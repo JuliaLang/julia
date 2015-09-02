@@ -2011,6 +2011,14 @@ void jl_gc_collect(int full)
     char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
     JL_SIGATOMIC_BEGIN();
+
+    ti_threadgroup_barrier(tgworld, ti_tid);
+
+    if (ti_tid != 0) {
+        ti_threadgroup_barrier(tgworld, ti_tid);
+        return;
+    }
+
     jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
     int recollect = 0;
@@ -2232,6 +2240,9 @@ void jl_gc_collect(int full)
     max_pause = max_pause < pause ? pause : max_pause;
 #endif
     jl_in_gc = 0;
+
+    ti_threadgroup_barrier(tgworld, ti_tid);
+
     JL_SIGATOMIC_END();
 #ifdef GC_TIME
     if (estimate_freed != SAVE2) {
@@ -2242,7 +2253,6 @@ void jl_gc_collect(int full)
     if (recollect) {
         n_pause--;
         jl_gc_collect(0);
-    ti_threadgroup_barrier(tgworld, ti_tid);
     }
 }
 
