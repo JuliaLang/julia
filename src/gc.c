@@ -1172,7 +1172,7 @@ static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(gcval_t **pfl[jl_n_threads][N_POOLS], int region_i, int sweep_mask)
+static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 {
     region_t* region = regions[region_i];
 
@@ -1188,9 +1188,9 @@ static void sweep_pool_region(gcval_t **pfl[jl_n_threads][N_POOLS], int region_i
                     gcpage_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
-                    pool_t *p = &jl_thread_heap[t_n].norm_pools[p_n];
+                    pool_t *p = &jl_all_heaps[t_n]->norm_pools[p_n];
                     int osize = pg->osize;
-                    pfl[t_n][p_n] = sweep_page(p, pg, pfl[t_n][p_n], sweep_mask, osize);
+                    pfl[t_n * N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * N_POOLS + p_n], sweep_mask, osize);
                 }
             }
         }
@@ -1370,7 +1370,7 @@ static int gc_sweep_inc(int sweep_mask)
     page_done = 0;
     int finished = 1;
 
-    gcval_t **pfl[jl_n_threads][N_POOLS];
+    gcval_t **pfl[jl_n_threads * N_POOLS];
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
@@ -1384,7 +1384,7 @@ static int gc_sweep_inc(int sweep_mask)
                 pg->nfree = p->nfree;
             }
             p->freelist =  NULL;
-            pfl[current_heap_index][i] = &p->freelist;
+            pfl[current_heap_index * N_POOLS + i] = &p->freelist;
 
             last = p->newpages;
             if (last) {
@@ -1406,7 +1406,7 @@ static int gc_sweep_inc(int sweep_mask)
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
             pool_t* p = &HEAP(norm_pools)[i];
-            *pfl[current_heap_index][i] = NULL;
+            *pfl[current_heap_index * N_POOLS + i] = NULL;
             if (p->freelist) {
                 p->nfree = page_metadata(p->freelist)->nfree;
             }
@@ -2418,7 +2418,6 @@ struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
 void jl_gc_init(void)
 {
     gc_debug_init();
-    jl_mk_thread_heap();
 
     arraylist_new(&finalizer_list, 0);
     arraylist_new(&finalizer_list_marked, 0);
