@@ -570,12 +570,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
-   .. code-block:: julia
-
-       svd(A, B) -> U, V, Q, D1, D2, R0
-
-   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
-
 .. function:: svdvals(A)
 
    .. Docstring generated from Julia source
@@ -603,12 +597,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
    .. Docstring generated from Julia source
-
-   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
-
-   .. code-block:: julia
-
-       svd(A, B) -> U, V, Q, D1, D2, R0
 
    Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
 
@@ -719,6 +707,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    ..  scale!(A, b)
+
+   ::
+
+              scale!(b, A)
 
    Scale an array ``A`` by a scalar ``b``, similar to :func:`scale` but
    overwriting ``A`` in-place.
