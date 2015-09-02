@@ -69,7 +69,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         for func in (expm,)
             @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
         end
-        @test_approx_eq_eps logm(abs(D)) logm(abs(DM)) n^3*eps(relty)
+        @test_approx_eq_eps logm(Diagonal(abs(D.diag))) logm(abs(DM)) n^3*eps(relty)
     end
     if elty <: BlasComplex
         for func in (logdet, sqrtm)
