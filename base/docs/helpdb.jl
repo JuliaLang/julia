@@ -2496,12 +2496,15 @@ doc"""
     ones(type, dims)
 
 Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+"""
+ones(t,dims)
 
+doc"""
     ones(A)
 
 Create an array of all ones with the same element type and shape as A.
 """
-ones
+ones(A)
 
 doc"""
     ind2chr(string, i)
