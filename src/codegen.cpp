@@ -5595,6 +5595,11 @@ extern "C" void jl_init_codegen(void)
         .setTargetOptions(options)
         .setRelocationModel(Reloc::PIC_)
         .setCodeModel(CodeModel::Small)
+#ifdef DISABLE_OPT
+        .setOptLevel(CodeGenOpt::None)
+#else
+        .setOptLevel(CodeGenOpt::Aggressive)
+#endif
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
 #endif
@@ -5614,33 +5619,13 @@ extern "C" void jl_init_codegen(void)
         MAttrs.append(1, "+vfp2"); // the processors that don't have VFP are old and (hopefully) rare. this affects the platform calling convention.
 #endif
     }
-    TargetMachine *targetMachine = eb.selectTarget(
+    jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
             TheCPU,
             MAttrs);
-    assert(targetMachine && "Failed to select target machine -"
+    assert(jl_TargetMachine && "Failed to select target machine -"
                             " Is the LLVM backend for this CPU enabled?");
-    jl_TargetMachine = targetMachine->getTarget().createTargetMachine(
-            TheTriple.getTriple(),
-            targetMachine->getTargetCPU(),
-            targetMachine->getTargetFeatureString(),
-            targetMachine->Options,
-#ifdef CODEGEN_TLS
-            Reloc::PIC_,
-            CodeModel::Small,
-#else
-            Reloc::Default,
-            CodeModel::JITDefault,
-#endif
-#ifdef DISABLE_OPT
-            CodeGenOpt::None
-#else
-            CodeGenOpt::Aggressive // -O3
-#endif
-            );
-    delete targetMachine;
-    assert(jl_TargetMachine);
 #if defined(LLVM38)
     engine_module->setDataLayout(jl_TargetMachine->createDataLayout());
 #elif defined(LLVM36) && !defined(LLVM37)
