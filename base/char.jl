@@ -19,7 +19,6 @@ endof(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
 getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
-getindex(c::Char, I::Real...) = getindex(c, to_indexes(I...)...)
 first(c::Char) = c
 last(c::Char) = c
 eltype(::Type{Char}) = Char
