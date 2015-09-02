@@ -2,9 +2,9 @@ module Threading
 
 export threadid, maxthreads, nthreads, @threads
 
-threadid() = int(ccall(:jl_threadid, Int16, ())+1)
-maxthreads() = int(unsafe_load(cglobal(:jl_max_threads, Cint)))
-nthreads() = int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
+maxthreads() = Int(unsafe_load(cglobal(:jl_max_threads, Cint)))
+nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function _threadsfor(forexpr)
     fun = gensym("_threadsfor")
@@ -88,4 +88,3 @@ macro threads(args...)
 end
 
 end # module
-

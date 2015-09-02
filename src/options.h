@@ -99,15 +99,11 @@
 
 // defaults for # threads
 #define NUM_THREADS_NAME		"JULIA_NUM_THREADS"
-// FIXME - change back to 8 after debugging
-#define DEFAULT_NUM_THREADS		1
+#define DEFAULT_NUM_THREADS		8
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME		"JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE	0
-
-// number of memory pools for lock free pool_alloc
-#define N_GC_THREADS 16
 
 // sanitizer defaults ---------------------------------------------------------
 
