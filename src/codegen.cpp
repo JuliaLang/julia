@@ -4967,8 +4967,6 @@ static void init_julia_llvm_env(Module *m)
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
     jlemptysvec_var = global_to_llvm("jl_emptysvec", (void*)&jl_emptysvec, m);
     jlemptytuple_var = global_to_llvm("jl_emptytuple", (void*)&jl_emptytuple, m);
-    jlexc_var = global_to_llvm("jl_exception_in_transit",
-                               (void*)&jl_exception_in_transit, m);
     jldiverr_var = global_to_llvm("jl_diverror_exception",
                                   (void*)&jl_diverror_exception, m);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",
@@ -5594,7 +5592,7 @@ extern "C" void jl_init_codegen(void)
 #endif
         .setTargetOptions(options)
         .setRelocationModel(Reloc::PIC_)
-        .setCodeModel(CodeModel::Small)
+        .setCodeModel(CodeModel::JITDefault)
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
 #else
