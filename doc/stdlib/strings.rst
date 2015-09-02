@@ -24,9 +24,10 @@
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
+   .. doctest::
 
-	   julia> "Hello " * "world"
-	   "Hello world"
+      julia> "Hello " * "world"
+      "Hello world"
 
 .. function:: ^(s, n)
 
