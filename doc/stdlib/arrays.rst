@@ -185,21 +185,9 @@ Constructors
 
    Create an array of all ones of specified type. The type defaults to Float64 if not specified.
 
-   .. code-block:: julia
-
-       ones(A)
-
-   Create an array of all ones with the same element type and shape as A.
-
 .. function:: ones(A)
 
    .. Docstring generated from Julia source
-
-   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
-
-   .. code-block:: julia
-
-       ones(A)
 
    Create an array of all ones with the same element type and shape as A.
 
