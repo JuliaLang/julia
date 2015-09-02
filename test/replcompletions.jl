@@ -28,6 +28,7 @@ module CompletionFoo
 
     test2(x::AbstractString) = pass
     test2(x::Char) = pass
+    test2(x::Cmd) = pass
 
     test3(x::AbstractArray{Int}, y::Int) = pass
     test3(x::AbstractArray{Float64}, y::Float64) = pass
@@ -97,6 +98,10 @@ c,r = test_complete(s)
 @test r == 30:30
 @test s[r] == "x"
 
+s = "Main.CompletionFoo.bar.no_val_available"
+c,r = test_complete(s)
+@test length(c)==0
+
 # To complete on a variable of a type, the type T of the variable
 # must be a concrete type, hence Base.isstructtype(T) returns true,
 # for the completion to succeed. That why `xx :: Test_y` of `Test_x`.
@@ -138,6 +143,10 @@ c,r = test_bslashcomplete(s)
 @test c[1] == "🐨"
 @test r == 1:sizeof(s)
 @test length(c) == 1
+
+s = "\\:ko"
+c,r = test_bslashcomplete(s)
+@test "\\:koala:" in c
 
 # test emoji symbol completions after unicode #9209
 s = "α\\:koala:"
@@ -229,6 +238,12 @@ for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
+
+# This cannot find the correct method due to the backticks expands to a macro in the parser.
+# Then the function argument is an expression which is not handled by current method completion logic.
+s = "(1, CompletionFoo.test2(`)`,"
+c, r, res = test_complete(s)
+@test length(c) == 3
 
 s = "CompletionFoo.test3([1.,2.],"
 c, r, res = test_complete(s)
@@ -388,6 +403,9 @@ c, r, res = test_scomplete(s)
         @test "tmpfoobar/" in c
         @test r == 4:10
         @test s[r] == "tmpfoob"
+        s = "\"~"
+        @test "tmpfoobar/" in c
+        c,r = test_complete(s)
         rm(dir)
     end
 end
@@ -418,6 +436,10 @@ let #test that it can auto complete with spaces in file/path
     end
     rm(dir, recursive=true)
 end
+
+# Test the completion returns nothing when the folder do not exist
+c,r = test_complete("cd(\"folder_do_not_exist_77/file")
+@test length(c) == 0
 
 @windows_only begin
     tmp = tempname()
