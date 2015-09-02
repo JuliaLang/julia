@@ -1347,7 +1347,13 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                             return NULL;
                         }
                     }
-                    jl_value_t *result = fptr(f, v, n);
+                    jl_value_t *result;
+                    JL_TRY {
+                        result = fptr(f, v, n);
+                    }
+                    JL_CATCH {
+                        result = NULL;
+                    }
                     JL_GC_POP();
                     return result;
                 }

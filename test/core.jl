@@ -3100,12 +3100,12 @@ Base.convert(::Type{Foo11874},x::Int) = float(x)
 # issue #9233
 let
     err = @test_throws TypeError NTuple{Int, 1}
-    @test err.func == :apply_type
+    @test err.func == :NTuple
     @test err.expected == Int
     @test err.got == Int
 
     err = @test_throws TypeError NTuple{0x1, Int}
-    @test err.func == :apply_type
+    @test err.func == :NTuple
     @test err.expected == Int
     @test err.got == 0x1
 end
@@ -3244,6 +3244,15 @@ end
 # don't allow Vararg{} in Tuple{} type constructor in non-trailing position
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+
+# don't allow non-types in Tuple or Union
+@test_throws TypeError Tuple{1}
+@test_throws TypeError Union{1}
+@test_throws TypeError Union{Int,0}
+typealias PossiblyInvalidUnion{T} Union{T,Int}
+@test_throws TypeError PossiblyInvalidUnion{1}
+typealias PossiblyInvalidTuple{T} Tuple{T,Int}
+@test_throws TypeError PossiblyInvalidTuple{""}
 
 # issue #12551 (make sure these don't throw in inference)
 Base.return_types(unsafe_load, (Ptr{nothing},))
