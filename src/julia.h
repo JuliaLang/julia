@@ -62,7 +62,7 @@ extern "C" {
 // WARNING: Threading support is incomplete.  Changing the 1 to a 0 will break Julia.
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
 // of what eventual threading support will change.
-#if 1
+#if 0
 // Definition for compiling non-thread-safe Julia.
 #  define JL_THREAD
 #elif !defined(_OS_WINDOWS_)
