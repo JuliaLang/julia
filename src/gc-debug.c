@@ -128,20 +128,25 @@ static void clear_mark(int bits)
             bits_save[i].len = 0;
         }
     }
+    bigval_t *v;
     FOR_EACH_HEAP
-        bigval_t *bigs[2];
-        bigs[0] = big_objects;
-        bigs[1] = big_objects_marked;
-        for (int i = 0; i < 2; i++) {
-            bigval_t *v = bigs[i];
-            while (v != NULL) {
-                void* gcv = &v->header;
-                if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
-                gc_bits(gcv) = bits;
-                v = v->next;
-            }
+        v = big_objects;
+        while (v != NULL) {
+            void* gcv = &v->header;
+            if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
+            gc_bits(gcv) = bits;
+            v = v->next;
         }
     END
+
+    v = big_objects_marked;
+    while (v != NULL) {
+        void* gcv = &v->header;
+        if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
+        gc_bits(gcv) = bits;
+        v = v->next;
+    }
+
     for (int h = 0; h < REGION_COUNT; h++) {
         region_t* region = regions[h];
         if (!region) break;
