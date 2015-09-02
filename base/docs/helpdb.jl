@@ -981,13 +981,6 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 doc"""
-    countnz(A)
-
-Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
-"""
-countnz
-
-doc"""
     isnan(f) -> Bool
 
 Test whether a floating point number is not a number (NaN)
@@ -1327,13 +1320,6 @@ doc"""
 Read all lines as an array.
 """
 readlines
-
-doc"""
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero values in matrix `A`, and `V` is a vector of the non-zero values.
-"""
-findnz
 
 doc"""
     RemoteRef()
@@ -1718,25 +1704,6 @@ doc"""
 Compute the inverse cosine of `x`, where the output is in radians
 """
 acos
-
-doc"""
-    nzrange(A, col)
-
-Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for convenient iterating over a sparse matrix :
-
-    A = sparse(I,J,V)
-    rows = rowvals(A)
-    vals = nonzeros(A)
-    m, n = size(A)
-    for i = 1:n
-       for j in nzrange(A, i)
-          row = rows[j]
-          val = vals[j]
-          # perform sparse wizardry...
-       end
-    end
-"""
-nzrange
 
 doc"""
     ispath(path) -> Bool
@@ -3147,13 +3114,6 @@ doc"""
 Get a hexadecimal string of the binary representation of a floating point number
 """
 num2hex
-
-doc"""
-    speye(type,m[,n])
-
-Create a sparse identity matrix of specified type of size `m x m`. In case `n` is supplied, create a sparse identity matrix of size `m x n`.
-"""
-speye
 
 doc"""
 ```rst
@@ -5087,13 +5047,6 @@ for the transformed real array.)
 irfft
 
 doc"""
-    nnz(A)
-
-Returns the number of stored (filled) elements in a sparse matrix.
-"""
-nnz
-
-doc"""
 ```rst
 ::
 
@@ -5133,12 +5086,6 @@ Construct a real symmetric tridiagonal matrix from the diagonal and upper diagon
 """
 SymTridiagonal
 
-doc"""
-    spzeros(m,n)
-
-Create a sparse matrix of size `m x n`. This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
-"""
-spzeros
 
 doc"""
     colon(start, [step], stop)
@@ -11253,13 +11200,6 @@ the same as for :func:`brfft`.
 ```
 """
 plan_brfft
-
-doc"""
-    rowvals(A)
-
-Return a vector of the row indices of `A`, and any modifications to the returned vector will mutate `A` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See `nonzeros(A)` and `nzrange(A, col)`.
-"""
-rowvals
 
 doc"""
     mkdir(path, [mode])

@@ -25,11 +25,54 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
+
+"""
+    nnz(A)
+
+Returns the number of stored (filled) elements in a sparse matrix.
+"""
 nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
+
+doc"""
+    countnz(A)
+
+Counts the number of nonzero values in array A (dense or sparse). Note that this
+is not a constant-time operation. For sparse matrices, one should usually use `nnz`,
+which returns the number of stored values.
+"""
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 nonzeros(S::SparseMatrixCSC) = S.nzval
+
+"""
+    rowvals(A)
+
+Return a vector of the row indices of `A`, and any modifications to the returned vector
+will mutate `A` as well. Given the internal storage format of sparse matrices, providing
+access to how the row indices are stored internally can be useful in conjuction with
+iterating over structural nonzero values. See `nonzeros(A)` and `nzrange(A, col)`.
+"""
 rowvals(S::SparseMatrixCSC) = S.rowval
+
+"""
+    nzrange(A, col)
+
+Return the range of indices to the structural nonzero values of a sparse matrix column.
+In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for convenient iterating
+over a sparse matrix :
+
+    A = sparse(I,J,V)
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    m, n = size(A)
+    for i = 1:n
+       for j in nzrange(A, i)
+          row = rows[j]
+          val = vals[j]
+          # perform sparse wizardry...
+       end
+    end
+"""
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
@@ -368,6 +411,13 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J)
 end
 
+
+"""
+    findnz(A)
+
+Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the
+non-zero values in matrix `A`, and `V` is a vector of the non-zero values.
+"""
 function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     numnz = nnz(S)
     I = Array(Ti, numnz)
@@ -466,6 +516,13 @@ sprandbool(m::Integer, n::Integer, density::AbstractFloat) = sprandbool(GLOBAL_R
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
+doc"""
+    spzeros(m,n)
+
+Create a sparse matrix of size `m x n`. This sparse matrix will not contain
+any nonzero values. No storage will be allocated for nonzero values during
+construction.
+"""
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
 function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
@@ -473,6 +530,12 @@ function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
     SparseMatrixCSC(m, n, ones(Ti, n+1), Array(Ti, 0), Array(Tv, 0))
 end
 
+"""
+    speye(type,m[,n])
+
+Create a sparse identity matrix of specified type of size `m x m`.
+In case `n` is supplied, create a sparse identity matrix of size `m x n`.
+"""
 speye(n::Integer) = speye(Float64, n)
 speye(T::Type, n::Integer) = speye(T, n, n)
 speye(m::Integer, n::Integer) = speye(Float64, m, n)
