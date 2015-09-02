@@ -1345,7 +1345,7 @@ Indexable Collections
 
        setindex!(collection, value, key...)
 
-   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``setindex!(a, x, i, j, ...)``\ .
+   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
 
 Fully implemented by:
 

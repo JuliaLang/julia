@@ -1438,9 +1438,9 @@ Network I/O
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
@@ -1459,9 +1459,9 @@ Network I/O
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
@@ -1482,7 +1482,7 @@ Network I/O
 
        listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listen on a Named Pipe / Domain Socket
 
 .. function:: listen(path) -> PipeServer
 
@@ -1497,7 +1497,7 @@ Network I/O
 
        listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket
+   Create and listen on a Named Pipe / Domain Socket
 
 .. function:: getaddrinfo(host)
 

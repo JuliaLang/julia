@@ -589,7 +589,7 @@ Indexing, Assignment, and Concatenation
 
        setindex!(collection, value, key...)
 
-   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``setindex!(a, x, i, j, ...)``\ .
+   Store the given value at the given key or index within a collection. The syntax ``a[i,j,...] = x`` is converted by the compiler to ``(setindex!(a, x, i, j, ...); x)``\ .
 
 .. function:: broadcast_getindex(A, inds...)
 
@@ -1026,7 +1026,13 @@ Indexing, Assignment, and Concatenation
 
        checkbounds(array, indexes...)
 
-   Throw an error if the specified indexes are not in bounds for the given array.
+   Throw an error if the specified indexes are not in bounds for the given array. Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
+
+   .. code-block:: julia
+
+       checkbounds(::Type{Bool}, dimlength::Integer, index)
+
+   Return a ``Bool`` describing if the given index is within the bounds of the given dimension length. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
 
 .. function:: randsubseq(A, p) -> Vector
 

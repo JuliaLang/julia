@@ -258,6 +258,9 @@ General Parallel Computing Support
 
     Equivalent to ``addprocs(CPU_CORES)``
 
+    Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
+
    ::
 
               addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
@@ -326,6 +329,9 @@ General Parallel Computing Support
               addprocs() -> List of process identifiers
 
     Equivalent to ``addprocs(CPU_CORES)``
+
+    Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
    ::
 
@@ -396,6 +402,9 @@ General Parallel Computing Support
 
     Equivalent to ``addprocs(CPU_CORES)``
 
+    Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
+
    ::
 
               addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
@@ -464,6 +473,9 @@ General Parallel Computing Support
               addprocs() -> List of process identifiers
 
     Equivalent to ``addprocs(CPU_CORES)``
+
+    Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
    ::
 
@@ -1013,9 +1025,9 @@ Cluster Manager Interface
 
    .. code-block:: julia
 
-       connect(path) -> Pipe
+       connect(path) -> PipeEndpoint
 
-   Connect to the Named Pipe/Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``
 
    .. code-block:: julia
 
