@@ -87,7 +87,7 @@ combination of 3 flags::
     /usr/local/julia/share/julia/julia-config.jl
     Usage: julia-config [--cflags|--ldflags|--ldlibs]
 
-If the above example source is saved in the file *embed_exmaple.c*, then the following command will compile it into a running program on Linux and Windows (MSYS2 environment),
+If the above example source is saved in the file *embed_example.c*, then the following command will compile it into a running program on Linux and Windows (MSYS2 environment),
 or if on OS/X, then substitute ``clang`` for ``gcc``.::
 
     /usr/local/julia/share/julia/julia-config.jl --cflags --ldflags --ldlibs | xargs gcc embed_example.c
