@@ -10484,7 +10484,7 @@ LoadError
 doc"""
     InitError(mod::Symbol, error)
 
-An error occurred when running a module's \_\_init\_\_ function. The actual error thrown is available in the .error field.
+An error occurred when running a module's `__init__` function. The actual error thrown is available in the `.error` field.
 """
 InitError
 
