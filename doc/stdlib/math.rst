@@ -917,11 +917,13 @@ Mathematical Functions
    decimal place (or before if negative). ``round(x, digits, base)`` rounds
    using a base other than 10.
 
-	 julia> round(pi, 2)
-	 3.14
+   .. doctest::
 
-	 julia> round(pi, 3, 2)
-	 3.125
+      julia> round(pi, 2)
+      3.14
+
+      julia> round(pi, 3, 2)
+      3.125
 
    .. note::
 
@@ -932,17 +934,17 @@ Mathematical Functions
 
       .. doctest::
 
-	 julia> x = 1.15
-	 1.15
+         julia> x = 1.15
+         1.15
 
-	 julia> @sprintf "%.20f" x
-	 "1.14999999999999991118"
+         julia> @sprintf "%.20f" x
+         "1.14999999999999991118"
 
-	 julia> x < 115//100
-	 true
+         julia> x < 115//100
+         true
 
-	 julia> round(x, 1)
-	 1.2
+         julia> round(x, 1)
+         1.2
 
 .. data:: RoundingMode
 
