@@ -138,7 +138,6 @@ Sorting Functions
 
    .. Docstring generated from Julia source
 
-   ..  sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Return a permutation vector of indices of ``v`` that puts it in sorted order.
    Specify ``alg`` to choose a particular sorting algorithm (see Sorting Algorithms).
@@ -154,7 +153,6 @@ Sorting Functions
 
    .. Docstring generated from Julia source
 
-   ..  sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
    Like ``sortperm``, but accepts a preallocated index vector ``ix``.  If ``initialized`` is ``false``
    (the default), ix is initialized to contain the values ``1:length(v)``.

@@ -34,7 +34,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  *(x, y...)
 
    Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
    ``*(x, y, z, ...)``.
@@ -51,7 +50,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  \\(x, y)
 
    Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left.
    Gives floating-point results for integer arguments.
@@ -61,7 +59,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  ^(x, y)
 
    Exponentiation operator.
 
@@ -98,7 +95,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  .\\(x, y)
 
    Element-wise left division operator.
 
@@ -122,6 +118,7 @@ Mathematical Operators
    Combined multiply-add, computes ``x*y+z`` in an efficient manner. This may on some systems be equivalent to ``x*y+z``\ , or to ``fma(x,y,z)``\ . ``muladd`` is used to improve performance. See ``fma``\ .
 
 .. function:: div(x, y)
+              ÷(x, y)
 
    .. Docstring generated from Julia source
 
@@ -154,6 +151,7 @@ Mathematical Operators
    This function computes a floating point representation of the modulus after division by numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would compute the modulus of x relative to division by the floating-point number 2pi.
 
 .. function:: rem(x, y)
+              %(x, y)
 
    .. Docstring generated from Julia source
 
@@ -234,7 +232,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1, and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the function ``colon``.
    The colon is also used in indexing to select whole dimensions.
@@ -266,6 +263,7 @@ Mathematical Operators
 
 .. _!=:
 .. function:: !=(x, y)
+              ≠(x,y)
 
    .. Docstring generated from Julia source
 
@@ -273,16 +271,16 @@ Mathematical Operators
 
 .. _===:
 .. function:: ===(x, y)
+              ≡(x,y)
 
    .. Docstring generated from Julia source
 
-   ..  ===(x, y)
-              ≡(x,y)
 
    See the :func:`is` operator
 
 .. _!==:
 .. function:: !==(x, y)
+              ≢(x,y)
 
    .. Docstring generated from Julia source
 
@@ -297,6 +295,7 @@ Mathematical Operators
 
 .. _<=:
 .. function:: <=(x, y)
+              ≤(x,y)
 
    .. Docstring generated from Julia source
 
@@ -311,6 +310,7 @@ Mathematical Operators
 
 .. _>=:
 .. function:: >=(x, y)
+              ≥(x,y)
 
    .. Docstring generated from Julia source
 
@@ -325,6 +325,7 @@ Mathematical Operators
 
 .. _.!=:
 .. function:: .!=(x, y)
+              .≠(x,y)
 
    .. Docstring generated from Julia source
 
@@ -339,6 +340,7 @@ Mathematical Operators
 
 .. _.<=:
 .. function:: .<=(x, y)
+              .≤(x,y)
 
    .. Docstring generated from Julia source
 
@@ -353,6 +355,7 @@ Mathematical Operators
 
 .. _.>=:
 .. function:: .>=(x, y)
+              .≥(x,y)
 
    .. Docstring generated from Julia source
 
@@ -390,7 +393,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  $(x, y)
 
    Bitwise exclusive or
 
@@ -415,7 +417,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_ldiv_Bc(a,b)
 
    Matrix operator A \\ B\ :sup:`H`
 
@@ -423,7 +424,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_ldiv_Bt(a,b)
 
    Matrix operator A \\ B\ :sup:`T`
 
@@ -431,7 +431,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_mul_B!(Y, A, B) -> Y
 
 
    Calculates the matrix-matrix or matrix-vector product *A B* and stores the
@@ -450,7 +449,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_mul_Bc(...)
 
    Matrix operator A B\ :sup:`H`
 
@@ -458,7 +456,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_mul_Bt(...)
 
    Matrix operator A B\ :sup:`T`
 
@@ -466,7 +463,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_rdiv_Bc(...)
 
    Matrix operator A / B\ :sup:`H`
 
@@ -474,7 +470,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  A_rdiv_Bt(a,b)
 
    Matrix operator A / B\ :sup:`T`
 
@@ -482,7 +477,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_ldiv_B(...)
 
    Matrix operator A\ :sup:`H` \\ B
 
@@ -490,7 +484,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_ldiv_Bc(...)
 
    Matrix operator A\ :sup:`H` \\ B\ :sup:`H`
 
@@ -498,7 +491,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_mul_B(...)
 
    Matrix operator A\ :sup:`H` B
 
@@ -506,7 +498,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_mul_Bc(...)
 
    Matrix operator A\ :sup:`H` B\ :sup:`H`
 
@@ -514,7 +505,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_rdiv_B(a,b)
 
    Matrix operator A\ :sup:`H` / B
 
@@ -522,7 +512,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  Ac_rdiv_Bc(a,b)
 
    Matrix operator A\ :sup:`H` / B\ :sup:`H`
 
@@ -530,7 +519,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_ldiv_B(...)
 
    Matrix operator A\ :sup:`T` \\ B
 
@@ -538,7 +526,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_ldiv_Bt(...)
 
    Matrix operator A\ :sup:`T` \\ B\ :sup:`T`
 
@@ -546,7 +533,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_mul_B(...)
 
    Matrix operator A\ :sup:`T` B
 
@@ -554,7 +540,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_mul_Bt(...)
 
    Matrix operator A\ :sup:`T` B\ :sup:`T`
 
@@ -562,7 +547,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_rdiv_B(a,b)
 
    Matrix operator A\ :sup:`T` / B
 
@@ -570,7 +554,6 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   ..  At_rdiv_Bt(a,b)
 
    Matrix operator A\ :sup:`T` / B\ :sup:`T`
 
@@ -629,7 +612,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  sinpi(x)
 
    Compute :math:`\sin(\pi x)` more accurately than ``sin(pi*x)``, especially for large ``x``.
 
@@ -637,7 +619,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  cospi(x)
 
    Compute :math:`\cos(\pi x)` more accurately than ``cos(pi*x)``, especially for large ``x``.
 
@@ -831,7 +812,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  sinc(x)
 
    Compute :math:`\sin(\pi x) / (\pi x)` if :math:`x \neq 0`, and :math:`1` if :math:`x = 0`.
 
@@ -839,7 +819,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  cosc(x)
 
    Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
    if :math:`x = 0`. This is the derivative of ``sinc(x)``.
@@ -860,7 +839,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  hypot(x, y)
 
    Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
 
@@ -902,7 +880,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  frexp(val)
 
    Return ``(x,exp)`` such that ``x`` has a magnitude in the interval ``[1/2, 1)`` or 0,
    and val = :math:`x \times 2^{exp}`.
@@ -911,7 +888,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  exp(x)
 
    Compute :math:`e^x`
 
@@ -919,7 +895,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  exp2(x)
 
    Compute :math:`2^x`
 
@@ -927,7 +902,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  exp10(x)
 
    Compute :math:`10^x`
 
@@ -935,7 +909,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  ldexp(x, n)
 
    Compute :math:`x \times 2^n`
 
@@ -949,7 +922,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  expm1(x)
 
    Accurately compute :math:`e^x-1`
 
@@ -957,7 +929,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  round([T,] x, [digits, [base]], [r::RoundingMode])
 
    ``round(x)`` rounds ``x`` to an integer value according to the default
    rounding mode (see :func:`get_rounding`), returning a value of the same type as
@@ -1054,7 +1025,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   .. round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex-valued
    ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
@@ -1065,7 +1035,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  ceil([T,] x, [digits, [base]])
 
    ``ceil(x)`` returns the nearest integral value of the same type as ``x``
    that is greater than or equal to ``x``.
@@ -1079,7 +1048,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  floor([T,] x, [digits, [base]])
 
    ``floor(x)`` returns the nearest integral value of the same type as ``x``
    that is less than or equal to ``x``.
@@ -1093,7 +1061,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  trunc([T,] x, [digits, [base]])
 
    ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
    value is less than or equal to ``x``.
@@ -1131,7 +1098,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  minmax(x, y)
 
    Return ``(min(x,y), max(x,y))``.
    See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``
@@ -1164,7 +1130,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  sign(x)
 
    Return zero if ``x==0`` and :math:`x/|x|` otherwise (i.e., ±1 for real ``x``).
 
@@ -1184,7 +1149,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  sqrt(x)
 
    Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
 
@@ -1198,7 +1162,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  cbrt(x)
 
    Return :math:`x^{1/3}`.  The prefix operator ``∛`` is equivalent to ``cbrt``.
 
@@ -1206,7 +1169,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erf(x)
 
    Compute the error function of ``x``, defined by
    :math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
@@ -1216,7 +1178,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erfc(x)
 
    Compute the complementary error function of ``x``,
    defined by :math:`1 - \operatorname{erf}(x)`.
@@ -1225,7 +1186,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erfcx(x)
 
    Compute the scaled complementary error function of ``x``,
    defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
@@ -1236,7 +1196,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erfi(x)
 
    Compute the imaginary error function of ``x``,
    defined by :math:`-i \operatorname{erf}(ix)`.
@@ -1245,7 +1204,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   .. dawson(x)
 
    Compute the Dawson function (scaled imaginary error function) of ``x``,
    defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
@@ -1254,7 +1212,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erfinv(x)
 
    Compute the inverse error function of a real ``x``,
    defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
@@ -1263,7 +1220,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  erfcinv(x)
 
    Compute the inverse error complementary function of a real ``x``,
    defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
@@ -1302,7 +1258,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  cis(z)
 
    Return :math:`\exp(iz)`.
 
@@ -1316,7 +1271,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  factorial(n)
 
    Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
    is computed as an integer (promoted to at least 64 bits).  Note
@@ -1329,7 +1283,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  factorial(n,k)
 
    Compute ``factorial(n)/factorial(k)``
 
@@ -1337,7 +1290,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  factor(n) -> Dict
 
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
@@ -1364,7 +1316,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  gcdx(x,y)
 
    Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
 
@@ -1416,7 +1367,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  nextprod([k_1,k_2,...], n)
 
    Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
@@ -1424,7 +1374,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  prevprod([k_1,k_2,...], n)
 
    Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
@@ -1432,7 +1381,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  invmod(x,m)
 
    Take the inverse of ``x`` modulo ``m``: ``y`` such that :math:`xy = 1 \pmod m`
 
@@ -1440,7 +1388,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  powermod(x, p, m)
 
    Compute :math:`x^p \pmod m`
 
@@ -1454,7 +1401,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  lgamma(x)
 
    Compute the logarithm of the absolute value of :func:`gamma` for
    :obj:`Real` ``x``, while for :obj:`Complex` ``x`` it computes the
@@ -1494,7 +1440,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airy(k,x)
 
    kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
 
@@ -1502,7 +1447,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airyai(x)
 
    Airy function :math:`\operatorname{Ai}(x)`.
 
@@ -1510,7 +1454,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airyprime(x)
 
    Airy function derivative :math:`\operatorname{Ai}'(x)`.
 
@@ -1518,7 +1461,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airyaiprime(x)
 
    Airy function derivative :math:`\operatorname{Ai}'(x)`.
 
@@ -1526,7 +1468,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airybi(x)
 
    Airy function :math:`\operatorname{Bi}(x)`.
 
@@ -1534,7 +1475,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airybiprime(x)
 
    Airy function derivative :math:`\operatorname{Bi}'(x)`.
 
@@ -1542,7 +1482,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  airyx(k,x)
 
    scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
 
@@ -1550,7 +1489,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
 
@@ -1558,7 +1496,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselj1(x)
 
    Bessel function of the first kind of order 1, :math:`J_1(x)`.
 
@@ -1566,7 +1503,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselj(nu, x)
 
    Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
 
@@ -1574,7 +1510,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besseljx(nu, x)
 
    Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
@@ -1582,7 +1517,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  bessely0(x)
 
    Bessel function of the second kind of order 0, :math:`Y_0(x)`.
 
@@ -1590,7 +1524,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  bessely1(x)
 
    Bessel function of the second kind of order 1, :math:`Y_1(x)`.
 
@@ -1598,7 +1531,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  bessely(nu, x)
 
    Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
 
@@ -1606,7 +1538,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselyx(nu, x)
 
    Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
@@ -1614,7 +1545,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  hankelh1(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
 
@@ -1622,7 +1552,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  hankelh1x(nu, x)
 
    Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
 
@@ -1630,7 +1559,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  hankelh2(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
 
@@ -1638,7 +1566,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  hankelh2x(nu, x)
 
    Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
 
@@ -1652,7 +1579,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besseli(nu, x)
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
 
@@ -1660,7 +1586,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselix(nu, x)
 
    Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
 
@@ -1668,7 +1593,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselk(nu, x)
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
 
@@ -1676,7 +1600,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  besselkx(nu, x)
 
    Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 
@@ -1684,7 +1607,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  beta(x, y)
 
    Euler integral of the first kind :math:`\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)`.
 
@@ -1692,7 +1614,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  lbeta(x, y)
 
    Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`.
 
@@ -1700,7 +1621,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  eta(x)
 
    Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
 
@@ -1708,7 +1628,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  zeta(s)
 
    Riemann zeta function :math:`\zeta(s)`.
 
@@ -1716,7 +1635,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  zeta(s, z)
 
    Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
    the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
@@ -1737,7 +1655,6 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ..  @evalpoly(z, c...)
 
    Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
    coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
@@ -1936,7 +1853,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  fft!(A [, dims])
 
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
@@ -1945,7 +1861,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   .. ifft(A [, dims])
 
    Multidimensional inverse FFT.
 
@@ -1963,7 +1878,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  ifft!(A [, dims])
 
    Same as :func:`ifft`, but operates in-place on ``A``.
 
@@ -1971,7 +1885,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  bfft(A [, dims])
 
    Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
    transform, which must be divided by the product of the sizes of the
@@ -1987,7 +1900,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  bfft!(A [, dims])
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
@@ -1995,7 +1907,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
@@ -2033,7 +1944,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
    :func:`ifft`.
@@ -2042,7 +1952,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
    backwards transform :func:`bfft`.
@@ -2051,7 +1960,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but operates in-place on ``A``.
 
@@ -2059,7 +1967,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_ifft`, but operates in-place on ``A``.
 
@@ -2067,7 +1974,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_bfft`, but operates in-place on ``A``.
 
@@ -2075,7 +1981,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  rfft(A [, dims])
 
    Multidimensional FFT of a real array A, exploiting the fact that
    the transform has conjugate symmetry in order to save roughly half
@@ -2092,7 +1997,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  irfft(A, d [, dims])
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
@@ -2109,7 +2013,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  brfft(A, d [, dims])
 
    Similar to :func:`irfft` but computes an unnormalized inverse transform
    (similar to :func:`bfft`), which must be divided by the product
@@ -2120,7 +2023,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
    except for :func:`rfft` instead of :func:`fft`.  The first two
@@ -2131,7 +2033,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input unnormalized transform, similar to
    :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
@@ -2142,7 +2043,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
@@ -2152,7 +2052,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  dct(A [, dims])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
@@ -2166,7 +2065,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  dct!(A [, dims])
 
    Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
@@ -2176,7 +2074,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  idct(A [, dims])
 
    Computes the multidimensional inverse discrete cosine transform (DCT)
    of the array ``A`` (technically, a type-III DCT with the unitary
@@ -2191,7 +2088,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  idct!(A [, dims])
 
    Same as :func:`idct!`, but operates in-place on ``A``.
 
@@ -2199,7 +2095,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_dct(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`dct`.
@@ -2209,7 +2104,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_dct!(A [, dims [, flags [, timelimit]]])
 
    Same as :func:`plan_dct`, but operates in-place on ``A``.
 
@@ -2217,7 +2111,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_idct(A [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`idct`.
@@ -2227,7 +2120,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  plan_idct!(A [, dims [, flags [, timelimit]]])
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
@@ -2259,7 +2151,6 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    .. Docstring generated from Julia source
 
-   ..  filt!(out, b, a, x, [si])
 
    Same as :func:`filt` but writes the result into the ``out`` argument,
    which may alias the input ``x`` to modify it in-place.
@@ -2302,7 +2193,6 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   ..  r2r(A, kind [, dims])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -2329,7 +2219,6 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   ..  r2r!(A, kind [, dims])
 
    Same as :func:`r2r`, but operates in-place on ``A``, which must be
    an array of real or complex floating-point numbers.
@@ -2338,7 +2227,6 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   ..  plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
    except that the transforms (and the first three arguments)
@@ -2348,7 +2236,6 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   ..  plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
 
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 

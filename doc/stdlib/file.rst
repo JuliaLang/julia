@@ -66,7 +66,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  stat(file)
 
    Returns a structure whose fields contain information about the file. The fields of the structure are:
 
@@ -119,7 +118,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  uperm(file)
 
    Gets the permissions of the owner of the file as a bitfield of
 

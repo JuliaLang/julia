@@ -124,7 +124,6 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   ..  ind2sub(dims, index) -> subscripts
 
    Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
 
@@ -134,7 +133,6 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   ..  ind2sub(a, index) -> subscripts
 
    Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
 
@@ -157,7 +155,6 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   ..  getindex(type[, elements...])
 
    Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
 
@@ -307,7 +304,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ..  getindex(A, inds...)
 
    Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
@@ -315,7 +311,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ..  sub(A, inds...)
 
    Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
@@ -341,7 +336,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ..  slice(A, inds...)
 
    Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
 
@@ -507,7 +501,6 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   ..  ipermutedims(A, perm)
 
    Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
@@ -560,7 +553,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   ..  cumprod(A, [dim])
 
    Cumulative product along a dimension ``dim`` (defaults to 1).
    See also :func:`cumprod!` to use a preallocated output array,
@@ -577,7 +569,6 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   ..  cumsum(A, [dim])
 
    Cumulative sum along a dimension ``dim`` (defaults to 1).
    See also :func:`cumsum!` to use a preallocated output array,
@@ -701,7 +692,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  nthperm!(v, k)
 
    In-place version of :func:`nthperm`.
 
@@ -709,7 +699,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  randperm([rng,] n)
 
    Construct a random permutation of length ``n``. The optional ``rng`` argument
    specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
@@ -744,7 +733,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  randcycle([rng,] n)
 
    Construct a random cyclic permutation of length ``n``. The optional ``rng``
    argument specifies a random number generator, see :ref:`Random Numbers
@@ -754,7 +742,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  shuffle([rng,] v)
 
    Return a randomly permuted copy of ``v``. The optional ``rng`` argument
    specifies a random number generator, see :ref:`Random Numbers
@@ -764,7 +751,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  shuffle!([rng,] v)
 
    In-place version of :func:`shuffle`.
 
@@ -784,7 +770,6 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   ..  reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
    In-place version of :func:`reverse`.
 
@@ -843,7 +828,6 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   ..  flipbits!(B::BitArray{N}) -> BitArray{N}
 
    Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
 
@@ -930,7 +914,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   ..  full(S)
 
    Convert a sparse matrix ``S`` into a dense matrix.
 
@@ -968,7 +951,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   ..  sprand([rng,] m,n,p [,rfn])
 
    Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 

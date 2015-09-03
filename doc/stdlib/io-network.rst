@@ -23,7 +23,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
@@ -31,7 +30,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  open(file_name, [mode]) -> IOStream
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -49,7 +47,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  open(f::function, args...)
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
@@ -107,7 +104,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  close(stream)
 
    Close an I/O stream. Performs a ``flush`` first.
 
@@ -185,7 +181,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  mark(s)
 
    Add a mark at the current position of stream ``s``.  Returns the marked position.
 
@@ -195,7 +190,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  unmark(s)
 
    Remove a mark from stream ``s``.
    Returns ``true`` if the stream was marked, ``false`` otherwise.
@@ -206,7 +200,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  reset(s)
 
    Reset a stream ``s`` to a previously marked position, and remove the mark.
    Returns the previously marked position.
@@ -218,7 +211,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  ismarked(s)
 
    Returns true if stream ``s`` is marked.
 
@@ -264,7 +256,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   ..  print_unescaped(io, s::AbstractString)
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
@@ -389,7 +380,6 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   ..  println(x)
 
    Print (using :func:`print`) ``x`` followed by a newline.
 
@@ -573,6 +563,7 @@ Text I/O
    Returns a new read-only I/O stream, which decodes base64-encoded data read from ``istream``\ .
 
 .. function:: base64encode(writefunc, args...)
+              base64encode(args...)
 
    .. Docstring generated from Julia source
 
@@ -606,6 +597,9 @@ displays may be enabled by loading external modules or by using graphical
 Julia environments (such as the IPython-based IJulia notebook).
 
 .. function:: display(x)
+              display(d::Display, x)
+              display(mime, x)
+              display(d::Display, mime, x)
 
    .. Docstring generated from Julia source
 
@@ -614,12 +608,16 @@ Julia environments (such as the IPython-based IJulia notebook).
    There are also two variants with a ``mime`` argument (a MIME type string, such as ``"image/png"``\ ), which attempt to display ``x`` using the requested MIME type *only*, throwing a ``MethodError`` if this type is not supported by either the display(s) or by ``x``\ . With these variants, one can also supply the "raw" data in the requested MIME type by passing ``x::AbstractString`` (for MIME types with text-based storage, such as text/html or application/postscript) or ``x::Vector{UInt8}`` (for binary MIME types).
 
 .. function:: redisplay(x)
+              redisplay(d::Display, x)
+              redisplay(mime, x)
+              redisplay(d::Display, mime, x)
 
    .. Docstring generated from Julia source
 
    By default, the ``redisplay`` functions simply call ``display``\ . However, some display backends may override ``redisplay`` to modify an existing display of ``x`` (if any). Using ``redisplay`` is also a hint to the backend that ``x`` may be redisplayed several times, and the backend may choose to defer the display until (for example) the next interactive prompt.
 
 .. function:: displayable(mime) -> Bool
+              displayable(d::Display, mime) -> Bool
 
    .. Docstring generated from Julia source
 
@@ -717,11 +715,10 @@ Memory-mapped I/O
    Create an ``IO``\ -like object for creating zeroed-out mmapped-memory that is not tied to a file for use in ``Mmap.mmap``\ . Used by ``SharedArray`` for creating shared memory arrays.
 
 .. function:: Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+              Mmap.mmap(type::Type{Array{T,N}}, dims)
 
    .. Docstring generated from Julia source
 
-   ..  Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-              Mmap.mmap(type::Type{Array{T,N}}, dims)
 
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
@@ -766,7 +763,6 @@ Memory-mapped I/O
 
    .. Docstring generated from Julia source
 
-   ..  Mmap.mmap(io, BitArray, [dims, offset])
 
    Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`, but the byte representation is different.
 
@@ -789,7 +785,7 @@ Network I/O
 
    Connect to the host ``host`` on port ``port``
 
-.. function:: connect(path) -> Pipe
+.. function:: connect(path) -> PipeEndpoint
 
    .. Docstring generated from Julia source
 

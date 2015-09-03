@@ -20,7 +20,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  *(s, t)
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
@@ -33,7 +32,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  ^(s, n)
 
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
@@ -106,7 +104,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  normalize_string(s, normalform::Symbol)
 
    Normalize the string ``s`` according to one of the four "normal
    forms" of the Unicode standard: ``normalform`` can be ``:NFC``,
@@ -357,7 +354,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  randstring([rng,] len=8)
 
    Create a random ASCII string of length ``len``, consisting of upper- and
    lower-case letters and the digits 0-9. The optional ``rng`` argument
@@ -463,7 +459,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  escape_string(str::AbstractString) -> AbstractString
 
    General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
 
@@ -471,7 +466,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  unescape_string(s::AbstractString) -> AbstractString
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 

@@ -137,6 +137,8 @@ Macro reference
 ~~~~~~~~~~~~~~~
 
 .. function:: @nloops N itersym rangeexpr bodyexpr
+              @nloops N itersym rangeexpr preexpr bodyexpr
+              @nloops N itersym rangeexpr preexpr postexpr bodyexpr
 
    .. Docstring generated from Julia source
 
@@ -189,6 +191,7 @@ Macro reference
    ``@nall 3 d->(i_d > 1)`` would generate the expression ``(i_1 > 1 && i_2 > 1 && i_3 > 1)``\ . This can be convenient for bounds-checking.
 
 .. function:: @nif N conditionexpr expr
+              @nif N conditionexpr expr elseexpr
 
    .. Docstring generated from Julia source
 

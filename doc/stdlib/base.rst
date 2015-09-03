@@ -30,7 +30,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   ..  quit()
 
    Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
 
@@ -122,7 +121,6 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   ..  Base.compilecache(module::Symbol)
 
    Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
@@ -219,6 +217,8 @@ All Objects
 -----------
 
 .. function:: is(x, y) -> Bool
+              ===(x,y) -> Bool
+              ≡(x,y) -> Bool
 
    .. Docstring generated from Julia source
 
@@ -336,7 +336,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   ..  convert(T, x)
 
    Convert ``x`` to a value of type ``T``.
 
@@ -386,7 +385,6 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   ..  widen(type | x)
 
    If the argument is a type, return a "larger" type (for numeric types, this will be
    a type with at least as much range and precision as the argument, and usually more).
@@ -511,7 +509,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   ..  fieldoffsets(type)
 
    The byte offset of each field of a type relative to the data start. For example, we could use it
    in the following manner to summarize information about a struct type:
@@ -545,7 +542,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   ..  isimmutable(v)
 
    True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
    Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
@@ -554,7 +550,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   ..  isbits(T)
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
@@ -594,7 +589,6 @@ Types
 
    .. Docstring generated from Julia source
 
-   ..  @enum EnumName EnumValue1[=x] EnumValue2[=y]
 
    Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``, respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
 
@@ -621,7 +615,6 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ..  method_exists(f, Tuple type) -> Bool
 
    Determine whether the given generic function has a method matching the given :obj:`Tuple` of argument types.
 
@@ -634,7 +627,6 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ..  applicable(f, args...) -> Bool
 
    Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -660,7 +652,6 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   ..  |>(x, f)
 
    Applies a function to the preceding argument. This allows for easy function chaining.
 
@@ -700,7 +691,6 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   ..  esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
@@ -742,7 +732,6 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   ..  get(x)
 
    Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
    value if it is present; otherwise, throws a ``NullException``.
@@ -751,7 +740,6 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   ..  get(x, y)
 
    Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
    the value if it is present; otherwise, returns ``convert(T, y)``.
@@ -810,7 +798,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  open(command, mode::AbstractString="r", stdio=DevNull)
 
    Start running ``command`` asynchronously, and return a tuple
    ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
@@ -824,7 +811,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
    on the resulting read or write stream, then closes the stream
@@ -879,7 +865,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  pipeline(from, to, ...)
 
    Create a pipeline from a data source to a destination. The source and destination can
    be commands, I/O streams, strings, or results of other ``pipeline`` calls. At least one
@@ -898,7 +883,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  pipeline(command; stdin, stdout, stderr, append=false)
 
    Redirect I/O to or from the given ``command``. Keyword arguments specify which of
    the command's streams should be redirected. ``append`` controls whether file output
@@ -947,7 +931,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  tic()
 
    Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
 
@@ -955,7 +938,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  toc()
 
    Print and return the time elapsed since the last :func:`tic`.
 
@@ -963,7 +945,6 @@ System
 
    .. Docstring generated from Julia source
 
-   ..  toq()
 
    Return, but do not print, the time elapsed since the last :func:`tic`.
 
@@ -1353,7 +1334,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  @code_lowered
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 
@@ -1367,7 +1347,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  @code_typed
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
 
@@ -1375,7 +1354,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  code_warntype(f, types)
 
    Displays lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See :ref:`man-code-warntype` for more information.
 
@@ -1383,7 +1361,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  @code_warntype
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
 
@@ -1391,7 +1368,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
 
@@ -1401,7 +1377,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  @code_llvm
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
 
@@ -1415,7 +1390,6 @@ Internals
 
    .. Docstring generated from Julia source
 
-   ..  @code_native
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
 
