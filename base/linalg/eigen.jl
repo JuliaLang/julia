@@ -142,7 +142,7 @@ function eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
 end
 
 function eig(A::Union{Number, AbstractMatrix}, B::Union{Number, AbstractMatrix})
-    F = eigfact(B)
+    F = eigfact(A,B)
     F.values, F.vectors
 end
 
