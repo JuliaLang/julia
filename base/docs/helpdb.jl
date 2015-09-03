@@ -5433,7 +5433,6 @@ repeat
 
 doc"""
     scale(A, b)
-
     scale(b, A)
 
 Scale an array `A` by a scalar `b`, returning a new array.
@@ -7840,9 +7839,6 @@ Base.ccall
 doc"""
 ```rst
 ..  scale!(A, b)
-
-::
-
            scale!(b, A)
 
 Scale an array ``A`` by a scalar ``b``, similar to :func:`scale` but
