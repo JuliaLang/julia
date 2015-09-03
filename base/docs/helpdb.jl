@@ -12362,59 +12362,32 @@ Dates.dayofweek
 
 doc"""
     Year(dt::TimeType) -> Year
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Year(dt)
-
-doc"""
     Month(dt::TimeType) -> Month
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Month(dt)
-
-doc"""
     Week(dt::TimeType) -> Week
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Week(dt)
-
-doc"""
     Day(dt::TimeType) -> Day
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Day(dt)
-
-doc"""
     Hour(dt::TimeType) -> Hour
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Hour(dt)
-
-doc"""
     Minute(dt::TimeType) -> Minute
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Minute(dt)
-
-doc"""
     Second(dt::TimeType) -> Second
-
-Return the field part of a Date or DateTime as a `Period` type.
-"""
-Dates.Second(dt)
-
-doc"""
     Millisecond(dt::TimeType) -> Millisecond
 
 Return the field part of a Date or DateTime as a `Period` type.
 """
-Dates.Millisecond(dt)
+Dates.Year(dt::Dates.TimeType)
+
+doc"""
+    Year(v)
+    Month(v)
+    Week(v)
+    Day(v)
+    Hour(v)
+    Minute(v)
+    Second(v)
+    Millisecond(v)
+
+Construct a `Period` type with the given `v` value. Input must be losslessly
+convertible to an `Int64`.
+"""
+Dates.Year(v)
 
 doc"""
     quarterofyear(dt::TimeType) -> Int
