@@ -226,19 +226,20 @@ typedef struct _jl_thread_heap_t {
     pool_t norm_pools[N_POOLS];
 } jl_thread_heap_t;
 
-static JL_THREAD jl_thread_heap_t *jl_thread_heap;
-
 // The following macros are used for accessing these variables.
 // In the multi-threaded version, they establish the desired thread context.
 // In the single-threaded version, they are essentially noops, but nonetheless
 // serve to check that the thread context macros are being used.
 #ifdef JULIA_ENABLE_THREADING
+static JL_THREAD jl_thread_heap_t *jl_thread_heap;
 #define FOR_CURRENT_HEAP {jl_thread_heap_t *current_heap = jl_thread_heap;
 #define END }
 #define FOR_EACH_HEAP for( int current_heap_index=jl_n_threads; --current_heap_index>=0; ) { jl_thread_heap_t *current_heap = jl_all_heaps[current_heap_index];
 #define FOR_HEAP(t_n) {jl_thread_heap_t *current_heap = jl_all_heaps[t_n];
 /*}}*/
 #else
+static jl_thread_heap_t _jl_thread_heap;
+static jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
 #define FOR_CURRENT_HEAP {jl_thread_heap_t *current_heap = jl_thread_heap;
 #define END }
 #define FOR_EACH_HEAP FOR_CURRENT_HEAP int current_heap_index = 0; (void)current_heap_index;
@@ -2419,10 +2420,11 @@ void jl_print_gc_stats(JL_STREAM *s)
 }
 #endif
 
-#ifdef JULIA_ENABLE_THREADING
 // Per-thread initialization (when threading is fully implemented)
 struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
+#ifdef JULIA_ENABLE_THREADING
     jl_thread_heap = malloc(sizeof(jl_thread_heap_t)); // FIXME - should be cache-aligned malloc
+#endif
     FOR_CURRENT_HEAP
         const int* szc = sizeclasses;
         pool_t *p = pools;
@@ -2447,7 +2449,6 @@ struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
     END
     return jl_thread_heap;
 }
-#endif
 
 // System-wide initializations
 void jl_gc_init(void)

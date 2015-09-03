@@ -75,6 +75,8 @@ void ti_initthread(int16_t tid)
 #ifdef JULIA_ENABLE_THREADING
     jl_all_pgcstacks[tid] = &jl_pgcstack;
     jl_all_heaps[tid] = jl_mk_thread_heap();
+#else
+    jl_mk_thread_heap();
 #endif
 
     jl_all_task_states[tid].pcurrent_task = &jl_current_task;
