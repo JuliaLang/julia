@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-JL_DEFINE_MUTEX(gc)
+JL_DEFINE_MUTEX(pagealloc)
 
 // manipulating mark bits
 
@@ -664,7 +664,7 @@ static NOINLINE void *malloc_page(void)
     int i;
     region_t* region;
     int region_i = 0;
-    JL_LOCK(gc);
+    JL_LOCK(pagealloc);
     while(region_i < REGION_COUNT) {
         region = regions[region_i];
         if (region == NULL) {
@@ -732,7 +732,7 @@ static NOINLINE void *malloc_page(void)
 #endif
     current_pg_count++;
     max_pg_count = max_pg_count < current_pg_count ? current_pg_count : max_pg_count;
-    JL_UNLOCK(gc);
+    JL_UNLOCK(pagealloc);
     return ptr;
 }
 

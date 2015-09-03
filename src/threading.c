@@ -57,6 +57,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // lock for code generation
 JL_DEFINE_MUTEX(codegen);
+JL_DEFINE_MUTEX(typecache);
 
 // thread ID
 JL_THREAD int16_t ti_tid = 0;
