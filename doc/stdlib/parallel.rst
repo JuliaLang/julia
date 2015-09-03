@@ -220,7 +220,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Get the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
+   Get the number of available worker processes. This is one less than ``nprocs()``\ . Equal to ``nprocs()`` if ``nprocs() == 1``\ .
 
 .. function:: procs()
 

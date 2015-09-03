@@ -1653,14 +1653,14 @@ sech
 doc"""
     nworkers()
 
-Get the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
+Get the number of available worker processes. This is one less than `nprocs()`. Equal to `nprocs()` if `nprocs() == 1`.
 """
 nworkers
 
 doc"""
     filemode(file)
 
-Equivalent to stat(file).mode
+Equivalent to `stat(file).mode`
 """
 filemode
 
@@ -1890,7 +1890,7 @@ isimmutable
 doc"""
     macroexpand(x)
 
-Takes the expression x and returns an equivalent expression with all macros removed (expanded).
+Takes the expression `x` and returns an equivalent expression with all macros removed (expanded).
 """
 macroexpand
 
@@ -2468,7 +2468,7 @@ $
 doc"""
     expand(x)
 
-Takes the expression x and returns an equivalent expression in lowered form
+Takes the expression `x` and returns an equivalent expression in lowered form
 """
 expand
 
@@ -3288,7 +3288,7 @@ doc"""
 
 Modulus after division by 2pi, returning in the range \[0,2pi).
 
-This function computes a floating point representation of the modulus after division by numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would compute the modulus of x relative to division by the floating-point number 2pi.
+This function computes a floating point representation of the modulus after division by numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would compute the modulus of `x` relative to division by the floating-point number 2pi.
 """
 mod2pi
 
@@ -3662,7 +3662,7 @@ stdm
 doc"""
     mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
-Move the file, link, or directory from *src* to *dest*. `remove_destination=true` will first remove an existing `dst`.
+Move the file, link, or directory from `src` to `dst`. `remove_destination=true` will first remove an existing `dst`.
 """
 mv
 
@@ -4907,7 +4907,7 @@ readdlm(source)
 doc"""
     filesize(path...)
 
-Equivalent to stat(file).size
+Equivalent to `stat(file).size`
 """
 filesize
 
@@ -4953,7 +4953,7 @@ cglobal
 doc"""
     one(x)
 
-Get the multiplicative identity element for the type of x (x can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
+Get the multiplicative identity element for the type of `x` (`x` can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
 """
 one
 
@@ -7470,7 +7470,7 @@ besselk
 doc"""
     readchomp(x)
 
-Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
+Read the entirety of `x` as a string but remove trailing newlines. Equivalent to `chomp(readall(x))`.
 """
 readchomp
 
@@ -7666,7 +7666,7 @@ htol
 doc"""
     ctime(file)
 
-Equivalent to stat(file).ctime
+Equivalent to `stat(file).ctime`
 """
 ctime
 
@@ -9804,7 +9804,7 @@ promote_rule
 doc"""
     mtime(file)
 
-Equivalent to stat(file).mtime
+Equivalent to `stat(file).mtime`
 """
 mtime
 
@@ -10893,7 +10893,7 @@ ischardev
 doc"""
     zero(x)
 
-Get the additive identity element for the type of x (x can also specify the type itself).
+Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 """
 zero
 
@@ -11436,7 +11436,7 @@ exp2
 doc"""
     gcd(x,y)
 
-Greatest common (positive) divisor (or zero if x and y are both zero).
+Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
 """
 gcd
 
@@ -11457,7 +11457,7 @@ istaskstarted
 doc"""
     clamp(x, lo, hi)
 
-Return x if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments are promoted to a common type. Operates elementwise over `x` if it is an array.
+Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments are promoted to a common type. Operates elementwise over `x` if it is an array.
 """
 clamp
 

@@ -162,13 +162,13 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Get the multiplicative identity element for the type of x (x can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
+   Get the multiplicative identity element for the type of ``x`` (``x`` can also specify the type itself). For matrices, returns an identity matrix of the appropriate size and type.
 
 .. function:: zero(x)
 
    .. Docstring generated from Julia source
 
-   Get the additive identity element for the type of x (x can also specify the type itself).
+   Get the additive identity element for the type of ``x`` (``x`` can also specify the type itself).
 
 .. data:: pi
           π

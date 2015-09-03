@@ -296,7 +296,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
+   Read the entirety of ``x`` as a string but remove trailing newlines. Equivalent to ``chomp(readall(x))``\ .
 
 .. function:: truncate(file,n)
 
