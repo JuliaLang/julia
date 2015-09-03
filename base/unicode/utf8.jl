@@ -192,17 +192,6 @@ function string(a::Union{ByteString,Char}...)
     UTF8String(s)
 end
 
-"""
-Reverses a UTF-8 encoded string
-
-Returns:
-
-*   `UTF8String`
-
-Throws:
-
-*   `UnicodeError`
-"""
 function reverse(s::UTF8String)
     dat = s.data
     n = length(dat)

@@ -2459,13 +2459,6 @@ When searching for files, `require` first looks in the current working directory
 require
 
 doc"""
-    \$(x, y)
-
-Bitwise exclusive or
-"""
-$
-
-doc"""
     expand(x)
 
 Takes the expression `x` and returns an equivalent expression in lowered form
@@ -3725,6 +3718,13 @@ doc"""
 Return a copy of `v` reversed from start to stop.
 """
 reverse
+
+doc"""
+    reverse(s::AbstractString) -> AbstractString
+
+Reverses a string
+"""
+reverse(s::AbstractString)
 
 doc"""
 ```rst
@@ -9308,16 +9308,15 @@ doc"""
     get!(f::Function, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store `key => f()`, and return `f()`.
-"""
-get!(f::Function,collection,key)
 
-doc"""
 This is intended to be called using `do` block syntax:
 
     get!(dict, key) do
         # default value calculated here
+        time()
+    end
 """
-get!
+get!(f::Function,collection,key)
 
 doc"""
     inv(M)
