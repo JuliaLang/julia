@@ -141,19 +141,19 @@
 
    .. Docstring generated from Julia source
 
-   Returns true if the given value is valid for its type, which currently can be one of ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String``
+   Returns ``true`` if the given value is valid for its type, which currently can be one of ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String``
 
 .. function:: isvalid(T, value) -> Bool
 
    .. Docstring generated from Julia source
 
-   Returns true if the given value is valid for that type. Types currently can be ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String`` Values for ``Char`` can be of type ``Char`` or ``UInt32`` Values for ``ASCIIString`` and ``UTF8String`` can be of that type, or ``Vector{UInt8}`` Values for ``UTF16String`` can be ``UTF16String`` or ``Vector{UInt16}`` Values for ``UTF32String`` can be ``UTF32String``\ , ``Vector{Char}`` or ``Vector{UInt32}``
+   Returns ``true`` if the given value is valid for that type. Types currently can be ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String`` Values for ``Char`` can be of type ``Char`` or ``UInt32`` Values for ``ASCIIString`` and ``UTF8String`` can be of that type, or ``Vector{UInt8}`` Values for ``UTF16String`` can be ``UTF16String`` or ``Vector{UInt16}`` Values for ``UTF32String`` can be ``UTF32String``\ , ``Vector{Char}`` or ``Vector{UInt32}``
 
 .. function:: is_assigned_char(c) -> Bool
 
    .. Docstring generated from Julia source
 
-   Returns true if the given char or integer is an assigned Unicode code point.
+   Returns ``true`` if the given char or integer is an assigned Unicode code point.
 
 .. function:: ismatch(r::Regex, s::AbstractString) -> Bool
 
@@ -171,7 +171,7 @@
 
    .. Docstring generated from Julia source
 
-   Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
+   Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is ``true``\ , the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
 
 .. function:: matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
@@ -235,7 +235,7 @@
 
    .. Docstring generated from Julia source
 
-   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``\ 's second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be false. The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
+   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``\ 's second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be ``false``\ . The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
 
 .. function:: rsplit(string, [chars]; limit=0, keep=true)
 

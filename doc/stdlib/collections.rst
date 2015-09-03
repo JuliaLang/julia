@@ -465,55 +465,55 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Test whether any elements of a boolean collection are true.
+   Test whether any elements of a boolean collection are ``true``\ .
 
 .. function:: any(A, dims)
 
    .. Docstring generated from Julia source
 
-   Test whether any values along the given dimensions of an array are true.
+   Test whether any values along the given dimensions of an array are ``true``\ .
 
 .. function:: any!(r, A)
 
    .. Docstring generated from Julia source
 
-   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true, and write results to ``r``\ .
+   Test whether any values in ``A`` along the singleton dimensions of ``r`` are ``true``\ , and write results to ``r``\ .
 
 .. function:: all(itr) -> Bool
 
    .. Docstring generated from Julia source
 
-   Test whether all elements of a boolean collection are true.
+   Test whether all elements of a boolean collection are ``true``.
 
 .. function:: all(A, dims)
 
    .. Docstring generated from Julia source
 
-   Test whether all values along the given dimensions of an array are true.
+   Test whether all values along the given dimensions of an array are ``true``.
 
 .. function:: all!(r, A)
 
    .. Docstring generated from Julia source
 
-   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true, and write results to ``r``\ .
+   Test whether all values in ``A`` along the singleton dimensions of ``r`` are ``true``\ , and write results to ``r``\ .
 
 .. function:: count(p, itr) -> Integer
 
    .. Docstring generated from Julia source
 
-   Count the number of elements in ``itr`` for which predicate ``p`` returns true.
+   Count the number of elements in ``itr`` for which predicate ``p`` returns ``true``\ .
 
 .. function:: any(p, itr) -> Bool
 
    .. Docstring generated from Julia source
 
-   Determine whether predicate ``p`` returns true for any elements of ``itr``\ .
+   Determine whether predicate ``p`` returns ``true`` for any elements of ``itr``\ .
 
 .. function:: all(p, itr) -> Bool
 
    .. Docstring generated from Julia source
 
-   Determine whether predicate ``p`` returns true for all elements of ``itr``.
+   Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``.
 
    .. doctest::
 
@@ -664,13 +664,13 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Return a copy of ``collection``\ , removing elements for which ``function`` is false. For associative collections, the function is passed two arguments (key and value).
+   Return a copy of ``collection``\ , removing elements for which ``function`` is ``false``\ . For associative collections, the function is passed two arguments (key and value).
 
 .. function:: filter!(function, collection)
 
    .. Docstring generated from Julia source
 
-   Update ``collection``\ , removing elements for which ``function`` is false. For associative collections, the function is passed two arguments (key and value).
+   Update ``collection``\ , removing elements for which ``function`` is ``false``\ . For associative collections, the function is passed two arguments (key and value).
 
 Indexable Collections
 ---------------------
@@ -967,7 +967,7 @@ Set-Like Collections
 
    .. Docstring generated from Julia source
 
-   True if A is a subset of or equal to S.
+   Return ``true`` if ``A`` is a subset of or equal to ``S``.
 
 Fully implemented by:
 
@@ -1370,7 +1370,7 @@ is used, so that elements popped from the heap are given in ascending order.
 
    .. Docstring generated from Julia source
 
-   Return true iff an array is heap-ordered according to the given order.
+   Return ``true`` iff an array is heap-ordered according to the given order.
 
 .. function:: heappush!(v, x, [ord])
 

@@ -83,7 +83,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Wake up tasks waiting for a condition, passing them ``val``\ . If ``all`` is true (the default), all waiting tasks are woken, otherwise only one is. If ``error`` is true, the passed value is raised as an exception in the woken tasks.
+   Wake up tasks waiting for a condition, passing them ``val``\ . If ``all`` is ``true`` (the default), all waiting tasks are woken, otherwise only one is. If ``error`` is ``true``\ , the passed value is raised as an exception in the woken tasks.
 
 .. function:: schedule(t::Task, [val]; error=false)
 
@@ -91,7 +91,7 @@ Tasks
 
    Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as ``wait``\ .
 
-   If a second argument is provided, it will be passed to the task (via the return value of ``yieldto``\ ) when it runs again. If ``error`` is true, the value is raised as an exception in the woken task.
+   If a second argument is provided, it will be passed to the task (via the return value of ``yieldto``\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
 
 .. function:: @schedule
 
@@ -261,8 +261,8 @@ General Parallel Computing Support
    If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
    All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
 
-   If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
-   If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   If ``err_retry`` is ``true``, it retries a failed application of ``f`` on a different worker.
+   If ``err_stop`` is ``true``, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
 
 .. function:: remotecall(id, func, args...)
 

@@ -196,7 +196,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Print information about the version of Julia in use. If the ``verbose`` argument is true, detailed system information is shown as well.
+   Print information about the version of Julia in use. If the ``verbose`` argument is ``true``\ , detailed system information is shown as well.
 
 .. function:: workspace()
 
@@ -250,7 +250,7 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   Return ``x`` if ``condition`` is true, otherwise return ``y``\ . This differs from ``?`` or ``if`` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using ``ifelse`` instead of an ``if`` statement can eliminate the branch in generated code and provide higher performance in tight loops.
+   Return ``x`` if ``condition`` is ``true``\ , otherwise return ``y``\ . This differs from ``?`` or ``if`` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using ``ifelse`` instead of an ``if`` statement can eliminate the branch in generated code and provide higher performance in tight loops.
 
 .. function:: lexcmp(x, y)
 
@@ -415,7 +415,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   True if and only if all values of ``type1`` are also of ``type2``\ . Can also be written using the ``<:`` infix operator as ``type1 <: type2``\ .
+   Return ``true`` if and only if all values of ``type1`` are also of ``type2``\ . Can also be written using the ``<:`` infix operator as ``type1 <: type2``\ .
 
 .. function:: <:(T1, T2)
 
@@ -537,14 +537,14 @@ Types
 
    .. Docstring generated from Julia source
 
-   True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+   Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
    Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
 
 .. function:: isbits(T)
 
    .. Docstring generated from Julia source
 
-   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
+   Return ``true`` if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
    .. doctest::
 
@@ -699,13 +699,13 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is ``true`` (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``\ . If ``raise`` is ``true`` (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is ``false``\ , ``parse`` will return an expression that will raise an error upon evaluation.
 
 .. function:: parse(str; raise=true)
 
    .. Docstring generated from Julia source
 
-   Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
+   Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If ``raise`` is ``true`` (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
 Nullables
 ---------
@@ -1028,13 +1028,13 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``\ .
+   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Also available as the macro ``@assert expr``\ .
 
 .. function:: @assert cond [text]
 
    .. Docstring generated from Julia source
 
-   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
+   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Preferred syntax for writing assertions.
 
 .. function:: ArgumentError(msg)
 
@@ -1289,7 +1289,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Control whether garbage collection is enabled using a boolean argument (true for enabled, false for disabled). Returns previous GC state. Disabling garbage collection should be used only with extreme caution, as it can cause memory use to grow without bound.
+   Control whether garbage collection is enabled using a boolean argument (``true`` for enabled, ``false`` for disabled). Returns previous GC state. Disabling garbage collection should be used only with extreme caution, as it can cause memory use to grow without bound.
 
 .. function:: macroexpand(x)
 

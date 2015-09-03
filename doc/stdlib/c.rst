@@ -153,7 +153,7 @@
 
    .. Docstring generated from Julia source
 
-   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
+   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``iftrue`` is ``true``
 
 .. data:: Ptr{T}
 

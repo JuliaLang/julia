@@ -189,13 +189,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create a ``BitArray`` with all values set to true
+   Create a ``BitArray`` with all values set to ``true``
 
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
 
-   Create a ``BitArray`` with all values set to false
+   Create a ``BitArray`` with all values set to ``false``
 
 .. function:: fill(x, dims)
 
@@ -399,7 +399,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Return a vector of the linear indexes of ``A`` where ``f`` returns true.
+   Return a vector of the linear indexes of ``A`` where ``f`` returns ``true``\ .
 
 .. function:: findn(A)
 
@@ -429,7 +429,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Return the index of the first element of ``A`` for which ``predicate`` returns true.
+   Return the index of the first element of ``A`` for which ``predicate`` returns ``true``\ .
 
 .. function:: findlast(A)
 
@@ -447,7 +447,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Return the index of the last element of ``A`` for which ``predicate`` returns true.
+   Return the index of the last element of ``A`` for which ``predicate`` returns ``true``\ .
 
 .. function:: findnext(A, i)
 
@@ -459,7 +459,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
+   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
 
 .. function:: findnext(A, v, i)
 
@@ -477,7 +477,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
+   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
 
 .. function:: findprev(A, v, i)
 
@@ -702,7 +702,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Returns true if v is a valid permutation.
+   Returns ``true`` if ``v`` is a valid permutation.
 
 .. function:: permute!(v, p)
 
