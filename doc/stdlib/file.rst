@@ -189,7 +189,7 @@
 
    Returns ``(path, io)``\ , where ``path`` is the path of a new temporary file in ``parent`` and ``io`` is an open file object for this path.
 
-.. function:: mktemp(f::function, [parent=tempdir()])
+.. function:: mktemp(f::Function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
 
@@ -201,7 +201,7 @@
 
    Create a temporary directory in the ``parent`` directory and return its path.
 
-.. function:: mktempdir(f::function, [parent=tempdir()])
+.. function:: mktempdir(f::Function, [parent=tempdir()])
 
    .. Docstring generated from Julia source
 

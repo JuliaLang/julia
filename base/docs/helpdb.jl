@@ -2930,7 +2930,7 @@ open(file_name, mode="r")
 
 doc"""
 ```rst
-..  open(f::function, args...)
+..  open(f::Function, args...)
 
 Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
@@ -4560,7 +4560,7 @@ Create a temporary directory in the `parent` directory and return its path.
 mktempdir()
 
 doc"""
-    mktempdir(f::function, [parent=tempdir()])
+    mktempdir(f::Function, [parent=tempdir()])
 
 Apply the function `f` to the result of `mktempdir(parent)` and remove the temporary directory upon completion.
 """
@@ -6804,7 +6804,7 @@ Returns `(path, io)`, where `path` is the path of a new temporary file in `paren
 mktemp(?)
 
 doc"""
-    mktemp(f::function, [parent=tempdir()])
+    mktemp(f::Function, [parent=tempdir()])
 
 Apply the function `f` to the result of `mktemp(parent)` and remove the temporary file upon completion.
 """
