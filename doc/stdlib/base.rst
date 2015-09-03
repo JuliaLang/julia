@@ -1186,6 +1186,12 @@ Errors
 
    A symbol in the current scope is not defined.
 
+.. function:: InitError(mod::Symbol, error)
+
+   .. Docstring generated from Julia source
+
+   An error occurred when running a module's ``__init__`` function. The actual error thrown is available in the ``.error`` field.
+
 Events
 ------
 
