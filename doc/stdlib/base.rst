@@ -52,7 +52,7 @@ Getting Around
 
    Determine whether Julia is running an interactive session.
 
-.. function:: whos([Module,] [pattern::Regex])
+.. function:: whos([io,] [Module,] [pattern::Regex])
 
    .. Docstring generated from Julia source
 

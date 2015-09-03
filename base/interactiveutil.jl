@@ -414,7 +414,7 @@ end
 
 
 doc"""
-    whos([Module,] [pattern::Regex])
+    whos([io,] [Module,] [pattern::Regex])
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
 
