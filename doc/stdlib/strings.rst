@@ -231,6 +231,12 @@
 
    Determine whether the second argument is a substring of the first.
 
+.. function:: reverse(s::AbstractString) -> AbstractString
+
+   .. Docstring generated from Julia source
+
+   Reverses a string
+
 .. function:: replace(string, pat, r[, n])
 
    .. Docstring generated from Julia source

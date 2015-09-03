@@ -204,11 +204,19 @@ for folder in ["stdlib", "manual", "devdocs"]
     end
 end
 
+missing_count = 0
+
 for (d, v) in all_docs
     isa(v, ObjectIdDict) && continue # No idea what these are
     isa(v, Int) && continue # We don't document `0` as a function
     warn("Missing doc for $v")
     # println(tryrst(d, false))
     # # Generate todo list ;-p
-    # println("- [ ] $v")
+    # println("- [ ] `$v`")
+    missing_count += 1
+end
+
+if missing_count > 0
+    println()
+    warn("Missing $missing_count doc strings")
 end

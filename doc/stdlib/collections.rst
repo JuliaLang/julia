@@ -786,6 +786,15 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Return the value stored for the given key, or if no mapping for the key is present, store ``key => f()``\ , and return ``f()``\ .
 
+   This is intended to be called using ``do`` block syntax:
+
+   .. code-block:: julia
+
+       get!(dict, key) do
+           # default value calculated here
+           time()
+       end
+
 .. function:: getkey(collection, key, default)
 
    .. Docstring generated from Julia source
