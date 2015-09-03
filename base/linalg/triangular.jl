@@ -330,20 +330,6 @@ end
 scale!(A::Union{UpperTriangular,LowerTriangular},c::Number) = scale!(A,A,c)
 scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
-for (t1, t2) in ([:UnitLowerTriangular, :LowerTriangular],
-                 [:UnitUpperTriangular, :UpperTriangular])
-    for (type1, type2) in ([:Real, :Complex], [:Any, :Number])
-        @eval begin
-            function scale{T<:$(type1),S<:$(type2)}(A::$(t1){T}, c::S)
-                D = $(t2)(Array(promote_type(T,S), size(A)...));
-                scale!(D,A,c);
-                return D
-            end
-            scale{T<:$(type1),S<:$(type2)}(c::S, A::$(t1){T}) = scale(A, c)
-        end
-    end
-end
-
 # Binary operations
 +(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
 +(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data + B.data)

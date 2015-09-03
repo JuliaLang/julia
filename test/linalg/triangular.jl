@@ -133,14 +133,13 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test B == A1.'
 
         # scale
-        if elty1 == Int
-            cr = 2
-        else
-            cr = 0.5
-        end
-        ci = cr * im
-
         if (t1 == UpperTriangular || t1 == LowerTriangular)
+            if elty1 == Int
+                cr = 2
+            else
+                cr = 0.5
+            end
+            ci = cr * im
             if elty1 <: Real
                 A1tmp = copy(A1)
                 scale!(A1tmp,cr)
@@ -150,12 +149,11 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 scale!(A1tmp,ci)
                 @test A1tmp == ci*A1
             end
+            @test scale(A1,cr) == cr*A1
+            @test scale(cr,A1) == cr*A1
+            @test scale(A1,ci) == ci*A1
+            @test scale(ci,A1) == ci*A1
         end
-
-        @test scale(A1,cr) == cr*A1
-        @test scale(cr,A1) == cr*A1
-        @test scale(A1,ci) == ci*A1
-        @test scale(ci,A1) == ci*A1
 
         # Binary operations
         @test A1*0.5 == full(A1)*0.5
