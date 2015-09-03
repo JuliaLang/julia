@@ -151,7 +151,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Remainder from Euclidean division, returning a value of the same sign as``x``\ , and smaller in magnitude than ``y``\ . This value is always exact.
+   Remainder from Euclidean division, returning a value of the same sign as ``x``\ , and smaller in magnitude than ``y``\ . This value is always exact.
 
 .. function:: divrem(x, y)
 

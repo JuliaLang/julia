@@ -5816,7 +5816,7 @@ doc"""
     rem(x, y)
     %(x, y)
 
-Remainder from Euclidean division, returning a value of the same sign as`x`, and smaller in magnitude than `y`. This value is always exact.
+Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in magnitude than `y`. This value is always exact.
 """
 rem
 
