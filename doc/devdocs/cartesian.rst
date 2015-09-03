@@ -206,10 +206,10 @@ Macro reference
    .. code-block:: julia
 
        if i_1 > size(A, 1)
+           error("Dimension ", 1, " too big")
+       elseif i_2 > size(A, 2)
+           error("Dimension ", 2, " too big")
+       else
+           println("All OK")
+       end
 
-	    error("Dimension ", 1, " too big")
-        elseif i_2 > size(A, 2)
-	    error("Dimension ", 2, " too big")
-        else
-	    println("All OK")
-	end

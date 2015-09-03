@@ -136,7 +136,7 @@ function translate(file)
                     ismatch(r"^\s*$", l) ? println(io) : println(io, "   ", l)
                 end
                 isrst(doc) && println(io)
-            elseif doccing && (startswith(l, "   ") || ismatch(r"^\s*$", l))
+            elseif doccing && (ismatch(r"^\s+", l) || ismatch(r"^\s*$", l))
                 modidx == i-1 && println(io)
             else
                 doccing = false

@@ -765,6 +765,12 @@ Generates a sequence of `if ... elseif ... else ... end` statements. For example
 would generate:
 
     if i_1 > size(A, 1)
+        error("Dimension ", 1, " too big")
+    elseif i_2 > size(A, 2)
+        error("Dimension ", 2, " too big")
+    else
+        println("All OK")
+    end
 """
 :(Cartesian.@nif)
 
@@ -6955,6 +6961,8 @@ This is intended to be called using ``do`` block syntax::
 
   get(dict, key) do
       # default value calculated here
+      time()
+  end
 ```
 """
 get
