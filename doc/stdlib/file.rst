@@ -93,25 +93,25 @@
 
    .. Docstring generated from Julia source
 
-   Equivalent to stat(file).ctime
+   Equivalent to ``stat(file).ctime``
 
 .. function:: mtime(file)
 
    .. Docstring generated from Julia source
 
-   Equivalent to stat(file).mtime
+   Equivalent to ``stat(file).mtime``
 
 .. function:: filemode(file)
 
    .. Docstring generated from Julia source
 
-   Equivalent to stat(file).mode
+   Equivalent to ``stat(file).mode``
 
 .. function:: filesize(path...)
 
    .. Docstring generated from Julia source
 
-   Equivalent to stat(file).size
+   Equivalent to ``stat(file).size``
 
 .. function:: uperm(file)
 
@@ -157,7 +157,7 @@
 
    .. Docstring generated from Julia source
 
-   Move the file, link, or directory from *src* to *dest*. ``remove_destination=true`` will first remove an existing ``dst``\ .
+   Move the file, link, or directory from ``src`` to ``dst``\ . ``remove_destination=true`` will first remove an existing ``dst``\ .
 
 .. function:: rm(path::AbstractString; recursive=false)
 

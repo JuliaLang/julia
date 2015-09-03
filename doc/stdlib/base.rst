@@ -1295,13 +1295,13 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Takes the expression x and returns an equivalent expression with all macros removed (expanded).
+   Takes the expression ``x`` and returns an equivalent expression with all macros removed (expanded).
 
 .. function:: expand(x)
 
    .. Docstring generated from Julia source
 
-   Takes the expression x and returns an equivalent expression in lowered form
+   Takes the expression ``x`` and returns an equivalent expression in lowered form
 
 .. function:: code_lowered(f, types)
 
