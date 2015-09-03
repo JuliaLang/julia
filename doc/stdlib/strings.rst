@@ -401,7 +401,7 @@
 
    .. Docstring generated from Julia source
 
-   Tests whether a character is printable, and not a space, or whether this is true for all elements of a string. Any character that would cause a printer to use ink should be classified with isgraph(c)==true.
+   Tests whether a character is printable, and not a space, or whether this is true for all elements of a string. Any character that would cause a printer to use ink should be classified with ``isgraph(c)==true``\ .
 
 .. function:: islower(c::Union{Char,AbstractString}) -> Bool
 
@@ -469,7 +469,7 @@
 
    Create a UTF-16 string from a byte array, array of ``UInt16``\ , or any other string type. (Data must be valid UTF-16. Conversions of byte arrays check for a byte-order marker in the first two bytes, and do not include it in the resulting string.)
 
-   Note that the resulting ``UTF16String`` data is terminated by the NUL codepoint (16-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data. This NUL is appended automatically by the utf16(s) conversion function. If you have a ``UInt16`` array ``A`` that is already NUL-terminated valid UTF-16 data, then you can instead use UTF16String(A)` to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
+   Note that the resulting ``UTF16String`` data is terminated by the NUL codepoint (16-bit zero), which is not treated as a character in the string (so that it is mostly invisible in Julia); this allows the string to be passed directly to external functions requiring NUL-terminated data. This NUL is appended automatically by the ``utf16(s)`` conversion function. If you have a ``UInt16`` array ``A`` that is already NUL-terminated valid UTF-16 data, then you can instead use ``UTF16String(A)`` to construct the string without making a copy of the data and treating the NUL as a terminator rather than as part of the string.
 
 .. function:: utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
 
