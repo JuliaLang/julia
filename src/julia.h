@@ -59,10 +59,13 @@ extern "C" {
 
 // threading ------------------------------------------------------------------
 
-// WARNING: Threading support is incomplete.  Changing the 1 to a 0 will break Julia.
+// WARNING: Threading support is incomplete and experimental (and only works with llvm-svn)
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
 // of what eventual threading support will change.
-#if 0
+
+// #define JULIA_ENABLE_THREADING
+
+#ifndef JULIA_ENABLE_THREADING
 // Definition for compiling non-thread-safe Julia.
 #  define JL_THREAD
 #elif !defined(_OS_WINDOWS_)
@@ -100,30 +103,8 @@ DLLEXPORT void jl_threading_profile();
 #  error "No atomic operations supported."
 #endif
 
-#if 0
-#define JL_DEFINE_MUTEX(m)                                                \
-    uv_mutex_t m ## _mutex;                                               \
-    uint64_t m ## _thread_id = -1;
-
-#define JL_DEFINE_MUTEX_EXT(m)                                            \
-    extern uv_mutex_t m ## _mutex;                                        \
-    extern uint64_t m ## _thread_id;
-
-#define JL_LOCK(m)                                                        \
-    int m ## locked = 0;                                                  \
-    if (m ## _thread_id != uv_thread_self()) {                            \
-        uv_mutex_lock(&m ## _mutex);                                      \
-        m ## locked = 1;                                                  \
-        m ## _thread_id = uv_thread_self();                               \
-    }
-
-#define JL_UNLOCK(m)                                                      \
-    if (m ## locked) {                                                    \
-        m ## _thread_id = -1;                                             \
-        m ## locked = 0;                                                  \
-        uv_mutex_unlock(&m ## _mutex);                                    \
-    }
-#else
+#ifdef JULIA_ENABLE_THREADING
+#define FORCE_ELF
 #define JL_DEFINE_MUTEX(m)                                                \
     uint64_t volatile m ## _mutex = 0;                                    \
     int32_t m ## _lock_count = 0;
@@ -153,7 +134,13 @@ DLLEXPORT void jl_threading_profile();
         if (m ## _lock_count == 0)                                        \
             JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
     }
+#else
+#define JL_DEFINE_MUTEX(m)
+#define JL_DEFINE_MUTEX_EXT(m)
+#define JL_LOCK(m)
+#define JL_UNLOCK(m)
 #endif
+
 
 // core data types ------------------------------------------------------------
 

@@ -4941,18 +4941,21 @@ static void init_julia_llvm_env(Module *m)
                            "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
 
+#ifdef JULIA_ENABLE_THREADING
+#define JL_THREAD_MODEL ,GlobalValue::GeneralDynamicTLSModel
+#else
+#define JL_THREAD_MODEL
+#endif
     jlpgcstack_var =
         new GlobalVariable(*m, jl_ppvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack", NULL,
-                           GlobalValue::GeneralDynamicTLSModel);
+                           NULL, "jl_pgcstack", NULL JL_THREAD_MODEL);
     add_named_global(jlpgcstack_var, jl_dlsym(jl_dl_handle, "jl_pgcstack"));
 
     jlexc_var =
         new GlobalVariable(*m, jl_pvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_exception_in_transit", NULL,
-                           GlobalValue::GeneralDynamicTLSModel);
+                           NULL, "jl_exception_in_transit", NULL JL_THREAD_MODEL);
     add_named_global(jlexc_var, jl_dlsym(jl_dl_handle, "jl_exception_in_transit"));
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);

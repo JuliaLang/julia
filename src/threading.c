@@ -30,7 +30,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   . thread and threadgroup creation
   . thread function
   . invoke Julia function from multiple threads
+
+TODO:
+  . fix interface to properly support thread groups
+  . add queue per thread for tasks
+  . add reduction; reduce values returned from thread function
+  . make code generation thread-safe and remove the lock
 */
+
 
 #include <stdint.h>
 #include <stdio.h>
@@ -41,40 +48,56 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "uv.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "ia_misc.h"
 #include "threadgroup.h"
 #include "threading.h"
 
-/* TODO:
-  . ugly mixture of uv_thread* and pthread*; fix with patch to libuv?
-  . fix interface to properly support thread groups
-  . add queue per thread for tasks
-  . add reduction; reduce values returned from thread function
-  . make code generation thread-safe and remove the lock
-*/
+// thread ID
+JL_THREAD int16_t ti_tid = 0;
+DLLEXPORT int jl_n_threads;     // # threads we're actually using
+DLLEXPORT int jl_max_threads;   // # threads possible
+jl_thread_task_state_t *jl_all_task_states;
+
+// return calling thread's ID
+DLLEXPORT int16_t jl_threadid() { return ti_tid; }
+
+struct _jl_thread_heap_t *jl_mk_thread_heap(void);
+// must be called by each thread at startup
+void ti_initthread(int16_t tid)
+{
+    ti_tid = tid;
+    jl_pgcstack = NULL;
+#ifdef JULIA_ENABLE_THREADING
+    jl_all_pgcstacks[tid] = &jl_pgcstack;
+    jl_all_heaps[tid] = jl_mk_thread_heap();
+#endif
+
+    jl_all_task_states[tid].pcurrent_task = &jl_current_task;
+    jl_all_task_states[tid].proot_task = &jl_root_task;
+    jl_all_task_states[tid].pexception_in_transit = &jl_exception_in_transit;
+    jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
+}
+
+#ifdef JULIA_ENABLE_THREADING
 
 // lock for code generation
 JL_DEFINE_MUTEX(codegen);
 JL_DEFINE_MUTEX(typecache);
 
-// thread ID
-JL_THREAD int16_t ti_tid = 0;
-
 // thread heap
 struct _jl_thread_heap_t **jl_all_heaps;
 jl_gcframe_t ***jl_all_pgcstacks;
-jl_thread_task_state_t *jl_all_task_states;
 
 // only one thread group for now
 ti_threadgroup_t *tgworld;
 
 // for broadcasting work to threads
 ti_threadwork_t threadwork;
-
-DLLEXPORT int jl_max_threads;	// # threads possible
-DLLEXPORT int jl_n_threads;	// # threads we're actually using
 
 #if PROFILE_JL_THREADING
 double cpu_ghz;
@@ -85,51 +108,36 @@ uint64_t *join_ticks;
 #endif
 
 // create a thread and affinitize it if proc_num is specified
-int ti_threadcreate(pthread_t *pthread_id, int proc_num,
-                    void *(*thread_fun)(void *), void *thread_arg)
+int ti_threadcreate(uv_thread_t *thread_id, int proc_num,
+                    void (*thread_fun)(void *), void *thread_arg)
 {
+#ifdef _OS_LINUX_
     pthread_attr_t attr;
     pthread_attr_init(&attr);
 
-#ifdef _OS_LINUX_
     cpu_set_t cset;
     if (proc_num >= 0) {
-	CPU_ZERO(&cset);
-	CPU_SET(proc_num, &cset);
-	pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cset);
+        CPU_ZERO(&cset);
+        CPU_SET(proc_num, &cset);
+        pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cset);
     }
-#endif
-
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    return pthread_create(pthread_id, &attr, thread_fun, thread_arg);
+    return pthread_create(thread_id, &attr, thread_fun, thread_arg);
+#else
+    return uv_thread_create(thread_id, thread_fun, thread_arg);
+#endif
 }
 
 // set thread affinity
-void ti_threadsetaffinity(uint64_t pthread_id, int proc_num)
+void ti_threadsetaffinity(uint64_t thread_id, int proc_num)
 {
 #ifdef _OS_LINUX_
     cpu_set_t cset;
 
     CPU_ZERO(&cset);
     CPU_SET(proc_num, &cset);
-    pthread_setaffinity_np(pthread_id, sizeof(cpu_set_t), &cset);
+    pthread_setaffinity_np(thread_id, sizeof(cpu_set_t), &cset);
 #endif
-}
-
-struct _jl_thread_heap_t *jl_mk_thread_heap(void);
-
-// must be called by each thread at startup
-void ti_initthread(int16_t tid)
-{
-    ti_tid = tid;
-    jl_pgcstack = NULL;
-    jl_all_pgcstacks[tid] = &jl_pgcstack;
-    jl_all_heaps[tid] = jl_mk_thread_heap();
-
-    jl_all_task_states[tid].pcurrent_task = &jl_current_task;
-    jl_all_task_states[tid].proot_task = &jl_root_task;
-    jl_all_task_states[tid].pexception_in_transit = &jl_exception_in_transit;
-    jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
 }
 
 // all threads call this function to run user code
@@ -145,7 +153,7 @@ static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
 }
 
 // thread function: used by all except the main thread
-void *ti_threadfun(void *arg)
+void ti_threadfun(void *arg)
 {
     ti_threadarg_t *ta = (ti_threadarg_t *)arg;
     ti_threadgroup_t *tg;
@@ -193,22 +201,20 @@ void *ti_threadfun(void *arg)
         }
 
 #if PROFILE_JL_THREADING
-	uint64_t tuser = rdtsc();
+        uint64_t tuser = rdtsc();
         user_ticks[ti_tid] += tuser - tfork;
 #endif
 
         ti_threadgroup_join(tg, ti_tid);
 
 #if PROFILE_JL_THREADING
-	uint64_t tjoin = rdtsc();
+        uint64_t tjoin = rdtsc();
         join_ticks[ti_tid] += tjoin - tuser;
 #endif
 
         // TODO:
         // nowait should skip the join, but confirm that fork is reentrant
     }
-
-    return NULL;
 }
 
 #if PROFILE_JL_THREADING
@@ -225,7 +231,7 @@ void jl_init_threading(void)
     jl_n_threads = DEFAULT_NUM_THREADS;
     cp = getenv(NUM_THREADS_NAME);
     if (cp) {
-	jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
+        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     }
     if (jl_n_threads > jl_max_threads)
         jl_n_threads = jl_max_threads;
@@ -256,20 +262,20 @@ void jl_start_threads(void)
 {
     char *cp;
     int i, exclusive;
-    pthread_t ptid;
+    uv_thread_t ptid;
     ti_threadarg_t **targs;
 
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
     cp = getenv(MACHINE_EXCLUSIVE_NAME);
     if (cp)
-	exclusive = strtol(cp, NULL, 10);
+        exclusive = strtol(cp, NULL, 10);
 
     // exclusive use: affinitize threads, master thread on proc 0, rest
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive)
-	ti_threadsetaffinity(uv_thread_self(), 0);
+        ti_threadsetaffinity(uv_thread_self(), 0);
 
     // create threads
     targs = malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
@@ -320,9 +326,6 @@ void jl_shutdown_threading(void)
     fork_ticks = user_ticks = join_ticks = NULL;
 #endif
 }
-
-// return calling thread's ID
-int16_t jl_threadid() { return ti_tid; }
 
 // return thread's thread group
 void *jl_threadgroup() { return (void *)tgworld; }
@@ -405,7 +408,7 @@ void ti_reset_timings()
     int i;
     prep_ticks = 0;
     for (i = 0;  i < jl_n_threads;  i++)
-	fork_ticks[i] = user_ticks[i] = join_ticks[i] = 0;
+        fork_ticks[i] = user_ticks[i] = join_ticks[i] = 0;
 }
 
 void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
@@ -430,24 +433,42 @@ void jl_threading_profile()
     if (!fork_ticks) return;
 
     printf("\nti profile:\n");
-    printf("prep: %g (%lu)\n", TICKS_TO_SECS(prep_ticks), prep_ticks);
+    printf("prep: %g (%llu)\n", TICKS_TO_SECS(prep_ticks), (unsigned long long)prep_ticks);
 
     uint64_t min, max, avg;
     ti_timings(fork_ticks, &min, &max, &avg);
     printf("fork: %g (%g - %g)\n", TICKS_TO_SECS(min), TICKS_TO_SECS(max),
-	    TICKS_TO_SECS(avg));
+            TICKS_TO_SECS(avg));
     ti_timings(user_ticks, &min, &max, &avg);
     printf("user: %g (%g - %g)\n", TICKS_TO_SECS(min), TICKS_TO_SECS(max),
-	    TICKS_TO_SECS(avg));
+            TICKS_TO_SECS(avg));
     ti_timings(join_ticks, &min, &max, &avg);
     printf("join: %g (%g - %g)\n", TICKS_TO_SECS(min), TICKS_TO_SECS(max),
-	    TICKS_TO_SECS(avg));
+            TICKS_TO_SECS(avg));
 }
 
-#else
+#else //!PROFILE_JL_THREADING
 
 void jl_threading_profile()
 {
 }
 
+#endif //!PROFILE_JL_THREADING
+
+#else // !JULIA_ENABLE_THREADING
+
+void jl_init_threading(void) {
+    static jl_thread_task_state_t _jl_all_task_states;
+    jl_all_task_states = &_jl_all_task_states;
+    jl_max_threads = 1;
+    jl_n_threads = 1;
+    ti_initthread(0);
+}
+
+void jl_start_threads(void) { }
+
+#endif // !JULIA_ENABLE_THREADING
+
+#ifdef __cplusplus
+}
 #endif
