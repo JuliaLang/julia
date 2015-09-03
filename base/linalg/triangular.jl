@@ -313,6 +313,7 @@ function scale!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::UpperTriangul
             @inbounds A[i,j] = c * B[i,j]
         end
     end
+    return A
 end
 function scale!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::LowerTriangular, B::T, c::Number)
     n = chksquare(B)
@@ -324,23 +325,10 @@ function scale!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::LowerTriangul
             @inbounds A[i,j] = c * B[i,j]
         end
     end
+    return A
 end
-
-for (t1, t2) in ([:UnitLowerTriangular, :LowerTriangular],
-                 [:UnitUpperTriangular, :UpperTriangular])
-    @eval begin
-        function scale!{T,S<:Number}(A::$(t1){T}, c::S)
-            D = $(t2)(Array(promote_type(T,S), size(A)...));
-            scale!(D,A,c);
-            return D
-        end
-        function scale!{T,S<:Number}(A::$(t2){T}, c::S)
-            D = $(t2)(Array(promote_type(T,S), size(A)...));
-            scale!(D,A,c);
-            return D
-        end
-    end
-end
+scale!(A::Union{UpperTriangular,LowerTriangular},c::Number) = scale!(A,A,c)
+scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
 # Binary operations
 +(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
