@@ -41,7 +41,7 @@ General I/O
    ==== =================================
 
 
-.. function:: open(f::function, args...)
+.. function:: open(f::Function, args...)
 
    .. Docstring generated from Julia source
 
