@@ -315,13 +315,13 @@
 
    Get the file name part of a path.
 
-.. function:: @__FILE__() -> AbstractString
+.. function:: @__FILE__ -> AbstractString
 
    .. Docstring generated from Julia source
 
    ``@__FILE__`` expands to a string with the absolute path and file name of the script being run. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ .
 
-.. function:: @__LINE__() -> Int
+.. function:: @__LINE__ -> Int
 
    .. Docstring generated from Julia source
 
