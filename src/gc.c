@@ -34,6 +34,7 @@ extern "C" {
 #endif
 
 JL_DEFINE_MUTEX(pagealloc)
+JL_DEFINE_MUTEX(finalizers)
 
 // manipulating mark bits
 
@@ -379,6 +380,8 @@ static void run_finalizers(void)
 
 void jl_gc_inhibit_finalizers(int state)
 {
+    // NOTE: currently only called with the codegen lock held, but might need
+    // more synchronization in the future
     if (jl_gc_finalizers_inhibited && !state && !jl_in_gc) {
         jl_in_gc = 1;
         run_finalizers();
@@ -408,13 +411,17 @@ void jl_gc_run_all_finalizers(void)
 
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
+    JL_LOCK(finalizers);
     arraylist_push(&finalizer_list, (void*)v);
     arraylist_push(&finalizer_list, (void*)f);
+    JL_UNLOCK(finalizers);
 }
 
 void jl_finalize(jl_value_t *o)
 {
+    JL_LOCK(finalizers);
     (void)finalize_object(o);
+    JL_UNLOCK(finalizers);
 }
 
 static region_t *find_region(void *ptr, int maybe)
