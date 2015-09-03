@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code, LaTeX
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, Table, Code, LaTeX
 import Base: writemime
 
 # Basics
@@ -10,6 +10,10 @@ import Base: writemime
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"""foo
+bar""" == MD(Paragraph(["foo bar"]))
+@test md"""foo\
+bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
 @test md"#no title" == MD(Paragraph(["#no title"]))
 @test md"# title" == MD(Header{1}("title"))
