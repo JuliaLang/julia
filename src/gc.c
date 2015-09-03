@@ -825,7 +825,7 @@ DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
     jl_set_typeof(wr, jl_weakref_type);
-    wr->value = value;
+    wr->value = value;  // NOTE: wb not needed here
     FOR_CURRENT_HEAP
         arraylist_push(&weak_refs, wr);
     END
@@ -841,7 +841,7 @@ static void sweep_weak_refs(void)
         void *tmp;
 #define SWAP_wr(a,b) (tmp=a,a=b,b=tmp,1)
         if (l == 0)
-            return;
+            continue;
         do {
             wr = (jl_weakref_t*)lst[n];
             if (gc_marked(jl_astaggedvalue(wr))) {
