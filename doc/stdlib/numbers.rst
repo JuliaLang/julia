@@ -100,7 +100,6 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   ..  significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of
    a floating-point number or array. If ``x`` is a non-zero finite number,
@@ -288,7 +287,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  Float32(x [, mode::RoundingMode])
 
    Create a Float32 from ``x``. If ``x`` is not exactly representable then
    ``mode`` determines how ``x`` is rounded.
@@ -307,7 +305,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  Float64(x [, mode::RoundingMode])
 
    Create a Float64 from ``x``. If ``x`` is not exactly representable then
    ``mode`` determines how ``x`` is rounded.
@@ -326,7 +323,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  BigInt(x)
 
    Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
    that can be converted to an ``Int``).  The usual mathematical operators are
@@ -339,7 +335,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  BigFloat(x)
 
    Create an arbitrary precision floating point number. ``x`` may be
    an ``Integer``, a ``Float64`` or a ``BigInt``. The
@@ -363,7 +358,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  get_rounding(T)
 
    Get the current floating point rounding mode for type ``T``, controlling
    the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
@@ -376,7 +370,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   ..  set_rounding(T, mode)
 
    Set the rounding mode of floating point type ``T``, controlling the
    rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
@@ -422,7 +415,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  count_ones(x::Integer) -> Integer
 
    Number of ones in the binary representation of ``x``.
 
@@ -435,7 +427,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of ``x``.
 
@@ -448,7 +439,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of ``x``.
 
@@ -461,7 +451,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of ``x``.
 
@@ -474,7 +463,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of ``x``.
 
@@ -487,7 +475,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of ``x``.
 
@@ -500,7 +487,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  isprime(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
@@ -513,7 +499,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  isprime(x::BigInt, [reps = 25]) -> Bool
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
    ``false`` if ``x`` is not prime with high probability. The false positive
@@ -541,7 +526,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  isodd(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
@@ -557,7 +541,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-   ..  iseven(x::Integer) -> Bool
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
@@ -645,7 +628,6 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   ..  rand([rng], [S], [dims...])
 
    Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
 

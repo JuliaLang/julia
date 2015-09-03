@@ -227,9 +227,7 @@ short circuting boolean OR
 """
 
 keywords[:ccall] = doc"""
-      ccall((symbol, library) or function_pointer, ReturnType,
-            (ArgumentType1, ...),
-            ArgumentValue1, ...)
+      ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
   Call function in C-exported shared library, specified by
   `(function name, library)` tuple, where each component is a string

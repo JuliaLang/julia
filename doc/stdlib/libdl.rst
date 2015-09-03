@@ -16,7 +16,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  dlopen_e(libfile::AbstractString [, flags::Integer])
 
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 

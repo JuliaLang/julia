@@ -86,7 +86,6 @@
 
    .. Docstring generated from Julia source
 
-   ..  msync(ptr, len, [flags])
 
    Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
 

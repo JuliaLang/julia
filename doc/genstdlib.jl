@@ -61,6 +61,30 @@ end
 
 torst(md,remove_decl) = isrst(md) ? flatten(md).content[1].code : tryrst(md, remove_decl)
 
+function split_decl_rst(md, decl)
+    if isrst(md)
+        rst_text = flatten(md).content[1].code
+        ls = split(rst_text, "\n")
+        body_start = 1
+        if startswith(ls[1], ".. ") && !endswith(ls[1], "::")
+            decl = ".. function:: " * replace(ls[1], r"^.. *", "")
+            body_start += 1
+            while startswith(ls[body_start], "   ")
+                decl *= replace(ls[body_start], r"^ *", "\n              ")
+                body_start += 1
+            end
+            return decl, join(ls[body_start:end], "\n")
+        end
+        return decl, rst_text
+    else
+        if isa(md.content[1], Markdown.Code) && md.content[1].language == ""
+            decl = ".. function:: " * replace(shift!(md.content).code, "\n",
+                                              "\n              ")
+        end
+        return decl, Markdown.rst(md)
+    end
+end
+
 function translate(file)
     @assert(isfile(file))
     ls = split(readall(file), "\n")[1:end-1]
@@ -101,10 +125,11 @@ function translate(file)
                     continue
                 end
                 doccing = true
-                println(io, l)
+                decl, body = split_decl_rst(doc, l)
+                println(io, decl)
                 println(io)
                 println(io, "   .. Docstring generated from Julia source\n")
-                for l in split(torst(doc,true), "\n")
+                for l in split(body, "\n")
                     ismatch(r"^\s*$", l) ? println(io) : println(io, "   ", l)
                 end
                 isrst(doc) && println(io)

@@ -28,7 +28,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   ..  print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io`` (by default, ``STDOUT``). If you
    do not supply a ``data`` vector, the internal buffer of accumulated
@@ -42,7 +41,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   ..  print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine
    results exported by a previous call to :func:`retrieve`.
@@ -59,7 +57,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   ..  fetch() -> data
 
    Returns a reference to the internal buffer of backtraces. Note that
    subsequent operations, like :func:`clear`, can affect
@@ -79,7 +76,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   ..  callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
 
    Given a previous profiling run, determine who called a particular
    function. Supplying the filename (and optionally, range of line
@@ -94,7 +90,6 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   ..  clear_malloc_data()
 
    Clears any stored memory allocation data when running julia with
    ``--track-allocation``.  Execute the command(s) you want to test
