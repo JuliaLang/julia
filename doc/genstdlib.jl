@@ -153,8 +153,12 @@ function translate(file)
                 full = funcname * func.captures[2]
                 if !('(' in full || '@' in full)
                     ex = parse(full)
-                    if isa(ex, Expr) && (ex.head == :(||) || ex.head == :(&&))
-                        funcname = string(ex.head)
+                    if isa(ex, Expr)
+                        if (ex.head == :(||) || ex.head == :(&&))
+                            funcname = string(ex.head)
+                        elseif ex.head == :macrocall
+                            funcname = string(ex.args[1])
+                        end
                     end
                 end
                 doc = nothing
