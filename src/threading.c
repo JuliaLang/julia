@@ -95,6 +95,7 @@ DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 // must be called by each thread at startup
+
 void ti_initthread(int16_t tid)
 {
     ti_tid = tid;
@@ -107,6 +108,8 @@ void ti_initthread(int16_t tid)
 #endif
 
     jl_all_task_states[tid].ptls = jl_get_ptls_states();
+
+    jl_install_thread_signal_handler();
 }
 
 // all threads call this function to run user code
@@ -276,6 +279,16 @@ void jl_start_threads(void)
     }
 
     // create threads
+#ifdef _OS_WINDOWS_
+    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                         GetCurrentProcess(), &jl_all_task_states[0].system_id, 0,
+                         TRUE, DUPLICATE_SAME_ACCESS)) {
+        jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
+        jl_all_task_states[0].system_id = INVALID_HANDLE_VALUE;
+    }
+#else
+    jl_all_task_states[0].system_id = pthread_self();
+#endif
     targs = (ti_threadarg_t **)malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
     for (i = 0;  i < jl_n_threads - 1;  ++i) {
         targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
@@ -288,6 +301,7 @@ void jl_start_threads(void)
             uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
         }
         uv_thread_detach(&uvtid);
+        jl_all_task_states[i + 1].system_id = uvtid;
     }
 
     // set up the world thread group
@@ -473,7 +487,15 @@ void jl_init_threading(void)
     jl_all_task_states = &_jl_all_task_states;
     jl_max_threads = 1;
     jl_n_threads = 1;
-    jl_all_pgcstacks = (jl_gcframe_t ***) malloc(jl_n_threads * sizeof(void*));
+    jl_all_pgcstacks = (jl_gcframe_t***) malloc(jl_n_threads * sizeof(jl_gcframe_t**));
+
+#if defined(__linux__) && defined(JL_USE_INTEL_JITEVENTS)
+    if (jl_using_intel_jitevents)
+        // Intel VTune Amplifier needs at least 64k for alternate stack.
+        if (SIGSTKSZ < 1<<16)
+            sig_stack_size = 1<<16;
+#endif
+
     ti_initthread(0);
 }
 
