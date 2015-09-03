@@ -219,11 +219,11 @@ keywords[symbol(";")] = doc"""
   """
 
 keywords[:(&&)]  = doc"""
-    short circuting boolean AND
+short circuting boolean AND
 """
 
 keywords[:(||)]  = doc"""
-    short circuting boolean OR
+short circuting boolean OR
 """
 
 keywords[:ccall] = doc"""
