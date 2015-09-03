@@ -7826,17 +7826,6 @@ Returns `true` if `path` has the setuid flag set, `false` otherwise.
 issetuid
 
 doc"""
-    ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
-
-Call function in C-exported shared library, specified by `(function name, library)` tuple, where each component is an AbstractString or :Symbol.
-
-Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression. Alternatively, ccall may also be used to call a function pointer, such as one returned by dlsym.
-
-Each `ArgumentValue` to the `ccall` will be converted to the corresponding `ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType, cconvert(ArgumentType, ArgumentValue))`. (see also the documentation for each of these functions for further details). In most cases, this simply results in a call to `convert(ArgumentType, ArgumentValue)`
-"""
-Base.ccall
-
-doc"""
 ```rst
 ..  scale!(A, b)
            scale!(b, A)

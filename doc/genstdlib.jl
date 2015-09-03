@@ -84,7 +84,8 @@ function translate(file)
                 for mdoc in getdoc(mod, funcname)
                     trst = tryrst(mdoc, false)
                     trst !== nothing || continue
-                    if contains(trst, " " * full)
+                    if contains(replace(trst, r"[\n ][\n ]+", " "),
+                                " " * replace(full, r"[\n ][\n ]+", " "))
                         if doc != nothing
                             error("duplicate $full $l")
                         end
