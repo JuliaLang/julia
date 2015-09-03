@@ -307,7 +307,7 @@ keywords[:immutable] = doc"""
 # :@time
 
 doc"""
-    r"regex"
+    @r_str -> Regex
 Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
 one or more flags, listed after the ending quote, to change its
 behaviour:
