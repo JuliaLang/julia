@@ -2,16 +2,8 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
-scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
-
-function scale{R<:Real,S<:Complex}(X::AbstractArray{R}, s::S)
-    Y = Array(promote_type(R,S), size(X))
-    copy!(Y, X)
-    scale!(Y, s)
-end
-
-scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
+scale(X::AbstractArray, s::Number) = X*s
+scale(s::Number, X::AbstractArray) = s*X
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
