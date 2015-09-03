@@ -140,10 +140,6 @@ Macro reference
 
    .. Docstring generated from Julia source
 
-       @nloops N itersym rangeexpr bodyexpr
-       @nloops N itersym rangeexpr preexpr bodyexpr
-       @nloops N itersym rangeexpr preexpr postexpr bodyexpr
-
    Generate ``N`` nested loops, using ``itersym`` as the prefix for the iteration variables. ``rangeexpr`` may be an anonymous-function expression, or a simple symbol ``var`` in which case the range is ``1:size(var,d)`` for dimension ``d``\ .
 
    Optionally, you can provide "pre" and "post" expressions. These get executed first and last, respectively, in the body of each loop. For example, :
@@ -195,9 +191,6 @@ Macro reference
 .. function:: @nif N conditionexpr expr
 
    .. Docstring generated from Julia source
-
-       @nif N conditionexpr expr
-       @nif N conditionexpr expr elseexpr
 
    Generates a sequence of ``if ... elseif ... else ... end`` statements. For example:
 
