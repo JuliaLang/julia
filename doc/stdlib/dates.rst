@@ -39,54 +39,6 @@ Dates and Time Types
 
    ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
 
-.. function:: Year(dt::TimeType) -> Year
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Month(dt::TimeType) -> Month
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Week(dt::TimeType) -> Week
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Day(dt::TimeType) -> Day
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Hour(dt::TimeType) -> Hour
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Minute(dt::TimeType) -> Minute
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Second(dt::TimeType) -> Second
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-.. function:: Millisecond(dt::TimeType) -> Millisecond
-
-   .. Docstring generated from Julia source
-
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
 Dates Functions
 ---------------
 
@@ -244,19 +196,6 @@ Accessor Functions
    .. Docstring generated from Julia source
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Year(v)
-       Month(v)
-       Week(v)
-       Day(v)
-       Hour(v)
-       Minute(v)
-       Second(v)
-       Millisecond(v)
-
-   Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
@@ -466,11 +405,7 @@ Periods
 
    .. Docstring generated from Julia source
 
-   Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Year(v)
+   Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
 .. function:: default(p::Period) -> Period
 
