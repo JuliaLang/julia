@@ -1375,10 +1375,12 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
 
-    nI = length(I)
-    avgM = div(nnz(A),n)
+    nI   = length(I)
+    nzA  = nnz(A)
+    avgM = div(nzA,n)
     # heuristics based on experiments
-    alg = ((nI - avgM) > 2^8) ? 1 :
+    alg = ((m > nzA) && (m > nI)) ? 0 :
+          ((nI - avgM) > 2^8) ? 1 :
           ((avgM - nI) > 2^10) ? 0 : 2
 
     (alg == 0) ? getindex_I_sorted_bsearch_A(A, I, J) :
