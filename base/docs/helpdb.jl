@@ -1846,7 +1846,7 @@ randexp
 doc"""
     chop(string)
 
-Remove the last character from a string
+Remove the last character from a string.
 """
 chop
 
@@ -2514,7 +2514,7 @@ ones(A)
 doc"""
     ind2chr(string, i)
 
-Convert a byte index to a character index
+Convert a byte index to a character index.
 """
 ind2chr
 
@@ -6209,7 +6209,7 @@ std
 doc"""
     chr2ind(string, i)
 
-Convert a character index to a byte index
+Convert a character index to a byte index.
 """
 chr2ind
 
@@ -9933,7 +9933,7 @@ Base.(:(>))
 doc"""
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
-Search for the first match of the regular expression `r` in `s` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing `m.captures` The optional `idx` argument specifies an index at which to start the search.
+Search for the first match of the regular expression `r` in `s` and return a `RegexMatch` object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing `m.captures` The optional `idx` argument specifies an index at which to start the search.
 """
 match
 
@@ -11040,7 +11040,7 @@ vecnorm
 doc"""
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be one of `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String`
+Returns `true` if the given value is valid for its type, which currently can be one of `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String`.
 """
 isvalid(value)
 
@@ -11906,7 +11906,7 @@ unsafe_pointer_to_objref
 doc"""
     chomp(string)
 
-Remove a trailing newline from a string
+Remove a trailing newline from a string.
 """
 chomp
 

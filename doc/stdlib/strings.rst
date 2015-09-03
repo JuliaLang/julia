@@ -141,13 +141,19 @@
 
    .. Docstring generated from Julia source
 
-   Returns ``true`` if the given value is valid for its type, which currently can be one of ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String``
+   Returns ``true`` if the given value is valid for its type, which currently can be one of ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String``\ .
 
 .. function:: isvalid(T, value) -> Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the given value is valid for that type. Types currently can be ``Char``\ , ``ASCIIString``\ , ``UTF8String``\ , ``UTF16String``\ , or ``UTF32String`` Values for ``Char`` can be of type ``Char`` or ``UInt32`` Values for ``ASCIIString`` and ``UTF8String`` can be of that type, or ``Vector{UInt8}`` Values for ``UTF16String`` can be ``UTF16String`` or ``Vector{UInt16}`` Values for ``UTF32String`` can be ``UTF32String``\ , ``Vector{Char}`` or ``Vector{UInt32}``
+
+.. function:: isvalid(str, i)
+
+   .. Docstring generated from Julia source
+
+   Tells whether index ``i`` is valid for the given string
 
 .. function:: is_assigned_char(c) -> Bool
 
@@ -165,7 +171,7 @@
 
    .. Docstring generated from Julia source
 
-   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
+   Search for the first match of the regular expression ``r`` in ``s`` and return a ``RegexMatch`` object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
 .. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
@@ -309,31 +315,25 @@
 
    .. Docstring generated from Julia source
 
-   Remove the last character from a string
+   Remove the last character from a string.
 
 .. function:: chomp(string)
 
    .. Docstring generated from Julia source
 
-   Remove a trailing newline from a string
+   Remove a trailing newline from a string.
 
 .. function:: ind2chr(string, i)
 
    .. Docstring generated from Julia source
 
-   Convert a byte index to a character index
+   Convert a byte index to a character index.
 
 .. function:: chr2ind(string, i)
 
    .. Docstring generated from Julia source
 
-   Convert a character index to a byte index
-
-.. function:: isvalid(str, i)
-
-   .. Docstring generated from Julia source
-
-   Tells whether index ``i`` is valid for the given string
+   Convert a character index to a byte index.
 
 .. function:: nextind(str, i)
 
