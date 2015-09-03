@@ -29,8 +29,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define THREADGROUP_H
 
 #include <stdint.h>
-#include <pthread.h>
-
+#include "uv.h"
 
 // for the barrier
 typedef struct {
@@ -45,15 +44,15 @@ typedef struct {
     uint8_t             num_sockets, num_cores, num_threads_per_core;
 
     // fork/join/barrier
-    uint8_t		forked;
+    uint8_t             forked;
     volatile uint8_t    group_sense;
     ti_thread_sense_t  **thread_sense;
     void                *envelope;
 
     // to let threads sleep
-    pthread_mutex_t	alarm_lock;
-    pthread_cond_t	alarm;
-    uint64_t		sleep_threshold;
+    uv_mutex_t  alarm_lock;
+    uv_cond_t   alarm;
+    uint64_t            sleep_threshold;
 
 } ti_threadgroup_t;
 

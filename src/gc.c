@@ -194,55 +194,57 @@ static int regions_lb[REGION_COUNT] = {0};
 // an upper bound of the last non-free page
 static int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
 
-// Variables that become fields of a thread-local struct in the thread-safe
-// version.
-
-#define HEAP_DECL
-
+// Variables that become fields of a thread-local struct in the thread-safe version.
 typedef struct _jl_thread_heap_t {
+    // variable for tracking preserved values.
+    arraylist_t preserved_values;
 
-// variable for tracking preserved values.
-HEAP_DECL arraylist_t preserved_values;
+    // variable for tracking weak references
+    arraylist_t weak_refs;
 
-// variable for tracking weak references
-HEAP_DECL arraylist_t weak_refs;
+    // variables for tracking malloc'd arrays
+    mallocarray_t *mallocarrays;
+    mallocarray_t *mafreelist;
 
-// variables for tracking malloc'd arrays
-HEAP_DECL mallocarray_t *mallocarrays;
-HEAP_DECL mallocarray_t *mafreelist;
+    // variables for tracking big objects
+    bigval_t *big_objects;
 
-// variables for tracking big objects
-HEAP_DECL bigval_t *big_objects;
+    // variables for tracking "remembered set"
+    arraylist_t rem_bindings;
+    arraylist_t _remset[2]; // contains jl_value_t*
+    // lower bound of the number of pointers inside remembered values
+    int remset_nptr;
+    arraylist_t *remset;
+    arraylist_t *last_remset;
 
-// variables for tracking "remembered set"
-HEAP_DECL arraylist_t rem_bindings;
-HEAP_DECL arraylist_t _remset[2]; // contains jl_value_t*
-// lower bound of the number of pointers inside remembered values
-HEAP_DECL int remset_nptr;
-HEAP_DECL arraylist_t *remset;
-HEAP_DECL arraylist_t *last_remset;
-
-// variables for allocating objects from pools
+    // variables for allocating objects from pools
 #ifdef _P64
 #define N_POOLS 41
 #else
 #define N_POOLS 43
 #endif
-HEAP_DECL pool_t norm_pools[N_POOLS];
-
-// End of Variables that become fields of a thread-local struct in the thread-safe version.
+    pool_t norm_pools[N_POOLS];
 } jl_thread_heap_t;
 
 static JL_THREAD jl_thread_heap_t *jl_thread_heap;
 
 // The following macros are used for accessing these variables.
-// In the future multi-threaded version, they establish the desired thread context.
+// In the multi-threaded version, they establish the desired thread context.
 // In the single-threaded version, they are essentially noops, but nonetheless
 // serve to check that the thread context macros are being used.
+#ifdef JULIA_ENABLE_THREADING
 #define FOR_CURRENT_HEAP {jl_thread_heap_t *current_heap = jl_thread_heap;
 #define END }
 #define FOR_EACH_HEAP for( int current_heap_index=jl_n_threads; --current_heap_index>=0; ) { jl_thread_heap_t *current_heap = jl_all_heaps[current_heap_index];
-/*}*/
+#define FOR_HEAP(t_n) {jl_thread_heap_t *current_heap = jl_all_heaps[t_n];
+/*}}*/
+#else
+#define FOR_CURRENT_HEAP {jl_thread_heap_t *current_heap = jl_thread_heap;
+#define END }
+#define FOR_EACH_HEAP FOR_CURRENT_HEAP int current_heap_index = 0; (void)current_heap_index;
+#define FOR_HEAP(t_n) FOR_CURRENT_HEAP
+#endif
+
 #define HEAP(x) (current_heap->x)
 #define preserved_values HEAP(preserved_values)
 #define weak_refs HEAP(weak_refs)
@@ -253,7 +255,7 @@ static JL_THREAD jl_thread_heap_t *jl_thread_heap;
 #define remset_nptr HEAP(remset_nptr)
 #define last_remset HEAP(last_remset)
 #define rem_bindings HEAP(rem_bindings)
-#define pools (jl_thread_heap->norm_pools)
+#define pools HEAP(norm_pools)
 
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 static bigval_t *big_objects_marked = NULL;
@@ -1033,7 +1035,9 @@ static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
 {
     pg->gc_bits = 0;
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
-    pg->pool_n = p - jl_all_heaps[pg->thread_n]->norm_pools;
+    FOR_HEAP(pg->thread_n)
+        pg->pool_n = p - pools;
+    END
     memset(page_age(pg), 0, LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
     gcval_t *beg = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
     gcval_t *end = (gcval_t*)((char*)beg + (pg->nfree - 1)*p->osize);
@@ -1199,7 +1203,10 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
                     gcpage_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
-                    pool_t *p = &jl_all_heaps[t_n]->norm_pools[p_n];
+                    pool_t *p;
+                    FOR_HEAP(t_n)
+                        p = &pools[p_n];
+                    END
                     int osize = pg->osize;
                     pfl[t_n * N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * N_POOLS + p_n], sweep_mask, osize);
                 }
@@ -1387,7 +1394,7 @@ static int gc_sweep_inc(int sweep_mask)
     // i.e. pages being the current allocation target
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
-            pool_t* p = &HEAP(norm_pools)[i];
+            pool_t* p = &pools[i];
             gcval_t* last = p->freelist;
             if (last) {
                 gcpage_t* pg = page_metadata(last);
@@ -1416,7 +1423,7 @@ static int gc_sweep_inc(int sweep_mask)
     // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
     FOR_EACH_HEAP
         for (int i = 0; i < N_POOLS; i++) {
-            pool_t* p = &HEAP(norm_pools)[i];
+            pool_t* p = &pools[i];
             *pfl[current_heap_index * N_POOLS + i] = NULL;
             if (p->freelist) {
                 p->nfree = page_metadata(p->freelist)->nfree;
@@ -2023,12 +2030,13 @@ void jl_gc_collect(int full)
     gc_debug_print();
     JL_SIGATOMIC_BEGIN();
 
+#ifdef JULIA_ENABLE_THREADING
     ti_threadgroup_barrier(tgworld, ti_tid);
-
     if (ti_tid != 0) {
         ti_threadgroup_barrier(tgworld, ti_tid);
         return;
     }
+#endif
 
     jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
@@ -2252,7 +2260,9 @@ void jl_gc_collect(int full)
 #endif
     jl_in_gc = 0;
 
+#ifdef JULIA_ENABLE_THREADING
     ti_threadgroup_barrier(tgworld, ti_tid);
+#endif
 
     JL_SIGATOMIC_END();
 #ifdef GC_TIME
@@ -2286,7 +2296,9 @@ void *allocb(size_t sz)
         b->pooled = 0;
     }
     else {
-        b = (buff_t*)pool_alloc(&pools[szclass(allocsz)]);
+        FOR_CURRENT_HEAP
+            b = (buff_t*)pool_alloc(&pools[szclass(allocsz)]);
+        END
         b->header = 0x4EADE800;
         b->pooled = 1;
     }
@@ -2326,7 +2338,9 @@ DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
     return jl_valueof(alloc_big(allocsz));
 #endif
     if (allocsz <= GC_MAX_SZCLASS + sizeof(buff_t))
-        return jl_valueof(pool_alloc(&pools[szclass(allocsz)]));
+        FOR_CURRENT_HEAP
+            return jl_valueof(pool_alloc(&pools[szclass(allocsz)]));
+        END
     else
         return jl_valueof(alloc_big(allocsz));
 }
@@ -2337,7 +2351,9 @@ DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
-    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    FOR_CURRENT_HEAP
+        return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    END
 }
 
 DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
@@ -2346,7 +2362,9 @@ DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
-    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    FOR_CURRENT_HEAP
+        return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    END
 }
 
 DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
@@ -2355,7 +2373,9 @@ DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
-    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    FOR_CURRENT_HEAP
+        return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    END
 }
 
 DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
@@ -2364,7 +2384,9 @@ DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
-    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    FOR_CURRENT_HEAP
+        return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
+    END
 }
 
 #ifdef GC_FINAL_STATS
@@ -2397,12 +2419,13 @@ void jl_print_gc_stats(JL_STREAM *s)
 }
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
 // Per-thread initialization (when threading is fully implemented)
 struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
     jl_thread_heap = malloc(sizeof(jl_thread_heap_t)); // FIXME - should be cache-aligned malloc
     FOR_CURRENT_HEAP
         const int* szc = sizeclasses;
-        pool_t *p = HEAP(norm_pools);
+        pool_t *p = pools;
         for(int i=0; i < N_POOLS; i++) {
             assert((szc[i] < 16 && szc[i] % sizeof(void*) == 0) ||
                    (szc[i] % 16 == 0));
@@ -2424,6 +2447,7 @@ struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
     END
     return jl_thread_heap;
 }
+#endif
 
 // System-wide initializations
 void jl_gc_init(void)
@@ -2517,13 +2541,15 @@ static void all_pool_stats(void)
     int i;
     size_t nb=0, w, tw=0, no=0,tp=0, nold=0,noldbytes=0, b, np, nol;
     for(i=0; i < N_POOLS; i++) {
-        b = pool_stats(&norm_pools[i], &w, &np, &nol);
-        nb += b;
-        no += (b/norm_pools[i].osize);
-        tw += w;
-        tp += np;
-        nold += nol;
-        noldbytes += nol*norm_pools[i].osize;
+        FOR_EACH_HEAP
+            b = pool_stats(&pools[i], &w, &np, &nol);
+            nb += b;
+            no += (b/pools[i].osize);
+            tw += w;
+            tp += np;
+            nold += nol;
+            noldbytes += nol*pools[i].osize;
+        END
     }
     jl_printf(JL_STDOUT,
               "%d objects (%d%% old), %d kB (%d%% old) total allocated, %d total fragments (%d%% overhead), in %d pages\n",

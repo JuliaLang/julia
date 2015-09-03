@@ -29,22 +29,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define THREADING_H
 
 #include <stdint.h>
-#include "julia.h"
-#include <pthread.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "threadgroup.h"
+#include "julia.h"
 
 #define PROFILE_JL_THREADING            1
 
-
 // thread ID
 extern JL_THREAD int16_t ti_tid;
+extern jl_thread_task_state_t *jl_all_task_states;
+extern DLLEXPORT int jl_n_threads;  // # threads we're actually using
 
+#ifdef JULIA_ENABLE_THREADING
 // GC
 extern struct _jl_thread_heap_t **jl_all_heaps;
 extern jl_gcframe_t ***jl_all_pgcstacks;
-extern jl_thread_task_state_t *jl_all_task_states;
-
-extern DLLEXPORT int jl_n_threads;  // # threads we're actually using
+#endif
 
 // thread state
 enum {
@@ -80,12 +83,12 @@ typedef struct {
 
 
 // basic functions for thread creation
-int  ti_threadcreate(pthread_t *pthread_id, int proc_num,
-                     void *(*thread_fun)(void *), void *thread_arg);
-void ti_threadsetaffinity(uint64_t pthread_id, int proc_num);
+int  ti_threadcreate(uv_thread_t *thread_id, int proc_num,
+                     void (*thread_fun)(void *), void *thread_arg);
+void ti_threadsetaffinity(uint64_t thread_id, int proc_num);
 
 // thread function
-void *ti_threadfun(void *arg);
+void ti_threadfun(void *arg);
 
 // helpers for thread function
 void ti_initthread(int16_t tid);

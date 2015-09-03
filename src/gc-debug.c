@@ -156,7 +156,10 @@ static void clear_mark(int bits)
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
                         gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
-                        pool_t *pool = &jl_all_heaps[pg->thread_n]->norm_pools[pg->pool_n];
+                        pool_t *pool;
+                        FOR_HEAP(pg->thread_n)
+                            pool = &pools[pg->pool_n];
+                        END
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {

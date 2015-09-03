@@ -32,14 +32,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 
-#include "options.h"
-
 #include <immintrin.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "options.h"
 #include "ia_misc.h"
 #include "threadgroup.h"
-
 
 int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
                           uint8_t num_threads_per_core,
@@ -66,16 +69,16 @@ int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
     tg->group_sense = 0;
     tg->forked = 0;
 
-    pthread_mutex_init(&tg->alarm_lock, NULL);
-    pthread_cond_init(&tg->alarm, NULL);
+    uv_mutex_init(&tg->alarm_lock);
+    uv_cond_init(&tg->alarm);
 
     tg->sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
     if (cp) {
-	if (!strncasecmp(cp, "infinite", 8))
-	    tg->sleep_threshold = 0;
-	else
-	    tg->sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
+        if (!strncasecmp(cp, "infinite", 8))
+            tg->sleep_threshold = 0;
+        else
+            tg->sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
     }
 
     *newtg = tg;
@@ -151,36 +154,36 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid,
     if (tg->tid_map[ext_tid] == 0) {
         tg->envelope = bcast_val ? *bcast_val : NULL;
         cpu_sfence();
-	tg->forked = 1;
+        tg->forked = 1;
         tg->group_sense = tg->thread_sense[0]->sense;
 
-	// if it's possible that threads are sleeping, signal them
-	if (tg->sleep_threshold) {
-	    pthread_mutex_lock(&tg->alarm_lock);
-	    pthread_cond_broadcast(&tg->alarm);
-	    pthread_mutex_unlock(&tg->alarm_lock);
-	}
+        // if it's possible that threads are sleeping, signal them
+        if (tg->sleep_threshold) {
+            uv_mutex_lock(&tg->alarm_lock);
+            uv_cond_broadcast(&tg->alarm);
+            uv_mutex_unlock(&tg->alarm_lock);
+        }
     }
     else {
-	// spin up to threshold cycles (count sheep), then sleep
-	uint64_t spin_cycles, spin_start = rdtsc();
+        // spin up to threshold cycles (count sheep), then sleep
+        uint64_t spin_cycles, spin_start = rdtsc();
         while (tg->group_sense !=
                tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
-	    if (tg->sleep_threshold) {
-		spin_cycles = rdtsc() - spin_start;
-		if (spin_cycles >= tg->sleep_threshold) {
-		    pthread_mutex_lock(&tg->alarm_lock);
+            if (tg->sleep_threshold) {
+                spin_cycles = rdtsc() - spin_start;
+                if (spin_cycles >= tg->sleep_threshold) {
+                    uv_mutex_lock(&tg->alarm_lock);
                     if (tg->group_sense !=
                         tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
-                        pthread_cond_wait(&tg->alarm, &tg->alarm_lock);
+                        uv_cond_wait(&tg->alarm, &tg->alarm_lock);
                     }
-                    pthread_mutex_unlock(&tg->alarm_lock);
-		    spin_start = rdtsc();
-		    continue;
-		}
-	    }
+                    uv_mutex_unlock(&tg->alarm_lock);
+                    spin_start = rdtsc();
+                    continue;
+                }
+            }
             cpu_pause();
-	}
+        }
         cpu_lfence();
         if (bcast_val)
             *bcast_val = tg->envelope;
@@ -201,7 +204,7 @@ int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
             while (tg->thread_sense[i]->sense == tg->group_sense)
                 cpu_pause();
         }
-	tg->forked = 0;
+        tg->forked = 0;
     }
 
     return 0;
@@ -211,7 +214,7 @@ int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
 void ti_threadgroup_barrier(ti_threadgroup_t *tg, int16_t ext_tid)
 {
     if (tg->tid_map[ext_tid] == 0  &&  !tg->forked)
-	return;
+        return;
 
     ti_threadgroup_join(tg, ext_tid);
     ti_threadgroup_fork(tg, ext_tid, NULL);
@@ -222,8 +225,8 @@ int ti_threadgroup_destroy(ti_threadgroup_t *tg)
 {
     int i;
 
-    pthread_mutex_destroy(&tg->alarm_lock);
-    pthread_cond_destroy(&tg->alarm);
+    uv_mutex_destroy(&tg->alarm_lock);
+    uv_cond_destroy(&tg->alarm);
 
     for (i = 0;  i < tg->num_threads;  i++)
         _mm_free(tg->thread_sense[i]);
