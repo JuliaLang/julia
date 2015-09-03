@@ -89,7 +89,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
+   Create an ``IOStream`` object from an integer file descriptor. If ``own`` is ``true``\ , closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
 
 .. function:: flush(stream)
 
@@ -141,7 +141,7 @@ General I/O
 
    Read at most ``nb`` bytes from the stream, returning a ``Vector{UInt8}`` of the bytes read.
 
-   If ``all`` is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If ``all`` is false, at most one ``read`` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the ``all`` option.
+   If ``all`` is ``true`` (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If ``all`` is ``false``\ , at most one ``read`` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the ``all`` option.
 
 .. function:: position(s)
 
@@ -204,7 +204,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Returns true if stream ``s`` is marked.
+   Returns ``true`` if stream ``s`` is marked.
 
    See also :func:`mark`, :func:`unmark`, :func:`reset`
 
@@ -308,7 +308,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Advance the stream until before the first character for which ``predicate`` returns false. For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
+   Advance the stream until before the first character for which ``predicate`` returns ``false``\ . For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
 
 .. function:: countlines(io,[eol::Char])
 
@@ -839,7 +839,7 @@ Network I/O
 
    Monitor a file descriptor ``fd`` for changes in the read or write availability, and with a timeout given by ``timeout_s`` seconds.
 
-   The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to true.
+   The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to ``true``\ .
 
    The returned value is an object with boolean fields ``readable``\ , ``writable``\ , and ``timedout``\ , giving the result of the polling.
 
@@ -891,7 +891,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Set UDP socket options. ``multicast_loop``\ : loopback for multicast packets (default: true). ``multicast_ttl``\ : TTL for multicast packets. ``enable_broadcast``\ : flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). ``ttl``\ : Time-to-live of packets sent on the socket.
+   Set UDP socket options. ``multicast_loop``\ : loopback for multicast packets (default: ``true``\ ). ``multicast_ttl``\ : TTL for multicast packets. ``enable_broadcast``\ : flag must be set to ``true`` if socket will be used for broadcast messages, or else the UDP system will return an access error (default: ``false``\ ). ``ttl``\ : Time-to-live of packets sent on the socket.
 
 .. function:: ntoh(x)
 

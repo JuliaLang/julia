@@ -516,7 +516,7 @@ Collections.heapify
 doc"""
     isheap(v, [ord])
 
-Return true iff an array is heap-ordered according to the given order.
+Return `true` iff an array is heap-ordered according to the given order.
 """
 Collections.isheap
 
@@ -800,7 +800,7 @@ A macro to execute an expression, printing the time it took to execute, the numb
 doc"""
     systemerror(sysfunc, iftrue)
 
-Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `bool` is true
+Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
 """
 systemerror
 
@@ -878,7 +878,7 @@ doc"""
 
 Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as `wait`.
 
-If a second argument is provided, it will be passed to the task (via the return value of `yieldto`) when it runs again. If `error` is true, the value is raised as an exception in the woken task.
+If a second argument is provided, it will be passed to the task (via the return value of `yieldto`) when it runs again. If `error` is `true`, the value is raised as an exception in the woken task.
 """
 schedule
 
@@ -1069,8 +1069,8 @@ Transform collections ``lsts`` by applying ``f`` to each element in parallel.
 If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
 All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
 
-If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
-If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+If ``err_retry`` is ``true``, it retries a failed application of ``f`` on a different worker.
+If ``err_stop`` is ``true``, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
 ```
 """
 pmap
@@ -1639,7 +1639,7 @@ Base.(:(|>))
 doc"""
     assert(cond)
 
-Throw an `AssertionError` if `cond` is false. Also available as the macro `@assert expr`.
+Throw an `AssertionError` if `cond` is `false`. Also available as the macro `@assert expr`.
 """
 assert
 
@@ -1749,7 +1749,7 @@ ispath
 doc"""
     fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
 
-Create an `IOStream` object from an integer file descriptor. If `own` is true, closing this object will close the underlying descriptor. By default, an `IOStream` is closed when it is garbage collected. `name` allows you to associate the descriptor with a named file.
+Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing this object will close the underlying descriptor. By default, an `IOStream` is closed when it is garbage collected. `name` allows you to associate the descriptor with a named file.
 """
 fdio
 
@@ -1881,7 +1881,7 @@ doc"""
 ```rst
 ..  isimmutable(v)
 
-True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
 Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
 ```
 """
@@ -1989,21 +1989,21 @@ bessely0
 doc"""
     any!(r, A)
 
-Test whether any values in `A` along the singleton dimensions of `r` are true, and write results to `r`.
+Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 """
 any!
 
 doc"""
     falses(dims)
 
-Create a `BitArray` with all values set to false
+Create a `BitArray` with all values set to `false`
 """
 falses
 
 doc"""
     filter!(function, collection)
 
-Update `collection`, removing elements for which `function` is false. For associative collections, the function is passed two arguments (key and value).
+Update `collection`, removing elements for which `function` is `false`. For associative collections, the function is passed two arguments (key and value).
 """
 filter!
 
@@ -2628,7 +2628,7 @@ mean
 doc"""
     split(string, [chars]; limit=0, keep=true)
 
-Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by `search`'s second argument (i.e. a single character, collection of characters, string, or regular expression). If `chars` is omitted, it defaults to the set of all space characters, and `keep` is taken to be false. The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
+Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by `search`'s second argument (i.e. a single character, collection of characters, string, or regular expression). If `chars` is omitted, it defaults to the set of all space characters, and `keep` is taken to be `false`. The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
 """
 split
 
@@ -3046,7 +3046,7 @@ ifftshift
 doc"""
     eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
-Search for all matches of a the regular expression `r` in `s` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
+Search for all matches of a the regular expression `r` in `s` and return a iterator over the matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
 """
 eachmatch
 
@@ -3479,7 +3479,7 @@ complex
 doc"""
     setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
 
-Set UDP socket options. `multicast_loop`: loopback for multicast packets (default: true). `multicast_ttl`: TTL for multicast packets. `enable_broadcast`: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). `ttl`: Time-to-live of packets sent on the socket.
+Set UDP socket options. `multicast_loop`: loopback for multicast packets (default: `true`). `multicast_ttl`: TTL for multicast packets. `enable_broadcast`: flag must be set to `true` if socket will be used for broadcast messages, or else the UDP system will return an access error (default: `false`). `ttl`: Time-to-live of packets sent on the socket.
 """
 setopt
 
@@ -3912,7 +3912,7 @@ find(A)
 doc"""
     find(f,A)
 
-Return a vector of the linear indexes of `A` where `f` returns true.
+Return a vector of the linear indexes of `A` where `f` returns `true`.
 """
 find(f, A)
 
@@ -5222,7 +5222,7 @@ permute!
 doc"""
     ifelse(condition::Bool, x, y)
 
-Return `x` if `condition` is true, otherwise return `y`. This differs from `?` or `if` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using `ifelse` instead of an `if` statement can eliminate the branch in generated code and provide higher performance in tight loops.
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using `ifelse` instead of an `if` statement can eliminate the branch in generated code and provide higher performance in tight loops.
 """
 ifelse
 
@@ -5344,7 +5344,7 @@ max
 doc"""
     versioninfo([verbose::Bool])
 
-Print information about the version of Julia in use. If the `verbose` argument is true, detailed system information is shown as well.
+Print information about the version of Julia in use. If the `verbose` argument is `true`, detailed system information is shown as well.
 """
 versioninfo
 
@@ -5658,14 +5658,14 @@ invoke
 doc"""
     parse(str, start; greedy=true, raise=true)
 
-Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If `greedy` is true (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is true (default), syntax errors other than incomplete expressions will raise an error. If `raise` is false, `parse` will return an expression that will raise an error upon evaluation.
+Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If `greedy` is `true` (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default), syntax errors other than incomplete expressions will raise an error. If `raise` is `false`, `parse` will return an expression that will raise an error upon evaluation.
 """
 parse(str, start)
 
 doc"""
     parse(str; raise=true)
 
-Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If `raise` is true (default), syntax errors will raise an error; otherwise, `parse` will return an expression that will raise an error upon evaluation.
+Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If `raise` is `true` (default), syntax errors will raise an error; otherwise, `parse` will return an expression that will raise an error upon evaluation.
 """
 parse(str)
 
@@ -6685,7 +6685,7 @@ asinh
 doc"""
     count(p, itr) -> Integer
 
-Count the number of elements in `itr` for which predicate `p` returns true.
+Count the number of elements in `itr` for which predicate `p` returns `true`.
 """
 count
 
@@ -6855,7 +6855,7 @@ Bidiagonal
 doc"""
     notify(condition, val=nothing; all=true, error=false)
 
-Wake up tasks waiting for a condition, passing them `val`. If `all` is true (the default), all waiting tasks are woken, otherwise only one is. If `error` is true, the passed value is raised as an exception in the woken tasks.
+Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default), all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value is raised as an exception in the woken tasks.
 """
 notify
 
@@ -7044,7 +7044,7 @@ doc"""
 
 Monitor a file descriptor `fd` for changes in the read or write availability, and with a timeout given by `timeout_s` seconds.
 
-The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to true.
+The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to `true`.
 
 The returned value is an object with boolean fields `readable`, `writable`, and `timedout`, giving the result of the polling.
 """
@@ -7810,7 +7810,7 @@ doc"""
 ```rst
 ..  all(itr) -> Bool
 
-Test whether all elements of a boolean collection are true.
+Test whether all elements of a boolean collection are ``true``.
 ```
 """
 all(itr)
@@ -7819,7 +7819,7 @@ doc"""
 ```rst
 ..  all(A, dims)
 
-Test whether all values along the given dimensions of an array are true.
+Test whether all values along the given dimensions of an array are ``true``.
 ```
 """
 all(A::AbstractArray, dims)
@@ -7828,7 +7828,7 @@ doc"""
 ```rst
 ..  all(p, itr) -> Bool
 
-Determine whether predicate ``p`` returns true for all elements of ``itr``.
+Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``.
 
 .. doctest::
 
@@ -8452,7 +8452,7 @@ rad2deg
 doc"""
     gc_enable(on::Bool)
 
-Control whether garbage collection is enabled using a boolean argument (true for enabled, false for disabled). Returns previous GC state. Disabling garbage collection should be used only with extreme caution, as it can cause memory use to grow without bound.
+Control whether garbage collection is enabled using a boolean argument (`true` for enabled, `false` for disabled). Returns previous GC state. Disabling garbage collection should be used only with extreme caution, as it can cause memory use to grow without bound.
 """
 gc_enable
 
@@ -8466,7 +8466,7 @@ sub2ind
 doc"""
     isperm(v) -> Bool
 
-Returns true if v is a valid permutation.
+Returns `true` if `v` is a valid permutation.
 """
 isperm
 
@@ -8762,7 +8762,7 @@ randsubseq
 doc"""
     issubtype(type1, type2)
 
-True if and only if all values of `type1` are also of `type2`. Can also be written using the `<:` infix operator as `type1 <: type2`.
+Return `true` if and only if all values of `type1` are also of `type2`. Can also be written using the `<:` infix operator as `type1 <: type2`.
 """
 issubtype(type1, type2)
 
@@ -9159,7 +9159,7 @@ mod
 doc"""
     trues(dims)
 
-Create a `BitArray` with all values set to true
+Create a `BitArray` with all values set to `true`
 """
 trues
 
@@ -9279,7 +9279,7 @@ findprev(A,i)
 doc"""
     findprev(predicate, A, i)
 
-Find the previous index <= `i` of an element of `A` for which `predicate` returns true, or `0` if not found.
+Find the previous index <= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
 """
 findprev(predicate::Function,A,i)
 
@@ -9336,7 +9336,7 @@ mod1
 doc"""
     @assert cond [text]
 
-Throw an `AssertionError` if `cond` is false. Preferred syntax for writing assertions.
+Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
 """
 :@assert
 
@@ -9400,7 +9400,7 @@ doc"""
 ```rst
 ..  ismarked(s)
 
-Returns true if stream ``s`` is marked.
+Returns ``true`` if stream ``s`` is marked.
 
 See also :func:`mark`, :func:`unmark`, :func:`reset`
 ```
@@ -9783,7 +9783,7 @@ findfirst(A,v)
 doc"""
     findfirst(predicate, A)
 
-Return the index of the first element of `A` for which `predicate` returns true.
+Return the index of the first element of `A` for which `predicate` returns `true`.
 """
 findfirst
 
@@ -10085,7 +10085,7 @@ airyx
 doc"""
     get_zero_subnormals() -> Bool
 
-Returns `false` if operations on subnormal floating-point values ("denormals") obey rules for IEEE arithmetic, and `true` if they might be converted to zeros.
+Returns `false` if operations on subnormal floating-point values ("denormals") obey rules for IEEE arithmetic, and ``true`` if they might be converted to zeros.
 """
 get_zero_subnormals
 
@@ -10383,7 +10383,7 @@ doc"""
 ```rst
 ..  isbits(T)
 
-True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
+Return ``true`` if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
 .. doctest::
 
@@ -10413,7 +10413,7 @@ findlast(A,v)
 doc"""
     findlast(predicate, A)
 
-Return the index of the last element of `A` for which `predicate` returns true.
+Return the index of the last element of `A` for which `predicate` returns `true`.
 """
 findlast(::Function, A)
 
@@ -10434,7 +10434,7 @@ findnext
 doc"""
     findnext(predicate, A, i)
 
-Find the next index >= `i` of an element of `A` for which `predicate` returns true, or `0` if not found.
+Find the next index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
 """
 findnext(::Function,A,i)
 
@@ -10814,7 +10814,7 @@ doc"""
 ..  issubset(A, S) -> Bool
              ⊆(A,S) -> Bool
 
-True if A is a subset of or equal to S.
+Return ``true`` if ``A`` is a subset of or equal to ``S``.
 ```
 """
 issubset
@@ -10900,21 +10900,21 @@ zero
 doc"""
     any(itr) -> Bool
 
-Test whether any elements of a boolean collection are true.
+Test whether any elements of a boolean collection are `true`.
 """
 any(itr)
 
 doc"""
     any(A, dims)
 
-Test whether any values along the given dimensions of an array are true.
+Test whether any values along the given dimensions of an array are `true`.
 """
 any(::AbstractArray,dims)
 
 doc"""
     any(p, itr) -> Bool
 
-Determine whether predicate `p` returns true for any elements of `itr`.
+Determine whether predicate `p` returns `true` for any elements of `itr`.
 """
 any(p,itr)
 
@@ -11040,14 +11040,14 @@ vecnorm
 doc"""
     isvalid(value) -> Bool
 
-Returns true if the given value is valid for its type, which currently can be one of `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String`
+Returns `true` if the given value is valid for its type, which currently can be one of `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String`
 """
 isvalid(value)
 
 doc"""
     isvalid(T, value) -> Bool
 
-Returns true if the given value is valid for that type. Types currently can be `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String` Values for `Char` can be of type `Char` or `UInt32` Values for `ASCIIString` and `UTF8String` can be of that type, or `Vector{UInt8}` Values for `UTF16String` can be `UTF16String` or `Vector{UInt16}` Values for `UTF32String` can be `UTF32String`, `Vector{Char}` or `Vector{UInt32}`
+Returns `true` if the given value is valid for that type. Types currently can be `Char`, `ASCIIString`, `UTF8String`, `UTF16String`, or `UTF32String` Values for `Char` can be of type `Char` or `UInt32` Values for `ASCIIString` and `UTF8String` can be of that type, or `Vector{UInt8}` Values for `UTF16String` can be `UTF16String` or `Vector{UInt16}` Values for `UTF32String` can be `UTF32String`, `Vector{Char}` or `Vector{UInt32}`
 """
 isvalid(T,value)
 
@@ -11384,7 +11384,7 @@ doc"""
 
 Read at most `nb` bytes from the stream, returning a `Vector{UInt8}` of the bytes read.
 
-If `all` is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If `all` is false, at most one `read` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the `all` option.
+If `all` is `true` (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one `read` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the `all` option.
 """
 readbytes
 
@@ -11496,14 +11496,14 @@ lexless
 doc"""
     all!(r, A)
 
-Test whether all values in `A` along the singleton dimensions of `r` are true, and write results to `r`.
+Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 """
 all!
 
 doc"""
     is_assigned_char(c) -> Bool
 
-Returns true if the given char or integer is an assigned Unicode code point.
+Returns `true` if the given char or integer is an assigned Unicode code point.
 """
 is_assigned_char
 
@@ -11545,7 +11545,7 @@ realpath
 doc"""
     skipchars(stream, predicate; linecomment::Char)
 
-Advance the stream until before the first character for which `predicate` returns false. For example `skipchars(stream, isspace)` will skip all whitespace. If keyword argument `linecomment` is specified, characters from that character through the end of a line will also be skipped.
+Advance the stream until before the first character for which `predicate` returns `false`. For example `skipchars(stream, isspace)` will skip all whitespace. If keyword argument `linecomment` is specified, characters from that character through the end of a line will also be skipped.
 """
 skipchars
 
@@ -11776,7 +11776,7 @@ pop!(collection)
 doc"""
     filter(function, collection)
 
-Return a copy of `collection`, removing elements for which `function` is false. For associative collections, the function is passed two arguments (key and value).
+Return a copy of `collection`, removing elements for which `function` is `false`. For associative collections, the function is passed two arguments (key and value).
 """
 filter
 
@@ -12023,9 +12023,9 @@ doc"""
 ..  DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
 Create a DateTime through the adjuster API. The starting point will be constructed from the
-provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``. The step size in
 adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
-will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+will stop when ``f::Function`` returns ``false`` instead of ``true``. ``limit`` provides a limit to
 the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 ```
 """
@@ -12118,7 +12118,7 @@ Dates.Date(period::Dates.Period...)
 doc"""
     Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
-Create a Date through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns true. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns false instead of true. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
+Create a Date through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
 """
 Dates.Date(f::Function, y)
 
@@ -12160,7 +12160,7 @@ Dates.tonext(::Dates.TimeType,::Int,?)
 doc"""
     tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
 
-Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns true. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns false instead of true.
+Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns `false` instead of `true`.
 """
 Dates.tonext(::Function,::Dates.TimeType)
 
@@ -12219,7 +12219,7 @@ Dates.toprev(::Dates.TimeType,::Int,?)
 doc"""
     toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
-Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns true. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns false instead of true.
+Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func` returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same` allows `dt` to be considered in satisfying `func`. `negate` will make the adjustment process terminate when `func` returns `false` instead of `true`.
 """
 Dates.toprev(::Function,::Dates.TimeType)
 
@@ -12355,7 +12355,7 @@ Dates.now(::Type{Dates.UTC})
 doc"""
     isleapyear(dt::TimeType) -> Bool
 
-Returns true if the year of `dt` is a leap year.
+Returns `true` if the year of `dt` is a leap year.
 """
 Dates.isleapyear
 

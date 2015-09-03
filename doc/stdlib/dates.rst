@@ -65,9 +65,9 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    .. Docstring generated from Julia source
 
    Create a DateTime through the adjuster API. The starting point will be constructed from the
-   provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+   provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``. The step size in
    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
-   will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
+   will stop when ``f::Function`` returns ``false`` instead of ``true``. ``limit`` provides a limit to
    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 
 .. function:: DateTime(dt::Date) -> DateTime
@@ -132,7 +132,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
+   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
 
 .. function:: Date(dt::DateTime) -> Date
 
@@ -273,7 +273,7 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   Returns true if the year of ``dt`` is a leap year.
+   Returns ``true`` if the year of ``dt`` is a leap year.
 
 .. function:: dayofyear(dt::TimeType) -> Int
 
@@ -385,13 +385,13 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
+   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns ``true``\ . ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns ``false`` instead of ``true``\ .
 
 .. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns false instead of true.
+   Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns ``true``\ . ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns ``false`` instead of ``true``\ .
 
 .. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
