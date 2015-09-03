@@ -2125,7 +2125,9 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
 
 static void check_tuple_parameter(jl_value_t *pi, size_t i, size_t np)
 {
-    if (!(jl_is_type(pi) || jl_is_typevar(pi)))
+    // TODO: should possibly only allow Types and TypeVars, but see
+    // https://github.com/JuliaLang/julia/commit/85f45974a581ab9af955bac600b90d9ab00f093b#commitcomment-13041922
+    if (!valid_type_param(pi))
         jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
     if (i != np-1 && jl_is_vararg_type(pi))
         jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
