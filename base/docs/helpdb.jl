@@ -1753,14 +1753,17 @@ doc"""
 Copy `N` elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the pointers `dest` and `src` to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.
+"""
+unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
 
+doc"""
     unsafe_copy!(dest::Array, do, src::Array, so, N)
 
 Copy `N` elements from a source array to a destination, starting at offset `so` in the source and `do` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in the same manner as C.
 """
-unsafe_copy!
+unsafe_copy!(dest::Array, d, src::Array, so, N)
 
 doc"""
     diag(M[, k])
