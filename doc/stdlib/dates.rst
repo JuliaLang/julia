@@ -45,19 +45,11 @@ Dates and Time Types
 
    Return the field part of a Date or DateTime as a ``Period`` type.
 
-   .. code-block:: julia
-
-       Year(v)
-
 .. function:: Month(dt::TimeType) -> Month
 
    .. Docstring generated from Julia source
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Month(v)
 
 .. function:: Week(dt::TimeType) -> Week
 
@@ -65,19 +57,11 @@ Dates and Time Types
 
    Return the field part of a Date or DateTime as a ``Period`` type.
 
-   .. code-block:: julia
-
-       Week(v)
-
 .. function:: Day(dt::TimeType) -> Day
 
    .. Docstring generated from Julia source
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Day(v)
 
 .. function:: Hour(dt::TimeType) -> Hour
 
@@ -85,19 +69,11 @@ Dates and Time Types
 
    Return the field part of a Date or DateTime as a ``Period`` type.
 
-   .. code-block:: julia
-
-       Hour(v)
-
 .. function:: Minute(dt::TimeType) -> Minute
 
    .. Docstring generated from Julia source
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Minute(v)
 
 .. function:: Second(dt::TimeType) -> Second
 
@@ -105,19 +81,11 @@ Dates and Time Types
 
    Return the field part of a Date or DateTime as a ``Period`` type.
 
-   .. code-block:: julia
-
-       Second(v)
-
 .. function:: Millisecond(dt::TimeType) -> Millisecond
 
    .. Docstring generated from Julia source
 
    Return the field part of a Date or DateTime as a ``Period`` type.
-
-   .. code-block:: julia
-
-       Millisecond(v)
 
 Dates Functions
 ---------------
