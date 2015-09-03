@@ -1614,9 +1614,9 @@ getindex(collection, key...)
 doc"""
     cconvert(T,x)
 
-Convert "x" to a value of type "T", typically by calling `convert(T,x)`
+Convert `x` to a value of type `T`, typically by calling `convert(T,x)`
 
-In cases where "x" cannot be safely converted to "T", unlike `convert`, `cconvert` may return an object of a type different from "T", which however is suitable for `unsafe_convert` to handle.
+In cases where `x` cannot be safely converted to `T`, unlike `convert`, `cconvert` may return an object of a type different from `T`, which however is suitable for `unsafe_convert` to handle.
 
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
@@ -4716,7 +4716,7 @@ broadcast_function
 doc"""
     unsafe_convert(T,x)
 
-Convert "x" to a value of type "T"
+Convert `x` to a value of type `T`
 
 In cases where `convert` would need to take a Julia object and turn it into a `Ptr`, this function should be used to define and perform that conversion.
 
