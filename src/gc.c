@@ -242,7 +242,7 @@ static jl_thread_heap_t _jl_thread_heap;
 static jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
 #define FOR_CURRENT_HEAP {jl_thread_heap_t *current_heap = jl_thread_heap;
 #define END }
-#define FOR_EACH_HEAP FOR_CURRENT_HEAP int current_heap_index = 0; (void)current_heap_index;
+#define FOR_EACH_HEAP for( int current_heap_index=1; --current_heap_index>=0; ) { jl_thread_heap_t *current_heap = jl_thread_heap; (void)current_heap_index;
 #define FOR_HEAP(t_n) FOR_CURRENT_HEAP
 #endif
 
