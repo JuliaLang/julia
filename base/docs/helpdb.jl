@@ -2589,7 +2589,7 @@ Setting optional `shift` keyword argument computes the factorization of `A+shift
 
 The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 """
-ldltfact(A; shift=0, perm=Int[])
+ldltfact(A::SparseMatrix.CHOLMOD.Sparse; shift=0, perm=Int[])
 
 doc"""
     connect([host],port) -> TcpSocket
