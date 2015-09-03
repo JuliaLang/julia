@@ -98,7 +98,7 @@
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
-.. function:: r"regex"
+.. function:: @r_str -> Regex
 
    .. Docstring generated from Julia source
 
