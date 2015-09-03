@@ -10,6 +10,9 @@ ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 function getdoc(mod, x)
     try
         x = unescape_string(x)
+        if symbol(x) in keys(Docs.keywords)
+            return Any[Docs.keywords[symbol(x)]]
+        end
         v = if x[1] != '@'
             eval(parse(ident(mod, x)))
         else
@@ -19,11 +22,11 @@ function getdoc(mod, x)
             v = Base.colon
         end
         M = Docs.meta(Base)
-            if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
-                return collect(values(M[v].meta))
-            else
-                return Any[M[v]]
-            end
+        if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
+            return collect(values(M[v].meta))
+        else
+            return Any[M[v]]
+        end
     catch e
         println(e)
         warn("Mod $mod $x")

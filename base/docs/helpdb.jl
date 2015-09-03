@@ -9461,15 +9461,14 @@ Returns an iterator over substrings of `s` that correspond to the extended graph
 """
 graphemes
 
-keywords[symbol("@__FILE__")] = doc"""
-
+doc"""
     @__FILE__() -> AbstractString
 
 `@__FILE__` expands to a string with the absolute path and file name of the script being run. Returns `nothing` if run from a REPL or an empty string if evaluated by `julia -e <expr>`.
 """
+:@__FILE__
 
 keywords[symbol("@__LINE__")] = doc"""
-
     @__LINE__() -> Int
 
 `@__LINE__` expands to the line number of the call-site.
