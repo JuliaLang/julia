@@ -121,3 +121,6 @@ for elty in [Float32,Float64,Complex64,Complex128]
 end
 
 @test qr(big([0 1; 0 0]))[2] == [0 1; 0 0]
+
+@test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
+@test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
