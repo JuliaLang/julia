@@ -51,13 +51,11 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-
    Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
 
 .. function:: DateTime(periods::Period...) -> DateTime
 
    .. Docstring generated from Julia source
-
 
    Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
    DateTime parts not provided will default to the value of ``Dates.default(period)``.
@@ -65,7 +63,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
    .. Docstring generated from Julia source
-
 
    Create a DateTime through the adjuster API. The starting point will be constructed from the
    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
@@ -77,14 +74,12 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-
    Converts a ``Date`` type to a ``DateTime``.
    The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
 
 .. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    .. Docstring generated from Julia source
-
 
    Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
@@ -118,7 +113,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
    .. Docstring generated from Julia source
-
 
    Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 
@@ -312,7 +306,6 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-
    Truncates the value of ``dt`` according to the provided ``Period`` type.
    E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 
@@ -441,7 +434,6 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-
    Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
    and converts to the corresponding DateTime.
 
@@ -455,7 +447,6 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-
    Takes the number of Julian calendar days since epoch
    ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
 
@@ -468,7 +459,6 @@ Conversion Functions
 .. function:: rata2datetime(days) -> DateTime
 
    .. Docstring generated from Julia source
-
 
    Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
    and returns the corresponding DateTime.

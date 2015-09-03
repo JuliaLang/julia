@@ -23,13 +23,11 @@ General I/O
 
    .. Docstring generated from Julia source
 
-
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
 .. function:: open(file_name, [mode]) -> IOStream
 
    .. Docstring generated from Julia source
-
 
    Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
 
@@ -46,7 +44,6 @@ General I/O
 .. function:: open(f::function, args...)
 
    .. Docstring generated from Julia source
-
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
@@ -103,7 +100,6 @@ General I/O
 .. function:: close(stream)
 
    .. Docstring generated from Julia source
-
 
    Close an I/O stream. Performs a ``flush`` first.
 
@@ -181,7 +177,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-
    Add a mark at the current position of stream ``s``.  Returns the marked position.
 
    See also :func:`unmark`, :func:`reset`, :func:`ismarked`
@@ -189,7 +184,6 @@ General I/O
 .. function:: unmark(s)
 
    .. Docstring generated from Julia source
-
 
    Remove a mark from stream ``s``.
    Returns ``true`` if the stream was marked, ``false`` otherwise.
@@ -200,7 +194,6 @@ General I/O
 
    .. Docstring generated from Julia source
 
-
    Reset a stream ``s`` to a previously marked position, and remove the mark.
    Returns the previously marked position.
    Throws an error if the stream is not marked.
@@ -210,7 +203,6 @@ General I/O
 .. function:: ismarked(s)
 
    .. Docstring generated from Julia source
-
 
    Returns true if stream ``s`` is marked.
 
@@ -255,7 +247,6 @@ General I/O
 .. function:: print_unescaped(io, s::AbstractString)
 
    .. Docstring generated from Julia source
-
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
@@ -379,7 +370,6 @@ Text I/O
 .. function:: println(x)
 
    .. Docstring generated from Julia source
-
 
    Print (using :func:`print`) ``x`` followed by a newline.
 
@@ -719,7 +709,6 @@ Memory-mapped I/O
 
    .. Docstring generated from Julia source
 
-
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
    The type is an ``Array{T,N}`` with a bits-type element of ``T`` and dimension ``N`` that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
@@ -762,7 +751,6 @@ Memory-mapped I/O
 .. function:: Mmap.mmap(io, BitArray, [dims, offset])
 
    .. Docstring generated from Julia source
-
 
    Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`, but the byte representation is different.
 

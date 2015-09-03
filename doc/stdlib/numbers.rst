@@ -100,7 +100,6 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of
    a floating-point number or array. If ``x`` is a non-zero finite number,
    than the result will be a number of the same type on the interval
@@ -287,7 +286,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-
    Create a Float32 from ``x``. If ``x`` is not exactly representable then
    ``mode`` determines how ``x`` is rounded.
 
@@ -304,7 +302,6 @@ General Number Functions and Constants
 .. function:: Float64(x [, mode::RoundingMode])
 
    .. Docstring generated from Julia source
-
 
    Create a Float64 from ``x``. If ``x`` is not exactly representable then
    ``mode`` determines how ``x`` is rounded.
@@ -323,7 +320,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-
    Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
    that can be converted to an ``Int``).  The usual mathematical operators are
    defined for this type, and results are promoted to a ``BigInt``.
@@ -334,7 +330,6 @@ General Number Functions and Constants
 .. function:: BigFloat(x)
 
    .. Docstring generated from Julia source
-
 
    Create an arbitrary precision floating point number. ``x`` may be
    an ``Integer``, a ``Float64`` or a ``BigInt``. The
@@ -358,7 +353,6 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-
    Get the current floating point rounding mode for type ``T``, controlling
    the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
    :func:`*`, :func:`/` and :func:`sqrt`) and type conversion.
@@ -369,7 +363,6 @@ General Number Functions and Constants
 .. function:: set_rounding(T, mode)
 
    .. Docstring generated from Julia source
-
 
    Set the rounding mode of floating point type ``T``, controlling the
    rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
@@ -415,7 +408,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-
    Number of ones in the binary representation of ``x``.
 
    .. doctest::
@@ -426,7 +418,6 @@ Integers
 .. function:: count_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
-
 
    Number of zeros in the binary representation of ``x``.
 
@@ -439,7 +430,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-
    Number of zeros leading the binary representation of ``x``.
 
    .. doctest::
@@ -450,7 +440,6 @@ Integers
 .. function:: leading_ones(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
-
 
    Number of ones leading the binary representation of ``x``.
 
@@ -463,7 +452,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-
    Number of zeros trailing the binary representation of ``x``.
 
    .. doctest::
@@ -474,7 +462,6 @@ Integers
 .. function:: trailing_ones(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
-
 
    Number of ones trailing the binary representation of ``x``.
 
@@ -487,7 +474,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
    .. doctest::
@@ -498,7 +484,6 @@ Integers
 .. function:: isprime(x::BigInt, [reps = 25]) -> Bool
 
    .. Docstring generated from Julia source
-
 
    Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
    ``false`` if ``x`` is not prime with high probability. The false positive
@@ -526,7 +511,6 @@ Integers
 
    .. Docstring generated from Julia source
 
-
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
    .. doctest::
@@ -540,7 +524,6 @@ Integers
 .. function:: iseven(x::Integer) -> Bool
 
    .. Docstring generated from Julia source
-
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
@@ -627,7 +610,6 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 .. function:: rand([rng], [S], [dims...])
 
    .. Docstring generated from Julia source
-
 
    Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
 

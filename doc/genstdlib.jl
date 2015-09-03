@@ -73,6 +73,9 @@ function split_decl_rst(md, decl)
                 decl *= replace(ls[body_start], r"^ *", "\n              ")
                 body_start += 1
             end
+            while ls[body_start] == ""
+                body_start += 1
+            end
             return decl, join(ls[body_start:end], "\n")
         end
         return decl, rst_text
