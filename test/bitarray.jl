@@ -313,6 +313,7 @@ for m1 = 0 : v1
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(append!(b1, b2)), append!(i1, i2))
+        @test isequal(bitunpack(append!(b1, i2)), append!(i1, b2))
     end
 end
 
@@ -323,6 +324,7 @@ for m1 = 0 : v1
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
+        @test isequal(bitunpack(prepend!(b1, i2)), prepend!(i1, b2))
     end
 end
 
@@ -566,6 +568,8 @@ b2 = trues(n1, n2)
 @check_bit_operation mod(b1, b2) BitMatrix
 @check_bit_operation div(b1,bitunpack(b2)) BitMatrix
 @check_bit_operation mod(b1,bitunpack(b2)) BitMatrix
+@check_bit_operation div(bitunpack(b1),b2) BitMatrix
+@check_bit_operation mod(bitunpack(b1),b2) BitMatrix
 
 while true
     global b1
