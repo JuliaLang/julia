@@ -343,22 +343,17 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 
     jl_tupletype_t *argtypes = NULL;
     jl_function_t *fun = NULL;
-    jl_svec_t *argsvec = NULL;
-    JL_GC_PUSH3(&argtypes, &fun, &argsvec);
-    if (jl_is_tuple(args)) {
-        size_t na = jl_nfields(args);
-        argsvec = jl_alloc_svec(na);
-        size_t i;
-        for(i=0; i < na; i++) {
-            jl_svecset(argsvec, i, jl_get_nth_field((jl_value_t*)args, i));
-        }
-        args = argsvec;
-    }
-    argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
+    if ((jl_value_t*)args == jl_emptytuple)
+        args = jl_emptysvec;
+    assert(jl_is_svec(args));
+    JL_GC_PUSH2(&argtypes, &fun);
+    if (jl_svec_len(args) == 0)
+        argtypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
+    else
+        argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
     fun = jl_get_specialization(f, argtypes);
     if (fun == NULL)
         fun = f;
-    jl_compile(fun);
     jl_generate_fptr(fun);
 
     threadwork.command = TI_THREADWORK_RUN;

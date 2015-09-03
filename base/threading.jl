@@ -59,7 +59,7 @@ end
 function _threadscall(callexpr)
     fun = callexpr.args[1]
     esc(quote
-        ccall(:jl_threading_run, Void, (Any, Any), $fun, $(Expr(:tuple, callexpr.args[2:end]...)))
+        ccall(:jl_threading_run, Void, (Any, Any), $fun, $(Expr(:call, Core.svec, callexpr.args[2:end]...)))
     end)
 end
 
