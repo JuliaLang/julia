@@ -7,6 +7,51 @@ isop(func) = ismatch(r"[^\w@!.]|^!$", func)
 
 ident(mod, x) = "$mod.$(isop(x) ? "(:($x))" : x)"
 
+all_docs = ObjectIdDict()
+
+function add_all_docs(it)
+    for (k, v) in it
+        all_docs[v] = k
+    end
+end
+
+function add_all_docs(it, k)
+    for (_, v) in it
+        all_docs[v] = k
+    end
+end
+
+function add_all_docs_meta(meta)
+    for (sym, d) in meta
+        if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
+            add_all_docs(d.meta, sym)
+        else
+            all_docs[d] = sym
+        end
+    end
+end
+
+mod_added = ObjectIdDict()
+
+function add_all_docs_mod(m::Module)
+    mod_added[m] = m
+    try
+        add_all_docs_meta(Docs.meta(m))
+    end
+    for name in names(m)
+        try
+            sub_m = m.(name)
+            sub_m in keys(mod_added) || add_all_docs_mod(sub_m)
+        end
+    end
+end
+
+add_all_docs_mod(Base)
+# Most of the keywords are not functions and they are easy to check by hand
+# add_all_docs(Docs.keywords)
+
+println("Collect $(length(all_docs)) Docs")
+
 function getdoc(mod, x)
     try
         x = unescape_string(x)
@@ -132,6 +177,7 @@ function translate(file)
                     doccing = false
                     continue
                 end
+                delete!(all_docs, doc)
                 doccing = true
                 decl, body = split_decl_rst(doc, l)
                 println(io, decl)
@@ -156,4 +202,13 @@ for folder in ["stdlib", "manual", "devdocs"]
     for file in readdir("$folder")
         translate("$folder/$file")
     end
+end
+
+for (d, v) in all_docs
+    isa(v, ObjectIdDict) && continue # No idea what these are
+    isa(v, Int) && continue # We don't document `0` as a function
+    warn("Missing doc for $v")
+    # println(tryrst(d, false))
+    # # Generate todo list ;-p
+    # println("- [ ] $v")
 end
