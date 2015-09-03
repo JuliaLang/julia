@@ -107,6 +107,11 @@ function generic_vecnorm1(x)
     return convert(T, sum)
 end
 
+# faster computation of norm(x)^2, avoiding overflow for integers
+norm_sqr(x) = norm(x)^2
+norm_sqr(x::Number) = abs2(x)
+norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
@@ -114,17 +119,17 @@ function generic_vecnorm2(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
     if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
-        sum::promote_type(Float64, T) = abs2(norm(v)/norm(one(v)))
+        sum::promote_type(Float64, T) = norm_sqr(v)
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += abs2(norm(v)/norm(one(v)))
+            sum += norm_sqr(v)
         end
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += abs2(norm(v)/maxabs)
+            sum += (norm(v)/maxabs)^2
         end
         return convert(T, maxabs*sqrt(sum))
     end
@@ -144,10 +149,10 @@ function generic_vecnormp(x, p)
     end
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
-        sum::promote_type(Float64, T) = (norm(v)/norm(one(v)))^spp
+        sum::promote_type(Float64, T) = norm(v)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += (norm(v)/norm(one(v)))^spp
+            sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
