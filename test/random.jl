@@ -27,11 +27,15 @@ A = zeros(2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
+A = zeros(2, 2)
+@test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 @test rand(MersenneTwister(0), Int64, 1) == [4439861565447045202]
 A = zeros(Int64, 2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [858542123778948672  5715075217119798169;
             8690327730555225005 8435109092665372532]
+A = zeros(UInt128, 2, 2)
+@test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 
 # rand from AbstractArray
 let mt = MersenneTwister()
