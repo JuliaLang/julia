@@ -30,9 +30,9 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
     signal(sig, SIG_DFL);
 #ifdef __APPLE__
-    jl_critical_error(sig, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss, bt_data, &bt_size);
+    jl_critical_error(sig, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
 #else
-    jl_critical_error(sig, (ucontext_t*)context, bt_data, &bt_size);
+    jl_critical_error(sig, (ucontext_t*)context, jl_bt_data, &jl_bt_size);
 #endif
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
@@ -59,22 +59,15 @@ void jl_sigsetset(sigset_t *sset)
 #endif
 }
 
-void restore_signals(void)
-{
-    sigset_t sset;
-    jl_sigsetset(&sset);
-    sigprocmask(SIG_SETMASK, &sset, 0);
-}
-
-static pthread_t root_tid;
 static pthread_mutex_t in_signal_lock;
-static pthread_cond_t signal_caught_cond;
 static pthread_cond_t exit_signal_cond;
-static bt_context_t signal_context;
-static int remote_sig;
+static pthread_cond_t signal_caught_cond;
+static volatile int remote_sig;
+static volatile int waiting_for;
 static void *signal_listener(void *arg)
 {
-    static intptr_t bt_data[MAX_BT_SIZE + 1];
+    int i;
+    static intptr_t bt_data[JL_MAX_BT_SIZE + 1];
     static size_t bt_size = 0;
     sigset_t sset;
     int sig = 0, critical;
@@ -82,7 +75,6 @@ static void *signal_listener(void *arg)
     while (1) {
         remote_sig = 0;
         sigwait(&sset, &sig);
-
 
         critical = (sig == SIGINT && exit_on_sigint);
         critical |= (sig == SIGTERM);
@@ -94,33 +86,55 @@ static void *signal_listener(void *arg)
         critical |= (sig == SIGUSR1); // TODO: && si->si_value.sival_ptr != &timerprof)
 #endif
 
+        // notify all threads to stop
         pthread_mutex_lock(&in_signal_lock);
         remote_sig = sig;
-        pthread_kill(root_tid, SIGUSR2);
-        pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+        waiting_for = jl_n_threads;
+        for (i = 0; i < jl_n_threads; i++) {
+            pthread_kill(jl_all_task_states[i].system_id, SIGUSR2);
+        }
+        pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for all threads to acknowledge
+        assert(waiting_for == 0);
+
+        // do backtrace on thread contexts for critical signals
         // this part must be signal-handler safe
-        if (critical)
-            bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, signal_context);
+        if (critical) {
+            bt_size = 0;
+            for (i = 0; i < jl_n_threads; i++) {
+                bt_size += rec_backtrace_ctx(bt_data + bt_size,
+                        JL_MAX_BT_SIZE / jl_n_threads - 1,
+                        (bt_context_t)jl_all_task_states[i].signal_context);
+                bt_data[bt_size++] = 0;
+            }
+        }
+
+        // do backtrace for profiler
 #ifdef SIGPROF
         if (sig == SIGPROF)
 #else
         if (sig == SIGUSR1) // TODO: && !critical
 #endif
-        {
             if (running && bt_size_cur < bt_size_max) {
-                // Get backtrace data
-                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, signal_context);
-                // Mark the end of this block with 0
-                bt_data_prof[bt_size_cur] = 0;
-                bt_size_cur++;
+                for (i = 0; i < jl_n_threads; i++) {
+                    // Get backtrace data
+                    bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur,
+                            bt_size_max - bt_size_cur - 1, (bt_context_t)jl_all_task_states[i].signal_context);
+                    // Mark the end of this block with 0
+                    bt_data_prof[bt_size_cur++] = 0;
+                    if (bt_size_cur >= bt_size_max) {
+                        // Buffer full: Delete the  timer
+                        jl_profile_stop_timer();
+                        break;
+                    }
+                }
             }
-            if (bt_size_cur >= bt_size_max) {
-                // Buffer full: Delete the  timer
-                jl_profile_stop_timer();
-            }
-        }
+
+        // notify all threads to resume
         remote_sig = 0;
+        waiting_for = jl_n_threads;
         pthread_cond_broadcast(&exit_signal_cond);
+        pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for all threads to acknowledge
+        assert(waiting_for == 0);
         pthread_mutex_unlock(&in_signal_lock);
 
         // this part is async with the running of the rest of the program
@@ -135,6 +149,65 @@ static void *signal_listener(void *arg)
                 jl_exit(128 + sig);
         }
     }
+}
+
+static void wait_barrier(void)
+{
+    if (JL_ATOMIC_FETCH_AND_ADD(waiting_for, -1) == 1) {
+        pthread_cond_broadcast(&signal_caught_cond);
+    }
+}
+void usr2_handler(int sig, siginfo_t *info, void *ctx)
+{
+    sigset_t sset;
+    ucontext_t *context = (ucontext_t*)ctx;
+    if (remote_sig) {
+        int realsig = remote_sig;
+#ifdef __APPLE__
+        jl_all_task_states[ti_tid].signal_context = (void*)&context->uc_mcontext->__ss;
+#else
+        jl_all_task_states[ti_tid].signal_context = (void*)context;
+#endif
+
+        pthread_mutex_lock(&in_signal_lock);
+        wait_barrier();
+        pthread_cond_wait(&exit_signal_cond, &in_signal_lock);
+        wait_barrier();
+        pthread_mutex_unlock(&in_signal_lock);
+
+        if (ti_tid == 0 && realsig == SIGINT) {
+            if (jl_defer_signal) {
+                jl_signal_pending = realsig;
+            }
+            else {
+                jl_signal_pending = 0;
+                sigemptyset(&sset);
+                sigaddset(&sset, sig);
+                sigprocmask(SIG_UNBLOCK, &sset, NULL);
+                jl_throw(jl_interrupt_exception);
+            }
+        }
+    }
+}
+
+void restore_signals(void)
+{
+    pthread_attr_t attr;
+    pthread_t thread;
+    sigset_t sset;
+    jl_sigsetset(&sset);
+    sigprocmask(SIG_SETMASK, &sset, 0);
+
+    if (pthread_mutex_init(&in_signal_lock, NULL) != 0 ||
+        pthread_cond_init(&exit_signal_cond, NULL) != 0 ||
+        pthread_cond_init(&signal_caught_cond, NULL) != 0 ||
+        pthread_attr_init(&attr) != 0) {
+        jl_error("SIGUSR pthread init failed");
+    }
+    if (pthread_create(&thread, &attr, signal_listener, NULL) != 0) {
+        jl_error("pthread_create(signal_listener) failed");
+    }
+    pthread_attr_destroy(&attr);
 }
 
 #ifndef __APPLE__ // Apple handles this from a separate thread (catch_exception_raise)
@@ -169,36 +242,6 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-static void usr2_handler(int sig, siginfo_t *info, void *ctx)
-{
-    sigset_t sset;
-    ucontext_t *context = (ucontext_t*)ctx;
-    if (remote_sig) {
-        int realsig = remote_sig;
-#ifdef __APPLE__
-            signal_context = (bt_context_t)&context->uc_mcontext->__ss;
-#else
-            signal_context = context;
-#endif
-        pthread_mutex_lock(&in_signal_lock);
-        pthread_cond_broadcast(&signal_caught_cond);
-        pthread_cond_wait(&exit_signal_cond, &in_signal_lock);
-        pthread_mutex_unlock(&in_signal_lock);
-
-        if (realsig == SIGINT) {
-            if (jl_defer_signal) {
-                jl_signal_pending = realsig;
-            }
-            else {
-                jl_signal_pending = 0;
-                sigemptyset(&sset);
-                sigaddset(&sset, sig);
-                sigprocmask(SIG_UNBLOCK, &sset, NULL);
-                jl_throw(jl_interrupt_exception);
-            }
-        }
-    }
-}
 
 DLLEXPORT void jl_install_sigint_handler(void)
 {
@@ -208,7 +251,6 @@ DLLEXPORT void jl_install_sigint_handler(void)
 void jl_install_default_signal_handlers(void)
 {
     pthread_t thread;
-    pthread_attr_t attr;
 
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
@@ -222,23 +264,9 @@ void jl_install_default_signal_handlers(void)
         jl_error("fatal error: Couldn't set SIGPIPE");
     }
 
-#if defined(__linux__) && defined(JL_USE_INTEL_JITEVENTS)
-    if (jl_using_intel_jitevents)
-        // Intel VTune Amplifier needs at least 64k for alternate stack.
-        if (SIGSTKSZ < 1<<16)
-            sig_stack_size = 1<<16;
-#endif
-    signal_stack = malloc(sig_stack_size);
-    stack_t ss;
-    ss.ss_flags = 0;
-    ss.ss_size = sig_stack_size;
-    ss.ss_sp = signal_stack;
-    if (sigaltstack(&ss, NULL) < 0) {
-        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
-    }
-
 #ifdef __APPLE__
     {
+        pthread_attr_t attr;
         kern_return_t ret;
         mach_port_t self = mach_task_self();
         ret = mach_port_allocate(self, MACH_PORT_RIGHT_RECEIVE, &segv_port);
@@ -297,18 +325,18 @@ void jl_install_default_signal_handlers(void)
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #endif
+}
 
-    root_tid = pthread_self();
-    if (pthread_mutex_init(&in_signal_lock, NULL) != 0 ||
-        pthread_cond_init(&signal_caught_cond, NULL) != 0 ||
-        pthread_cond_init(&exit_signal_cond, NULL) != 0 ||
-        pthread_attr_init(&attr) != 0) {
-        jl_error("SIGUSR pthread init failed");
+void jl_install_thread_signal_handler(void)
+{
+    signal_stack = malloc(sig_stack_size);
+    stack_t ss;
+    ss.ss_flags = 0;
+    ss.ss_size = sig_stack_size;
+    ss.ss_sp = signal_stack;
+    if (sigaltstack(&ss, NULL) < 0) {
+        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
     }
-    if (pthread_create(&thread, &attr, signal_listener, NULL) != 0) {
-        jl_error("pthread_create(signal_listener) failed");
-    }
-    pthread_attr_destroy(&attr);
 
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));

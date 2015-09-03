@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#include <threading.h>
+
 // Profiler control variables //
 static volatile ptrint_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
@@ -72,7 +74,7 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
     if (context)
-        *bt_size = n = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, context);
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
     for(size_t i=0; i < n; i++)
         gdblookup(bt_data[i]);
     gc_debug_print_status();

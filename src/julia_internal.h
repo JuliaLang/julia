@@ -83,6 +83,8 @@ JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 void jl_install_default_signal_handlers(void);
+void restore_signals(void);
+void jl_install_thread_signal_handler(void);
 
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;
@@ -188,9 +190,8 @@ extern volatile int jl_in_stackwalk;
 #include <libunwind.h>
 typedef unw_context_t *bt_context_t;
 #endif
-#define MAX_BT_SIZE 80000
-extern ptrint_t bt_data[MAX_BT_SIZE+1];
-extern size_t bt_size;
+#define jl_bt_data (jl_get_ptls_states()->bt_data)
+#define jl_bt_size (jl_get_ptls_states()->bt_size)
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #ifdef LIBOSXUNWIND

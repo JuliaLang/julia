@@ -29,7 +29,7 @@ void *mach_segv_listener(void *arg)
 #ifdef SEGV_EXCEPTION
 void darwin_segv_handler(unw_context_t *uc)
 {
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_bt_size = rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, uc);
     jl_exception_in_transit = jl_segv_exception;
     jl_rethrow();
 }
@@ -37,14 +37,14 @@ void darwin_segv_handler(unw_context_t *uc)
 
 void darwin_stack_overflow_handler(unw_context_t *uc)
 {
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_bt_size = rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, uc);
     jl_exception_in_transit = jl_stackovf_exception;
     jl_rethrow();
 }
 
 void darwin_accerr_handler(unw_context_t *uc)
 {
-    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_bt_size = rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, uc);
     jl_exception_in_transit = jl_readonlymemory_exception;
     jl_rethrow();
 }
@@ -141,7 +141,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     else {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(3)",ret);
-        jl_critical_error(SIGSEGV, (unw_context_t*)&state, bt_data, &bt_size);
+        jl_critical_error(SIGSEGV, (unw_context_t*)&state,
+                          jl_bt_data, &jl_bt_size);
         return KERN_INVALID_ARGUMENT;
     }
 }
@@ -170,7 +171,6 @@ void attach_exception_port()
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
 static pthread_t profiler_thread;
-static mach_port_t main_thread;
 clock_serv_t clk;
 static int profile_started = 0;
 static mach_port_t profile_port = 0;
@@ -224,7 +224,8 @@ static kern_return_t profiler_segv_handler
 void *mach_profile_listener(void *arg)
 {
     (void)arg;
-    int max_size = 512;
+    int i;
+    const int max_size = 512;
     attach_exception_port();
     mach_profiler_thread = mach_thread_self();
     mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
@@ -233,24 +234,31 @@ void *mach_profile_listener(void *arg)
                                      0, max_size, profile_port,
                                      MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
         HANDLE_MACH_ERROR("mach_msg",ret);
-        if (bt_size_cur < bt_size_max) {
+        // sample each thread, round-robin style
+        for (i = 0; i < jl_n_threads; i++) {
+            // if there is no space left, break early
+            if (bt_size_cur >= bt_size_max - 1)
+                break;
+
+            mach_port_t tid_port = pthread_mach_thread_np(jl_all_task_states[i].system_id);
+
             kern_return_t ret;
             // Suspend the thread so we may safely sample it
-            ret = thread_suspend(main_thread);
-            HANDLE_MACH_ERROR("thread_suspend",ret);
+            ret = thread_suspend(tid_port);
+            HANDLE_MACH_ERROR("thread_suspend", ret);
 
             // Do the actual sampling
             unsigned int count = MACHINE_THREAD_STATE_COUNT;
             x86_thread_state64_t state;
 
             // Get the state of the suspended thread
-            ret = thread_get_state(main_thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-            HANDLE_MACH_ERROR("thread_get_state",ret);
+            ret = thread_get_state(tid_port, x86_THREAD_STATE64, (thread_state_t)&state, &count);
+            HANDLE_MACH_ERROR("thread_get_state", ret);
 
             // Initialize the unwind context with the suspend thread's state
             unw_context_t uc;
-            memset(&uc,0,sizeof(unw_context_t));
-            memcpy(&uc,&state,sizeof(x86_thread_state64_t));
+            memset(&uc, 0, sizeof(unw_context_t));
+            memcpy(&uc, &state, sizeof(x86_thread_state64_t));
 
             /*
              *  Unfortunately compact unwind info is incorrectly generated for quite a number of
@@ -271,10 +279,10 @@ void *mach_profile_listener(void *arg)
 
             if (forceDwarf == 0) {
                 // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, &uc);
             }
             else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+                bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, &uc);
             }
             else if (forceDwarf == -1) {
                 jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -283,17 +291,16 @@ void *mach_profile_listener(void *arg)
             forceDwarf = -2;
 
             // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur] = 0;
-            bt_size_cur++;
+            bt_data_prof[bt_size_cur++] = 0;
 
             // We're done! Resume the thread.
-            ret = thread_resume(main_thread);
-            HANDLE_MACH_ERROR("thread_resume",ret)
+            ret = thread_resume(tid_port);
+            HANDLE_MACH_ERROR("thread_resume", ret)
 
             if (running) {
                 // Reset the alarm
                 ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
-                HANDLE_MACH_ERROR("clock_alarm",ret)
+                HANDLE_MACH_ERROR("clock_alarm", ret)
             }
         }
     }
@@ -304,7 +311,6 @@ DLLEXPORT int jl_profile_start_timer(void)
     kern_return_t ret;
     if (!profile_started) {
         mach_port_t self = mach_task_self();
-        main_thread = mach_thread_self();
 
         ret = host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, (clock_serv_t *)&clk);
         HANDLE_MACH_ERROR("host_get_clock_service", ret);

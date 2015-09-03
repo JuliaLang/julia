@@ -8,9 +8,6 @@ struct itimerval timerprof;
 
 DLLEXPORT int jl_profile_start_timer(void)
 {
-    struct sigaction sa;
-    sigset_t ss;
-
     timerprof.it_interval.tv_sec = nsecprof/GIGA;
     timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
     timerprof.it_value.tv_sec = nsecprof/GIGA;
