@@ -395,7 +395,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
+   Print ``args`` using C ``printf()`` style format specification string. Optionally, an ``IOStream`` may be passed as the first argument to redirect output.
 
 .. function:: @sprintf("%Fmt", args...)
 

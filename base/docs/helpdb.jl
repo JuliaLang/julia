@@ -9018,7 +9018,7 @@ setfield!
 doc"""
     @printf([io::IOStream], "%Fmt", args...)
 
-Print arg(s) using C `printf()` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
+Print `args` using C `printf()` style format specification string. Optionally, an `IOStream` may be passed as the first argument to redirect output.
 """
 :@printf
 
