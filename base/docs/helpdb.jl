@@ -5534,7 +5534,7 @@ Pick a random element or array of random elements from the set of values specifi
 
 * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
 
-* a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to [0,1) for floating point numbers;
+* a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to :math:`[0, 1)` for floating point numbers;
 
 ``S`` defaults to ``Float64``.
 ```
@@ -10321,10 +10321,10 @@ doc"""
 ```rst
 ..  significand(x)
 
-Extract the significand(s) (a.k.a. mantissa), in binary representation, of
+Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of
 a floating-point number or array. If ``x`` is a non-zero finite number,
 than the result will be a number of the same type on the interval
-[1,2). Otherwise ``x`` is returned.
+:math:`[1,2)`. Otherwise ``x`` is returned.
 
 .. doctest::
 
@@ -11102,7 +11102,7 @@ doc"""
 ```rst
 ..  frexp(val)
 
-Return ``(x,exp)`` such that ``x`` has a magnitude in the interval ``[1/2, 1)`` or 0,
+Return ``(x,exp)`` such that ``x`` has a magnitude in the interval :math:`[1/2, 1)` or 0,
 and val = :math:`x \times 2^{exp}`.
 ```
 """
