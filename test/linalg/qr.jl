@@ -35,7 +35,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         α = rand(eltyb)
         aα = fill(α,1,1)
         @test qrfact(α)[:Q]*qrfact(α)[:R] ≈ qrfact(aα)[:Q]*qrfact(aα)[:R]
-
+        @test abs(qrfact(α)[:Q][1,1]) ≈ one(eltyb)
+        tab = promote_type(eltya,eltyb)
 
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 debug && println("QR decomposition (without pivoting)")
@@ -50,6 +51,10 @@ debug && println("QR decomposition (without pivoting)")
                 @test_approx_eq q*r a
                 @test_approx_eq_eps a*(qra\b) b 3000ε
                 @test_approx_eq full(qra) a
+                @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
+                end
 
 debug && println("Thin QR decomposition (without pivoting)")
                 qra   = @inferred qrfact(a[:,1:n1], Val{false})
@@ -63,6 +68,10 @@ debug && println("Thin QR decomposition (without pivoting)")
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
+                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
+                end
 
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
                 if eltya <: BlasFloat
@@ -75,6 +84,7 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is onl
                 if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
                 @test_approx_eq q'*full(q, thin=false) eye(n1)
                 @test_approx_eq q*full(q, thin=false)' eye(n1)
+                @test_approx_eq (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) eye(n1)
                 @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
                 @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:n1,:]
                 @test_approx_eq isa(qrpa, QRPivoted) ? q*r*qrpa[:P].' : q*r a[1:n1,:]
@@ -82,6 +92,9 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is onl
                 @test_approx_eq full(qrpa) a[1:5,:]
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
+                if eltya != Int
+                    @test eye(eltyb,n1)*q ≈ convert(AbstractMatrix{tab},q)
+                end
 
 debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
                 qrpa  = factorize(a[:,1:n1])
@@ -95,18 +108,26 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is on
                 @test_approx_eq full(qrpa) a[:,1:5]
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
+                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
+                end
             end
         end
 
 debug && println("Matmul with QR factorizations")
         if eltya != Int
-            qrpa  = factorize(a[:,1:n1])
-            q,r = qrpa[:Q], qrpa[:R]
+            qrpa = factorize(a[:,1:n1])
+            q,r  = qrpa[:Q], qrpa[:R]
             @test_approx_eq A_mul_B!(full(q,thin=false)',q) eye(n)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
             @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
             @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
             @test_throws BoundsError size(q,-1)
+            if eltya == BigFloat
+                @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
+                @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
+            end
 
             qra   = qrfact(a[:,1:n1], Val{false})
             q,r   = qra[:Q], qra[:R]
@@ -144,3 +165,8 @@ let
     Q=full(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
+
+qrpa = qrfact(areal,Val{true})
+qrpa = convert(QRPivoted{BigFloat},qrpa)
+@test qrpa \ zeros(BigFloat,n) ≈ zeros(BigFloat,n)
+@test qrpa \ zeros(BigFloat,n,n) ≈ zeros(BigFloat,n,n)
