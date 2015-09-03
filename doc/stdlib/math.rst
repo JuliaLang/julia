@@ -848,7 +848,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return ``(x,exp)`` such that ``x`` has a magnitude in the interval ``[1/2, 1)`` or 0,
+   Return ``(x,exp)`` such that ``x`` has a magnitude in the interval :math:`[1/2, 1)` or 0,
    and val = :math:`x \times 2^{exp}`.
 
 .. function:: exp(x)
