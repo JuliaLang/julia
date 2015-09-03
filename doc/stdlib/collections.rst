@@ -771,8 +771,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
      get(dict, key) do
          # default value calculated here
-
-	      time()
+         time()
      end
 
 .. function:: get!(collection, key, default)
