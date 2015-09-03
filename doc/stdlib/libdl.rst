@@ -16,7 +16,6 @@
 
    .. Docstring generated from Julia source
 
-
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
 .. data:: RTLD_DEEPBIND

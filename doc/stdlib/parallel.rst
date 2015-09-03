@@ -147,14 +147,12 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-
    Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
    This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 
 .. function:: addprocs() -> List of process identifiers
 
    .. Docstring generated from Julia source
-
 
    Equivalent to ``addprocs(CPU_CORES)``
 
@@ -164,7 +162,6 @@ General Parallel Computing Support
 .. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
 
    .. Docstring generated from Julia source
-
 
    Add processes on remote machines via SSH.
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
@@ -205,7 +202,6 @@ General Parallel Computing Support
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
-
 
    Launches worker processes via the specified cluster manager.
 
@@ -260,7 +256,6 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-
    Transform collections ``lsts`` by applying ``f`` to each element in parallel.
    (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.)
    If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
@@ -278,7 +273,6 @@ General Parallel Computing Support
 .. function:: wait([x])
 
    .. Docstring generated from Julia source
-
 
    Block the current task until some event occurs, depending on the type
    of the argument:
@@ -306,7 +300,6 @@ General Parallel Computing Support
 .. function:: fetch(x)
 
    .. Docstring generated from Julia source
-
 
    Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
 
@@ -368,7 +361,6 @@ General Parallel Computing Support
 .. function:: close(Channel)
 
    .. Docstring generated from Julia source
-
 
    Closes a channel. An exception is thrown by:
 
@@ -506,7 +498,6 @@ Cluster Manager Interface
 .. function:: manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
 
    .. Docstring generated from Julia source
-
 
    Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
    with appropriate ``op`` values:

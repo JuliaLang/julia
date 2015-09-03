@@ -17,13 +17,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Matrix multiplication
 
 .. function:: \\(A, B)
 
    .. Docstring generated from Julia source
-
 
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor.
 
@@ -59,7 +57,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
 
 .. function:: lu(A) -> L, U, p
@@ -71,7 +68,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: lufact(A [,pivot=Val{true}]) -> F
 
    .. Docstring generated from Julia source
-
 
    Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
@@ -113,7 +109,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 
 .. function:: chol(A, [LU]) -> F
@@ -141,7 +136,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    .. Docstring generated from Julia source
-
 
    ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy. ``cholfact!`` can also reuse the symbolic factorization from a different matrix ``F`` with the same structure when used as: ``cholfact!(F::CholmodFactor, A)``.
 
@@ -180,7 +174,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact(A [,pivot=Val{false}]) -> F
 
    .. Docstring generated from Julia source
-
 
    Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
@@ -241,20 +234,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Compute the QR factorization of a sparse matrix ``A``. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 
 .. function:: qrfact!(A [,pivot=Val{false}])
 
    .. Docstring generated from Julia source
 
-
    ``qrfact!`` is the same as :func:`qrfact` when A is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
 
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 
    .. Docstring generated from Julia source
-
 
    Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ``
    object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
@@ -269,7 +259,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``, ``\``, ``inv``, ``issym``, ``ishermitian``.
 
 .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_.
@@ -278,13 +267,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    ``bkfact!`` is the same as :func:`bkfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
 
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
    .. Docstring generated from Julia source
-
 
    Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
    details on the ``balance`` keyword argument.
@@ -306,7 +293,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
 
    ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
@@ -316,7 +302,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvals(A,[irange,][vl,][vu])
 
    .. Docstring generated from Julia source
-
 
    Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
    :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
@@ -346,7 +331,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
    (The ``k``\ th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
@@ -357,7 +341,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
    .. Docstring generated from Julia source
-
 
    Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
    factorization object ``F`` which contains the eigenvalues in ``F[:values]``
@@ -383,7 +366,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
    returning a ``GeneralizedEigen`` factorization object ``F`` which contains
    the generalized eigenvalues in ``F[:values]`` and the generalized
@@ -395,7 +377,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Same as :func:`eigfact`, but saves space by overwriting the input ``A`` (and
    ``B``), instead of creating a copy.
 
@@ -403,13 +384,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``. When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`full`.
 
 .. function:: hessfact!(A)
 
    .. Docstring generated from Julia source
-
 
    ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input A, instead of creating a copy.
 
@@ -423,13 +402,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
 
 .. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
    .. Docstring generated from Julia source
-
 
    See :func:`schurfact`
 
@@ -437,13 +414,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
 
 .. function:: ordschur!(Q, T, select) -> Schur
 
    .. Docstring generated from Julia source
-
 
    Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
 
@@ -451,13 +426,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Reorders the Schur factorization ``S`` of type ``Schur``.
 
 .. function:: ordschur!(S, select) -> Schur
 
    .. Docstring generated from Julia source
-
 
    Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
 
@@ -471,13 +444,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    See :func:`schurfact`
 
 .. function:: ordschur(S, T, Q, Z, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
-
 
    Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
 
@@ -485,20 +456,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
 
 .. function:: ordschur(GS, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
 
-
    Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
 
 .. function:: ordschur!(GS, select) -> GeneralizedSchur
 
    .. Docstring generated from Julia source
-
 
    Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
 
@@ -511,7 +479,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact!(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
-
 
    ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
@@ -633,7 +600,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Scale an array ``A`` by a scalar ``b``, similar to :func:`scale` but
    overwriting ``A`` in-place.
 
@@ -647,13 +613,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
 
 .. function:: Bidiagonal(dv, ev, isupper)
 
    .. Docstring generated from Julia source
-
 
    Constructs an upper (``isupper=true``) or lower (``isupper=false``) bidiagonal matrix
    using the given diagonal (``dv``) and off-diagonal (``ev``) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
@@ -661,7 +625,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: SymTridiagonal(d, du)
 
    .. Docstring generated from Julia source
-
 
    Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`.
 
@@ -674,7 +637,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: norm(A, [p])
 
    .. Docstring generated from Julia source
-
 
    Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defaulting to the ``p=2``-norm.
 
@@ -699,7 +661,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: condskeel(M, [x, p])
 
    .. Docstring generated from Julia source
-
 
    .. math::
       \kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
@@ -742,7 +703,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: pinv(M[, tol])
 
    .. Docstring generated from Julia source
-
 
    Computes the Moore-Penrose pseudoinverse.
 
@@ -807,7 +767,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
 
    **Example**::
@@ -824,13 +783,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Weighted least-squares linear regression.
 
 .. function:: expm(A)
 
    .. Docstring generated from Julia source
-
 
    Compute the matrix exponential of ``A``, defined by
 
@@ -847,7 +804,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: logm(A)
 
    .. Docstring generated from Julia source
-
 
    If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a warning is printed and whenever possible a nonprincipal matrix function is returned.
 
@@ -866,7 +822,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: sqrtm(A)
 
    .. Docstring generated from Julia source
-
 
    If ``A`` has no negative real eigenvalues, compute the principal matrix square root of ``A``, that is the unique matrix :math:`X` with eigenvalues having positive real part such that :math:`X^2 = A`. Otherwise, a nonprincipal square root is returned.
 
@@ -958,7 +913,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
    real symmetric or general nonsymmetric matrices respectively. If ``B`` is
    provided, the generalized eigenproblem is solved.
@@ -1006,7 +960,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-
    ``svds`` computes largest singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations.
    Uses :func:`eigs` underneath.
 
@@ -1025,7 +978,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: peakflops(n; parallel=false)
 
    .. Docstring generated from Julia source
-
 
    ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
 
