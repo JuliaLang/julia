@@ -70,3 +70,10 @@ setindex!(b::RefValue, x) = (b.x = x; b)
 setindex!(b::RefArray, x) = (b.x[b.i] = x; b)
 
 ###
+
+function showcompact(io::IO, b::RefValue)
+    show(io, typeof(b))
+    print(io, "(")
+    showcompact(io, b.x)
+    print(io, ")")
+end
