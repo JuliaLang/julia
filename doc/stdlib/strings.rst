@@ -98,6 +98,24 @@
 
    Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
 
+.. function:: r"regex"
+
+   .. Docstring generated from Julia source
+
+   Construct a regex, such as ``r"^[a-z]*$"``\ . The regex also accepts one or more flags, listed after the ending quote, to change its behaviour:
+
+     * ``i`` enables case-insensitive matching
+     * ``m`` treats the ``^`` and ``$`` tokens as matching the start and     and end of individual lines, as opposed to the whole string.
+     * ``s`` allows the ``.`` modifier to match newlines.
+     * ``x`` enables "comment mode": whitespace is enabled except when     escaped with ``\``\ , and ``#`` is treated as starting a comment.
+
+   For example, this regex has all three flags enabled:
+
+   .. code-block:: julia
+
+       julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+       RegexMatch("angry,\nBad world")
+
 .. function:: normalize_string(s, normalform::Symbol)
 
    .. Docstring generated from Julia source
