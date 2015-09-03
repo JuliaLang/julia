@@ -153,22 +153,33 @@ function doc!(f::Function, m::Method, data, source)
     fd.source[m] = source
 end
 
-function doc(f::Function)
-    docs = []
+function doc(object::Union{Function, DataType}, index::Int = 0)
+    main, related = [], []
     for mod in modules
-        if haskey(meta(mod), f)
-            fd = meta(mod)[f]
-            length(docs) == 0 && fd.main !== nothing && push!(docs, fd.main)
-            if isa(fd, FuncDoc)
-                for m in fd.order
-                    push!(docs, fd.meta[m])
+        if haskey(meta(mod), object)
+            d = meta(mod)[object]
+            if isa(d, FuncDoc) || isa(d, TypeDoc)
+                d.main ≡ nothing || push!(main, d.main)
+                for m in d.order
+                    push!(related, (m, d.meta[m]))
                 end
-            elseif length(docs) == 0
-                return fd
+            elseif isempty(main) && isempty(related)
+                return d
             end
         end
     end
-    return catdoc(docs...)
+    # Only one method/constructor doc was found. Just display that by itself.
+    isempty(main) && length(related) == 1 && return related[1][end]
+
+    # Display the 'index'th docstring for a method/constructor.
+    0 < index ≤ length(related) && return related[index][end]
+
+    # Append a numbered list of related docstrings to the main function/type docs.
+    if length(related) > 0
+        list = Markdown.MD(Markdown.List([string(m) for (m, _) in related], true))
+        push!(main, Markdown.parse("**Related Documentation:**"), list)
+    end
+    catdoc(main...)
 end
 
 function doc(f::Function, m::Method)
@@ -226,24 +237,6 @@ function doc!(f::DataType, m::Method, data, source)
     isa(td, TypeDoc) || error("Can't document a method when the type already has metadata")
     !haskey(td.meta, m) && push!(td.order, m)
     td.meta[m] = data
-end
-
-function doc(f::DataType)
-    docs = []
-    for mod in modules
-        if haskey(meta(mod), f)
-            fd = meta(mod)[f]
-            if isa(fd, TypeDoc)
-                length(docs) == 0 && fd.main !== nothing && push!(docs, fd.main)
-                for m in fd.order
-                    push!(docs, fd.meta[m])
-                end
-            elseif length(docs) == 0
-                return fd
-            end
-        end
-    end
-    return catdoc(docs...)
 end
 
 isfield(x) = isexpr(x, :.) &&
@@ -395,6 +388,7 @@ function docm(ex)
     isa(ex,Symbol) && haskey(keywords, ex) ? keywords[ex] :
     isexpr(ex, :call)                      ? findmethod(ex) :
     isvar(ex)                              ? :(doc(@var($(esc(ex))))) :
+    isexpr(ex, :tuple)                     ? :(doc($(map(esc, ex.args)...))) :
     :(doc($(esc(ex))))
 end
 
