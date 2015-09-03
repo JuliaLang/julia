@@ -399,12 +399,16 @@ Mathematical Operators
 .. _&&:
 .. function:: x && y
 
-   Short-circuiting boolean and
+   .. Docstring generated from Julia source
+
+   Short-circuiting boolean AND
 
 .. _||:
 .. function:: x || y
 
-   Short-circuiting boolean or
+   .. Docstring generated from Julia source
+
+   Short-circuiting boolean OR
 
 .. function:: A_ldiv_Bc(a,b)
 

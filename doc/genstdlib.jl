@@ -105,8 +105,13 @@ function translate(file)
                 func = match(r"^\.\. function:: (@?[^\(\s\{]+)(.*)", l)
                 func == nothing && (warn("bad function $l"); continue)
                 funcname = func.captures[1]
-                rest = func.captures[2]
-                full = funcname*rest
+                full = funcname * func.captures[2]
+                if !('(' in full || '@' in full)
+                    ex = parse(full)
+                    if isa(ex, Expr) && (ex.head == :(||) || ex.head == :(&&))
+                        funcname = string(ex.head)
+                    end
+                end
                 doc = nothing
                 for mdoc in getdoc(mod, funcname)
                     trst = tryrst(mdoc, false)
@@ -122,7 +127,7 @@ function translate(file)
                     end
                 end
                 if doc == nothing || torst(doc, false) == nothing
-                    info("no docs for $(ident(mod, funcname)) $rest")
+                    info("no docs for $full in $mod")
                     println(io, l)
                     doccing = false
                     continue
