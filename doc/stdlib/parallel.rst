@@ -543,18 +543,6 @@ Cluster Manager Interface
 
    .. Docstring generated from Julia source
 
-   Connect to the host ``host`` on port ``port``
-
-   .. code-block:: julia
-
-       connect(path) -> PipeEndpoint
-
-   Connect to the Named Pipe / Domain Socket at ``path``
-
-   .. code-block:: julia
-
-       connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
-
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
 
 .. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
