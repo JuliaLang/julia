@@ -58,11 +58,11 @@ Getting Around
 
    The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-.. function:: summarysize(obj, recurse) => Int
+.. function:: Base.summarysize(obj, recurse) -> Int
 
    .. Docstring generated from Julia source
 
-   summarysize is an estimate of the size of the object as if all iterables were allocated inline in general, this forms a conservative lower bound n the memory "controlled" by the object if recurse is true, then simply reachable memory should also be included, otherwise, only directly used memory should be included you should never ignore recurse in cases where recursion is possible
+   ``summarysize`` is an estimate of the size of the object as if all iterables were allocated inline in general, this forms a conservative lower bound n the memory "controlled" by the object if recurse is ``true``\ , then simply reachable memory should also be included, otherwise, only directly used memory should be included you should never ignore recurse in cases where recursion is possible
 
 .. function:: edit(file::AbstractString, [line])
 
