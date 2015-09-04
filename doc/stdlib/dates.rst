@@ -51,20 +51,20 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
+   Construct a ``DateTime`` type by parts. Arguments must be convertible to ``Int64``.
 
 .. function:: DateTime(periods::Period...) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   Constuct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order.
    DateTime parts not provided will default to the value of ``Dates.default(period)``.
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Create a DateTime through the adjuster API. The starting point will be constructed from the
+   Create a ``DateTime`` through the adjuster API. The starting point will be constructed from the
    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``. The step size in
    adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
    will stop when ``f::Function`` returns ``false`` instead of ``true``. ``limit`` provides a limit to
@@ -81,7 +81,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+   Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
 
    =============== ========= ===============================================================
@@ -126,13 +126,13 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Constuct a Date type by ``Period`` type parts. Arguments may be in any order. Date parts not provided will default to the value of ``Dates.default(period)``\ .
+   Constuct a ``Date`` type by ``Period`` type parts. Arguments may be in any order. ``Date`` parts not provided will default to the value of ``Dates.default(period)``\ .
 
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
    .. Docstring generated from Julia source
 
-   Create a Date through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
+   Create a ``Date`` through the adjuster API. The starting point will be constructed from the provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
 
 .. function:: Date(dt::DateTime) -> Date
 
@@ -144,7 +144,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Construct a Date type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
+   Construct a ``Date`` type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
@@ -156,13 +156,13 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    .. Docstring generated from Julia source
 
-   Returns a DateTime corresponding to the user's system time including the system timezone locale.
+   Returns a ``DateTime`` corresponding to the user's system time including the system timezone locale.
 
 .. function:: now(::Type{UTC}) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Returns a DateTime corresponding to the user's system time as UTC/GMT.
+   Returns a ``DateTime`` corresponding to the user's system time as UTC/GMT.
 
 .. function:: eps(::DateTime) -> Millisecond
               eps(::Date) -> Day
@@ -185,7 +185,7 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   Return the field part of a Date or DateTime as an ``Int64``\ .
+   Return the field part of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
 .. function:: Year(dt::TimeType) -> Year
               Month(dt::TimeType) -> Month
@@ -198,25 +198,25 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   Return the field part of a Date or DateTime as a ``Period`` type.
+   Return the field part of a ``Date`` or ``DateTime`` as a ``Period`` type.
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
    .. Docstring generated from Julia source
 
-   Simultaneously return the year and month parts of a Date or DateTime.
+   Simultaneously return the year and month parts of a ``Date`` or ``DateTime``\ .
 
 .. function:: monthday(dt::TimeType) -> (Int64, Int64)
 
    .. Docstring generated from Julia source
 
-   Simultaneously return the month and day parts of a Date or DateTime.
+   Simultaneously return the month and day parts of a ``Date`` or ``DateTime``\ .
 
 .. function:: yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
    .. Docstring generated from Julia source
 
-   Simultaneously return the year, month, and day parts of a Date or DateTime.
+   Simultaneously return the year, month, and day parts of a ``Date`` or ``DateTime``\ .
 
 Query Functions
 ~~~~~~~~~~~~~~~
@@ -225,13 +225,13 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   Return the full day name corresponding to the day of the week of the Date or DateTime in the given ``locale``\ .
+   Return the full day name corresponding to the day of the week of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
 .. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
 
-   Return the abbreviated name corresponding to the day of the week of the Date or DateTime in the given ``locale``\ .
+   Return the abbreviated name corresponding to the day of the week of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
 .. function:: dayofweek(dt::TimeType) -> Int64
 
@@ -255,13 +255,13 @@ Query Functions
 
    .. Docstring generated from Julia source
 
-   Return the full name of the month of the Date or DateTime in the given ``locale``\ .
+   Return the full name of the month of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
 .. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
 
-   Return the abbreviated month name of the Date or DateTime in the given ``locale``\ .
+   Return the abbreviated month name of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
 .. function:: daysinmonth(dt::TimeType) -> Int
 
@@ -435,39 +435,39 @@ Conversion Functions
    .. Docstring generated from Julia source
 
    Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
-   and converts to the corresponding DateTime.
+   and converts to the corresponding ``DateTime``.
 
 .. function:: datetime2unix(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
 
-   Takes the given DateTime and returns the number of seconds since the unix epoch as a ``Float64``\ .
+   Takes the given ``DateTime`` and returns the number of seconds since the unix epoch as a ``Float64``\ .
 
 .. function:: julian2datetime(julian_days) -> DateTime
 
    .. Docstring generated from Julia source
 
    Takes the number of Julian calendar days since epoch
-   ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
+   ``-4713-11-24T12:00:00`` and returns the corresponding ``DateTime``.
 
 .. function:: datetime2julian(dt::DateTime) -> Float64
 
    .. Docstring generated from Julia source
 
-   Takes the given DateTime and returns the number of Julian calendar days since the julian epoch as a ``Float64``\ .
+   Takes the given ``DateTime`` and returns the number of Julian calendar days since the julian epoch as a ``Float64``\ .
 
 .. function:: rata2datetime(days) -> DateTime
 
    .. Docstring generated from Julia source
 
    Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
-   and returns the corresponding DateTime.
+   and returns the corresponding ``DateTime``.
 
 .. function:: datetime2rata(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
 
-   Returns the number of Rata Die days since epoch from the given Date or DateTime.
+   Returns the number of Rata Die days since epoch from the given ``Date`` or ``DateTime``\ .
 
 Constants
 ~~~~~~~~~
