@@ -340,12 +340,12 @@ function show_method_candidates(io::IO, ex::MethodError)
 end
 
 function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n)
+    print(io, "\n")
     # if we have inlining information, we print the `file`:`line` first,
     # then show the inlining info, because the inlining location
     # corresponds to `fname`.
     if (inlinedat_file != symbol(""))
         # align the location text
-        print(io, "\n")
         print(io, " [inlined code] from ")
     else
         print(io, " in ", fname, " at ")
@@ -367,7 +367,7 @@ function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line,
 
     if (inlinedat_file != symbol(""))
         print(io, "\n in ", fname, " at ")
-        print(io, inlinedat_file, ":", inlinedat_line, "\n")
+        print(io, inlinedat_file, ":", inlinedat_line)
     end
 end
 
