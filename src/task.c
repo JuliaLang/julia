@@ -857,6 +857,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->eh = NULL;
     t->gcstack = NULL;
     t->stkbuf = NULL;
+    t->tid = 0;
 
 #ifdef COPY_STACKS
     t->bufsz = 0;
@@ -960,6 +961,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->backtrace = jl_nothing;
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
+    jl_current_task->tid = ti_tid;
 
     jl_root_task = jl_current_task;
 

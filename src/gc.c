@@ -1604,10 +1604,10 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
         }
 #ifdef COPY_STACKS
         ptrint_t offset;
-        if (ta == jl_current_task) {
+        if (ta == *jl_all_task_states[ta->tid].pcurrent_task) {
             offset = 0;
             // FIXME - do we need to mark stacks on other threads?
-            gc_mark_stack((jl_value_t*)ta, jl_pgcstack, offset, d);
+            gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[ta->tid], offset, d);
         }
         else {
             offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
@@ -1862,18 +1862,21 @@ static void pre_mark(void)
     gc_push_root(jl_current_module, 0);
     if (jl_old_base_module) gc_push_root(jl_old_base_module, 0);
     gc_push_root(jl_internal_main_module, 0);
-    gc_push_root(jl_root_task, 0);
-    gc_push_root(jl_current_task, 0);
+
+    size_t i;
+    for(i=0; i < jl_n_threads; i++) {
+        jl_thread_task_state_t *ts = &jl_all_task_states[i];
+        gc_push_root(*ts->pcurrent_task, 0);
+        gc_push_root(*ts->proot_task, 0);
+        gc_push_root(*ts->pexception_in_transit, 0);
+        gc_push_root(*ts->ptask_arg_in_transit, 0);
+    }
 
     // invisible builtin values
     if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell, 0);
-    gc_push_root(jl_exception_in_transit, 0);
-    gc_push_root(jl_task_arg_in_transit, 0);
     gc_push_root(typeToTypeId, 0);
     if (jl_module_init_order != NULL)
         gc_push_root(jl_module_init_order, 0);
-
-    size_t i;
 
     // stuff randomly preserved
     FOR_EACH_HEAP
@@ -2016,8 +2019,6 @@ static int saved_mark_sp = 0;
 #endif
 static int sweep_mask = GC_MARKED;
 #define MIN_SCAN_BYTES 1024*1024
-
-static void gc_mark_task_stack(jl_task_t*,int);
 
 void prepare_sweep(void)
 {
@@ -2421,7 +2422,8 @@ void jl_print_gc_stats(JL_STREAM *s)
 #endif
 
 // Per-thread initialization (when threading is fully implemented)
-struct _jl_thread_heap_t *jl_mk_thread_heap(void) {
+struct _jl_thread_heap_t *jl_mk_thread_heap(void)
+{
 #ifdef JULIA_ENABLE_THREADING
     jl_thread_heap = malloc(sizeof(jl_thread_heap_t)); // FIXME - should be cache-aligned malloc
 #endif
