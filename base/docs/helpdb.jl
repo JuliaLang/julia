@@ -2686,7 +2686,7 @@ cummax
 doc"""
     watch_file(path, timeout_s::Real)
 
-Watch file or directory `s` for changes until a change occurs or `timeout_s` seconds have elapsed.
+Watch file or directory `path` for changes until a change occurs or `timeout_s` seconds have elapsed.
 
 The returned value is an object with boolean fields `changed`, `renamed`, and `timedout`, giving the result of watching the file.
 
@@ -4841,8 +4841,7 @@ minabs(A, dims)
 
 doc"""
     popdisplay()
-
-popdisplay(d::Display)
+    popdisplay(d::Display)
 
 Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the second variant.
 """

@@ -676,10 +676,9 @@ stack with:
    Pushes a new display ``d`` on top of the global display-backend stack. Calling ``display(x)`` or ``display(mime, x)`` will display ``x`` on the topmost compatible backend in the stack (i.e., the topmost backend that does not throw a ``MethodError``\ ).
 
 .. function:: popdisplay()
+              popdisplay(d::Display)
 
    .. Docstring generated from Julia source
-
-   popdisplay(d::Display)
 
    Pop the topmost backend off of the display-backend stack, or the topmost copy of ``d`` in the second variant.
 
@@ -857,7 +856,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Watch file or directory ``s`` for changes until a change occurs or ``timeout_s`` seconds have elapsed.
+   Watch file or directory ``path`` for changes until a change occurs or ``timeout_s`` seconds have elapsed.
 
    The returned value is an object with boolean fields ``changed``\ , ``renamed``\ , and ``timedout``\ , giving the result of watching the file.
 
