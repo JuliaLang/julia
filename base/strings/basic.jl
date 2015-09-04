@@ -17,7 +17,7 @@ function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_cstr_to_string, Any, (Ptr{UInt8},), p)::ByteString
 end
-bytestring(s::Cstring) = bytestring(box(Ptr{Cchar}, unbox(Cstring,s)))
+bytestring(s::Cstring) = bytestring(convert(Ptr{UInt8}, s))
 
 function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}},len::Integer)
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :

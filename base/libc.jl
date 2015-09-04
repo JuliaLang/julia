@@ -194,5 +194,7 @@ free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
 malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+free(p::Cstring) = free(convert(Ptr{UInt8}, p))
+free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 end # module

@@ -248,6 +248,16 @@ let s = "ba\0d"
     @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
 end
 
+cstrdup(s) = @windows? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+let p = cstrdup("hello")
+    @test bytestring(p) == "hello" == pointer_to_string(cstrdup(p), true)
+    Libc.free(p)
+end
+let p = @windows? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
+    @test wstring(p) == "tést"
+    Libc.free(p)
+end
+
 # issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
 a = UInt32[48,0]
 b = UTF32String(a)

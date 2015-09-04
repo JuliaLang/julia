@@ -60,6 +60,11 @@ end
 
 convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, unbox(Ptr{Cwchar_t}, p))
+convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, unbox(Cstring, p))
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, unbox(Cwstring, p))
+
+# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
+pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)
 
 # convert strings to ByteString etc. to pass as pointers
 cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
