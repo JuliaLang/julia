@@ -57,6 +57,24 @@ add_all_docs_mod(Base)
 
 println("Collect $(length(all_docs)) Docs")
 
+function find_docs(v)
+    docs = []
+    for mod in keys(mod_added)
+        try
+            meta = Docs.meta(mod)[v]
+            if isa(meta, Base.Docs.FuncDoc) || isa(meta, Base.Docs.TypeDoc)
+                append!(docs, collect(values(meta.meta)))
+            else
+                push!(docs, meta)
+            end
+        end
+    end
+    if isempty(docs)
+        error("Cannot find doc for $v")
+    end
+    return docs
+end
+
 function getdoc(mod, x)
     try
         x = unescape_string(x)
@@ -71,12 +89,7 @@ function getdoc(mod, x)
         if isa(v, Colon)
             v = Base.colon
         end
-        M = Docs.meta(Base)
-        if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
-            return collect(values(M[v].meta))
-        else
-            return Any[M[v]]
-        end
+        return find_docs(v)
     catch e
         println(e)
         warn("Mod $mod $x")
