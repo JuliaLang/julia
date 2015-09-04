@@ -623,7 +623,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``\ . This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
+   Populate the array ``A`` with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``\ . This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
 
 .. function:: bitrand([rng], [dims...])
 

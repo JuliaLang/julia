@@ -77,7 +77,7 @@ LinAlg.BLAS.syr!
 doc"""
     trsm!(side, ul, tA, dA, alpha, A, B)
 
-Overwrite `B` with the solution to `A*X = alpha*B` or one of the other three variants determined by `side` (A on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `B`.
+Overwrite `B` with the solution to `A*X = alpha*B` or one of the other three variants determined by `side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `B`.
 """
 LinAlg.BLAS.trsm!
 
@@ -126,7 +126,7 @@ LinAlg.BLAS.herk!
 doc"""
     trmv(side, ul, tA, dA, alpha, A, b)
 
-Returns `alpha*A*b` or one of the other three variants determined by `side` (A on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
+Returns `alpha*A*b` or one of the other three variants determined by `side` (`A` on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
 """
 LinAlg.BLAS.trmv
 
@@ -233,7 +233,7 @@ LinAlg.BLAS.syrk
 doc"""
     trsm(side, ul, tA, dA, alpha, A, B)
 
-Returns the solution to `A*X = alpha*B` or one of the other three variants determined by `side` (A on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
+Returns the solution to `A*X = alpha*B` or one of the other three variants determined by `side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
 """
 LinAlg.BLAS.trsm
 
@@ -254,7 +254,7 @@ LinAlg.BLAS.asum
 doc"""
     trmv!(side, ul, tA, dA, alpha, A, b)
 
-Update `b` as `alpha*A*b` or one of the other three variants determined by `side` (A on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `b`.
+Update `b` as `alpha*A*b` or one of the other three variants determined by `side` (`A` on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `b`.
 """
 LinAlg.BLAS.trmv!
 
@@ -296,14 +296,14 @@ LinAlg.BLAS.nrm2
 doc"""
     trmm!(side, ul, tA, dA, alpha, A, B)
 
-Update `B` as `alpha*A*B` or one of the other three variants determined by `side` (A on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `B`.
+Update `B` as `alpha*A*B` or one of the other three variants determined by `side` (`A` on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated `B`.
 """
 LinAlg.BLAS.trmm!
 
 doc"""
     trmm(side, ul, tA, dA, alpha, A, B)
 
-Returns `alpha*A*B` or one of the other three variants determined by `side` (A on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
+Returns `alpha*A*B` or one of the other three variants determined by `side` (`A` on left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
 """
 LinAlg.BLAS.trmm
 
@@ -986,7 +986,7 @@ pointer
 doc"""
     countnz(A)
 
-Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
+Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
 """
 countnz
 
@@ -2235,7 +2235,7 @@ ceil
 doc"""
     mapslices(f, A, dims)
 
-Transform the given dimensions of array `A` using function `f`. `f` is called on each slice of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if `dims` is `[1,2]` and A is 4-dimensional, `f` is called on `A[:,:,i,j]` for all `i` and `j`.
+Transform the given dimensions of array `A` using function `f`. `f` is called on each slice of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]` for all `i` and `j`.
 """
 mapslices
 
@@ -2479,7 +2479,7 @@ peakflops
 doc"""
     svd(A, [thin=true]) -> U, S, V
 
-Wrapper around `svdfact` extracting all parts the factorization to a tuple. Direct use of `svdfact` is therefore generally more efficient. Computes the SVD of A, returning `U`, vector `S`, and `V` such that `A == U*diagm(S)*V'`. If `thin` is `true`, an economy mode decomposition is returned. The default is to produce a thin decomposition.
+Wrapper around `svdfact` extracting all parts the factorization to a tuple. Direct use of `svdfact` is therefore generally more efficient. Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that `A == U*diagm(S)*V'`. If `thin` is `true`, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 """
 svd
 
@@ -2500,7 +2500,7 @@ ones(t,dims)
 doc"""
     ones(A)
 
-Create an array of all ones with the same element type and shape as A.
+Create an array of all ones with the same element type and shape as `A`.
 """
 ones(A)
 
@@ -5592,7 +5592,7 @@ doc"""
 ```rst
 ..  svdfact!(A, [thin=true]) -> SVD
 
-``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
+``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input ``A``, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 ```
 """
 svdfact!
@@ -6977,7 +6977,7 @@ doc"""
 ```rst
 ..  lufact!(A) -> LU
 
-``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
+``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input ``A``, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 ```
 """
 lufact!
@@ -7728,7 +7728,7 @@ hex2num
 doc"""
     ndims(A) -> Integer
 
-Returns the number of dimensions of A
+Returns the number of dimensions of `A`
 """
 ndims
 
@@ -7756,14 +7756,14 @@ sind
 doc"""
     iseltype(A,T)
 
-Tests whether A or its elements are of type T
+Tests whether `A` or its elements are of type ``T``
 """
 iseltype
 
 doc"""
     symperm(A, p)
 
-Return the symmetric permutation of A, which is `A[p,p]`. A should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
+Return the symmetric permutation of `A`, which is `A[p,p]`. `A` should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
 """
 symperm
 
@@ -8301,7 +8301,7 @@ doc"""
 ```rst
 ..  hessfact!(A)
 
-``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input A, instead of creating a copy.
+``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
 ```
 """
 hessfact!
@@ -9051,7 +9051,7 @@ doc"""
 ```rst
 ..  \\(A, B)
 
-Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor.
+Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of ``A`` based on the R factor.
 
 When ``A`` is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.
 ```
@@ -9537,7 +9537,7 @@ Applied to a function call, it evaluates the arguments to the specified function
 doc"""
     size(A, [dim...])
 
-Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
+Returns a tuple containing the dimensions of `A`. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
 
     julia> A = rand(2,3,4);
 
@@ -9603,7 +9603,7 @@ Base.(:(!))
 doc"""
     length(A) -> Integer
 
-Returns the number of elements in A
+Returns the number of elements in `A`.
 """
 length(::AbstractArray)
 
@@ -9624,7 +9624,7 @@ length(::AbstractString)
 doc"""
     rand!([rng], A, [coll])
 
-Populate the array A with random values. If the indexable collection `coll` is specified, the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))` or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
+Populate the array `A` with random values. If the indexable collection `coll` is specified, the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))` or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
 """
 rand!
 
@@ -9792,7 +9792,7 @@ findfirst
 doc"""
     factorize(A)
 
-Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: `A=factorize(A); x=A\b; y=A\C`.
+Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of `A`, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: `A=factorize(A); x=A\b; y=A\C`.
 """
 factorize
 
@@ -9959,7 +9959,7 @@ doc"""
 ```rst
 ..  qrfact!(A [,pivot=Val{false}])
 
-``qrfact!`` is the same as :func:`qrfact` when A is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
+``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
 ```
 """
 qrfact!
@@ -10981,7 +10981,7 @@ zeros(t,dims)
 doc"""
     zeros(A)
 
-Create an array of all zeros with the same element type and shape as A.
+Create an array of all zeros with the same element type and shape as `A`.
 """
 zeros(A)
 
@@ -11851,7 +11851,7 @@ doc"""
 ```rst
 ..  rfft(A [, dims])
 
-Multidimensional FFT of a real array A, exploiting the fact that
+Multidimensional FFT of a real array ``A``, exploiting the fact that
 the transform has conjugate symmetry in order to save roughly half
 the computational time and storage costs compared with :func:`fft`.
 If ``A`` has size ``(n_1, ..., n_d)``, the result has size

@@ -1883,7 +1883,7 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   Multidimensional FFT of a real array A, exploiting the fact that
+   Multidimensional FFT of a real array ``A``, exploiting the fact that
    the transform has conjugate symmetry in order to save roughly half
    the computational time and storage costs compared with :func:`fft`.
    If ``A`` has size ``(n_1, ..., n_d)``, the result has size

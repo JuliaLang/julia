@@ -23,7 +23,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of ``A`` based on the R factor.
 
    When ``A`` is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.
 
@@ -51,7 +51,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\b; y=A\C``\ .
+   Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of ``A``\ , based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\b; y=A\C``\ .
 
 .. function:: full(F)
 
@@ -109,7 +109,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
+   ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input ``A``, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 
 .. function:: chol(A, [LU]) -> F
 
@@ -230,7 +230,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``qrfact!`` is the same as :func:`qrfact` when A is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
+   ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
 
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 
@@ -380,7 +380,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input A, instead of creating a copy.
+   ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
 
 .. function:: schurfact(A) -> Schur
 
@@ -470,13 +470,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input ``A``, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svd(A, [thin=true]) -> U, S, V
 
    .. Docstring generated from Julia source
 
-   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of ``A``\ , returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svdvals(A)
 
@@ -1194,37 +1194,37 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
 
-   Update ``B`` as ``alpha*A*B`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
+   Update ``B`` as ``alpha*A*B`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
 
 .. function:: trmm(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
 
-   Returns ``alpha*A*B`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns ``alpha*A*B`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
 .. function:: trsm!(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
 
-   Overwrite ``B`` with the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (A on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
+   Overwrite ``B`` with the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (``A`` on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``B``\ .
 
 .. function:: trsm(side, ul, tA, dA, alpha, A, B)
 
    .. Docstring generated from Julia source
 
-   Returns the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (A on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (``A`` on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
 .. function:: trmv!(side, ul, tA, dA, alpha, A, b)
 
    .. Docstring generated from Julia source
 
-   Update ``b`` as ``alpha*A*b`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``b``\ .
+   Update ``b`` as ``alpha*A*b`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``b``\ .
 
 .. function:: trmv(side, ul, tA, dA, alpha, A, b)
 
    .. Docstring generated from Julia source
 
-   Returns ``alpha*A*b`` or one of the other three variants determined by ``side`` (A on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns ``alpha*A*b`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
 .. function:: trsv!(ul, tA, dA, A, b)
 
