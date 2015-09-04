@@ -23,7 +23,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Get the currently running Task.
+   Get the currently running ``Task``\ .
 
 .. function:: istaskdone(task) -> Bool
 
@@ -97,13 +97,13 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Wrap an expression in a Task and add it to the scheduler's queue.
+   Wrap an expression in a ``Task`` and add it to the scheduler's queue.
 
 .. function:: @task
 
    .. Docstring generated from Julia source
 
-   Wrap an expression in a Task without executing it, and return the Task. This only creates a task, and does not run it.
+   Wrap an expression in a ``Task`` without executing it, and return the ``Task``\ . This only creates a task, and does not run it.
 
 .. function:: sleep(seconds)
 
@@ -133,7 +133,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Constructs a Channel that can hold a maximum of ``sz`` objects of type ``T``\ . ``put!`` calls on a full channel block till an object is removed with ``take!``\ .
+   Constructs a ``Channel`` that can hold a maximum of ``sz`` objects of type ``T``\ . ``put!`` calls on a full channel block till an object is removed with ``take!``\ .
 
    Other constructors:
 

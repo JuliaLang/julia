@@ -2406,7 +2406,7 @@ promote
 doc"""
     @schedule
 
-Wrap an expression in a Task and add it to the scheduler's queue.
+Wrap an expression in a `Task` and add it to the scheduler's queue.
 """
 :@schedule
 
@@ -3957,7 +3957,7 @@ lu
 doc"""
     @task
 
-Wrap an expression in a Task without executing it, and return the Task. This only creates a task, and does not run it.
+Wrap an expression in a `Task` without executing it, and return the `Task`. This only creates a task, and does not run it.
 """
 :@task
 
@@ -5076,7 +5076,7 @@ isfifo
 doc"""
     Channel{T}(sz::Int)
 
-Constructs a Channel that can hold a maximum of `sz` objects of type `T`. `put!` calls on a full channel block till an object is removed with `take!`.
+Constructs a `Channel` that can hold a maximum of `sz` objects of type `T`. `put!` calls on a full channel block till an object is removed with `take!`.
 
 Other constructors:
 
@@ -11953,7 +11953,7 @@ dawson
 doc"""
     current_task()
 
-Get the currently running Task.
+Get the currently running `Task`.
 """
 current_task
 
