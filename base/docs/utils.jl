@@ -114,7 +114,7 @@ macro repl(ex)
             if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
                 $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
             else
-                $((isa(ex,Symbol) || isfield(ex)) ? :($doc($(esc(ex)))) : Base.gen_call_with_extracted_types(doc, ex))
+                $((isa(ex,Symbol) || isfield(ex) || isexpr(ex,:macrocall)) ? :(@doc ($(esc(ex)))) : Base.gen_call_with_extracted_types(doc, ex))
             end
         end
     end
