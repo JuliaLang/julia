@@ -16,7 +16,8 @@
 @test strip("  ") == ""
 @test strip("   ") == ""
 @test strip("\t  hi   \n") == "hi"
-@test strip("foobarfoo", ['f', 'o']) == "bar"
+@test strip("foobarfoo", ['f','o']) == "bar"
+@test strip("foobarfoo", ('f','o')) == "bar"
 
 for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
     fs = f(s)
