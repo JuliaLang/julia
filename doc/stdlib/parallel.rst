@@ -303,8 +303,7 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
 
-   * ``RemoteRef``: Wait for and get the value of a remote reference. If the remote value is an exception,
-                    throws a ``RemoteException`` which captures the remote exception and backtrace.
+   * ``RemoteRef``: Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
 
    * ``Channel`` : Wait for and get the first available item from the channel.
 
