@@ -10,17 +10,17 @@
 
    Get the current working directory.
 
-.. function:: cd(dir::AbstractString)
+.. function:: cd([dir::AbstractString=homedir()])
 
    .. Docstring generated from Julia source
 
    Set the current working directory.
 
-.. function:: cd(f, [dir])
+.. function:: cd(f, [dir=homedir()])
 
    .. Docstring generated from Julia source
 
-   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
+   Temporarily changes the current working directory and applies function ``f`` before returning.
 
 .. function:: readdir([dir]) -> Vector{ByteString}
 
