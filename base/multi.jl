@@ -1389,11 +1389,11 @@ function pmap(f, lsts...; err_retry=0, err_stop=true, pids = workers())
     state = start(tasks)
     abort_tasks() = state = nothing
 
-    function next_task() 
+    function next_task()
 
         if state != nothing && !done(tasks, state)
             ((idx, args), state) = next(tasks, state)
-            return (idx, args, 0)
+            return (idx, length(lsts) > 1 ? args : tuple(args), 0)
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
         end
