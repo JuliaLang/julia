@@ -1082,6 +1082,7 @@ export
     symbol,
 
 # help and reflection
+    apropos,
     current_module,
     edit,
     code_typed,
