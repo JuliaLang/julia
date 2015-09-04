@@ -4604,7 +4604,7 @@ digits
 doc"""
     bytes2hex(bin_arr::Array{UInt8, 1})
 
-Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
+Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an `ASCIIString`.
 """
 bytes2hex
 
@@ -5739,7 +5739,7 @@ isabspath
 doc"""
     hex2bytes(s::ASCIIString)
 
-Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
+Convert an arbitrarily long hexadecimal string to its binary representation. Returns an `Array{UInt8,1}`, i.e. an array of bytes.
 """
 hex2bytes
 
@@ -7945,7 +7945,7 @@ pushdisplay
 doc"""
     randexp!([rng], A::Array{Float64,N})
 
-Fill the array A with random numbers following the exponential distribution (with scale 1).
+Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 """
 randexp!
 
@@ -8508,7 +8508,7 @@ joinpath
 doc"""
     get_bigfloat_precision()
 
-Get the precision (in bits) currently used for BigFloat arithmetic.
+Get the precision (in bits) currently used for `BigFloat` arithmetic.
 """
 get_bigfloat_precision
 
@@ -9221,7 +9221,7 @@ exp
 doc"""
     with_bigfloat_precision(f::Function,precision::Integer)
 
-Change the BigFloat arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
+Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
 
     old = get_bigfloat_precision()
     set_bigfloat_precision(precision)
@@ -10374,7 +10374,7 @@ issorted
 doc"""
     set_bigfloat_precision(x::Int64)
 
-Set the precision (in bits) to be used to BigFloat arithmetic.
+Set the precision (in bits) to be used to `BigFloat` arithmetic.
 """
 set_bigfloat_precision
 
@@ -11307,7 +11307,7 @@ __precompile__
 doc"""
     randn!([rng], A::Array{Float64,N})
 
-Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
+Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 """
 randn!
 
