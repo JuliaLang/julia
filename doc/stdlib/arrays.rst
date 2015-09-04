@@ -35,7 +35,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Tests whether ``A`` or its elements are of type ``T``
+   Tests whether ``A`` or its elements are of type ``T``\ .
 
 .. function:: length(A) -> Integer
 
@@ -112,7 +112,7 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   Returns the distance in memory (in number of elements) between adjacent elements in dimension k
+   Returns the distance in memory (in number of elements) between adjacent elements in dimension ``k``\ .
 
 .. function:: strides(A)
 
@@ -177,7 +177,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+   Create an array of all ones of specified type. The type defaults to ``Float64`` if not specified.
 
 .. function:: ones(A)
 
@@ -201,7 +201,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10x10 array of floats, with each element initialized to 1.0.
+   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10x10 array of floats, with each element initialized to ``1.0``\ .
 
    If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
@@ -233,13 +233,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   n-by-n identity matrix
+   ``n``\ -by-``n`` identity matrix
 
 .. function:: eye(m, n)
 
    .. Docstring generated from Julia source
 
-   m-by-n identity matrix
+   ``m``\ -by-``n`` identity matrix
 
 .. function:: eye(A)
 
