@@ -132,7 +132,7 @@
    ligatures into the individual characters), with form KC being more compact.
 
    Alternatively, finer control and additional transformations may be
-   be obtained by calling `normalize_string(s; keywords...)`, where
+   be obtained by calling ``normalize_string(s; keywords...)``, where
    any number of the following boolean keywords options (which all default
    to ``false`` except for ``compose``) are specified:
 
