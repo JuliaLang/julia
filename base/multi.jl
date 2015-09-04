@@ -1376,8 +1376,7 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
-    len = length(lsts)
+function pmap(f, lsts...; err_retry=0, err_stop=true, pids = workers())
 
     results = Dict{Int,Any}()
 
@@ -1385,76 +1384,62 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
     busy_workers_ntfy = Condition()
 
     retryqueue = []
-    task_in_err = false
-    is_task_in_error() = task_in_err
-    set_task_in_error() = (task_in_err = true)
 
-    nextidx = 0
-    getnextidx() = (nextidx += 1)
+    tasks = enumerate(zip(lsts...))
+    state = start(tasks)
+    abort_tasks() = state = nothing
 
-    states = [start(lsts[idx]) for idx in 1:len]
-    function getnext_tasklet()
-        if is_task_in_error() && err_stop
-            return nothing
-        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
-            nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            for idx in 1:len; states[idx] = nxts[idx][2]; end
-            nxtvals = [x[1] for x in nxts]
-            return (getnextidx(), nxtvals)
+    function next_task() 
+
+        if state != nothing && !done(tasks, state)
+            ((idx, args), state) = next(tasks, state)
+            return (idx, args, 0)
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
-        elseif err_retry
-            # Handles the condition where we have finished processing the requested lsts as well
-            # as any retryqueue entries, but there are still some jobs active that may result
-            # in an error and have to be retried.
-            while any(busy_workers)
-                wait(busy_workers_ntfy)
-                if !isempty(retryqueue)
-                    return shift!(retryqueue)
-                end
-            end
-            return nothing
-        else
-            return nothing
         end
+
+        # Handles the condition where we have finished processing the requested
+        # lsts as well as any retryqueue entries, but there are still some jobs
+        # active that may result in an error and have to be retried.
+        while any(busy_workers)
+            wait(busy_workers_ntfy)
+            if !isempty(retryqueue)
+                return shift!(retryqueue)
+            end
+        end
+
+        return nothing
     end
 
     @sync begin
         for (pididx, wpid) in enumerate(pids)
             @async begin
-                tasklet = getnext_tasklet()
-                while (tasklet !== nothing)
-                    (idx, fvals) = tasklet
+                while (task = next_task()) != nothing
+
+                    (idx, args, retry_count) = task
                     busy_workers[pididx] = true
+
                     try
-                        results[idx] = remotecall_fetch(wpid, f, fvals...)
+                        results[idx] = remotecall_fetch(wpid, f, args...)
                     catch ex
-                        if err_retry
-                            push!(retryqueue, (idx,fvals, ex))
+                        if retry_count < err_retry
+                            push!(retryqueue, (idx, args, retry_count + 1))
+                        elseif err_stop
+                            abort_tasks()
+                            rethrow(ex)
                         else
                             results[idx] = ex
                         end
-                        set_task_in_error()
-
+                    finally
                         busy_workers[pididx] = false
                         notify(busy_workers_ntfy; all=true)
-
-                        break # remove this worker from accepting any more tasks
                     end
-
-                    busy_workers[pididx] = false
-                    notify(busy_workers_ntfy; all=true)
-
-                    tasklet = getnext_tasklet()
                 end
             end
         end
     end
 
-    for failure in retryqueue
-        results[failure[1]] = failure[3]
-    end
-    [results[x] for x in 1:nextidx]
+    [results[x] for x in 1:length(results)]
 end
 
 # Statically split range [1,N] into equal sized chunks for np processors
