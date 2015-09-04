@@ -13,13 +13,13 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns the number of dimensions of A
+   Returns the number of dimensions of ``A``
 
 .. function:: size(A, [dim...])
 
    .. Docstring generated from Julia source
 
-   Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
+   Returns a tuple containing the dimensions of ``A``\ . Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
 
    .. code-block:: julia
 
@@ -35,13 +35,13 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Tests whether A or its elements are of type T
+   Tests whether ``A`` or its elements are of type ``T``
 
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
 
-   Returns the number of elements in A
+   Returns the number of elements in ``A``\ .
 
 .. function:: eachindex(A...)
 
@@ -100,7 +100,7 @@ largest range along each dimension.
 
    .. Docstring generated from Julia source
 
-   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``\ , which returns the number of stored values.
+   Counts the number of nonzero values in array ``A`` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``\ , which returns the number of stored values.
 
 .. function:: conj!(A)
 
@@ -171,7 +171,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array of all zeros with the same element type and shape as A.
+   Create an array of all zeros with the same element type and shape as ``A``\ .
 
 .. function:: ones(type, dims)
 
@@ -183,7 +183,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array of all ones with the same element type and shape as A.
+   Create an array of all ones with the same element type and shape as ``A``\ .
 
 .. function:: trues(dims)
 
@@ -656,7 +656,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   Transform the given dimensions of array ``A`` using function ``f``\ . ``f`` is called on each slice of ``A`` of the form ``A[...,:,...,:,...]``\ . ``dims`` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if ``dims`` is ``[1,2]`` and A is 4-dimensional, ``f`` is called on ``A[:,:,i,j]`` for all ``i`` and ``j``\ .
+   Transform the given dimensions of array ``A`` using function ``f``\ . ``f`` is called on each slice of ``A`` of the form ``A[...,:,...,:,...]``\ . ``dims`` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if ``dims`` is ``[1,2]`` and ``A`` is 4-dimensional, ``f`` is called on ``A[:,:,i,j]`` for all ``i`` and ``j``\ .
 
 .. function:: sum_kbn(A)
 
@@ -958,7 +958,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Return the symmetric permutation of A, which is ``A[p,p]``\ . A should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
+   Return the symmetric permutation of ``A``\ , which is ``A[p,p]``\ . ``A`` should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
 
 .. function:: nonzeros(A)
 
