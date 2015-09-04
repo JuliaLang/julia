@@ -4408,7 +4408,7 @@ besselix
 
 doc"""
     union(s1,s2...)
-    ∪(s1,s2)
+    ∪(s1,s2...)
 
 Construct the union of two or more sets. Maintains order with arrays.
 """
@@ -10801,9 +10801,9 @@ rol!(::BitArray,::Integer)
 doc"""
 ```rst
 ..  issubset(a, b)
-           ⊆(A,S) -> Bool
-           ⊈(A,S) -> Bool
-           ⊊(A,S) -> Bool
+           ⊆(a,b) -> Bool
+           ⊈(a,b) -> Bool
+           ⊊(a,b) -> Bool
 
 Determine whether every element of ``a`` is also in ``b``, using :func:`in`.
 ```
