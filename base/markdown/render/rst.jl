@@ -21,7 +21,7 @@ function rst{l}(io::IO, header::Header{l})
 end
 
 function rst(io::IO, code::Code)
-    println(io, ".. code-block:: julia\n")
+    code.language == "rst" || println(io, ".. code-block:: julia\n")
     for l in lines(code.code)
         println(io, "    ", l)
     end
@@ -50,6 +50,13 @@ end
 
 function rst(io::IO, md::HorizontalRule)
     println(io, "–" ^ 5)
+end
+
+function rst(io::IO, l::LaTeX)
+    println(io, ".. math::\n")
+    for l in lines(l.formula)
+        println(io, "    ", l)
+    end
 end
 
 rst(io::IO, md) = writemime(io, "text/rst", md)

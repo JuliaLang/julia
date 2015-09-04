@@ -7,7 +7,7 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    =========   ================================================
    symbol      meaning
    =========   ================================================
-   ``@m``      invoke macro m; followed by space-separated expressions
+   ``@m``      invoke macro ``m``; followed by space-separated expressions
    ``!``       prefix "not" operator
    ``a!( )``   at the end of a function name, `!` indicates that a function modifies its argument(s)
    ``#``       begin single line comment
@@ -36,7 +36,7 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    ``?``       3-argument conditional operator (conditional ? if_true : if_false)
    ``""``      delimit string literals
    ``''``      delimit character literals
-   `\`\``      delimit external process (command) specifications
+   ``` ```     delimit external process (command) specifications
    ``...``     splice arguments into a function call or declare a varargs function or type
    ``.``       access named fields in objects or names inside modules, also prefixes elementwise operators
    ``a:b``     range a, a+1, a+2, ..., b

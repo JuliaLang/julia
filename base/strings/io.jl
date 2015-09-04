@@ -198,8 +198,9 @@ macro b_str(s); :($(unescape_string(s)).data); end
 """
 Calculate the width of leading blank space, and also return if string is blank
 
-### Returns:
-* (width of leading whitespace, flag if string is totally blank)
+Returns:
+
+* width of leading whitespace, flag if string is totally blank
 """
 function indentation(str::AbstractString; tabwidth=8)
     count = 0
@@ -218,7 +219,8 @@ end
 """
 Removes leading indentation from string
 
-### Returns:
+Returns:
+
 * `ASCIIString` or `UTF8String` of multiline string, with leading indentation of `indent` removed
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)

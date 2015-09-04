@@ -128,6 +128,11 @@ function empty!(s::IntSet)
     return s
 end
 
+"""
+    symdiff!(s, n)
+
+The set `s` is destructively modified to toggle the inclusion of integer `n`.
+"""
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = Int(n + div(n,2))
@@ -139,6 +144,11 @@ function symdiff!(s::IntSet, n::Integer)
     return s
 end
 
+"""
+    symdiff!(s, itr)
+
+For each element in `itr`, destructively toggle its inclusion in set `s`.
+"""
 function symdiff!(s::IntSet, ns)
    for n in ns
        symdiff!(s, n)
@@ -250,6 +260,11 @@ intersect(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
 
+"""
+    symdiff!(s1, s2)
+
+Construct the symmetric difference of sets `s1` and `s2`, storing the result in `s1`.
+"""
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         sizehint!(s, s2.limit)

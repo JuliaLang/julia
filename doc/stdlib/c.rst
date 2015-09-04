@@ -7,31 +7,22 @@
 .. function:: ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
 
-       ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a string or symbol.
 
-   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is an AbstractString or :Symbol.
+   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression. Alternatively, ``ccall`` may also be used to call a function pointer, such as one returned by ``dlsym``\ .
 
-   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression. Alternatively, ccall may also be used to call a function pointer, such as one returned by dlsym.
-
-   Each ``ArgumentValue`` to the ``ccall`` will be converted to the corresponding ``ArgumentType``\ , by automatic insertion of calls to ``unsafe_convert(ArgumentType, cconvert(ArgumentType, ArgumentValue))``\ . (see also the documentation for each of these functions for further details). In most cases, this simply results in a call to ``convert(ArgumentType, ArgumentValue)``
+   Each ``ArgumentValue`` to the ``ccall`` will be converted to the corresponding ``ArgumentType``\ , by automatic insertion of calls to ``unsafe_convert(ArgumentType, cconvert(ArgumentType, ArgumentValue))``\ . (See also the documentation for each of these functions for further details.) In most cases, this simply results in a call to ``convert(ArgumentType, ArgumentValue)``\ .
 
 .. function:: cglobal((symbol, library) [, type=Void])
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       cglobal((symbol, library) [, type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``\ . Returns a ``Ptr{Type}``\ , defaulting to ``Ptr{Void}`` if no Type argument is supplied. The values can be read or written by ``unsafe_load`` or ``unsafe_store!``\ , respectively.
 
 .. function:: cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    Generate C-callable function pointer from Julia function. Type annotation of the return value in the callback function is a must for situations where Julia cannot infer the return type automatically.
 
@@ -50,11 +41,8 @@
 .. function:: unsafe_convert(T,x)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
 
-       unsafe_convert(T,x)
-
-   Convert "x" to a value of type "T"
+   Convert ``x`` to a value of type ``T``
 
    In cases where ``convert`` would need to take a Julia object and turn it into a ``Ptr``\ , this function should be used to define and perform that conversion.
 
@@ -65,22 +53,16 @@
 .. function:: cconvert(T,x)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
 
-       cconvert(T,x)
+   Convert ``x`` to a value of type ``T``\ , typically by calling ``convert(T,x)``
 
-   Convert "x" to a value of type "T", typically by calling ``convert(T,x)``
-
-   In cases where "x" cannot be safely converted to "T", unlike ``convert``\ , ``cconvert`` may return an object of a type different from "T", which however is suitable for ``unsafe_convert`` to handle.
+   In cases where ``x`` cannot be safely converted to ``T``\ , unlike ``convert``\ , ``cconvert`` may return an object of a type different from ``T``\ , which however is suitable for ``unsafe_convert`` to handle.
 
    Neither ``convert`` nor ``cconvert`` should take a Julia object and turn it into a ``Ptr``\ .
 
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       unsafe_load(p::Ptr{T},i::Integer)
 
    Load a value of type ``T`` from the address of the ith element (1-indexed) starting at ``p``\ . This is equivalent to the C expression ``p[i-1]``\ .
 
@@ -89,9 +71,6 @@
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Store a value of type ``T`` to the address of the ith element (1-indexed) starting at ``p``\ . This is equivalent to the C expression ``p[i-1] = x``\ .
 
@@ -100,36 +79,14 @@
 .. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    Copy ``N`` elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.
 
    The ``unsafe`` prefix on this function indicates that no validation is performed on the pointers ``dest`` and ``src`` to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.
-
-   .. code-block:: julia
-
-       unsafe_copy!(dest::Array, do, src::Array, so, N)
-
-   Copy ``N`` elements from a source array to a destination, starting at offset ``so`` in the source and ``do`` in the destination (1-indexed).
-
-   The ``unsafe`` prefix on this function indicates that no validation is performed to ensure that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in the same manner as C.
 
 .. function:: unsafe_copy!(dest::Array, do, src::Array, so, N)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
-
-   Copy ``N`` elements from a source pointer to a destination, with no checking. The size of an element is determined by the type of the pointers.
-
-   The ``unsafe`` prefix on this function indicates that no validation is performed on the pointers ``dest`` and ``src`` to ensure that they are valid. Incorrect usage may corrupt or segfault your program, in the same manner as C.
-
-   .. code-block:: julia
-
-       unsafe_copy!(dest::Array, do, src::Array, so, N)
 
    Copy ``N`` elements from a source array to a destination, starting at offset ``so`` in the source and ``do`` in the destination (1-indexed).
 
@@ -138,39 +95,18 @@
 .. function:: copy!(dest, src)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       copy!(dest, src)
 
    Copy all elements from collection ``src`` to array ``dest``\ . Returns ``dest``\ .
-
-   .. code-block:: julia
-
-       copy!(dest, do, src, so, N)
-
-   Copy ``N`` elements from collection ``src`` starting at offset ``so``\ , to array ``dest`` starting at offset ``do``\ . Returns ``dest``\ .
 
 .. function:: copy!(dest, do, src, so, N)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       copy!(dest, src)
-
-   Copy all elements from collection ``src`` to array ``dest``\ . Returns ``dest``\ .
-
-   .. code-block:: julia
-
-       copy!(dest, do, src, so, N)
 
    Copy ``N`` elements from collection ``src`` starting at offset ``so``\ , to array ``dest`` starting at offset ``do``\ . Returns ``dest``\ .
 
 .. function:: pointer(array [, index])
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       pointer(array [, index])
 
    Get the native address of an array or string element. Be careful to ensure that a julia reference to ``a`` exists as long as this pointer will be used. This function is "unsafe" like ``unsafe_convert``\ .
 
@@ -179,36 +115,24 @@
 .. function:: pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    Wrap a native pointer as a Julia Array object. The pointer element type determines the array element type. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
 
 .. function:: pointer_from_objref(object_instance)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       pointer_from_objref(object_instance)
 
    Get the memory address of a Julia object as a ``Ptr``\ . The existence of the resulting ``Ptr`` will not protect the object from garbage collection, so you must ensure that the object remains referenced for the whole time that the ``Ptr`` will be used.
 
 .. function:: unsafe_pointer_to_objref(p::Ptr)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       unsafe_pointer_to_objref(p::Ptr)
 
    Convert a ``Ptr`` to an object reference. Assumes the pointer refers to a valid heap-allocated Julia object. If this is not the case, undefined behavior results, hence this function is considered "unsafe" and should be used with care.
 
 .. function:: disable_sigint(f::Function)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       disable_sigint(f::Function)
 
    Disable Ctrl-C handler during execution of a function, for calling external code that is not interrupt safe. Intended to be called using ``do`` block syntax as follows:
 
@@ -222,20 +146,14 @@
 .. function:: reenable_sigint(f::Function)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       reenable_sigint(f::Function)
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily reverses the effect of ``disable_sigint``\ .
 
 .. function:: systemerror(sysfunc, iftrue)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
 
-       systemerror(sysfunc, iftrue)
-
-   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
+   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``iftrue`` is ``true``
 
 .. data:: Ptr{T}
 
