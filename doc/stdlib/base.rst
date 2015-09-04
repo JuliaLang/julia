@@ -435,53 +435,53 @@ Types
 
    Return a list of immediate subtypes of DataType ``T``\ . Note that all currently loaded subtypes are included, including those not visible in the current module.
 
-.. function:: typemin(type)
+.. function:: typemin(T)
 
    .. Docstring generated from Julia source
 
-   The lowest value representable by the given (real) numeric type.
+   The lowest value representable by the given (real) numeric DataType ``T``\ .
 
-.. function:: typemax(type)
-
-   .. Docstring generated from Julia source
-
-   The highest value representable by the given (real) numeric type.
-
-.. function:: realmin(type)
+.. function:: typemax(T)
 
    .. Docstring generated from Julia source
 
-   The smallest in absolute value non-subnormal value representable by the given floating-point type
+   The highest value representable by the given (real) numeric ``DataType``\ .
 
-.. function:: realmax(type)
-
-   .. Docstring generated from Julia source
-
-   The highest finite value representable by the given floating-point type
-
-.. function:: maxintfloat(type)
+.. function:: realmin(T)
 
    .. Docstring generated from Julia source
 
-   The largest integer losslessly representable by the given floating-point type
+   The smallest in absolute value non-subnormal value representable by the given floating-point DataType ``T``\ .
 
-.. function:: sizeof(type)
-
-   .. Docstring generated from Julia source
-
-   Size, in bytes, of the canonical binary representation of the given type, if any.
-
-.. function:: eps([type])
+.. function:: realmax(T)
 
    .. Docstring generated from Julia source
 
-   The distance between 1.0 and the next larger representable floating-point value of ``type``\ . Only floating-point types are sensible arguments. If ``type`` is omitted, then ``eps(Float64)`` is returned.
+   The highest finite value representable by the given floating-point DataType ``T``\ .
+
+.. function:: maxintfloat(T)
+
+   .. Docstring generated from Julia source
+
+   The largest integer losslessly representable by the given floating-point DataType ``T``\ .
+
+.. function:: sizeof(T)
+
+   .. Docstring generated from Julia source
+
+   Size, in bytes, of the canonical binary representation of the given DataType ``T``\ , if any.
+
+.. function:: eps([T])
+
+   .. Docstring generated from Julia source
+
+   The distance between 1.0 and the next larger representable floating-point value of ``DataType`` ``T``\ . Only floating-point types are sensible arguments. If ``T`` is omitted, then ``eps(Float64)`` is returned.
 
 .. function:: eps(x)
 
    .. Docstring generated from Julia source
 
-   The distance between ``x`` and the next larger representable floating-point value of the same type as ``x``\ .
+   The distance between ``x`` and the next larger representable floating-point value of the same ``DataType`` as ``x``\ .
 
 .. function:: promote_type(type1, type2)
 
@@ -533,11 +533,11 @@ Types
        (80,:mtime,Float64)
        (88,:ctime,Float64)
 
-.. function:: fieldtype(type, name::Symbol | index::Int)
+.. function:: fieldtype(T, name::Symbol | index::Int)
 
    .. Docstring generated from Julia source
 
-   Determine the declared type of a field (specified by name or index) in a composite type.
+   Determine the declared type of a field (specified by name or index) in a composite DataType ``T``\ .
 
 .. function:: isimmutable(v)
 
@@ -1040,19 +1040,19 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Preferred syntax for writing assertions.
+   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Preferred syntax for writing assertions. Message ``text`` is optionally displayed upon assertion failure.
 
 .. function:: ArgumentError(msg)
 
    .. Docstring generated from Julia source
 
-   The parameters to a function call do not match a valid signature.
+   The parameters to a function call do not match a valid signature. Argument ``msg`` is a descriptive error string.
 
 .. function:: AssertionError([msg])
 
    .. Docstring generated from Julia source
 
-   The asserted condition did not evalutate to ``true``\ .
+   The asserted condition did not evalutate to ``true``\ . Optional argument ``msg`` is a descriptive error string.
 
 .. function:: BoundsError([a],[i])
 
@@ -1064,7 +1064,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   The objects called do not have matching dimensionality.
+   The objects called do not have matching dimensionality. Optional argument ``msg`` is a descriptive error string.
 
 .. function:: DivideError()
 
@@ -1162,7 +1162,7 @@ Errors
 
    The function call grew beyond the size of the call stack. This usually happens when a call recurses infinitely.
 
-.. function:: SystemError(prefix::AbstractString, [errnum::Int32])
+.. function:: SystemError(prefix::AbstractString, [errno::Int32])
 
    .. Docstring generated from Julia source
 
@@ -1199,13 +1199,13 @@ Events
 
    .. Docstring generated from Julia source
 
-   Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
+   Create a timer to call the given ``callback`` function. The ``callback`` is passed one argument, the timer object itself. The callback will be invoked after the specified initial ``delay``\ , and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
 
 .. function:: Timer(delay, repeat=0)
 
    .. Docstring generated from Julia source
 
-   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval. Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
+   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
 
 Reflection
 ----------
@@ -1214,19 +1214,19 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Get the name of a module as a symbol.
+   Get the name of a ``Module`` as a ``Symbol``\ .
 
 .. function:: module_parent(m::Module) -> Module
 
    .. Docstring generated from Julia source
 
-   Get a module's enclosing module. ``Main`` is its own parent.
+   Get a module's enclosing ``Module``\ . ``Main`` is its own parent.
 
 .. function:: current_module() -> Module
 
    .. Docstring generated from Julia source
 
-   Get the *dynamically* current module, which is the module code is currently being read from. In general, this is not the same as the module containing the call to this function.
+   Get the *dynamically* current ``Module``\ , which is the ``Module`` code is currently being read from. In general, this is not the same as the module containing the call to this function.
 
 .. function:: fullname(m::Module)
 
@@ -1238,37 +1238,37 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Get an array of the names exported by a module, with optionally more module globals according to the additional parameters.
+   Get an array of the names exported by a ``Module``\ , with optionally more ``Module`` globals according to the additional parameters.
 
 .. function:: nfields(x::DataType) -> Int
 
    .. Docstring generated from Julia source
 
-   Get the number of fields of a data type.
+   Get the number of fields of a ``DataType``\ .
 
 .. function:: fieldnames(x::DataType)
 
    .. Docstring generated from Julia source
 
-   Get an array of the fields of a data type.
+   Get an array of the fields of a ``DataType``\ .
 
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source
 
-   Determine whether a global is declared ``const`` in a given module. The default module argument is ``current_module()``\ .
+   Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
 
 .. function:: isgeneric(f::Function) -> Bool
 
    .. Docstring generated from Julia source
 
-   Determine whether a function is generic.
+   Determine whether a ``Function`` is generic.
 
 .. function:: function_name(f::Function) -> Symbol
 
    .. Docstring generated from Julia source
 
-   Get the name of a generic function as a symbol, or ``:anonymous``\ .
+   Get the name of a generic ``Function`` as a symbol, or ``:anonymous``\ .
 
 .. function:: function_module(f::Function, types) -> Module
 
@@ -1280,13 +1280,13 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Returns a tuple ``(filename,line)`` giving the location of a method definition.
+   Returns a tuple ``(filename,line)`` giving the location of a generic ``Function`` definition.
 
 .. function:: functionloc(m::Method)
 
    .. Docstring generated from Julia source
 
-   Returns a tuple ``(filename,line)`` giving the location of a method definition.
+   Returns a tuple ``(filename,line)`` giving the location of a ``Method`` definition.
 
 Internals
 ---------
@@ -1313,7 +1313,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Takes the expression ``x`` and returns an equivalent expression in lowered form
+   Takes the expression ``x`` and returns an equivalent expression in lowered form.
 
 .. function:: code_lowered(f, types)
 
@@ -1325,7 +1325,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression.
 
 .. function:: code_typed(f, types; optimize=true)
 
@@ -1337,7 +1337,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression.
 
 .. function:: code_warntype(f, types)
 
@@ -1349,7 +1349,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression.
 
 .. function:: code_llvm(f, types)
 
@@ -1363,7 +1363,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression.
 
 .. function:: code_native(f, types)
 
@@ -1375,7 +1375,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression.
 
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 

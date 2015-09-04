@@ -383,13 +383,13 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Display an informational message.
+   Display an informational message. Argument ``msg`` is a string describing the information to be displayed.
 
 .. function:: warn(msg)
 
    .. Docstring generated from Julia source
 
-   Display a warning.
+   Display a warning. Argument ``msg`` is a string describing the warning to be displayed.
 
 .. function:: @printf([io::IOStream], "%Fmt", args...)
 
