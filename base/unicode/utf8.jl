@@ -192,15 +192,6 @@ function string(a::Union{ByteString,Char}...)
     UTF8String(s)
 end
 
-"""
-Reverses a UTF-8 encoded string
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function reverse(s::UTF8String)
     dat = s.data
     n = length(dat)
@@ -245,15 +236,6 @@ convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
 convert(::Type{SubString{UTF8String}}, s::SubString{ASCIIString}) =
     SubString(utf8(s.string), s.offset+1, s.endof+s.offset)
 
-"""
-Converts a UTF-8 encoded vector of `UInt8` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF8String}, dat::Vector{UInt8})
     # handle zero length string quickly
     isempty(dat) && return empty_utf8
@@ -333,11 +315,13 @@ convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 """
 Converts an already validated vector of `UInt16` or `UInt32` to a `UTF8String`
 
-### Input Arguments:
+Input Arguments:
+
 * `dat` Vector of code units (`UInt16` or `UInt32`), explicit `\0` is not converted
 * `len` length of output in bytes
 
-### Returns:
+Returns:
+
 * `UTF8String`
 """
 function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)

@@ -13,15 +13,6 @@ const empty_utf32 = UTF32String(UInt32[0])
 convert(::Type{UTF32String}, c::Char) = UTF32String(UInt32[c, 0])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
-"""
-Converts an `AbstractString` to a `UTF32String`
-
-### Returns:
-*   `UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::AbstractString)
     len, flags = unsafe_checkstring(str)
     buf = Vector{UInt32}(len+1)
@@ -31,15 +22,6 @@ function convert(::Type{UTF32String}, str::AbstractString)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF32String` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF8String},  str::UTF32String)
     dat = str.data
     len = sizeof(dat) >>> 2
@@ -51,15 +33,6 @@ function convert(::Type{UTF8String},  str::UTF32String)
     return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
 
-"""
-Converts a `UTF8String` to a `UTF32String`
-
-### Returns:
-*   `::UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::UTF8String)
     dat = str.data
     # handle zero length string quickly
@@ -105,15 +78,6 @@ function convert(::Type{UTF32String}, str::UTF8String)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF16String` to `UTF32String`
-
-### Returns:
-*   `::UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::UTF16String)
     dat = str.data
     len = sizeof(dat)
@@ -136,15 +100,6 @@ function convert(::Type{UTF32String}, str::UTF16String)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF32String` to `UTF16String`
-
-### Returns:
-*   `::UTF16String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF16String}, str::UTF32String)
     dat = str.data
     len = sizeof(dat)

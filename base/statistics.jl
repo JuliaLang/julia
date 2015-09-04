@@ -455,13 +455,36 @@ end
 
 ##### median & quantiles #####
 
+"""
+    middle(x)
+
+Compute the middle of a scalar value, which is equivalent to `x` itself, but of the type of `middle(x, x)` for consistency.
+"""
 # Specialized functions for real types allow for improved performance
 middle(x::Union{Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128}) = Float64(x)
 middle(x::AbstractFloat) = x
 middle(x::Float16) = Float32(x)
 middle(x::Real) = (x + zero(x)) / 1
+
+"""
+    middle(x, y)
+
+Compute the middle of two reals `x` and `y`, which is equivalent in both value and type to computing their mean (`(x + y) / 2`).
+"""
 middle(x::Real, y::Real) = x/2 + y/2
+
+"""
+    middle(range)
+
+Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
+"""
 middle(a::Range) = middle(a[1], a[end])
+
+"""
+    middle(array)
+
+Compute the middle of an array, which consists in finding its extrema and then computing their mean.
+"""
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
 function median!{T}(v::AbstractVector{T})
@@ -509,7 +532,18 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     r[i] = (1.-h).*r[i] + h.*v[hi[i]]
     return r
 end
+
+"""
+    quantile(v, ps)
+
+Compute the quantiles of a vector `v` at a specified set of probability values `ps`. Note: Julia does not ignore `NaN` values in the computation.
+"""
 quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
+"""
+    quantile(v, p)
+
+Compute the quantile of a vector `v` at the probability `p`. Note: Julia does not ignore `NaN` values in the computation.
+"""
 quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 
 function bound_quantiles(qs::AbstractVector)

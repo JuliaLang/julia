@@ -718,6 +718,7 @@ For example::
 
 Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
 as in::
+
     julia> replace("a", r".", "\g<0>1")
     julia> a1
 

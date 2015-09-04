@@ -236,12 +236,12 @@ function gen_call_with_extracted_types(fcn, ex0)
         # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         return Expr(:call, fcn, esc(args[1]),
-                    Expr(:call, :typesof, map(esc, args[2:end])...))
+                    Expr(:call, typesof, map(esc, args[2:end])...))
     end
     ex = expand(ex0)
     if isa(ex, Expr) && ex.head == :call
         return Expr(:call, fcn, esc(ex.args[1]),
-                    Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+                    Expr(:call, typesof, map(esc, ex.args[2:end])...))
     end
     exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
@@ -251,10 +251,10 @@ function gen_call_with_extracted_types(fcn, ex0)
             isa(ex.args[1], TopNode) && ex.args[1].name == :apply
             exret = Expr(:call, ex.args[1], fcn,
                          Expr(:tuple, esc(ex.args[2])),
-                         Expr(:call, :typesof, map(esc, ex.args[3:end])...))
+                         Expr(:call, typesof, map(esc, ex.args[3:end])...))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
-                         Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+                         Expr(:call, typesof, map(esc, ex.args[2:end])...))
         end
     elseif ex.head == :body
         a1 = ex.args[1]
@@ -262,7 +262,7 @@ function gen_call_with_extracted_types(fcn, ex0)
             a11 = a1.args[1]
             if a11 == :setindex!
                 exret = Expr(:call, fcn, a11,
-                             Expr(:call, :typesof, map(esc, a1.args[2:end])...))
+                             Expr(:call, typesof, map(esc, a1.args[2:end])...))
             end
         end
     elseif ex.head == :thunk
@@ -467,6 +467,15 @@ whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 
 #################################################################################
 
+"""
+    Base.summarysize(obj, recurse) -> Int
+
+`summarysize` is an estimate of the size of the object as if all iterables were
+allocated inline in general, this forms a conservative lower bound n the memory
+"controlled" by the object if recurse is `true`, then simply reachable memory
+should also be included, otherwise, only directly used memory should be included
+you should never ignore recurse in cases where recursion is possible
+"""
 summarysize(obj; exclude = Union{Module,Function,DataType,TypeName}) =
     summarysize(obj, ObjectIdDict(), exclude)
 

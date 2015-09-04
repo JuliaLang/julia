@@ -104,10 +104,13 @@ end
 
 function signature(expr::Expr)
     if isexpr(expr, :call)
-        sig = :(Tuple{})
+        sig = :(Union{Tuple{}})
         for arg in expr.args[2:end]
             isexpr(arg, :parameters) && continue
-            push!(sig.args, argtype(arg))
+            if isa(arg,Expr) && arg.head === :kw # optional arg
+                push!(sig.args, :(Tuple{$(sig.args[end].args...)}))
+            end
+            push!(sig.args[end].args, argtype(arg))
         end
         Expr(:let, Expr(:block, sig), typevars(expr)...)
     else
@@ -133,50 +136,58 @@ tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
 
 type FuncDoc
     main
-    order::Vector{Method}
+    order::Vector{Type}
     meta::ObjectIdDict
     source::ObjectIdDict
 end
 
 FuncDoc() = FuncDoc(nothing, [], ObjectIdDict(), ObjectIdDict())
 
+# handles the :(function foo end) form
 function doc!(f::Function, data)
-    fd = get!(meta(), f, FuncDoc())
-    fd.main = data
+    doc!(f, Union{}, data, nothing)
 end
 
-function doc!(f::Function, m::Method, data, source)
+type_morespecific(a::Type, b::Type) =
+    (ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
+
+# handles the :(function foo(x...); ...; end) form
+function doc!(f::Function, sig::ANY, data, source)
     fd = get!(meta(), f, FuncDoc())
     isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
-    !haskey(fd.meta, m) && push!(fd.order, m)
-    fd.meta[m] = data
-    fd.source[m] = source
+    haskey(fd.meta, sig) || push!(fd.order, sig)
+    sort!(fd.order, lt=type_morespecific)
+    fd.meta[sig] = data
+    fd.source[sig] = source
 end
 
-function doc(f::Function)
-    docs = []
+doc(f::Function) = doc(f, Tuple)
+
+function doc(f::Function, sig::Type)
+    isgeneric(f) && isempty(methods(f,sig)) && return nothing
     for mod in modules
-        if haskey(meta(mod), f)
+        if (haskey(meta(mod),f) && isa(meta(mod)[f],FuncDoc))
             fd = meta(mod)[f]
-            length(docs) == 0 && fd.main !== nothing && push!(docs, fd.main)
-            if isa(fd, FuncDoc)
-                for m in fd.order
-                    push!(docs, fd.meta[m])
+            results = []
+            for msig in fd.order
+                # try to find specific matching method signatures
+                if sig <: msig
+                    push!(results, (msig,fd.meta[msig]))
                 end
-            elseif length(docs) == 0
-                return fd
+            end
+            # if all method signatures are Union{} ( ⊥ ), concat all docstrings
+            if isempty(results)
+                return catdoc([fd.meta[msig] for msig in reverse(fd.order)]...)
+            else
+                sort!(results, lt=(a,b)->type_morespecific(first(a),first(b)))
+                return catdoc([last(r) for r in results]...)
             end
         end
     end
-    return catdoc(docs...)
+    return nothing
 end
+doc(f::Function,args::Any...) = doc(f, Tuple{args...})
 
-function doc(f::Function, m::Method)
-    for mod in modules
-        haskey(meta(mod), f) && isa(meta(mod)[f], FuncDoc) && haskey(meta(mod)[f].meta, m) &&
-            return meta(mod)[f].meta[m]
-    end
-end
 
 """
 `catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
@@ -209,7 +220,7 @@ end
 type TypeDoc
     main
     fields::Dict{Symbol, Any}
-    order::Vector{Method}
+    order::Vector{Type}
     meta::ObjectIdDict
 end
 
@@ -221,11 +232,11 @@ function doc!(t::DataType, data, fields)
     td.fields = fields
 end
 
-function doc!(f::DataType, m::Method, data, source)
+function doc!(f::DataType, sig::ANY, data, source)
     td = get!(meta(), f, TypeDoc())
     isa(td, TypeDoc) || error("Can't document a method when the type already has metadata")
-    !haskey(td.meta, m) && push!(td.order, m)
-    td.meta[m] = data
+    !haskey(td.meta, sig) && push!(td.order, sig)
+    td.meta[sig] = data
 end
 
 function doc(f::DataType)
@@ -251,18 +262,16 @@ isfield(x) = isexpr(x, :.) &&
   isexpr(x.args[2], QuoteNode, :quote)
 
 function fielddoc(T, k)
-  for mod in modules
-    if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
-      return meta(mod)[T].fields[k]
-    end
+    for mod in modules
+        if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
+            return meta(mod)[T].fields[k]
+        end
   end
   Text(sprint(io -> (print(io, "$T has fields: ");
                      print_joined(io, fieldnames(T), ", ", " and "))))
 end
 
 # Generic Callables
-
-doc(f, ::Method) = doc(f)
 
 # Modules
 
@@ -318,11 +327,10 @@ end
 
 function funcdoc(meta, def, def′)
     f = esc(namify(def′))
-    m = :(methods($f, $(esc(signature(def′))))[end])
     quote
         @init
         $(esc(def))
-        doc!($f, $m, $(mdify(meta)), $(esc(quot(def′))))
+        doc!($f, $(esc(signature(def′))), $(mdify(meta)), $(esc(quot(def′))))
         $f
     end
 end
@@ -400,11 +408,7 @@ end
 
 function findmethod(ex)
     f = esc(namify(ex.args[1]))
-    if any(x -> isexpr(x, :(::)), ex.args)
-        :(doc($f, methods($f, $(esc(signature(ex))))[1]))
-    else
-        :(doc($f, @which($(esc(ex)))))
-    end
+    :(doc($f, $(esc(signature(ex)))))
 end
 
 # Swap out the bootstrap macro with the real one

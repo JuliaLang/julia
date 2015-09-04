@@ -748,7 +748,7 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
--- _man-packages:
+.. _man-packages:
 
 Packages and Modules
 --------------------
@@ -875,6 +875,7 @@ The following::
     end
 
 results in::
+
     123 Foo  Foo  Foo  Bar  Bar  Bar
 
 This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,

@@ -7,9 +7,6 @@
 .. function:: dlopen(libfile::AbstractString [, flags::Integer])
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       dlopen(libfile::AbstractString [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -18,9 +15,6 @@
 .. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
 
    .. Docstring generated from Julia source
-   ::
-
-              dlopen_e(libfile::AbstractString [, flags::Integer])
 
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
@@ -59,36 +53,24 @@
 .. function:: dlsym(handle, sym)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       dlsym(handle, sym)
 
    Look up a symbol from a shared library handle, return callable function pointer on success.
 
 .. function:: dlsym_e(handle, sym)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       dlsym_e(handle, sym)
 
    Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
 
 .. function:: dlclose(handle)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       dlclose(handle)
 
    Close shared library referenced by handle.
 
 .. function:: find_library(names, locations)
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       find_library(names, locations)
 
    Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``\ , or system library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const`` and used as the library name in future ``ccall``\ 's. On failure, it returns the empty string.
 
