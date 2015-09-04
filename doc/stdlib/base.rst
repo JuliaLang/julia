@@ -45,7 +45,7 @@ Getting Around
 
        atexit(f)
 
-   Register a zero-argument function to be called at exit.
+   Register a zero-argument function ``f()`` to be called at process exit. ``atexit()`` hooks are called in last in first out (LIFO) order and run before object finalizers.
 
 .. function:: atreplinit(f)
 
@@ -70,9 +70,11 @@ Getting Around
    .. Docstring generated from Julia source
    .. code-block:: julia
 
-       whos([Module,] [pattern::Regex])
+       whos([io,] [Module,] [pattern::Regex])
 
    Print information about exported global variables in a module, optionally restricted to those matching ``pattern``\ .
+
+   The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
 .. function:: edit(file::AbstractString, [line])
 
