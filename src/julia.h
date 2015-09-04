@@ -1404,6 +1404,10 @@ typedef struct _jl_task_t {
     jl_gcframe_t *gcstack;
     // current module, or NULL if this task has not set one
     jl_module_t *current_module;
+
+    // id of owning thread
+    // does not need to be defined until the task runs
+    int16_t tid;
 } jl_task_t;
 
 typedef struct {

@@ -62,6 +62,7 @@ JL_THREAD int16_t ti_tid = 0;
 DLLEXPORT int jl_n_threads;     // # threads we're actually using
 DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;
+jl_gcframe_t ***jl_all_pgcstacks;
 
 // return calling thread's ID
 DLLEXPORT int16_t jl_threadid() { return ti_tid; }
@@ -72,8 +73,8 @@ void ti_initthread(int16_t tid)
 {
     ti_tid = tid;
     jl_pgcstack = NULL;
-#ifdef JULIA_ENABLE_THREADING
     jl_all_pgcstacks[tid] = &jl_pgcstack;
+#ifdef JULIA_ENABLE_THREADING
     jl_all_heaps[tid] = jl_mk_thread_heap();
 #else
     jl_mk_thread_heap();
@@ -93,7 +94,6 @@ JL_DEFINE_MUTEX(typecache);
 
 // thread heap
 struct _jl_thread_heap_t **jl_all_heaps;
-jl_gcframe_t ***jl_all_pgcstacks;
 
 // only one thread group for now
 ti_threadgroup_t *tgworld;
@@ -454,11 +454,13 @@ void jl_threading_profile()
 
 #else // !JULIA_ENABLE_THREADING
 
-void jl_init_threading(void) {
+void jl_init_threading(void)
+{
     static jl_thread_task_state_t _jl_all_task_states;
     jl_all_task_states = &_jl_all_task_states;
     jl_max_threads = 1;
     jl_n_threads = 1;
+    jl_all_pgcstacks = malloc(jl_n_threads * sizeof(void*));
     ti_initthread(0);
 }
 

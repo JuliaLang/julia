@@ -46,8 +46,8 @@ extern DLLEXPORT int jl_n_threads;  // # threads we're actually using
 #ifdef JULIA_ENABLE_THREADING
 // GC
 extern struct _jl_thread_heap_t **jl_all_heaps;
-extern jl_gcframe_t ***jl_all_pgcstacks;
 #endif
+extern jl_gcframe_t ***jl_all_pgcstacks;
 
 // thread state
 enum {
