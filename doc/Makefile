@@ -24,7 +24,7 @@ $(ACTIVATE):
 	touch -c $@
 
 $(SPHINX_BUILD): $(ACTIVATE) requirements.txt
-	. $(ACTIVATE) && pip install sphinx==1.2.3 \
+	. $(ACTIVATE) && pip install sphinx==1.3.1 \
 	              && pip install -r requirements.txt
 	touch -c $@
 
