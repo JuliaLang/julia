@@ -924,7 +924,7 @@ download
 doc"""
     @everywhere
 
-Execute an expression on all processes. Errors on any of the processes are collected into a CompositeException and thrown.
+Execute an expression on all processes. Errors on any of the processes are collected into a `CompositeException` and thrown.
 """
 :@everywhere
 
@@ -2741,7 +2741,7 @@ doc"""
 
 Closes a channel. An exception is thrown by:
 
-    - ``put!`` on a on a closed channel.
+    - ``put!`` on a closed channel.
 
     - ``take!`` and ``fetch`` on an empty, closed channel.
 
@@ -9813,7 +9813,7 @@ mtime
 doc"""
     SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
-Construct a SharedArray of a bitstype `T` and size `dims` across the processes specified by `pids` - all of which have to be on the same host.
+Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified by `pids` - all of which have to be on the same host.
 
 If `pids` is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, `localindexes` and `indexpids` will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.
 
@@ -10255,7 +10255,7 @@ xdump
 doc"""
     Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
 
-Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
+Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two `AsyncStream` objects, one for incoming messages and the other for messages addressed to the remote worker.
 """
 Base.process_messages
 
