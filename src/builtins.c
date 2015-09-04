@@ -1500,7 +1500,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, ")");
     }
     else if (jl_is_linenode(v)) {
-        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
+        n += jl_printf(out, "# line %"PRIuPTR" %s", jl_linenode_line(v), jl_linenode_file(v)->name);
     }
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
