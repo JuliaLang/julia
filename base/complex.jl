@@ -114,20 +114,46 @@ inv{T<:Integer}(z::Complex{T}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+# handle Bool and Complex{Bool}
+# avoid type signature ambiguity warnings
++(x::Bool, z::Complex{Bool}) = Complex(x + real(z), imag(z))
++(z::Complex{Bool}, x::Bool) = Complex(real(z) + x, imag(z))
+-(x::Bool, z::Complex{Bool}) = Complex(x - real(z), - imag(z))
+-(z::Complex{Bool}, x::Bool) = Complex(real(z) - x, imag(z))
+*(x::Bool, z::Complex{Bool}) = Complex(x * real(z), x * imag(z))
+*(z::Complex{Bool}, x::Bool) = Complex(real(z) * x, imag(z) * x)
+
++(x::Bool, z::Complex) = Complex(x + real(z), imag(z))
++(z::Complex, x::Bool) = Complex(real(z) + x, imag(z))
+-(x::Bool, z::Complex) = Complex(x - real(z), - imag(z))
+-(z::Complex, x::Bool) = Complex(real(z) - x, imag(z))
+*(x::Bool, z::Complex) = Complex(x * real(z), x * imag(z))
+*(z::Complex, x::Bool) = Complex(real(z) * x, imag(z) * x)
+
++(x::Real, z::Complex{Bool}) = Complex(x + real(z), imag(z))
++(z::Complex{Bool}, x::Real) = Complex(real(z) + x, imag(z))
+function -(x::Real, z::Complex{Bool})
+    # we don't want the default type for -(Bool)
+    re = x-real(z)
+    Complex(re, - oftype(re, imag(z)))
+end
+-(z::Complex{Bool}, x::Real) = Complex(real(z) - x, imag(z))
+*(x::Real, z::Complex{Bool}) = Complex(x * real(z), x * imag(z))
+*(z::Complex{Bool}, x::Real) = Complex(real(z) * x, imag(z) * x)
+
 # adding or multiplying real & complex is common
-*(x::Bool, z::Complex) = ifelse(x, z, zero(z))
-*(z::Complex, x::Bool) = ifelse(x, z, zero(z))
-*(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
-*(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = Complex(x + real(z), imag(z))
 +(z::Complex, x::Real) = Complex(x + real(z), imag(z))
 function -(x::Real, z::Complex)
+    # we don't want the default type for -(Bool)
     re = x - real(z)
-    Complex(re, oftype(re, -imag(z)))
+    Complex(re, - oftype(re, imag(z)))
 end
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
+*(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
+*(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
-/(a::Real  , w::Complex) = a*inv(w)
+/(a::Real, z::Complex) = a*inv(z)
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
 function /{T<:Real}(a::Complex{T}, b::Complex{T})
