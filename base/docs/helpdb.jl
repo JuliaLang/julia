@@ -5943,16 +5943,16 @@ For example, NFKC corresponds to the options ``compose=true, compat=true, stable
 normalize_string
 
 doc"""
-    cd(dir::AbstractString)
+    cd([dir::AbstractString=homedir()])
 
 Set the current working directory.
 """
 cd(dir::AbstractString)
 
 doc"""
-    cd(f, [dir])
+    cd(f, [dir=homedir()])
 
-Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
+Temporarily changes the current working directory and applies function `f` before returning.
 """
 cd(f, dir=?)
 
