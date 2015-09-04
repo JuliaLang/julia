@@ -11969,7 +11969,7 @@ Dates.firstdayofweek
 doc"""
     datetime2unix(dt::DateTime) -> Float64
 
-Takes the given DateTime and returns the number of seconds since the unix epoch as a `Float64`.
+Takes the given `DateTime` and returns the number of seconds since the unix epoch as a `Float64`.
 """
 Dates.datetime2unix
 
@@ -11983,21 +11983,21 @@ Dates.dayofweekofmonth
 doc"""
     monthabbr(dt::TimeType; locale="english") -> AbstractString
 
-Return the abbreviated month name of the Date or DateTime in the given `locale`.
+Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
 """
 Dates.monthabbr
 
 doc"""
     datetime2julian(dt::DateTime) -> Float64
 
-Takes the given DateTime and returns the number of Julian calendar days since the julian epoch as a `Float64`.
+Takes the given `DateTime` and returns the number of Julian calendar days since the julian epoch as a `Float64`.
 """
 Dates.datetime2julian
 
 doc"""
     dayabbr(dt::TimeType; locale="english") -> AbstractString
 
-Return the abbreviated name corresponding to the day of the week of the Date or DateTime in the given `locale`.
+Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime` in the given `locale`.
 """
 Dates.dayabbr
 
@@ -12005,7 +12005,7 @@ doc"""
 ```rst
 ..  DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
-Construct a DateTime type by parts. Arguments must be convertible to ``Int64``.
+Construct a ``DateTime`` type by parts. Arguments must be convertible to ``Int64``.
 ```
 """
 Dates.DateTime(y)
@@ -12014,7 +12014,7 @@ doc"""
 ```rst
 ..  DateTime(periods::Period...) -> DateTime
 
-Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+Constuct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order.
 DateTime parts not provided will default to the value of ``Dates.default(period)``.
 ```
 """
@@ -12024,7 +12024,7 @@ doc"""
 ```rst
 ..  DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
-Create a DateTime through the adjuster API. The starting point will be constructed from the
+Create a ``DateTime`` through the adjuster API. The starting point will be constructed from the
 provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``. The step size in
 adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
 will stop when ``f::Function`` returns ``false`` instead of ``true``. ``limit`` provides a limit to
@@ -12047,7 +12047,7 @@ doc"""
 ```rst
 ..  DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
-Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
+Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in
 the ``format`` string. The following codes can be used for constructing format strings:
 
 =============== ========= ===============================================================
@@ -12085,21 +12085,21 @@ Dates.DateTime(dt::AbstractString, df::Dates.DateFormat)
 doc"""
     datetime2rata(dt::TimeType) -> Int64
 
-Returns the number of Rata Die days since epoch from the given Date or DateTime.
+Returns the number of Rata Die days since epoch from the given `Date` or `DateTime`.
 """
 Dates.datetime2rata
 
 doc"""
     monthname(dt::TimeType; locale="english") -> AbstractString
 
-Return the full name of the month of the Date or DateTime in the given `locale`.
+Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
 """
 Dates.monthname
 
 doc"""
     dayname(dt::TimeType; locale="english") -> AbstractString
 
-Return the full day name corresponding to the day of the week of the Date or DateTime in the given `locale`.
+Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in the given `locale`.
 """
 Dates.dayname
 
@@ -12113,14 +12113,14 @@ Dates.Date(y)
 doc"""
     Date(period::Period...) -> Date
 
-Constuct a Date type by `Period` type parts. Arguments may be in any order. Date parts not provided will default to the value of `Dates.default(period)`.
+Constuct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts not provided will default to the value of `Dates.default(period)`.
 """
 Dates.Date(period::Dates.Period...)
 
 doc"""
     Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
-Create a Date through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
+Create a `Date` through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
 """
 Dates.Date(f::Function, y)
 
@@ -12134,7 +12134,7 @@ Dates.Date(dt::DateTime)
 doc"""
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
-Construct a Date type by parsing a `dt` date string following the pattern given in the `format` string. Follows the same conventions as `DateTime` above.
+Construct a `Date` type by parsing a `dt` date string following the pattern given in the `format` string. Follows the same conventions as `DateTime` above.
 """
 Dates.Date(dt::AbstractString, format::AbstractString)
 
@@ -12192,7 +12192,7 @@ doc"""
 ..  julian2datetime(julian_days) -> DateTime
 
 Takes the number of Julian calendar days since epoch
-``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
+``-4713-11-24T12:00:00`` and returns the corresponding ``DateTime``.
 ```
 """
 Dates.julian2datetime
@@ -12207,7 +12207,7 @@ doc"""
     second(dt::TimeType) -> Int64
     millisecond(dt::TimeType) -> Int64
 
-Return the field part of a Date or DateTime as an `Int64`.
+Return the field part of a `Date` or `DateTime` as an `Int64`.
 """
 Dates.year
 
@@ -12252,7 +12252,7 @@ Dates.daysinmonth
 doc"""
     yearmonth(dt::TimeType) -> (Int64, Int64)
 
-Simultaneously return the year and month parts of a Date or DateTime.
+Simultaneously return the year and month parts of a `Date` or `DateTime`.
 """
 Dates.yearmonth
 
@@ -12266,7 +12266,7 @@ Dates.daysofweekinmonth
 doc"""
     yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
 
-Simultaneously return the year, month, and day parts of a Date or DateTime.
+Simultaneously return the year, month, and day parts of a `Date` or `DateTime`.
 """
 Dates.yearmonthday
 
@@ -12294,7 +12294,7 @@ Dates.recur
 doc"""
     monthday(dt::TimeType) -> (Int64, Int64)
 
-Simultaneously return the month and day parts of a Date or DateTime.
+Simultaneously return the month and day parts of a `Date` or `DateTime`.
 """
 Dates.monthday
 
@@ -12310,7 +12310,7 @@ doc"""
 ..  unix2datetime(x) -> DateTime
 
 Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
-and converts to the corresponding DateTime.
+and converts to the corresponding ``DateTime``.
 ```
 """
 Dates.unix2datetime
@@ -12335,7 +12335,7 @@ doc"""
 ..  rata2datetime(days) -> DateTime
 
 Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
-and returns the corresponding DateTime.
+and returns the corresponding ``DateTime``.
 ```
 """
 Dates.rata2datetime
@@ -12343,14 +12343,14 @@ Dates.rata2datetime
 doc"""
     now() -> DateTime
 
-Returns a DateTime corresponding to the user's system time including the system timezone locale.
+Returns a `DateTime` corresponding to the user's system time including the system timezone locale.
 """
 now
 
 doc"""
     now(::Type{UTC}) -> DateTime
 
-Returns a DateTime corresponding to the user's system time as UTC/GMT.
+Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
 """
 Dates.now(::Type{Dates.UTC})
 
@@ -12406,7 +12406,7 @@ doc"""
     Second(dt::TimeType) -> Second
     Millisecond(dt::TimeType) -> Millisecond
 
-Return the field part of a Date or DateTime as a `Period` type.
+Return the field part of a `Date` or `DateTime` as a `Period` type.
 """
 Dates.Year(dt::Dates.TimeType)
 
