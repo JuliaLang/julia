@@ -23,11 +23,23 @@ eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
 abstract AbstractZipIterator
 
+immutable Zip1{I} <: AbstractZipIterator
+    i::I
+end
+zip(a) = Zip1(a)
+length(z::Zip1) = length(z.i)
+eltype{I}(::Type{Zip1{I}}) = Tuple{eltype(I)}
+start(z::Zip1) = start(z.i)
+function next(z::Zip1, st)
+    n = next(z.i,st)
+    return (tuple(n[1]), n[2])
+end
+done(z::Zip1, st) = done(z.i,st)
+
 immutable Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
-zip(a) = a
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = min(length(z.a), length(z.b))
 eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
