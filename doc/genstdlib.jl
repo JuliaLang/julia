@@ -21,12 +21,14 @@ function add_all_docs(it, k)
     end
 end
 
-function add_all_docs_meta(meta)
+function add_all_docs_meta(m::Module,meta)
+    exports = names(m)
     for (sym, d) in meta
+        isexported = sym in exports
         if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
-            add_all_docs(d.meta, sym)
+            add_all_docs(d.meta, (sym,isexported))
         else
-            all_docs[d] = sym
+            all_docs[d] = (sym,isexported)
         end
     end
 end
@@ -36,12 +38,15 @@ mod_added = ObjectIdDict()
 function add_all_docs_mod(m::Module)
     mod_added[m] = m
     try
-        add_all_docs_meta(Docs.meta(m))
+        add_all_docs_meta(m,Docs.meta(m))
     end
     for name in names(m)
         try
-            sub_m = m.(name)
-            sub_m in keys(mod_added) || add_all_docs_mod(sub_m)
+            sub_m = getfield(m,name)
+            isa(sub_m,Module) || continue
+            if !(sub_m in keys(mod_added))
+                add_all_docs_mod(sub_m)
+            end
         end
     end
 end
@@ -208,19 +213,31 @@ for folder in ["stdlib", "manual", "devdocs"]
     end
 end
 
-missing_count = 0
+exported_missing_count = 0
+unexported_missing_count = 0
 
 for (d, v) in all_docs
-    isa(v, ObjectIdDict) && continue # No idea what these are
-    isa(v, Int) && continue # We don't document `0` as a function
-    warn("Missing doc for $v")
+    if length(v) == 2
+        val,isexported = v
+    else
+        val,isexported = v,true
+    end
+    isa(val, ObjectIdDict) && continue # No idea what these are
+    isa(val, Int) && continue # We don't document `0` as a function
+    if isexported
+        warn("Exported method missing doc for $val")
+        exported_missing_count += 1
+    else
+        info("Unexported method missing doc for $val")
+        unexported_missing_count += 1
+    end
     # println(tryrst(d, false))
     # # Generate todo list ;-p
     # println("- [ ] `$v`")
-    missing_count += 1
 end
 
-if missing_count > 0
+if (exported_missing_count + unexported_missing_count) > 0
     println()
-    warn("Missing $missing_count doc strings")
+    warn("Missing $exported_missing_count exported doc strings")
+    info("Missing $unexported_missing_count unexported doc strings")
 end
