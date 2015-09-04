@@ -80,7 +80,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression.
 
 .. function:: less(file::AbstractString, [line])
 
@@ -98,7 +98,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression.
 
 .. function:: clipboard(x)
 
@@ -116,7 +116,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   This function is part of the implementation of ``using`` / ``import``\ , if a module is not already defined in ``Main``\ . It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for exmple, when interactively developing libraries).
+   This function is part of the implementation of ``using`` / ``import``\ , if a module is not already defined in ``Main``\ . It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for example, when interactively developing libraries).
 
    Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
@@ -160,7 +160,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
+   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given ``types``\ .
 
    If ``types`` is an abstract type, then the method that would be called by ``invoke`` is returned.
 
@@ -196,7 +196,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Show an expression and result, returning the result
+   Show an expression and result, returning the result.
 
 .. function:: versioninfo([verbose::Bool])
 
