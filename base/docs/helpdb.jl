@@ -1030,7 +1030,7 @@ doc"""
 ```rst
 ..  @code_lowered
 
-Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
+Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression.
 ```
 """
 :@code_lowered
@@ -1570,7 +1570,7 @@ doc"""
 ```rst
 ..  @code_typed
 
-Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
+Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression.
 ```
 """
 :@code_typed
@@ -2106,14 +2106,14 @@ permutedims!
 doc"""
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a method definition.
+Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(f, types)
 
 doc"""
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a method definition.
+Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 functionloc(m)
 
@@ -2461,7 +2461,7 @@ require
 doc"""
     expand(x)
 
-Takes the expression `x` and returns an equivalent expression in lowered form
+Takes the expression `x` and returns an equivalent expression in lowered form.
 """
 expand
 
@@ -2841,7 +2841,7 @@ circshift
 doc"""
     fieldnames(x::DataType)
 
-Get an array of the fields of a data type.
+Get an array of the fields of a `DataType`.
 """
 fieldnames
 
@@ -2862,7 +2862,7 @@ transpose!
 doc"""
     isconst([m::Module], s::Symbol) -> Bool
 
-Determine whether a global is declared `const` in a given module. The default module argument is `current_module()`.
+Determine whether a global is declared `const` in a given `Module`. The default `Module` argument is `current_module()`.
 """
 isconst
 
@@ -4264,7 +4264,7 @@ Float64
 doc"""
     function_name(f::Function) -> Symbol
 
-Get the name of a generic function as a symbol, or `:anonymous`.
+Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
 function_name
 
@@ -4729,7 +4729,7 @@ unsafe_convert
 doc"""
     warn(msg)
 
-Display a warning.
+Display a warning. Argument `msg` is a string describing the warning to be displayed.
 """
 warn
 
@@ -5266,7 +5266,7 @@ Note that :func:`zip` is its own inverse: ``collect(zip(zip(a...)...)) == collec
 zip
 
 doc"""
-    SystemError(prefix::AbstractString, [errnum::Int32])
+    SystemError(prefix::AbstractString, [errno::Int32])
 
 A system call failed with an error code (in the `errno` global variable).
 """
@@ -5352,6 +5352,7 @@ doc"""
     DimensionMismatch([msg])
 
 The objects called do not have matching dimensionality.
+Optional argument `msg` is a descriptive error string.
 """
 DimensionMismatch
 
@@ -5558,14 +5559,14 @@ base
 doc"""
     Timer(callback::Function, delay, repeat=0)
 
-Create a timer to call the given callback function. The callback is passed one argument, the timer object itself. The callback will be invoked after the specified initial delay, and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling `close` on it.
+Create a timer to call the given `callback` function. The `callback` is passed one argument, the timer object itself. The callback will be invoked after the specified initial `delay`, and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling `close` on it.
 """
 Timer(::Function,delay,repeat=0)
 
 doc"""
     Timer(delay, repeat=0)
 
-Create a timer that wakes up tasks waiting for it (by calling `wait` on the timer object) at a specified interval. Waiting tasks are woken with an error when the timer is closed (by `close`). Use `isopen` to check whether a timer is still active.
+Create a timer that wakes up tasks waiting for it (by calling `wait` on the timer object) at a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the timer is closed (by `close`). Use `isopen` to check whether a timer is still active.
 """
 Timer(delay, repeat=0)
 
@@ -5838,6 +5839,7 @@ doc"""
     info(msg)
 
 Display an informational message.
+Argument `msg` is a string describing the information to be displayed.
 """
 info
 
@@ -6228,16 +6230,16 @@ Returns `true` if the current user has permission to read `path`, `false` otherw
 isreadable
 
 doc"""
-    eps([type])
+    eps([T])
 
-The distance between 1.0 and the next larger representable floating-point value of `type`. Only floating-point types are sensible arguments. If `type` is omitted, then `eps(Float64)` is returned.
+The distance between 1.0 and the next larger representable floating-point value of `DataType` `T`. Only floating-point types are sensible arguments. If `T` is omitted, then `eps(Float64)` is returned.
 """
 eps(::Any)
 
 doc"""
     eps(x)
 
-The distance between `x` and the next larger representable floating-point value of the same type as `x`.
+The distance between `x` and the next larger representable floating-point value of the same `DataType` as `x`.
 """
 eps(::FloatingPoint)
 
@@ -6307,7 +6309,7 @@ big
 doc"""
     names(x::Module[, all=false[, imported=false]])
 
-Get an array of the names exported by a module, with optionally more module globals according to the additional parameters.
+Get an array of the names exported by a `Module`, with optionally more `Module` globals according to the additional parameters.
 """
 names
 
@@ -6358,7 +6360,7 @@ Base64DecodePipe
 doc"""
     module_parent(m::Module) -> Module
 
-Get a module's enclosing module. `Main` is its own parent.
+Get a module's enclosing `Module`. `Main` is its own parent.
 """
 module_parent
 
@@ -6742,7 +6744,7 @@ doc"""
 ```rst
 ..  @code_native
 
-Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
+Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression.
 ```
 """
 :@code_native
@@ -6767,7 +6769,7 @@ doc"""
 ```rst
 ..  @code_warntype
 
-Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
+Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression.
 ```
 """
 :@code_warntype
@@ -7315,7 +7317,7 @@ code_native
 doc"""
     isgeneric(f::Function) -> Bool
 
-Determine whether a function is generic.
+Determine whether a `Function` is generic.
 """
 isgeneric
 
@@ -7544,6 +7546,7 @@ doc"""
     ArgumentError(msg)
 
 The parameters to a function call do not match a valid signature.
+Argument `msg` is a descriptive error string.
 """
 ArgumentError
 
@@ -7692,7 +7695,7 @@ unmark
 doc"""
     module_name(m::Module) -> Symbol
 
-Get the name of a module as a symbol.
+Get the name of a `Module` as a `Symbol`.
 """
 module_name
 
@@ -7800,9 +7803,9 @@ Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `
 :@sync
 
 doc"""
-    typemax(type)
+    typemax(T)
 
-The highest value representable by the given (real) numeric type.
+The highest value representable by the given (real) numeric `DataType`.
 """
 typemax
 
@@ -8110,7 +8113,7 @@ seekstart
 doc"""
     nfields(x::DataType) -> Int
 
-Get the number of fields of a data type.
+Get the number of fields of a `DataType`.
 """
 nfields
 
@@ -8321,7 +8324,7 @@ readcsv
 doc"""
     current_module() -> Module
 
-Get the *dynamically* current module, which is the module code is currently being read from. In general, this is not the same as the module containing the call to this function.
+Get the *dynamically* current `Module`, which is the `Module` code is currently being read from. In general, this is not the same as the module containing the call to this function.
 """
 current_module
 
@@ -9336,6 +9339,7 @@ doc"""
     @assert cond [text]
 
 Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
+Message `text` is optionally displayed upon assertion failure.
 """
 :@assert
 
@@ -9730,7 +9734,7 @@ doc"""
 ```rst
 ..  @code_llvm
 
-Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
+Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression.
 ```
 """
 :@code_llvm
@@ -11825,6 +11829,7 @@ doc"""
     AssertionError([msg])
 
 The asserted condition did not evalutate to `true`.
+Optional argument `msg` is a descriptive error string.
 """
 AssertionError
 
@@ -12318,7 +12323,7 @@ doc"""
 
 Returns `Millisecond(1)` for `DateTime` values and `Day(1)` for `Date` values.
 """
-eps(::Union{Date,DateTime})
+Dates.eps(::Union{Date,DateTime})
 
 doc"""
     firstdayofyear(dt::TimeType) -> TimeType
