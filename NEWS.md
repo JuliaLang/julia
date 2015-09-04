@@ -423,6 +423,8 @@ Library improvements
     * `mktemp` and `mktempdir` now take an optional argument to set which
       directory the temporary file or directory is created in.
 
+    * New, generational garbage collector ([#5227]). In some use cases it can reduce the worst case time for garbage collection by a factor of ten. Julia can now be used for soft real-time applications like audio processing or high-level robot control.
+
     * New garbage collector tracked memory allocator functions: `jl_malloc`, `jl_calloc`,
     `jl_realloc`, and `jl_free` with libc API ([[#12034]]).
 
