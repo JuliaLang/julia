@@ -21,14 +21,27 @@ function add_all_docs(it, k)
     end
 end
 
+function sym_exported(obj::ANY, m, exports)
+    if isa(obj, Union{Function,DataType,Module})
+        return symbol(string(obj)) in exports
+    elseif isa(obj, IntrinsicFunction)
+        # Only example seems to be cglobal for now
+        return true
+    elseif isa(obj, Docs.Binding)
+        return (obj::Docs.Binding).var in exports
+    else
+        return false
+    end
+end
+
 function add_all_docs_meta(m::Module,meta)
     exports = names(m)
-    for (sym, d) in meta
-        isexported = sym in exports
+    for (obj, d) in meta
+        isexported = sym_exported(obj, m, exports)
         if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
-            add_all_docs(d.meta, (sym,isexported))
+            add_all_docs(d.meta, (obj, isexported))
         else
-            all_docs[d] = (sym,isexported)
+            all_docs[d] = (obj, isexported)
         end
     end
 end
@@ -43,7 +56,7 @@ function add_all_docs_mod(m::Module)
     for name in names(m)
         try
             sub_m = getfield(m,name)
-            isa(sub_m,Module) || continue
+            isa(sub_m, Module) || continue
             if !(sub_m in keys(mod_added))
                 add_all_docs_mod(sub_m)
             end
