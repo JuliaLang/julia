@@ -192,7 +192,7 @@ end
 if VERSION < v"0.4.0-dev+3413"
     # based on pipe in base/process.jl:
     import Base: AbstractCmd, Redirectable
-    function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+    function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
         if append && stdout === nothing && stderr === nothing
             error("append set to true, but no output redirections specified")
         end
@@ -207,10 +207,13 @@ if VERSION < v"0.4.0-dev+3413"
         end
         return cmd
     end
-    pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
-    pipe(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipe(cmd, stdin=src)
-    pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
-    export pipe
+    pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
+    pipeline(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipeline(cmd, stdin=src)
+    pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
+    export pipeline
+elseif VERSION < v"0.4.0-dev+6987"
+    const pipeline = Base.pipe
+    export pipeline
 end
 
 function rewrite_dict(ex)
@@ -405,6 +408,8 @@ function _compat(ex::Expr)
             else
                 Expr(:tuple, args...)
             end
+        elseif VERSION < v"0.4.0-dev" && f == :Union
+            ex = Expr(:call,:Union,ex.args[2:end]...)
         end
     elseif ex.head == :macrocall
         f = ex.args[1]
@@ -646,6 +651,14 @@ if VERSION < v"0.4.0-dev+6578"
     const ≈ = isapprox
     ≉(x,y) = !(x ≈ y)
     export ≈, ≉
+end
+
+# Use as Compat.Linspace to get improved linspace in both 0.3 and 0.4
+if VERSION < v"0.4.0-dev+6110"
+    include("linspace.jl")
+    const linspace = LazyLinSpace.linspace
+else
+    const linspace = Base.linspace
 end
 
 end # module

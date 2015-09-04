@@ -161,8 +161,8 @@ end
 @test CartesianTest.f(1,2,3,4) == (1,2,3,4)
 @test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
 
-@test readall(pipe(`echo hello`, `sort`)) == "hello\n"
-@test success(pipe(`true`, `true`))
+@test readall(pipeline(`echo hello`, `sort`)) == "hello\n"
+@test success(pipeline(`true`, `true`))
 
 let convert_funcs_and_types =
     ((integer, :Integer), (signed, :Signed), (unsigned, :Unsigned),
@@ -458,3 +458,55 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 @test [1,2,3] ≈ [1,2,3+1e-9]
 @test [0,1] ≈ [1e-9, 1]
 @test [0,1] ≉ [1e-3, 1]
+
+# linspace (some of the julia 0.4 tests)
+@test [Compat.linspace(0.1,0.3,3);]     == [1:3;]./10
+@test [Compat.linspace(0.0,0.3,4);]     == [0:3;]./10
+@test [Compat.linspace(0.3,-0.1,5);]    == [3:-1:-1;]./10
+@test [Compat.linspace(0.1,-0.3,5);]    == [1:-1:-3;]./10
+@test [Compat.linspace(0.0,1.0,11);]    == [0:10;]./10
+@test [Compat.linspace(0.0,1.0,0);]     == []
+@test [Compat.linspace(0.0,-1.0,0);]    == []
+@test [Compat.linspace(0.0,-1.0,11);]   == [0:-1:-10;]./10
+@test [Compat.linspace(1.0,27.0,1275);] == [49:1323;]./49
+@test [Compat.linspace(0.0,2.1,4);]     == [0:7:21;]./10
+@test [Compat.linspace(0.0,3.3,4);]     == [0:11:33;]./10
+@test [Compat.linspace(0.1,3.4,4);]     == [1:11:34;]./10
+@test [Compat.linspace(0.0,3.9,4);]     == [0:13:39;]./10
+@test [Compat.linspace(0.1,4.0,4);]     == [1:13:40;]./10
+@test [Compat.linspace(1.1,3.3,3);]     == [11:11:33;]./10
+@test [Compat.linspace(0.3,1.1,9);]     == [3:1:11;]./10
+@test [Compat.linspace(0.0,0.0,1);]     == [0.0]
+@test [Compat.linspace(0.0,0.0,1);]     == [0.0]
+
+for T = (Float32, Float64)
+    z = zero(T)
+    u = eps(z)
+    @test first(Compat.linspace(u,u,0)) == u
+    @test last(Compat.linspace(u,u,0)) == u
+    @test first(Compat.linspace(-u,u,0)) == -u
+    @test last(Compat.linspace(-u,u,0)) == u
+    @test [Compat.linspace(-u,u,0);] == []
+    @test [Compat.linspace(-u,-u,1);] == [-u]
+    @test [Compat.linspace(-u,u,2);] == [-u,u]
+    @test [Compat.linspace(-u,u,3);] == [-u,0,u]
+    @test [Compat.linspace(-u,u,4);] == [-u,0,0,u]
+    @test [Compat.linspace(-u,u,4);][2] === -z
+    @test [Compat.linspace(-u,u,4);][3] === z
+    @test first(Compat.linspace(-u,-u,0)) == -u
+    @test last(Compat.linspace(-u,-u,0)) == -u
+    @test first(Compat.linspace(u,-u,0)) == u
+    @test last(Compat.linspace(u,-u,0)) == -u
+    @test [Compat.linspace(u,-u,0);] == []
+    @test [Compat.linspace(u,u,1);] == [u]
+    @test [Compat.linspace(u,-u,2);] == [u,-u]
+    @test [Compat.linspace(u,-u,3);] == [u,0,-u]
+    @test [Compat.linspace(u,-u,4);] == [u,0,0,-u]
+    @test [Compat.linspace(u,-u,4);][2] === z
+    @test [Compat.linspace(u,-u,4);][3] === -z
+    v = [Compat.linspace(-u,u,12);]
+    @test length(v) == 12
+    @test issorted(v) && unique(v) == [-u,0,0,u]
+    @test [-3u:u:3u;] == [Compat.linspace(-3u,3u,7);] == [-3:3;].*u
+    @test [3u:-u:-3u;] == [Compat.linspace(3u,-3u,7);] == [3:-1:-3;].*u
+end
