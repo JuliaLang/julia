@@ -5658,14 +5658,14 @@ invoke
 doc"""
     parse(str, start; greedy=true, raise=true)
 
-Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If `greedy` is `true` (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default), syntax errors other than incomplete expressions will raise an error. If `raise` is `false`, `parse` will return an expression that will raise an error upon evaluation.
+Parse the expression string and return an expression (which could later be passed to eval for execution). `start` is the index of the first character to start parsing. If `greedy` is `true` (default), `parse` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default), syntax errors other than incomplete expressions will raise an error. If `raise` is `false`, `parse` will return an expression that will raise an error upon evaluation.
 """
 parse(str, start)
 
 doc"""
     parse(str; raise=true)
 
-Parse the whole string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If `raise` is `true` (default), syntax errors will raise an error; otherwise, `parse` will return an expression that will raise an error upon evaluation.
+Parse the expression string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If `raise` is `true` (default), syntax errors will raise an error; otherwise, `parse` will return an expression that will raise an error upon evaluation.
 """
 parse(str)
 
@@ -7221,7 +7221,7 @@ plan_rfft
 doc"""
     @timev
 
-This is a verbose version of the `@time` macro, it first prints the same information as `@time`, then any non-zero memory allocation counters, and then returns the value of the expression.
+This is a verbose version of the `@time` macro. It first prints the same information as `@time`, then any non-zero memory allocation counters, and then returns the value of the expression.
 """
 :@timev
 
@@ -7959,7 +7959,7 @@ prevind
 doc"""
     setenv(command, env; dir=working_dir)
 
-Set environment variables to use when running the given command. `env` is either a dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or zero or more `"var"=>val` pair arguments. In order to modify (rather than replace) the existing environment, create `env` by `copy(ENV)` and then setting `env["var"]=val` as desired, or use `withenv`.
+Set environment variables to use when running the given `command`. `env` is either a dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or zero or more `"var"=>val` pair arguments. In order to modify (rather than replace) the existing environment, create `env` by `copy(ENV)` and then setting `env["var"]=val` as desired, or use `withenv`.
 
 The `dir` keyword argument can be used to specify a working directory for the command.
 """
@@ -11061,7 +11061,7 @@ doc"""
 ```rst
 ..  esc(e::ANY)
 
-Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
+Only valid in the context of an ``Expr`` returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
 section of the Metaprogramming chapter of the manual for more details and examples.
 ```
 """
@@ -11628,7 +11628,7 @@ Evaluate an expression and return the value.
 doc"""
     eval([m::Module], expr::Expr)
 
-Evaluate an expression in the given module and return the result. Every module (except those defined with `baremodule`) has its own 1-argument definition of `eval`, which evaluates expressions in that module.
+Evaluate an expression in the given module and return the result. Every `Module` (except those defined with `baremodule`) has its own 1-argument definition of `eval`, which evaluates expressions in that module.
 """
 eval
 
