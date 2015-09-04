@@ -1741,7 +1741,7 @@ Fast Fourier transform (FFT) functions in Julia are
 implemented by calling functions from `FFTW
 <http://www.fftw.org>`_. By default, Julia does not use multi-threaded
 FFTW. Higher performance may be obtained by experimenting with
-multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
+multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
 .. function:: fft(A [, dims])
 
