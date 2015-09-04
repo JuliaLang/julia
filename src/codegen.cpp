@@ -4373,8 +4373,26 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.gensym_SAvalues.assign(n_gensyms, (Value*)NULL);
 
     // fetch env out of function object if we need it
-    if (hasCapt) {
+    if (hasCapt)
         ctx.envArg = emit_nthptr(fArg, offsetof(jl_function_t,env)/sizeof(jl_value_t*), tbaa_func);
+    // hoist loads of constant closed variables
+    for(i=0; i < captvinfoslen; i++) {
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(captvinfos,i),0);
+        assert(jl_is_symbol(s));
+        jl_varinfo_t &vi = ctx.vars[s];
+        if (!vi.isAssigned) {
+            vi.SAvalue = emit_var(s, vi.declType, &ctx, true);
+            if (store_unboxed_p(vi.declType))
+                vi.SAvalue = emit_unbox(julia_struct_to_llvm(vi.declType),
+                                        vi.SAvalue, vi.declType);
+            vi.hasGCRoot = false;
+            if (jl_is_array_type(vi.declType)) {
+                maybe_alloc_arrayvar(s, &ctx);
+                jl_arrayvar_t *av = arrayvar_for((jl_value_t*)s, &ctx);
+                if (av != NULL)
+                    assign_arrayvar(*av, vi.SAvalue);
+            }
+        }
     }
 
     // step 8. set up GC frame
