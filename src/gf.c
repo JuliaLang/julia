@@ -907,7 +907,8 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
     jl_function_t *func = NULL;
-    JL_GC_PUSH3(&ex, &oldast, &func);
+    jl_value_t *linenum = NULL;
+    JL_GC_PUSH4(&ex, &oldast, &func, &linenum);
     if (jl_is_expr(m->func->linfo->ast))
         oldast = (jl_expr_t*)m->func->linfo->ast;
     else
@@ -935,10 +936,12 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
     func = with_appended_env(m->func, env);
     jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
     jl_cellset(ex->args, 1, body);
-    jl_expr_t *linenode = jl_exprn(line_sym, 2);
+    linenum = jl_box_long(m->func->linfo->line);
+    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type,
+                                         m->func->linfo->file,
+                                         linenum
+                                         );
     jl_cellset(body->args, 0, linenode);
-    jl_cellset(linenode->args, 0, jl_box_long(m->func->linfo->line));
-    jl_cellset(linenode->args, 1, m->func->linfo->file);
     jl_cellset(body->args, 1, jl_apply(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
     if (m->tvars != jl_emptysvec) {
         // mark this function as having the same static parameters as the generator

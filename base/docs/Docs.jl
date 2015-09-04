@@ -288,7 +288,7 @@ isexpr(x, ts...) = any(T->isa(T, Type) && isa(x, T), ts)
 
 function unblock(ex)
     isexpr(ex, :block) || return ex
-    exs = filter(ex->!isexpr(ex, :line), ex.args)
+    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
     length(exs) == 1 || return ex
     return unblock(exs[1])
 end

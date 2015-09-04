@@ -335,9 +335,9 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     li->line = 0;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_value_t *body1 = skip_meta(jl_lam_body((jl_expr_t*)ast)->args);
-        if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
-            li->file = (jl_sym_t*)jl_exprarg(body1, 1);
-            li->line = jl_unbox_long(jl_exprarg(body1, 0));
+        if (jl_is_linenode(body1)) {
+            li->file = (jl_sym_t*)jl_fieldref(body1, 0);
+            li->line = jl_unbox_long(jl_fieldref(body1, 1));
         }
     }
     li->module = ctx;
