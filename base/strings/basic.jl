@@ -196,7 +196,7 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
-typealias Chars Union{Char,AbstractVector{Char},Set{Char}}
+typealias Chars Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
 typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
 
