@@ -2120,7 +2120,7 @@ functionloc(m)
 doc"""
     stride(A, k)
 
-Returns the distance in memory (in number of elements) between adjacent elements in dimension k
+Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 """
 stride
 
@@ -2493,7 +2493,7 @@ svd(A::AbstractMatrix, B::AbstractMatrix)
 doc"""
     ones(type, dims)
 
-Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
 """
 ones(t,dims)
 
@@ -6415,14 +6415,14 @@ beta
 doc"""
     eye(n)
 
-n-by-n identity matrix
+`n`-by-`n` identity matrix
 """
 eye(n::Int)
 
 doc"""
     eye(m, n)
 
-m-by-n identity matrix
+`m`-by-`n` identity matrix
 """
 eye(m, n)
 
@@ -7749,14 +7749,14 @@ ishermitian
 doc"""
     sind(x)
 
-Compute sine of `x`, where `x` is in degrees
+Compute sine of `x`, where `x` is in degrees.
 """
 sind
 
 doc"""
     iseltype(A,T)
 
-Tests whether `A` or its elements are of type ``T``
+Tests whether `A` or its elements are of type `T`.
 """
 iseltype
 
@@ -10778,7 +10778,7 @@ isxdigit
 doc"""
     fill(x, dims)
 
-Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10x10 array of floats, with each element initialized to 1.0.
+Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10x10 array of floats, with each element initialized to `1.0`.
 
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(), dims)` will return an array filled with the result of evaluating `Foo()` once.
 """

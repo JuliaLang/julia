@@ -571,7 +571,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute sine of ``x``\ , where ``x`` is in degrees
+   Compute sine of ``x``\ , where ``x`` is in degrees.
 
 .. function:: cosd(x)
 
