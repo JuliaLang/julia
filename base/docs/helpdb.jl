@@ -1125,9 +1125,9 @@ Compute a "2d histogram" with respect to the bins delimited by the edges given i
 hist2d!
 
 doc"""
-    fieldtype(type, name::Symbol | index::Int)
+    fieldtype(T, name::Symbol | index::Int)
 
-Determine the declared type of a field (specified by name or index) in a composite type.
+Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 """
 fieldtype
 
@@ -2059,9 +2059,9 @@ Waits till `testcb` returns `true` or for `secs` seconds, whichever is earlier. 
 timedwait
 
 doc"""
-    sizeof(type)
+    sizeof(T)
 
-Size, in bytes, of the canonical binary representation of the given type, if any.
+Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
 """
 sizeof(::Type)
 
@@ -4107,7 +4107,7 @@ rest
 doc"""
     getfield(value, name::Symbol)
 
-Extract a named field from a value of composite type. The syntax `a.b` calls `getfield(a, :b)`, and the syntax `a.(b)` calls `getfield(a, b)`.
+Extract a named field from a `value` of composite type. The syntax `a.b` calls `getfield(a, :b)`, and the syntax `a.(b)` calls `getfield(a, b)`.
 """
 getfield
 
@@ -4443,9 +4443,9 @@ collections (see ``reduce(op, itr)``).
 mapfoldl(f, op, itr)
 
 doc"""
-    realmax(type)
+    realmax(T)
 
-The highest finite value representable by the given floating-point type
+The highest finite value representable by the given floating-point DataType `T`.
 """
 realmax
 
@@ -4525,9 +4525,9 @@ Sum the results of calling function `f` on each element of `itr`.
 sum(f::Function, itr)
 
 doc"""
-    typemin(type)
+    typemin(T)
 
-The lowest value representable by the given (real) numeric type.
+The lowest value representable by the given (real) numeric DataType `T`.
 """
 typemin
 
@@ -4590,7 +4590,7 @@ Evaluates the arguments to the function call, determines their types, and calls 
 doc"""
     subtypes(T::DataType)
 
-Return a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.
+Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes are included, including those not visible in the current module.
 """
 subtypes
 
@@ -6128,9 +6128,9 @@ Create a string from any value using the `showall` function.
 repr
 
 doc"""
-    maxintfloat(type)
+    maxintfloat(T)
 
-The largest integer losslessly representable by the given floating-point type
+The largest integer losslessly representable by the given floating-point DataType `T`.
 """
 maxintfloat
 
@@ -8473,7 +8473,7 @@ isperm
 doc"""
     super(T::DataType)
 
-Return the supertype of DataType T
+Return the supertype of DataType `T`.
 """
 super
 
@@ -11549,9 +11549,9 @@ Advance the stream until before the first character for which `predicate` return
 skipchars
 
 doc"""
-    realmin(type)
+    realmin(T)
 
-The smallest in absolute value non-subnormal value representable by the given floating-point type
+The smallest in absolute value non-subnormal value representable by the given floating-point DataType `T`.
 """
 realmin
 
