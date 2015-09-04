@@ -147,13 +147,13 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
+   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an ``Array{UInt8,1}``\ , i.e. an array of bytes.
 
 .. function:: bytes2hex(bin_arr::Array{UInt8, 1})
 
    .. Docstring generated from Julia source
 
-   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
+   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ``ASCIIString``\ .
 
 General Number Functions and Constants
 --------------------------------------
@@ -200,27 +200,27 @@ General Number Functions and Constants
 
 .. data:: Inf
 
-   Positive infinity of type Float64
+   Positive infinity of type ``Float64``
 
 .. data:: Inf32
 
-   Positive infinity of type Float32
+   Positive infinity of type ``Float32``
 
 .. data:: Inf16
 
-   Positive infinity of type Float16
+   Positive infinity of type ``Float16``
 
 .. data:: NaN
 
-   A not-a-number value of type Float64
+   A not-a-number value of type ``Float64``
 
 .. data:: NaN32
 
-   A not-a-number value of type Float32
+   A not-a-number value of type ``Float32``
 
 .. data:: NaN16
 
-   A not-a-number value of type Float16
+   A not-a-number value of type ``Float16``
 
 .. function:: issubnormal(f) -> Bool
 
@@ -537,7 +537,7 @@ Integers
 
 BigFloats
 ---------
-The `BigFloat` type implements arbitrary-precision floating-point arithmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
+The ``BigFloat`` type implements arbitrary-precision floating-point arithmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
 
 .. function:: precision(num::AbstractFloat)
 
@@ -549,19 +549,19 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
    .. Docstring generated from Julia source
 
-   Get the precision (in bits) currently used for BigFloat arithmetic.
+   Get the precision (in bits) currently used for ``BigFloat`` arithmetic.
 
 .. function:: set_bigfloat_precision(x::Int64)
 
    .. Docstring generated from Julia source
 
-   Set the precision (in bits) to be used to BigFloat arithmetic.
+   Set the precision (in bits) to be used to ``BigFloat`` arithmetic.
 
 .. function:: with_bigfloat_precision(f::Function,precision::Integer)
 
    .. Docstring generated from Julia source
 
-   Change the BigFloat arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
+   Change the ``BigFloat`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
 
    .. code-block:: julia
 
@@ -641,7 +641,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
+   Fill the array ``A`` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
 .. function:: randexp([rng], [dims...])
 
@@ -653,7 +653,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Fill the array A with random numbers following the exponential distribution (with scale 1).
+   Fill the array ``A`` with random numbers following the exponential distribution (with scale 1).
 
 .. function:: randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}
 
