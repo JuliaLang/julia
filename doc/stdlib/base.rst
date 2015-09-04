@@ -415,7 +415,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Return the supertype of DataType T
+   Return the supertype of DataType ``T``\ .
 
 .. function:: issubtype(type1, type2)
 
@@ -433,7 +433,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Return a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.
+   Return a list of immediate subtypes of DataType ``T``\ . Note that all currently loaded subtypes are included, including those not visible in the current module.
 
 .. function:: typemin(type)
 
@@ -499,7 +499,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Extract a named field from a value of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ , and the syntax ``a.(b)`` calls ``getfield(a, b)``\ .
+   Extract a named field from a ``value`` of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ , and the syntax ``a.(b)`` calls ``getfield(a, b)``\ .
 
 .. function:: setfield!(value, name::Symbol, x)
 
