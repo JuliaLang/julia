@@ -313,7 +313,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Returns the "parent array" of an array view type (e.g., SubArray), or the array itself if it is not a view
+   Returns the "parent array" of an array view type (e.g., ``SubArray``\ ), or the array itself if it is not a view
 
 .. function:: parentindexes(A)
 
@@ -471,7 +471,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or 0 if not found.
+   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
 
 .. function:: findprev(predicate, A, i)
 
@@ -813,7 +813,7 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
+   Performs a bitwise not operation on ``B``. See :ref:`~ operator <~>`.
 
 .. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -825,7 +825,7 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation on B.
+   Performs a left rotation operation on ``B``\ .
 
 .. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -843,7 +843,7 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on B.
+   Performs a right rotation operation on ``B``\ .
 
 .. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 

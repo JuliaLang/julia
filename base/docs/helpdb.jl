@@ -1448,7 +1448,7 @@ ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
 doc"""
     ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-Performs a right rotation operation on B.
+Performs a right rotation operation on `B`.
 """
 ror!(B::BitArray{1}, i::Integer)
 
@@ -6752,7 +6752,7 @@ doc"""
 ```rst
 ..  flipbits!(B::BitArray{N}) -> BitArray{N}
 
-Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
+Performs a bitwise not operation on ``B``. See :ref:`~ operator <~>`.
 ```
 """
 flipbits!
@@ -8405,7 +8405,7 @@ unsafe_trunc
 doc"""
     parent(A)
 
-Returns the "parent array" of an array view type (e.g., SubArray), or the array itself if it is not a view
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if it is not a view
 """
 parent
 
@@ -9235,7 +9235,7 @@ with_bigfloat_precision
 doc"""
     searchindex(string, substring, [start])
 
-Similar to `search`, but return only the start index at which the substring is found, or 0 if it is not.
+Similar to `search`, but return only the start index at which the substring is found, or `0` if it is not.
 """
 searchindex
 
@@ -9274,7 +9274,7 @@ Tridiagonal
 doc"""
     findprev(A, i)
 
-Find the previous index <= `i` of a non-zero element of `A`, or 0 if not found.
+Find the previous index <= `i` of a non-zero element of `A`, or `0` if not found.
 """
 findprev(A,i)
 
@@ -10794,7 +10794,7 @@ rol!(::BitArray,::BitArray,::Integer)
 doc"""
     rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-Performs a left rotation operation on B.
+Performs a left rotation operation on `B`.
 """
 rol!(::BitArray,::Integer)
 
@@ -11154,7 +11154,7 @@ exponent
 doc"""
     rsearchindex(string, substring, [start])
 
-Similar to `rsearch`, but return only the start index at which the substring is found, or 0 if it is not.
+Similar to `rsearch`, but return only the start index at which the substring is found, or `0` if it is not.
 """
 rsearchindex
 

@@ -235,13 +235,13 @@
 
    .. Docstring generated from Julia source
 
-   Similar to ``search``\ , but return only the start index at which the substring is found, or 0 if it is not.
+   Similar to ``search``\ , but return only the start index at which the substring is found, or ``0`` if it is not.
 
 .. function:: rsearchindex(string, substring, [start])
 
    .. Docstring generated from Julia source
 
-   Similar to ``rsearch``\ , but return only the start index at which the substring is found, or 0 if it is not.
+   Similar to ``rsearch``\ , but return only the start index at which the substring is found, or ``0`` if it is not.
 
 .. function:: contains(haystack, needle)
 
