@@ -187,8 +187,14 @@ Command line option changes
   * The `--depwarn={yes|no|error}` option enables/disables syntax and method deprecation warnings,
     or turns them into errors ([#9294]).
 
-Compiler improvements
----------------------
+  * Some command line options are slated for deprecation / removal
+    - `-f, --no-startup` Don't load ~/.juliarc (deprecated, use --startup-file=no)
+    - `-F` Load ~/.juliarc (deprecated, use --startup-file=yes)`
+    - `-P, --post-boot <expr>`  Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)
+    - `--no-history-file`  Don't load history file (deprecated, use --history-file=no)
+
+Compiler/Runtime improvements
+-----------------------------
 
   * Functions may be annotated with metadata (`:meta` expressions) to be used by the compiler ([#8297]).
 
@@ -197,6 +203,8 @@ Compiler improvements
   * Loads from heap-allocated immutables are hoisted out of loops in more cases ([#8867]).
 
   * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
+
+  * New generational garbage collector which greatly reduces GC overhead for many commmon workloads ([#5227]).
 
 Library improvements
 --------------------
@@ -1382,6 +1390,7 @@ Too numerous to mention.
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
+[#5227]: https://github.com/JuliaLang/julia/issues/5227
 [#5255]: https://github.com/JuliaLang/julia/issues/5255
 [#5263]: https://github.com/JuliaLang/julia/issues/5263
 [#5275]: https://github.com/JuliaLang/julia/issues/5275
