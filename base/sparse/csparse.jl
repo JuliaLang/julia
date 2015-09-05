@@ -19,7 +19,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 combine::Union{Function,Base.Func})
 
     if length(I) == 0;
-        return spzeros(eltype(V),nrow,ncol)
+        return spzeros(eltype(V), Ti, nrow,ncol)
     end
     N = length(I)
     if N != length(J) || N != length(V)
@@ -86,7 +86,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                     Ri[pdest] = j
                     Rx[pdest] = Rx[p]
                 end
-                pdest += 1
+                pdest += one(Ti)
             end
         end
 
