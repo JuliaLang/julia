@@ -108,8 +108,7 @@ void ti_initthread(int16_t tid)
 #endif
 
     jl_all_task_states[tid].ptls = jl_get_ptls_states();
-
-    jl_install_thread_signal_handler();
+    jl_all_task_states[tid].signal_stack = jl_install_thread_signal_handler();
 }
 
 // all threads call this function to run user code

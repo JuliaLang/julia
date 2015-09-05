@@ -41,28 +41,8 @@ DLLEXPORT void jl_sigint_action(void)
 static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size);
 
 #if defined(_WIN32)
-#define sig_stack_size 131072 // 128k reserved for SEGV handling
-#include <signals-win.c>
+#include "signals-win.c"
 #else
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <pthread.h>
-#if defined(JL_USE_INTEL_JITEVENTS)
-unsigned sig_stack_size = SIGSTKSZ;
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
-static void *signal_stack;
-static int is_addr_on_stack(void *addr);
-#ifdef __APPLE__
-#include "signals-apple.c"
-#elif defined(__FreeBSD__)
-#include "signals-bsd.c"
-#else
-#include "signals-linux.c"
-#endif
 #include "signals-unix.c"
 #endif
 
