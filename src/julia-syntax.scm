@@ -1693,7 +1693,7 @@
                               (call (top fieldtype) (call (top typeof) ,aa) ,bb)
                               ,(expand-forms rhs)))))))
 
-           ((tuple)
+           ((tuple =>)
             ;; multiple assignment
             (let ((lhss (cdr (cadr e)))
                   (x    (caddr e)))
