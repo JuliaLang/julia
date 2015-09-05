@@ -2084,6 +2084,14 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
                 if (p != cachep)
                     jl_svecset(tt, i, cachep);
             }
+            jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
+            if (jl_is_datatype_singleton(tp)) {
+                if (tp->uid == -1) {
+                    tp = jl_recache_type(tp, start);
+                }
+                if ((jl_value_t*)p != tp->instance)
+                    jl_svecset(tt, i, tp->instance);
+            }
         }
         dt->uid = 0;
         t = (jl_datatype_t*)jl_cache_type_(dt);
@@ -2129,17 +2137,21 @@ static void jl_recache_types()
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         int offs = (int)(intptr_t)flagref_list.items[i++];
         jl_value_t *v, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        jl_datatype_t *dt;
+        jl_datatype_t *dt, *t;
         if (jl_is_datatype(o)) {
             dt = (jl_datatype_t*)o;
             v = dt->instance;
+            t = jl_recache_type(dt, i);
         }
         else {
             dt = (jl_datatype_t*)jl_typeof(o);
             v = o;
+            if (dt->uid == -1)
+                t = jl_recache_type(dt, i);
+            else
+                t = dt;
         }
         assert(dt);
-        jl_datatype_t *t = jl_recache_type(dt, i);
         if (t != dt) {
             jl_set_typeof(dt, (jl_value_t*)(ptrint_t)0x10); // invalidate the old value to help catch errors
             if ((jl_value_t*)dt == o) {
