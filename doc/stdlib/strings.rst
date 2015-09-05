@@ -116,6 +116,18 @@
        julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
        RegexMatch("angry,\nBad world")
 
+.. function:: @html_str -> Docs.HTML
+
+   .. Docstring generated from Julia source
+
+   Create an ``HTML`` object from a literal string.
+
+.. function:: @text_str -> Docs.Text
+
+   .. Docstring generated from Julia source
+
+   Create a ``Text`` object from a literal string.
+
 .. function:: normalize_string(s, normalform::Symbol)
 
    .. Docstring generated from Julia source
