@@ -94,15 +94,19 @@ function getdoc(mod, x)
         if symbol(x) in keys(Docs.keywords)
             return Any[Docs.keywords[symbol(x)]]
         end
-        v = if x[1] != '@'
-            eval(parse(ident(mod, x)))
+        if x[1] != '@'
+            v = eval(parse(ident(mod, x)))
+            isa(v, Colon) && (v = Base.colon)
+            return find_docs(v)
         else
-            Docs.Binding(eval(parse(mod)), symbol(x))
+            for m in [eval(parse(mod)); collect(keys(mod_added));]
+                try
+                    v = Docs.Binding(m, symbol(x))
+                    return find_docs(v)
+                end
+            end
+            error("Cannot find doc for $x")
         end
-        if isa(v, Colon)
-            v = Base.colon
-        end
-        return find_docs(v)
     catch e
         println(e)
         warn("Mod $mod $x")

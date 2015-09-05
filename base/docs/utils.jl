@@ -34,7 +34,11 @@ end
 writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
-"Create an `HTML` object from a literal string."
+"""
+    @html_str -> Docs.HTML
+
+Create an `HTML` object from a literal string.
+"""
 macro html_str(s)
     :(HTML($s))
 end
@@ -68,7 +72,11 @@ print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{Function}) = t.content(io)
 writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 
-"Create a `Text` object from a literal string."
+"""
+    @text_str -> Docs.Text
+
+Create a `Text` object from a literal string.
+"""
 macro text_str(s)
     :(Text($s))
 end
