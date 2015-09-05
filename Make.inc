@@ -678,7 +678,13 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR = @rpath/
   INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+  LLVM_MAJOR = $(shell echo $(LLVM_VER) | cut -d. -f1)
+  LLVM_MINOR = $(shell echo $(LLVM_VER) | cut -d. -f2)
+ifeq ($(LLVM_VER),svn)
+  DSYMUTIL = $(build_bindir)/llvm-dsymutil
+else ifeq ($(shell test (($(LLVM_MAJOR) -gt 3) -o (($(LLVM_MAJOR -eq 3) -a ($(LLVM_MINOR) -gt 7))))))
+  DSYMUTIL = $(build_bindir)/llvm-dsymutil
+else ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
   DSYMUTIL = dsymutil
 else
   DSYMUTIL = true -ignore
