@@ -1,10 +1,11 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
-
 // Windows
-//
+
+#define sig_stack_size 131072 // 128k reserved for SEGV handling
 static BOOL (*pSetThreadStackGuarantee)(PULONG);
+
 DLLEXPORT void gdblookup(ptrint_t ip);
-#define WIN32_LEAN_AND_MEAN
+
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
@@ -355,7 +356,7 @@ void jl_install_default_signal_handlers()
     SetUnhandledExceptionFilter(exception_handler);
 }
 
-void jl_install_thread_signal_handler()
+void *jl_install_thread_signal_handler()
 {
     // Ensure the stack overflow handler has enough space to collect the backtrace
     ULONG StackSizeInBytes = sig_stack_size;
@@ -364,4 +365,5 @@ void jl_install_thread_signal_handler()
             pSetThreadStackGuarantee = NULL;
         }
     }
+    return NULL;
 }

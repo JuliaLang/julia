@@ -1485,7 +1485,7 @@ typedef struct _jl_tls_states_t {
 typedef struct {
     jl_tls_states_t *ptls;
     uv_thread_t system_id;
-    void *signal_context; // bt_context_t
+    void *signal_stack;
 } jl_thread_task_state_t;
 
 #define jl_current_task (jl_get_ptls_states()->current_task)

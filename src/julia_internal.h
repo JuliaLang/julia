@@ -84,7 +84,7 @@ extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
-void jl_install_thread_signal_handler(void);
+void *jl_install_thread_signal_handler(void);
 
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;
