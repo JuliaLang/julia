@@ -518,7 +518,7 @@ void lookup_pointer(DIContext *context, char **name, size_t *line,
     if (inlineinfo.getNumberOfFrames() > 1) {
         topinfo = inlineinfo.getFrame(inlineinfo.getNumberOfFrames() - 1);
         jl_copy_str(inlinedat_file, topinfo.FileName.c_str());
-        *inlinedat_line = topinfo.getLine();
+        *inlinedat_line = topinfo.Line;
     }
 #endif
 
