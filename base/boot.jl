@@ -282,6 +282,8 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
 
+Void() = nothing
+
 Expr(args::ANY...) = _expr(args...)
 
 _new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
