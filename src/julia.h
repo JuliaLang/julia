@@ -860,7 +860,6 @@ int jl_is_type(jl_value_t *v);
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 DLLEXPORT int jl_has_typevars(jl_value_t *v);
 DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
-int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_type_union(jl_svec_t *types);
 jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n);
