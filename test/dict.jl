@@ -120,7 +120,7 @@ let
 end
 
 @test_throws ArgumentError first(Dict())
-@test first(Dict(:f=>2)) == :f=>2
+@test first(Dict(:f=>2)) == (:f=>2)
 
 # issue #1821
 let
