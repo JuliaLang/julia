@@ -156,6 +156,12 @@ Getting Around
 
    This is only needed if your module depends on a file that is not used via ``include``\ . It has no effect outside of compilation.
 
+.. function:: apropos(string)
+
+   .. Docstring generated from Julia source
+
+   Search through all documention for a string, ignoring case.
+
 .. function:: which(f, types)
 
    .. Docstring generated from Julia source

@@ -21,7 +21,7 @@ srand(123)
 @test α + UniformScaling(1.0) == UniformScaling(1.0) + α
 @test α - UniformScaling(1.0) == -(UniformScaling(1.0) - α)
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,UniformScaling(one(Float32))) == "Base.LinAlg.UniformScaling{Float32}\n1.0*I"
+@test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
 
 λ = complex(randn(),randn())
 J = UniformScaling(λ)
