@@ -97,6 +97,9 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
+d = SharedArray(Float64, (2,3))
+@test isa(d[:,2], Vector{Float64})
+
 ### SharedArrays from a file
 
 # Mapping an existing file
@@ -183,10 +186,10 @@ d = Base.shmem_rand(dims)
 s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
-pids_ds = procs(ds)
-remotecall_fetch(pids_ds[findfirst(id->(id != myid()), pids_ds)], setindex!, ds, 1.0, 1:10)
+pids_d = procs(d)
+remotecall_fetch(pids_d[findfirst(id->(id != myid()), pids_d)], setindex!, d, 1.0, 1:10)
 @test ds != d
-@test s == d
+@test s != d
 
 
 # SharedArray as an array
