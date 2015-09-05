@@ -21,14 +21,27 @@ function add_all_docs(it, k)
     end
 end
 
+function sym_exported(obj::ANY, m, exports)
+    if isa(obj, Union{Function,DataType,Module})
+        return symbol(string(obj)) in exports
+    elseif isa(obj, IntrinsicFunction)
+        # Only example seems to be cglobal for now
+        return true
+    elseif isa(obj, Docs.Binding)
+        return (obj::Docs.Binding).var in exports
+    else
+        return false
+    end
+end
+
 function add_all_docs_meta(m::Module,meta)
     exports = names(m)
-    for (sym, d) in meta
-        isexported = sym in exports
+    for (obj, d) in meta
+        isexported = sym_exported(obj, m, exports)
         if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
-            add_all_docs(d.meta, (sym,isexported))
+            add_all_docs(d.meta, (obj, isexported))
         else
-            all_docs[d] = (sym,isexported)
+            all_docs[d] = (obj, isexported)
         end
     end
 end
@@ -43,7 +56,7 @@ function add_all_docs_mod(m::Module)
     for name in names(m)
         try
             sub_m = getfield(m,name)
-            isa(sub_m,Module) || continue
+            isa(sub_m, Module) || continue
             if !(sub_m in keys(mod_added))
                 add_all_docs_mod(sub_m)
             end
@@ -57,25 +70,42 @@ add_all_docs_mod(Base)
 
 println("Collect $(length(all_docs)) Docs")
 
+function find_docs(v)
+    docs = []
+    for mod in keys(mod_added)
+        try
+            meta = Docs.meta(mod)[v]
+            if isa(meta, Base.Docs.FuncDoc) || isa(meta, Base.Docs.TypeDoc)
+                append!(docs, collect(values(meta.meta)))
+            else
+                push!(docs, meta)
+            end
+        end
+    end
+    if isempty(docs)
+        error("Cannot find doc for $v")
+    end
+    return docs
+end
+
 function getdoc(mod, x)
     try
         x = unescape_string(x)
         if symbol(x) in keys(Docs.keywords)
             return Any[Docs.keywords[symbol(x)]]
         end
-        v = if x[1] != '@'
-            eval(parse(ident(mod, x)))
+        if x[1] != '@'
+            v = eval(parse(ident(mod, x)))
+            isa(v, Colon) && (v = Base.colon)
+            return find_docs(v)
         else
-            Docs.Binding(eval(parse(mod)), symbol(x))
-        end
-        if isa(v, Colon)
-            v = Base.colon
-        end
-        M = Docs.meta(Base)
-        if isa(M[v], Base.Docs.FuncDoc) || isa(M[v], Base.Docs.TypeDoc)
-            return collect(values(M[v].meta))
-        else
-            return Any[M[v]]
+            for m in [eval(parse(mod)); collect(keys(mod_added));]
+                try
+                    v = Docs.Binding(m, symbol(x))
+                    return find_docs(v)
+                end
+            end
+            error("Cannot find doc for $x")
         end
     catch e
         println(e)
