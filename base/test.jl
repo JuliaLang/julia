@@ -2,7 +2,7 @@
 
 module Test
 
-export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
 
 abstract Result
 type Success <: Result
@@ -104,11 +104,6 @@ macro test_throws(args...)
         extype = args[1]
     end
     :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(esc(extype))))
-end
-
-macro test_fails(ex)
-    Base.warn_once("@test_fails is deprecated, use @test_throws instead.")
-    :(@test_throws $ex Exception)
 end
 
 approx_full(x::AbstractArray) = x
