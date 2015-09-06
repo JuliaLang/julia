@@ -2008,13 +2008,13 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
             return builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
         }
         else {
-            at = at->getPointerTo();
+            Type *atp = at->getPointerTo();
             Value *varg1 = arg1.V;
-            if (varg1->getType() != at)
-                builder.CreatePointerCast(varg1, at);
+            if (varg1->getType() != atp)
+                builder.CreatePointerCast(varg1, atp);
             Value *varg2 = arg2.V;
-            if (varg2->getType() != at)
-                builder.CreatePointerCast(varg2, at);
+            if (varg2->getType() != atp)
+                builder.CreatePointerCast(varg2, atp);
             jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             size_t l = jl_svec_len(types);
@@ -4366,7 +4366,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 topfile,                            // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,  // Line
                 // Variable type
-                julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig));
+                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,specsig));
 #else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag

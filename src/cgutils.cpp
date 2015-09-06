@@ -1585,6 +1585,9 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
 {
     assert(constant != NULL);
 
+    if (isa<UndefValue>(constant))
+	return NULL;
+
     ConstantInt *cint = dyn_cast<ConstantInt>(constant);
     if (cint != NULL) {
         assert(jl_is_datatype(jt));
