@@ -3347,3 +3347,13 @@ foo12967(x, ::TupleType12967) = 2
 
 # issue #13083
 @test Void() === nothing
+
+# issue discovered in #11973
+for j = 1:1
+    x = try
+        error()
+        2
+    catch
+        continue
+    end
+end
