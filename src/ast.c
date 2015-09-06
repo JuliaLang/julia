@@ -337,7 +337,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return temp;
                 }
                 jl_value_t *scmv = NULL, *temp = NULL;
-                JL_GC_PUSH(&scmv);
+                JL_GC_PUSH1(&scmv);
                 if (sym == label_sym) {
                     scmv = scm_to_julia_(car_(e),0);
                     temp = jl_new_struct(jl_labelnode_type, scmv);
