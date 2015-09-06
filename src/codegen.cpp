@@ -696,7 +696,11 @@ static void jl_setup_module(Module *m, bool add)
 #endif
 #ifdef LLVM37
     if (jl_ExecutionEngine) {
+#ifdef LLVM38
         m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
+#else
+        m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+#endif
         m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     }
 #elif LLVM36
@@ -4172,7 +4176,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SP,                                 // Scope (current function will be fill in later)
                 argname->name,                      // Variable name
                 i+1,                                // Argument number (1-based)
-                fil,                                // File
+                topfile,                            // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,  // Line
                 // Variable type
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig));
@@ -4615,10 +4619,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
                     // set the DebugLoc "inlinedAt" parameter.
 #ifdef LLVM37
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,dfil);
+                    MDNode *inlineLocMd = DebugLoc::get(ctx.lineno, 1, funcscope, NULL).getAsMDNode();
 #else
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
-#endif
                     MDNode *inlineLocMd = DebugLoc::get(ctx.lineno, 1, funcscope, NULL).getAsMDNode(jl_LLVMContext);
+#endif
                     loc = DebugLoc::get(lno, 1, scope, inlineLocMd);
                 }
                 builder.SetCurrentDebugLocation(loc);
@@ -5639,8 +5644,13 @@ extern "C" void jl_init_codegen(void)
     mbuilder = new MDBuilder(getGlobalContext());
 
 #ifdef LLVM37
+#ifdef LLVM38
     m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
+#else
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+#endif
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
 #elif LLVM36
