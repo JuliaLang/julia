@@ -2072,9 +2072,9 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    Compute the cross-correlation of two vectors.
 
-The following functions are defined within the ``Base.FFTW`` module.
-
 .. currentmodule:: Base.FFTW
+
+The following functions are defined within the ``Base.FFTW`` module.
 
 .. function:: r2r(A, kind [, dims])
 
