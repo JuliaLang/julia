@@ -261,7 +261,9 @@ DICompositeType jl_di_func_sig;
 static Value *V_null;
 static Type *NoopType;
 static Value *literal_pointer_val(jl_value_t *p);
-static Type *julia_type_to_llvm(jl_value_t *jt);
+extern "C" {
+DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt);
+}
 static bool type_is_ghost(Type *ty)
 {
     return (ty == T_void || ty->isEmptyTy());
