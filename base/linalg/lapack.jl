@@ -3020,6 +3020,9 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             n = chksquare(A)
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
+            if n == 0
+                return A, ipiv
+            end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
