@@ -1226,7 +1226,7 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Get a module's enclosing ``Module``\ . ``Main`` is its own parent.
+   Get a module's enclosing ``Module``\ . ``Main`` is its own parent, as is ``LastMain`` after ``workspace()``\ .
 
 .. function:: current_module() -> Module
 
