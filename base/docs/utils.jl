@@ -318,21 +318,8 @@ function docsearch(haystack::FuncDoc, needle)
     false
 end
 
-## Recursive Markdown search
-docsearch(haystack::Markdown.BlockQuote, needle) = docsearch(haystack.content, needle)
-docsearch(haystack::Markdown.Bold, needle) = docsearch(haystack.text, needle)
-docsearch(haystack::Markdown.Code, needle) = docsearch(haystack.code, needle)
-docsearch(haystack::Markdown.Header, needle) = docsearch(haystack.text, needle)
-docsearch(haystack::Markdown.HorizontalRule, needle) = false
-docsearch(haystack::Markdown.Image, needle) = docsearch(haystack.alt, needle)
-docsearch(haystack::Markdown.Italic, needle) = docsearch(haystack.text, needle)
-docsearch(haystack::Markdown.LaTeX, needle) = docsearch(haystack.formula, needle)
-docsearch(haystack::Markdown.LineBreak, needle) = false
-docsearch(haystack::Markdown.Link, needle) = docsearch(haystack.text, needle) # URL too?
-docsearch(haystack::Markdown.List, needle) = docsearch(haystack.items, needle)
-docsearch(haystack::Markdown.MD, needle) = docsearch(haystack.content, needle)
-docsearch(haystack::Markdown.Paragraph, needle) = docsearch(haystack.content, needle)
-docsearch(haystack::Markdown.Table, needle) = docsearch(haystack.rows, needle)
+## Markdown: simply search the plaintext
+docsearch(haystack::Markdown.MD, needle) = docsearch(sprint(writemime, MIME"text/plain"(), haystack), needle)
 
 # Apropos searches through all available documentation for some string or regex
 """
