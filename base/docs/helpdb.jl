@@ -3779,6 +3779,13 @@ Example for a sparse 2-d array:
     A[iter] = 0.4864987874354343
     (iter.I_1,iter.I_2) = (2,3)
     A[iter] = 0.8090413606455655
+
+If you supply more than one ``AbstractArray`` argument, ``eachindex``
+will create an iterable object that is fast for all arguments (a
+``UnitRange`` if all inputs have fast linear indexing, a
+CartesianRange otherwise).  If the arrays have different sizes and/or
+dimensionalities, ``eachindex`` returns an iterable that spans the
+largest range along each dimension.
 """
 eachindex
 
@@ -9633,6 +9640,8 @@ doc"""
 ..  bkfact(A) -> BunchKaufman
 
 Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``, ``\``, ``inv``, ``issym``, ``ishermitian``.
+
+.. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_.
 ```
 """
 bkfact

@@ -168,6 +168,9 @@ function split_decl_rst(md, decl)
     end
 end
 
+# Disable by default since it is hard to eliminate false positives
+const warn_doc_between_func = "JULIA_WARN_DOC_BETWEEN_FUNC" in keys(ENV)
+
 function translate(file)
     @assert(isfile(file))
     ls = split(readall(file), "\n")[1:end-1]
@@ -176,8 +179,47 @@ function translate(file)
     mod = "Base"
     modidx = -1
     open(file, "w+") do io
+        has_func_doc = false
+        missing_func_doc = []
+        cur_func = ""
+        function warn_missing_func_doc()
+            if (warn_doc_between_func && has_func_doc &&
+                !isempty(missing_func_doc))
+                doc_str = join(missing_func_doc, "\n")
+                warn("Possible missing document for `$cur_func` in `$file`:")
+                info(doc_str)
+            end
+            missing_func_doc = []
+        end
+        function start_new_section()
+            warn_missing_func_doc()
+            has_func_doc = false
+        end
+        function start_func_doc(func_line)
+            warn_missing_func_doc()
+            cur_func = func_line
+            has_func_doc = true
+        end
+        function push_non_func_line(l)
+            has_func_doc || return
+            if (startswith(l, ".. data:: ") ||
+                startswith(l, ".. _") ||
+                ismatch(r"^[A-Z][a-z]* implemented", l))
+                start_new_section()
+            elseif (startswith(l, "----") ||
+                    startswith(l, "====") ||
+                    startswith(l, "~~~~"))
+                if !isempty(missing_func_doc)
+                    pop!(missing_func_doc)
+                    start_new_section()
+                end
+            end
+            has_func_doc || return
+            push!(missing_func_doc, l)
+        end
         for (i,l) in enumerate(ls)
             if ismatch(r"^\.\. (current)?module::", l)
+                start_new_section()
                 mod = match(r"^\.\. (current)?module:: ([\w\.]+)", l).captures[2]
                 modidx = i
                 println(io, l)
@@ -214,10 +256,12 @@ function translate(file)
                     info("no docs for $full in $mod")
                     println(io, l)
                     doccing = false
+                    start_new_section()
                     continue
                 end
                 delete!(all_docs, doc)
                 doccing = true
+                start_func_doc(full)
                 decl, body = split_decl_rst(doc, l)
                 println(io, decl)
                 println(io)
@@ -230,6 +274,7 @@ function translate(file)
                 modidx == i-1 && println(io)
             else
                 doccing = false
+                push_non_func_line(l)
                 println(io, l)
             end
         end
