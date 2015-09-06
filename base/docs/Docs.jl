@@ -107,8 +107,8 @@ function signature(expr::Expr)
         sig = :(Union{Tuple{}})
         for arg in expr.args[2:end]
             isexpr(arg, :parameters) && continue
-            if isa(arg,Expr) && arg.head === :kw # optional arg
-                push!(sig.args, :(Tuple{$(sig.args[end].args...)}))
+            if isexpr(arg, :kw) # optional arg
+                push!(sig.args, :(Tuple{$(sig.args[end].args[2:end]...)}))
             end
             push!(sig.args[end].args, argtype(arg))
         end

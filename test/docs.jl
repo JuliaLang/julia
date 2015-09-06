@@ -104,6 +104,9 @@ type FieldDocs
     three
 end
 
+"h/0-3"
+h(x = 1, y = 2, z = 3) = x + y + z
+
 end
 
 import Base.Docs: meta
@@ -135,6 +138,12 @@ end
 let g = DocsTest.g
     funcdoc = meta(DocsTest)[g]
     @test docstrings_equal(funcdoc.meta[Union{}], doc"g")
+end
+
+let h = DocsTest.h
+    funcdoc = meta(DocsTest)[h]
+    sig = Union{Tuple{}, Tuple{Any}, Tuple{Any, Any}, Tuple{Any, Any, Any}}
+    @test docstrings_equal(funcdoc.meta[sig], doc"h/0-3")
 end
 
 let AT = DocsTest.AT
