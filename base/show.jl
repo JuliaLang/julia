@@ -56,14 +56,16 @@ end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
-    parent = module_parent(mod)
-    if parent !== Main && isdefined(mod, name) && isdefined(parent, name) &&
-            getfield(mod, name) === getfield(parent, name)
-        is_exported_from_stdlib(name, module_parent(mod))
-    else
-        (mod === Base && name in names(Base)) ||
-            (mod === Core && name in names(Core))
+    if (mod === Base && name in names(Base)) ||
+       (mod === Core && name in names(Core))
+        return true
     end
+    parent = module_parent(mod)
+    if parent !== mod && isdefined(mod, name) && isdefined(parent, name) &&
+       getfield(mod, name) === getfield(parent, name)
+        return is_exported_from_stdlib(name, parent)
+    end
+    return false
 end
 
 function show(io::IO, f::Function)
