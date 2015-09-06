@@ -29,11 +29,7 @@
 #endif
 
 #ifndef static_assert
-#  ifdef __cplusplus
-#    if __cplusplus < 201103L
-#      define static_assert(...)
-#    endif
-#  else
+#  ifndef __cplusplus
 #    define static_assert(...)
 // Remove the following gcc special handling when we officially requires
 // gcc 4.7 (for c++11) and -std=gnu11
