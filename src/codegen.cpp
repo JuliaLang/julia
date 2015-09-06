@@ -4070,10 +4070,26 @@ static Function *emit_function(jl_lambda_info_t *lam)
     std::string filename = "no file";
     char *dbgFuncName = lam->name->name;
     int lno = -1;
-    // look for initial (line num filename) node
+    // look for initial (line num filename [funcname]) node, [funcname] for kwarg methods.
     if (jl_is_linenode(stmt)) {
         lno = jl_linenode_line(stmt);
         filename = jl_linenode_file(stmt)->name;
+    }
+    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym &&
+             jl_array_dim0(((jl_expr_t*)stmt)->args) > 0) {
+        jl_value_t *a1 = jl_exprarg(stmt,0);
+        if (jl_is_long(a1))
+            lno = jl_unbox_long(a1);
+        if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
+            a1 = jl_exprarg(stmt,1);
+            if (jl_is_symbol(a1))
+                filename = ((jl_sym_t*)a1)->name;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
+                a1 = jl_exprarg(stmt,2);
+                if (jl_is_symbol(a1))
+                    dbgFuncName = ((jl_sym_t*)a1)->name;
+            }
+        }
     }
     ctx.lineno = lno;
 
@@ -4574,9 +4590,23 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int prevlno = -1;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
-        if (jl_is_linenode(stmt)) {
-            lno = jl_linenode_line(stmt);
-            jl_sym_t *file = jl_linenode_file(stmt);
+        if (jl_is_linenode(stmt) ||
+            (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
+
+            jl_sym_t *file = NULL;
+            if (jl_is_linenode(stmt)) {
+                lno = jl_linenode_line(stmt);
+                file = jl_linenode_file(stmt);
+            } else if (jl_is_expr(stmt)) {
+                lno = jl_unbox_long(jl_exprarg(stmt,0));
+                if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
+                    jl_value_t *a1 = jl_exprarg(stmt,1);
+                    if (jl_is_symbol(a1)) {
+                        file = (jl_sym_t*)a1;
+                    }
+                }
+            }
+            assert(file->name);
 
 #           ifdef LLVM37
             DIFile *dfil = NULL;

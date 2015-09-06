@@ -327,6 +327,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             e = cdr_(e);
             if (!eo) {
                 if (sym == line_sym && n==2) {
+                    // NOTE: n==3 case exists: '(line, linenum, filename, funcname) passes
+                    //       the original name through to keyword-arg specializations.
+                    //       See 'line handling in julia-syntax.scm:keywords-method-def-expr
                     jl_value_t *filename = NULL, *linenum = NULL;
                     JL_GC_PUSH2(&filename, &linenum);
                     filename = scm_to_julia_(car_(cdr_(e)),0);
