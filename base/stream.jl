@@ -129,6 +129,9 @@ type PipeEndpoint <: AsyncStream
         DEFAULT_READ_BUFFER_SZ)
 end
 
+lock(p::PipeEndpoint) = lock(p.lock)
+unlock(p::PipeEndpoint) = unlock(p.lock)
+
 type PipeServer <: UVServer
     handle::Ptr{Void}
     status::Int
@@ -215,6 +218,9 @@ function TTY(fd::RawFD; readable::Bool = false)
     ret.line_buffered = false
     ret
 end
+
+lock(t::TTY) = lock(t.lock)
+unlock(t::TTY) = unlock(t.lock)
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
