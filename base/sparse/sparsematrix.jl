@@ -52,7 +52,11 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
             print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
-            showcompact(io, S.nzval[k])
+            if isassigned(S.nzval, k)
+                showcompact(io, S.nzval[k])
+            else
+                print(io, Base.undef_ref_str)
+            end
         elseif k == half_screen_rows
             print(io, sep, '\u22ee')
         end
