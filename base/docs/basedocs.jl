@@ -18,7 +18,7 @@ const intro = doc"""
   enter.
   """
 
-keywords[:help] = keywords[:?] = keywords[:julia] = keywords[:wtf] = intro
+keywords[:help] = keywords[:?] = keywords[:julia] = intro
 
 keywords[:using] = doc"""
   `using` will load the given module or package and make some of its names
@@ -181,8 +181,6 @@ keywords[:do] = doc"""
       map(1:10, 10:20) do x, y
         x + y
       end
-
-  Splats (`...`) are not supported in do block notation yet.
   """
 
 keywords[:...] = doc"""
