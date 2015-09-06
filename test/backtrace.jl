@@ -21,7 +21,7 @@ using Base.Test
 
 function get_bt_frame(functionname, bt)
     for i = 1:length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), bt[i], true)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), bt[i]-1, true)
         # find the function frame
         lkup[1] == functionname && (return lkup)
     end
