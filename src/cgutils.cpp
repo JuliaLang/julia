@@ -658,7 +658,8 @@ static Value *julia_binding_gv(jl_binding_t *b)
 
 static Type *julia_struct_to_llvm(jl_value_t *jt);
 
-static Type *julia_type_to_llvm(jl_value_t *jt)
+extern "C" {
+DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
@@ -697,6 +698,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         return julia_struct_to_llvm(jt);
     }
     return jl_pvalue_llvmt;
+}
 }
 
 static Type *julia_struct_to_llvm(jl_value_t *jt)
