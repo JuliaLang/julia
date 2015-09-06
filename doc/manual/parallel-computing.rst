@@ -490,8 +490,8 @@ Shared Arrays
 -------------
 
 Shared Arrays use system shared memory to map the same array across
-many processes.  While there are some similarities to a :class:`DArray`,
-the behavior of a :class:`SharedArray` is quite different. In a :class:`DArray`,
+many processes.  While there are some similarities to a `DArray`_,
+the behavior of a :class:`SharedArray` is quite different. In a `DArray`_,
 each process has local access to just a chunk of the data, and no two
 processes share the same chunk; in contrast, in a :class:`SharedArray` each
 "participating" process has access to the entire array.  A
@@ -895,3 +895,5 @@ functionality and interface should be considered experimental in nature and may 
 .. rubric:: Footnotes
 
 .. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.
+
+.. _DArray: https://github.com/JuliaParallel/DistributedArrays.jl
