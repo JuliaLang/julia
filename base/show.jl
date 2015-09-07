@@ -56,8 +56,7 @@ end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
-    if (mod === Base && name in names(Base)) ||
-       (mod === Core && name in names(Core))
+    if (mod === Base || mod === Core) && isexported(mod, name)
         return true
     end
     parent = module_parent(mod)
