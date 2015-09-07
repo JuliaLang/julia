@@ -4,6 +4,8 @@ macro doc(args...)
     DocBootstrap._expand_(args...)
 end
 
+macro __doc__(ex) esc(Expr(:block, symbol("#doc#"), ex)) end
+
 module DocBootstrap
 
 type List

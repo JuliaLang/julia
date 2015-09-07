@@ -496,9 +496,49 @@ end
 
 multidoc(meta, objs) = quote $([:(@doc $(esc(meta)) $(esc(obj))) for obj in objs]...) end
 
+doc"""
+    @__doc__(ex)
+
+Low-level macro used to mark expressions returned by a macro that should be documented. If
+more than one expression is marked then the same docstring is applied to each expression.
+
+    macro example(f)
+        quote
+            $(f)() = 0
+            @__doc__ $(f)(x) = 1
+            $(f)(x, y) = 2
+        end |> esc
+    end
+
+`@__doc__` has no effect when a macro that uses it is not documented.
+"""
+:(Base.@__doc__)
+
+function __doc__!(meta, def::Expr)
+    if isexpr(def, :block) && length(def.args) == 2 && def.args[1] == symbol("#doc#")
+        # Convert `Expr(:block, :#doc#, ...)` created by `@__doc__` to an `@doc`.
+        def.head = :macrocall
+        def.args = [symbol("@doc"), meta, def.args[end]]
+        true
+    else
+        found = false
+        for each in def.args
+            found |= __doc__!(meta, each)
+        end
+        found
+    end
+end
+__doc__!(meta, def) = false
+
 fexpr(ex) = isexpr(ex, :function, :stagedfunction, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
+
+    err = (
+        "invalid doc expression:", def, isexpr(def, :macrocall) ?
+        "'$(def.args[1])' is not documentable. See 'help?> Base.@__doc__' for details." : ""
+    )
+
     def′ = unblock(def)
 
     isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
@@ -522,7 +562,8 @@ function docm(meta, def, define = true)
                  :global)      ?  vardoc(meta, def, namify(def′)) :
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
-    isa(def′, Expr)            ? error("invalid doc expression $def′") :
+    __doc__!(meta, def′)       ? esc(def′) :
+    isa(def′, Expr)            ? error(strip(join(err, "\n\n"))) :
     objdoc(meta, def′)
 end
 
