@@ -107,6 +107,15 @@ end
 "h/0-3"
 h(x = 1, y = 2, z = 3) = x + y + z
 
+# Issue #12700.
+module Inner
+    macro m() end
+end
+import .Inner.@m
+
+"Inner.@m"
+:@m
+
 end
 
 import Base.Docs: meta
@@ -200,6 +209,9 @@ let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
     @test haskey(fields, :two) && fields[:two] == doc"two"
 end
 
+# Issue #12700.
+@test @doc(DocsTest.@m) == doc"Inner.@m"
+
 # issue 11993
 # Check if we are documenting the expansion of the macro
 macro m1_11993()
@@ -283,3 +295,38 @@ f12593_2() = 1
 @test contains(sprint(apropos, "pearson"), "cov")
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
 @test contains(sprint(apropos, "print"), "Profile.print")
+
+# Bindings.
+
+import Base.Docs: @var, Binding
+
+let x = Binding(Base, symbol("@time"))
+    @test @var(@time) == x
+    @test @var(Base.@time) == x
+    @test @var(Base.Pkg.@time) == x
+end
+
+let x = Binding(Base.LinAlg, :norm)
+    @test @var(norm) == x
+    @test @var(Base.norm) == x
+    @test @var(Base.LinAlg.norm) == x
+    @test @var(Base.Pkg.Dir.norm) == x
+end
+
+let x = Binding(Core, :Int)
+    @test @var(Int) == x
+    @test @var(Base.Int) == x
+    @test @var(Core.Int) == x
+    @test @var(Base.Pkg.Resolve.Int) == x
+end
+
+let x = Binding(Base, :Pkg)
+    @test @var(Pkg) == x
+    @test @var(Base.Pkg) == x
+    @test @var(Main.Pkg) == x
+end
+
+let x = Binding(Base, :VERSION)
+    @test @var(VERSION) == x
+    @test @var(Base.VERSION) == x
+end
