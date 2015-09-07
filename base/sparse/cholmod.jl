@@ -24,6 +24,8 @@ using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indty
 
 include("cholmod_h.jl")
 
+const CHOLMOD_MIN_VERSION = v"2.1.1"
+
 ### These offsets are defined in SuiteSparse_wrapper.c
 const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 
@@ -55,7 +57,7 @@ end
 common() = commonStruct
 
 const version_array = Array(Cint, 3)
-if Libdl.dlsym(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
+if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
     ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
 else
     ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
@@ -65,46 +67,47 @@ const version = VersionNumber(version_array...)
 function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
-        if Libdl.dlsym(Libdl.dlopen("libcholmod"), :cholmod_version) == C_NULL
+        if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
+            tmp = Array(Cint, 3)
+            ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
+            ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), tmp)
+            hasversion = true
+        else # CHOLMOD < 2.1.1 does not include cholmod_version()
             hasversion = false
+        end
+
+        if !hasversion || VersionNumber(version_array...) < CHOLMOD_MIN_VERSION
+		    warn("""
+
+		        CHOLMOD version incompatibility
+
+		        Julia was compiled with CHOLMOD version $version. It is
+		        currently linked with a version older than
+		        $(CHOLMOD_MIN_VERSION). This might cause Julia to
+		        terminate when working with sparse matrix factorizations,
+		        e.g. solving systems of equations with \\.
+
+		        It is recommended that you use Julia with a recent version
+		        of CHOLMOD, or download the generic binaries
+		        from www.julialang.org, which ship with the correct
+		        versions of all dependencies.
+		    """)
+        elseif tmp[1] != version_array[1]
             warn("""
 
                 CHOLMOD version incompatibility
 
-                Julia was compiled with CHOLMOD version $version. It is
-                currently linked with a version older than 2.1.0. This
-                might cause Julia to terminate when working with sparse
-                matrix factorizations, e.g. solving systems of equations
-                with \\.
+                Julia was compiled with CHOLMOD version $version. It
+                is currently linked with version $(VersionNumber(tmp...)).
+                This might cause Julia to terminate when working with
+                sparse matrix factorizations, e.g. solving systems of
+                equations with \\.
 
-                It is recommended that you use Julia with a recent version
-                of CHOLMOD, or download the OS X or generic Linux binaries
-                from www.julialang.org, which ship with the correct
-                versions of all dependencies.
+                It is recommended that you use Julia with the same major
+                version of CHOLMOD as the one used during the build, or
+                download the generic binaries from www.julialang.org,
+                which ship with the correct versions of all dependencies.
             """)
-        else
-            hasversion = true
-            tmp = Array(Cint, 3)
-            ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
-            ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), tmp)
-            if tmp != version_array
-                warn("""
-
-                     CHOLMOD version incompatibility
-
-                     Julia was compiled with CHOLMOD version $version. It
-                     is currently linked with a version older than
-                     $(VersionNumber(tmp...)). This might cause Julia to
-                     terminate when working with sparse matrix
-                     factorizations, e.g. solving systems of equations
-                     with \\.
-
-                     It is recommended that you use Julia with a recent
-                     version of CHOLMOD, or download the OS X or generic
-                     Linux binary from www.julialang.org, which ship with
-                     the correct versions of all dependencies.
-                """)
-            end
         end
 
         intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
