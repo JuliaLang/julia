@@ -6366,7 +6366,7 @@ Base64DecodePipe
 doc"""
     module_parent(m::Module) -> Module
 
-Get a module's enclosing `Module`. `Main` is its own parent.
+Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
 """
 module_parent
 
