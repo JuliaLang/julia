@@ -887,3 +887,38 @@ let n = tempname()
     close(io); close(w)
     rm(n)
 end
+
+#issue #12992
+function test_12992()
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    gc()
+    gc()
+end
+
+# Make sure multiple close is fine
+function test2_12992()
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    gc()
+    gc()
+end
+
+test_12992()
+test_12992()
+test_12992()
+
+test2_12992()
+test2_12992()
+test2_12992()
