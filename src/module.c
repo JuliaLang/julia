@@ -413,6 +413,13 @@ int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
     return (*bp)->exportp || (*bp)->owner==m;
 }
 
+DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    if (*bp == HT_NOTFOUND) return 0;
+    return (*bp)->exportp;
+}
+
 int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
