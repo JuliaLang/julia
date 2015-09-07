@@ -9,6 +9,9 @@
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 
+scary = Base.Test.Error("hi",DimensionMismatch,[])
+@test sprint(showerror,scary) == "test error in expression: hi\nDimensionMismatch"
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
