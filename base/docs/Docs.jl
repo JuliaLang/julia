@@ -254,7 +254,41 @@ function doc(f::DataType)
             end
         end
     end
-    return catdoc(docs...)
+    isempty(docs) ? typesummary(f) : catdoc(docs...)
+end
+
+function typesummary(f::DataType)
+    parts = [
+    """
+    No documentation found.
+
+    **Summary:**
+    ```julia
+    $(f.abstract ? "abstract" : f.mutable ? "type" : "immutable") $f <: $(super(f))
+    ```
+    """
+    ]
+    if !isempty(fieldnames(f))
+        pad    = maximum([length(string(f)) for f in fieldnames(f)])
+        fields = ["$(rpad(f, pad)) :: $(t)" for (f, t) in zip(fieldnames(f), f.types)]
+        push!(parts,
+        """
+        **Fields:**
+        ```julia
+        $(join(fields, "\n"))
+        ```
+        """)
+    end
+    if !isempty(subtypes(f))
+        push!(parts,
+        """
+        **Subtypes:**
+        ```julia
+        $(join(subtypes(f), "\n"))
+        ```
+        """)
+    end
+    Markdown.parse(join(parts, "\n"))
 end
 
 isfield(x) = isexpr(x, :.) &&
