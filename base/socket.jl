@@ -294,6 +294,9 @@ function TCPSocket()
     this
 end
 
+lock(s::TCPSocket) = lock(s.lock)
+unlock(s::TCPSocket) = unlock(s.lock)
+
 type TCPServer <: UVServer
     handle::Ptr{Void}
     status::Int
