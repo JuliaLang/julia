@@ -1642,7 +1642,7 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Compute the median of whole array ``v``\ , or optionally along the dimensions in ``region``\ . ``NaN`` is returned if the data contains any ``NaN`` values. For applications requiring the handling of missing data, the ``DataArrays`` package is recommended.
+   Compute the median of whole array ``v``\ , or optionally along the dimensions in ``region``\ . for even amount of data median equals to mean of two middle values. ``NaN`` is returned if the data contains any ``NaN`` values. For applications requiring the handling of missing data, the ``DataArrays`` package is recommended.
 
 .. function:: median!(v)
 
