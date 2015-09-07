@@ -160,7 +160,7 @@ int jl_is_leaf_type(jl_value_t *v)
         }
         else {
             for(int i=0; i < l; i++) {
-                if (jl_has_typevars(jl_svecref(t,i)))
+                if (jl_is_typevar(jl_svecref(t,i)))
                     return 0;
             }
         }
@@ -1914,8 +1914,7 @@ int jl_assign_type_uid(void)
 
 static int is_cacheable(jl_datatype_t *type)
 {
-    // only cache types whose behavior will not depend on the identities
-    // of contained TypeVars
+    // only cache concrete types
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
     if (jl_svec_len(t) == 0) return 0;
@@ -2293,7 +2292,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     }
                 }
             }
-            if (jl_has_typevars(iparams[i]))
+            if (jl_is_typevar(iparams[i]))
                 isabstract = 1;
         }
         if (jl_has_typevars_(iparams[i],0))

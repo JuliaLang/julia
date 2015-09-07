@@ -3148,12 +3148,6 @@ f12092(x::Int,) = 1
 f12092(x::Int, y::Int...) = 2
 @test f12092(1) == 1
 
-# issue #12096
-let a = Val{Val{TypeVar(:_,Int,true)}}
-    @test_throws UndefRefError a.instance
-    @test !isleaftype(a)
-end
-
 # PR #12058
 let N = TypeVar(:N,true)
     @test typeintersect(NTuple{N,Int}, NTuple{N,Float64}) === Tuple{}
