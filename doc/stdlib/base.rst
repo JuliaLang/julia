@@ -58,11 +58,11 @@ Getting Around
 
    The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-.. function:: Base.summarysize(obj, recurse) -> Int
+.. function:: Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
 
    .. Docstring generated from Julia source
 
-   ``summarysize`` is an estimate of the size of the object as if all iterables were allocated inline in general, this forms a conservative lower bound n the memory "controlled" by the object if recurse is ``true``\ , then simply reachable memory should also be included, otherwise, only directly used memory should be included you should never ignore recurse in cases where recursion is possible
+   Compute the amount of memory used by all unique objects reachable from the argument. Keyword argument ``exclude`` specifies a type of objects to exclude from the traversal.
 
 .. function:: edit(file::AbstractString, [line])
 

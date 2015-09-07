@@ -468,13 +468,10 @@ whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 #################################################################################
 
 """
-    Base.summarysize(obj, recurse) -> Int
+    Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
 
-`summarysize` is an estimate of the size of the object as if all iterables were
-allocated inline in general, this forms a conservative lower bound n the memory
-"controlled" by the object if recurse is `true`, then simply reachable memory
-should also be included, otherwise, only directly used memory should be included
-you should never ignore recurse in cases where recursion is possible
+Compute the amount of memory used by all unique objects reachable from the argument.
+Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
 """
 summarysize(obj; exclude = Union{Module,Function,DataType,TypeName}) =
     summarysize(obj, ObjectIdDict(), exclude)
