@@ -296,6 +296,77 @@ f12593_2() = 1
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
 @test contains(sprint(apropos, "print"), "Profile.print")
 
+# Undocumented DataType Summaries.
+
+module Undocumented
+
+abstract A
+abstract B <: A
+
+type C <: A end
+
+immutable D <: B
+    one
+    two::UTF8String
+    three::Float64
+end
+
+end
+
+@test @doc(Undocumented.A) == doc"""
+No documentation found.
+
+**Summary:**
+```julia
+abstract Undocumented.A <: Any
+```
+
+**Subtypes:**
+```julia
+Undocumented.B
+Undocumented.C
+```
+"""
+
+@test @doc(Undocumented.B) == doc"""
+No documentation found.
+
+**Summary:**
+```julia
+abstract Undocumented.B <: Undocumented.A
+```
+
+**Subtypes:**
+```julia
+Undocumented.D
+```
+"""
+
+@test @doc(Undocumented.C) == doc"""
+No documentation found.
+
+**Summary:**
+```julia
+type Undocumented.C <: Undocumented.A
+```
+"""
+
+@test @doc(Undocumented.D) == doc"""
+No documentation found.
+
+**Summary:**
+```julia
+immutable Undocumented.D <: Undocumented.B
+```
+
+**Fields:**
+```julia
+one   :: Any
+two   :: UTF8String
+three :: Float64
+```
+"""
+
 # Bindings.
 
 import Base.Docs: @var, Binding
