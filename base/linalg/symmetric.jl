@@ -176,12 +176,12 @@ end
 
 #Matrix-valued functions
 function expm(A::Symmetric)
-    F = eigfact(full(A))
+    F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
 end
 function expm{T}(A::Hermitian{T})
     n = chksquare(A)
-    F = eigfact(full(A))
+    F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp(F.values))) * F.vectors'
     if T <: Real
         return real(Hermitian(retmat))
@@ -198,7 +198,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
     @eval begin
 
         function ($funm)(A::Symmetric)
-            F = eigfact(full(A))
+            F = eigfact(A)
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
             else
