@@ -286,6 +286,23 @@ keywords[:type] = doc"""
   inner constructors.
   """
 
+keywords[:typealias] = doc"""
+  Introduce a new name for an already expressible type.
+  For example, in `base/boot.jl`, `UInt` is type aliased to either `UInt64` or `UInt32` as appropriate
+  for the size of pointers on the system:
+
+      if is(Int,Int64)
+          typealias UInt UInt64
+      else
+          typealias UInt UInt32
+      end
+
+  For parametric types, `typealias` can be convenient for providing names in cases where some parameter
+  choices are fixed.  In `base` for example:
+
+      typealias Vector{T} Array{T,1}
+  """
+
 keywords[:immutable] = doc"""
   `immutable` acts in the same way as `type`, but declares
   that the fields of the type may not be set after construction.
