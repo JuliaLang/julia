@@ -263,11 +263,23 @@ end
 
 # based on cs_permute p. 21, "Direct Methods for Sparse Linear Systems"
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    if length(pinv) != m || length(q) !=  n
-        error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
+    m, n = size(A)
+    Ap = A.colptr
+    Ai = A.rowval
+    Ax = A.nzval
+    lpinv = length(pinv)
+    if m != lpinv
+        throw(DimensionMismatch(
+            "the number of rows of sparse matrix A must equal the length of pinv, $m != $lpinv"))
     end
-    if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
+    lq = length(q)
+    if n != lq
+        throw(DimensionMismatch(
+            "the number of columns of sparse matrix A must equal the length of q, $n != $lq"))
+    end
+    if !isperm(pinv) || !isperm(q)
+        throw(ArgumentError("both pinv and q must be permutations"))
+    end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     nz = one(Ti)
     for k in 1:n
@@ -280,25 +292,37 @@ function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vect
         end
     end
     Cp[n + 1] = nz
-    (C.').'                    # double transpose to order the columns
+    (C.').' # double transpose to order the columns
 end
 
 # based on cs_symperm p. 21, "Direct Methods for Sparse Linear Systems"
 # form A[p,p] for a symmetric A stored in the upper triangle
 function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    isperm(pinv) || error("perm must be a permutation")
-    m == n == length(pinv) || error("dimension mismatch")
+    m, n = size(A)
+    if m != n
+        throw(DimensionMismatch("sparse matrix A must be square"))
+    end
+    Ap = A.colptr
+    Ai = A.rowval
+    Ax = A.nzval
+    if !isperm(pinv)
+        throw(ArgumentError("pinv must be a permutation"))
+    end
+    lpinv = length(pinv)
+    if n != lpinv
+        throw(DimensionMismatch(
+            "dimensions of sparse matrix A must equal the length of pinv, $((m,n)) != $lpinv"))
+    end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     w = zeros(Ti,n)
-    for j in 1:n                   # count entries in each column of C
+    for j in 1:n  # count entries in each column of C
         j2 = pinv[j]
         for p in Ap[j]:(Ap[j+1]-1)
             (i = Ai[p]) > j || (w[max(pinv[i],j2)] += one(Ti))
         end
     end
     Cp[:] = cumsum(vcat(one(Ti),w))
-    copy!(w,Cp[1:n])          # needed to be consistent with cs_cumsum
+    copy!(w,Cp[1:n]) # needed to be consistent with cs_cumsum
     for j in 1:n
         j2 = pinv[j]
         for p = Ap[j]:(Ap[j+1]-1)
@@ -310,7 +334,7 @@ function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
             Cx[q] = Ax[p]
         end
     end
-    (C.').'                    # double transpose to order the columns
+    (C.').' # double transpose to order the columns
 end
 
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
