@@ -4945,7 +4945,7 @@ utf16(::Union{Ptr{UInt16},Ptr{Int16}}, length=?)
 doc"""
     median(v[, region])
 
-Compute the median of whole array `v`, or optionally along the dimensions in `region`. `NaN` is returned if the data contains any `NaN` values. For applications requiring the handling of missing data, the `DataArrays` package is recommended.
+Compute the median of whole array `v`, or optionally along the dimensions in `region`. For even number of elements no exact median element exists, so the result is equalent to calculating mean of two median elements. `NaN` is returned if the data contains any `NaN` values. For applications requiring the handling of missing data, the `DataArrays` package is recommended.
 """
 median
 
