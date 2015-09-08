@@ -267,7 +267,7 @@ end
 """
     collect(collection)
 
-Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
 """
 collect(itr) = collect(eltype(itr), itr)
 
