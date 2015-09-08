@@ -1924,7 +1924,13 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 size_t l = jl_array_len(t);
                 for(i=0; i < l; i++) {
                     jl_value_t *prior_ti = jl_svecref(jl_cellref(t,i),0);
-                    if (jl_is_leaf_type(prior_ti) && jl_subtype(ti, prior_ti, 0)) {
+                    // in issue #13007 we incorrectly set skip=1 here, due to
+                    // Type{_<:T} ∩ (UnionAll S Type{T{S}}) = Type{T{S}}
+                    // then isleaftype(Type{T{S}}) gave true. instead we should have computed the
+                    // intersection as (UnionAll S Type{T{S}}), which would make isleaftype false
+                    // and this condition fail. We simulate that for now by checking jl_has_typevars.
+                    if (jl_is_leaf_type(prior_ti) && !jl_has_typevars(ti) && !jl_has_typevars(prior_ti) &&
+                        jl_subtype(ti, prior_ti, 0)) {
                         skip = 1;
                         break;
                     }

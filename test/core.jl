@@ -3295,3 +3295,8 @@ code_typed(A12612.f2, Tuple{})
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
 @test Base.return_types(f12826,Tuple{Array{TypeVar(:I, Integer),1}})[1] == Integer
+
+# issue #13007
+call13007{T,N}(::Type{Array{T,N}}) = 0
+call13007(::Type{Array}) = 1
+@test length(Base._methods(call13007, Tuple{Type{TypeVar(:_,Array)}}, 4)) == 2
