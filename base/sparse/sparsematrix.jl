@@ -315,17 +315,17 @@ end
 
 dimlub(I) = length(I)==0 ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
 
-sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), AddFun())
+sparse(I,J,v::Number ; keepzeros::Bool = false) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), AddFun(), keepzeros = keepzeros)
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J), AddFun())
+sparse(I,J,V::AbstractVector ; keepzeros::Bool = false) = sparse(I, J, V, dimlub(I), dimlub(J), AddFun(), keepzeros = keepzeros)
 
-sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), AddFun())
+sparse(I,J,v::Number,m,n ; keepzeros::Bool = false) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), AddFun(), keepzeros = keepzeros)
 
-sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), AddFun())
+sparse(I,J,V::AbstractVector,m,n ; keepzeros::Bool = false) = sparse(I, J, V, Int(m), Int(n), AddFun(), keepzeros = keepzeros)
 
-sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), OrFun())
+sparse(I,J,V::AbstractVector{Bool},m,n ; keepzeros::Bool = false) = sparse(I, J, V, Int(m), Int(n), OrFun(), keepzeros = keepzeros)
 
-sparse(I,J,v::Number,m,n,combine::Union{Function,Func}) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
+sparse(I,J,v::Number,m,n,combine::Union{Function,Func} ; keepzeros::Bool = false) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine, keepzeros = keepzeros)
 
 function sparse(T::SymTridiagonal)
     m = length(T.dv)

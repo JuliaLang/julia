@@ -16,7 +16,8 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer,
-                                combine::Union{Function,Base.Func})
+                                combine::Union{Function,Base.Func};
+                                keepzeros::Bool = false)
 
     if length(I) == 0;
         return spzeros(eltype(V), Ti, nrow,ncol)
@@ -35,7 +36,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:N
-        if V[k] != 0
+        if keepzeros || V[k] != 0
             Rnz[I[k]+1] += 1
             nz += 1
         end
@@ -58,7 +59,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
         jind <= ncol || throw(ArgumentError("all J index values must be ≤ the number of columns"))
         p = Wj[iind]
         Vk = V[k]
-        if Vk != 0
+        if keepzeros || Vk != 0
             Wj[iind] += 1
             Rx[p] = Vk
             Ri[p] = jind

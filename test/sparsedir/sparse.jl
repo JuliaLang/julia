@@ -3,6 +3,10 @@
 # check sparse matrix construction
 @test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 
+# test zeros can be kept
+@test nonzeros(sparse([1, 2], [1, 2], [0, 1])) == [1]
+@test nonzeros(sparse([1, 2], [1, 2], [0, 1], keepzeros = true)) == [0, 1]
+
 # check matrix operations
 se33 = speye(3)
 do33 = ones(3)
