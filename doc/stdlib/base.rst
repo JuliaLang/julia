@@ -477,11 +477,17 @@ Types
 
    Size, in bytes, of the canonical binary representation of the given DataType ``T``\ , if any.
 
-.. function:: eps([T])
+.. function:: eps(T)
 
    .. Docstring generated from Julia source
 
-   The distance between 1.0 and the next larger representable floating-point value of ``DataType`` ``T``\ . Only floating-point types are sensible arguments. If ``T`` is omitted, then ``eps(Float64)`` is returned.
+   The distance between 1.0 and the next larger representable floating-point value of ``DataType`` ``T``\ . Only floating-point types are sensible arguments.
+
+.. function:: eps()
+
+   .. Docstring generated from Julia source
+
+   The distance between 1.0 and the next larger representable floating-point value of ``Float64``\ .
 
 .. function:: eps(x)
 

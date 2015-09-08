@@ -6250,11 +6250,18 @@ Returns `true` if the current user has permission to read `path`, `false` otherw
 isreadable
 
 doc"""
-    eps([T])
+    eps(T)
 
-The distance between 1.0 and the next larger representable floating-point value of `DataType` `T`. Only floating-point types are sensible arguments. If `T` is omitted, then `eps(Float64)` is returned.
+The distance between 1.0 and the next larger representable floating-point value of `DataType` `T`. Only floating-point types are sensible arguments.
 """
-eps(::Any)
+eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
+
+doc"""
+    eps()
+
+The distance between 1.0 and the next larger representable floating-point value of `Float64`.
+"""
+eps()
 
 doc"""
     eps(x)
