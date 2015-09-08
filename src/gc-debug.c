@@ -1,5 +1,16 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+// Useful function in debugger to find page/region metadata
+gcpage_t *jl_gc_page_metadata(void *data)
+{
+    return page_metadata(data);
+}
+
+region_t *jl_gc_find_region(void *ptr, int maybe)
+{
+    return find_region(ptr, maybe);
+}
+
 // Find the memory block in the pool that owns the byte pointed to by p.
 // For end of object pointer (which is always the case for pointer to a
 // singleton object), this usually returns the same pointer which points to
