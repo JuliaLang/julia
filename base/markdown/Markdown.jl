@@ -51,6 +51,7 @@ macro md_str(s, t...)
 end
 
 doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
+doc_str(md::AbstractString, file, mod) = doc_str(parse(md), file, mod)
 
 macro doc_str(s, t...)
     :(doc_str($(mdexpr(s, t...)), @__FILE__, current_module()))
