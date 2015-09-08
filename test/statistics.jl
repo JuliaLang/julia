@@ -101,6 +101,7 @@ end
 
 @test var(1:8) == 6.
 @test varm(1:8,1) == varm(collect(1:8),1)
+@test isnan(varm(1:1,1))
 @test isnan(var(1:1))
 @test isnan(var(1:-1))
 

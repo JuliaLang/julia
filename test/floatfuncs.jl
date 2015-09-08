@@ -9,7 +9,7 @@ using Base.Test
 for elty in (Float32,Float64)
     x = convert(elty,-2.0)
     x = flipsign(x,-1.0)
-    @test flipsign(x,-1.0) == convert(elty,-2.0)
+    @test flipsign(x,big(-1.0)) == convert(elty,-2.0)
 end
 
 #maxintfloat
@@ -50,5 +50,6 @@ for elty in (Float32,Float64)
         @test round(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,10,10))
         @test round(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10,10))
         @test round(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
+        @test round(elty2,A) == fill(round(elty2,x),(10,10,10))
     end
 end
