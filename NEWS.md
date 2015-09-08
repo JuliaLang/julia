@@ -272,6 +272,7 @@ Library improvements
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
     * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
+    * `countlines()` now also counts non-empty lines by default ([#11947]).
 
     * Backreferences in replacement strings in calls to `replace` with a `Regex` pattern are now supported ([#11849]).
       Use the `s` string prefix to indicate a replacement string contains a backreference. For example, `replace("ab", r"(.)(.)", s"\2\1")` yields "ba".
