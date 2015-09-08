@@ -59,14 +59,14 @@ min(x,y) = ifelse(y < x, y, x)
 minmax(x,y) = y < x ? (y, x) : (x, y)
 
 scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmax(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmax(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmin(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmin(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 ## definitions providing basic traits of arithmetic operators ##
 

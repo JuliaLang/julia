@@ -28,3 +28,22 @@ p = 1=>:foo
 @test last(reverse(p))  == 1
 @test endof(p) == 2
 @test p[endof(p)] == p[end] == p[2] == :foo
+
+@test (|)(2) == 2
+@test ($)(2) == 2
+
+@test ctranspose('a') == 'a'
+
+@test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
+@test_throws ArgumentError Base.scalarmin('a',['c','d'])
+@test_throws ArgumentError Base.scalarmin(['a','b'],'c')
+@test_throws ArgumentError Base.scalarmax(['a','b'],['c','d'])
+@test_throws ArgumentError Base.scalarmax('a',['c','d'])
+@test_throws ArgumentError Base.scalarmax(['a','b'],'c')
+
+@test lexless('a','b')
+
+@test 1 .!= 2
+@test 1 .== 1
+@test 1 .< 2
+@test 1 .<= 2

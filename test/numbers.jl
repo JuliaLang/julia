@@ -471,6 +471,8 @@ end
 @test signbit(1//0) == 0
 @test signbit(-1//0) == 1
 
+@test copysign(big(1.0),big(-2.0)) == big(-1.0)
+
 @test isnan(1)     == false
 @test isnan(1.0)   == false
 @test isnan(-1.0)  == false
