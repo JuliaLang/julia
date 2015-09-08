@@ -93,6 +93,8 @@ function doc(obj)
     for mod in modules
         haskey(meta(mod), obj) && return meta(mod)[obj]
     end
+    # if no docs for obj was found, return the doc of its type
+    return doc(typeof(obj))
 end
 
 function doc(b::Binding)
