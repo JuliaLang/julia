@@ -180,7 +180,6 @@ end
 function close(t::Union{FileMonitor, PollingFileWatcher})
     if t.handle != C_NULL
         ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
-        t.handle = C_NULL
     end
 end
 
