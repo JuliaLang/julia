@@ -79,6 +79,7 @@ let T = TypeVar(:T,true)
 
     testintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}, Tuple{Rational{Integer},Int})
 
+    # issue #1631
     testintersect(Pair{T,Ptr{T}}, Pair{Ptr{S},S}, Bottom)
     testintersect(Tuple{T,Ptr{T}}, Tuple{Ptr{S},S}, Bottom)
 end
@@ -3300,3 +3301,8 @@ f12826{I<:Integer}(v::Vector{I}) = v[1]
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
 @test length(Base._methods(call13007, Tuple{Type{TypeVar(:_,Array)}}, 4)) == 2
+
+# detecting cycles during type intersection, e.g. #1631
+cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
+cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
+@test length(methods(cycle_in_solve_tvar_constraints)) == 2
