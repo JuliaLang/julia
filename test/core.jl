@@ -3306,3 +3306,10 @@ call13007(::Type{Array}) = 1
 cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
 cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
+
+# issue #12967
+foo12967(x, ::ANY) = 1
+typealias TupleType12967{T<:Tuple} Type{T}
+foo12967(x, ::TupleType12967) = 2
+@test foo12967(1, Int) == 1
+@test foo12967(1, Tuple{}) == 2
