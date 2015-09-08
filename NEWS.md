@@ -271,7 +271,7 @@ Library improvements
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
-    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
+    * `is_valid_char(c)`, (now `isvalid(Char,c)` ([#11241])), now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
 
     * Backreferences in replacement strings in calls to `replace` with a `Regex` pattern are now supported ([#11849]).
       Use the `s` string prefix to indicate a replacement string contains a backreference. For example, `replace("ab", r"(.)(.)", s"\2\1")` yields "ba".
