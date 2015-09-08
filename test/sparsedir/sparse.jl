@@ -1101,3 +1101,4 @@ q = randperm(10)
 
 # issue #13008
 @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
+@test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))

@@ -18,12 +18,12 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 nrow::Integer, ncol::Integer,
                                 combine::Union{Function,Base.Func})
 
-    if length(I) == 0;
-        return spzeros(eltype(V), Ti, nrow,ncol)
-    end
     N = length(I)
     if N != length(J) || N != length(V)
         throw(ArgumentError("triplet I,J,V vectors must be the same length"))
+    end
+    if N == 0
+        return spzeros(eltype(V), Ti, nrow, ncol)
     end
 
     # Work array
