@@ -35,8 +35,11 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:N
+        iind = I[k]
+        iind > 0 || throw(ArgumentError("all I index values must be > 0"))
+        iind <= nrow || throw(ArgumentError("all I index values must be ≤ the number of rows"))
         if V[k] != 0
-            Rnz[I[k]+1] += 1
+            Rnz[iind+1] += 1
             nz += 1
         end
     end
@@ -52,9 +55,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     @inbounds for k=1:N
         iind = I[k]
         jind = J[k]
-        iind > 0 || throw(ArgumentError("all I index values must be > 0"))
         jind > 0 || throw(ArgumentError("all J index values must be > 0"))
-        iind <= nrow || throw(ArgumentError("all I index values must be ≤ the number of rows"))
         jind <= ncol || throw(ArgumentError("all J index values must be ≤ the number of columns"))
         p = Wj[iind]
         Vk = V[k]
