@@ -75,17 +75,16 @@ STATIC_INLINE int is_unspec(jl_datatype_t *dt)
     return (jl_datatype_t*)dt->name->primary == dt;
 }
 
-static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_svec_t *p)
+static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_value_t **p, size_t np)
 {
     size_t i;
     if (jl_typeis(v, jl_tvar_type)) {
-        if (jl_has_typevars__(((jl_tvar_t*)v)->ub, incl_wildcard, p) ||
-            jl_has_typevars__(((jl_tvar_t*)v)->lb, incl_wildcard, p))
+        if (jl_has_typevars__(((jl_tvar_t*)v)->ub, incl_wildcard, p, np) ||
+            jl_has_typevars__(((jl_tvar_t*)v)->lb, incl_wildcard, p, np))
             return 1;
         if (p != NULL) {
-            size_t l = jl_svec_len(p);
-            for(i=0; i < l; i++) {
-                if (v == jl_svecref(p, i))
+            for(i=0; i < np; i++) {
+                if (v == p[i])
                     return 1;
             }
             return 0;
@@ -112,7 +111,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_svec_t *p)
     for(i=0; i < l; i++) {
         jl_value_t *elt = jl_svecref(t, i);
         if (elt != v) {
-            if (jl_has_typevars__(elt, incl_wildcard, p))
+            if (jl_has_typevars__(elt, incl_wildcard, p, np))
                 return 1;
         }
     }
@@ -126,20 +125,25 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_svec_t *p)
 static int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     if (jl_is_typevar(v)) return 1;
-    return jl_has_typevars__(v, incl_wildcard, NULL);
+    return jl_has_typevars__(v, incl_wildcard, NULL, 0);
 }
 
 static int jl_has_typevars_from(jl_value_t *v, jl_svec_t *p)
 {
-    if (jl_svec_len(p) == 0)
-        return 0;
-    return jl_has_typevars__(v, 0, p);
+    if (jl_svec_len(p) == 0) return 0;
+    return jl_has_typevars__(v, 0, jl_svec_data(p), jl_svec_len(p));
+}
+
+static int jl_has_typevars_from_v(jl_value_t *v, jl_value_t **p, size_t np)
+{
+    if (np == 0) return 0;
+    return jl_has_typevars__(v, 0, p, np);
 }
 
 DLLEXPORT int jl_has_typevars(jl_value_t *v)
 {
     if (jl_is_typevar(v)) return 1;
-    return jl_has_typevars__(v, 0, NULL);
+    return jl_has_typevars__(v, 0, NULL, 0);
 }
 
 int jl_is_leaf_type(jl_value_t *v)
@@ -1286,6 +1290,11 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
             jl_value_t **pS = &soln->data[i+1];
             if (jl_is_typevar(*pS))
                 *pS = *tvar_lookup(soln, pS);
+            if (!jl_is_typevar(*pS)) {
+                // detect cycles
+                if (jl_has_typevars_from_v(*pS, &soln->data[i], 1))
+                    return 0;
+            }
         }
 
         // 2. instantiate all RHSes using soln
@@ -1532,13 +1541,10 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         }
 
         // detect cycles; e.g. (T,Ptr{T}) ∩ (Ptr{S},S) == ⊥
-        jl_svec_t *tempvec = jl_alloc_svec(1);
-        *extraroot = (jl_value_t*)tempvec;
         for(int i=0; i < eqc.n; i+=2) {
             jl_value_t *var = eqc.data[i];
             jl_value_t *val = eqc.data[i+1];
-            jl_svecset(tempvec, 0, var);
-            if (val != var && jl_has_typevars_from(val, tempvec)) {
+            if (val != var && jl_has_typevars_from_v(val, &var, 1)) {
                 // var's RHS contains the var itself => unsatisfiable (e.g. T = Foo{T})
                 JL_GC_POP();
                 return (jl_value_t*)jl_bottom_type;
