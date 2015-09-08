@@ -11359,7 +11359,7 @@ quadgk
 doc"""
     hist(v[, n]) -> e, counts
 
-Compute the histogram of `v`, optionally using approximately `n` bins. The return values are a range `e`, which correspond to the edges of the bins, and `counts` containing the number of elements of `v` in each bin. Note: Julia does not ignore `NaN` values in the computation.
+Compute the histogram of `v`, optionally using approximately `n` bins. The return values are a range `e`, which correspond to the edges of the bins, and `counts` containing the number of elements of `v` in each bin. Here *nice* bin widths are computed by `histrange` function and the resulting step sizes will be 1, 2 or 5 multiplied by a power of 10. Note: Julia does not ignore `NaN` values in the computation.
 """
 hist(v,n::Int=?)
 
