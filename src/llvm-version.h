@@ -8,6 +8,8 @@
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 7
 #define LLVM37 1
+// Experimental:
+//#define USE_ORCJIT
 #endif
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
@@ -27,4 +29,8 @@
 #define LLVM33 1
 #else
 #error LLVM versions < 3.3 are not supported by Julia
+#endif
+
+#ifdef USE_ORCJIT //temporary, since in some places USE_MCJIT may be used instead of the correct LLVM version test
+#define USE_MCJIT
 #endif
