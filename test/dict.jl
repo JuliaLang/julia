@@ -71,6 +71,18 @@ h["a","b"] = 4
 h["a","b","c"] = 4
 @test h["a","b","c"] == h[("a","b","c")] == 4
 
+# Test eltype, keytype and valtype
+@test eltype(h) == Pair{Any,Any}
+@test keytype(h) == Any
+@test valtype(h) == Any
+
+let
+    td = Dict{String,Float64}()
+    @test eltype(td) == Pair{String,Float64}
+    @test keytype(td) == String
+    @test valtype(td) == Float64
+end
+
 let
     z = Dict()
     get_KeyError = false
