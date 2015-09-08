@@ -701,7 +701,6 @@ end
 
 ## event loop ##
 eventloop() = global uv_eventloop::Ptr{Void}
-#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
 
 function run_event_loop()
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),eventloop())
@@ -751,19 +750,21 @@ function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
                    readpipe::PipeEndpoint, writepipe::PipeEndpoint)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
+    loop = eventloop()
     uv_error("init_pipe(read)",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Ptr{Void},Int32,Int32,Int32), read_end, loop, 0, 1, readable_julia_only))
     uv_error("init_pipe(write)",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Ptr{Void},Int32,Int32,Int32), write_end, loop, 1, 0, writable_julia_only))
     _link_pipe(read_end, write_end)
 end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
                    write_end::Ptr{Void}, writable_julia_only::Bool)
+    loop = eventloop()
     uv_error("init_pipe(read)",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Ptr{Void},Int32,Int32,Int32), read_end, loop, 0, 1, readable_julia_only))
     uv_error("init_pipe(write)",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Ptr{Void},Int32,Int32,Int32), write_end, loop, 1, 0, writable_julia_only))
     _link_pipe(read_end,write_end)
 end
 
@@ -772,10 +773,11 @@ function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
     if read_end.handle == C_NULL
         malloc_julia_pipe!(read_end)
     end
+    loop = eventloop()
     init_pipe!(read_end;
         readable = true, writable = false, julia_only = readable_julia_only)
     uv_error("init_pipe",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Ptr{Void},Int32,Int32,Int32), write_end, loop, 1, 0, writable_julia_only))
     _link_pipe(read_end.handle, write_end)
     read_end.status = StatusOpen
 end
@@ -785,8 +787,9 @@ function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
     if write_end.handle == C_NULL
         malloc_julia_pipe!(write_end)
     end
+    loop = eventloop()
     uv_error("init_pipe",
-        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
+        ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, loop, 0, 1, readable_julia_only))
     init_pipe!(write_end;
         readable = false, writable = true, julia_only = writable_julia_only)
     _link_pipe(read_end, write_end.handle)

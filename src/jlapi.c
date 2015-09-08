@@ -108,6 +108,11 @@ DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
 
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 
+DLLEXPORT size_t jl_array_length(jl_array_t *a)
+{
+    return jl_array_len(a);
+}
+
 DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
 {
     return jl_string_data(s);

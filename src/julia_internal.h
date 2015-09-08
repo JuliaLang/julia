@@ -215,7 +215,6 @@ extern uv_lib_t *jl_winsock_handle;
 uv_lib_t *jl_get_library(char *f_lib);
 DLLEXPORT void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd);
 
-
 // libuv wrappers:
 DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 

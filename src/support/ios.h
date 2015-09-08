@@ -4,7 +4,7 @@
 #define IOS_H
 
 #include <stdarg.h>
-#include "uv.h"
+#include <sys/types.h> // For off_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,7 +15,7 @@ extern "C" {
 // never moves out.
 
 //make it compatible with UV Handles
-typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
+typedef enum { bm_none=/*UV_HANDLE_TYPE_MAX*/18+1, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54

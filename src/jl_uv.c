@@ -49,6 +49,7 @@ extern "C" {
 
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
+static_assert(bm_none - 1 == UV_HANDLE_TYPE_MAX);
 
 static void jl_uv_call_close_callback(void *val)
 {
@@ -135,7 +136,7 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
     else return 0;
 }
 
-DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int julia_only)
+DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, uv_loop_t *loop, int writable, int readable, int julia_only)
 {
      int flags = 0;
      if (writable)
@@ -144,7 +145,7 @@ DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int juli
          flags |= UV_PIPE_READABLE;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
-     int err = uv_pipe_init(jl_io_loop, pipe, flags);
+     int err = uv_pipe_init(loop, pipe, flags);
      return err;
 }
 

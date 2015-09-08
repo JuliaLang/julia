@@ -1077,6 +1077,7 @@ DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
 // property access
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
+DLLEXPORT size_t jl_array_length(jl_array_t *a);
 DLLEXPORT void *jl_array_eltype(jl_value_t *a);
 DLLEXPORT int jl_array_rank(jl_value_t *a);
 DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
@@ -1234,7 +1235,27 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
+// Forward declare libuv symbols
+
+struct uv_loop_s;
+struct uv_idle_s;
+struct uv_pipe_s;
+struct uv_async_s;
+struct uv_timer_s;
+struct uv_tcp_s;
+struct uv_handle_s;
+struct uv_stream_s;
+typedef struct uv_loop_s uv_loop_t;
+typedef struct uv_idle_s uv_idle_t;
+typedef struct uv_async_s uv_async_t;
+typedef struct uv_pipe_s uv_pipe_t;
+typedef struct uv_timer_s uv_timer_t;
+typedef struct uv_tcp_s uv_tcp_t;
+typedef struct uv_handle_s uv_handle_t;
+typedef struct uv_stream_s uv_stream_t;
+
 typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
+
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
@@ -1502,12 +1523,8 @@ DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT void *jl_takebuf_raw(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
-typedef struct {
-    void *data;
-    uv_loop_t *loop;
-    uv_handle_type type;
-    uv_file file;
-} jl_uv_file_t;
+struct jl_uv_file_s;
+typedef struct jl_uv_file_s jl_uv_file_t;
 
 #ifdef __GNUC__
 #define _JL_FORMAT_ATTR(type, str, arg) \

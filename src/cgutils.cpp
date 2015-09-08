@@ -317,11 +317,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     }
     if (jl_is_bitstype(jt)) {
     #ifdef LLVM37
-        llvm::DIType *t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        llvm::DIType *t = dbuilder->createBasicType(jdt->name->name->name,jdt->size*8,jdt->alignment*8,llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
     #else
-        DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size*8,jdt->alignment*8,llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
         jdt->ditype = M;
         return t;

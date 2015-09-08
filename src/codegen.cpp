@@ -1150,6 +1150,128 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
         return (Function*)sf->linfo->functionObject;
 }
 
+#ifdef LLVM37
+// A function mover just simple enough that the module won't crash when written to
+// a bitcode file
+class SimpleFunctionMover : public ValueMaterializer
+{
+public:
+    SimpleFunctionMover(llvm::Module *dest, DICompileUnit *TargetCU = nullptr) :
+        ValueMaterializer(), TargetCU(TargetCU), VMap(), destModule(dest)
+    {
+    }
+    SmallVector<Metadata *, 16> NewSPs;
+    DICompileUnit *TargetCU;
+    ValueToValueMapTy VMap;
+    llvm::Module *destModule;
+    llvm::Function *clone(llvm::Function *toClone)
+    {
+        Function *NewF = Function::Create(toClone->getFunctionType(),
+                                          toClone->getLinkage(),
+                                          toClone->getName(),
+                                          this->destModule);
+        ClonedCodeInfo info;
+        Function::arg_iterator DestI = NewF->arg_begin();
+        for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            this->VMap[I] = DestI++;         // Add mapping to VMap
+        }
+
+        // Necessary in case the function is self referential
+        this->VMap[toClone] = NewF;
+
+        // Clone and record the subprogram
+        CloneDebugInfoMetadata(NewF, toClone, this->VMap);
+
+        SmallVector<ReturnInst*, 8> Returns;
+        llvm::CloneFunctionInto(NewF,toClone,this->VMap,true,Returns,"",NULL,NULL,this);
+
+        return NewF;
+    }
+
+    void finalize()
+    {
+        if (TargetCU != nullptr)
+        {
+            // Record old subprograms
+            for (auto *SP : TargetCU->getSubprograms())
+                NewSPs.push_back(SP);
+            TargetCU->replaceSubprograms(MDTuple::get(TargetCU->getContext(), NewSPs));
+            NewSPs.clear();
+        }
+    }
+
+    // Find the MDNode which corresponds to the subprogram data that described F.
+    DISubprogram *FindSubprogram(const Function *F,
+                                        DebugInfoFinder &Finder) {
+      for (DISubprogram *Subprogram : Finder.subprograms()) {
+        if (Subprogram->describes(F))
+          return Subprogram;
+      }
+      return nullptr;
+    }
+
+    // Clone the module-level debug info associated with OldFunc. The cloned data
+    // will point to NewFunc instead.
+    void CloneDebugInfoMetadata(Function *NewFunc, const Function *OldFunc,
+                                ValueToValueMapTy &VMap) {
+      DebugInfoFinder Finder;
+      Finder.processModule(*OldFunc->getParent());
+
+      const DISubprogram *OldSubprogramMDNode = FindSubprogram(OldFunc, Finder);
+      if (!OldSubprogramMDNode) return;
+
+      // Ensure that OldFunc appears in the map.
+      // (if it's already there it must point to NewFunc anyway)
+      VMap[OldFunc] = NewFunc;
+      auto *NewSubprogram =
+          cast<DISubprogram>(MapMetadata(OldSubprogramMDNode, VMap));
+
+      NewSPs.push_back(NewSubprogram);
+    }
+
+    virtual Value *materializeValueFor (Value *V)
+    {
+        Function *F = dyn_cast<Function>(V);
+        if (F) {
+            if (F->isIntrinsic()) {
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+            // Still a declaration and still in a different module
+            if (F->isDeclaration() && F->getParent() != destModule) {
+                // Create forward declaration in current module
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+        }
+        else if (isa<GlobalVariable>(V)) {
+            GlobalVariable *GV = cast<GlobalVariable>(V);
+            assert(GV != NULL);
+            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
+            if (oldGV != NULL)
+                return oldGV;
+            GlobalVariable *newGV = new GlobalVariable(*destModule,
+                GV->getType()->getElementType(),
+                GV->isConstant(),
+                GlobalVariable::ExternalLinkage,
+                NULL,
+                GV->getName());
+            newGV->copyAttributesFrom(GV);
+            return newGV;
+        }
+        return NULL;
+    };
+};
+
+Function *CloneFunctionToModule(Function *F, Module *destModule)
+{
+    SimpleFunctionMover mover(destModule);
+    Function *NewF = mover.clone(F);
+    mover.finalize();
+    return NewF;
+}
+
+#else
+
 Function* CloneFunctionToModule(Function *F, Module *destModule)
 {
     ValueToValueMapTy VMap;
@@ -1169,6 +1291,8 @@ Function* CloneFunctionToModule(Function *F, Module *destModule)
     llvm::CloneFunctionInto(NewF, F, VMap, true, Returns, "", NULL, NULL);
     return NewF;
 }
+
+#endif
 
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
@@ -4081,7 +4205,11 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f, bool sret)
+static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f, bool sret, jl_codectx_t *main_ctx,
+#ifdef LLVM37
+    DIFile *fil, DICompileUnit *CU
+#endif
+    )
 {
     std::stringstream funcName;
     const std::string &fname = f->getName().str();
@@ -4103,6 +4231,29 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     builder.SetInsertPoint(b0);
     DebugLoc noDbg;
     builder.SetCurrentDebugLocation(noDbg);
+
+#ifdef LLVM37
+    if (main_ctx->debug_enabled) {
+        /*
+         * Describe jlcall wrappers as julia functions marked as DW_AT_artificial.
+         * Thus debuggers that step julia functions will generally still
+         */
+        DISubprogram *SP = main_ctx->dbuilder->createFunction(CU,
+                                                                w->getName(),   // Name
+                                                                w->getName(),   // LinkageName
+                                                                fil,            // File
+                                                                0,              // LineNo
+                                                                jl_di_func_sig, // Ty
+                                                                false,          // isLocalToUnit
+                                                                true,           // isDefinition
+                                                                0,              // ScopeLine
+                                                                // Flags
+                                                                DINode::FlagArtificial,
+                                                                true,           // isOptimized
+                                                                w);             // Fn
+        builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, (MDNode*)SP, NULL));
+    }
+#endif
 
     jl_codectx_t ctx;
     ctx.f = w;
@@ -4151,7 +4302,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     builder.CreateRet(boxed(retval, &ctx));
     finalize_gc_frame(&ctx);
 
-    FPM->run(*w);
+    //FPM->run(*w);
 
     return w;
 }
@@ -4272,29 +4423,12 @@ static Function *emit_function(jl_lambda_info_t *lam)
     jl_array_t *stmts = jl_lam_body(ast)->args;
     mark_volatile_vars(stmts, ctx.vars);
 
-    // step 4. determine function signature
-    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
-    Function *f = NULL;
-
-    bool specsig = false;
-    if (!va && !hasCapt && lam->specTypes != jl_anytuple_type && lam->inferred) {
-        // no captured vars and not vararg
-        // consider specialized signature
-        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
-            if (isbits_spec(jl_tparam(lam->specTypes, i))) { // assumes !va
-                specsig = true;
-                break;
-            }
-        }
-        if (jl_nparams(lam->specTypes) == 0)
-            specsig = true;
-        if (isbits_spec(jlrettype))
-            specsig = true;
-    }
+    // step 5. set up debug info context
 
     std::stringstream funcName;
     // try to avoid conflicts in the global symbol table
     funcName << "julia_" << lam->name->name;
+    funcName << "_" << globalUnique++;
 
     Module *m;
 #ifdef USE_MCJIT
@@ -4308,81 +4442,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #else
     m = jl_Module;
 #endif
-    funcName << "_" << globalUnique++;
-    emitted_function_map[jl_symbol(funcName.str().data())] = lam;
-
-    ctx.sret = false;
-    if (specsig) { // assumes !va
-        std::vector<Type*> fsig(0);
-        Type *rt;
-        bool retboxed;
-        if (jlrettype == (jl_value_t*)jl_void_type) {
-            rt = T_void;
-            retboxed = false;
-        }
-        else {
-            rt = julia_type_to_llvm(jlrettype, &retboxed);
-        }
-        if (!retboxed && rt != T_void && deserves_sret(jlrettype, rt)) {
-            ctx.sret = true;
-            fsig.push_back(rt->getPointerTo());
-            rt = T_void;
-        }
-        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
-            Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
-            if (type_is_ghost(ty))
-                continue;
-            if (ty->isAggregateType()) // aggregate types are passed by pointer
-                ty = PointerType::get(ty,0);
-            fsig.push_back(ty);
-        }
-        f = Function::Create(FunctionType::get(rt, fsig, false),
-                             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
-                             funcName.str(), m);
-        if (ctx.sret)
-            f->addAttribute(1, Attribute::StructRet);
-        addComdat(f);
-        if (lam->specFunctionObject == NULL) {
-            lam->specFunctionObject = (void*)f;
-            lam->specFunctionID = jl_assign_functionID(f);
-        }
-        if (lam->functionObject == NULL) {
-            Function *fwrap = gen_jlcall_wrapper(lam, ast, f, ctx.sret);
-            lam->functionObject = (void*)fwrap;
-            lam->functionID = jl_assign_functionID(fwrap);
-        }
-    }
-    else {
-        f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
-                             funcName.str(), m);
-        addComdat(f);
-        if (lam->functionObject == NULL) {
-            lam->functionObject = (void*)f;
-            lam->functionID = jl_assign_functionID(f);
-        }
-    }
-    if (jlrettype == (jl_value_t*)jl_bottom_type)
-        f->setDoesNotReturn();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 16-byte boundary
-    // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
-    // i686 Windows (which uses a 4-byte-aligned stack)
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    f->addAttributes(AttributeSet::FunctionIndex,
-        AttributeSet::get(f->getContext(),
-            AttributeSet::FunctionIndex,*attr));
-#endif
-
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && LLVM35
-    f->setHasUWTable(); // force NeedsWinEH
-#endif
-
-#ifdef JL_DEBUG_BUILD
-    f->addFnAttr(Attribute::StackProtectReq);
-#endif
-    ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
     bool in_user_code = !jl_is_submodule(lam->module, jl_base_module) && !jl_is_submodule(lam->module, jl_core_module);
@@ -4426,12 +4485,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
     DebugLoc inlineLoc;
 
-    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
-    builder.SetInsertPoint(b0);
-
-    //jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
-    //           lam->name->name, filename.c_str(), lno);
-
     DebugLoc noDbg;
     ctx.debug_enabled = true;
     if (dbgFuncName[0] == 0) {
@@ -4445,12 +4498,122 @@ static Function *emit_function(jl_lambda_info_t *lam)
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #elif LLVM37
-        DICompileUnit *CU = dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia, filename, ".", "julia", true, "", 0);
+        CU = dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         assert(CU.Verify());
         #endif
 
+        topfile = dbuilder.createFile(filename, ".");
+    }
+
+    // step 4. determine function signature
+    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
+    Function *f = NULL;
+
+    bool specsig = false;
+    if (!va && !hasCapt && lam->specTypes != jl_anytuple_type && lam->inferred) {
+        // no captured vars and not vararg
+        // consider specialized signature
+        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
+            if (isbits_spec(jl_tparam(lam->specTypes, i))) { // assumes !va
+                specsig = true;
+                break;
+            }
+        }
+        if (jl_nparams(lam->specTypes) == 0)
+            specsig = true;
+        if (isbits_spec(jlrettype))
+            specsig = true;
+    }
+
+    emitted_function_map[jl_symbol(funcName.str().data())] = lam;
+
+    ctx.sret = false;
+    if (specsig) { // assumes !va
+        std::vector<Type*> fsig(0);
+        Type *rt;
+        bool retboxed;
+        if (jlrettype == (jl_value_t*)jl_void_type) {
+            rt = T_void;
+            retboxed = false;
+        }
+        else {
+            rt = julia_type_to_llvm(jlrettype, &retboxed);
+        }
+        if (!retboxed && rt != T_void && deserves_sret(jlrettype, rt)) {
+            ctx.sret = true;
+            fsig.push_back(rt->getPointerTo());
+            rt = T_void;
+        }
+        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
+            Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
+            if (type_is_ghost(ty))
+                continue;
+            if (ty->isAggregateType()) // aggregate types are passed by pointer
+                ty = PointerType::get(ty,0);
+            fsig.push_back(ty);
+        }
+        f = Function::Create(FunctionType::get(rt, fsig, false),
+                             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+                             funcName.str(), m);
+        if (ctx.sret)
+            f->addAttribute(1, Attribute::StructRet);
+        addComdat(f);
+        if (lam->specFunctionObject == NULL) {
+            lam->specFunctionObject = (void*)f;
+            lam->specFunctionID = jl_assign_functionID(f);
+        }
+        if (lam->functionObject == NULL) {
+            Function *fwrap = gen_jlcall_wrapper(lam, ast, f, ctx.sret, &ctx
+#ifdef LLVM37
+                ,topfile,CU
+#endif
+            );
+            lam->functionObject = (void*)fwrap;
+            lam->functionID = jl_assign_functionID(fwrap);
+        }
+    }
+    else {
+        f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+                             funcName.str(), m);
+        addComdat(f);
+        if (lam->functionObject == NULL) {
+            lam->functionObject = (void*)f;
+            lam->functionID = jl_assign_functionID(f);
+        }
+    }
+    if (jlrettype == (jl_value_t*)jl_bottom_type)
+        f->setDoesNotReturn();
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    // tell Win32 to realign the stack to the next 16-byte boundary
+    // upon entry to any function. This achieves compatibility
+    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
+    // i686 Windows (which uses a 4-byte-aligned stack)
+    AttrBuilder *attr = new AttrBuilder();
+    attr->addStackAlignmentAttr(16);
+    f->addAttributes(AttributeSet::FunctionIndex,
+        AttributeSet::get(f->getContext(),
+            AttributeSet::FunctionIndex,*attr));
+#endif
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && LLVM35
+    f->setHasUWTable(); // force NeedsWinEH
+#endif
+
+#ifdef JL_DEBUG_BUILD
+    f->addFnAttr(Attribute::StackProtectReq);
+#endif
+    ctx.f = f;
+
+    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
+    builder.SetInsertPoint(b0);
+
+    //jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
+    //           lam->name->name, filename.c_str(), lno);
+
+    // Create debug entry for the main function
+    if (ctx.debug_enabled) {
 #ifdef LLVM37
         DISubroutineType *subrty;
 #elif LLVM36
@@ -4482,7 +4645,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
         }
 
-        topfile = dbuilder.createFile(filename, ".");
         #ifndef LLVM34
         SP = dbuilder.createFunction((DIDescriptor)dbuilder.getCU(),
         #else
@@ -4520,7 +4682,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line
                 // Variable type
-                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,specsig));
+                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,!specsig));
 #else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
@@ -4528,7 +4690,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 argname->name,    // Variable name
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, specsig), // Variable type
+                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, !specsig), // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + i + 1);                   // Argument number (1-based)
@@ -4619,25 +4781,56 @@ static Function *emit_function(jl_lambda_info_t *lam)
         argCount = AI++;
         ctx.argArray = argArray;
         ctx.argCount = argCount;
-
+    }
+    if (ctx.debug_enabled) {
+        if (!specsig) {
 #ifdef LLVM36
-        // Declare arguments early so llvm in case any of the below emits basic blocks
-        // before we get to loading local variables
-        for(i=0; i < nreq; i++) {
-            jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
-            if (ctx.vars[s].dinfo != (MDNode*)NULL) {
-                SmallVector<int64_t, 9> addr;
-                addr.push_back(llvm::dwarf::DW_OP_plus);
-                addr.push_back(i * sizeof(void*));
-                //addr.push_back(llvm::dwarf::DW_OP_deref);
+            // Declare arguments early so llvm in case any of the below emits basic blocks
+            // before we get to loading local variables
+            for(i=0; i < nreq; i++) {
+                jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+                if (ctx.vars[s].dinfo != (MDNode*)NULL) {
+                    SmallVector<int64_t, 9> addr;
+                    addr.push_back(llvm::dwarf::DW_OP_plus);
+                    addr.push_back(i * sizeof(void*));
+                    addr.push_back(llvm::dwarf::DW_OP_deref);
 #ifdef LLVM37
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr),
-                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+                    ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
+                    ctx.dbuilder->createExpression(addr),
+                    builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
 #else
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
+                    ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
+                    ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
 #endif
+                }
+            }
+#endif
+        } else {
+#ifdef LLVM37
+            Function::arg_iterator AI = f->arg_begin();
+            for(i=0; i < nreq; i++) {
+                jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+                jl_varinfo_t &vi = ctx.vars[s];
+                if (!vi.value.isghost) {
+                    if (specsig) {
+                        jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+                        Type *llvmArgType = julia_type_to_llvm(argType);
+                        if (type_is_ghost(llvmArgType)) // this argument is not actually passed
+                            continue;
+                        else if (llvmArgType->isAggregateType()) { // this argument is by-pointer
+                            SmallVector<int64_t, 9> addr;
+                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                            ctx.dbuilder->insertDbgValueIntrinsic(AI++, 0, vi.dinfo,
+                                ctx.dbuilder->createExpression(addr),
+                                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+
+                        }
+                        else {
+                            ctx.dbuilder->insertDbgValueIntrinsic(AI++, 0, vi.dinfo,
+                                dbuilder.createExpression(), builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+                        }
+                    }
+                }
             }
         }
 #endif
