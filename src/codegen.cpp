@@ -4632,8 +4632,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 }
             }
             DebugLoc loc;
-            MDNode *funcscope = (MDNode*)dbuilder.createLexicalBlockFile(SP,topfile);
             if (ctx.debug_enabled) {
+                MDNode *funcscope = (MDNode*)dbuilder.createLexicalBlockFile(SP, topfile);
                 MDNode *scope;
                 if ((dfil == topfile || dfil == NULL) &&
                     lno >= ctx.lineno) // if we are in the top-level file
@@ -5601,12 +5601,17 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #elif defined(CUSTOM_MEMORY_MANAGER)
         .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManagerOSX()}))
+#elif defined(USE_ORCJIT) // ORCJIT forgets to create one if one isn't created for it
+        .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()}))
 #endif
         .setTargetOptions(options)
         .setRelocationModel(Reloc::PIC_)
         .setCodeModel(CodeModel::Small)
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
+#endif
+#ifdef USE_ORCJIT
+        .setUseOrcMCJITReplacement(true)
 #endif
     ;
     Triple TheTriple(sys::getProcessTriple());
@@ -5667,7 +5672,7 @@ extern "C" void jl_init_codegen(void)
                   ErrorStr.c_str());
         exit(1);
     }
-#ifdef LLVM35
+#if defined(LLVM35) && !defined(USE_ORCJIT)
     jl_ExecutionEngine->setProcessAllSections(true);
 #endif
     jl_ExecutionEngine->DisableLazyCompilation();
