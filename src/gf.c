@@ -234,6 +234,9 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt, jl
                                 ml->sig, ml->va)) {
             return ml->func;
         }
+        // see corresponding code in jl_method_table_assoc_exact
+        if (ml->func == jl_bottom_func && jl_subtype((jl_value_t*)types, (jl_value_t*)ml->sig, 0))
+            return jl_bottom_func;
         ml = ml->next;
     }
     return jl_bottom_func;
@@ -283,6 +286,11 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t
             if (cache_match(args, n, ml->sig, ml->va, lensig)) {
                 return ml->func;
             }
+            // if we hit a guard entry (ml->func == jl_bottom_func), do a more
+            // expensive subtype check, since guard entries added for ANY might be
+            // abstract. this fixed issue #12967.
+            if (ml->func == jl_bottom_func && jl_tuple_subtype(args, n, ml->sig, 1))
+                return jl_bottom_func;
         }
         ml = ml->next;
     }
