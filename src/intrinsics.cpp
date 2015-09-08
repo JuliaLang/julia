@@ -663,7 +663,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         uint64_t size = jl_datatype_size(ety);
         Value *strct =
             builder.CreateCall(prepare_call(jlallocobj_func),
-                               ConstantInt::get(T_size, sizeof(void*)+size));
+                               ConstantInt::get(T_size, size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
