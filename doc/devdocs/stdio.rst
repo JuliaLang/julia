@@ -67,8 +67,8 @@ The :func:`Base.read` and :func:`Base.write` methods for these
 streams use :func:`ccall` to call ``libuv`` wrappers in :code:`src/jl_uv.c`, e.g.::
 
     stream.jl: function write(s::AsyncStream, p::Ptr, nb::Integer)
-                   -> ccall(:jl_write_no_copy, ...)
-      jl_uv.c:          -> int jl_write_no_copy(uv_stream_t *stream, ...)
+                   -> ccall(:jl_uv_write, ...)
+      jl_uv.c:          -> int jl_uv_write(uv_stream_t *stream, ...)
                             -> uv_write(uvw, stream, buf, ...)
 
 printf() during initialisation

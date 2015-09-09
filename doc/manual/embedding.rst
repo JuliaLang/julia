@@ -37,7 +37,7 @@ In order to build this program you have to put the path to the Julia header into
 
     gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
 
-Alternatively, look at the ``embedding.c`` program in the Julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_compileropts`` options while linking against ``libjulia``.
+Alternatively, look at the ``embedding.c`` program in the Julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_options`` options while linking against ``libjulia``.
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
