@@ -75,8 +75,10 @@ nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+convert{T<:AbstractString}(S::Type{SubString{T}}, s::AbstractString) = convert(S, convert(T, s))
+convert{T<:AbstractString}(::Type{SubString}, x::T) = convert(SubString{T}, x)
 
-bytestring{T <: ByteString}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+bytestring{T<:ByteString}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
@@ -121,6 +123,8 @@ reverse(s::AbstractString) = RevString(s)
 reverse(s::RevString) = s.string
 
 isascii(s::RevString{ASCIIString}) = true
+
+Base.convert{T<:AbstractString}(::Type{RevString{T}}, x::SubString{RevString{T}}) = RevString(reverse(bytestring(x)))
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
