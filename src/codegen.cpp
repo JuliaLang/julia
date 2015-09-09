@@ -4251,7 +4251,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
                                                                 DINode::FlagArtificial,
                                                                 true,           // isOptimized
                                                                 w);             // Fn
-        builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, (MDNode*)SP, NULL));
+        //builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, (MDNode*)SP, NULL));
     }
 #endif
 
