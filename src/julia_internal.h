@@ -90,6 +90,8 @@ STATIC_INLINE int jl_is_box(void *v)
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
 
+DLLEXPORT int jl_bitszero(jl_value_t *v);
+
 ssize_t jl_max_jlgensym_in(jl_value_t *v);
 
 extern uv_loop_t *jl_io_loop;
