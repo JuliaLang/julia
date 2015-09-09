@@ -142,6 +142,91 @@ keywords[:return] = doc"""
   block) and gives a value back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
   """
 
+keywords[:if]  = keywords[:elseif] = keywords[:else] = doc"""
+  `if`-`elseif`-`else` performs conditional evaluation, which allows portions of code to be evaluated or not evaluated depending on the value of a boolean expression.
+  Here is the anatomy of the `if`-`elseif`-`else` conditional syntax:
+
+      if x < y
+        println("x is less than y")
+      elseif x > y
+        println("x is greater than y")
+      else
+        println("x is equal to y")
+      end
+
+  If the condition expression `x < y` is true, then the corresponding block is evaluated;
+  otherwise the condition expression `x > y` is evaluated, and if it is true, the corresponding block is evaluated; if neither expression is true, the `else` block is evaluated.
+  The `elseif` and `else` blocks are optional, and as many `elseif` blocks as desired can be used.
+  """
+
+keywords[:for] = doc"""
+  `for` loops repeatedly evaluate the body of the loop by iterating over a sequence of values.  For example:
+
+      for i in [1,4,0]
+        println(i)
+      end
+  """
+
+keywords[:while] = doc"""
+  `while` loops repeatedly evaluate a conditional expression, and continues evaluating the body of the while loop so long as
+  the expression remains `true`. If the condition expression is false when the while loop is first reached, the body is never evaluated.
+  For example:
+
+      while i <= 5
+        println(i)
+        i += 1
+      end
+  """
+
+keywords[:end] = doc"""
+  `end` marks the conclusion of a block of expressions.
+  In the example below, `end` marks the conclusion of a `function`.
+
+      function foo()
+        println("hello, world")
+      end
+
+  `end` marks the conclusion of all kinds of expression blocks: `module`, `type`, `begin`, `let`, `for`, etc.
+
+  In addition, `end` may be used when indexing into an array to represent the last index of each dimension:
+
+      x[1:end, 2:end-1]
+  """
+
+keywords[:try] = keywords[:catch] = doc"""
+  A `try/catch` statement allows for `Exception`s to be tested for. For example, a customized square root function
+  can be written to automatically call either the real or complex square root method on demand using `Exception`s:
+
+      f(x) = try
+        sqrt(x)
+      catch
+        sqrt(complex(x, 0))
+      end
+
+  `try/catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
+
+  The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
+  The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
+  immediately to a much higher level in the stack of calling functions.
+  """
+
+keywords[:finally] = doc"""
+  `finally` provides a way to run some code when a given block of code exits, regardless of how it exits.
+  For example, here is how we can guarantee that an opened file is closed:
+
+      f = open("file")
+      try
+  	operate_on_file(f)
+      finally
+        close(f)
+      end
+
+  When control leaves the `try` block (for example due to a `return`, or just finishing normally),
+  `close(f)` will be executed. If the `try` block exits due to an exception, the exception will continue propagating.
+  A `catch` block may be combined with `try` and `finally` as well.
+  In this case the `finally` block will run after `catch` has handled the error.
+  """
+
 keywords[:break] = doc"""
   `break` breaks out of a loop immediately. For example
 
