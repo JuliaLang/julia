@@ -56,32 +56,28 @@ end
 
 common() = commonStruct
 
-const version_array = Array(Cint, 3)
-if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
-    ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
-else
-    ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
-end
-const version = VersionNumber(version_array...)
+const build_version_array = Array(Cint, 3)
+ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
+const build_version = VersionNumber(build_version_array...)
 
 function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
         if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
-            tmp = Array(Cint, 3)
-            ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
-            ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), tmp)
-            hasversion = true
+            current_version_array = Array(Cint, 3)
+            ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), current_version_array)
+            current_version = VersionNumber(current_version_array...)
         else # CHOLMOD < 2.1.1 does not include cholmod_version()
-            hasversion = false
+            current_version = v"0.0.0"
         end
 
-        if !hasversion || VersionNumber(version_array...) < CHOLMOD_MIN_VERSION
+
+        if current_version < CHOLMOD_MIN_VERSION
 		    warn("""
 
 		        CHOLMOD version incompatibility
 
-		        Julia was compiled with CHOLMOD version $version. It is
+		        Julia was compiled with CHOLMOD version $build_version. It is
 		        currently linked with a version older than
 		        $(CHOLMOD_MIN_VERSION). This might cause Julia to
 		        terminate when working with sparse matrix factorizations,
@@ -92,13 +88,13 @@ function __init__()
 		        from www.julialang.org, which ship with the correct
 		        versions of all dependencies.
 		    """)
-        elseif tmp[1] != version_array[1]
+        elseif build_version_array[1] != current_version_array[1]
             warn("""
 
                 CHOLMOD version incompatibility
 
-                Julia was compiled with CHOLMOD version $version. It
-                is currently linked with version $(VersionNumber(tmp...)).
+                Julia was compiled with CHOLMOD version $build_version. It is
+                currently linked with version $current_version.
                 This might cause Julia to terminate when working with
                 sparse matrix factorizations, e.g. solving systems of
                 equations with \\.
@@ -154,7 +150,7 @@ function __init__()
         set_print_level(commonStruct, 0) # no printing from CHOLMOD by default
 
         # Register gc tracked allocator if CHOLMOD is new enough
-        if hasversion && version >= v"3.0.0"
+        if current_version >= v"3.0.0"
             cnfg = cglobal((:SuiteSparse_config, :libsuitesparseconfig), Ptr{Void})
             unsafe_store!(cnfg, cglobal(:jl_malloc, Ptr{Void}), 1)
             unsafe_store!(cnfg, cglobal(:jl_calloc, Ptr{Void}), 2)
@@ -249,7 +245,7 @@ Sparse{Tv<:VTypes}(p::Ptr{C_Sparse{Tv}}) = Sparse{Tv}(p)
 
 # Factor
 
-if version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
+if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
     immutable C_Factor{Tv<:VTypes}
         n::Csize_t
         minor::Csize_t
