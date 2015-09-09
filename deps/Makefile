@@ -630,6 +630,7 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only) && \
+		cd llvm-$(LLVM_VER)/tools/clang && \
 		git checkout $(LLVM_GIT_VER_CLANG)
 endif # BUILD_LLVM_CLANG
 ifeq ($(BUILD_LLDB),1)
@@ -637,6 +638,7 @@ ifeq ($(BUILD_LLDB),1)
 		git clone $(LLVM_GIT_URL_LLDB) llvm-$(LLVM_VER)/tools/lldb ) || \
 		(cd llvm-$(LLVM_VER)/tools/lldb  && \
 		git pull --ff-only) && \
+		cd llvm-$(LLVM_VER)/tools/lldb && \
 		git checkout $(LLVM_GIT_VER_LLDB)
 endif # BUILD_LLDB
 endif # LLVM_VER
