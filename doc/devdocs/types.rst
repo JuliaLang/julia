@@ -360,13 +360,14 @@ type:
    svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
    ERROR: UndefRefError: access to undefined reference
     in getindex at ./essentials.jl:211
-    in show_delim_array at show.jl:214
-    in show at show.jl:242
-    in anonymous at show.jl:1280
-    in with_output_limit at ./show.jl:1257
-    in showlimited at show.jl:1279
+    in show_delim_array at show.jl:229
+    in show at show.jl:257
+    in anonymous at show.jl:1278
+    in with_output_limit at ./show.jl:1255
+    in showlimited at show.jl:1277
     in display at multimedia.jl:120
-    in display at multimedia.jl:151
+    [inlined code] from multimedia.jl:151
+    in display at multimedia.jl:162
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)

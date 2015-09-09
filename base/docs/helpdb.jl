@@ -7207,7 +7207,7 @@ Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted a
 
   julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
   ERROR: ArgumentError: indices must be unique and sorted
-   in deleteat! at array.jl:533
+   in deleteat! at array.jl:543
 ```
 """
 deleteat!(collection, itr)
@@ -10259,7 +10259,7 @@ integer-valued, or is outside the range supported by ``T``.
 
    julia> convert(Int, 3.5)
    ERROR: InexactError()
-    in convert at int.jl:205
+    in convert at int.jl:209
 
 If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
 the closest value to ``x`` representable by ``T``.

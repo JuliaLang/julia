@@ -359,7 +359,7 @@ All Objects
 
       julia> convert(Int, 3.5)
       ERROR: InexactError()
-       in convert at int.jl:205
+       in convert at int.jl:209
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
    the closest value to ``x`` representable by ``T``.
