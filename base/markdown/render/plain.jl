@@ -20,7 +20,7 @@ function plain{l}(io::IO, header::Header{l})
 end
 
 function plain(io::IO, code::Code)
-    println(io, "```", code.language)
+    println(io, "```", code.language == "jldoctest" ? "jl" : code.language)
     println(io, code.code)
     println(io, "```")
 end
