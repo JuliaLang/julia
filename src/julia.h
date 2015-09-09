@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#define JULIA_API_VERSION 1
+
 #include "options.h"
 
 #include "libsupport.h"
