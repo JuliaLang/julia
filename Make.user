@@ -1,0 +1,13 @@
+override LLVM_GIT_URL_LLVM=git@github.com:JuliaLang/llvm.git
+override LLVM_GIT_URL_LLDB=git@github.com:JuliaLang/lldb.git
+override LLVM_GIT_URL_CLANG=git@github.com:JuliaLang/clang.git
+override LLDB_VER=kf/gallium
+override LLVM_VER=kf/gallium
+override LLVM_CLANG_VER=kf/gallium
+override LLVM_ASSERTIONS=1
+override BUILD_LLVM_CLANG=1
+override BUILD_LLDB=1
+override USE_LLVM_SHLIB=1
+override LLDB_DISABLE_PYTHON=1
+
+OPENBLAS_DYNAMIC_ARCH=0

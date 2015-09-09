@@ -49,7 +49,7 @@ extern "C" {
 
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
-static_assert(bm_none - 1 == UV_HANDLE_TYPE_MAX);
+//static_assert(bm_none - 1 == UV_HANDLE_TYPE_MAX);
 
 static void jl_uv_call_close_callback(void *val)
 {
