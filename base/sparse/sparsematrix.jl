@@ -311,7 +311,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
     return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
-## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
+## sparse() can take its inputs in unsorted order (the parent method is now in csparse.jl)
 
 dimlub(I) = length(I)==0 ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
 
