@@ -57,9 +57,9 @@ grow!(::Anonymous,o::Integer,l::Integer) = return
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
-    if filelen < offset + len
-        write(io, Base.zeros(UInt8,(offset + len) - filelen))
-        flush(io)
+    failure = ccall(:ftruncate, Int16, (Int, Int), fd(io), offset+len)
+    if failure!=0
+        error("Failed to grow file to the size requested")
     end
     seek(io, pos)
     return
