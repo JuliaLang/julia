@@ -91,7 +91,7 @@ keywords[:function] = doc"""
   Functions are defined with the `function` keyword:
 
       function add(a, b)
-        return a + b
+          return a + b
       end
 
   Or the short form notation:
@@ -113,8 +113,8 @@ keywords[:return] = doc"""
   e.g.
 
       function compare(a, b)
-        a == b && return "equal to"
-        a < b ? "less than" : "greater than"
+          a == b && return "equal to"
+          a < b ? "less than" : "greater than"
       end
 
   In general you can place a `return` statement anywhere within a function
@@ -122,16 +122,16 @@ keywords[:return] = doc"""
   with `do` blocks. For example:
 
       function test1(xs)
-        for x in xs
-          iseven(x) && return 2x
-        end
+          for x in xs
+              iseven(x) && return 2x
+          end
       end
 
       function test2(xs)
-        map(xs) do x
-          iseven(x) && return 2x
-          x
-        end
+          map(xs) do x
+              iseven(x) && return 2x
+              x
+          end
       end
 
   In the first example, the return breaks out of its enclosing function
@@ -147,11 +147,11 @@ keywords[:if]  = keywords[:elseif] = keywords[:else] = doc"""
   Here is the anatomy of the `if`-`elseif`-`else` conditional syntax:
 
       if x < y
-        println("x is less than y")
+          println("x is less than y")
       elseif x > y
-        println("x is greater than y")
+          println("x is greater than y")
       else
-        println("x is equal to y")
+          println("x is equal to y")
       end
 
   If the condition expression `x < y` is true, then the corresponding block is evaluated;
@@ -163,7 +163,7 @@ keywords[:for] = doc"""
   `for` loops repeatedly evaluate the body of the loop by iterating over a sequence of values.  For example:
 
       for i in [1,4,0]
-        println(i)
+          println(i)
       end
   """
 
@@ -173,8 +173,8 @@ keywords[:while] = doc"""
   For example:
 
       while i <= 5
-        println(i)
-        i += 1
+          println(i)
+          i += 1
       end
   """
 
@@ -183,7 +183,7 @@ keywords[:end] = doc"""
   In the example below, `end` marks the conclusion of a `function`.
 
       function foo()
-        println("hello, world")
+          println("hello, world")
       end
 
   `end` marks the conclusion of all kinds of expression blocks: `module`, `type`, `begin`, `let`, `for`, etc.
@@ -198,9 +198,9 @@ keywords[:try] = keywords[:catch] = doc"""
   can be written to automatically call either the real or complex square root method on demand using `Exception`s:
 
       f(x) = try
-        sqrt(x)
+          sqrt(x)
       catch
-        sqrt(complex(x, 0))
+          sqrt(complex(x, 0))
       end
 
   `try/catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
@@ -216,9 +216,9 @@ keywords[:finally] = doc"""
 
       f = open("file")
       try
-  	operate_on_file(f)
+          operate_on_file(f)
       finally
-        close(f)
+          close(f)
       end
 
   When control leaves the `try` block (for example due to a `return`, or just finishing normally),
@@ -232,9 +232,9 @@ keywords[:break] = doc"""
 
       i = 0
       while true
-        i += 1
-        i > 10 && break
-        println(i)
+          i += 1
+          i > 10 && break
+          println(i)
       end
 
   prints the numbers 1 to 10.
@@ -245,8 +245,8 @@ keywords[:continue] = doc"""
   looping. For example
 
       for i = 1:10
-        iseven(i) && continue
-        println(i)
+          iseven(i) && continue
+          println(i)
       end
 
   prints the numbers 1, 3, 5..., skipping the even numbers.
@@ -256,7 +256,7 @@ keywords[:do] = doc"""
   The `do` keyword creates an anonymous function. For example
 
       map(1:10) do x
-        2x
+          2x
       end
 
   is equivalent to `map(x->2x, 1:10)`.
@@ -264,7 +264,7 @@ keywords[:do] = doc"""
   Use multiple arguments like so:
 
       map(1:10, 10:20) do x, y
-        x + y
+          x + y
       end
   """
 
@@ -291,8 +291,8 @@ keywords[symbol(";")] = doc"""
   a single expression:
 
       function foo()
-        println("Hello, "); println("World!")
-        return true
+          println("Hello, "); println("World!")
+          return true
       end
 
       foo() = (println("Hello, World!"); true)
@@ -337,8 +337,8 @@ keywords[:begin] = doc"""
   `begin...end` denotes a block of code.
 
       begin
-        println("Hello, ")
-        println("World!")
+          println("Hello, ")
+          println("World!")
       end
 
   Usually `begin` will not be necessary, since keywords
@@ -351,21 +351,21 @@ keywords[:type] = doc"""
   and a set of fields.
 
       type Point
-        x
-        y
+          x
+          y
       end
 
   Fields can have type restrictions, which may be parametised:
 
       type Point{X}
-        x::X
-        y::Float64
+          x::X
+          y::Float64
       end
 
   Type can also declare an abstract super type via `<:` syntax:
 
       type Point <: AbstractPoint
-        ...
+          ...
 
   See the manual for more details, such as information on
   inner constructors.
@@ -400,8 +400,8 @@ keywords[:immutable] = doc"""
 # allocated. Returns the value of the expression. For example:
 #
 #     @time begin
-#       sleep(1)
-#       2+2
+#         sleep(1)
+#         2+2
 #     end
 # """
 # :@time
