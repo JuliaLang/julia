@@ -394,19 +394,15 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   If the argument is a type, return a "larger" type (for numeric types, this will be
-   a type with at least as much range and precision as the argument, and usually more).
-   Otherwise the argument ``x`` is converted to ``widen(typeof(x))``.
+   If the argument is a type, return a "larger" type (for numeric types, this will be a type with at least as much range and precision as the argument, and usually more). Otherwise the argument ``x`` is converted to ``widen(typeof(x))``\ .
 
    .. doctest::
 
-      julia> widen(Int32)
-      Int64
+       julia> widen(Int32)
+       Int64
 
-   .. doctest::
-
-      julia> widen(1.5f0)
-      1.5
+       julia> widen(1.5f0)
+       1.5
 
 .. function:: identity(x)
 
@@ -523,27 +519,26 @@ Types
 
    .. Docstring generated from Julia source
 
-   The byte offset of each field of a type relative to the data start. For example, we could use it
-   in the following manner to summarize information about a struct type:
+   The byte offset of each field of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct type:
 
    .. doctest::
 
-      julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
+       julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
-      julia> structinfo(StatStruct)
-      12-element Array{Tuple{Int64,Symbol,DataType},1}:
-       (0,:device,UInt64)
-       (8,:inode,UInt64)
-       (16,:mode,UInt64)
-       (24,:nlink,Int64)
-       (32,:uid,UInt64)
-       (40,:gid,UInt64)
-       (48,:rdev,UInt64)
-       (56,:size,Int64)
-       (64,:blksize,Int64)
-       (72,:blocks,Int64)
-       (80,:mtime,Float64)
-       (88,:ctime,Float64)
+       julia> structinfo(StatStruct)
+       12-element Array{Tuple{Int64,Symbol,DataType},1}:
+        (0,:device,UInt64)
+        (8,:inode,UInt64)
+        (16,:mode,UInt64)
+        (24,:nlink,Int64)
+        (32,:uid,UInt64)
+        (40,:gid,UInt64)
+        (48,:rdev,UInt64)
+        (56,:size,Int64)
+        (64,:blksize,Int64)
+        (72,:blocks,Int64)
+        (80,:mtime,Float64)
+        (88,:ctime,Float64)
 
 .. function:: fieldtype(T, name::Symbol | index::Int)
 
@@ -562,15 +557,15 @@ Types
 
    .. Docstring generated from Julia source
 
-   Return ``true`` if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
+   Return ``true`` if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``\ , ``Float64``\ , and ``Complex{Float64}``\ .
 
    .. doctest::
 
-      julia> isbits(Complex{Float64})
-      true
+       julia> isbits(Complex{Float64})
+       true
 
-      julia> isbits(Complex)
-      false
+       julia> isbits(Complex)
+       false
 
 .. function:: isleaftype(T)
 
@@ -640,15 +635,15 @@ Generic Functions
 
    .. doctest::
 
-   	julia> function f(x, y)
-   	           x + y
-   	       end;
+       julia> function f(x, y)
+                  x + y
+              end;
 
-   	julia> applicable(f, 1)
-   	false
+       julia> applicable(f, 1)
+       false
 
-   	julia> applicable(f, 1, 2)
-   	true
+       julia> applicable(f, 1, 2)
+       true
 
 .. function:: invoke(f, (types...), args...)
 
@@ -664,8 +659,8 @@ Generic Functions
 
    .. doctest::
 
-      julia> [1:5;] |> x->x.^2 |> sum |> inv
-      0.01818181818181818
+       julia> [1:5;] |> x->x.^2 |> sum |> inv
+       0.01818181818181818
 
 .. function:: call(x, args...)
 

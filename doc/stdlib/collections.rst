@@ -63,14 +63,14 @@ type.
 
    .. doctest::
 
-   	julia> a = ["a", "b", "c"];
+       julia> a = ["a", "b", "c"];
 
-   	julia> for (index, value) in enumerate(a)
-                   println("$index $value")
-               end
-        1 a
-        2 b
-        3 c
+       julia> for (index, value) in enumerate(a)
+                  println("$index $value")
+              end
+       1 a
+       2 b
+       3 c
 
 .. function:: rest(iter, state)
 
@@ -136,11 +136,11 @@ General Collections
 
    .. doctest::
 
-   	julia> isempty([])
-   	true
+       julia> isempty([])
+       true
 
-   	julia> isempty([1 2 3])
-   	false
+       julia> isempty([1 2 3])
+       false
 
 .. function:: empty!(collection) -> collection
 
@@ -513,33 +513,32 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``.
+   Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``\ .
 
    .. doctest::
 
-   	julia> all(i->(4<=i<=6), [4,5,6])
-   	true
+       julia> all(i->(4<=i<=6), [4,5,6])
+       true
 
 .. function:: map(f, c...) -> collection
 
    .. Docstring generated from Julia source
 
-   Transform collection ``c`` by applying ``f`` to each element.
-   For multiple collection arguments, apply ``f`` elementwise.
+   Transform collection ``c`` by applying ``f`` to each element. For multiple collection arguments, apply ``f`` elementwise.
 
    .. doctest::
 
-      julia> map((x) -> x * 2, [1, 2, 3])
-      3-element Array{Int64,1}:
-       2
-       4
-       6
+       julia> map((x) -> x * 2, [1, 2, 3])
+       3-element Array{Int64,1}:
+        2
+        4
+        6
 
-      julia> map(+, [1, 2, 3], [10, 20, 30])
-      3-element Array{Int64,1}:
-       11
-       22
-       33
+       julia> map(+, [1, 2, 3], [10, 20, 30])
+       3-element Array{Int64,1}:
+        11
+        22
+        33
 
 .. function:: map!(function, collection)
 
@@ -833,27 +832,27 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    .. doctest::
 
-     julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-     Dict{ASCIIString,Float64} with 2 entries:
-       "bar" => 42.0
-       "foo" => 0.0
+       julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+       Dict{ASCIIString,Float64} with 2 entries:
+         "bar" => 42.0
+         "foo" => 0.0
 
-     julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
-     Dict{UTF8String,Int64} with 2 entries:
-       "bar" => 4711
-       "baz" => 17
+       julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+       Dict{UTF8String,Int64} with 2 entries:
+         "bar" => 4711
+         "baz" => 17
 
-     julia> merge(a, b)
-     Dict{UTF8String,Float64} with 3 entries:
-       "bar" => 4711.0
-       "baz" => 17.0
-       "foo" => 0.0
+       julia> merge(a, b)
+       Dict{UTF8String,Float64} with 3 entries:
+         "bar" => 4711.0
+         "baz" => 17.0
+         "foo" => 0.0
 
-     julia> merge(b, a)
-     Dict{UTF8String,Float64} with 3 entries:
-       "bar" => 42.0
-       "baz" => 17.0
-       "foo" => 0.0
+       julia> merge(b, a)
+       Dict{UTF8String,Float64} with 3 entries:
+         "bar" => 42.0
+         "baz" => 17.0
+         "foo" => 0.0
 
 .. function:: merge!(collection, others...)
 
@@ -1036,25 +1035,25 @@ Dequeues
 
    .. doctest::
 
-     julia> A=[1, 2, 3, 4, 5, 6]
-     6-element Array{Int64,1}:
-      1
-      2
-      3
-      4
-      5
-      6
+       julia> A=[1, 2, 3, 4, 5, 6]
+       6-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+        6
 
-     julia> pop!(A)
-     6
+       julia> pop!(A)
+       6
 
-     julia> A
-     5-element Array{Int64,1}:
-      1
-      2
-      3
-      4
-      5
+       julia> A
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
 
 .. function:: unshift!(collection, items...) -> collection
 
@@ -1105,19 +1104,18 @@ Dequeues
 
    .. Docstring generated from Julia source
 
-   Insert an ``item`` into ``collection`` at the given ``index``.
-   ``index`` is the index of ``item`` in the resulting ``collection``.
+   Insert an ``item`` into ``collection`` at the given ``index``\ . ``index`` is the index of ``item`` in the resulting ``collection``\ .
 
    .. doctest::
 
-      julia> insert!([6, 5, 4, 2, 1], 4, 3)
-      6-element Array{Int64,1}:
-       6
-       5
-       4
-       3
-       2
-       1
+       julia> insert!([6, 5, 4, 2, 1], 4, 3)
+       6-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        2
+        1
 
 .. function:: deleteat!(collection, index)
 
