@@ -67,7 +67,7 @@ end
 
 function html(io::IO, code::Code)
     withtag(io, :pre) do
-        maybe_lang = code.language != "" ? Any[:class=>"language-$(code.language)"] : []
+        maybe_lang = code.language != "" ? Any[:class=>"language-$(code.language == "jldoctest" ? "jl" : code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
             # TODO should print newline if this is longer than one line ?
