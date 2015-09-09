@@ -884,7 +884,13 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2
 
 ## Binary arithmetic and boolean operators
 
-for op in (+, -, min, max)
+for (op, pro) in ((+,   :eltype_plus),
+                  (-,   :eltype_plus),
+                  (min, :promote_eltype),
+                  (max, :promote_eltype),
+                  (&,   :promote_eltype),
+                  (|,   :promote_eltype),
+                  ($,   :promote_eltype))
     body = gen_broadcast_body_sparse(op, true)
     OP = Symbol(string(op))
     @eval begin
@@ -892,7 +898,7 @@ for op in (+, -, min, max)
             if size(A_1,1) != size(A_2,1) || size(A_1,2) != size(A_2,2)
                 throw(DimensionMismatch(""))
             end
-            Tv = eltype_plus(A_1, A_2)
+            Tv = ($pro)(A_1, A_2)
             B =  spzeros(Tv, promote_type(Ti1, Ti2), broadcast_shape(A_1, A_2)...)
             $body
             B
