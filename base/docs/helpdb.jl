@@ -1637,15 +1637,13 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 cconvert
 
 doc"""
-```rst
-..  |>(x, f)
+    |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
 
-.. doctest::
-
-   julia> [1:5;] |> x->x.^2 |> sum |> inv
-   0.01818181818181818
+```jldoctest
+julia> [1:5;] |> x->x.^2 |> sum |> inv
+0.01818181818181818
 ```
 """
 Base.(:(|>))
@@ -1700,22 +1698,20 @@ Construct vector `c` such that `b = conv(a,c) + r`. Equivalent to polynomial div
 deconv
 
 doc"""
-```rst
-..  insert!(collection, index, item)
+    insert!(collection, index, item)
 
-Insert an ``item`` into ``collection`` at the given ``index``.
-``index`` is the index of ``item`` in the resulting ``collection``.
+Insert an `item` into `collection` at the given `index`.
+`index` is the index of `item` in the resulting `collection`.
 
-.. doctest::
-
-   julia> insert!([6, 5, 4, 2, 1], 4, 3)
-   6-element Array{Int64,1}:
-    6
-    5
-    4
-    3
-    2
-    1
+```jldoctest
+julia> insert!([6, 5, 4, 2, 1], 4, 3)
+6-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 2
+ 1
 ```
 """
 insert!
@@ -1865,22 +1861,20 @@ Remove the last character from a string.
 chop
 
 doc"""
-```rst
-..  Float32(x [, mode::RoundingMode])
+    Float32(x [, mode::RoundingMode])
 
-Create a Float32 from ``x``. If ``x`` is not exactly representable then
-``mode`` determines how ``x`` is rounded.
+Create a Float32 from `x`. If `x` is not exactly representable then
+`mode` determines how `x` is rounded.
 
-.. doctest::
+```jldoctest
+julia> Float32(1/3, RoundDown)
+0.3333333f0
 
-   julia> Float32(1/3, RoundDown)
-   0.3333333f0
-
-   julia> Float32(1/3, RoundUp)
-   0.33333334f0
-
-See ``get_rounding`` for available rounding modes.
+julia> Float32(1/3, RoundUp)
+0.33333334f0
 ```
+
+See `get_rounding` for available rounding modes.
 """
 Float32
 
@@ -2807,34 +2801,35 @@ Print the shortest possible representation, with the minimum number of consecuti
 print_shortest
 
 doc"""
-```rst
-..  merge(collection, others...)
+    merge(collection, others...)
 
-Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.
+Construct a merged collection from the given collections. If necessary, the
+types of the resulting collection will be promoted to accommodate the types of
+the merged collections. If the same key is present in another collection, the
+value for that key will be the value it has in the last collection listed.
 
-.. doctest::
+```jldoctest
+julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+Dict{ASCIIString,Float64} with 2 entries:
+  "bar" => 42.0
+  "foo" => 0.0
 
-  julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-  Dict{ASCIIString,Float64} with 2 entries:
-    "bar" => 42.0
-    "foo" => 0.0
+julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+Dict{UTF8String,Int64} with 2 entries:
+  "bar" => 4711
+  "baz" => 17
 
-  julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
-  Dict{UTF8String,Int64} with 2 entries:
-    "bar" => 4711
-    "baz" => 17
+julia> merge(a, b)
+Dict{UTF8String,Float64} with 3 entries:
+  "bar" => 4711.0
+  "baz" => 17.0
+  "foo" => 0.0
 
-  julia> merge(a, b)
-  Dict{UTF8String,Float64} with 3 entries:
-    "bar" => 4711.0
-    "baz" => 17.0
-    "foo" => 0.0
-
-  julia> merge(b, a)
-  Dict{UTF8String,Float64} with 3 entries:
-    "bar" => 42.0
-    "baz" => 17.0
-    "foo" => 0.0
+julia> merge(b, a)
+Dict{UTF8String,Float64} with 3 entries:
+  "bar" => 42.0
+  "baz" => 17.0
+  "foo" => 0.0
 ```
 """
 merge
@@ -2969,30 +2964,28 @@ Right bit shift operator, preserving the sign of `x`.
 Base.(:(>>))
 
 doc"""
-```rst
-..  fieldoffsets(type)
+    fieldoffsets(type)
 
 The byte offset of each field of a type relative to the data start. For example, we could use it
 in the following manner to summarize information about a struct type:
 
-.. doctest::
+```jldoctest
+julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
-   julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
-
-   julia> structinfo(StatStruct)
-   12-element Array{Tuple{Int64,Symbol,DataType},1}:
-    (0,:device,UInt64)
-    (8,:inode,UInt64)
-    (16,:mode,UInt64)
-    (24,:nlink,Int64)
-    (32,:uid,UInt64)
-    (40,:gid,UInt64)
-    (48,:rdev,UInt64)
-    (56,:size,Int64)
-    (64,:blksize,Int64)
-    (72,:blocks,Int64)
-    (80,:mtime,Float64)
-    (88,:ctime,Float64)
+julia> structinfo(StatStruct)
+12-element Array{Tuple{Int64,Symbol,DataType},1}:
+ (0,:device,UInt64)
+ (8,:inode,UInt64)
+ (16,:mode,UInt64)
+ (24,:nlink,Int64)
+ (32,:uid,UInt64)
+ (40,:gid,UInt64)
+ (48,:rdev,UInt64)
+ (56,:size,Int64)
+ (64,:blksize,Int64)
+ (72,:blocks,Int64)
+ (80,:mtime,Float64)
+ (88,:ctime,Float64)
 ```
 """
 fieldoffsets
@@ -3108,15 +3101,13 @@ Create a sparse identity matrix of specified type of size `m x m`. In case `n` i
 speye
 
 doc"""
-```rst
-..  count_ones(x::Integer) -> Integer
+    count_ones(x::Integer) -> Integer
 
-Number of ones in the binary representation of ``x``.
+Number of ones in the binary representation of `x`.
 
-.. doctest::
-
-   julia> count_ones(7)
-   3
+```jldoctest
+julia> count_ones(7)
+3
 ```
 """
 count_ones
@@ -7590,15 +7581,13 @@ Equivalent to `!is(x, y)`
 Base.(:(!==))
 
 doc"""
-```rst
-..  trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer) -> Integer
 
-Number of ones trailing the binary representation of ``x``.
+Number of ones trailing the binary representation of `x`.
 
-.. doctest::
-
-   julia> trailing_ones(3)
-   2
+```jldoctest
+julia> trailing_ones(3)
+2
 ```
 """
 trailing_ones
@@ -7664,18 +7653,16 @@ Create a shallow copy of `x`: the outer structure is copied, but not all interna
 copy
 
 doc"""
-```rst
-..  isempty(collection) -> Bool
+    isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
 
-.. doctest::
+```jldoctest
+julia> isempty([])
+true
 
-	julia> isempty([])
-	true
-
-	julia> isempty([1 2 3])
-	false
+julia> isempty([1 2 3])
+false
 ```
 """
 isempty
@@ -7870,15 +7857,13 @@ Test whether all values along the given dimensions of an array are ``true``.
 all(A::AbstractArray, dims)
 
 doc"""
-```rst
-..  all(p, itr) -> Bool
+    all(p, itr) -> Bool
 
-Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``.
+Determine whether predicate `p` returns `true` for all elements of `itr`.
 
-.. doctest::
-
-	julia> all(i->(4<=i<=6), [4,5,6])
-	true
+```jldoctest
+julia> all(i->(4<=i<=6), [4,5,6])
+true
 ```
 """
 all(p, itr)
@@ -8569,15 +8554,13 @@ Return the current user's home directory.
 homedir
 
 doc"""
-```rst
-..  count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer) -> Integer
 
-Number of zeros in the binary representation of ``x``.
+Number of zeros in the binary representation of `x`.
 
-.. doctest::
-
-   julia> count_zeros(Int32(2 ^ 16 - 1))
-   16
+```jldoctest
+julia> count_zeros(Int32(2 ^ 16 - 1))
+16
 ```
 """
 count_zeros
@@ -8723,15 +8706,13 @@ argument specifies a random number generator, see :ref:`Random Numbers
 randcycle
 
 doc"""
-```rst
-..  leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer) -> Integer
 
-Number of zeros leading the binary representation of ``x``.
+Number of zeros leading the binary representation of `x`.
 
-.. doctest::
-
-   julia> leading_zeros(Int32(1))
-   31
+```jldoctest
+julia> leading_zeros(Int32(1))
+31
 ```
 """
 leading_zeros
@@ -9136,15 +9117,13 @@ Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i
 Base.(:(*))(x, y...)
 
 doc"""
-```rst
-..  *(s, t)
+    *(s, t)
 
-Concatenate strings. The ``*`` operator is an alias to this function.
+Concatenate strings. The `*` operator is an alias to this function.
 
-.. doctest::
-
-   julia> "Hello " * "world"
-   "Hello world"
+```jldoctest
+julia> "Hello " * "world"
+"Hello world"
 ```
 """
 Base.(:(*))(s::AbstractString, t::AbstractString)
@@ -9236,17 +9215,18 @@ Returns a `TextDisplay <: Display`, which can display any object as the text/pla
 TextDisplay
 
 doc"""
-```rst
-..  factor(n) -> Dict
+    factor(n) -> Dict
 
-Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
+Compute the prime factorization of an integer `n`. Returns a dictionary. The
+keys of the dictionary correspond to the factors, and hence are of the same type
+as `n`. The value associated with each key indicates the number of times the
+factor appears in the factorization.
 
-.. doctest::
-
-   julia> factor(100) # == 2*2*5*5
-   Dict{Int64,Int64} with 2 entries:
-     2 => 2
-     5 => 2
+```jldoctest
+julia> factor(100) # == 2*2*5*5
+Dict{Int64,Int64} with 2 entries:
+  2 => 2
+  5 => 2
 ```
 """
 factor
@@ -9411,15 +9391,13 @@ Create and listen on a Named Pipe / Domain Socket
 listen(path)
 
 doc"""
-```rst
-..  leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer) -> Integer
 
-Number of ones leading the binary representation of ``x``.
+Number of ones leading the binary representation of `x`.
 
-.. doctest::
-
-   julia> leading_ones(UInt32(2 ^ 32 - 2))
-   31
+```jldoctest
+julia> leading_ones(UInt32(2 ^ 32 - 2))
+31
 ```
 """
 leading_ones
@@ -9944,32 +9922,28 @@ For any iterable containers `x` and `y` (including arrays of any dimension) of n
 vecdot
 
 doc"""
-```rst
-..  isprime(x::Integer) -> Bool
+    isprime(x::Integer) -> Bool
 
-Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
+Returns `true` if `x` is prime, and `false` otherwise.
 
-.. doctest::
-
-	julia> isprime(3)
-	true
+```jldoctest
+julia> isprime(3)
+true
 ```
 """
 isprime(::Integer)
 
 doc"""
-```rst
-..  isprime(x::BigInt, [reps = 25]) -> Bool
+    isprime(x::BigInt, [reps = 25]) -> Bool
 
-Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
-``false`` if ``x`` is not prime with high probability. The false positive
-rate is about ``0.25^reps``. ``reps = 25`` is considered safe for
+Probabilistic primality test. Returns `true` if `x` is prime; and
+`false` if `x` is not prime with high probability. The false positive
+rate is about `0.25^reps`. `reps = 25` is considered safe for
 cryptographic applications (Knuth, Seminumerical Algorithms).
 
-.. doctest::
-
-	julia> isprime(big(3))
-	true
+```jldoctest
+julia> isprime(big(3))
+true
 ```
 """
 isprime(::BigInt, ?)
@@ -10274,22 +10248,20 @@ Matrix operator A \\ B\ :sup:`T`
 A_ldiv_Bt
 
 doc"""
-```rst
-..  applicable(f, args...) -> Bool
+    applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
-.. doctest::
+```jldoctest
+julia> function f(x, y)
+           x + y
+       end;
 
-	julia> function f(x, y)
-	           x + y
-	       end;
+julia> applicable(f, 1)
+false
 
-	julia> applicable(f, 1)
-	false
-
-	julia> applicable(f, 1, 2)
-	true
+julia> applicable(f, 1, 2)
+true
 ```
 """
 applicable
@@ -10431,18 +10403,18 @@ Set the precision (in bits) to be used to `BigFloat` arithmetic.
 set_bigfloat_precision
 
 doc"""
-```rst
-..  isbits(T)
+    isbits(T)
 
-Return ``true`` if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
+Return `true` if `T` is a "plain data" type, meaning it is immutable and
+contains no references to other values. Typical examples are numeric types such
+as `UInt8`, `Float64`, and `Complex{Float64}`.
 
-.. doctest::
+```jldoctest
+julia> isbits(Complex{Float64})
+true
 
-   julia> isbits(Complex{Float64})
-   true
-
-   julia> isbits(Complex)
-   false
+julia> isbits(Complex)
+false
 ```
 """
 isbits
@@ -10672,18 +10644,16 @@ The identity function. Returns its argument.
 identity
 
 doc"""
-```rst
-..  iseven(x::Integer) -> Bool
+    iseven(x::Integer) -> Bool
 
-Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
+Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
-.. doctest::
+```jldoctest
+julia> iseven(9)
+false
 
-	julia> iseven(9)
-	false
-
-	julia> iseven(10)
-	true
+julia> iseven(10)
+true
 ```
 """
 iseven
@@ -10765,25 +10735,23 @@ spans all rows of ``R`` in its corresponding QR factorization.
 full(::LinAlg.QRCompactWYQ, ?)
 
 doc"""
-```rst
-..  map(f, c...) -> collection
+    map(f, c...) -> collection
 
-Transform collection ``c`` by applying ``f`` to each element.
-For multiple collection arguments, apply ``f`` elementwise.
+Transform collection `c` by applying `f` to each element.
+For multiple collection arguments, apply `f` elementwise.
 
-.. doctest::
+```jldoctest
+julia> map((x) -> x * 2, [1, 2, 3])
+3-element Array{Int64,1}:
+ 2
+ 4
+ 6
 
-   julia> map((x) -> x * 2, [1, 2, 3])
-   3-element Array{Int64,1}:
-    2
-    4
-    6
-
-   julia> map(+, [1, 2, 3], [10, 20, 30])
-   3-element Array{Int64,1}:
-    11
-    22
-    33
+julia> map(+, [1, 2, 3], [10, 20, 30])
+3-element Array{Int64,1}:
+ 11
+ 22
+ 33
 ```
 """
 map
@@ -11646,22 +11614,18 @@ While it isn't normally necessary, user-defined types can override the default `
 deepcopy
 
 doc"""
-```rst
-..  widen(type | x)
+    widen(type | x)
 
 If the argument is a type, return a "larger" type (for numeric types, this will be
 a type with at least as much range and precision as the argument, and usually more).
-Otherwise the argument ``x`` is converted to ``widen(typeof(x))``.
+Otherwise the argument `x` is converted to `widen(typeof(x))`.
 
-.. doctest::
+```jldoctest
+julia> widen(Int32)
+Int64
 
-   julia> widen(Int32)
-   Int64
-
-.. doctest::
-
-   julia> widen(1.5f0)
-   1.5
+julia> widen(1.5f0)
+1.5
 ```
 """
 widen
@@ -11790,32 +11754,30 @@ Delete and return the mapping for ``key`` if it exists in ``collection``, otherw
 pop!(collection,key,?)
 
 doc"""
-```rst
-..  pop!(collection) -> item
+    pop!(collection) -> item
 
-Remove the last item in ``collection`` and return it.
+Remove the last item in `collection` and return it.
 
-.. doctest::
+```jldoctest
+julia> A=[1, 2, 3, 4, 5, 6]
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
 
-  julia> A=[1, 2, 3, 4, 5, 6]
-  6-element Array{Int64,1}:
-   1
-   2
-   3
-   4
-   5
-   6
+julia> pop!(A)
+6
 
-  julia> pop!(A)
-  6
-
-  julia> A
-  5-element Array{Int64,1}:
-   1
-   2
-   3
-   4
-   5
+julia> A
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
 ```
 """
 pop!(collection)
@@ -11959,21 +11921,22 @@ Remove a trailing newline from a string.
 chomp
 
 doc"""
-```rst
-..  enumerate(iter)
+    enumerate(iter)
 
-An iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
+An iterator that yields `(i, x)` where `i` is an index starting at 1, and
+`x` is the `i`th value from the given iterator. It's useful when you need
+not only the values `x` over which you are iterating, but also the index `i`
+of the iterations.
 
-.. doctest::
+```jldoctest
+julia> a = ["a", "b", "c"];
 
-	julia> a = ["a", "b", "c"];
-
-	julia> for (index, value) in enumerate(a)
-                println("$index $value")
-            end
-     1 a
-     2 b
-     3 c
+julia> for (index, value) in enumerate(a)
+           println("$index $value")
+       end
+1 a
+2 b
+3 c
 ```
 """
 enumerate

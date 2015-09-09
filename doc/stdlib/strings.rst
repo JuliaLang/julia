@@ -24,8 +24,8 @@
 
    .. doctest::
 
-      julia> "Hello " * "world"
-      "Hello world"
+       julia> "Hello " * "world"
+       "Hello world"
 
 .. function:: ^(s, n)
 

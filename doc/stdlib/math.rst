@@ -1239,14 +1239,14 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
+   Compute the prime factorization of an integer ``n``\ . Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``\ . The value associated with each key indicates the number of times the factor appears in the factorization.
 
    .. doctest::
 
-      julia> factor(100) # == 2*2*5*5
-      Dict{Int64,Int64} with 2 entries:
-        2 => 2
-        5 => 2
+       julia> factor(100) # == 2*2*5*5
+       Dict{Int64,Int64} with 2 entries:
+         2 => 2
+         5 => 2
 
 .. function:: gcd(x,y)
 

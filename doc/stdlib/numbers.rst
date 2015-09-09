@@ -286,16 +286,15 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Create a Float32 from ``x``. If ``x`` is not exactly representable then
-   ``mode`` determines how ``x`` is rounded.
+   Create a Float32 from ``x``\ . If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded.
 
    .. doctest::
 
-      julia> Float32(1/3, RoundDown)
-      0.3333333f0
+       julia> Float32(1/3, RoundDown)
+       0.3333333f0
 
-      julia> Float32(1/3, RoundUp)
-      0.33333334f0
+       julia> Float32(1/3, RoundUp)
+       0.33333334f0
 
    See ``get_rounding`` for available rounding modes.
 
@@ -408,45 +407,45 @@ Integers
 
    .. Docstring generated from Julia source
 
-   Number of ones in the binary representation of ``x``.
+   Number of ones in the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> count_ones(7)
-      3
+       julia> count_ones(7)
+       3
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of zeros in the binary representation of ``x``.
+   Number of zeros in the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> count_zeros(Int32(2 ^ 16 - 1))
-      16
+       julia> count_zeros(Int32(2 ^ 16 - 1))
+       16
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of zeros leading the binary representation of ``x``.
+   Number of zeros leading the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> leading_zeros(Int32(1))
-      31
+       julia> leading_zeros(Int32(1))
+       31
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of ones leading the binary representation of ``x``.
+   Number of ones leading the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> leading_ones(UInt32(2 ^ 32 - 2))
-      31
+       julia> leading_ones(UInt32(2 ^ 32 - 2))
+       31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
@@ -463,12 +462,12 @@ Integers
 
    .. Docstring generated from Julia source
 
-   Number of ones trailing the binary representation of ``x``.
+   Number of ones trailing the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> trailing_ones(3)
-      2
+       julia> trailing_ones(3)
+       2
 
 .. function:: isprime(x::Integer) -> Bool
 
@@ -478,22 +477,19 @@ Integers
 
    .. doctest::
 
-   	julia> isprime(3)
-   	true
+       julia> isprime(3)
+       true
 
 .. function:: isprime(x::BigInt, [reps = 25]) -> Bool
 
    .. Docstring generated from Julia source
 
-   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
-   ``false`` if ``x`` is not prime with high probability. The false positive
-   rate is about ``0.25^reps``. ``reps = 25`` is considered safe for
-   cryptographic applications (Knuth, Seminumerical Algorithms).
+   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``\ . ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
 
    .. doctest::
 
-   	julia> isprime(big(3))
-   	true
+       julia> isprime(big(3))
+       true
 
 .. function:: primes([lo,] hi)
 
@@ -529,11 +525,11 @@ Integers
 
    .. doctest::
 
-   	julia> iseven(9)
-   	false
+       julia> iseven(9)
+       false
 
-   	julia> iseven(10)
-   	true
+       julia> iseven(10)
+       true
 
 BigFloats
 ---------
