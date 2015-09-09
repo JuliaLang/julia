@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 # check sparse matrix construction
 @test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 
@@ -1102,3 +1104,28 @@ q = randperm(10)
 # issue #13008
 @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
 @test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
+
+# issue #13024
+let
+    A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
+    B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
+
+    @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test A13024 $ B13024 == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
+    @test typeof(A13024 $ B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+    @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+    for op in (+, -, &, |, $, max, min)
+        @test op(A13024, B13024) == op(full(A13024), full(B13024))
+    end
+end
