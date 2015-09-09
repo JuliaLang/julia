@@ -226,7 +226,7 @@ function banner(io::IO = STDOUT)
         commit = GIT_VERSION_INFO.commit_short
 
         if distance == 0
-            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+            commit_string = "Commit $(commit) ($(days) $(unit) old release-0.4)"
         else
             branch = GIT_VERSION_INFO.branch
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
