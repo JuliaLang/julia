@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # UTF-32 basic functions
 next(s::UTF32String, i::Int) = (Char(s.data[i]), i+1)
 endof(s::UTF32String) = length(s.data) - 1

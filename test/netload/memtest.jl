@@ -28,7 +28,7 @@ function get_vmsize()
 end
 
 function run_mtest(name, testf)
-    print ("Testing $name...")
+    print("Testing $name...")
     for i in 1:2
         print("priming process...")
         testf()
@@ -61,5 +61,3 @@ end
 
 run_mtest("create_strings", () -> mtest_create_strings())
 run_mtest("remotecall_fetch", () -> mtest_remotecall_fetch())
-
-
