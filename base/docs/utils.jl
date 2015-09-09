@@ -282,16 +282,16 @@ const builtins = ["abstract", "baremodule", "begin", "bitstype", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-isvalid(name::AbstractString) = !ismatch(r"#", name)
+is_valid_name(name::AbstractString) = !ismatch(r"#", name)
 
 function accessible(mod::Module)
     result = ByteString[]
-    append!(result, filter(isvalid, map(string, names(mod, true, true))))
+    append!(result, filter(is_valid_name, map(string, names(mod, true, true))))
     for inner_mod in moduleusings(mod), sym in names(inner_mod)
         name = string(sym)
-        if isvalid(name); push!(result, name) end
+        if is_valid_name(name); push!(result, name) end
     end
-    return append!(result, filter(isvalid, map(string, builtins)))
+    return append!(result, filter(is_valid_name, map(string, builtins)))
 end
 
 completions(name) = fuzzysort(name, accessible(current_module()))
