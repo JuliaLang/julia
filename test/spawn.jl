@@ -271,3 +271,25 @@ let fname = tempname()
     @test success(pipeline(`cat $fname`, `$exename -e $code`))
     rm(fname)
 end
+
+let cmd = AbstractString[]
+    # Ensure that quoting works
+    @test Base.shell_split("foo bar baz") == ["foo", "bar", "baz"]
+    @test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
+    @test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
+    @test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
+
+    # "Over quoted"
+    @test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
+    @test Base.shell_split("\"foo\\ bar\" baz") == ["foo\\ bar", "baz"]
+
+    # Ensure that shell_split handles quoted spaces
+    cmd = ["/Volumes/External HD/program", "-a"]
+    @test Base.shell_split("/Volumes/External\\ HD/program -a") == cmd
+    @test Base.shell_split("'/Volumes/External HD/program' -a") == cmd
+    @test Base.shell_split("\"/Volumes/External HD/program\" -a") == cmd
+
+    # Backticks should automatically quote where necessary
+    cmd = ["foo bar", "baz"]
+    @test string(`$cmd`) == "`'foo bar' baz`"
+end
