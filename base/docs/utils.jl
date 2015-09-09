@@ -135,6 +135,18 @@ end
 
 # Fuzzy Search Algorithm
 
+immutable ScorePair{T1<:Real, T2<:Real}
+    first::T1
+    second::T2
+end
+function Base.isless{T1<:Real,T2<:Real}(a::ScorePair{T1,T2}, b::ScorePair{T1,T2})
+    if isequal(a.first, b.first)
+        isless(a.second, b.second)
+    else
+        isless(a.first, b.first)
+    end
+end
+
 function matchinds(needle, haystack; acronym = false)
     chars = collect(needle)
     is = Int[]
@@ -172,8 +184,10 @@ function fuzzyscore(needle, haystack)
 end
 
 function fuzzysort(search, candidates)
-    scores = map(cand -> (fuzzyscore(search, cand), -levenshtein(search, cand)), candidates)
-    candidates[sortperm(scores)] |> reverse
+    scores = ScorePair{Float64,Int}[ScorePair(fuzzyscore(search, cand),
+                                              -levenshtein(search, cand))
+                                        for cand in candidates]
+    candidates[sortperm(scores, rev=true)]
 end
 
 # Levenshtein Distance
@@ -187,7 +201,7 @@ function levenshtein(s1, s2)
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
 
-    for i = 1:m, j = 1:n
+    for j = 1:n, i = 1:m
         d[i+1,j+1] = min(d[i  , j+1] + 1,
                          d[i+1, j  ] + 1,
                          d[i  , j  ] + (a[i] != b[j]))
@@ -197,13 +211,11 @@ function levenshtein(s1, s2)
 end
 
 function levsort(search, candidates)
-    scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
-    candidates = candidates[sortperm(scores)]
-    i = 0
-    for i = 1:length(candidates)
-        levenshtein(search, candidates[i]) > 3 && break
-    end
-    return candidates[1:i]
+    candidates = filter(cand -> levenshtein(search, cand) <= 3, candidates)
+    scores = ScorePair{Int,Float64}[ScorePair(levenshtein(search, cand),
+                                              -fuzzyscore(search, cand))
+                                        for cand in candidates]
+    return permute!(candidates, sortperm(scores))
 end
 
 # Result printing
@@ -270,12 +282,17 @@ const builtins = ["abstract", "baremodule", "begin", "bitstype", "break",
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
+isvalid(name::AbstractString) = !ismatch(r"#", name)
 
-accessible(mod::Module) =
-    [names(mod, true, true);
-     map(names, moduleusings(mod))...;
-     builtins] |> unique |> filtervalid
+function accessible(mod::Module)
+    result = ByteString[]
+    append!(result, filter(isvalid, map(string, names(mod, true, true))))
+    for inner_mod in moduleusings(mod), sym in names(inner_mod)
+        name = string(sym)
+        if isvalid(name); push!(result, name) end
+    end
+    return append!(result, filter(isvalid, map(string, builtins)))
+end
 
 completions(name) = fuzzysort(name, accessible(current_module()))
 completions(name::Symbol) = completions(string(name))
