@@ -31,7 +31,7 @@ The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
 2. The C function :c:func:`main` from `ui/repl.c` gets called.
-   This function processes the command line arguments, filling in the :c:type:`jl_compileropts` struct and setting the variable :code:`ARGS`.
+   This function processes the command line arguments, filling in the :c:type:`jl_options` struct and setting the variable :code:`ARGS`.
    It then initializes Julia (by calling `julia_init in task.c <https://github.com/JuliaLang/julia/blob/master/src/task.c>`_,
    which may load a previously compiled sysimg_).
    Finally, it passes off control to Julia by calling `Base._start() <https://github.com/JuliaLang/julia/blob/master/base/client.jl>`_.
@@ -188,7 +188,7 @@ and serializing the resulting environment (including Types, Functions, Modules, 
 into a file. Therefore, it contains a frozen version of the :mod:`Main`, :mod:`Core`, and :mod:`Base` modules (and whatever else was in the environment at the end of bootstrapping).
 This serializer/deserializer is implemented by `jl_save_system_image/jl_restore_system_image in dump.c <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_.
 
-If there is no sysimg file (:code:`jl_compileropts.image_file == NULL`),
+If there is no sysimg file (:code:`jl_options.image_file == NULL`),
 this also implies that `--build` was given on the command line,
 so the final result should be a new sysimg file.
 During Julia initialization, minimal :mod:`Core` and :mod:`Main` modules are created.
