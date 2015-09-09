@@ -52,8 +52,7 @@ call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 
-# The specialization for 1 arg is important
-# when running with --inline=no, see #11158
+# The specialization for 1 arg is important when running with --inline=no, see #11158
 call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 

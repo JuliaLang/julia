@@ -615,7 +615,7 @@ However, type promotion between the primitive types above and
     -9223372036854775809
 
     julia> typeof(y)
-    Base.GMP.BigInt
+    BigInt
 
 The default precision (in number of bits of the significand) and
 rounding mode of :class:`BigFloat` operations can be changed globally

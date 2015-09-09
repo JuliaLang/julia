@@ -106,7 +106,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
         if length(code) == 7 && !code[6]  # code[6] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1]) (complex(x)).")
+                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code[1] == :^ && (code[2] == symbol("promotion.jl") || code[2] == symbol("math.jl"))
