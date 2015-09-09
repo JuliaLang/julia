@@ -73,21 +73,21 @@ function __init__()
 
 
         if current_version < CHOLMOD_MIN_VERSION
-		    warn("""
+            warn("""
 
-		        CHOLMOD version incompatibility
+                CHOLMOD version incompatibility
 
-		        Julia was compiled with CHOLMOD version $build_version. It is
-		        currently linked with a version older than
-		        $(CHOLMOD_MIN_VERSION). This might cause Julia to
-		        terminate when working with sparse matrix factorizations,
-		        e.g. solving systems of equations with \\.
+                Julia was compiled with CHOLMOD version $build_version. It is
+                currently linked with a version older than
+                $(CHOLMOD_MIN_VERSION). This might cause Julia to
+                terminate when working with sparse matrix factorizations,
+                e.g. solving systems of equations with \\.
 
-		        It is recommended that you use Julia with a recent version
-		        of CHOLMOD, or download the generic binaries
-		        from www.julialang.org, which ship with the correct
-		        versions of all dependencies.
-		    """)
+                It is recommended that you use Julia with a recent version
+                of CHOLMOD, or download the generic binaries
+                from www.julialang.org, which ship with the correct
+                versions of all dependencies.
+            """)
         elseif build_version_array[1] != current_version_array[1]
             warn("""
 
