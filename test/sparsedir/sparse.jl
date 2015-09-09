@@ -1098,3 +1098,7 @@ A = sprand(10,10,0.2)
 p = randperm(10)
 q = randperm(10)
 @test Base.SparseMatrix.csc_permute(A, invperm(p), q) == full(A)[p, q]
+
+# issue #13008
+@test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
+@test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
