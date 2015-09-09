@@ -130,6 +130,10 @@ end
 
 @test meta(DocsTest)[DocsTest] == doc"DocsTest"
 
+# Check that plain docstrings store a module reference.
+# https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
+@test meta(DocsTest)[DocsTest].meta[:module] == DocsTest
+
 let f = DocsTest.f
     funcdoc = meta(DocsTest)[f]
     @test funcdoc.main == nothing

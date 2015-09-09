@@ -344,7 +344,7 @@ namify(sy::Symbol) = sy
 
 function mdify(ex)
     if isexpr(ex, AbstractString, :string)
-        :(Markdown.parse($(esc(ex))))
+        :(Markdown.doc_str($(esc(ex)), @__FILE__, current_module()))
     else
         esc(ex)
     end
