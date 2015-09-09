@@ -103,7 +103,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `beginswith` is now `startswith` [#9583](https://github.com/JuliaLang/julia/pull/9583)
 
-* `|>`, `>>`, `.>`, and `.>>` are now `pipe` [#10211](https://github.com/JuliaLang/julia/pull/10211)
+* `|>`, `>>`, `.>`, and `.>>` are now `pipeline` ([#10211](https://github.com/JuliaLang/julia/pull/10211) and [#12739](https://github.com/JuliaLang/julia/pull/12739))
 
 * `names(::DataType)` is now renamed to `fieldnames` [#10332](https://github.com/JuliaLang/julia/pull/10332)
 
