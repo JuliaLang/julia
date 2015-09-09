@@ -377,7 +377,7 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     # in case its name changes in the future
     show_backtrace(io,
                     try
-                        symbol(string(eval_user_input))
+                        eval_user_input.env.name
                     catch
                         :(:) #for when client.jl is not yet defined
                     end, t, set)
