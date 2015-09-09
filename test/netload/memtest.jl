@@ -33,10 +33,10 @@ function run_mtest(name, testf)
         print("priming process...")
         testf()
     end
-    vm1 = get_vmsize_rusage()
+    vm1 = get_vmsize()
     println("monitored run...")
     testf()
-    vm2 = get_vmsize_rusage()
+    vm2 = get_vmsize()
 
     diff = vm2 - vm1
     WARN = (diff > 1000) ? "<===================================== WARNING" : ""
