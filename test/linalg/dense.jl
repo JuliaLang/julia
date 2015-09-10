@@ -96,7 +96,7 @@ debug && println("Numbers")
     @test expm(α) == exp(α)
 
 debug && println("Powers")
-    if eltya <: FloatingPoint
+    if eltya <: AbstractFloat
         z = zero(eltya)
         t = convert(eltya,2)
         r = convert(eltya,2.5)

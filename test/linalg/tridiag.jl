@@ -84,7 +84,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @test_approx_eq full(full(Tldlt)) Fs
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
         @test size(Tldlt) == size(Ts)
-        if elty <: FloatingPoint
+        if elty <: AbstractFloat
             @test typeof(convert(Base.LinAlg.LDLt{Float32},Tldlt)) == Base.LinAlg.LDLt{Float32,SymTridiagonal{elty}}
         end
     end

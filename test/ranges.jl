@@ -108,8 +108,8 @@ end
 @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
 @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-@test 0 in UInt(0):100:typemax(Uint)
-@test last(UInt(0):100:typemax(Uint)) in UInt(0):100:typemax(Uint)
+@test 0 in UInt(0):100:typemax(UInt)
+@test last(UInt(0):100:typemax(UInt)) in UInt(0):100:typemax(UInt)
 @test -9223372036854775790 in -9223372036854775790:100:9223372036854775710
 @test -9223372036854775690 in -9223372036854775790:100:9223372036854775710
 @test -90 in -9223372036854775790:100:9223372036854775710
