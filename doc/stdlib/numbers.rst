@@ -304,7 +304,7 @@ General Number Functions and Constants
 
    Create a Float64 from ``x``\ . If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded.
 
-   .. code-block:: julia
+   .. doctest::
 
        julia> Float64(pi, RoundDown)
        3.141592653589793
