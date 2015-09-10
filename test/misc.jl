@@ -170,3 +170,13 @@ end
 let v = sprint(whos, _test_whos_)
     @test contains(v, "x      8 bytes  Float64 : 1.0")
 end
+
+# issue #13021
+let ex = try
+    Main.x13021 = 0
+    nothing
+catch ex
+    ex
+end
+    @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
+end
