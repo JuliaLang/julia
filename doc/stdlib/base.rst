@@ -867,35 +867,24 @@ System
 
    .. Docstring generated from Julia source
 
-   Create a pipeline from a data source to a destination. The source and destination can
-   be commands, I/O streams, strings, or results of other ``pipeline`` calls. At least one
-   argument must be a command. Strings refer to filenames.
-   When called with more than two arguments, they are chained together from left to right.
-   For example ``pipeline(a,b,c)`` is equivalent to ``pipeline(pipeline(a,b),c)``. This provides a more
-   concise way to specify multi-stage pipelines.
+   Create a pipeline from a data source to a destination. The source and destination can be commands, I/O streams, strings, or results of other ``pipeline`` calls. At least one argument must be a command. Strings refer to filenames. When called with more than two arguments, they are chained together from left to right. For example ``pipeline(a,b,c)`` is equivalent to ``pipeline(pipeline(a,b),c)``\ . This provides a more concise way to specify multi-stage pipelines.
 
    **Examples**:
+
      * ``run(pipeline(`ls`, `grep xyz`))``
      * ``run(pipeline(`ls`, "out.txt"))``
      * ``run(pipeline("out.txt", `grep xyz`))``
-
 
 .. function:: pipeline(command; stdin, stdout, stderr, append=false)
 
    .. Docstring generated from Julia source
 
-   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
-   the command's streams should be redirected. ``append`` controls whether file output
-   appends to the file.
-   This is a more general version of the 2-argument ``pipeline`` function.
-   ``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a
-   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
-   data source.
+   Redirect I/O to or from the given ``command``\ . Keyword arguments specify which of the command's streams should be redirected. ``append`` controls whether file output appends to the file. This is a more general version of the 2-argument ``pipeline`` function. ``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of data source.
 
    **Examples**:
+
      * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
      * ``run(pipeline(`update`, stdout="log.txt", append=true))``
-
 
 .. function:: gethostname() -> AbstractString
 

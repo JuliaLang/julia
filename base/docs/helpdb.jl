@@ -2741,25 +2741,19 @@ Sum elements of `A` over the singleton dimensions of `r`, and write results to `
 sum!
 
 doc"""
-```rst
-..  close(stream)
+    close(stream)
 
-Close an I/O stream. Performs a ``flush`` first.
-```
+Close an I/O stream. Performs a `flush` first.
 """
 close(stream::IO)
 
 doc"""
-```rst
-..  close(Channel)
+    close(Channel)
 
 Closes a channel. An exception is thrown by:
 
-    - ``put!`` on a closed channel.
-
-    - ``take!`` and ``fetch`` on an empty, closed channel.
-
-```
+* `put!` on a closed channel.
+* `take!` and `fetch` on an empty, closed channel.
 """
 close(::Channel)
 
@@ -4478,42 +4472,40 @@ Obtain the contents of an `IOBuffer` as a string, without copying. Afterwards, t
 takebuf_string
 
 doc"""
-```rst
-..  pipeline(from, to, ...)
+    pipeline(from, to, ...)
 
 Create a pipeline from a data source to a destination. The source and destination can
-be commands, I/O streams, strings, or results of other ``pipeline`` calls. At least one
+be commands, I/O streams, strings, or results of other `pipeline` calls. At least one
 argument must be a command. Strings refer to filenames.
 When called with more than two arguments, they are chained together from left to right.
-For example ``pipeline(a,b,c)`` is equivalent to ``pipeline(pipeline(a,b),c)``. This provides a more
+For example `pipeline(a,b,c)` is equivalent to `pipeline(pipeline(a,b),c)`. This provides a more
 concise way to specify multi-stage pipelines.
 
 **Examples**:
-  * ``run(pipeline(`ls`, `grep xyz`))``
-  * ``run(pipeline(`ls`, "out.txt"))``
-  * ``run(pipeline("out.txt", `grep xyz`))``
 
-```
+* ``run(pipeline(`ls`, `grep xyz`))``
+* ``run(pipeline(`ls`, "out.txt"))``
+* ``run(pipeline("out.txt", `grep xyz`))``
+
 """
 pipeline(from, to, rest...)
 
 doc"""
-```rst
-..  pipeline(command; stdin, stdout, stderr, append=false)
+    pipeline(command; stdin, stdout, stderr, append=false)
 
-Redirect I/O to or from the given ``command``. Keyword arguments specify which of
-the command's streams should be redirected. ``append`` controls whether file output
+Redirect I/O to or from the given `command`. Keyword arguments specify which of
+the command's streams should be redirected. `append` controls whether file output
 appends to the file.
-This is a more general version of the 2-argument ``pipeline`` function.
-``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a
-command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
+This is a more general version of the 2-argument `pipeline` function.
+`pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a
+command, and to `pipe(to, stdin=from)` when `from` is another kind of
 data source.
 
 **Examples**:
-  * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-  * ``run(pipeline(`update`, stdout="log.txt", append=true))``
 
-```
+* ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+* ``run(pipeline(`update`, stdout="log.txt", append=true))``
+
 """
 pipeline(command)
 
@@ -5928,12 +5920,11 @@ Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` ot
 isodd
 
 doc"""
-```rst
-..  normalize_string(s, normalform::Symbol)
+    normalize_string(s, normalform::Symbol)
 
-Normalize the string ``s`` according to one of the four "normal
-forms" of the Unicode standard: ``normalform`` can be ``:NFC``,
-``:NFD``, ``:NFKC``, or ``:NFKD``.  Normal forms C (canonical
+Normalize the string `s` according to one of the four "normal
+forms" of the Unicode standard: `normalform` can be `:NFC`,
+`:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C (canonical
 composition) and D (canonical decomposition) convert different
 visually identical representations of the same abstract string into
 a single canonical form, with form C being more compact.  Normal
@@ -5943,23 +5934,22 @@ but visually distinct into a single canonical choice (e.g. they expand
 ligatures into the individual characters), with form KC being more compact.
 
 Alternatively, finer control and additional transformations may be
-be obtained by calling ``normalize_string(s; keywords...)``, where
+be obtained by calling `normalize_string(s; keywords...)`, where
 any number of the following boolean keywords options (which all default
-to ``false`` except for ``compose``) are specified:
+to `false` except for `compose`) are specified:
 
-* ``compose=false``: do not perform canonical composition
-* ``decompose=true``: do canonical decomposition instead of canonical composition (``compose=true`` is ignored if present)
-* ``compat=true``: compatibility equivalents are canonicalized
-* ``casefold=true``: perform Unicode case folding, e.g. for case-insensitive string comparison
-* ``newline2lf=true``, ``newline2ls=true``, or ``newline2ps=true``: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
-* ``stripmark=true``: strip diacritical marks (e.g. accents)
-* ``stripignore=true``: strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
-* ``stripcc=true``: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
-* ``rejectna=true``: throw an error if unassigned code points are found
-* ``stable=true``: enforce Unicode Versioning Stability
+* `compose=false`: do not perform canonical composition
+* `decompose=true`: do canonical decomposition instead of canonical composition (`compose=true` is ignored if present)
+* `compat=true`: compatibility equivalents are canonicalized
+* `casefold=true`: perform Unicode case folding, e.g. for case-insensitive string comparison
+* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
+* `stripmark=true`: strip diacritical marks (e.g. accents)
+* `stripignore=true`: strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
+* `stripcc=true`: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+* `rejectna=true`: throw an error if unassigned code points are found
+* `stable=true`: enforce Unicode Versioning Stability
 
-For example, NFKC corresponds to the options ``compose=true, compat=true, stable=true``.
-```
+For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
 """
 normalize_string
 
@@ -7402,32 +7392,25 @@ Convert an integer to a decimal string, optionally specifying a number of digits
 dec
 
 doc"""
-```rst
-..  wait([x])
+    wait([x])
 
 Block the current task until some event occurs, depending on the type
 of the argument:
 
-* ``RemoteRef``: Wait for a value to become available for the specified remote reference.
-
-* ``Channel``: Wait for a value to be appended to the channel.
-
-* ``Condition``: Wait for ``notify`` on a condition.
-
-* ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
-
-* ``Task``: Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``).
-
-* ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
+* `RemoteRef`: Wait for a value to become available for the specified remote reference.
+* `Channel`: Wait for a value to be appended to the channel.
+* `Condition`: Wait for `notify` on a condition.
+* `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process can be used to determine success or failure.
+* `Task`: Wait for a `Task` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called `wait`).
+* `RawFD`: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
 If no argument is passed, the task blocks for an undefined period. If the task's
-state is set to ``:waiting``, it can only be restarted by an explicit call to
-``schedule`` or ``yieldto``. If the task's state is ``:runnable``, it might be
+state is set to `:waiting`, it can only be restarted by an explicit call to
+`schedule` or `yieldto`. If the task's state is `:runnable`, it might be
 restarted unpredictably.
 
-Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
+Often `wait` is called within a `while` loop to ensure a waited-for condition
 is met before proceeding.
-```
 """
 wait
 
@@ -10514,15 +10497,12 @@ Find the next index >= `i` of an element of `A` equal to `v` (using `==`), or `0
 findnext(A,v,i)
 
 doc"""
-```rst
-..  fetch(x)
+    fetch(x)
 
-Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
+Waits and fetches a value from `x` depending on the type of `x`. Does not remove the item fetched:
 
-* ``RemoteRef``: Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
-
-* ``Channel`` : Wait for and get the first available item from the channel.
-```
+* `RemoteRef`: Wait for and get the value of a remote reference. If the remote value is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
+* `Channel` : Wait for and get the first available item from the channel.
 """
 fetch
 
