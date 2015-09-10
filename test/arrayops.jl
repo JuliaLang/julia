@@ -136,9 +136,8 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-# XXX: fails, returns [Union{}]
-# rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
-# @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
+@test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # construction
 @test typeof(Vector{Int}(3)) == Vector{Int}
@@ -909,7 +908,6 @@ A = [NaN]; B = [NaN]
 # complete testsuite for reducedim
 
 # Inferred types
-#= XXX: Base.return_types returns [Union{}]
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
@@ -923,7 +921,6 @@ for N = 1:Nmax
     N > 1 && @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == [BitArray{N-1}]
     N > 1 && @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
 end
-=#
 
 # issue #6645 (32-bit)
 let

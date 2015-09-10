@@ -243,18 +243,6 @@ General Number Functions and Constants
 
    Test whether a floating point number is not a number (NaN)
 
-.. function:: inf(f)
-
-   .. Docstring generated from Julia source
-
-   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
-
-.. function:: nan(f)
-
-   .. Docstring generated from Julia source
-
-   Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
-
 .. function:: nextfloat(f)
 
    .. Docstring generated from Julia source

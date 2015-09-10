@@ -968,18 +968,6 @@ Set-Like Collections
 
    Construct the symmetric difference of sets ``s1`` and ``s2``\ , storing the result in ``s1``\ .
 
-.. function:: complement(s)
-
-   .. Docstring generated from Julia source
-
-   Returns the set-complement of :obj:`IntSet` ``s``.
-
-.. function:: complement!(s)
-
-   .. Docstring generated from Julia source
-
-   Mutates :obj:`IntSet` ``s`` into its set-complement.
-
 .. function:: intersect!(s1, s2)
 
    .. Docstring generated from Julia source
