@@ -34,8 +34,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-   ``*(x, y, z, ...)``.
+   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e. ``*(x, y, z, ...)``\ .
 
 .. _/:
 .. function:: /(x, y)
@@ -426,17 +425,16 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product *A B* and stores the
-   result in *Y*, overwriting the existing value of *Y*.
+   Calculates the matrix-matrix or matrix-vector product ``A * B`` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ .
 
    .. doctest::
 
-      julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
+       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
 
-      julia> B
-      2x2 Array{Float64,2}:
-       3.0  3.0
-       7.0  7.0
+       julia> B
+       2x2 Array{Float64,2}:
+        3.0  3.0
+        7.0  7.0
 
 .. function:: A_mul_Bc(...)
 
@@ -1239,14 +1237,14 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
+   Compute the prime factorization of an integer ``n``\ . Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``\ . The value associated with each key indicates the number of times the factor appears in the factorization.
 
    .. doctest::
 
-      julia> factor(100) # == 2*2*5*5
-      Dict{Int64,Int64} with 2 entries:
-        2 => 2
-        5 => 2
+       julia> factor(100) # == 2*2*5*5
+       Dict{Int64,Int64} with 2 entries:
+         2 => 2
+         5 => 2
 
 .. function:: gcd(x,y)
 
