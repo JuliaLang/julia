@@ -509,11 +509,11 @@ function register(pkg::AbstractString, url::AbstractString)
     isfile("METADATA",pkg,"url") && error("$pkg already registered")
     tags = split(Git.readall(`tag -l v*`, dir=pkg))
     filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
-    versions = [
+    versions = Dict([
         convert(VersionNumber,tag) =>
         Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
         for tag in tags
-    ]
+    ])
     Git.transact(dir="METADATA") do
         cd("METADATA") do
             info("Registering $pkg at $url")

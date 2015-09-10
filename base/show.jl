@@ -578,18 +578,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_call(io, head, ex.args[1], ex.args[2:end], indent)
 
     # comprehensions
-    elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 3
-        isdict = (head === :typed_dict_comprehension)
-        isdict && print(io, '(')
+    elseif head === :typed_comprehension && length(args) == 3
         show_unquoted(io, args[1], indent)
-        isdict && print(io, ')')
         print(io, '[')
         show_unquoted(io, args[2], indent)
         print(io, " for ")
         show_unquoted(io, args[3], indent)
         print(io, ']')
 
-    elseif (head === :comprehension || head === :dict_comprehension) && length(args) == 2
+    elseif head === :comprehension && length(args) == 2
         print(io, '[')
         show_unquoted(io, args[1], indent)
         print(io, " for ")

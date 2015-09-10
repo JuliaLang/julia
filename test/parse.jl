@@ -22,10 +22,10 @@ let
                        ("5.≥x", "5.>=x"),
                        ("5.≤x", "5.<=x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
-        @test ex1.head === :comparison && (ex1.head === ex2.head)
-        @test ex1.args[1] === 5 && ex2.args[1] === 5
-        @test is(eval(Main, ex1.args[2]), eval(Main, ex2.args[2]))
-        @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
+        @assert ex1.head === :comparison && (ex1.head === ex2.head)
+        @assert ex1.args[1] === 5 && ex2.args[1] === 5
+        @assert is(eval(Main, ex1.args[2]), eval(Main, ex2.args[2]))
+        @assert ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
 
@@ -293,3 +293,29 @@ parse("""
 
 # issue #12771
 @test -(3)^2 == -9
+
+# test that pre 0.5 deprecated syntax is a parse error
+@test_throws ParseError parse("Int [1,2,3]")
+@test_throws ParseError parse("Int [x for x in 1:10]")
+@test_throws ParseError parse("foo (x) = x")
+@test_throws ParseError parse("foo {T<:Int}(x::T) = x")
+
+@test_throws ParseError parse("Foo .bar")
+
+@test_throws ParseError parse("import x .y")
+@test_throws ParseError parse("using x .y")
+
+@test_throws ParseError parse("--x")
+@test_throws ParseError parse("stagedfunction foo(x); end")
+
+@test_throws ParseError parse("{1,2,3}")
+@test_throws ParseError parse("{1 2 3 4}")
+@test_throws ParseError parse("{1,2; 3,4}")
+@test_throws ParseError parse("{x for x in 1:10}")
+@test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
+@test_throws ParseError parse("{:a=>1, :b=>2}")
+
+# this now is parsed as getindex(Pair{Any,Any}, ...)
+@test_throws MethodError eval(parse("(Any=>Any)[]"))
+@test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
+@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))

@@ -248,9 +248,9 @@ end
 
 # show
 for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
-          [string(i) => i for i = 1:30],
-          [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [utf8(Char['α':'α'+i;]) => utf8(Char['α':'α'+i;]) for i = (1:10)*10],
+          Dict([string(i) => i for i = 1:30]),
+          Dict([reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24]),
+          Dict([utf8(Char['α':'α'+i;]) => utf8(Char['α':'α'+i;]) for i = (1:10)*10]),
           Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested

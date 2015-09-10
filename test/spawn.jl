@@ -173,16 +173,16 @@ exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test readall(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
+    @test readall(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
     out = Pipe()
-    proc = spawn(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr = out))
+    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr = out))
     close(out.in)
     @test readall(out) == "Hello World\n"
     @test success(proc)
 end
 
 # issue #6310
-@test readall(pipeline(`echo "2+2"`, `$exename -f`)) == "4\n"
+@test readall(pipeline(`echo "2+2"`, `$exename --startup-file=no`)) == "4\n"
 
 # issue #5904
 @test run(pipeline(ignorestatus(`false`), `true`)) === nothing
@@ -208,37 +208,39 @@ close(f)
 rm(fname)
 
 # Test that redirecting an IOStream does not crash the process
-fname = tempname()
-cmd = """
-# Overwrite libuv memory before freeing it, to make sure that a use after free
-# triggers an assertion.
-function thrash(handle::Ptr{Void})
-    # Kill the memory, but write a nice low value in the libuv type field to
-    # trigger the right code path
-    ccall(:memset,Ptr{Void},(Ptr{Void},Cint,Csize_t),handle,0xee,3*sizeof(Ptr{Void}))
-    unsafe_store!(convert(Ptr{Cint},handle+2*sizeof(Ptr{Void})),15)
-    nothing
+let fname = tempname()
+    cmd = """
+    # Overwrite libuv memory before freeing it, to make sure that a use after free
+    # triggers an assertion.
+    function thrash(handle::Ptr{Void})
+        # Kill the memory, but write a nice low value in the libuv type field to
+        # trigger the right code path
+        ccall(:memset,Ptr{Void},(Ptr{Void},Cint,Csize_t),handle,0xee,3*sizeof(Ptr{Void}))
+        unsafe_store!(convert(Ptr{Cint},handle+2*sizeof(Ptr{Void})),15)
+        nothing
+    end
+    OLD_STDERR = STDERR
+    redirect_stderr(open("$(escape_string(fname))","w"))
+    # Usually this would be done by GC. Do it manually, to make the failure
+    # case more reliable.
+    oldhandle = OLD_STDERR.handle
+    OLD_STDERR.status = Base.StatusClosing
+    OLD_STDERR.handle = C_NULL
+    ccall(:uv_close,Void,(Ptr{Void},Ptr{Void}),oldhandle,cfunction(thrash,Void,(Ptr{Void},)))
+    sleep(1)
+    import Base.zzzInvalidIdentifier
+    """
+    try
+        (in,p) = open(`$exename --startup-file=no`, "w")
+        write(in,cmd)
+        close(in)
+        wait(p)
+    catch
+        error("IOStream redirect failed. Child stderr was \n$(readall(fname))\n")
+    finally
+        rm(fname)
+    end
 end
-OLD_STDERR = STDERR
-redirect_stderr(open("$(escape_string(fname))","w"))
-# Usually this would be done by GC. Do it manually, to make the failure
-# case more reliable.
-oldhandle = OLD_STDERR.handle
-OLD_STDERR.status = Base.StatusClosing
-OLD_STDERR.handle = C_NULL
-ccall(:uv_close,Void,(Ptr{Void},Ptr{Void}),oldhandle,cfunction(thrash,Void,(Ptr{Void},)))
-sleep(1)
-import Base.zzzInvalidIdentifier
-"""
-try
-    (in,p) = open(`$exename -f`, "w")
-    write(in,cmd)
-    close(in)
-    wait(p)
-catch
-    error("IOStream redirect failed. Child stderr was \n$(readall(fname))\n")
-end
-rm(fname)
 
 # issue #10994: libuv can't handle strings containing NUL
 let bad = "bad\0name"
