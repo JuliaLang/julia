@@ -95,9 +95,82 @@ function doc(obj)
     end
 end
 
+function write_lambda_signature(io::IO, lam::LambdaStaticData)
+    ex = Base.uncompressed_ast(lam)
+    write(io, '(')
+    nargs = length(ex.args[1])
+    for (i,arg) in enumerate(ex.args[1])
+        argname, argtype = arg.args
+        if argtype === :Any || argtype === :ANY
+            write(io, argname)
+        elseif isa(argtype,Expr) && argtype.head === :... &&
+               (argtype.args[end] === :Any || argtype.args[end] === :ANY)
+            write(io, argname, "...")
+        else
+            write(io, argname, "::", argtype)
+        end
+        i < nargs && write(io, ',')
+    end
+    write(io, ')')
+    return io
+end
+
+function macrosummary(name::Symbol, func::Function)
+    if !isdefined(func,:code) || func.code == nothing
+        return Markdown.parse("\n")
+    end
+    io  = IOBuffer()
+    write(io, "```julia\n")
+    write(io, name)
+    write_lambda_signature(io, func.code)
+    write(io, "\n```")
+    return Markdown.parse(takebuf_string(io))
+end
+
+function functionsummary(func::Function)
+    io  = IOBuffer()
+    write(io, "```julia\n")
+    if isgeneric(func)
+        print(io, methods(func))
+    else
+        if isdefined(func,:code) && func.code !== nothing
+            write_lambda_signature(io, func.code)
+            write(io, " -> ...")
+        end
+    end
+    write(io, "\n```")
+    return Markdown.parse(takebuf_string(io))
+end
+
 function doc(b::Binding)
     d = invoke(doc, Tuple{Any}, b)
-    d == nothing ? doc(getfield(b.mod, b.var)) : d
+    if d === nothing
+        v = getfield(b.mod,b.var)
+        d = doc(v)
+        if d === nothing
+            if isa(v,Function)
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+                """), functionsummary(v))
+            elseif startswith(string(b.var),'@')
+                # check to see if the binding var is a macro
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                """), macrosummary(b.var, v))
+            else
+                T = typeof(v)
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is of type `$T`:
+                """), typesummary(typeof(v)))
+            end
+        end
+    end
+    return d
 end
 
 # Function / Method support
@@ -154,7 +227,7 @@ type_morespecific(a::Type, b::Type) =
 # handles the :(function foo(x...); ...; end) form
 function doc!(f::Function, sig::ANY, data, source)
     fd = get!(meta(), f, FuncDoc())
-    isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
+    isa(fd, FuncDoc) || error("can not document a method when the function already has metadata")
     haskey(fd.meta, sig) || push!(fd.order, sig)
     sort!(fd.order, lt=type_morespecific)
     fd.meta[sig] = data
@@ -232,45 +305,54 @@ function doc!(t::DataType, data, fields)
     td.fields = fields
 end
 
-function doc!(f::DataType, sig::ANY, data, source)
-    td = get!(meta(), f, TypeDoc())
-    isa(td, TypeDoc) || error("Can't document a method when the type already has metadata")
+function doc!(T::DataType, sig::ANY, data, source)
+    td = get!(meta(), T, TypeDoc())
+    if !isa(td, TypeDoc)
+        error("can not document a method when the type already has metadata")
+    end
     !haskey(td.meta, sig) && push!(td.order, sig)
     td.meta[sig] = data
 end
 
-function doc(f::DataType)
+function doc(T::DataType)
     docs = []
     for mod in modules
-        if haskey(meta(mod), f)
-            fd = meta(mod)[f]
-            if isa(fd, TypeDoc)
-                length(docs) == 0 && fd.main !== nothing && push!(docs, fd.main)
-                for m in fd.order
-                    push!(docs, fd.meta[m])
+        if haskey(meta(mod), T)
+            Td = meta(mod)[T]
+            if isa(Td, TypeDoc)
+                if length(docs) == 0 && Td.main !== nothing
+                    push!(docs, Td.main)
+                end
+                for m in Td.order
+                    push!(docs, Td.meta[m])
                 end
             elseif length(docs) == 0
-                return fd
+                return Td
             end
         end
     end
-    isempty(docs) ? typesummary(f) : catdoc(docs...)
+    if isempty(docs)
+        catdoc(Markdown.parse("""
+        No documentation found.
+
+        """), typesummary(T))
+    else
+        catdoc(docs...)
+    end
 end
 
-function typesummary(f::DataType)
+function typesummary(T::DataType)
     parts = [
     """
-    No documentation found.
-
     **Summary:**
     ```julia
-    $(f.abstract ? "abstract" : f.mutable ? "type" : "immutable") $f <: $(super(f))
+    $(T.abstract ? "abstract" : T.mutable ? "type" : "immutable") $T <: $(super(T))
     ```
     """
     ]
-    if !isempty(fieldnames(f))
-        pad    = maximum([length(string(f)) for f in fieldnames(f)])
-        fields = ["$(rpad(f, pad)) :: $(t)" for (f, t) in zip(fieldnames(f), f.types)]
+    if !isempty(fieldnames(T))
+        pad    = maximum([length(string(f)) for f in fieldnames(T)])
+        fields = ["$(rpad(f, pad)) :: $(t)" for (f,t) in zip(fieldnames(T), T.types)]
         push!(parts,
         """
         **Fields:**
@@ -279,16 +361,16 @@ function typesummary(f::DataType)
         ```
         """)
     end
-    if !isempty(subtypes(f))
+    if !isempty(subtypes(T))
         push!(parts,
         """
         **Subtypes:**
         ```julia
-        $(join(subtypes(f), "\n"))
+        $(join(subtypes(T),'\n'))
         ```
         """)
     end
-    Markdown.parse(join(parts, "\n"))
+    Markdown.parse(join(parts,'\n'))
 end
 
 isfield(x) = isexpr(x, :.) &&
@@ -419,7 +501,7 @@ function docm(meta, def, define = true)
     isexpr(def′, :function)    ? namedoc(meta, def, namify(def′)) :
     isexpr(def′, :call)        ? funcdoc(meta, nothing, def′) :
     isexpr(def′, :type)        ? typedoc(meta, def, def′) :
-    isexpr(def′, :macro)       ?  vardoc(meta, def, symbol("@", namify(def′))) :
+    isexpr(def′, :macro)       ?  vardoc(meta, def, symbol('@',namify(def′))) :
     isexpr(def′, :abstract)    ? namedoc(meta, def, namify(def′)) :
     isexpr(def′, :bitstype)    ? namedoc(meta, def, def′.args[2]) :
     isexpr(def′, :typealias)   ?  vardoc(meta, def, namify(def′)) :
@@ -428,7 +510,7 @@ function docm(meta, def, define = true)
                  :global)      ?  vardoc(meta, def, namify(def′)) :
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
-    isa(def′, Expr)            ? error("Invalid doc expression $def′") :
+    isa(def′, Expr)            ? error("invalid doc expression $def′") :
     objdoc(meta, def′)
 end
 

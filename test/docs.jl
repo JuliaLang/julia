@@ -116,6 +116,13 @@ import .Inner.@m
 "Inner.@m"
 :@m
 
+type Foo
+    x
+end
+
+# value with no docs
+const val = Foo(1.0)
+
 end
 
 import Base.Docs: meta
@@ -213,6 +220,12 @@ let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
     @test haskey(fields, :two) && fields[:two] == doc"two"
 end
 
+# test that when no docs exist, they fallback to
+# the docs for the typeof(value)
+let d1 = @doc(DocsTest.val)
+    @test d1 !== nothing
+end
+
 # Issue #12700.
 @test @doc(DocsTest.@m) == doc"Inner.@m"
 
@@ -227,7 +240,11 @@ end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
-@test (@doc @m2_11993) === nothing
+let d = (@doc @m2_11993)
+    io = IOBuffer()
+    writemime(io, MIME"text/markdown"(), d)
+    @test startswith(takebuf_string(io),"No documentation found")
+end
 
 @doc "Now @m2... should be documented" :@m2_11993
 @test (@doc @m2_11993) !== nothing
@@ -315,9 +332,15 @@ immutable D <: B
     three::Float64
 end
 
+f = () -> nothing
+
+undocumented() = 1
+undocumented(x) = 2
+undocumented(x,y) = 3
+
 end
 
-@test @doc(Undocumented.A) == doc"""
+@test docstrings_equal(@doc(Undocumented.A), doc"""
 No documentation found.
 
 **Summary:**
@@ -330,9 +353,9 @@ abstract Undocumented.A <: Any
 Undocumented.B
 Undocumented.C
 ```
-"""
+""")
 
-@test @doc(Undocumented.B) == doc"""
+@test docstrings_equal(@doc(Undocumented.B), doc"""
 No documentation found.
 
 **Summary:**
@@ -344,18 +367,18 @@ abstract Undocumented.B <: Undocumented.A
 ```julia
 Undocumented.D
 ```
-"""
+""")
 
-@test @doc(Undocumented.C) == doc"""
+@test docstrings_equal(@doc(Undocumented.C), doc"""
 No documentation found.
 
 **Summary:**
 ```julia
 type Undocumented.C <: Undocumented.A
 ```
-"""
+""")
 
-@test @doc(Undocumented.D) == doc"""
+@test docstrings_equal(@doc(Undocumented.D), doc"""
 No documentation found.
 
 **Summary:**
@@ -369,7 +392,28 @@ one   :: Any
 two   :: UTF8String
 three :: Float64
 ```
-"""
+""")
+
+let d = @doc Undocumented.f
+    io = IOBuffer()
+    writemime(io, MIME"text/markdown"(), d)
+    @test startswith(takebuf_string(io),"""
+    No documentation found.
+
+    `Undocumented.f` is an anonymous `Function`.
+    """)
+end
+
+let d = @doc Undocumented.undocumented
+    io = IOBuffer()
+    writemime(io, MIME"text/markdown"(), d)
+    @test startswith(takebuf_string(io), """
+    No documentation found.
+
+    `Undocumented.undocumented` is a generic `Function`.
+    """)
+end
+
 
 # Bindings.
 
