@@ -39,9 +39,14 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
 
         real{T<:Real}(A::$t{T}) = A
         real{T<:Complex}(A::$t{T}) = (B = real(A.data); $t(B))
-
+        abs(A::$t) = $t(abs(A.data))
     end
 end
+
+imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
+imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
+imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
+imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
 full(A::AbstractTriangular) = convert(Matrix, A)
 
