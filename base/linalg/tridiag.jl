@@ -59,7 +59,7 @@ function size(A::SymTridiagonal, d::Integer)
 end
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 for func in (:round, :trunc, :floor, :ceil)
@@ -315,7 +315,7 @@ end
 copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
