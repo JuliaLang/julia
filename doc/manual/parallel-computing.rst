@@ -450,7 +450,7 @@ Channels provide for a fast means of inter-task communication. A
 ``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
 holding objects of type ``T``. Multiple readers can read off the channel
 via ``fetch`` and ``take!``. Multiple writers can add to the channel via
-``put!``. ``isready`` tests for the prescence of any object in
+``put!``. ``isready`` tests for the presence of any object in
 the channel, while ``wait`` waits for an object to become available.
 ``close`` closes a Channel. On a closed channel, ``put!`` will fail,
 while ``take!`` and ``fetch`` successfully return any existing values
