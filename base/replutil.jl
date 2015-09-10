@@ -389,6 +389,12 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     process_backtrace(process_entry, top_function, t, set)
 end
 
+function show_backtrace(io::IO, top_function::Symbol, t::Vector{Any}, set)
+    for entry in t
+        show_trace_entry(io, entry...)
+    end
+end
+
 # process the backtrace, up to (but not including) top_function
 function process_backtrace(process_func::Function, top_function::Symbol, t, set)
     n = 1

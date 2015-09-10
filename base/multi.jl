@@ -633,9 +633,9 @@ type RemoteException <: Exception
 end
 
 RemoteException(captured) = RemoteException(myid(), captured)
-function show(io::IO, re::RemoteException)
+function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    show(io, re.captured)
+    showerror(io, re.captured)
 end
 
 
