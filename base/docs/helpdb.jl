@@ -438,17 +438,6 @@ Flushes the C `stdout` and `stderr` streams (which may have been written to by e
 """
 Libc.flush_cstdio
 
-doc"""
-```rst
-..  msync(ptr, len, [flags])
-
-Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
-
-You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
-```
-"""
-Libc.msync
-
 # Base.Collections
 
 doc"""
@@ -6166,7 +6155,7 @@ doc"""
 
 The distance between `x` and the next larger representable floating-point value of the same `DataType` as `x`.
 """
-eps(::FloatingPoint)
+eps(::AbstractFloat)
 
 doc"""
     rem1(x,m)
@@ -7678,13 +7667,6 @@ Compute sine of `x`, where `x` is in degrees.
 sind
 
 doc"""
-    iseltype(A,T)
-
-Tests whether `A` or its elements are of type `T`.
-"""
-iseltype
-
-doc"""
     symperm(A, p)
 
 Return the symmetric permutation of `A`, which is `A[p,p]`. `A` should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
@@ -8612,13 +8594,6 @@ Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whethe
 lexcmp
 
 doc"""
-    inf(f)
-
-Returns positive infinity of the floating point type `f` or of the same floating point type as `f`
-"""
-inf
-
-doc"""
     isupper(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is an uppercase letter, or whether this is true for all elements of a string. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
@@ -9002,15 +8977,6 @@ Base.(:(*))(s::AbstractString, t::AbstractString)
 
 doc"""
 ```rst
-..  complement!(s)
-
-Mutates :obj:`IntSet` ``s`` into its set-complement.
-```
-"""
-complement!
-
-doc"""
-```rst
 ..  slice(A, inds...)
 
 Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
@@ -9330,15 +9296,6 @@ doc"""
 Given `@linux? a : b`, do `a` on Linux and `b` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
 """
 :@linux
-
-doc"""
-```rst
-..  complement(s)
-
-Returns the set-complement of :obj:`IntSet` ``s``.
-```
-"""
-complement
 
 doc"""
     rethrow([e])
@@ -11141,13 +11098,6 @@ doc"""
 Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that `v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a Unicode string.)
 """
 reverseind
-
-doc"""
-    nan(f)
-
-Returns NaN (not-a-number) of the floating point type `f` or of the same floating point type as `f`
-"""
-nan
 
 doc"""
     float(x)
