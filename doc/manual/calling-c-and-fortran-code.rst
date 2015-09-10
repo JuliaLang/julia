@@ -399,7 +399,7 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``va_arg``                        |                 |                      | Not supported                     |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
-| ``...``                           |                 |                      | ``T...`` (where ``T``           |
+| ``...``                           |                 |                      | ``T...`` (where ``T``             |
 | (variadic function specification) |                 |                      | is one of the above types,        |
 |                                   |                 |                      | variadic functions of different   |
 |                                   |                 |                      | argument types are not supported) |
