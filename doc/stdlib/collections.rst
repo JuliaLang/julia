@@ -810,7 +810,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    .. Docstring generated from Julia source
 
-   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
+   Delete and return the mapping for ``key`` if it exists in ``collection``\ , otherwise return ``default``\ , or throw an error if default is not specified.
 
 .. function:: keys(collection)
 

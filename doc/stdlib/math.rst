@@ -34,8 +34,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-   ``*(x, y, z, ...)``.
+   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e. ``*(x, y, z, ...)``\ .
 
 .. _/:
 .. function:: /(x, y)
