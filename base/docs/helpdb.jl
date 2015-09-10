@@ -5703,7 +5703,7 @@ julia> "Test "^3
 "Test Test Test "
 ```
 """
-Base.(:(^))(s::String, n::Int)
+Base.(:(^))(s::AbstractString, n::Int)
 
 doc"""
     position(s)
