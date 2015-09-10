@@ -174,19 +174,19 @@ BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
 $(build_private_libdir)/inference0.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) --startup-file=no \
 		coreimg.jl)
 
 $(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) --startup-file=no \
 		-J $(call cygpath_w,$<) coreimg.jl)
 
 COMMA:=,
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd base && \
-	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) --startup-file=no \
 		-J $$(call cygpath_w,$$<) sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o

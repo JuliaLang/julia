@@ -114,13 +114,10 @@ those available for the ``perl`` and ``ruby`` programs::
      --precompiled={yes|no}    Use precompiled code from system image if available
      -H, --home <dir>          Set location of julia executable
      --startup-file={yes|no}   Load ~/.juliarc.jl
-     -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)
-     -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)
      --handle-signals={yes|no} Enable or disable Julia's default signal handlers
 
      -e, --eval <expr>         Evaluate <expr>
      -E, --print <expr>        Evaluate and show <expr>
-     -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)
      -L, --load <file>         Load <file> immediately on all processors
 
      -p, --procs {N|auto}      Integer value N launches N additional local worker processes
@@ -131,7 +128,6 @@ those available for the ``perl`` and ``ruby`` programs::
      -q, --quiet               Quiet startup (no banner)
      --color={yes|no}          Enable or disable color text
      --history-file={yes|no}   Load or save history
-     --no-history-file         Don't load history file (deprecated, use --history-file=no)
 
      --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation
      -C, --cpu-target <target> Limit usage of cpu features up to <target>

@@ -49,14 +49,11 @@ static const char opts[]  =
     " --precompiled={yes|no}    Use precompiled code from system image if available\n"
     " -H, --home <dir>          Set location of julia executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
-    " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
-    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
     " -E, --print <expr>        Evaluate and show <expr>\n"
-    " -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)\n"
     " -L, --load <file>         Load <file> immediately on all processors\n\n"
 
     // parallel options
@@ -69,7 +66,6 @@ static const char opts[]  =
     " -q, --quiet               Quiet startup (no banner)\n"
     " --color={yes|no}          Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n"
-    " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n\n"
 
     // code generation options
     " --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation\n"
@@ -99,7 +95,6 @@ void parse_opts(int *argcp, char ***argvp)
     enum { opt_machinefile = 300,
            opt_color,
            opt_history_file,
-           opt_no_history_file,
            opt_startup_file,
            opt_compile,
            opt_code_coverage,
@@ -128,7 +123,6 @@ void parse_opts(int *argcp, char ***argvp)
         { "home",            required_argument, 0, 'H' },
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
-        { "post-boot",       required_argument, 0, 'P' },
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
         { "precompiled",     required_argument, 0, opt_use_precompiled },
@@ -137,9 +131,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "machinefile",     required_argument, 0, opt_machinefile },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
-        { "no-history-file", no_argument,       0, opt_no_history_file }, // deprecated
         { "startup-file",    required_argument, 0, opt_startup_file },
-        { "no-startup",      no_argument,       0, 'f' },                 // deprecated
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
@@ -200,9 +192,6 @@ void parse_opts(int *argcp, char ***argvp)
         case 'E': // print
             jl_options.print = strdup(optarg);
             break;
-        case 'P': // post-boot
-            jl_options.postboot = strdup(optarg);
-            break;
         case 'L': // load
             jl_options.load = strdup(optarg);
             break;
@@ -252,9 +241,6 @@ void parse_opts(int *argcp, char ***argvp)
             else
                 jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)", optarg);
             break;
-        case opt_no_history_file:
-            jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
-            break;
         case opt_startup_file:
             if (!strcmp(optarg,"yes"))
                 jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
@@ -262,12 +248,6 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
             else
                 jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)", optarg);
-            break;
-        case 'f':
-            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
-            break;
-        case 'F':
-            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
             break;
         case opt_compile:
             if (!strcmp(optarg,"yes"))

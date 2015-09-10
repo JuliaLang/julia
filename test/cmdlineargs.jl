@@ -34,13 +34,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
-    # --post-boot
-    @test  success(`$exename -P "exit(0)"`)
-    @test !success(`$exename -P "exit(1)"`)
-    @test  success(`$exename --post-boot="exit(0)"`)
-    @test !success(`$exename --post-boot="exit(1)"`)
-    @test !success(`$exename -P`)
-    @test !success(`$exename --post-boot`)
+    # post boot
+    @test  success(`$exename -i -e "exit(0)"`)
+    @test !success(`$exename -i -e "exit(1)"`)
+    @test !success(`$exename -i -e`)
 
     # --load
     let testfile = tempname()
