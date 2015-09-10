@@ -66,14 +66,15 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
   2. Double-click `msys2_shell.bat` in the installed msys directory. Initialize the MSYS2 base system using the `pacman` package manager included in MSYS2:
 
      ```
-    pacman --needed -Sy bash pacman pacman-mirrors msys2-runtime
+    update-core
+    pacman --needed -Sy bash pacman pacman-mirrors msys2-runtime # if update-core is not available
+    pacman -Syu           #Update package database and full system upgrade
 ```
 
   3. Exit and restart MSYS2, then install packages required to build julia:
 
      ```
-    pacman -Syu           #Update package database and full system upgrade
-    pacman -S diffutils git m4 make patch tar p7zip msys/openssh
+    pacman -S diffutils git m4 make patch tar p7zip msys/openssh ca-certificates
 ```
 
   4. Configure your MSYS2 shell so Python is visible on the path:
