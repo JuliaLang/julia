@@ -77,9 +77,9 @@ h["a","b","c"] = 4
 @test valtype(h) == Any
 
 let
-    td = Dict{String,Float64}()
-    @test eltype(td) == Pair{String,Float64}
-    @test keytype(td) == String
+    td = Dict{AbstractString,Float64}()
+    @test eltype(td) == Pair{AbstractString,Float64}
+    @test keytype(td) == AbstractString
     @test valtype(td) == Float64
 end
 
