@@ -1594,6 +1594,9 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
     // FIXME - we need to mark stacks on other threads
     int curtask = (ta == *jl_all_task_states[0].pcurrent_task);
     if (stkbuf) {
+#ifndef COPY_STACKS
+        if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
+#endif
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
     if (curtask) {

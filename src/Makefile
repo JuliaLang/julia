@@ -4,9 +4,6 @@ BUILDDIR := .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
-ifeq ($(USE_COPY_STACKS),1)
-JCFLAGS += -DCOPY_STACKS
-endif
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)

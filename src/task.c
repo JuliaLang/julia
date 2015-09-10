@@ -27,10 +27,11 @@ extern "C" {
 volatile int jl_in_stackwalk = 0;
 #else
 #include <unistd.h>
+#include <sys/mman.h> // for mprotect
+#include <dlfcn.h>   // for dladdr
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
-#include <dlfcn.h>   // for dladdr
 #endif
 
 /* This probing code is derived from Douglas Jones' user thread library */
@@ -130,12 +131,6 @@ static void _probe_arch(void)
 }
 
 /* end probing code */
-
-/*
-  TODO:
-  - per-task storage (scheme-like parameters)
-  - stack growth
-*/
 
 static jl_sym_t *done_sym;
 static jl_sym_t *failed_sym;
@@ -264,14 +259,6 @@ static void NOINLINE NORETURN start_task(void)
 }
 
 #ifdef COPY_STACKS
-void jl_set_stackbase(char *__stk)
-{
-    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
-}
-#else
-void jl_set_stackbase(char *__stk) { }
-#endif
-
 #ifndef ASM_COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
 {
@@ -282,7 +269,7 @@ void NOINLINE jl_set_base_ctx(char *__stk)
 #else
 void jl_set_base_ctx(char *__stk) { }
 #endif
-
+#endif
 
 DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 { // keep this function small, since we want to keep the stack frame
@@ -294,25 +281,6 @@ DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
 }
-
-#ifndef COPY_STACKS
-static void init_task(jl_task_t *t)
-{
-    if (jl_setjmp(t->ctx, 0)) {
-        start_task();
-    }
-    // this runs when the task is created
-    ptrint_t local_sp = (ptrint_t)&t;
-    ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
-#ifdef _P64
-    // SP must be 16-byte aligned
-    new_sp = new_sp&-16;
-    local_sp = local_sp&-16;
-#endif
-    memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
-    rebase_state(&t->ctx, local_sp, new_sp);
-}
-#endif
 
 static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 {
@@ -493,6 +461,22 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 #else
 #error "COPY_STACKS must be defined on this platform."
 #endif
+}
+static void init_task(jl_task_t *t, char* stack)
+{
+    if (jl_setjmp(t->ctx, 0)) {
+        start_task();
+    }
+    // this runs when the task is created
+    ptrint_t local_sp = (ptrint_t)&t;
+    ptrint_t new_sp = (ptrint_t)stack + t->ssize - _frame_offset;
+#ifdef _P64
+    // SP must be 16-byte aligned
+    new_sp = new_sp&-16;
+    local_sp = local_sp&-16;
+#endif
+    memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
+    rebase_state(&t->ctx, local_sp, new_sp);
 }
 
 #endif /* !COPY_STACKS */
@@ -858,6 +842,10 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(t, jl_task_type);
+#ifndef COPY_STACKS
+    if (ssize == 0) // unspecified -- pick some default size
+        ssize = 1*1024*1024; // 1M (for now)
+#endif
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->current_module = NULL;
@@ -886,12 +874,11 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     jl_gc_wb_buf(t, t->stkbuf);
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
-    // the GC might read this area, which is ok, just prevent writes
-    if (mprotect(stk, pagesz-1, PROT_READ) == -1)
+    if (mprotect(stk, pagesz-1, PROT_NONE) == -1)
         jl_errorf("mprotect: %s", strerror(errno));
-    t->stack = stk+pagesz;
+    stk += pagesz;
 
-    init_task(t);
+    init_task(t, stk);
     JL_GC_POP();
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
 #endif
@@ -903,9 +890,10 @@ JL_CALLABLE(jl_unprotect_stack)
 {
 #ifndef COPY_STACKS
     jl_task_t *t = (jl_task_t*)args[0];
-    char *stk = t->stack-jl_page_size;
+    size_t pagesz = jl_page_size;
+    char *stk = (char*)LLT_ALIGN((uptrint_t)t->stkbuf, pagesz);
     // unprotect stack so it can be reallocated for something else
-    mprotect(stk, jl_page_size-1, PROT_READ|PROT_WRITE|PROT_EXEC);
+    mprotect(stk, pagesz - 1, PROT_READ|PROT_WRITE);
 #endif
     return jl_nothing;
 }
@@ -958,12 +946,12 @@ void jl_init_root_task(void *stack, size_t ssize)
 #ifdef COPY_STACKS
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
+    jl_current_task->stkbuf = NULL;
 #else
     // TODO update for threads
-    jl_current_task->stack = stack;
     jl_current_task->ssize = ssize;
+    jl_current_task->stkbuf = stack;
 #endif
-    jl_current_task->stkbuf = NULL;
     jl_current_task->parent = jl_current_task;
     jl_current_task->current_module = jl_current_module;
     jl_current_task->tls = jl_nothing;
