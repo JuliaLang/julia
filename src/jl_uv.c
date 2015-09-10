@@ -377,7 +377,7 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
     assert(stream);
     static_assert(offsetof(uv_stream_t,type) == offsetof(ios_t,bm) &&
         sizeof(((uv_stream_t*)0)->type) == sizeof(((ios_t*)0)->bm),
-	   "UV and ios layout mismatch");
+            "UV and ios layout mismatch");
 
     uv_file fd = 0;
 
