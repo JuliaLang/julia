@@ -4248,22 +4248,20 @@ specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 randstring
 
 doc"""
-```rst
-..  Float64(x [, mode::RoundingMode])
+    Float64(x [, mode::RoundingMode])
 
-Create a Float64 from ``x``. If ``x`` is not exactly representable then
-``mode`` determines how ``x`` is rounded.
+Create a Float64 from `x`. If `x` is not exactly representable then
+`mode` determines how `x` is rounded.
 
-.. doctest::
+```jl
+julia> Float64(pi, RoundDown)
+3.141592653589793
 
-   julia> Float64(pi, RoundDown)
-   3.141592653589793
-
-   julia> Float64(pi, RoundUp)
-   3.1415926535897936
-
-See ``get_rounding`` for available rounding modes.
+julia> Float64(pi, RoundUp)
+3.1415926535897936
 ```
+
+See `get_rounding` for available rounding modes.
 """
 Float64
 
@@ -4975,97 +4973,91 @@ Approximate floating point number `x` as a Rational number with components of th
 rationalize
 
 doc"""
-```rst
-..  splice!(collection, index, [replacement]) -> item
+    splice!(collection, index, [replacement]) -> item
 
 Remove the item at the given index, and return the removed item. Subsequent items
 are shifted down to fill the resulting gap. If specified, replacement values from
 an ordered collection will be spliced in place of the removed item.
 
-.. doctest::
+```jldoctest
+julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+2
 
-  julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
-  2
+julia> A
+5-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 1
 
-  julia> A
-  5-element Array{Int64,1}:
-   6
-   5
-   4
-   3
-   1
+julia> splice!(A, 5, -1)
+1
 
-  julia> splice!(A, 5, -1)
-  1
-
-  julia> A
-  5-element Array{Int64,1}:
-    6
-    5
-    4
-    3
-   -1
-
-  julia> splice!(A, 1, [-1, -2, -3])
+julia> A
+5-element Array{Int64,1}:
   6
+  5
+  4
+  3
+ -1
 
-  julia> A
-  7-element Array{Int64,1}:
-   -1
-   -2
-   -3
-    5
-    4
-    3
-   -1
+julia> splice!(A, 1, [-1, -2, -3])
+6
 
-To insert ``replacement`` before an index ``n`` without removing any items, use
-``splice!(collection, n:n-1, replacement)``.
+julia> A
+7-element Array{Int64,1}:
+ -1
+ -2
+ -3
+  5
+  4
+  3
+ -1
 ```
+
+To insert `replacement` before an index `n` without removing any items, use
+`splice!(collection, n:n-1, replacement)`.
 """
 splice!(collection, index, replacement = ?)
 
 doc"""
-```rst
-..  splice!(collection, range, [replacement]) -> items
+    splice!(collection, range, [replacement]) -> items
 
 Remove items in the specified index range, and return a collection containing the
 removed items. Subsequent items are shifted down to fill the resulting gap.
 If specified, replacement values from an ordered collection will be spliced in place
 of the removed items.
 
-To insert ``replacement`` before an index ``n`` without removing any items, use
-``splice!(collection, n:n-1, replacement)``.
+To insert `replacement` before an index `n` without removing any items, use
+`splice!(collection, n:n-1, replacement)`.
 
-.. doctest::
+```jldoctest
+julia> splice!(A, 4:3, 2)
+0-element Array{Int64,1}
 
-  julia> splice!(A, 4:3, 2)
-  0-element Array{Int64,1}
-
-  julia> A
-  8-element Array{Int64,1}:
-   -1
-   -2
-   -3
-    2
-    5
-    4
-    3
-   -1
+julia> A
+8-element Array{Int64,1}:
+ -1
+ -2
+ -3
+  2
+  5
+  4
+  3
+ -1
 ```
 """
 splice!(collection, range::Range, replacement)
 
 doc"""
-```rst
-..  endof(collection) -> Integer
+    endof(collection) -> Integer
 
 Returns the last index of the collection.
 
-.. doctest::
-
-	julia> endof([1,2,4])
-	3
+```jldoctest
+julia> endof([1,2,4])
+3
 ```
 """
 endof
@@ -5122,13 +5114,11 @@ Returns the number of stored (filled) elements in a sparse matrix.
 nnz
 
 doc"""
-```rst
-..  unshift!(collection, items...) -> collection
+    unshift!(collection, items...) -> collection
 
-Insert one or more ``items`` at the beginning of ``collection``.
+Insert one or more `items` at the beginning of `collection`.
 
-.. doctest::
-
+```jldoctest
   julia> unshift!([1, 2, 3, 4], 5, 6)
   6-element Array{Int64,1}:
    5
@@ -5697,24 +5687,20 @@ doc"""
 bkfact!
 
 doc"""
-```rst
-..  ^(x, y)
+    ^(x, y)
 
 Exponentiation operator.
-```
 """
 Base.(:(^))(x, y)
 
 doc"""
-```rst
-..  ^(s, n)
+    ^(s, n)
 
-Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
+Repeat `n` times the string `s`. The `repeat` function is an alias to this operator.
 
-.. doctest::
-
-	julia> "Test "^3
-	"Test Test Test "
+```jldoctest
+julia> "Test "^3
+"Test Test Test "
 ```
 """
 Base.(:(^))(s::String, n::Int)
@@ -5894,18 +5880,16 @@ See also :func:`sortperm`
 sortperm!
 
 doc"""
-```rst
-..  isodd(x::Integer) -> Bool
+    isodd(x::Integer) -> Bool
 
-Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
+Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
-.. doctest::
+```jldoctest
+julia> isodd(9)
+true
 
-	julia> isodd(9)
-	true
-
-	julia> isodd(10)
-	false
+julia> isodd(10)
+false
 ```
 """
 isodd
@@ -6019,34 +6003,32 @@ with appropriate ``op`` values:
 manage
 
 doc"""
-```rst
-..  resize!(collection, n) -> collection
+    resize!(collection, n) -> collection
 
-Resize ``collection`` to contain ``n`` elements.
-If ``n`` is smaller than the current collection length, the first ``n``
-elements will be retained. If ``n`` is larger, the new elements are not
+Resize `collection` to contain `n` elements.
+If `n` is smaller than the current collection length, the first `n`
+elements will be retained. If `n` is larger, the new elements are not
 guaranteed to be initialized.
 
-.. doctest::
+```jldoctest
+julia> resize!([6, 5, 4, 3, 2, 1], 3)
+3-element Array{Int64,1}:
+ 6
+ 5
+ 4
+```
 
-  julia> resize!([6, 5, 4, 3, 2, 1], 3)
-  3-element Array{Int64,1}:
-   6
-   5
-   4
-
-.. code-block:: julia
-
-  julia> resize!([6, 5, 4, 3, 2, 1], 8)
-  8-element Array{Int64,1}:
-   6
-   5
-   4
-   3
-   2
-   1
-   0
-   0
+```jl
+julia> resize!([6, 5, 4, 3, 2, 1], 8)
+8-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 2
+ 1
+ 0
+ 0
 ```
 """
 resize!
@@ -6066,15 +6048,13 @@ Returns IPv4 object from ip address formatted as Integer
 IPv4
 
 doc"""
-```rst
-..  trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer) -> Integer
 
-Number of zeros trailing the binary representation of ``x``.
+Number of zeros trailing the binary representation of `x`.
 
-.. doctest::
-
-   julia> trailing_zeros(2)
-   1
+```jldoctest
+julia> trailing_zeros(2)
+1
 ```
 """
 trailing_zeros
@@ -6389,18 +6369,16 @@ Bessel function of the third kind of order `nu` (Hankel function). `k` is either
 besselh
 
 doc"""
-```rst
-..  prepend!(collection, items) -> collection
+    prepend!(collection, items) -> collection
 
-Insert the elements of ``items`` to the beginning of ``collection``.
+Insert the elements of `items` to the beginning of `collection`.
 
-.. doctest::
-
-   julia> prepend!([3],[1,2])
-   3-element Array{Int64,1}:
-    1
-    2
-    3
+```jldoctest
+julia> prepend!([3],[1,2])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
 ```
 """
 prepend!
@@ -6565,21 +6543,19 @@ Return an iterator over all values in a collection. `collect(values(d))` returns
 values
 
 doc"""
-```rst
-..  A_mul_B!(Y, A, B) -> Y
+    A_mul_B!(Y, A, B) -> Y
 
 
-Calculates the matrix-matrix or matrix-vector product *A B* and stores the
-result in *Y*, overwriting the existing value of *Y*.
+Calculates the matrix-matrix or matrix-vector product `A B` and stores the
+result in `Y`, overwriting the existing value of `Y`.
 
-.. doctest::
+```jldoctest
+julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
 
-   julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
-
-   julia> B
-   2x2 Array{Float64,2}:
-    3.0  3.0
-    7.0  7.0
+julia> B
+2x2 Array{Float64,2}:
+ 3.0  3.0
+ 7.0  7.0
 ```
 """
 A_mul_B!
@@ -7149,46 +7125,39 @@ Compute the inverse hyperbolic tangent of `x`
 atanh
 
 doc"""
-```rst
-..  deleteat!(collection, index)
+    deleteat!(collection, index)
 
-Remove the item at the given ``index`` and return the modified ``collection``.
+Remove the item at the given `index` and return the modified `collection`.
 Subsequent items are shifted to fill the resulting gap.
 
-.. doctest::
-
-  julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-  5-element Array{Int64,1}:
-   6
-   4
-   3
-   2
-   1
-
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+5-element Array{Int64,1}:
+ 6
+ 4
+ 3
+ 2
+ 1
 ```
 """
 deleteat!(collection, index::Integer)
 
 doc"""
-```rst
-..  deleteat!(collection, itr)
+    deleteat!(collection, itr)
 
-Remove the items at the indices given by ``itr``, and return the modified ``collection``.
-Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
+Remove the items at the indices given by `itr`, and return the modified `collection`.
+Subsequent items are shifted to fill the resulting gap. `itr` must be sorted and unique.
 
-.. doctest::
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Array{Int64,1}:
+ 5
+ 3
+ 1
 
-  julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
-  3-element Array{Int64,1}:
-   5
-   3
-   1
-
-.. doctest::
-
-  julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
-  ERROR: ArgumentError: indices must be unique and sorted
-   in deleteat! at array.jl:543
+julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+ERROR: ArgumentError: indices must be unique and sorted
+ in deleteat! at array.jl:543
 ```
 """
 deleteat!(collection, itr)
@@ -7243,32 +7212,30 @@ Determine whether an object - such as a stream, timer, or mmap -- is not yet clo
 isopen
 
 doc"""
-```rst
-..  shift!(collection) -> item
+    shift!(collection) -> item
 
-Remove the first ``item`` from ``collection``.
+Remove the first `item` from `collection`.
 
-.. doctest::
+```jldoctest
+julia> A = [1, 2, 3, 4, 5, 6]
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
 
-  julia> A = [1, 2, 3, 4, 5, 6]
-  6-element Array{Int64,1}:
-   1
-   2
-   3
-   4
-   5
-   6
+julia> shift!(A)
+1
 
-  julia> shift!(A)
-  1
-
-  julia> A
-  5-element Array{Int64,1}:
-   2
-   3
-   4
-   5
-   6
+julia> A
+5-element Array{Int64,1}:
+ 2
+ 3
+ 4
+ 5
+ 6
 ```
 """
 shift!
@@ -7839,20 +7806,16 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 doc"""
-```rst
-..  all(itr) -> Bool
+    all(itr) -> Bool
 
-Test whether all elements of a boolean collection are ``true``.
-```
+Test whether all elements of a boolean collection are `true`.
 """
 all(itr)
 
 doc"""
-```rst
-..  all(A, dims)
+    all(A, dims)
 
-Test whether all values along the given dimensions of an array are ``true``.
-```
+Test whether all values along the given dimensions of an array are `true`.
 """
 all(A::AbstractArray, dims)
 
@@ -9067,11 +9030,9 @@ Read `io` until the end of the stream/file and count the number of lines. To spe
 countlines
 
 doc"""
-```rst
-..  *(A, B)
+    *(A, B)
 
 Matrix multiplication
-```
 """
 Base.(:(*))(::AbstractMatrix, ::AbstractMatrix)
 
@@ -9107,12 +9068,10 @@ Base.(:(\))(x::Number,y::Number)
 
 
 doc"""
-```rst
-..  *(x, y...)
+    *(x, y...)
 
-Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
-``*(x, y, z, ...)``.
-```
+Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e.
+`*(x, y, z, ...)`.
 """
 Base.(:(*))(x, y...)
 
@@ -11745,11 +11704,10 @@ On Windows, split a path into the drive letter part and the path part. On Unix s
 splitdrive
 
 doc"""
-```rst
-..  pop!(collection, key[, default])
+    pop!(collection, key[, default])
 
-Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
-```
+Delete and return the mapping for `key` if it exists in `collection`,
+otherwise return `default`, or throw an error if default is not specified.
 """
 pop!(collection,key,?)
 

@@ -302,16 +302,15 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Create a Float64 from ``x``. If ``x`` is not exactly representable then
-   ``mode`` determines how ``x`` is rounded.
+   Create a Float64 from ``x``\ . If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded.
 
-   .. doctest::
+   .. code-block:: julia
 
-      julia> Float64(pi, RoundDown)
-      3.141592653589793
+       julia> Float64(pi, RoundDown)
+       3.141592653589793
 
-      julia> Float64(pi, RoundUp)
-      3.1415926535897936
+       julia> Float64(pi, RoundUp)
+       3.1415926535897936
 
    See ``get_rounding`` for available rounding modes.
 
@@ -451,12 +450,12 @@ Integers
 
    .. Docstring generated from Julia source
 
-   Number of zeros trailing the binary representation of ``x``.
+   Number of zeros trailing the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> trailing_zeros(2)
-      1
+       julia> trailing_zeros(2)
+       1
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
@@ -511,11 +510,11 @@ Integers
 
    .. doctest::
 
-   	julia> isodd(9)
-   	true
+       julia> isodd(9)
+       true
 
-   	julia> isodd(10)
-   	false
+       julia> isodd(10)
+       false
 
 .. function:: iseven(x::Integer) -> Bool
 

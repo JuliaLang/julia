@@ -31,12 +31,12 @@
 
    .. Docstring generated from Julia source
 
-   Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
+   Repeat ``n`` times the string ``s``\ . The ``repeat`` function is an alias to this operator.
 
    .. doctest::
 
-   	julia> "Test "^3
-   	"Test Test Test "
+       julia> "Test "^3
+       "Test Test Test "
 
 .. function:: string(xs...)
 
