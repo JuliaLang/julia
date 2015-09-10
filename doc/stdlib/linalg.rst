@@ -653,10 +653,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    .. math::
-      \kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
-      \kappa_S(M, x, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert \left\vert x \right\vert \right\Vert_p
 
-   Skeel condition number :math:`\kappa_S` of the matrix ``M``, optionally with respect to the vector ``x``, as computed using the operator ``p``-norm. ``p`` is ``Inf`` by default, if not provided. Valid values for ``p`` are ``1``, ``2``, or ``Inf``.
+       \kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
+       \kappa_S(M, x, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert \left\vert x \right\vert \right\Vert_p
+
+   Skeel condition number :math:`\kappa_S` of the matrix ``M``\ , optionally with respect to the vector ``x``\ , as computed using the operator ``p``\ -norm. ``p`` is ``Inf`` by default, if not provided. Valid values for ``p`` are ``1``\ , ``2``\ , or ``Inf``\ .
 
    This quantity is also known in the literature as the Bauer condition number, relative condition number, or componentwise relative condition number.
 
