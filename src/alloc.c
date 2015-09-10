@@ -585,6 +585,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
+    if (st->size > sz)
+        st->haspadding = 1;
     st->pointerfree = ptrfree && !st->abstract;
 }
 
