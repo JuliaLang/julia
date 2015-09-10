@@ -748,7 +748,7 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
-.. _man-packages:
+.. _faq-packages:
 
 Packages and Modules
 --------------------
