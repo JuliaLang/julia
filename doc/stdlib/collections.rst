@@ -63,14 +63,14 @@ type.
 
    .. doctest::
 
-   	julia> a = ["a", "b", "c"];
+       julia> a = ["a", "b", "c"];
 
-   	julia> for (index, value) in enumerate(a)
-                   println("$index $value")
-               end
-        1 a
-        2 b
-        3 c
+       julia> for (index, value) in enumerate(a)
+                  println("$index $value")
+              end
+       1 a
+       2 b
+       3 c
 
 .. function:: rest(iter, state)
 
@@ -136,11 +136,11 @@ General Collections
 
    .. doctest::
 
-   	julia> isempty([])
-   	true
+       julia> isempty([])
+       true
 
-   	julia> isempty([1 2 3])
-   	false
+       julia> isempty([1 2 3])
+       false
 
 .. function:: empty!(collection) -> collection
 
@@ -162,8 +162,8 @@ General Collections
 
    .. doctest::
 
-   	julia> endof([1,2,4])
-   	3
+       julia> endof([1,2,4])
+       3
 
 Fully implemented by:
 
@@ -483,13 +483,13 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Test whether all elements of a boolean collection are ``true``.
+   Test whether all elements of a boolean collection are ``true``\ .
 
 .. function:: all(A, dims)
 
    .. Docstring generated from Julia source
 
-   Test whether all values along the given dimensions of an array are ``true``.
+   Test whether all values along the given dimensions of an array are ``true``\ .
 
 .. function:: all!(r, A)
 
@@ -513,33 +513,32 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``.
+   Determine whether predicate ``p`` returns ``true`` for all elements of ``itr``\ .
 
    .. doctest::
 
-   	julia> all(i->(4<=i<=6), [4,5,6])
-   	true
+       julia> all(i->(4<=i<=6), [4,5,6])
+       true
 
 .. function:: map(f, c...) -> collection
 
    .. Docstring generated from Julia source
 
-   Transform collection ``c`` by applying ``f`` to each element.
-   For multiple collection arguments, apply ``f`` elementwise.
+   Transform collection ``c`` by applying ``f`` to each element. For multiple collection arguments, apply ``f`` elementwise.
 
    .. doctest::
 
-      julia> map((x) -> x * 2, [1, 2, 3])
-      3-element Array{Int64,1}:
-       2
-       4
-       6
+       julia> map((x) -> x * 2, [1, 2, 3])
+       3-element Array{Int64,1}:
+        2
+        4
+        6
 
-      julia> map(+, [1, 2, 3], [10, 20, 30])
-      3-element Array{Int64,1}:
-       11
-       22
-       33
+       julia> map(+, [1, 2, 3], [10, 20, 30])
+       3-element Array{Int64,1}:
+        11
+        22
+        33
 
 .. function:: map!(function, collection)
 
@@ -811,7 +810,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    .. Docstring generated from Julia source
 
-   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
+   Delete and return the mapping for ``key`` if it exists in ``collection``\ , otherwise return ``default``\ , or throw an error if default is not specified.
 
 .. function:: keys(collection)
 
@@ -833,27 +832,27 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    .. doctest::
 
-     julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-     Dict{ASCIIString,Float64} with 2 entries:
-       "bar" => 42.0
-       "foo" => 0.0
+       julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+       Dict{ASCIIString,Float64} with 2 entries:
+         "bar" => 42.0
+         "foo" => 0.0
 
-     julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
-     Dict{UTF8String,Int64} with 2 entries:
-       "bar" => 4711
-       "baz" => 17
+       julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+       Dict{UTF8String,Int64} with 2 entries:
+         "bar" => 4711
+         "baz" => 17
 
-     julia> merge(a, b)
-     Dict{UTF8String,Float64} with 3 entries:
-       "bar" => 4711.0
-       "baz" => 17.0
-       "foo" => 0.0
+       julia> merge(a, b)
+       Dict{UTF8String,Float64} with 3 entries:
+         "bar" => 4711.0
+         "baz" => 17.0
+         "foo" => 0.0
 
-     julia> merge(b, a)
-     Dict{UTF8String,Float64} with 3 entries:
-       "bar" => 42.0
-       "baz" => 17.0
-       "foo" => 0.0
+       julia> merge(b, a)
+       Dict{UTF8String,Float64} with 3 entries:
+         "bar" => 42.0
+         "baz" => 17.0
+         "foo" => 0.0
 
 .. function:: merge!(collection, others...)
 
@@ -1036,233 +1035,217 @@ Dequeues
 
    .. doctest::
 
-     julia> A=[1, 2, 3, 4, 5, 6]
-     6-element Array{Int64,1}:
-      1
-      2
-      3
-      4
-      5
-      6
+       julia> A=[1, 2, 3, 4, 5, 6]
+       6-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+        6
 
-     julia> pop!(A)
-     6
+       julia> pop!(A)
+       6
 
-     julia> A
-     5-element Array{Int64,1}:
-      1
-      2
-      3
-      4
-      5
+       julia> A
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
 
 .. function:: unshift!(collection, items...) -> collection
 
    .. Docstring generated from Julia source
 
-   Insert one or more ``items`` at the beginning of ``collection``.
+   Insert one or more ``items`` at the beginning of ``collection``\ .
 
    .. doctest::
 
-     julia> unshift!([1, 2, 3, 4], 5, 6)
-     6-element Array{Int64,1}:
-      5
-      6
-      1
-      2
-      3
-      4
+         julia> unshift!([1, 2, 3, 4], 5, 6)
+         6-element Array{Int64,1}:
+          5
+          6
+          1
+          2
+          3
+          4
 
 .. function:: shift!(collection) -> item
 
    .. Docstring generated from Julia source
 
-   Remove the first ``item`` from ``collection``.
+   Remove the first ``item`` from ``collection``\ .
 
    .. doctest::
 
-     julia> A = [1, 2, 3, 4, 5, 6]
-     6-element Array{Int64,1}:
-      1
-      2
-      3
-      4
-      5
-      6
+       julia> A = [1, 2, 3, 4, 5, 6]
+       6-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+        6
 
-     julia> shift!(A)
-     1
+       julia> shift!(A)
+       1
 
-     julia> A
-     5-element Array{Int64,1}:
-      2
-      3
-      4
-      5
-      6
+       julia> A
+       5-element Array{Int64,1}:
+        2
+        3
+        4
+        5
+        6
 
 .. function:: insert!(collection, index, item)
 
    .. Docstring generated from Julia source
 
-   Insert an ``item`` into ``collection`` at the given ``index``.
-   ``index`` is the index of ``item`` in the resulting ``collection``.
+   Insert an ``item`` into ``collection`` at the given ``index``\ . ``index`` is the index of ``item`` in the resulting ``collection``\ .
 
    .. doctest::
 
-      julia> insert!([6, 5, 4, 2, 1], 4, 3)
-      6-element Array{Int64,1}:
-       6
-       5
-       4
-       3
-       2
-       1
+       julia> insert!([6, 5, 4, 2, 1], 4, 3)
+       6-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        2
+        1
 
 .. function:: deleteat!(collection, index)
 
    .. Docstring generated from Julia source
 
-   Remove the item at the given ``index`` and return the modified ``collection``.
-   Subsequent items are shifted to fill the resulting gap.
+   Remove the item at the given ``index`` and return the modified ``collection``\ . Subsequent items are shifted to fill the resulting gap.
 
    .. doctest::
 
-     julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-     5-element Array{Int64,1}:
-      6
-      4
-      3
-      2
-      1
-
+       julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+       5-element Array{Int64,1}:
+        6
+        4
+        3
+        2
+        1
 
 .. function:: deleteat!(collection, itr)
 
    .. Docstring generated from Julia source
 
-   Remove the items at the indices given by ``itr``, and return the modified ``collection``.
-   Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
+   Remove the items at the indices given by ``itr``\ , and return the modified ``collection``\ . Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
 
    .. doctest::
 
-     julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
-     3-element Array{Int64,1}:
-      5
-      3
-      1
+       julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+       3-element Array{Int64,1}:
+        5
+        3
+        1
 
-   .. doctest::
-
-     julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
-     ERROR: ArgumentError: indices must be unique and sorted
-      in deleteat! at array.jl:543
+       julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+       ERROR: ArgumentError: indices must be unique and sorted
+        in deleteat! at array.jl:543
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
    .. Docstring generated from Julia source
 
-   Remove the item at the given index, and return the removed item. Subsequent items
-   are shifted down to fill the resulting gap. If specified, replacement values from
-   an ordered collection will be spliced in place of the removed item.
+   Remove the item at the given index, and return the removed item. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed item.
 
    .. doctest::
 
-     julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
-     2
+       julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+       2
 
-     julia> A
-     5-element Array{Int64,1}:
-      6
-      5
-      4
-      3
-      1
+       julia> A
+       5-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        1
 
-     julia> splice!(A, 5, -1)
-     1
+       julia> splice!(A, 5, -1)
+       1
 
-     julia> A
-     5-element Array{Int64,1}:
+       julia> A
+       5-element Array{Int64,1}:
+         6
+         5
+         4
+         3
+        -1
+
+       julia> splice!(A, 1, [-1, -2, -3])
        6
-       5
-       4
-       3
-      -1
 
-     julia> splice!(A, 1, [-1, -2, -3])
-     6
+       julia> A
+       7-element Array{Int64,1}:
+        -1
+        -2
+        -3
+         5
+         4
+         3
+        -1
 
-     julia> A
-     7-element Array{Int64,1}:
-      -1
-      -2
-      -3
-       5
-       4
-       3
-      -1
-
-   To insert ``replacement`` before an index ``n`` without removing any items, use
-   ``splice!(collection, n:n-1, replacement)``.
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``\ .
 
 .. function:: splice!(collection, range, [replacement]) -> items
 
    .. Docstring generated from Julia source
 
-   Remove items in the specified index range, and return a collection containing the
-   removed items. Subsequent items are shifted down to fill the resulting gap.
-   If specified, replacement values from an ordered collection will be spliced in place
-   of the removed items.
+   Remove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.
 
-   To insert ``replacement`` before an index ``n`` without removing any items, use
-   ``splice!(collection, n:n-1, replacement)``.
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``\ .
 
    .. doctest::
 
-     julia> splice!(A, 4:3, 2)
-     0-element Array{Int64,1}
+       julia> splice!(A, 4:3, 2)
+       0-element Array{Int64,1}
 
-     julia> A
-     8-element Array{Int64,1}:
-      -1
-      -2
-      -3
-       2
-       5
-       4
-       3
-      -1
+       julia> A
+       8-element Array{Int64,1}:
+        -1
+        -2
+        -3
+         2
+         5
+         4
+         3
+        -1
 
 .. function:: resize!(collection, n) -> collection
 
    .. Docstring generated from Julia source
 
-   Resize ``collection`` to contain ``n`` elements.
-   If ``n`` is smaller than the current collection length, the first ``n``
-   elements will be retained. If ``n`` is larger, the new elements are not
-   guaranteed to be initialized.
+   Resize ``collection`` to contain ``n`` elements. If ``n`` is smaller than the current collection length, the first ``n`` elements will be retained. If ``n`` is larger, the new elements are not guaranteed to be initialized.
 
    .. doctest::
 
-     julia> resize!([6, 5, 4, 3, 2, 1], 3)
-     3-element Array{Int64,1}:
-      6
-      5
-      4
+       julia> resize!([6, 5, 4, 3, 2, 1], 3)
+       3-element Array{Int64,1}:
+        6
+        5
+        4
 
    .. code-block:: julia
 
-     julia> resize!([6, 5, 4, 3, 2, 1], 8)
-     8-element Array{Int64,1}:
-      6
-      5
-      4
-      3
-      2
-      1
-      0
-      0
+       julia> resize!([6, 5, 4, 3, 2, 1], 8)
+       8-element Array{Int64,1}:
+        6
+        5
+        4
+        3
+        2
+        1
+        0
+        0
 
 .. function:: append!(collection, collection2) -> collection.
 
@@ -1298,15 +1281,15 @@ Dequeues
 
    .. Docstring generated from Julia source
 
-   Insert the elements of ``items`` to the beginning of ``collection``.
+   Insert the elements of ``items`` to the beginning of ``collection``\ .
 
    .. doctest::
 
-      julia> prepend!([3],[1,2])
-      3-element Array{Int64,1}:
-       1
-       2
-       3
+       julia> prepend!([3],[1,2])
+       3-element Array{Int64,1}:
+        1
+        2
+        3
 
 Fully implemented by:
 
