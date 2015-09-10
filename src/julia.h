@@ -1451,9 +1451,6 @@ typedef struct _jl_task_t {
     jl_value_t *backtrace;
     jl_function_t *start;
     jl_jmp_buf ctx;
-#ifndef COPY_STACKS
-    void *stack;
-#endif
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
