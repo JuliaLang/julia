@@ -426,17 +426,16 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product *A B* and stores the
-   result in *Y*, overwriting the existing value of *Y*.
+   Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ .
 
    .. doctest::
 
-      julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
+       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
 
-      julia> B
-      2x2 Array{Float64,2}:
-       3.0  3.0
-       7.0  7.0
+       julia> B
+       2x2 Array{Float64,2}:
+        3.0  3.0
+        7.0  7.0
 
 .. function:: A_mul_Bc(...)
 
