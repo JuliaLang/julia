@@ -102,11 +102,11 @@ testintersect(Type{Any},Type{Complex}, Bottom)
 testintersect(Type{Any},Type{TypeVar(:T,Real)}, Bottom)
 @test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
 @test !(Type{Array{Integer}} <: Type{Array{TypeVar(:T,Integer)}})
-testintersect(Type{Function},UnionType,Bottom)
+testintersect(Type{Function},Union,Bottom)
 testintersect(Type{Int32}, DataType, Type{Int32})
 @test !(Type <: TypeVar)
 testintersect(DataType, Type, Bottom, isnot)
-testintersect(UnionType, Type, Bottom, isnot)
+testintersect(Union, Type, Bottom, isnot)
 testintersect(DataType, Type{Int}, Bottom, isnot)
 testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, isnot)
 testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, isnot)
@@ -143,11 +143,11 @@ end
 @test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
-# this is fancy: know that any type T<:Number must be either a DataType or a UnionType
-@test Type{TypeVar(:T,Number)} <: Union{DataType,UnionType}
+# this is fancy: know that any type T<:Number must be either a DataType or a Union
+@test Type{TypeVar(:T,Number)} <: Union{DataType,Union}
 @test !(Type{TypeVar(:T,Number)} <: DataType)
-@test !(Type{TypeVar(:T,Tuple)} <: Union{Tuple,UnionType})
-@test Type{TypeVar(:T,Tuple)} <: Union{DataType,UnionType}
+@test !(Type{TypeVar(:T,Tuple)} <: Union{Tuple,Union})
+@test Type{TypeVar(:T,Tuple)} <: Union{DataType,Union}
 
 # issue #2997
 let T = TypeVar(:T,Union{Float64,Array{Float64,1}},true)
@@ -823,7 +823,7 @@ let
     local baar, foor, boor
     # issue #1131
     baar(x::DataType) = 0
-    baar(x::UnionType) = 1
+    baar(x::Union) = 1
     baar(x::TypeConstructor) = 2
     @test baar(StridedArray) == 2
     @test baar(StridedArray.body) == 1
@@ -831,12 +831,12 @@ let
     @test baar(Vector.body) == 0
 
     boor(x) = 0
-    boor(x::UnionType) = 1
+    boor(x::Union) = 1
     @test boor(StridedArray) == 0
     @test boor(StridedArray.body) == 1
 
     # issue #1202
-    foor(x::UnionType) = 1
+    foor(x::Union) = 1
     @test_throws MethodError foor(StridedArray)
     @test foor(StridedArray.body) == 1
     @test_throws MethodError foor(StridedArray)
@@ -3254,7 +3254,7 @@ Base.return_types(getindex, (Vector{nothing},))
 module MyColors
 
 abstract Paint{T}
-immutable RGB{T<:FloatingPoint} <: Paint{T}
+immutable RGB{T<:AbstractFloat} <: Paint{T}
     r::T
     g::T
     b::T
