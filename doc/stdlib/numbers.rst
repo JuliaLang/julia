@@ -100,18 +100,15 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of
-   a floating-point number or array. If ``x`` is a non-zero finite number,
-   than the result will be a number of the same type on the interval
-   :math:`[1,2)`. Otherwise ``x`` is returned.
+   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of a floating-point number or array. If ``x`` is a non-zero finite number, than the result will be a number of the same type on the interval :math:`[1,2)`\ . Otherwise ``x`` is returned.
 
    .. doctest::
 
-      julia> significand(15.2)/15.2
-      0.125
+       julia> significand(15.2)/15.2
+       0.125
 
-      julia> significand(15.2)*8
-      15.2
+       julia> significand(15.2)*8
+       15.2
 
 .. function:: exponent(x) -> Int
 
@@ -606,13 +603,12 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
+   Pick a random element or array of random elements from the set of values specified by ``S``\ ; ``S`` can be
 
-   * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
+     * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
+     * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
 
-   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to :math:`[0, 1)` for floating point numbers;
-
-   ``S`` defaults to ``Float64``.
+   ``S`` defaults to ``Float64``\ .
 
 .. function:: rand!([rng], A, [coll])
 
