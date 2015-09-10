@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## from base/boot.jl:
-#
-# immutable ASCIIString <: DirectIndexString
-#     data::Array{UInt8,1}
-# end
-#
+immutable ASCIIString <: DirectIndexString
+    data::Array{UInt8,1}
+end
+
+typealias ByteString Union{ASCIIString,UTF8String}
+
+bytestring(str::ASCIIString) = UTF8String(str.data)
 
 ## required core functionality ##
 

@@ -138,7 +138,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
+    Char, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception, InexactError,
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
@@ -246,19 +246,11 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
-abstract DirectIndexString <: AbstractString
-
-immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
-end
-
 immutable UTF8String <: AbstractString
     data::Array{UInt8,1}
 end
 
-typealias ByteString Union{ASCIIString,UTF8String}
-
-include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
+include(fname::UTF8String) = ccall(:jl_load_, Any, (Any,), fname)
 
 # constructors for built-in types
 

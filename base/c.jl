@@ -71,7 +71,7 @@ cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
 cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
 
 containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
-function unsafe_convert(::Type{Cstring}, s::ByteString)
+function unsafe_convert(::Type{Cstring}, s::UTF8String)
     p = unsafe_convert(Ptr{Cchar}, s)
     if containsnul(p, sizeof(s))
         throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
