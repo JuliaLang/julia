@@ -4253,7 +4253,7 @@ doc"""
 Create a Float64 from `x`. If `x` is not exactly representable then
 `mode` determines how `x` is rounded.
 
-```jl
+```jldoctest
 julia> Float64(pi, RoundDown)
 3.141592653589793
 
@@ -6546,7 +6546,7 @@ doc"""
     A_mul_B!(Y, A, B) -> Y
 
 
-Calculates the matrix-matrix or matrix-vector product `A B` and stores the
+Calculates the matrix-matrix or matrix-vector product `A * B` and stores the
 result in `Y`, overwriting the existing value of `Y`.
 
 ```jldoctest
