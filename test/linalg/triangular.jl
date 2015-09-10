@@ -120,6 +120,8 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         # real
         @test full(real(A1)) == real(full(A1))
+        @test full(imag(A1)) == imag(full(A1))
+        @test full(abs(A1)) == abs(full(A1))
 
         # Unary operations
         @test full(-A1) == -full(A1)

@@ -49,6 +49,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
         @test Bidiagonal(full(T), isupper) == T
         @test big(T) == T
+        @test full(abs(T)) == abs(diagm(dv)) + abs(diagm(ev, isupper?1:-1))
+        @test full(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
+        @test full(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
         z = zeros(elty, n)
 
         debug && println("Idempotent tests")
