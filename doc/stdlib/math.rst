@@ -425,7 +425,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ .
+   Calculates the matrix-matrix or matrix-vector product ``A * B`` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ .
 
    .. doctest::
 
