@@ -27,6 +27,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
     @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
 
+    @test full(real(D)) == real(DM)
+    @test full(abs(D)) == abs(DM)
+    @test full(imag(D)) == imag(DM)
+
     debug && println("Linear solve")
     @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
     @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)

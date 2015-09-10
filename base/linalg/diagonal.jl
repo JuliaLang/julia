@@ -55,6 +55,10 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
 
+abs(D::Diagonal) = Diagonal(abs(D.diag))
+real(D::Diagonal) = Diagonal(real(D.diag))
+imag(D::Diagonal) = Diagonal(imag(D.diag))
+
 istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
