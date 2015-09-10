@@ -274,38 +274,27 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Block the current task until some event occurs, depending on the type
-   of the argument:
+   Block the current task until some event occurs, depending on the type of the argument:
 
-   * ``RemoteRef``: Wait for a value to become available for the specified remote reference.
+     * ``RemoteRef``\ : Wait for a value to become available for the specified remote reference.
+     * ``Channel``\ : Wait for a value to be appended to the channel.
+     * ``Condition``\ : Wait for ``notify`` on a condition.
+     * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
+     * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
+     * ``RawFD``\ : Wait for changes on a file descriptor (see ``poll_fd`` for keyword arguments and return code)
 
-   * ``Channel``: Wait for a value to be appended to the channel.
+   If no argument is passed, the task blocks for an undefined period. If the task's state is set to ``:waiting``\ , it can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ . If the task's state is ``:runnable``\ , it might be restarted unpredictably.
 
-   * ``Condition``: Wait for ``notify`` on a condition.
-
-   * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
-
-   * ``Task``: Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``).
-
-   * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
-
-   If no argument is passed, the task blocks for an undefined period. If the task's
-   state is set to ``:waiting``, it can only be restarted by an explicit call to
-   ``schedule`` or ``yieldto``. If the task's state is ``:runnable``, it might be
-   restarted unpredictably.
-
-   Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
-   is met before proceeding.
+   Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition is met before proceeding.
 
 .. function:: fetch(x)
 
    .. Docstring generated from Julia source
 
-   Waits and fetches a value from ``x`` depending on the type of ``x``. Does not remove the item fetched:
+   Waits and fetches a value from ``x`` depending on the type of ``x``\ . Does not remove the item fetched:
 
-   * ``RemoteRef``: Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
-
-   * ``Channel`` : Wait for and get the first available item from the channel.
+     * ``RemoteRef``\ : Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
+     * ``Channel`` : Wait for and get the first available item from the channel.
 
 .. function:: remotecall_wait(id, func, args...)
 
@@ -363,10 +352,8 @@ General Parallel Computing Support
 
    Closes a channel. An exception is thrown by:
 
-       - ``put!`` on a closed channel.
-
-       - ``take!`` and ``fetch`` on an empty, closed channel.
-
+     * ``put!`` on a closed channel.
+     * ``take!`` and ``fetch`` on an empty, closed channel.
 
 .. function:: RemoteRef()
 
