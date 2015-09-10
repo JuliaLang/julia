@@ -95,43 +95,71 @@ function doc(obj)
     end
 end
 
-function macrosummary(name::Symbol, func::Function)
-    parts = ["""
-
-    No documentation found.
-    """]
-    if isdefined(func,:code) && func.code != nothing
-        lam = Base.uncompressed_ast(func.code)
-        io  = IOBuffer()
-        write(io, name, '(')
-        nargs = length(lam.args[1])
-        for (i,arg) in enumerate(lam.args[1])
-            argname, argtype = arg.args
-            if argtype === :Any || argtype === :ANY
-                write(io, argname)
-            elseif isa(argtype,Expr) && argtype.head === :... &&
-                   (argtype.args[end] === :Any || argtype.args[end] === :ANY)
-                write(io, argname, "...")
-            else
-                write(io, argname, "::", argtype)
-            end
-            i < nargs && write(io, ',')
+function write_lambda_signature(io::IO, lam::LambdaStaticData)
+    ex = Base.uncompressed_ast(lam)
+    write(io, '(')
+    nargs = length(ex.args[1])
+    for (i,arg) in enumerate(ex.args[1])
+        argname, argtype = arg.args
+        if argtype === :Any || argtype === :ANY
+            write(io, argname)
+        elseif isa(argtype,Expr) && argtype.head === :... &&
+               (argtype.args[end] === :Any || argtype.args[end] === :ANY)
+            write(io, argname, "...")
+        else
+            write(io, argname, "::", argtype)
         end
-        write(io, ')')
-        push!(parts, string("```julia\n", takebuf_string(io), "\n```"))
+        i < nargs && write(io, ',')
     end
-    Markdown.parse(join(parts,'\n'))
+    write(io, ')')
+    return io
+end
+
+function macrosummary(name::Symbol, func::Function)
+    if !isdefined(func,:code) || func.code == nothing
+        return Markdown.parse("\n")
+    end
+    io  = IOBuffer()
+    write(io, "```julia\n")
+    write(io, name)
+    write_lambda_signature(io, func.code)
+    write(io, "\n```")
+    return Markdown.parse(takebuf_string(io))
+end
+
+function functionsummary(func::Function)
+    io  = IOBuffer()
+    write(io, "```julia\n")
+    if isgeneric(func)
+        print(io, methods(func))
+    else
+        if isdefined(func,:code) && func.code !== nothing
+            write_lambda_signature(io, func.code)
+            write(io, " -> ...")
+        end
+    end
+    write(io, "\n```")
+    return Markdown.parse(takebuf_string(io))
 end
 
 function doc(b::Binding)
     d = invoke(doc, Tuple{Any}, b)
-    if d == nothing
+    if d === nothing
         v = getfield(b.mod,b.var)
         d = doc(v)
-        if d == nothing
-            # check to see if the binding var is a macro
-            if startswith(string(b.var),'@')
-                d = macrosummary(b.var, v)
+        if d === nothing
+            if isa(v,Function)
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+                """), functionsummary(v))
+            elseif startswith(string(b.var),'@')
+                # check to see if the binding var is a macro
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                """), macrosummary(b.var, v))
             else
                 T = typeof(v)
                 d = catdoc(Markdown.parse("""

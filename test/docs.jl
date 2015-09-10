@@ -332,6 +332,12 @@ immutable D <: B
     three::Float64
 end
 
+f = () -> nothing
+
+undocumented() = 1
+undocumented(x) = 2
+undocumented(x,y) = 3
+
 end
 
 @test docstrings_equal(@doc(Undocumented.A), doc"""
@@ -387,6 +393,27 @@ two   :: UTF8String
 three :: Float64
 ```
 """)
+
+let d = @doc Undocumented.f
+    io = IOBuffer()
+    writemime(io, MIME"text/markdown"(), d)
+    @test startswith(takebuf_string(io),"""
+    No documentation found.
+
+    `Undocumented.f` is an anonymous `Function`.
+    """)
+end
+
+let d = @doc Undocumented.undocumented
+    io = IOBuffer()
+    writemime(io, MIME"text/markdown"(), d)
+    @test startswith(takebuf_string(io), """
+    No documentation found.
+
+    `Undocumented.undocumented` is a generic `Function`.
+    """)
+end
+
 
 # Bindings.
 
