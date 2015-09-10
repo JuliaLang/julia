@@ -16,7 +16,7 @@ end
 # Container for a captured exception and its backtrace. Can be serialized.
 type CapturedException
     ex::Any
-    processed_bt::Array
+    processed_bt::Vector{Any}
 
     function CapturedException(ex, bt_raw)
         # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
@@ -32,12 +32,7 @@ type CapturedException
     end
 end
 
-function show(io::IO, ce::CapturedException)
-    show(io, ce.ex)
-    for entry in ce.processed_bt
-        show_trace_entry(io, entry...)
-    end
-end
+showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 
 type CompositeException <: Exception
     exceptions::Array
@@ -46,9 +41,9 @@ end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 
-function show(io::IO, ex::CompositeException)
+function showerror(io::IO, ex::CompositeException)
     if length(ex) > 0
-        show(io, ex.exceptions[1])
+        showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
             print(io, "\n\n...and $remaining other exceptions.\n")
