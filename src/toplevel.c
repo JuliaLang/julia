@@ -370,7 +370,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             }
         }
         if (retrying && require_func) {
-            jl_printf(JL_STDERR, "WARNING: requiring \"%s\" did not define a corresponding module.\n", var->name);
+            jl_printf(JL_STDERR, "WARNING: requiring \"%s\" in module \"%s\" did not define a corresponding module.\n", var->name, jl_current_module->name->name);
             return NULL;
         }
         else {
