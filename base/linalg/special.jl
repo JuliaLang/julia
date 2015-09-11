@@ -141,6 +141,24 @@ for op in (:+, :-)
             end
         end
     end
+
+    for matrixtype1 in (:Diagonal,)
+        for (matrixtype2,matrixtype3) in ((:UpperTriangular,:UpperTriangular),
+                                          (:UnitUpperTriangular,:UpperTriangular),
+                                          (:LowerTriangular,:LowerTriangular),
+                                          (:UnitLowerTriangular,:LowerTriangular))
+            @eval begin
+                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype3), A), B)
+                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype3), B))
+            end
+        end
+    end
+    for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
+        @eval begin
+            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(full(A), B)
+            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, full(B))
+        end
+    end
 end
 
 A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
