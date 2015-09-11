@@ -7345,9 +7345,7 @@ Dict
 doc"""
     sqrt(x)
 
-Return $\sqrt{x}$. Throws `DomainError` for negative `Real` arguments. Use
-complex negative arguments instead.  The prefix operator `√` is equivalent to
-`sqrt`.
+Return $\sqrt{x}$. Throws `DomainError` for negative `Real` arguments. Use complex negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt
 
