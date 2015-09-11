@@ -719,6 +719,11 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 arg = emit_unbox(t, arg, tti);
             }
         }
+        if (arg->getType() == T_void || isa<UndefValue>(arg)) {
+            emit_error("llvmcall: argument value didn't match declared type", ctx);
+            JL_GC_POP();
+            return literal_pointer_val(jl_nothing);
+        }
 
         // make sure args are rooted
         if (t == jl_pvalue_llvmt && (needroot || might_need_root(argi))) {
@@ -726,7 +731,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *v = julia_to_native(t, tti, arg, expr_type(argi, ctx), false, false, false, false, false, i, ctx, NULL);
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
-        argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
+        argvals[i] = llvm_type_rewrite(v, t, t == jl_pvalue_llvmt ? T_pint8->getPointerTo() : t, false, false, issigned, ctx);
     }
 
     Function *f;
@@ -748,13 +753,19 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 argstream << ",";
             else
                 first = false;
-            (*it)->print(argstream);
+            if (*it == jl_pvalue_llvmt)
+                argstream << "i8**";
+            else
+                (*it)->print(argstream);
             argstream << " ";
         }
 
         std::string rstring;
         llvm::raw_string_ostream rtypename(rstring);
-        rettype->print(rtypename);
+        if (rettype == jl_pvalue_llvmt)
+            rtypename << "i8**";
+        else
+            rettype->print(rtypename);
 
         ir_stream << "; Number of arguments: " << nargt << "\n"
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
@@ -763,11 +774,11 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
         Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"), *jl_Module, Err);
         if (!failed)
             m = jl_Module;
 #else
-        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
+        Module *m = ParseAssemblyString(ir_string.c_str(), jl_Module, Err, jl_LLVMContext);
 #endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
@@ -818,11 +829,13 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // the actual call
     assert(f->getParent() == jl_Module); // no prepare_call(f) is needed below, since this was just emitted into the same module
-    CallInst *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
-    ctx->to_inline.push_back(inst);
+    Value *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
+    ctx->to_inline.push_back((CallInst*)inst);
 
     JL_GC_POP();
 
+    if (rettype == jl_pvalue_llvmt && inst->getType() == T_pint8->getPointerTo())
+        inst = builder.CreatePointerCast(inst, rettype);
     if (inst->getType() != rettype) {
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
@@ -1134,39 +1147,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Value *ary = emit_expr(argi, ctx);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary),lrt),
-                                        args[2], rt, static_rt, ctx);
-    }
-    if (fptr == (void *) &jl_value_ptr ||
-        ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name,"jl_value_ptr"))) {
-        assert(lrt->isPointerTy());
-        assert(!isVa);
-        assert(nargt==1);
-        jl_value_t *argi = args[4];
-        bool addressOf = false;
-        jl_value_t *tti = jl_svecref(tt,0);
-        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
-            addressOf = true;
-            argi = jl_exprarg(argi,0);
-        }
-        else if (jl_is_abstract_ref_type(tti)) {
-            tti = (jl_value_t*)jl_voidpointer_type;
-        }
-        Value *ary;
-        Type *largty;
-        if (addressOf)
-            largty = jl_pvalue_llvmt;
-        else
-            largty = julia_struct_to_llvm(jl_svecref(tt, 0));
-        if (largty == jl_pvalue_llvmt) {
-            ary = boxed(emit_expr(argi, ctx),ctx);
-        }
-        else {
-            assert(!addressOf);
-            ary = emit_unbox(largty, emit_unboxed(argi, ctx), jl_svecref(tt, 0));
-        }
-        JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_is_leaf_type ||

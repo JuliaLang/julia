@@ -60,9 +60,9 @@ pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
     pointer_to_string(p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
 
 # convert a raw Ptr to an object reference, and vice-versa
-unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
-pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
-data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
+unsafe_pointer_to_objref(x::Ptr) = llvmcall("%2 = bitcast i8* %0 to i8**\nret i8** %2", Any, Type{Ptr{Void}}, convert(Ptr{Void}, x))
+pointer_from_objref(x::ANY) = llvmcall("%2 = bitcast i8** %0 to i8*\nret i8* %2", Ptr{Void}, Type{Any}, x)
+data_pointer_from_objref(x::ANY) = pointer_from_objref(x)
 
 eltype{T}(::Type{Ptr{T}}) = T
 

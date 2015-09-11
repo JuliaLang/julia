@@ -782,10 +782,6 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
 }
-DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
-{
-    return a;
-}
 
 // printing -------------------------------------------------------------------
 

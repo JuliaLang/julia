@@ -37,7 +37,8 @@ end
 @test ccall_echo_func(124, Ref{Int}, Any) === 124
 @test ccall_echo_load(422, Ptr{Any}, Ref{Any}) === 422
 @test ccall_echo_load([383], Ptr{Int}, Ref{Int}) === 383
-@test ccall_echo_load(Ref([144,172],2), Ptr{Int}, Ref{Int}) === 172
+@test_throws MethodError ccall_echo_load(Base.Ref(Any[821, 241], 2), Ptr{Int}, Ref{Int}) === 271
+@test ccall_echo_load(Ref(Int[144, 172], 2), Ptr{Int}, Ref{Int}) === 172
 # @test ccall_echo_load(Ref([8],1,1), Ptr{Int}, Ref{Int}) === 8
 
 # Tests for passing and returning structs
