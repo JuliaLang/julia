@@ -107,7 +107,10 @@ The maximal number of elements the channel can store.
 """
 capacity(c::Channel) = c.sz_max
 
-function n_avail(c::Channel)
+"""
+The number of elements currently in the channel.
+"""
+function navailable(c::Channel)
     if c.put_pos >= c.take_pos
         return c.put_pos - c.take_pos
     else
@@ -115,7 +118,7 @@ function n_avail(c::Channel)
     end
 end
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(capacity:$(capacity(c)), sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, "$(typeof(c))(capacity:$(capacity(c)), navailable:$(navailable(c)))")
 
 start{T}(c::Channel{T}) = Ref{Nullable{T}}()
 function done(c::Channel, state::Ref)

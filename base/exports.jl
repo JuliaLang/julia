@@ -1218,6 +1218,7 @@ export
     launch,
     manage,
     myid,
+    navailable,
     nprocs,
     nworkers,
     pmap,
