@@ -317,6 +317,48 @@ f12593_2() = 1
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
 @test contains(sprint(apropos, "print"), "Profile.print")
 
+# Issue #13068.
+
+module I13068
+
+module A
+
+export foo
+
+"""
+foo from A
+"""
+foo(::Int) = 1
+
+end
+
+module B
+
+import ..A: foo
+
+export foo
+
+"""
+foo from B
+"""
+foo(::Float64) = 2
+
+end
+
+end
+
+@test docstrings_equal(
+    @doc(I13068.A.foo),
+    doc"""
+    foo from A
+
+    foo from B
+    """
+)
+@test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Int}), doc"foo from A")
+@test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Float64}), doc"foo from B")
+@test Docs.doc(I13068.A.foo, Tuple{Char}) === nothing
+
 # Undocumented DataType Summaries.
 
 module Undocumented
