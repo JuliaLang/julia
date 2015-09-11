@@ -1078,7 +1078,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                           formatted_raw_ostream &stream);
 
 extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function_asm(void *f)
+const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
@@ -1099,6 +1099,8 @@ const jl_value_t *jl_dump_function_asm(void *f)
 #endif
     assert(fptr != 0);
     if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
+        if (raw_mc)
+            return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
         jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
     }
     else {
