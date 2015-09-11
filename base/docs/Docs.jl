@@ -238,26 +238,29 @@ doc(f::Function) = doc(f, Tuple)
 
 function doc(f::Function, sig::Type)
     isgeneric(f) && isempty(methods(f,sig)) && return nothing
+    results, funcdocs = [], []
     for mod in modules
-        if (haskey(meta(mod),f) && isa(meta(mod)[f],FuncDoc))
+        if (haskey(meta(mod), f) && isa(meta(mod)[f], FuncDoc))
             fd = meta(mod)[f]
-            results = []
+            push!(funcdocs, fd)
             for msig in fd.order
                 # try to find specific matching method signatures
                 if sig <: msig
-                    push!(results, (msig,fd.meta[msig]))
+                    push!(results, (msig, fd.meta[msig]))
                 end
-            end
-            # if all method signatures are Union{} ( ⊥ ), concat all docstrings
-            if isempty(results)
-                return catdoc([fd.meta[msig] for msig in reverse(fd.order)]...)
-            else
-                sort!(results, lt=(a,b)->type_morespecific(first(a),first(b)))
-                return catdoc([last(r) for r in results]...)
             end
         end
     end
-    return nothing
+    # if all method signatures are Union{} ( ⊥ ), concat all docstrings
+    if isempty(results)
+        for fd in funcdocs
+            append!(results, [fd.meta[msig] for msig in reverse(fd.order)])
+        end
+    else
+        sort!(results, lt = (a, b) -> type_morespecific(first(a), first(b)))
+        results = [last(r) for r in results]
+    end
+    catdoc(results...)
 end
 doc(f::Function,args::Any...) = doc(f, Tuple{args...})
 
