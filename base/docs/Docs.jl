@@ -277,7 +277,7 @@ isdoc(x) = isexpr(x, :string, AbstractString) ||
     (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str")) ||
     (isexpr(x, :call) && x.args[1] == Expr(:., Base.Markdown, QuoteNode(:doc_str)))
 
-dict_expr(d) = :(Dict($([:($(Expr(:quote, f)) => $d) for (f, d) in d]...)))
+dict_expr(d) = :(Dict($([:(Pair($(Expr(:quote, f)), $d)) for (f, d) in d]...)))
 
 function field_meta(def)
     meta = Dict()
@@ -465,9 +465,18 @@ end
 
 function moddoc(meta, def, name)
     docex = :(@doc $meta $name)
-    def == nothing && return :(eval($name, $(quot(docex)))) |> esc
-    push!(unblock(def).args[3].args, docex)
-    return esc(Expr(:toplevel, def))
+    if def == nothing
+        esc(:(eval($name, $(quot(docex)))))
+    else
+        def = unblock(def)
+        block = def.args[3].args
+        if !def.args[1]
+            isempty(block) && error("empty baremodules are not documentable.")
+            insert!(block, 2, :(import Base: call, @doc))
+        end
+        push!(block, docex)
+        esc(Expr(:toplevel, def))
+    end
 end
 
 function objdoc(meta, def)

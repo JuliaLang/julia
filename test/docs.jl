@@ -220,6 +220,45 @@ let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
     @test haskey(fields, :two) && fields[:two] == doc"two"
 end
 
+"BareModule"
+baremodule BareModule
+
+"f/1"
+f(x) = x
+
+"g/1"
+function g(x) end
+
+"h"
+function h end
+
+"@m"
+macro m() end
+
+"C"
+const C = 1
+
+"A"
+abstract A
+
+"T"
+type T
+    "x"
+    x
+    "y"
+    y
+end
+
+end
+
+@test docstrings_equal(@doc(BareModule), doc"BareModule")
+@test docstrings_equal(@doc(BareModule.f), doc"f/1")
+@test docstrings_equal(@doc(BareModule.g), doc"g/1")
+@test docstrings_equal(@doc(BareModule.@m), doc"@m")
+@test docstrings_equal(@doc(BareModule.C), doc"C")
+@test docstrings_equal(@doc(BareModule.A), doc"A")
+@test docstrings_equal(@doc(BareModule.T), doc"T")
+
 # test that when no docs exist, they fallback to
 # the docs for the typeof(value)
 let d1 = @doc(DocsTest.val)
