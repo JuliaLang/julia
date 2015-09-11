@@ -1,8 +1,6 @@
 using Base.Test
 using Base.Threading
 
-println("Threading tests")
-
 expected = [1:nthreads();]
 
 # test 1

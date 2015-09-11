@@ -30,7 +30,7 @@ function choosetests(choices = [])
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
-        "threads", "base64", "serialize", "functors", "misc",
+        "threads", "atomics", "base64", "serialize", "functors", "misc",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "intset", "floatfuncs", "compile"
     ]
