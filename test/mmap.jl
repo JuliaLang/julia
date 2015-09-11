@@ -283,3 +283,22 @@ n = similar(m, (2,2))
 n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
+
+# Test Base.File; ref #12286
+t = "Hello World".data
+file = tempname()
+s = open(file, "w") do f
+    write(f, "Hello World\n")
+end
+f = Base.FS.open(file,Base.JL_O_RDWR)
+m = Mmap.mmap(f, Vector{UInt8})
+@test m[1:11] == t
+@test length(m) == 12
+
+m2 = Mmap.mmap(f, Vector{UInt8}, (20,))
+@test m2[1:11] == t
+@test length(m2) == 20
+finalize(m); finalize(m2)
+gc()
+@test filesize(file) == 20
+rm(file)

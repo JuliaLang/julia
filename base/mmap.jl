@@ -33,13 +33,13 @@ const F_GETFL       = convert(Cint,3)
 gethandle(io::IO) = fd(io)
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::Int, shared::Bool)
+function settings(fd, shared::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
-    if s == INVALID_HANDLE_VALUE
+    if fd == INVALID_HANDLE_VALUE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
     else
-        mode = ccall(:fcntl,Cint,(Cint,Cint),s,F_GETFL)
+        mode = ccall(:fcntl,Cint,(Cint,Cint),fd,F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = mode == 0 ? PROT_READ : mode == 1 ? PROT_WRITE : PROT_READ | PROT_WRITE
@@ -54,6 +54,7 @@ end
 # Note: a few mappable streams do not support lseek. When Julia
 # supports structures in ccall, switch to fstat.
 grow!(::Anonymous,o::Integer,l::Integer) = return
+grow!(f::Base.File,o::Integer,l::Integer) = Base.FS.truncate(f, o + l)
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
