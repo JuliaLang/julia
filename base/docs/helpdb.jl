@@ -950,11 +950,9 @@ Returns the index of the minimum element in a collection.
 indmin
 
 doc"""
-```rst
-..  powermod(x, p, m)
+    powermod(x, p, m)
 
-Compute :math:`x^p \pmod m`
-```
+Compute $x^p \pmod m$.
 """
 powermod
 
@@ -1018,11 +1016,9 @@ Print (using :func:`print`) ``x`` followed by a newline.
 println
 
 doc"""
-```rst
-..  besselj(nu, x)
+    besselj(nu, x)
 
-Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
-```
+Bessel function of the first kind of order `nu`, $J_\nu(x)$.
 """
 besselj
 
@@ -1132,20 +1128,16 @@ Determine the declared type of a field (specified by name or index) in a composi
 fieldtype
 
 doc"""
-```rst
-..  hypot(x, y)
+    hypot(x, y)
 
-Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
-```
+Compute the $\sqrt{x^2+y^2}$ avoiding overflow and underflow
 """
 hypot
 
 doc"""
-```rst
-..  airybi(x)
+    airybi(x)
 
-Airy function :math:`\operatorname{Bi}(x)`.
-```
+Airy function $\operatorname{Bi}(x)$.
 """
 airybi
 
@@ -1171,24 +1163,20 @@ Compute the minimum absolute values over the singleton dimensions of `r`, and wr
 minabs!
 
 doc"""
-```rst
-..  prevprod([k_1,k_2,...], n)
+    prevprod([k_1,k_2,...], n)
 
-Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
-```
+Previous integer not greater than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
 """
 prevprod
 
 doc"""
-```rst
-..  @evalpoly(z, c...)
+    @evalpoly(z, c...)
 
-Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
-coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
-given in ascending order by power of ``z``.  This macro expands to
+Evaluate the polynomial $\sum_k c[k] z^{k-1}$ for the
+coefficients `c[1]`, `c[2]`, ...; that is, the coefficients are
+given in ascending order by power of `z`.  This macro expands to
 efficient inline code that uses either Horner's method or, for
-complex ``z``, a more efficient Goertzel-like algorithm.
-```
+complex `z`, a more efficient Goertzel-like algorithm.
 """
 :@evalpoly
 
@@ -1365,11 +1353,9 @@ as ``v0``. In general, this cannot be used with empty collections
 foldl(op, itr)
 
 doc"""
-```rst
-..  airybiprime(x)
+    airybiprime(x)
 
-Airy function derivative :math:`\operatorname{Bi}'(x)`.
-```
+Airy function derivative $\operatorname{Bi}'(x)$.
 """
 airybiprime
 
@@ -1824,11 +1810,9 @@ Returns an array of lowered and type-inferred ASTs for the methods matching the 
 code_typed
 
 doc"""
-```rst
-..  hankelh1x(nu, x)
+    hankelh1x(nu, x)
 
-Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
-```
+Scaled Bessel function of the third kind of order `nu`, $H^{(1)}_\nu(x) e^{-x i}$.
 """
 hankelh1x
 
@@ -1977,20 +1961,16 @@ This would create a 25-by-30000 ``BitArray``, linked to the file associated with
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 doc"""
-```rst
-..  airyprime(x)
+    airyprime(x)
 
-Airy function derivative :math:`\operatorname{Ai}'(x)`.
-```
+Airy function derivative $\operatorname{Ai}'(x)$.
 """
 airyprime
 
 doc"""
-```rst
-..  bessely0(x)
+    bessely0(x)
 
-Bessel function of the second kind of order 0, :math:`Y_0(x)`.
-```
+Bessel function of the second kind of order 0, $Y_0(x)$.
 """
 bessely0
 
@@ -2037,11 +2017,9 @@ Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
 base64decode
 
 doc"""
-```rst
-..  besselkx(nu, x)
+    besselkx(nu, x)
 
-Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
-```
+Scaled modified Bessel function of the second kind of order `nu`, $K_\nu(x) e^x$.
 """
 besselkx
 
@@ -2176,11 +2154,9 @@ Convert an integer to a binary string, optionally specifying a number of digits 
 bin
 
 doc"""
-```rst
-..  cis(z)
+    cis(z)
 
-Return :math:`\exp(iz)`.
-```
+Return $\exp(iz)$.
 """
 cis
 
@@ -2419,11 +2395,9 @@ Wrap an expression in a `Task` and add it to the scheduler's queue.
 :@schedule
 
 doc"""
-```rst
-..  bessely(nu, x)
+    bessely(nu, x)
 
-Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
-```
+Bessel function of the second kind of order `nu`, $Y_\nu(x)$.
 """
 bessely
 
@@ -2669,11 +2643,9 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 consume
 
 doc"""
-```rst
-..  hankelh2x(nu, x)
+    hankelh2x(nu, x)
 
-Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
-```
+Scaled Bessel function of the third kind of order `nu`, $H^{(2)}_\nu(x) e^{x i}$.
 """
 hankelh2x
 
@@ -2752,11 +2724,9 @@ Closes a channel. An exception is thrown by:
 close(::Channel)
 
 doc"""
-```rst
-..  cospi(x)
+    cospi(x)
 
-Compute :math:`\cos(\pi x)` more accurately than ``cos(pi*x)``, especially for large ``x``.
-```
+Compute $\cos(\pi x)$ more accurately than `cos(pi*x)`, especially for large `x`.
 """
 cospi
 
@@ -3022,11 +2992,9 @@ Construct a tuple of the given objects.
 tuple
 
 doc"""
-```rst
-..  besseli(nu, x)
+    besseli(nu, x)
 
-Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
-```
+Modified Bessel function of the first kind of order `nu`, $I_\nu(x)$.
 """
 besseli
 
@@ -3166,11 +3134,9 @@ Returns a structure whose fields contain information about the file. The fields 
 stat
 
 doc"""
-```rst
-..  exp10(x)
+    exp10(x)
 
-Compute :math:`10^x`
-```
+Compute $10^x$.
 """
 exp10
 
@@ -3182,11 +3148,9 @@ Bitwise and
 &
 
 doc"""
-```rst
-..  besselyx(nu, x)
+    besselyx(nu, x)
 
-Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
-```
+Scaled Bessel function of the second kind of order `nu`, $Y_\nu(x) e^{- | \operatorname{Im}(x) |}$.
 """
 besselyx
 
@@ -3659,12 +3623,10 @@ Move the file, link, or directory from `src` to `dst`. `remove_destination=true`
 mv
 
 doc"""
-```rst
-..  erfi(x)
+    erfi(x)
 
-Compute the imaginary error function of ``x``,
-defined by :math:`-i \operatorname{erf}(ix)`.
-```
+Compute the imaginary error function of `x`,
+defined by $-i \operatorname{erf}(ix)$.
 """
 erfi
 
@@ -3803,11 +3765,9 @@ The item or field is not defined for the given object.
 UndefRefError
 
 doc"""
-```rst
-..  bessely1(x)
+    bessely1(x)
 
-Bessel function of the second kind of order 1, :math:`Y_1(x)`.
-```
+Bessel function of the second kind of order 1, $Y_1(x)$.
 """
 bessely1
 
@@ -3824,11 +3784,9 @@ output (e.g. to avoid overflow).
 cumprod
 
 doc"""
-```rst
-..  besseljx(nu, x)
+    besseljx(nu, x)
 
-Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
-```
+Scaled Bessel function of the first kind of order `nu`, $J_\nu(x) e^{- | \operatorname{Im}(x) |}$.
 """
 besseljx
 
@@ -4087,12 +4045,10 @@ Create a string from any values using the `print` function.
 string
 
 doc"""
-```rst
-..  erfc(x)
+    erfc(x)
 
 Compute the complementary error function of ``x``,
-defined by :math:`1 - \operatorname{erf}(x)`.
-```
+defined by $1 - \operatorname{erf}(x)$.
 """
 erfc
 
@@ -4148,20 +4104,16 @@ If the first argument is a single integer `n`, then all block rows are assumed t
 hvcat
 
 doc"""
-```rst
-..  besselj1(x)
+    besselj1(x)
 
-Bessel function of the first kind of order 1, :math:`J_1(x)`.
-```
+Bessel function of the first kind of order 1, $J_1(x)$.
 """
 besselj1
 
 doc"""
-```rst
-..  sinpi(x)
+    sinpi(x)
 
-Compute :math:`\sin(\pi x)` more accurately than ``sin(pi*x)``, especially for large ``x``.
-```
+Compute $\sin(\pi x)$ more accurately than `sin(pi*x)`, especially for large `x`.
 """
 sinpi
 
@@ -4228,11 +4180,9 @@ Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flips
 flipsign
 
 doc"""
-```rst
-..  lbeta(x, y)
+    lbeta(x, y)
 
-Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`.
-```
+Natural logarithm of the absolute value of the beta function $\log(|\operatorname{B}(x,y)|)$.
 """
 lbeta
 
@@ -4402,11 +4352,9 @@ The individual components of the factorization ``F`` can be accessed by indexing
 lufact
 
 doc"""
-```rst
-..  besselix(nu, x)
+    besselix(nu, x)
 
-Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
-```
+Scaled modified Bessel function of the first kind of order `nu`, $I_\nu(x) e^{- | \operatorname{Re}(x) |}$.
 """
 besselix
 
@@ -4736,12 +4684,10 @@ Display a warning. Argument `msg` is a string describing the warning to be displ
 warn
 
 doc"""
-```rst
-..  erfinv(x)
+    erfinv(x)
 
-Compute the inverse error function of a real ``x``,
-defined by :math:`\operatorname{erf}(\operatorname{erfinv}(x)) = x`.
-```
+Compute the inverse error function of a real `x`,
+defined by $\operatorname{erf}(\operatorname{erfinv}(x)) = x$.
 """
 erfinv
 
@@ -4809,21 +4755,17 @@ Return a collection of all instances of the given type, if applicable. Mostly us
 instances
 
 doc"""
-```rst
-..  besselj0(x)
+    besselj0(x)
 
-Bessel function of the first kind of order 0, :math:`J_0(x)`.
-```
+Bessel function of the first kind of order 0, $J_0(x)$.
 """
 besselj0
 
 doc"""
-```rst
-..  erfcinv(x)
+    erfcinv(x)
 
-Compute the inverse error complementary function of a real ``x``,
-defined by :math:`\operatorname{erfc}(\operatorname{erfcinv}(x)) = x`.
-```
+Compute the inverse error complementary function of a real `x`,
+defined by $\operatorname{erfc}(\operatorname{erfcinv}(x)) = x$.
 """
 erfcinv
 
@@ -4913,11 +4855,9 @@ Equivalent to `stat(file).size`
 filesize
 
 doc"""
-```rst
-..  sinc(x)
+    sinc(x)
 
-Compute :math:`\sin(\pi x) / (\pi x)` if :math:`x \neq 0`, and :math:`1` if :math:`x = 0`.
-```
+Compute $\sin(\pi x) / (\pi x)$ if $x \neq 0$, and $1$ if $x = 0$.
 """
 sinc
 
@@ -5521,17 +5461,16 @@ Immediately run finalizers registered for object `x`.
 finalize
 
 doc"""
-```rst
-..  rand([rng], [S], [dims...])
+    rand([rng], [S], [dims...])
 
-Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
+Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
-* an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
+* an indexable collection (for example `1:n` or `['x','y','z']`), or
+* a type: the set of values to pick from is then equivalent to
+`typemin(S):typemax(S)` for integers (this is not applicable to `BigInt`),
+and to $[0, 1)$ for floating point numbers;
 
-* a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to :math:`[0, 1)` for floating point numbers;
-
-``S`` defaults to ``Float64``.
-```
+`S` defaults to `Float64`.
 """
 rand
 
@@ -5762,11 +5701,9 @@ Bitwise not
 ~
 
 doc"""
-```rst
-..  hankelh1(nu, x)
+    hankelh1(nu, x)
 
-Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
-```
+Bessel function of the third kind of order `nu`, $H^{(1)}_\nu(x)$.
 """
 hankelh1
 
@@ -6353,11 +6290,9 @@ Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` af
 module_parent
 
 doc"""
-```rst
-..  airyaiprime(x)
+    airyaiprime(x)
 
-Airy function derivative :math:`\operatorname{Ai}'(x)`.
-```
+Airy function derivative $\operatorname{Ai}'(x)$.
 """
 airyaiprime
 
@@ -6391,11 +6326,9 @@ Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensa
 sum_kbn
 
 doc"""
-```rst
-..  beta(x, y)
+    beta(x, y)
 
-Euler integral of the first kind :math:`\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)`.
-```
+Euler integral of the first kind $\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)$.
 """
 beta
 
@@ -7320,11 +7253,9 @@ Compute *nice* bin ranges for the edges of a histogram of `v`, using approximate
 histrange
 
 doc"""
-```rst
-..  eta(x)
+    eta(x)
 
-Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
-```
+Dirichlet eta function $\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}$.
 """
 eta
 
@@ -7412,11 +7343,9 @@ Alternatively, a sequence of pair arguments may be passed.
 Dict
 
 doc"""
-```rst
-..  sqrt(x)
+    sqrt(x)
 
-Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
-```
+Return $\sqrt{x}$. Throws `DomainError` for negative `Real` arguments. Use complex negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt
 
@@ -7429,11 +7358,9 @@ Register a zero-argument function `f()` to be called at process exit.
 atexit
 
 doc"""
-```rst
-..  besselk(nu, x)
+    besselk(nu, x)
 
-Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
-```
+Modified Bessel function of the second kind of order `nu`, $K_\nu(x)$.
 """
 besselk
 
@@ -7984,21 +7911,17 @@ Send the given value to the last `consume` call, switching to the consumer task.
 produce
 
 doc"""
-```rst
-.. ifft(A [, dims])
+    ifft(A [, dims])
 
 Multidimensional inverse FFT.
 
 A one-dimensional inverse FFT computes
 
-.. math::
+$$\operatorname{IDFT}(A)[k] = \frac{1}{\operatorname{length}(A)}
+\sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi (n-1)(k-1)}
+{\operatorname{length}(A)} \right) A[n].$$
 
-   \operatorname{IDFT}(A)[k] = \frac{1}{\operatorname{length}(A)}
-   \sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi (n-1)(k-1)}
-   {\operatorname{length}(A)} \right) A[n].
-
-A multidimensional inverse FFT simply performs this operation along each transformed dimension of ``A``.
-```
+A multidimensional inverse FFT simply performs this operation along each transformed dimension of `A`.
 """
 ifft
 
@@ -8190,11 +8113,9 @@ Test whether `x` is less than `y`, according to a canonical total order. Values 
 isless
 
 doc"""
-```rst
-..  expm1(x)
+    expm1(x)
 
-Accurately compute :math:`e^x-1`
-```
+Accurately compute $e^x-1$.
 """
 expm1
 
@@ -8213,11 +8134,9 @@ Construct the set of elements in `s1` but not `s2`. Maintains order with arrays.
 setdiff
 
 doc"""
-```rst
-..  airyai(x)
+    airyai(x)
 
-Airy function :math:`\operatorname{Ai}(x)`.
-```
+Airy function $\operatorname{Ai}(x)$.
 """
 airyai
 
@@ -8323,14 +8242,12 @@ Get the *dynamically* current `Module`, which is the `Module` code is currently 
 current_module
 
 doc"""
-```rst
-..  erfcx(x)
+    erfcx(x)
 
-Compute the scaled complementary error function of ``x``,
-defined by :math:`e^{x^2} \operatorname{erfc}(x)`.  Note
-also that :math:`\operatorname{erfcx}(-ix)` computes the
-Faddeeva function :math:`w(x)`.
-```
+Compute the scaled complementary error function of `x`,
+defined by $e^{x^2} \operatorname{erfc}(x)$.  Note
+also that $\operatorname{erfcx}(-ix)$ computes the
+Faddeeva function $w(x)$.
 """
 erfcx
 
@@ -8681,11 +8598,9 @@ julia> leading_zeros(Int32(1))
 leading_zeros
 
 doc"""
-```rst
-..  hankelh2(nu, x)
+    hankelh2(nu, x)
 
-Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
-```
+Bessel function of the third kind of order `nu`, $H^{(2)}_\nu(x)$.
 """
 hankelh2
 
@@ -8767,11 +8682,9 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 finalizer
 
 doc"""
-```rst
-..  nextprod([k_1,k_2,...], n)
+    nextprod([k_1,k_2,...], n)
 
-Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
-```
+Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
 """
 nextprod
 
@@ -8810,17 +8723,17 @@ Computes the solution `X` to the continuous Lyapunov equation `AX + XA' + C = 0`
 lyap
 
 doc"""
-```rst
-..  condskeel(M, [x, p])
+    condskeel(M, [x, p])
 
-.. math::
-   \kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
-   \kappa_S(M, x, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert \left\vert x \right\vert \right\Vert_p
+$$\kappa_S(M, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
+\kappa_S(M, x, p) & = \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert \left\vert x \right\vert \right\Vert_p$$
 
-Skeel condition number :math:`\kappa_S` of the matrix ``M``, optionally with respect to the vector ``x``, as computed using the operator ``p``-norm. ``p`` is ``Inf`` by default, if not provided. Valid values for ``p`` are ``1``, ``2``, or ``Inf``.
+Skeel condition number $\kappa_S$ of the matrix `M`, optionally with respect to
+the vector `x`, as computed using the operator `p`-norm. `p` is `Inf` by
+default, if not provided. Valid values for `p` are `1`, `2`, or `Inf`.
 
-This quantity is also known in the literature as the Bauer condition number, relative condition number, or componentwise relative condition number.
-```
+This quantity is also known in the literature as the Bauer condition number,
+relative condition number, or componentwise relative condition number.
 """
 condskeel
 
@@ -9158,11 +9071,9 @@ Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:
 qr
 
 doc"""
-```rst
-..  invmod(x,m)
+    invmod(x,m)
 
-Take the inverse of ``x`` modulo ``m``: ``y`` such that :math:`xy = 1 \pmod m`
-```
+Take the inverse of `x` modulo `m`: `y` such that $xy = 1 \pmod m$.
 """
 invmod
 
@@ -9198,11 +9109,9 @@ Test whether a string contains a match of the given regular expression.
 ismatch
 
 doc"""
-```rst
-..  exp(x)
+    exp(x)
 
-Compute :math:`e^x`
-```
+Compute $e^x$.
 """
 exp
 
@@ -9240,11 +9149,9 @@ Get julia's process ID.
 getpid
 
 doc"""
-```rst
-..  cbrt(x)
+    cbrt(x)
 
-Return :math:`x^{1/3}`.  The prefix operator ``∛`` is equivalent to ``cbrt``.
-```
+Return $x^{1/3}$.  The prefix operator `∛` is equivalent to `cbrt`.
 """
 cbrt
 
@@ -9569,11 +9476,9 @@ Returns `true` if `string` ends with `suffix`. If the second argument is a vecto
 endswith
 
 doc"""
-```rst
-..  airy(k,x)
+    airy(k,x)
 
-kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
-```
+The `k`th derivative of the Airy function $\operatorname{Ai}(x)$.
 """
 airy
 
@@ -10058,11 +9963,11 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 catch_backtrace
 
 doc"""
-```rst
-..  airyx(k,x)
+    airyx(k,x)
 
-scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
-```
+scaled `k`th derivative of the Airy function, return $\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}$
+for `k == 0 || k == 1`, and $\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}$
+for `k == 2 || k == 3`.
 """
 airyx
 
@@ -10300,21 +10205,19 @@ General escaping of traditional C and Unicode escape sequences. See :func:`print
 escape_string
 
 doc"""
-```rst
-..  significand(x)
+    significand(x)
 
-Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of
-a floating-point number or array. If ``x`` is a non-zero finite number,
+Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of
+a floating-point number or array. If `x` is a non-zero finite number,
 than the result will be a number of the same type on the interval
-:math:`[1,2)`. Otherwise ``x`` is returned.
+$[1,2)$. Otherwise `x` is returned.
 
-.. doctest::
+```jldoctest
+julia> significand(15.2)/15.2
+0.125
 
-   julia> significand(15.2)/15.2
-   0.125
-
-   julia> significand(15.2)*8
-   15.2
+julia> significand(15.2)*8
+15.2
 ```
 """
 significand
@@ -10903,12 +10806,10 @@ Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
 plan_ifft
 
 doc"""
-```rst
-..  cosc(x)
+    cosc(x)
 
-Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
-if :math:`x = 0`. This is the derivative of ``sinc(x)``.
-```
+Compute $\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)$ if $x \neq 0$, and $0$
+if $x = 0$. This is the derivative of `sinc(x)`.
 """
 cosc
 
@@ -10966,21 +10867,17 @@ Create a `Symbol` by concatenating the string representations of the arguments t
 symbol
 
 doc"""
-```rst
-..  zeta(s)
+    zeta(s)
 
-Riemann zeta function :math:`\zeta(s)`.
-```
+Riemann zeta function $\zeta(s)$.
 """
 zeta(s)
 
 doc"""
-```rst
-..  zeta(s, z)
+    zeta(s, z)
 
-Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
-the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
-```
+Hurwitz zeta function $\zeta(s, z)$.  (This is equivalent to
+the Riemann zeta function $\zeta(s)$ for the case of `z=1`.)
 """
 zeta(s,z)
 
@@ -11073,12 +10970,10 @@ Generate all combinations of `n` elements from an indexable object. Because the 
 combinations
 
 doc"""
-```rst
-..  frexp(val)
+    frexp(val)
 
-Return ``(x,exp)`` such that ``x`` has a magnitude in the interval :math:`[1/2, 1)` or 0,
-and val = :math:`x \times 2^{exp}`.
-```
+Return `(x,exp)` such that `x` has a magnitude in the interval $[1/2, 1)$ or 0,
+and val = $x \times 2^{exp}$.
 """
 frexp
 
@@ -11287,11 +11182,9 @@ Fill the array `A` with normally-distributed (mean 0, standard deviation 1) rand
 randn!
 
 doc"""
-```rst
-..  ldexp(x, n)
+    ldexp(x, n)
 
-Compute :math:`x \times 2^n`
-```
+Compute $x \times 2^n$.
 """
 ldexp
 
@@ -11399,11 +11292,9 @@ recommended.
 eig(A,B)
 
 doc"""
-```rst
-..  exp2(x)
+    exp2(x)
 
-Compute :math:`2^x`
-```
+Compute $2^x$.
 """
 exp2
 
@@ -11614,13 +11505,11 @@ Should be used instead of :obj:`IntSet` for sparse integer sets, or for sets of 
 Set
 
 doc"""
-```rst
-..  erf(x)
+    erf(x)
 
-Compute the error function of ``x``, defined by
-:math:`\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt`
-for arbitrary complex ``x``.
-```
+Compute the error function of `x`, defined by
+$\frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} dt$
+for arbitrary complex `x`.
 """
 erf
 
@@ -11646,11 +11535,9 @@ Split a path into a tuple of the directory name and file name.
 splitdir
 
 doc"""
-```rst
-..  sign(x)
+    sign(x)
 
-Return zero if ``x==0`` and :math:`x/|x|` otherwise (i.e., ±1 for real ``x``).
-```
+Return zero if `x==0` and $x/|x|$ otherwise (i.e., ±1 for real `x`).
 """
 sign
 
@@ -11908,12 +11795,10 @@ Greater-than-or-equals comparison operator.
 Base.(:(>=))
 
 doc"""
-```rst
-.. dawson(x)
+    dawson(x)
 
-Compute the Dawson function (scaled imaginary error function) of ``x``,
-defined by :math:`\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)`.
-```
+Compute the Dawson function (scaled imaginary error function) of `x`,
+defined by $\frac{\sqrt{\pi}}{2} e^{-x^2} \operatorname{erfi}(x)$.
 """
 dawson
 
