@@ -29,6 +29,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
 2. Double-click the `julia` shortcut to launch Julia.
 
+3. Julia's home directory is the location pointed to by the Windows environment variable `HOME`: this directory is for instance where the startup file `.juliarc.jl` resides. `HOMEDRIVE`\\`HOMEPATH` is used as a fallback if `HOME` is not defined.
+
+
 # Line endings
 
 Julia uses binary-mode files exclusively. Unlike many other Windows programs, if you write '\n' to a file, you get a '\n' in the file, not some other bit pattern. This matches the behavior exhibited by other operating systems. If you have installed msysGit, it is suggested, but not required, that you configure your system msysGit to use the same convention:
