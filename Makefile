@@ -359,6 +359,12 @@ endif
 	# Install appdata file
 	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
 	$(INSTALL_F) contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
+	# Copy some editor add-ins
+	mkdir -p $(DESTDIR)$(datarootdir)/julia/contrib/
+	$(INSTALL_F) contrib/julia-mode.el $(DESTDIR)$(datarootdir)/julia/contrib/
+	$(INSTALL_F) contrib/Julia_Notepad++.xml $(DESTDIR)$(datarootdir)/julia/contrib/
+	$(INSTALL_F) contrib/Notepad++_2_Julia.ahk $(DESTDIR)$(datarootdir)/julia/contrib/
+	$(INSTALL_F) contrib/BBEditTextWrangler-julia.plist $(DESTDIR)$(datarootdir)/julia/contrib/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
