@@ -456,10 +456,10 @@ spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{Process
 function eachline(cmd::AbstractCmd, stdin)
     stdout = Pipe()
     processes = spawn(cmd, (stdin,stdout,STDERR))
-    close(stdout.in)
+    !isa(cmds, Cmd) || close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, ()->close(out))
+    return EachLine(out, ()->close(stdout))
 end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
@@ -469,12 +469,12 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::AsyncStream=De
         in = other
         out = io = Pipe()
         processes = spawn(cmds, (in,out,STDERR))
-        close(out.in)
+        !isa(cmds, Cmd) || close(out.in)
     elseif mode == "w"
         in = io = Pipe()
         out = other
         processes = spawn(cmds, (in,out,STDERR))
-        close(in.out)
+        !isa(cmds, Cmd) || close(in.out)
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
     end
