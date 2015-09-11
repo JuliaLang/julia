@@ -16,17 +16,33 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
 rr=RemoteRef()
 @test typeof(rr) == RemoteRef{Channel{Any}}
+@test !isready(rr)
+@test navailable(rr) == 0
+@test capacity(rr) > 0
 a = rand(5,5)
 put!(rr, a)
+@test isready(rr)
+@test navailable(rr) == 1
 @test rr[2,3] == a[2,3]
 @test rr[] == a
+take!(rr)
+@test !isready(rr)
+@test navailable(rr) == 0
 
 rr=RemoteRef(workers()[1])
 @test typeof(rr) == RemoteRef{Channel{Any}}
+@test !isready(rr)
+@test navailable(rr) == 0
+@test capacity(rr) > 0
 a = rand(5,5)
 put!(rr, a)
+@test isready(rr)
+@test navailable(rr) == 1
 @test rr[1,5] == a[1,5]
 @test rr[] == a
+take!(rr)
+@test !isready(rr)
+@test navailable(rr) == 0
 
 dims = (20,20,20)
 
