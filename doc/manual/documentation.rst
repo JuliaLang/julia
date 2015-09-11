@@ -256,6 +256,26 @@ Modules
 Adds docstring ``"..."`` to the ``Module`` ``M``. Adding the docstring above the ``Module``
 is the preferred syntax, however both are equivalent.
 
+.. code-block:: julia
+
+    "..."
+    baremodule M
+    # ...
+    end
+
+    baremodule M
+
+    import Base: call, @doc
+
+    "..."
+    f(x) = x
+
+    end
+
+Documenting a ``baremodule`` by placing a docstring above the expression automatically
+imports ``call`` and ``@doc`` into the module. These imports must be done manually when the
+module expression is not documented. Empty ``baremodule``\ s cannot be documented.
+
 Global Variables
 ~~~~~~~~~~~~~~~~
 
