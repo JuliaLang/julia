@@ -148,18 +148,18 @@ function doc(b::Binding)
         v = getfield(b.mod,b.var)
         d = doc(v)
         if d === nothing
-            if isa(v,Function)
-                d = catdoc(Markdown.parse("""
-                No documentation found.
-
-                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
-                """), functionsummary(v))
-            elseif startswith(string(b.var),'@')
+            if startswith(string(b.var),'@')
                 # check to see if the binding var is a macro
                 d = catdoc(Markdown.parse("""
                 No documentation found.
 
                 """), macrosummary(b.var, v))
+            elseif isa(v,Function)
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+                """), functionsummary(v))
             else
                 T = typeof(v)
                 d = catdoc(Markdown.parse("""
