@@ -241,9 +241,13 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc @m2_11993)
-    io = IOBuffer()
-    writemime(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io),"No documentation found")
+    @test docstrings_equal(d, doc"""
+    No documentation found.
+
+    ```julia
+    @m2_11993()
+    ```
+    """)
 end
 
 @doc "Now @m2... should be documented" :@m2_11993
