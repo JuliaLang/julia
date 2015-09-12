@@ -10,7 +10,7 @@ for σ in map(Hermitian, Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
-# Hermitian matrix exponential/log
+# Hermitian matrix exponential/log/det
 let A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test expm(A2) ≈ expm(Hermitian(A2))
@@ -18,11 +18,18 @@ let A1 = randn(4,4) + im*randn(4,4)
     A3 = A1 * A1' # posdef
     @test expm(A3) ≈ expm(Hermitian(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
+    @test det(A2) ≈ det(Hermitian(A2))
+    @test det(A3) ≈ det(Hermitian(A3))
+    @test det(A4) ≈ det(Hermitian(A4))
 end
 
+# Symmetric matrix exponential/log/det
 let A1 = randn(4,4)
     A3 = A1 * A1'
     A4 = A1 + A1.'
+    @test det(A3) ≈ det(Hermitian(A3))
+    @test det(A3) ≈ det(Symmetric(A3))
+    @test det(A4) ≈ det(Hermitian(A4))
     @test expm(A4) ≈ expm(Symmetric(A4))
     @test logm(A3) ≈ logm(Symmetric(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))

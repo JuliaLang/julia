@@ -55,6 +55,7 @@ function transpose(A::Hermitian)
 end
 ctranspose(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
+det(A::HermOrSym) = det(full(A))
 
 #tril/triu
 function tril(A::Hermitian, k::Integer=0)
