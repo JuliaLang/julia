@@ -2,15 +2,15 @@
 # You may have to wipe your openblas build to ensure that it is built
 # with support for all architectures, or else performance may suffer.
 
-JULIAHOME = $(abspath ../../..)
+JULIAHOME := $(abspath ../../..)
 include ../../../Make.inc
 
-JULIA_PKGDIR=$(shell echo $$JULIA_PKGDIR)
+JULIA_PKGDIR:=$(shell echo $$JULIA_PKGDIR)
 ifeq ($(JULIA_PKGDIR),)
-	JULIA_PKGDIR=$(shell echo ~)/.julia
+	JULIA_PKGDIR:=$(shell echo ~)/.julia
 endif
 
-VERSION_SUFFIX=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+VERSION_SUFFIX:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
 
 all: clean dmg
 
