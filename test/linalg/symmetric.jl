@@ -18,6 +18,9 @@ let A1 = randn(4,4) + im*randn(4,4)
     A3 = A1 * A1' # posdef
     @test expm(A3, method=:higham) ≈ expm(Hermitian(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
+    A4 = (A2 - trace(A2)/size(A2,1)*eye(A2)) # tr(A4) == 0 => det(expm(A4)) == 1
+    @test expm(A4, method=:higham) ≈ expm(Hermitian(A4))
+    @test logm(A4) ≈ logm(Hermitian(A4))
     @test det(A2) ≈ det(Hermitian(A2))
     @test det(A3) ≈ det(Hermitian(A3))
     @test det(A4) ≈ det(Hermitian(A4))
@@ -33,6 +36,10 @@ let A1 = randn(4,4)
     @test expm(A4, method=:higham) ≈ expm(Symmetric(A4))
     @test logm(A3) ≈ logm(Symmetric(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
+    A5 = (A4 - trace(A4)/size(A4,1)*eye(A4)) # tr(A5) == 0 => det(expm(A5)) == 1
+    @assert isapprox(trace(A5), 0.0, atol=1E-10)
+    @test expm(A5, method=:higham) ≈ expm(Symmetric(A5))
+    @test det(expm(Symmetric(A5))) ≈ 1.0
 end
 
 let n=10
