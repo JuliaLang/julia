@@ -38,7 +38,7 @@ Editors  + Debuggers
 |[ Julia_Notepad++.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/Julia_Notepad++.xml) | Notepad++ config file |
 |[ julia.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.xml) | KDE editors Kate and Kwrite config file |
 |[ Notepad++_2_Julia.ahk ](https://github.com/JuliaLang/julia/blob/master/contrib/Notepad++_2_Julia.ahk) | Auto Hotkey for Notepad++ config file |
-|[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc config file |
+|[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc  config file |
 |[ README.ctags.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ctags.txt) | README for ctags  config file |
-|[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4. make) | Reinstall suitesparse4 script |
-|[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions for Valgrind debugging tool |
+|[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4.make) | Links shared    libraries from static-library for suitesparse4 |
+|[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | Suppressions  for Valgrind debugging tool |
