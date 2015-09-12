@@ -14,4 +14,4 @@ show(io, Pair)
 @assert !Base.inbase(LastMain)
 """
 exename = joinpath(JULIA_HOME, Base.julia_exename())
-run(`$exename -f -e $script`)
+run(`$exename --startup-file=no -e $script`)

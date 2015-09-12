@@ -434,24 +434,6 @@ function test_UInt_indexing(::Type{TestAbstractArray})
     end
 end
 
-function test_vcat_depwarn(::Type{TestAbstractArray})
-    if (Base.JLOptions()).depwarn > 1
-        @test_throws ErrorException [1:10]
-        @test_throws ErrorException [[1, 2], [3, 4]]
-        @test_throws ErrorException [[1, 2], [3, 4], [5, 6]]
-    else
-        olderr = STDERR
-        try
-            rd, wr = redirect_stderr()
-            @test [1:10] == [1:10...]
-            @test [[1, 2], [3, 4]] == [1, 2, 3, 4]
-            @test [[1, 2], [3, 4], [5, 6]] == [1, 2, 3, 4, 5, 6]
-        finally
-            redirect_stderr(olderr)
-        end
-    end
-end
-
 #----- run tests -------------------------------------------------------------#
 
 for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
@@ -470,4 +452,3 @@ test_ind2sub(TestAbstractArray)
 test_map(TestAbstractArray)
 test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
-test_vcat_depwarn(TestAbstractArray)

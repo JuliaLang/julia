@@ -34,13 +34,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
-    # --post-boot
-    @test  success(`$exename -P "exit(0)"`)
-    @test !success(`$exename -P "exit(1)"`)
-    @test  success(`$exename --post-boot="exit(0)"`)
-    @test !success(`$exename --post-boot="exit(1)"`)
-    @test !success(`$exename -P`)
-    @test !success(`$exename --post-boot`)
+    # post boot
+    @test  success(`$exename -i -e "exit(0)"`)
+    @test !success(`$exename -i -e "exit(1)"`)
+    @test !success(`$exename -i -e`)
 
     # --load
     let testfile = tempname()
@@ -48,8 +45,8 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
             open(testfile, "w") do io
                 println(io, "testvar = :test")
             end
-            @test split(readchomp(`$exename --load=$testfile -P "println(testvar)"`), '\n')[end] == "test"
-            @test split(readchomp(`$exename -P "println(testvar)" -L $testfile`), '\n')[end] == "test"
+            @test split(readchomp(`$exename --load=$testfile -i -e "println(testvar)"`), '\n')[end] == "test"
+            @test split(readchomp(`$exename -i -e "println(testvar)" -L $testfile`), '\n')[end] == "test"
         finally
             rm(testfile)
         end
@@ -68,7 +65,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     end
 
     # --procs
-    @test readchomp(`$exename -q -p 2 -P "println(nworkers()); exit(0)"`) == "2"
+    @test readchomp(`$exename -q -p 2 -i -e "println(nworkers()); exit(0)"`) == "2"
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
@@ -97,9 +94,6 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=yes`) == "true"
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=no`) == "false"
-    # deprecated
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --no-history-file`) == "false"
-    @test !success(`$exename --history-file=false`)
 
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,

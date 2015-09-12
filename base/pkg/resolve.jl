@@ -74,7 +74,8 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
 
     nv = length(vers)
 
-    svdict = (Tuple{ByteString,VersionNumber}=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
+    svdict = Dict{Tuple{ByteString,VersionNumber},Int}(
+                    [vers[i][1:2]=>i for i = 1:nv ])
 
     checked = falses(nv)
 

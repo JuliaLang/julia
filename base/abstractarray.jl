@@ -12,42 +12,11 @@ typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
 vect() = Array(Any, 0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
-const _oldstyle_array_vcat_ = true
-
-if _oldstyle_array_vcat_
-    function oldstyle_vcat_warning(n::Int)
-        if n == 1
-            before = "[a]"
-            after  = "collect(a)"
-        elseif n == 2
-            before = "[a,b]"
-            after  = "[a;b]"
-        else
-            before = "[a,b,...]"
-            after  = "[a;b;...]"
-        end
-        depwarn("$before concatenation is deprecated; use $after instead", :vect)
-    end
-    function vect(A::AbstractArray...)
-        oldstyle_vcat_warning(length(A))
-        vcat(A...)
-    end
-    function vect(X...)
-        for a in X
-            if typeof(a) <: AbstractArray
-                oldstyle_vcat_warning(length(X))
-                break
-            end
-        end
-        vcat(X...)
-    end
-else
-    function vect(X...)
-        T = promote_typeof(X...)
-        #T[ X[i] for i=1:length(X) ]
-        # TODO: this is currently much faster. should figure out why. not clear.
-        copy!(Array(T,length(X)), X)
-    end
+function vect(X...)
+    T = promote_typeof(X...)
+    #T[ X[i] for i=1:length(X) ]
+    # TODO: this is currently much faster. should figure out why. not clear.
+    copy!(Array(T,length(X)), X)
 end
 
 size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1

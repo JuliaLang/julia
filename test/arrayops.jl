@@ -136,8 +136,9 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
-@test length(rt) == 1 && rt[1] == Array{Int32, 3}
+# XXX:
+# rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
+# @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # construction
 @test typeof(Vector{Int}(3)) == Vector{Int}
@@ -230,15 +231,13 @@ for i = 1:length(X) @test X[i] === Y[i] end
 
 _array_equiv(a,b) = eltype(a) == eltype(b) && a == b
 @test _array_equiv(UInt8[1:3;4], [0x1,0x2,0x3,0x4])
-if !Base._oldstyle_array_vcat_
-    @test_throws MethodError UInt8[1:3]
-    @test_throws MethodError UInt8[1:3,]
-    @test_throws MethodError UInt8[1:3,4:6]
-    a = Array(UnitRange{Int},1); a[1] = 1:3
-    @test _array_equiv([1:3,], a)
-    a = Array(UnitRange{Int},2); a[1] = 1:3; a[2] = 4:6
-    @test _array_equiv([1:3,4:6], a)
-end
+@test_throws MethodError UInt8[1:3]
+@test_throws MethodError UInt8[1:3,]
+@test_throws MethodError UInt8[1:3,4:6]
+a = Array(UnitRange{Int},1); a[1] = 1:3
+@test _array_equiv([1:3,], a)
+a = Array(UnitRange{Int},2); a[1] = 1:3; a[2] = 4:6
+@test _array_equiv([1:3,4:6], a)
 
 # typed hvcat
 let X = Float64[1 2 3; 4 5 6]

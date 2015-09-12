@@ -201,7 +201,7 @@ f2 = "dd/mm/yy"
 
 const french = Dict("janv"=>1,"févr"=>2,"mars"=>3,"avril"=>4,"mai"=>5,"juin"=>6,"juil"=>7,"août"=>8,"sept"=>9,"oct"=>10,"nov"=>11,"déc"=>12)
 Dates.MONTHTOVALUEABBR["french"] = french
-Dates.VALUETOMONTHABBR["french"] = [v=>k for (k,v) in french]
+Dates.VALUETOMONTHABBR["french"] = Dict([v=>k for (k,v) in french])
 
 f = "dd uuuuu yyyy"
 @test Dates.Date("28 mai 2014",f;locale="french") == Dates.Date(2014,5,28)
@@ -230,7 +230,7 @@ f = "duy"
 const globex = Dict("f"=>Dates.Jan,"g"=>Dates.Feb,"h"=>Dates.Mar,"j"=>Dates.Apr,"k"=>Dates.May,"m"=>Dates.Jun,
                     "n"=>Dates.Jul,"q"=>Dates.Aug,"u"=>Dates.Sep,"v"=>Dates.Oct,"x"=>Dates.Nov,"z"=>Dates.Dec)
 Dates.MONTHTOVALUEABBR["globex"] = globex
-Dates.VALUETOMONTHABBR["globex"] = [v=>uppercase(k) for (k,v) in globex]
+Dates.VALUETOMONTHABBR["globex"] = Dict([v=>uppercase(k) for (k,v) in globex])
 @test Dates.Date("1F4",f;locale="globex") + Dates.Year(2010) == Dates.Date(2014,1,1)
 @test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F4"
 

@@ -109,9 +109,6 @@
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
 
-(define (dict-literal? l)
-  (and (length= l 3) (eq? (car l) '=>)))
-
 ;; Parser state variables
 
 ; disable range colon for parsing ternary conditional operator
@@ -187,8 +184,6 @@
                                     (loop newop (peek-char port)))
                              str))
                        str))))
-        (if (equal? str "--")
-            (syntax-deprecation port str ""))
         (string->symbol str))))
 
 (define (accum-digits c pred port lz)
@@ -937,11 +932,6 @@
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
 
-(define (deprecated-dict-replacement ex)
-  (if (dict-literal? ex)
-      (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
-      "Dict"))
-
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
@@ -954,9 +944,7 @@
           (case t
             ((#\( )
 	     (if (ts:space? s)
-             (syntax-deprecation s
-                                 (string (deparse ex) " " (deparse t))
-                                 (string (deparse ex) (deparse t))))
+	       (error (string "invalid space \"" (deparse ex) " " (deparse t) "\"")))
 	     (take-token s)
              (let ((c
                     (let ((al (parse-arglist s #\) )))
@@ -975,44 +963,29 @@
                    (loop c))))
             ((#\[ )
 	     (if (ts:space? s)
-             (syntax-deprecation s
-                                 (string (deparse ex) " " (deparse t))
-                                 (string (deparse ex) (deparse t))))
+	       (error (string "invalid space \"" (deparse ex) " " (deparse t) "\"")))
 	     (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
-             (let ((al (with-end-symbol (parse-cat s #\] (dict-literal? ex)))))
+             (let ((al (with-end-symbol (parse-cat s #\]))))
                (if (null? al)
-                   (if (dict-literal? ex)
-                       (begin
-                         (syntax-deprecation
-                          s (string #\( (deparse ex) #\) "[]")
-                          (string (deprecated-dict-replacement ex) "()"))
-                         (loop (list 'typed_dict ex)))
-                       (loop (list 'ref ex)))
-                   (case (car al)
-                     ((dict)
-                      (if (dict-literal? ex)
-                          (begin (syntax-deprecation
-                                  s (string #\( (deparse ex) #\) "[a=>b, ...]")
-                                  (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
-                                 (loop (list* 'typed_dict ex (cdr al))))
-                          (loop (list* 'ref ex (cdr al)))))
-                     ((vect)  (loop (list* 'ref ex (cdr al))))
-                     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
-                     ((vcat)
-                      (loop (list* 'typed_vcat ex (cdr al))))
-                     ((comprehension)
-                      (loop (list* 'typed_comprehension ex (cdr al))))
-                     ((dict_comprehension)
-                      (loop (list* 'typed_dict_comprehension ex (cdr al))))
-                     (else (error "unknown parse-cat result (internal error)"))))))
+                 (loop (list 'ref ex))
+                 (case (car al)
+                   ((dict)
+		     (loop (list* 'ref ex (cdr al))))
+                   ((vect)
+		     (loop (list* 'ref ex (cdr al))))
+                   ((hcat)
+		     (loop (list* 'typed_hcat ex (cdr al))))
+                   ((vcat)
+                     (loop (list* 'typed_vcat ex (cdr al))))
+                   ((comprehension)
+                     (loop (list* 'typed_comprehension ex (cdr al))))
+                   (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
              (if (ts:space? s)
-               (syntax-deprecation s
-                                           (string (deparse ex) " " (deparse t))
-                                           (string (deparse ex) (deparse t))))
+	       (error (string "invalid space \"" (deparse ex) " " (deparse t) "\"")))
              (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
@@ -1035,9 +1008,7 @@
              (loop (list t ex)))
             ((#\{ )
              (if (ts:space? s)
-               (syntax-deprecation s
-                                   (string (deparse ex) " " (deparse t))
-                                   (string (deparse ex) (deparse t))))
+	       (error (string "invalid space \"" (deparse ex) " " (deparse t) "\"")))
              (take-token s)
              (loop (list* 'curly ex
                           (map subtype-syntax (parse-arglist s #\} )))))
@@ -1148,8 +1119,7 @@
        (if const
            `(const ,expr)
            expr)))
-    ((stagedfunction function macro)
-     (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
+    ((function macro)
      (let* ((paren (eqv? (require-token s) #\())
             (sig   (parse-call s)))
        (if (and (eq? word 'function) (not paren) (symbol? sig))
@@ -1378,9 +1348,7 @@
       (cond
        ((eq? nxt '|.|)
         (if (ts:space? s)
-          (syntax-deprecation s
-                              (string (deparse word) " " (deparse nxt))
-                              (string (deparse word) (deparse nxt))))
+	  (error (string "invalid space \"" (deparse word) " " (deparse nxt) "\"")))
         (take-token s)
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
@@ -1509,25 +1477,12 @@
             (else
              (error "missing separator in array expression")))))))
 
-(define (parse-dict s first closer)
-  (let ((v (parse-vect s first closer)))
-    (if (any dict-literal? (cdr v))
-        (if (every dict-literal? (cdr v))
-            `(dict ,@(cdr v))
-            (error "invalid dict literal")))))
-
 (define (parse-comprehension s first closer)
   (let ((r (parse-comma-separated-iters s)))
     (if (not (eqv? (require-token s) closer))
         (error (string "expected " closer))
         (take-token s))
     `(comprehension ,first ,@r)))
-
-(define (parse-dict-comprehension s first closer)
-  (let ((c (parse-comprehension s first closer)))
-    (if (dict-literal? (cadr c))
-        `(dict_comprehension ,@(cdr c))
-        (error "invalid dict comprehension"))))
 
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
@@ -1574,36 +1529,26 @@
                (loop (peek-token s)))
         t)))
 
-(define (parse-cat s closer . isdict)
+(define (parse-cat s closer)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
         (begin (take-token s)
                '())
         (let ((first (parse-eq* s)))
-          (if (and (dict-literal? first)
-                   (or (null? isdict) (car isdict)))
-              (case (peek-non-newline-token s)
-                ((for)
-                 (take-token s)
-                 (parse-dict-comprehension s first closer))
-                (else
-                 (if (or (null? isdict) (not (car isdict)))
-                     (syntax-deprecation s "[a=>b, ...]" "Dict(a=>b, ...)"))
-                 (parse-dict s first closer)))
-              (let ((t (peek-token s)))
-                (cond ((or (eqv? t #\,) (eqv? t closer))
-                       (parse-vect s first closer))
-                      ((eq? t 'for)
-                       (take-token s)
-                       (parse-comprehension s first closer))
-                      ((eqv? t #\newline)
-                       (take-token s)
-                       (if (memv (peek-token s) (list #\, closer))
-                           (parse-vect s first closer)
-                           (parse-matrix s first closer #t)))
-                      (else
-                       (parse-matrix s first closer #f))))))))))
+          (let ((t (peek-token s)))
+            (cond ((or (eqv? t #\,) (eqv? t closer))
+		    (parse-vect s first closer))
+                  ((eq? t 'for)
+                    (take-token s)
+                    (parse-comprehension s first closer))
+                  ((eqv? t #\newline)
+                    (take-token s)
+                    (if (memv (peek-token s) (list #\, closer))
+                      (parse-vect s first closer)
+                      (parse-matrix s first closer #t)))
+                  (else
+                    (parse-matrix s first closer #f)))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
@@ -1958,60 +1903,6 @@
                       (error (string "unexpected \"" t "\" in tuple")))
                      (else
                       (error "missing separator in tuple")))))))))
-
-          ;; cell expression
-          ((eqv? t #\{ )
-           (take-token s)
-           (if (eqv? (require-token s) #\})
-               (begin (syntax-deprecation s "{}" "[]")
-                      (take-token s)
-                      '(cell1d))
-               (let ((vex (parse-cat s #\} #t)))
-                 (if (null? vex)
-                     (begin (syntax-deprecation s "{}" "[]")
-                            '(cell1d))
-                     (case (car vex)
-                       ((vect)
-                        (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                        `(cell1d ,@(cdr vex)))
-                       ((comprehension)
-                        (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
-                        `(typed_comprehension (top Any) ,@(cdr vex)))
-                       ((dict_comprehension)
-                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
-                        `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((dict)
-                        (syntax-deprecation s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
-                        `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((hcat)
-                        (syntax-deprecation s "{a b ...}" "Any[a b ...]")
-                        `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
-                       (else  ; (vcat ...)
-                        (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
-                            (let ((nr (length (cdr vex)))
-                                  (nc (length (cdadr vex))))
-                              ;; make sure all rows are the same length
-                              (if (not (every
-                                        (lambda (x)
-                                          (and (pair? x)
-                                               (eq? (car x) 'row)
-                                               (length= (cdr x) nc)))
-                                        (cddr vex)))
-                                  (error "inconsistent shape in cell expression"))
-                              (begin
-                                (syntax-deprecation s "{a b; c d}" "Any[a b; c d]")
-                                `(cell2d ,nr ,nc
-                                         ,@(apply append
-                                                  ;; transpose to storage order
-                                                  (apply map list
-                                                         (map cdr (cdr vex)))))))
-                            (if (any (lambda (x) (and (pair? x)
-                                                      (eq? (car x) 'row)))
-                                     (cddr vex))
-                                (error "inconsistent shape in cell expression")
-                                (begin
-                                  (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                                  `(cell1d ,@(cdr vex)))))))))))
 
           ;; cat expression
           ((eqv? t #\[ )

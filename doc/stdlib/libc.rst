@@ -44,14 +44,6 @@
 
    Convert a system call error code to a descriptive string
 
-.. function:: GetLastError()
-
-   Call the Win32 ``GetLastError`` function [only available on Windows].
-
-.. function:: FormatMessage(n=GetLastError())
-
-   Convert a Win32 system call error code to a descriptive string [only available on Windows].
-
 .. function:: time(t::TmStruct)
 
    .. Docstring generated from Julia source
@@ -82,22 +74,3 @@
 
    Flushes the C ``stdout`` and ``stderr`` streams (which may have been written to by external C code).
 
-.. function:: msync(ptr, len, [flags])
-
-   .. Docstring generated from Julia source
-
-   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
-
-   You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
-
-.. data:: MS_ASYNC
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. data:: MS_SYNC
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. data:: MS_INVALIDATE
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
