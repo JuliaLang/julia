@@ -158,7 +158,7 @@ Macros
 
    .. Docstring generated from Julia source
 
-   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
+   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
 
 .. function:: @test_approx_eq(a, b)
 
