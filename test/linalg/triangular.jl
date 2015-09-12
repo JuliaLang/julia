@@ -136,6 +136,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         # scale
         if (t1 == UpperTriangular || t1 == LowerTriangular)
+            unitt = istriu(A1) ? UnitUpperTriangular : UnitLowerTriangular
             if elty1 == Int
                 cr = 2
             else
@@ -146,10 +147,24 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 A1tmp = copy(A1)
                 scale!(A1tmp,cr)
                 @test A1tmp == cr*A1
+                A1tmp = copy(A1)
+                scale!(cr,A1tmp)
+                @test A1tmp == cr*A1
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                scale!(A1tmp,A2tmp,cr)
+                @test A1tmp == cr * A2tmp
             else
                 A1tmp = copy(A1)
                 scale!(A1tmp,ci)
                 @test A1tmp == ci*A1
+                A1tmp = copy(A1)
+                scale!(ci,A1tmp)
+                @test A1tmp == ci*A1
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                scale!(A1tmp,A2tmp,ci)
+                @test A1tmp == ci * A2tmp
             end
         end
 
