@@ -1063,6 +1063,8 @@ export
     convert,
     fieldoffsets,
     fieldnames,
+    nparams,
+    getparam,
     isleaftype,
     oftype,
     promote,

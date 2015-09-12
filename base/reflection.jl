@@ -91,6 +91,9 @@ end
 type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
 field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
 
+nparams(T::Type) = length(T.parameters)
+getparam(T::Type, i::Integer) = T.parameters[i]
+
 # return all instances, for types that can be enumerated
 function instances end
 
