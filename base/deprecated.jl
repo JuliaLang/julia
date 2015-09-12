@@ -787,3 +787,6 @@ export FloatingPoint
 end
 
 @deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
+
+# 12839
+const AsyncStream = IO
