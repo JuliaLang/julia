@@ -525,7 +525,7 @@ Collections.isheap
 doc"""
     @test_throws(extype, ex)
 
-Test that the expression `ex` throws an exception of type `extype` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
+Test that the expression `ex` throws an exception of type `extype` and calls the current handler to handle the result.
 """
 :(Test.@test_throws)
 
