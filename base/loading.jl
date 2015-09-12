@@ -118,7 +118,6 @@ end
 
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
-const package_loaded = Set{Symbol}()
 
 # used to optionally track dependencies when requiring a module:
 const _require_dependencies = Tuple{ByteString,Float64}[]
@@ -160,6 +159,40 @@ function __precompile__(isprecompilable::Bool=true)
     if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
         !(isprecompilable && toplevel_load::Bool)
         throw(PrecompilableError(isprecompilable))
+    end
+end
+
+function require_filename(name::AbstractString)
+    # This function can be deleted when the deprecation for `require`
+    # is deleted.
+    # While we could also strip off the absolute path, the user may be
+    # deliberately directing to a different file than what got
+    # cached. So this takes a conservative approach.
+    if endswith(name, ".jl")
+        tmp = name[1:end-3]
+        for prefix in LOAD_CACHE_PATH
+            path = joinpath(prefix, tmp*".ji")
+            if isfile(path)
+                return tmp
+            end
+        end
+    end
+    name
+end
+
+doc"""
+    reload(name::AbstractString)
+
+Force reloading of a package, even if it has been loaded before. This is intended for use
+during package development as code is modified.
+"""
+function reload(name::AbstractString)
+    if isfile(name) || contains(name,path_separator)
+        # for reload("path/file.jl") just ask for include instead
+        error("use `include` instead of `reload` to load source files")
+    else
+        # reload("Package") is ok
+        require(symbol(require_filename(name)))
     end
 end
 

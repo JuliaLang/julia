@@ -112,6 +112,12 @@ Getting Around
 
    Return a string with the contents of the operating system clipboard ("paste").
 
+.. function:: reload(name::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Force reloading of a package, even if it has been loaded before. This is intended for use during package development as code is modified.
+
 .. function:: require(module::Symbol)
 
    .. Docstring generated from Julia source
@@ -122,7 +128,7 @@ Getting Around
 
    When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
 
-.. function:: Base.compilecache(module::Symbol)
+.. function:: Base.compilecache(module::ByteString)
 
    .. Docstring generated from Julia source
 
