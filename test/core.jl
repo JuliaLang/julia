@@ -3109,15 +3109,25 @@ Base.convert(::Type{Foo11874},x::Int) = float(x)
 
 # issue #9233
 let
-    err = @test_throws TypeError NTuple{Int, 1}
-    @test err.func == :NTuple
-    @test err.expected == Int
-    @test err.got == Int
+    try
+        NTuple{Int, 1}
+        @test false
+    catch err
+        @test isa(err, TypeError)
+        @test err.func == :NTuple
+        @test err.expected == Int
+        @test err.got == Int
+    end
 
-    err = @test_throws TypeError NTuple{0x1, Int}
-    @test err.func == :NTuple
-    @test err.expected == Int
-    @test err.got == 0x1
+    try
+        NTuple{0x1, Int}
+        @test false
+    catch err
+        @test isa(err, TypeError)
+        @test err.func == :NTuple
+        @test err.expected == Int
+        @test err.got == 0x1
+    end
 end
 
 # 11996

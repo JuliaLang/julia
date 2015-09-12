@@ -6,20 +6,20 @@ s = open(file, "w") do f
 end
 t = "Hello World".data
 @test Mmap.mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
-gc()
+gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,11,1)) == reshape(t,(1,11,1))
-gc()
+gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
-gc()
+gc(); gc()
 @test_throws ArgumentError Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) # 0-dimension results in len=0
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
-gc()
+gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
-gc()
+gc(); gc()
 @test_throws ArgumentError Mmap.mmap(file, Array{UInt8,2}, (0,12))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape("He".data,(1,2,1))
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 
 # constructors
 @test length(Mmap.mmap(file)) == 12
@@ -45,7 +45,7 @@ s = open(file)
 @test length(Mmap.mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
 @test_throws ErrorException Mmap.mmap(file, Vector{Ref}) # must be bit-type
-gc()
+gc(); gc()
 
 s = open(f->f,file,"w")
 @test_throws ArgumentError Mmap.mmap(file) # requested len=0 on empty file
@@ -53,7 +53,7 @@ s = open(f->f,file,"w")
 m = Mmap.mmap(file,Vector{UInt8},12)
 m[:] = "Hello World\n".data
 Mmap.sync!(m)
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 @test open(readall,file) == "Hello World\n"
 
 s = open(file, "r")
@@ -70,30 +70,30 @@ close(s)
 for i = 0x01:0x0c
     @test length(Mmap.mmap(file, Vector{UInt8}, i)) == Int(i)
 end
-gc()
+gc(); gc()
 
 sz = filesize(file)
 m = Mmap.mmap(file, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 sz = filesize(file)
 m = Mmap.mmap(file, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 sz = filesize(file)
 # test where offset is actually > than size of file; file is grown with zeroed bytes
 m = Mmap.mmap(file, Vector{UInt8}, 1, sz+1)
 @test length(m) == 1
 @test m[1] == 0x00
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 
 # Uncomment out once #11351 is resolved
 # s = open(file, "r")
 # m = Mmap.mmap(s)
 # @test_throws ReadOnlyMemoryError m[5] = Vector{UInt8}('x') # tries to setindex! on read-only array
-# m=nothing; gc()
+# finalize(m); m=nothing; gc()
 
 s = open(file, "w") do f
     write(f, "Hello World\n")
@@ -102,7 +102,7 @@ end
 s = open(file, "r")
 m = Mmap.mmap(s)
 close(s)
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 m = Mmap.mmap(file)
 s = open(file, "r+")
 c = Mmap.mmap(s)
@@ -112,6 +112,7 @@ Mmap.sync!(c)
 close(s)
 @test m[1] == UInt8('J')
 @test d[1] == UInt8('J')
+finalize(m); finalize(c); finalize(d)
 m=nothing; c=nothing; d=nothing; gc()
 
 s = open(file, "w") do f
@@ -122,10 +123,10 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = Mmap.mmap(s, Vector{UInt8}, (11,))
 @test c == "Hello World".data
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 c = Mmap.mmap(s, Vector{UInt8}, (UInt16(11),))
 @test c == "Hello World".data
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 @test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (Int16(-11),))
 @test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (typemax(UInt),))
 close(s)
@@ -139,22 +140,22 @@ s = open(file, "r")
 str = readline(s)
 close(s)
 @test startswith(str, "Hellx World")
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 
 c = Mmap.mmap(file)
 @test c == "Hellx World\n".data
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 c = Mmap.mmap(file, Vector{UInt8}, 3)
 @test c == "Hel".data
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 s = open(file, "r")
 c = Mmap.mmap(s, Vector{UInt8}, 6)
 @test c == "Hellx ".data
 close(s)
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 c = Mmap.mmap(file, Vector{UInt8}, 5, 6)
 @test c == "World".data
-c=nothing; gc()
+finalize(c); c=nothing; gc()
 
 s = open(file, "w")
 write(s, "Hello World\n")
@@ -167,7 +168,7 @@ for i = 1:12
     @test m[i] == t.data[i]
 end
 @test_throws BoundsError m[13]
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 
 m = Mmap.mmap(file,Vector{UInt8},6)
 @test m[1] == "H".data[1]
@@ -177,7 +178,7 @@ m = Mmap.mmap(file,Vector{UInt8},6)
 @test m[5] == "o".data[1]
 @test m[6] == " ".data[1]
 @test_throws BoundsError m[7]
-m=nothing; gc()
+finalize(m); m=nothing; gc()
 
 m = Mmap.mmap(file,Vector{UInt8},2,6)
 @test m[1] == "W".data[1]
@@ -283,3 +284,4 @@ n = similar(m, (2,2))
 n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
+finalize(m); m = nothing; gc()
