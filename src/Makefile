@@ -165,7 +165,7 @@ $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUIL
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 
 clean:
-	-rm -f $(build_shlibdir)/libjulia* $(build_shlibdir)/libccalltest*
+	-rm -fr $(build_shlibdir)/libjulia* $(build_shlibdir)/libccalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o *~ $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a *#
 	-rm -f $(BUILDDIR)/julia_version.h
