@@ -183,16 +183,20 @@ function ^(A::Matrix, p::Number)
 end
 
 # Matrix exponential
-expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
-expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+expm{T<:BlasFloat}(A::StridedMatrix{T}; method::Symbol = :auto) = expm!(copy(A); method = method)
+expm{T<:Integer}(A::StridedMatrix{T}; method::Symbol = :auto) = expm!(float(A); method = method)
 expm(x::Number) = exp(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!{T<:BlasFloat}(A::StridedMatrix{T})
+function expm!{T<:BlasFloat}(A::StridedMatrix{T}; method::Symbol = :auto)
     n = chksquare(A)
-    if ishermitian(A)
-        return full(expm(Hermitian(A)))
+    if method == :auto
+        if ishermitian(A)
+            return full(expm(Hermitian(A)))
+        end
+    elseif method != :higham
+        throw(ArgumentError("Unknown expm() method $(method). Expected :auto or :higham"))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
