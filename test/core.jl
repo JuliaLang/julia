@@ -3322,3 +3322,6 @@ typealias TupleType12967{T<:Tuple} Type{T}
 foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Int) == 1
 @test foo12967(1, Tuple{}) == 2
+
+# issue #13083
+@test Void() === nothing
