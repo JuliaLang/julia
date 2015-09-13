@@ -1708,11 +1708,11 @@ for (gtsv, gttrf, gttrs, elty) in
 end
 
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
-for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
-    ((:dorglq_,:dorgqr_,:dormlq_,:dormqr_,:dgemqrt_,:Float64),
-     (:sorglq_,:sorgqr_,:sormlq_,:sormqr_,:sgemqrt_,:Float32),
-     (:zunglq_,:zungqr_,:zunmlq_,:zunmqr_,:zgemqrt_,:Complex128),
-     (:cunglq_,:cungqr_,:cunmlq_,:cunmqr_,:cgemqrt_,:Complex64))
+for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
+    ((:dorglq_,:dorgqr_,:dorgql_,:dorgrq_,:dormlq_,:dormqr_,:dormql_,:dormrq_,:dgemqrt_,:Float64),
+     (:sorglq_,:sorgqr_,:sorgql_,:sorgrq_,:sormlq_,:sormqr_,:sormql_,:sormrq_,:sgemqrt_,:Float32),
+     (:zunglq_,:zungqr_,:zungql_,:zungrq_,:zunmlq_,:zunmqr_,:zunmql_,:zunmrq_,:zgemqrt_,:Complex128),
+     (:cunglq_,:cungqr_,:cungql_,:cungrq_,:cunmlq_,:cunmqr_,:cunmql_,:cunmrq_,:cgemqrt_,:Complex64))
     @eval begin
         # SUBROUTINE DORGLQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -1763,6 +1763,74 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(orgqr)), liblapack), Void,
+                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &m, &n, &k, A,
+                      &max(1,stride(A,2)), tau, work, &lwork,
+                      info)
+                @lapackerror
+                if lwork < 0
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if n<size(A,2)
+                A[:,1:n]
+            else
+                A
+            end
+        end
+        # SUBROUTINE DORGQL( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, K, LDA, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function orgql!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
+            chkstride1(A)
+            m = size(A, 1)
+            n = min(m, size(A, 2))
+            if k > n
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= n = $n"))
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(blasfunc(orgql)), liblapack), Void,
+                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &m, &n, &k, A,
+                      &max(1,stride(A,2)), tau, work, &lwork,
+                      info)
+                @lapackerror
+                if lwork < 0
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if n<size(A,2)
+                A[:,1:n]
+            else
+                A
+            end
+        end
+        # SUBROUTINE DORGRQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, K, LDA, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function orgrq!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
+            chkstride1(A)
+            m = size(A, 1)
+            n = min(m, size(A, 2))
+            if k > n
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= n = $n"))
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(blasfunc(orgrq)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A,
@@ -1865,6 +1933,99 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1, stride(C,2)), work, &lwork,
                       info)
+                @lapackerror
+                if lwork < 0
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            C
+        end
+        #      SUBROUTINE DORMQL( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
+        #                         WORK, INFO )
+        #      .. Scalar Arguments ..
+        #      CHARACTER          SIDE, TRANS
+        #      INTEGER            INFO, K, LDA, LDC, M, N
+        #      .. Array Arguments ..
+        #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+        function ormql!(side::Char, trans::Char, A::StridedMatrix{$elty},
+                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+            chktrans(trans)
+            chkside(side)
+            chkstride1(A, C)
+            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
+            mA    = size(A, 1)
+            k     = length(tau)
+            if side == 'L' && m != mA
+                throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
+            end
+            if side == 'R' && n != mA
+                throw(DimensionMismatch("For a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
+            end
+            if side == 'L' && k > m
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= m = $m"))
+            end
+            if side == 'R' && k > n
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= n = $n"))
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(blasfunc(ormql)), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}),
+                      &side, &trans, &m, &n,
+                      &k, A, &max(1,stride(A,2)), tau,
+                      C, &max(1, stride(C,2)), work, &lwork,
+                      info)
+                @lapackerror
+                if lwork < 0
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            C
+        end
+        #      SUBROUTINE DORMRQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
+        #                         WORK, LWORK, INFO )
+        #      .. Scalar Arguments ..
+        #      CHARACTER          SIDE, TRANS
+        #      INTEGER            INFO, K, LDA, LDC, LWORK, M, N
+        #      .. Array Arguments ..
+        #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+        function ormrq!(side::Char, trans::Char, A::StridedMatrix{$elty},
+                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+            chktrans(trans)
+            chkside(side)
+            chkstride1(A, C)
+            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
+            nA    = size(A, 2)
+            k     = length(tau)
+            if side == 'L' && m != nA
+                throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
+            end
+            if side == 'R' && n != nA
+                throw(DimensionMismatch("For a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $nA"))
+            end
+            if side == 'L' && k > m
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= m = $m"))
+            end
+            if side == 'R' && k > n
+                throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= n = $n"))
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(blasfunc(ormrq)), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
+                      C, &max(1,stride(C,2)), work, &lwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
