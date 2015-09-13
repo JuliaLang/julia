@@ -419,6 +419,7 @@ end
 ^(x::BigInt , y::BigInt ) = bigint_pow(x, y)
 ^(x::BigInt , y::Bool   ) = y ? x : one(x)
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
+^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     p < 0 && throw(DomainError())
