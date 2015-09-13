@@ -754,21 +754,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
-.. function:: linreg(x, y) -> [a; b]
+.. function:: linreg(x, y) -> a, b
 
    .. Docstring generated from Julia source
 
-   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
+   Perform linear regression. Returns ``a`` and ``b`` such that ``a + b*x`` is the closest straight line to the given points ``(x, y)``\ , i.e., such that the squared error between ``y`` and ``a + b*x`` is minimized.
 
-   **Example**::
+   **Example**:
 
-      using PyPlot;
-      x = float([1:12])
-      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-      a, b = linreg(x,y) # Linear regression
-      plot(x, y, "o") # Plot (x,y) points
-      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
+   .. code-block:: julia
 
+          using PyPlot
+          x = [1.0:12.0;]
+          y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+          a, b = linreg(x, y)          # Linear regression
+          plot(x, y, "o")              # Plot (x, y) points
+          plot(x, [a+b*i for i in x])  # Plot line determined by linear regression
 
 .. function:: linreg(x, y, w)
 
