@@ -5,7 +5,7 @@ default: html
 # You can set these variables from the command line.
 SPHINXOPTS       :=
 PAPER            :=
-SRCDIR 			 := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR         := .
 JULIAHOME        := $(abspath $(SRCDIR)/..)
 JULIA_EXECUTABLE := $(JULIAHOME)/usr/bin/julia
