@@ -353,19 +353,6 @@ DLLEXPORT struct_big test_big(struct_big a) {
     return a;
 }
 
-int main() {
-    fprintf(stderr,"all of the following should be 1 except xs[259] = 0\n");
-    a = 3;
-    b = 259;
-    fptr = (int (*)(unsigned char x))&testUcharX;
-    if ((((size_t)fptr)&((size_t)1)) == 1) fptr = NULL;
-    fprintf(stderr,"compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
-           xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));
-    fprintf(stderr,"misc tests:\n");
-    struct1 a = {352.39422e23, 19.287577};
-    a = test_1(a);
-}
-
 //////////////////////////////////
 // Turn off verbose for automated tests, leave on for debugging
 DLLEXPORT void set_verbose(int level) {
