@@ -377,9 +377,6 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 sym = quote_sym;
             }
             jl_expr_t *ex = jl_exprn(sym, n);
-            // allocate a fresh args array for empty exprs passed to macros
-            if (eo && n == 0)
-                ex->args = jl_alloc_cell_1d(0);
             for(i=0; i < n; i++) {
                 assert(iscons(e));
                 jl_cellset(ex->args, i, scm_to_julia_(car_(e),eo));
