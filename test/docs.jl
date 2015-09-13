@@ -54,6 +54,9 @@ abstract AT
 "BT"
 bitstype 8 BT
 
+"BT2"
+bitstype 8 BT2 <: Integer
+
 "T"
 type T <: AT
     "T.x"
@@ -173,6 +176,8 @@ end
 let BT = DocsTest.BT
     @test meta(DocsTest)[BT] == doc"BT"
 end
+
+@test meta(DocsTest)[DocsTest.BT2] == doc"BT2"
 
 let T = DocsTest.T
     typedoc = meta(DocsTest)[T]
