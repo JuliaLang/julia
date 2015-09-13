@@ -4050,7 +4050,9 @@ for (trexc, trsen, tgsen, elty) in
             @lapackerror
             T, Q
         end
-        function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trsen!('N', 'V', select, T, Q)
+        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
 #       INTEGER            INFO, LDQ, LDT, LIWORK, LWORK, M, N
@@ -4081,7 +4083,7 @@ for (trexc, trsen, tgsen, elty) in
                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void}, Ptr{Void},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{BlasInt}),
-                    &'N', &'V', select, &n,
+                    &compq, &job, select, &n,
                     T, &ldt, Q, &ldq,
                     wr, wi, &m, C_NULL, C_NULL,
                     work, &lwork, iwork, &liwork,
@@ -4196,7 +4198,9 @@ for (trexc, trsen, tgsen, elty) in
             @lapackerror
             T, Q
         end
-        function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trsen!('N', 'V', select, T, Q)
+        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
 #       INTEGER            INFO, LDQ, LDT, LWORK, M, N
@@ -4223,7 +4227,7 @@ for (trexc, trsen, tgsen, elty) in
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{Void}, Ptr{Void},
                     Ptr{$elty}, Ptr{BlasInt},
                     Ptr{BlasInt}),
-                    &'N', &'V', select, &n,
+                    &compq, &job, select, &n,
                     T, &ldt, Q, &ldq,
                     w, &m, C_NULL, C_NULL,
                     work, &lwork,
