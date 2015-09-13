@@ -204,7 +204,9 @@ JL_LIBS = julia julia-debug
 # private libraries, that are installed in $(prefix)/lib/julia
 JL_PRIVATE_LIBS = suitesparse_wrapper Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
+ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
+endif
 endif
 ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
