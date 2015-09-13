@@ -201,6 +201,8 @@ latex_elements = {
         \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
         \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
         \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
+        \DeclareUnicodeCharacter{1D34}{\ensuremath{^{\mathrm{H}}}}
+        \DeclareUnicodeCharacter{1D40}{\ensuremath{^{\mathrm{T}}}}
         \DeclareUnicodeCharacter{2081}{\ensuremath{_{1}}}
         \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
         \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
@@ -228,6 +230,7 @@ latex_elements = {
         \DeclareUnicodeCharacter{22C5}{\ensuremath{\cdot}}
         \DeclareUnicodeCharacter{2713}{x}
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
+
     ''',
 }
 
