@@ -1256,3 +1256,12 @@ module RetTypeDecl
     @test @inferred(m.*[m,m]) == [m2,m2]
     @test @inferred([m,m].*m) == [m2,m2]
 end
+
+# range, range ops
+A = 1:5
+B = 1.5:5.5
+@test A + B == 2.5:2.0:10.5
+
+#slice dim error
+A = zeros(5,5)
+@test_throws ArgumentError slicedim(A,0,1)

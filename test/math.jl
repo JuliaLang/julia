@@ -46,6 +46,11 @@ for T in (Float16,Float32,Float64)
         @test significand(-a) == -2b
         @test exponent(-a) == n-1
     end
+    @test_throws DomainError exponent(convert(T,NaN))
+    @test isnan(significand(convert(T,NaN)))
+    x,y = frexp(convert(T,NaN))
+    @test isnan(x)
+    @test y == 0
 end
 
 # Test math functions. We compare to BigFloat instead of hard-coding
