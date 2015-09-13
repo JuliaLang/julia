@@ -1041,7 +1041,7 @@ Base.(:(//))
 doc"""
     At_mul_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ B`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅B$
 """
 At_mul_B
 
@@ -1360,7 +1360,7 @@ airybiprime
 doc"""
     Ac_rdiv_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ / B`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
 """
 Ac_rdiv_B
 
@@ -2528,7 +2528,7 @@ redisplay
 doc"""
     A_mul_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $A⋅Bᴴ$
 """
 A_mul_Bc
 
@@ -2662,7 +2662,7 @@ watch_file
 doc"""
     At_rdiv_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ / Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ / Bᵀ$
 """
 At_rdiv_Bt
 
@@ -2676,7 +2676,7 @@ isinteractive
 doc"""
     At_mul_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅Bᵀ$
 """
 At_mul_Bt
 
@@ -3429,7 +3429,7 @@ Mmap.Anonymous
 doc"""
     A_rdiv_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A / Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $A / Bᴴ$
 """
 A_rdiv_Bc
 
@@ -6457,8 +6457,8 @@ doc"""
     A_mul_B!(Y, A, B) -> Y
 
 
-Calculates the matrix-matrix or matrix-vector product `A * B` and stores the
-result in `Y`, overwriting the existing value of `Y`.
+Calculates the matrix-matrix or matrix-vector product $A⋅B$ and stores the
+result in $Y$, overwriting the existing value of $Y$.
 
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
@@ -6490,7 +6490,7 @@ idct!
 doc"""
     Ac_rdiv_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ \ Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ / Bᴴ$
 
 """
 Ac_rdiv_Bc
@@ -8789,7 +8789,7 @@ plan_fft
 doc"""
     A_rdiv_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A / Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $A / Bᵀ$
 """
 A_rdiv_Bt
 
@@ -9549,7 +9549,7 @@ issubnormal
 doc"""
     Ac_ldiv_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ \ B`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $B$
 """
 Ac_ldiv_B
 
@@ -9807,7 +9807,7 @@ nprocs
 doc"""
     Ac_mul_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ B`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ⋅B$
 """
 Ac_mul_B
 
@@ -9823,7 +9823,7 @@ qrfact!
 doc"""
     At_rdiv_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ / B`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ / B$
 """
 At_rdiv_B
 
@@ -10072,7 +10072,7 @@ convert
 doc"""
     A_ldiv_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A \ Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᵀ$
 """
 A_ldiv_Bt
 
@@ -10154,7 +10154,7 @@ eigvals
 doc"""
     A_ldiv_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A \ Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᴴ$
 """
 A_ldiv_Bc
 
@@ -10786,14 +10786,14 @@ getkey
 doc"""
     At_ldiv_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ \ Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $Bᵀ$
 """
 At_ldiv_Bt
 
 doc"""
     Ac_mul_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ Bᴴ$
 """
 Ac_mul_Bc
 
@@ -10852,7 +10852,7 @@ sprand
 doc"""
     A_mul_Bt(A, B)
 
-For matrices or vectors `A` and `B`, calculates `A Bᵀ`
+For matrices or vectors $A$ and $B$, calculates $A⋅Bᵀ$
 """
 A_mul_Bt
 
@@ -11388,7 +11388,7 @@ union!
 doc"""
     At_ldiv_B(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᵀ \ B`
+For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $B$
 """
 At_ldiv_B
 
@@ -11649,7 +11649,7 @@ ror
 doc"""
     Ac_ldiv_Bc(A, B)
 
-For matrices or vectors `A` and `B`, calculates `Aᴴ \ Bᴴ`
+For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $Bᴴ$
 """
 Ac_ldiv_Bc
 
