@@ -264,11 +264,11 @@ ifneq ($(NO_GIT),1)
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
 $$($2_SRC_FILE): | $$(SRCDIR)/srccache
-	git clone -q --mirror --depth=10 --branch $$($2_BRANCH) $$($2_GIT_URL) $$@
+	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$@
 $5/$1: | $$($2_SRC_FILE)
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	git clone -q --branch $$($2_BRANCH) $$(SRCDIR)/srccache/$1.git $$@
+	git clone -q --depth=10 --branch $$($2_BRANCH) $$(SRCDIR)/srccache/$1.git $$@
 	cd $5/$1 && git remote set-url origin $$($2_GIT_URL)
 	touch -c $5/$1/$3
 ifneq ($5,$$(BUILDDIR))
