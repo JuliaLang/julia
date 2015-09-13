@@ -1398,22 +1398,20 @@ Determine a type big enough to hold values of each argument type without loss, w
 promote_type
 
 doc"""
-```rst
-..  ind2sub(dims, index) -> subscripts
+    ind2sub(dims, index) -> subscripts
 
-Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
+Returns a tuple of subscripts into an array with dimensions `dims`,
+corresponding to the linear index `index`.
 
-**Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
-```
+**Example**: `i, j, ... = ind2sub(size(A), indmax(A))` provides the
+indices of the maximum element
 """
 ind2sub(dims::Tuple, index::Int)
 
 doc"""
-```rst
-..  ind2sub(a, index) -> subscripts
+    ind2sub(a, index) -> subscripts
 
-Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
-```
+Returns a tuple of subscripts into array `a` corresponding to the linear index `index`
 """
 ind2sub(a, index)
 
@@ -2888,13 +2886,12 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
 open(file_name, mode="r")
 
 doc"""
-```rst
-..  open(f::Function, args...)
+    open(f::Function, args...)
 
-Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+Apply the function `f` to the result of `open(args...)`
+and close the resulting file descriptor upon completion.
 
-**Example**: ``open(readall, "file.txt")``
-```
+**Example**: `open(readall, "file.txt")`
 """
 open(f::Function, args...)
 
@@ -8064,30 +8061,28 @@ Join an array of `strings` into a single string, inserting the given delimiter b
 join
 
 doc"""
-```rst
-..  linreg(x, y) -> [a; b]
+    linreg(x, y) -> a, b
 
-Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
+Perform linear regression. Returns `a` and `b` such that `a + b*x` is the closest
+straight line to the given points `(x, y)`, i.e., such that the squared error
+between `y` and `a + b*x` is minimized.
 
-**Example**::
-
-   using PyPlot;
-   x = float([1:12])
-   y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-   a, b = linreg(x,y) # Linear regression
-   plot(x, y, "o") # Plot (x,y) points
-   plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
-
+**Example**:
+```
+   using PyPlot
+   x = [1.0:12.0;]
+   y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+   a, b = linreg(x, y)          # Linear regression
+   plot(x, y, "o")              # Plot (x, y) points
+   plot(x, [a+b*i for i in x])  # Plot line determined by linear regression
 ```
 """
 linreg(x,y)
 
 doc"""
-```rst
-..   linreg(x, y, w)
+    linreg(x, y, w)
 
 Weighted least-squares linear regression.
-```
 """
 linreg(x,y,w)
 
