@@ -413,19 +413,19 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A \ Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᴴ`
 
 .. function:: A_ldiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A \ Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᵀ`
 
 .. function:: A_mul_B!(Y, A, B) -> Y
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product ``A * B`` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ .
+   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in :math:`Y`\ , overwriting the existing value of :math:`Y`\ .
 
    .. doctest::
 
@@ -440,97 +440,97 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᴴ`
 
 .. function:: A_mul_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᵀ`
 
 .. function:: A_rdiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A / Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᴴ`
 
 .. function:: A_rdiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``A / Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᵀ`
 
 .. function:: Ac_ldiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ \ B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`B`
 
 .. function:: Ac_ldiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ \ Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`Bᴴ`
 
 .. function:: Ac_mul_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ⋅B`
 
 .. function:: Ac_mul_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ Bᴴ`
 
 .. function:: Ac_rdiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ / B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / B`
 
 .. function:: Ac_rdiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᴴ \ Bᴴ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / Bᴴ`
 
 .. function:: At_ldiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ \ B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`B`
 
 .. function:: At_ldiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ \ Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`Bᵀ`
 
 .. function:: At_mul_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅B`
 
 .. function:: At_mul_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅Bᵀ`
 
 .. function:: At_rdiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ / B``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / B`
 
 .. function:: At_rdiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors ``A`` and ``B``\ , calculates ``Aᵀ / Bᵀ``
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / Bᵀ`
 
 Mathematical Functions
 ----------------------
