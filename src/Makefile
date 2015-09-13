@@ -85,8 +85,6 @@ $(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDD
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): ccalltest.c
 	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) -DCC="$(CC)")
-$(BUILDDIR)/ccalltest: ccalltest.c $(BUILDDIR)/libccalltest.$(SHLIB_EXT)
-	@$(call PRINT_CC, $(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -o $@ $(LDFLAGS) -DCC="$(CC)")
 
 
 
