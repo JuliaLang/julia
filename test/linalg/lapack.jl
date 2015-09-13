@@ -455,6 +455,20 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.laic1!(1,rand(elty,10),real(rand(elty)),rand(elty,11),rand(elty))
 end
 
+#trexc
+for elty in (Float32, Float64, Complex64, Complex128)
+    for c in ('V', 'N')
+        A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+        T,Q,d = schur(A)
+        Base.LinAlg.LAPACK.trexc!(c,LinAlg.BlasInt(1),LinAlg.BlasInt(2),T,Q)
+        @test d[1] ≈ T[2,2]
+        @test d[2] ≈ T[1,1]
+        if (c == 'V')
+            @test  Q * T * Q' ≈ A
+        end
+    end
+end
+
 # Test our own linear algebra functionaly against LAPACK
 for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     for nn in (5,10,15)
