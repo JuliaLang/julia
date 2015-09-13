@@ -100,18 +100,15 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of
-   a floating-point number or array. If ``x`` is a non-zero finite number,
-   than the result will be a number of the same type on the interval
-   :math:`[1,2)`. Otherwise ``x`` is returned.
+   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of a floating-point number or array. If ``x`` is a non-zero finite number, than the result will be a number of the same type on the interval :math:`[1,2)`\ . Otherwise ``x`` is returned.
 
    .. doctest::
 
-      julia> significand(15.2)/15.2
-      0.125
+       julia> significand(15.2)/15.2
+       0.125
 
-      julia> significand(15.2)*8
-      15.2
+       julia> significand(15.2)*8
+       15.2
 
 .. function:: exponent(x) -> Int
 
@@ -286,16 +283,15 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Create a Float32 from ``x``. If ``x`` is not exactly representable then
-   ``mode`` determines how ``x`` is rounded.
+   Create a Float32 from ``x``\ . If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded.
 
    .. doctest::
 
-      julia> Float32(1/3, RoundDown)
-      0.3333333f0
+       julia> Float32(1/3, RoundDown)
+       0.3333333f0
 
-      julia> Float32(1/3, RoundUp)
-      0.33333334f0
+       julia> Float32(1/3, RoundUp)
+       0.33333334f0
 
    See ``get_rounding`` for available rounding modes.
 
@@ -303,16 +299,15 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Create a Float64 from ``x``. If ``x`` is not exactly representable then
-   ``mode`` determines how ``x`` is rounded.
+   Create a Float64 from ``x``\ . If ``x`` is not exactly representable then ``mode`` determines how ``x`` is rounded.
 
    .. doctest::
 
-      julia> Float64(pi, RoundDown)
-      3.141592653589793
+       julia> Float64(pi, RoundDown)
+       3.141592653589793
 
-      julia> Float64(pi, RoundUp)
-      3.1415926535897936
+       julia> Float64(pi, RoundUp)
+       3.1415926535897936
 
    See ``get_rounding`` for available rounding modes.
 
@@ -408,67 +403,67 @@ Integers
 
    .. Docstring generated from Julia source
 
-   Number of ones in the binary representation of ``x``.
+   Number of ones in the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> count_ones(7)
-      3
+       julia> count_ones(7)
+       3
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of zeros in the binary representation of ``x``.
+   Number of zeros in the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> count_zeros(Int32(2 ^ 16 - 1))
-      16
+       julia> count_zeros(Int32(2 ^ 16 - 1))
+       16
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of zeros leading the binary representation of ``x``.
+   Number of zeros leading the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> leading_zeros(Int32(1))
-      31
+       julia> leading_zeros(Int32(1))
+       31
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of ones leading the binary representation of ``x``.
+   Number of ones leading the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> leading_ones(UInt32(2 ^ 32 - 2))
-      31
+       julia> leading_ones(UInt32(2 ^ 32 - 2))
+       31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of zeros trailing the binary representation of ``x``.
+   Number of zeros trailing the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> trailing_zeros(2)
-      1
+       julia> trailing_zeros(2)
+       1
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
    .. Docstring generated from Julia source
 
-   Number of ones trailing the binary representation of ``x``.
+   Number of ones trailing the binary representation of ``x``\ .
 
    .. doctest::
 
-      julia> trailing_ones(3)
-      2
+       julia> trailing_ones(3)
+       2
 
 .. function:: isprime(x::Integer) -> Bool
 
@@ -478,22 +473,19 @@ Integers
 
    .. doctest::
 
-   	julia> isprime(3)
-   	true
+       julia> isprime(3)
+       true
 
 .. function:: isprime(x::BigInt, [reps = 25]) -> Bool
 
    .. Docstring generated from Julia source
 
-   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and
-   ``false`` if ``x`` is not prime with high probability. The false positive
-   rate is about ``0.25^reps``. ``reps = 25`` is considered safe for
-   cryptographic applications (Knuth, Seminumerical Algorithms).
+   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``\ . ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
 
    .. doctest::
 
-   	julia> isprime(big(3))
-   	true
+       julia> isprime(big(3))
+       true
 
 .. function:: primes([lo,] hi)
 
@@ -515,11 +507,11 @@ Integers
 
    .. doctest::
 
-   	julia> isodd(9)
-   	true
+       julia> isodd(9)
+       true
 
-   	julia> isodd(10)
-   	false
+       julia> isodd(10)
+       false
 
 .. function:: iseven(x::Integer) -> Bool
 
@@ -529,11 +521,11 @@ Integers
 
    .. doctest::
 
-   	julia> iseven(9)
-   	false
+       julia> iseven(9)
+       false
 
-   	julia> iseven(10)
-   	true
+       julia> iseven(10)
+       true
 
 BigFloats
 ---------
@@ -611,13 +603,12 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
+   Pick a random element or array of random elements from the set of values specified by ``S``\ ; ``S`` can be
 
-   * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
+     * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
+     * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
 
-   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to :math:`[0, 1)` for floating point numbers;
-
-   ``S`` defaults to ``Float64``.
+   ``S`` defaults to ``Float64``\ .
 
 .. function:: rand!([rng], A, [coll])
 

@@ -103,6 +103,17 @@ let a=[1.0:n;]
        @test_approx_eq full(B - convert(Spectype,A)) full(B - A)
        @test_approx_eq full(convert(Spectype,A) - B) full(A - B)
    end
+
+   C = rand(n,n)
+   for TriType in [Base.LinAlg.UnitLowerTriangular, Base.LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
+       D = TriType(C)
+       for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+           @test full(D + convert(Spectype,A)) ≈ full(D + A)
+           @test full(convert(Spectype,A) + D) ≈ full(A + D)
+           @test full(D - convert(Spectype,A)) ≈ full(D - A)
+           @test full(convert(Spectype,A) - D) ≈ full(A - D)
+       end
+   end
 end
 
 #Triangular Types and QR

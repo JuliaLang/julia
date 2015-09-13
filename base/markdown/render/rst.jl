@@ -21,7 +21,11 @@ function rst{l}(io::IO, header::Header{l})
 end
 
 function rst(io::IO, code::Code)
-    code.language == "rst" || println(io, ".. code-block:: julia\n")
+    if code.language == "jldoctest"
+        println(io, ".. doctest::\n")
+    elseif code.language != "rst"
+        println(io, ".. code-block:: julia\n")
+    end
     for l in lines(code.code)
         println(io, "    ", l)
     end
@@ -69,7 +73,7 @@ function rstinline(io::IO, md...)
     wasCode = false
     for el in md
         wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
-        wasCode = isa(el, Code) && (wasCode = true)
+        wasCode = (isa(el, Code) || isa(el, LaTeX)) && (wasCode = true)
         rstinline(io, el)
     end
 end
@@ -91,6 +95,8 @@ rstinline(io::IO, md::Italic) = rstinline(io, "*", md.text, "*")
 rstinline(io::IO, md::Code) = print(io, "``", md.code, "``")
 
 rstinline(io::IO, br::LineBreak) = println(io)
+
+rstinline(io::IO, l::LaTeX) = print(io, ":math:`", l.formula, "`")
 
 rstinline(io::IO, x) = writemime(io, MIME"text/rst"(), x)
 
