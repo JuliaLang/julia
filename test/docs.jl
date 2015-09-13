@@ -264,6 +264,13 @@ end
 @test docstrings_equal(@doc(BareModule.A), doc"A")
 @test docstrings_equal(@doc(BareModule.T), doc"T")
 
+# Test that empty baremodules can be documented #13109
+"EmptyBareModule"
+baremodule EmptyBareModule
+end
+
+@test docstrings_equal(@doc(EmptyBareModule), doc"EmptyBareModule")
+
 # test that when no docs exist, they fallback to
 # the docs for the typeof(value)
 let d1 = @doc(DocsTest.val)
