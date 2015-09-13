@@ -1039,11 +1039,9 @@ Divide two integers or rational numbers, giving a `Rational` result.
 Base.(:(//))
 
 doc"""
-```rst
-..  At_mul_B(...)
+    At_mul_B(A, B)
 
-Matrix operator A\ :sup:`T` B
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ B`
 """
 At_mul_B
 
@@ -1360,11 +1358,9 @@ Airy function derivative $\operatorname{Bi}'(x)$.
 airybiprime
 
 doc"""
-```rst
-..  Ac_rdiv_B(a,b)
+    Ac_rdiv_B(A, B)
 
-Matrix operator A\ :sup:`H` / B
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ / B`
 """
 Ac_rdiv_B
 
@@ -2530,11 +2526,9 @@ By default, the `redisplay` functions simply call `display`. However, some displ
 redisplay
 
 doc"""
-```rst
-..  A_mul_Bc(...)
+    A_mul_Bc(A, B)
 
-Matrix operator A B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `A Bᴴ`
 """
 A_mul_Bc
 
@@ -2666,11 +2660,9 @@ This behavior of this function varies slightly across platforms. See <https://no
 watch_file
 
 doc"""
-```rst
-..  At_rdiv_Bt(a,b)
+    At_rdiv_Bt(A, B)
 
-Matrix operator A\ :sup:`T` / B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ / Bᵀ`
 """
 At_rdiv_Bt
 
@@ -2682,11 +2674,9 @@ Determine whether Julia is running an interactive session.
 isinteractive
 
 doc"""
-```rst
-..  At_mul_Bt(...)
+    At_mul_Bt(A, B)
 
-Matrix operator A\ :sup:`T` B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ Bᵀ`
 """
 At_mul_Bt
 
@@ -3437,11 +3427,9 @@ Create an `IO`-like object for creating zeroed-out mmapped-memory that is not ti
 Mmap.Anonymous
 
 doc"""
-```rst
-..  A_rdiv_Bc(...)
+    A_rdiv_Bc(A, B)
 
-Matrix operator A / B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `A / Bᴴ`
 """
 A_rdiv_Bc
 
@@ -6500,11 +6488,10 @@ Same as :func:`idct!`, but operates in-place on ``A``.
 idct!
 
 doc"""
-```rst
-..  Ac_rdiv_Bc(a,b)
+    Ac_rdiv_Bc(A, B)
 
-Matrix operator A\ :sup:`H` / B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ \ Bᴴ`
+
 """
 Ac_rdiv_Bc
 
@@ -8800,11 +8787,9 @@ the inverse transforms :func:`ifft` and so on.
 plan_fft
 
 doc"""
-```rst
-..  A_rdiv_Bt(a,b)
+    A_rdiv_Bt(A, B)
 
-Matrix operator A / B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `A / Bᵀ`
 """
 A_rdiv_Bt
 
@@ -9562,11 +9547,9 @@ Test whether a floating point number is subnormal
 issubnormal
 
 doc"""
-```rst
-..  Ac_ldiv_B(...)
+    Ac_ldiv_B(A, B)
 
-Matrix operator A\ :sup:`H` \\ B
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ \ B`
 """
 Ac_ldiv_B
 
@@ -9822,11 +9805,9 @@ Get the number of available processes.
 nprocs
 
 doc"""
-```rst
-..  Ac_mul_B(...)
+    Ac_mul_B(A, B)
 
-Matrix operator A\ :sup:`H` B
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ B`
 """
 Ac_mul_B
 
@@ -9840,11 +9821,9 @@ doc"""
 qrfact!
 
 doc"""
-```rst
-..  At_rdiv_B(a,b)
+    At_rdiv_B(A, B)
 
-Matrix operator A\ :sup:`T` / B
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ / B`
 """
 At_rdiv_B
 
@@ -10091,11 +10070,9 @@ the closest value to ``x`` representable by ``T``.
 convert
 
 doc"""
-```rst
-..  A_ldiv_Bt(a,b)
+    A_ldiv_Bt(A, B)
 
-Matrix operator A \\ B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `A \ Bᵀ`
 """
 A_ldiv_Bt
 
@@ -10175,11 +10152,9 @@ equal in norm. The default is ``true`` for both options.
 eigvals
 
 doc"""
-```rst
-..  A_ldiv_Bc(a,b)
+    A_ldiv_Bc(A, B)
 
-Matrix operator A \\ B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `A \ Bᴴ`
 """
 A_ldiv_Bc
 
@@ -10809,20 +10784,16 @@ Return the key matching argument `key` if one exists in `collection`, otherwise 
 getkey
 
 doc"""
-```rst
-..  At_ldiv_Bt(...)
+    At_ldiv_Bt(A, B)
 
-Matrix operator A\ :sup:`T` \\ B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ \ Bᵀ`
 """
 At_ldiv_Bt
 
 doc"""
-```rst
-..  Ac_mul_Bc(...)
+    Ac_mul_Bc(A, B)
 
-Matrix operator A\ :sup:`H` B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ Bᴴ`
 """
 Ac_mul_Bc
 
@@ -10879,11 +10850,9 @@ Create a random ``m`` by ``n`` sparse matrix, in which the probability of any el
 sprand
 
 doc"""
-```rst
-..  A_mul_Bt(...)
+    A_mul_Bt(A, B)
 
-Matrix operator A B\ :sup:`T`
-```
+For matrices or vectors `A` and `B`, calculates `A Bᵀ`
 """
 A_mul_Bt
 
@@ -11417,11 +11386,9 @@ Union each element of `iterable` into set `s` in-place.
 union!
 
 doc"""
-```rst
-..  At_ldiv_B(...)
+    At_ldiv_B(A, B)
 
-Matrix operator A\ :sup:`T` \\ B
-```
+For matrices or vectors `A` and `B`, calculates `Aᵀ \ B`
 """
 At_ldiv_B
 
@@ -11680,11 +11647,9 @@ Performs a right rotation operation.
 ror
 
 doc"""
-```rst
-..  Ac_ldiv_Bc(...)
+    Ac_ldiv_Bc(A, B)
 
-Matrix operator A\ :sup:`H` \\ B\ :sup:`H`
-```
+For matrices or vectors `A` and `B`, calculates `Aᴴ \ Bᴴ`
 """
 Ac_ldiv_Bc
 
