@@ -848,6 +848,8 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test A .- 3 == AF .- 3
     @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
+    @test A - AF == zeros(AF)
+    @test AF - A == zeros(AF)
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]
@@ -856,6 +858,7 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test A .+ 3 == AF .+ 3
     @test 3 .+ A == 3 .+ AF
     @test A .+ B == AF .+ BF
+    @test A + AF == AF + A
     @test (A .< B) == (AF .< BF)
     @test (A .!= B) == (AF .!= BF)
 
@@ -871,6 +874,7 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test BF .\ C == BF .\ CF
 
     @test A .^ 3 == AF .^ 3
+    @test 3 .^ A == 3 .^ AF
     @test A .^ BF[:,1] == AF .^ BF[:,1]
     @test BF[:,1] .^ A == BF[:,1] .^ AF
 end
@@ -880,6 +884,7 @@ A = sprandbool(5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
 @test_throws DimensionMismatch reinterpret(Int8,A,(20,))
 @test_throws DimensionMismatch reshape(A,(20,2))
+@test_throws ArgumentError squeeze(A,(1,1))
 
 # test similar with type conversion
 A = speye(5)

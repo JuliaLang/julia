@@ -659,9 +659,16 @@ end
     return a
 end
 
-@noinline function require(mod::AbstractString)
+## require ##
+
+include("require.jl")
+@noinline function require(f::AbstractString)
+    if !(endswith(f,".jl") || contains(f,path_separator))
+        # for require("Name") this function shouldn't be needed at all
+        error("use `using` or `import` to load packages")
+    end
     depwarn("`require` is deprecated, use `using` or `import` instead", :require)
-    require(symbol(require_filename(mod)))
+    OldRequire.require(f)
 end
 @noinline function require(f::AbstractString, fs::AbstractString...)
     require(f)
@@ -670,25 +677,6 @@ end
     end
 end
 export require
-@noinline function require_filename(name::AbstractString)
-    # This function can be deleted when the deprecation for `require`
-    # is deleted.
-    # While we could also strip off the absolute path, the user may be
-    # deliberately directing to a different file than what got
-    # cached. So this takes a conservative approach.
-    if endswith(name, ".jl")
-        tmp = name[1:end-3]
-        for prefix in LOAD_CACHE_PATH
-            path = joinpath(prefix, tmp*".ji")
-            if isfile(path)
-                return tmp
-            end
-        end
-    end
-    name
-end
-const reload = require
-export reload
 
 ## ropes for efficient concatenation, etc. ##
 

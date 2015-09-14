@@ -1114,6 +1114,7 @@ export
     include,
     include_string,
     include_dependency,
+    reload,
 
 # RTS internals
     finalizer,

@@ -515,7 +515,7 @@ function docm(meta, def, define = true)
     isexpr(def′, :type)        ? typedoc(meta, def, def′) :
     isexpr(def′, :macro)       ?  vardoc(meta, def, symbol('@',namify(def′))) :
     isexpr(def′, :abstract)    ? namedoc(meta, def, namify(def′)) :
-    isexpr(def′, :bitstype)    ? namedoc(meta, def, def′.args[2]) :
+    isexpr(def′, :bitstype)    ? namedoc(meta, def, namify(def′.args[2])) :
     isexpr(def′, :typealias)   ?  vardoc(meta, def, namify(def′)) :
     isexpr(def′, :module)      ?  moddoc(meta, def, def′.args[2]) :
     isexpr(def′, :(=), :const,

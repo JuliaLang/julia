@@ -87,6 +87,11 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
+libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+$(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
+	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS))
+
+
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
@@ -163,7 +168,7 @@ $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUIL
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 
 clean:
-	-rm -f $(build_shlibdir)/libjulia*
+	-rm -fr $(build_shlibdir)/libjulia* $(build_shlibdir)/libccalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
 	-rm -f $(BUILDDIR)/julia_version.h
@@ -177,4 +182,4 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support
 
-.PHONY: debug release clean cleanall clean-*
+.PHONY: default all debug release clean cleanall clean-* libccalltest

@@ -15,14 +15,6 @@ perf:
 	@$(MAKE) -C $(SRCDIR)/perf all
 
 clean:
-	@$(MAKE) -C $(SRCDIR)/perf clean
-	-rm -f $(SRCDIR)/libccalltest.$(SHLIB_EXT) $(SRCDIR)/ccalltest
+	@$(MAKE) -C perf $@
 
-.PHONY: $(TESTS) perf clean libccalltest
-
-all ccall libccalltest: $(SRCDIR)/libccalltest.$(SHLIB_EXT)
-$(SRCDIR)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
-	@$(call PRINT_CC, $(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) -DCC="$(CC)")
-
-$(SRCDIR)/ccalltest: $(SRCDIR)/ccalltest.c $(SRCDIR)/libccalltest.$(SHLIB_EXT)
-	@$(call PRINT_CC, $(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -o $@ $(LDFLAGS) -DCC="$(CC)")
+.PHONY: $(TESTS) perf clean
