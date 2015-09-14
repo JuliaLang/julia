@@ -406,6 +406,8 @@ function _atreplinit(repl)
 end
 
 function _start()
+    empty!(ARGS)
+    append!(ARGS, Core.ARGS)
     opts = JLOptions()
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
