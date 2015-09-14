@@ -37,6 +37,8 @@ readdlm(input, dlm::Char, eol::Char; opts...) = readdlm_auto(input, dlm, Float64
 readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm, T, eol, false; opts...)
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
+    # prevent cryptic error message if input is a directory instead of a file (#11485)
+    isdir(input) && throw(ArgumentError("$input is a directory; a file was expected."))
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, @windows ? false : true)
     isa(input, AbstractString) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
