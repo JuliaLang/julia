@@ -1,4 +1,6 @@
-JULIAHOME = $(abspath ..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+JULIAHOME := $(abspath $(SRCDIR)/..)
+BUILDDIR ?= .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
@@ -6,28 +8,28 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS = repl
+SRCS := repl
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
 endif
 
-FLAGS = -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
+FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
 
-OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
 endif
 else
-LLVMLINK =
+LLVMLINK :=
 endif
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(LLVMLINK) $(RPATH)
 
@@ -45,14 +47,14 @@ default: release
 all: release debug
 release debug :  % : julia-%
 
-%.o: %.c
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.dbg.obj: %.c
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
 ifneq ($(USEMSVC), 1)
-julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
+$(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
 		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
@@ -67,9 +69,9 @@ julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 
 ifneq ($(USEMSVC), 1)
-CXXLD = $(CXX)
+CXXLD := $(CXX)
 else
-CXXLD = $(LD)
+CXXLD := $(LD)
 endif
 
 $(build_bindir)/julia$(EXE): $(OBJS)

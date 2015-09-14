@@ -3,8 +3,8 @@
 #ifndef JULIA_INTERNAL_H
 #define JULIA_INTERNAL_H
 
-#include "options.h"
-#include "uv.h"
+#include <options.h>
+#include <uv.h>
 
 #ifdef __cplusplus
 extern "C" {
