@@ -661,14 +661,36 @@ end
 
 ## require ##
 
+function maybe_require_file(name::AbstractString)
+    isabspath(name) && return name
+    isfile(name) && return abspath(name)
+    if !endswith(name,".jl")
+        fname = string(name,".jl")
+        isfile(fname) && return abspath(fname)
+    end
+    return name
+end
+
 include("require.jl")
 @noinline function require(f::AbstractString)
-    if !(endswith(f,".jl") || contains(f,path_separator))
-        # for require("Name") this function shouldn't be needed at all
-        error("use `using` or `import` to load packages")
-    end
     depwarn("`require` is deprecated, use `using` or `import` instead", :require)
-    OldRequire.require(f)
+    if endswith(f,".jl") || contains(f,path_separator)
+        # specifying file path
+        OldRequire.require(f)
+    else
+        # require("Foo") --- ambiguous. might be file or package
+        filename = maybe_require_file(f)
+        if filename == f
+            mod = symbol(require_modname(f))
+            M = current_module()
+            if isdefined(M,mod) && isa(eval(M,mod),Module)
+                return
+            end
+            require(mod)
+        else
+            OldRequire.require(f)
+        end
+    end
 end
 @noinline function require(f::AbstractString, fs::AbstractString...)
     require(f)
