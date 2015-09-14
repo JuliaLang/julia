@@ -246,7 +246,6 @@ override BUILD_OS := WINNT
 endif
 
 ifeq ($(BUILD_OS), WINNT)
-PATH := $(PATH):$(build_libdir):$(build_private_libdir):/c/Program Files/7-zip:$(JULIAHOME)/dist-extras
 BUILD_EXE := .exe
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 BUILD_EXE := .exe
