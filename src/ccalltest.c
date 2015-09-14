@@ -8,6 +8,7 @@
 int verbose = 1;
 
 #include "../src/support/platform.h"
+#include "../src/support/dtypes.h"
 
 #ifdef _P64
 #define jint int64_t
@@ -26,7 +27,7 @@ int __declspec(noinline)
 #else
 int __attribute__((noinline))
 #endif
-testUcharX(unsigned char x) {
+DLLEXPORT testUcharX(unsigned char x) {
     return xs[x];
 }
 
@@ -45,41 +46,41 @@ typedef struct {
     jint imag;
 } complex_t;
 
-complex_t ctest(complex_t a) {
+DLLEXPORT complex_t ctest(complex_t a) {
     a.real += 1;
     a.imag -= 2;
     return a;
 }
 
-complex double cgtest(complex double a) {
+DLLEXPORT complex double cgtest(complex double a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(a), cimag(a));
     a += 1 - (2.0*I);
     return a;
 }
 
-complex double* cgptest(complex double *a) {
+DLLEXPORT complex double* cgptest(complex double *a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
 }
 
-complex float cftest(complex float a) {
+DLLEXPORT complex float cftest(complex float a) {
     //Unpack a ComplexPair{Float32} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(a), cimag(a));
     a += 1 - (2.0*I);
     return a;
 }
 
-complex float* cfptest(complex float *a) {
+DLLEXPORT complex float* cfptest(complex float *a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
 }
 
-complex_t* cptest(complex_t *a) {
+DLLEXPORT complex_t* cptest(complex_t *a) {
     //Unpack a ComplexPair{Int} struct pointer
     if (verbose) fprintf(stderr,"%lld + %lld i\n", (long long)a->real, (long long)a->imag);
     a->real += 1;
@@ -87,7 +88,7 @@ complex_t* cptest(complex_t *a) {
     return a;
 }
 
-complex_t* cptest_static(complex_t *a) {
+DLLEXPORT complex_t* cptest_static(complex_t *a) {
     complex_t *b = (complex_t*)malloc(sizeof(complex_t));
     b->real = a->real;
     b->imag = a->imag;
@@ -95,7 +96,7 @@ complex_t* cptest_static(complex_t *a) {
 }
 
 // Native-like data types
-char* stest(char *x) {
+DLLEXPORT char* stest(char *x) {
     //Print a character Array
     if (verbose) fprintf(stderr,"%s\n", x);
     return x;
@@ -203,7 +204,7 @@ typedef struct {
     char z;
 } struct_big;
 
-struct1 test_1(struct1 a) {
+DLLEXPORT struct1 test_1(struct1 a) {
     //Unpack a "small" struct { float, double }
     if (verbose) fprintf(stderr,"%g + %g i\n", a.x, a.y);
     a.x += 1;
@@ -211,7 +212,7 @@ struct1 test_1(struct1 a) {
     return a;
 }
 
-struct1 add_1(struct1 a, struct1 b) {
+DLLEXPORT struct1 add_1(struct1 a, struct1 b) {
     // Two small structs
     struct1 c;
     c.x = a.x + b.x;
@@ -219,7 +220,7 @@ struct1 add_1(struct1 a, struct1 b) {
     return c;
 }
 
-struct2a test_2a(struct2a a) {
+DLLEXPORT struct2a test_2a(struct2a a) {
     //Unpack a ComplexPair{Int32} struct
     if (verbose) fprintf(stderr,"%" PRId32 " + %" PRId32 " i\n", a.x.x, a.y.y);
     a.x.x += 1;
@@ -227,7 +228,7 @@ struct2a test_2a(struct2a a) {
     return a;
 }
 
-struct2b test_2b(struct2b a) {
+DLLEXPORT struct2b test_2b(struct2b a) {
     //Unpack a ComplexPair{Int32} struct
     if (verbose) fprintf(stderr,"%" PRId32 " + %" PRId32 " i\n", a.x, a.y);
     a.x += 1;
@@ -235,7 +236,7 @@ struct2b test_2b(struct2b a) {
     return a;
 }
 
-struct3a test_3a(struct3a a) {
+DLLEXPORT struct3a test_3a(struct3a a) {
     //Unpack a ComplexPair{Int64} struct
     if (verbose) fprintf(stderr,"%" PRId64 " + %" PRId64 " i\n", a.x.x, a.y.y);
     a.x.x += 1;
@@ -243,7 +244,7 @@ struct3a test_3a(struct3a a) {
     return a;
 }
 
-struct3b test_3b(struct3b a) {
+DLLEXPORT struct3b test_3b(struct3b a) {
     //Unpack a ComplexPair{Int64} struct
     if (verbose) fprintf(stderr,"%" PRId64 " + %" PRId64 " i\n", a.x, a.y);
     a.x += 1;
@@ -251,7 +252,7 @@ struct3b test_3b(struct3b a) {
     return a;
 }
 
-struct4 test_4(struct4 a)
+DLLEXPORT struct4 test_4(struct4 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId32 ",%" PRId32 ",%" PRId32 ")\n", a.x, a.y, a.z);
     a.x += 1;
@@ -261,7 +262,7 @@ struct4 test_4(struct4 a)
 }
 
 
-struct5 test_5(struct5 a)
+DLLEXPORT struct5 test_5(struct5 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId32 ",%" PRId32 ",%" PRId32 ",%" PRId32 ")\n", a.x, a.y, a.z, a.a);
     a.x += 1;
@@ -273,7 +274,7 @@ struct5 test_5(struct5 a)
 }
 
 
-struct6 test_6(struct6 a)
+DLLEXPORT struct6 test_6(struct6 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId64 ",%" PRId64 ",%" PRId64 ")\n", a.x, a.y, a.z);
     a.x += 1;
@@ -282,7 +283,7 @@ struct6 test_6(struct6 a)
     return a;
 }
 
-struct7 test_7(struct7 a)
+DLLEXPORT struct7 test_7(struct7 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId64 ",%" PRId8 ")\n", a.x, a.y);
     a.x += 1;
@@ -290,7 +291,7 @@ struct7 test_7(struct7 a)
     return a;
 }
 
-struct8 test_8(struct8 a)
+DLLEXPORT struct8 test_8(struct8 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId32 ",%" PRId8 ")\n", a.x, a.y);
     a.x += 1;
@@ -298,7 +299,7 @@ struct8 test_8(struct8 a)
     return a;
 }
 
-struct9 test_9(struct9 a)
+DLLEXPORT struct9 test_9(struct9 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId32 ",%" PRId16 ")\n", a.x, a.y);
     a.x += 1;
@@ -306,7 +307,7 @@ struct9 test_9(struct9 a)
     return a;
 }
 
-struct10 test_10(struct10 a)
+DLLEXPORT struct10 test_10(struct10 a)
 {
     if (verbose) fprintf(stderr,"(%" PRId8 ",%" PRId8 ",%" PRId8 ",%" PRId8 ")\n", a.x, a.y, a.z, a.a);
     a.x += 1;
@@ -317,7 +318,7 @@ struct10 test_10(struct10 a)
     return a;
 }
 
-struct14 test_14(struct14 a) {
+DLLEXPORT struct14 test_14(struct14 a) {
     //The C equivalent of a  ComplexPair{Float32} struct (but without special complex ABI)
     if (verbose) fprintf(stderr,"%g + %g i\n", a.x, a.y);
     a.x += 1;
@@ -325,7 +326,7 @@ struct14 test_14(struct14 a) {
     return a;
 }
 
-struct15 test_15(struct15 a) {
+DLLEXPORT struct15 test_15(struct15 a) {
     //The C equivalent of a  ComplexPair{Float32} struct (but without special complex ABI)
     if (verbose) fprintf(stderr,"%g + %g i\n", a.x, a.y);
     a.x += 1;
@@ -334,7 +335,7 @@ struct15 test_15(struct15 a) {
 }
 
 #define int128_t struct3b
-int128_t test_128(int128_t a) {
+DLLEXPORT int128_t test_128(int128_t a) {
     //Unpack a Int128
     if (verbose) fprintf(stderr,"0x%016" PRIx64 "%016" PRIx64 "\n", a.y, a.x);
     a.x += 1;
@@ -343,7 +344,7 @@ int128_t test_128(int128_t a) {
     return a;
 }
 
-struct_big test_big(struct_big a) {
+DLLEXPORT struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
     if (verbose) fprintf(stderr,"%lld %lld %c\n", (long long)a.x, (long long)a.y, a.z);
     a.x += 1;
@@ -352,25 +353,12 @@ struct_big test_big(struct_big a) {
     return a;
 }
 
-int main() {
-    fprintf(stderr,"all of the following should be 1 except xs[259] = 0\n");
-    a = 3;
-    b = 259;
-    fptr = (int (*)(unsigned char x))&testUcharX;
-    if ((((size_t)fptr)&((size_t)1)) == 1) fptr = NULL;
-    fprintf(stderr,"compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
-           xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));
-    fprintf(stderr,"misc tests:\n");
-    struct1 a = {352.39422e23, 19.287577};
-    a = test_1(a);
-}
-
 //////////////////////////////////
 // Turn off verbose for automated tests, leave on for debugging
-void set_verbose(int level) {
+DLLEXPORT void set_verbose(int level) {
     verbose = level;
 }
 
-void *test_echo_p(void *p) {
+DLLEXPORT void *test_echo_p(void *p) {
     return p;
 }
