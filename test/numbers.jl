@@ -2471,11 +2471,13 @@ end
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed
 
-#map(f::Callable, x::Number) = f(x)
+#map(f::Callable, x::Number, ys::Number...) = f(x)
 @test map(sin, 3) == sin(3)
 @test map(cos, 3) == cos(3)
 @test map(tan, 3) == tan(3)
 @test map(log, 3) == log(3)
+@test map(copysign, 1.0, -2.0) == -1.0
+@test map(muladd, 2, 3, 4) == 10
 
 @test_throws InexactError convert(UInt8, big(300))
 
