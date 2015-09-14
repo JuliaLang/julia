@@ -745,6 +745,64 @@ function plan_r2r!{T<:fftwNumber,N}(X::StridedArray{T,N}, kinds, region;
     r2rFFTWPlan{T,ANY,true,N}(X, X, region, kinds, flags, timelimit)
 end
 
+doc"""
+```rst
+..  r2r(A, kind [, dims])
+
+Performs a multidimensional real-input/real-output (r2r) transform
+of type ``kind`` of the array ``A``, as defined in the FFTW manual.
+``kind`` specifies either a discrete cosine transform of various types
+(``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
+``FFTW.REDFT11``), a discrete sine transform of various types
+(``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
+``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
+(``FFTW.R2HC`` and its inverse ``FFTW.HC2R``), or a discrete
+Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be
+an array or tuple in order to specify different transform types
+along the different dimensions of ``A``; ``kind[end]`` is used
+for any unspecified dimensions.  See the FFTW manual for precise
+definitions of these transform types, at http://www.fftw.org/doc.
+
+The optional ``dims`` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along. ``kind[i]`` is then the transform type for ``dims[i]``,
+with ``kind[end]`` being used for ``i > length(kind)``.
+
+See also :func:`plan_r2r` to pre-plan optimized r2r transforms.
+```
+"""
+FFTW.r2r
+
+doc"""
+```rst
+..  r2r!(A, kind [, dims])
+
+Same as :func:`r2r`, but operates in-place on ``A``, which must be
+an array of real or complex floating-point numbers.
+```
+"""
+FFTW.r2r!
+
+doc"""
+```rst
+..  plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
+```
+"""
+FFTW.plan_r2r!
+
+doc"""
+```rst
+..  plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
+except that the transforms (and the first three arguments)
+correspond to :func:`r2r` and :func:`r2r!`, respectively.
+```
+"""
+FFTW.plan_r2r
+
 # mapping from r2r kind to the corresponding inverse transform
 const inv_kind = Dict{Int,Int}(R2HC => HC2R, HC2R => R2HC, DHT => DHT,
                                REDFT00 => REDFT00,
