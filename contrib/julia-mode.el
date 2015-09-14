@@ -3240,6 +3240,10 @@ y2 = g(x)"))
 
 (add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
 
+;;;###autoload
+(defalias 'run-julia #'inferior-julia
+  "Run an inferior instance of `julia' inside Emacs.")
+
 (provide 'julia-mode)
 
 ;; Local Variables:

@@ -525,7 +525,7 @@ Collections.isheap
 doc"""
     @test_throws(extype, ex)
 
-Test that the expression `ex` throws an exception of type `extype` and calls the current handler to handle the result. The default handler returns the exception if it is of the expected type.
+Test that the expression `ex` throws an exception of type `extype` and calls the current handler to handle the result.
 """
 :(Test.@test_throws)
 
@@ -1039,11 +1039,9 @@ Divide two integers or rational numbers, giving a `Rational` result.
 Base.(:(//))
 
 doc"""
-```rst
-..  At_mul_B(...)
+    At_mul_B(A, B)
 
-Matrix operator A\ :sup:`T` B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅B$
 """
 At_mul_B
 
@@ -1360,11 +1358,9 @@ Airy function derivative $\operatorname{Bi}'(x)$.
 airybiprime
 
 doc"""
-```rst
-..  Ac_rdiv_B(a,b)
+    Ac_rdiv_B(A, B)
 
-Matrix operator A\ :sup:`H` / B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
 """
 Ac_rdiv_B
 
@@ -1398,22 +1394,20 @@ Determine a type big enough to hold values of each argument type without loss, w
 promote_type
 
 doc"""
-```rst
-..  ind2sub(dims, index) -> subscripts
+    ind2sub(dims, index) -> subscripts
 
-Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
+Returns a tuple of subscripts into an array with dimensions `dims`,
+corresponding to the linear index `index`.
 
-**Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
-```
+**Example**: `i, j, ... = ind2sub(size(A), indmax(A))` provides the
+indices of the maximum element
 """
 ind2sub(dims::Tuple, index::Int)
 
 doc"""
-```rst
-..  ind2sub(a, index) -> subscripts
+    ind2sub(a, index) -> subscripts
 
-Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
-```
+Returns a tuple of subscripts into array `a` corresponding to the linear index `index`
 """
 ind2sub(a, index)
 
@@ -2532,11 +2526,9 @@ By default, the `redisplay` functions simply call `display`. However, some displ
 redisplay
 
 doc"""
-```rst
-..  A_mul_Bc(...)
+    A_mul_Bc(A, B)
 
-Matrix operator A B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $A⋅Bᴴ$
 """
 A_mul_Bc
 
@@ -2668,11 +2660,9 @@ This behavior of this function varies slightly across platforms. See <https://no
 watch_file
 
 doc"""
-```rst
-..  At_rdiv_Bt(a,b)
+    At_rdiv_Bt(A, B)
 
-Matrix operator A\ :sup:`T` / B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ / Bᵀ$
 """
 At_rdiv_Bt
 
@@ -2684,11 +2674,9 @@ Determine whether Julia is running an interactive session.
 isinteractive
 
 doc"""
-```rst
-..  At_mul_Bt(...)
+    At_mul_Bt(A, B)
 
-Matrix operator A\ :sup:`T` B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅Bᵀ$
 """
 At_mul_Bt
 
@@ -2888,13 +2876,12 @@ Alternate syntax for open, where a string-based mode specifier is used instead o
 open(file_name, mode="r")
 
 doc"""
-```rst
-..  open(f::Function, args...)
+    open(f::Function, args...)
 
-Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
+Apply the function `f` to the result of `open(args...)`
+and close the resulting file descriptor upon completion.
 
-**Example**: ``open(readall, "file.txt")``
-```
+**Example**: `open(readall, "file.txt")`
 """
 open(f::Function, args...)
 
@@ -3440,11 +3427,9 @@ Create an `IO`-like object for creating zeroed-out mmapped-memory that is not ti
 Mmap.Anonymous
 
 doc"""
-```rst
-..  A_rdiv_Bc(...)
+    A_rdiv_Bc(A, B)
 
-Matrix operator A / B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $A / Bᴴ$
 """
 A_rdiv_Bc
 
@@ -6419,7 +6404,7 @@ ordschur!(::LinAlg.GeneralizedSchur,select)
 
 doc"""
 ```rst
-..  Base.compilecache(module::Symbol)
+..  Base.compilecache(module::ByteString)
 
 Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 ```
@@ -6472,8 +6457,8 @@ doc"""
     A_mul_B!(Y, A, B) -> Y
 
 
-Calculates the matrix-matrix or matrix-vector product `A * B` and stores the
-result in `Y`, overwriting the existing value of `Y`.
+Calculates the matrix-matrix or matrix-vector product $A⋅B$ and stores the
+result in $Y$, overwriting the existing value of $Y$.
 
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
@@ -6503,11 +6488,10 @@ Same as :func:`idct!`, but operates in-place on ``A``.
 idct!
 
 doc"""
-```rst
-..  Ac_rdiv_Bc(a,b)
+    Ac_rdiv_Bc(A, B)
 
-Matrix operator A\ :sup:`H` / B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ / Bᴴ$
+
 """
 Ac_rdiv_Bc
 
@@ -8064,30 +8048,28 @@ Join an array of `strings` into a single string, inserting the given delimiter b
 join
 
 doc"""
-```rst
-..  linreg(x, y) -> [a; b]
+    linreg(x, y) -> a, b
 
-Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
+Perform linear regression. Returns `a` and `b` such that `a + b*x` is the closest
+straight line to the given points `(x, y)`, i.e., such that the squared error
+between `y` and `a + b*x` is minimized.
 
-**Example**::
-
-   using PyPlot;
-   x = float([1:12])
-   y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-   a, b = linreg(x,y) # Linear regression
-   plot(x, y, "o") # Plot (x,y) points
-   plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
-
+**Example**:
+```
+   using PyPlot
+   x = [1.0:12.0;]
+   y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+   a, b = linreg(x, y)          # Linear regression
+   plot(x, y, "o")              # Plot (x, y) points
+   plot(x, [a+b*i for i in x])  # Plot line determined by linear regression
 ```
 """
 linreg(x,y)
 
 doc"""
-```rst
-..   linreg(x, y, w)
+    linreg(x, y, w)
 
 Weighted least-squares linear regression.
-```
 """
 linreg(x,y,w)
 
@@ -8805,11 +8787,9 @@ the inverse transforms :func:`ifft` and so on.
 plan_fft
 
 doc"""
-```rst
-..  A_rdiv_Bt(a,b)
+    A_rdiv_Bt(A, B)
 
-Matrix operator A / B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $A / Bᵀ$
 """
 A_rdiv_Bt
 
@@ -9567,11 +9547,9 @@ Test whether a floating point number is subnormal
 issubnormal
 
 doc"""
-```rst
-..  Ac_ldiv_B(...)
+    Ac_ldiv_B(A, B)
 
-Matrix operator A\ :sup:`H` \\ B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $B$
 """
 Ac_ldiv_B
 
@@ -9827,11 +9805,9 @@ Get the number of available processes.
 nprocs
 
 doc"""
-```rst
-..  Ac_mul_B(...)
+    Ac_mul_B(A, B)
 
-Matrix operator A\ :sup:`H` B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ⋅B$
 """
 Ac_mul_B
 
@@ -9845,11 +9821,9 @@ doc"""
 qrfact!
 
 doc"""
-```rst
-..  At_rdiv_B(a,b)
+    At_rdiv_B(A, B)
 
-Matrix operator A\ :sup:`T` / B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ / B$
 """
 At_rdiv_B
 
@@ -10096,11 +10070,9 @@ the closest value to ``x`` representable by ``T``.
 convert
 
 doc"""
-```rst
-..  A_ldiv_Bt(a,b)
+    A_ldiv_Bt(A, B)
 
-Matrix operator A \\ B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᵀ$
 """
 A_ldiv_Bt
 
@@ -10180,11 +10152,9 @@ equal in norm. The default is ``true`` for both options.
 eigvals
 
 doc"""
-```rst
-..  A_ldiv_Bc(a,b)
+    A_ldiv_Bc(A, B)
 
-Matrix operator A \\ B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᴴ$
 """
 A_ldiv_Bc
 
@@ -10814,20 +10784,16 @@ Return the key matching argument `key` if one exists in `collection`, otherwise 
 getkey
 
 doc"""
-```rst
-..  At_ldiv_Bt(...)
+    At_ldiv_Bt(A, B)
 
-Matrix operator A\ :sup:`T` \\ B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $Bᵀ$
 """
 At_ldiv_Bt
 
 doc"""
-```rst
-..  Ac_mul_Bc(...)
+    Ac_mul_Bc(A, B)
 
-Matrix operator A\ :sup:`H` B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ Bᴴ$
 """
 Ac_mul_Bc
 
@@ -10884,11 +10850,9 @@ Create a random ``m`` by ``n`` sparse matrix, in which the probability of any el
 sprand
 
 doc"""
-```rst
-..  A_mul_Bt(...)
+    A_mul_Bt(A, B)
 
-Matrix operator A B\ :sup:`T`
-```
+For matrices or vectors $A$ and $B$, calculates $A⋅Bᵀ$
 """
 A_mul_Bt
 
@@ -11422,11 +11386,9 @@ Union each element of `iterable` into set `s` in-place.
 union!
 
 doc"""
-```rst
-..  At_ldiv_B(...)
+    At_ldiv_B(A, B)
 
-Matrix operator A\ :sup:`T` \\ B
-```
+For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $B$
 """
 At_ldiv_B
 
@@ -11685,11 +11647,9 @@ Performs a right rotation operation.
 ror
 
 doc"""
-```rst
-..  Ac_ldiv_Bc(...)
+    Ac_ldiv_Bc(A, B)
 
-Matrix operator A\ :sup:`H` \\ B\ :sup:`H`
-```
+For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $Bᴴ$
 """
 Ac_ldiv_Bc
 
