@@ -11,7 +11,7 @@ function find_in_path(name::AbstractString)
         name = string(base,".jl")
         isfile(name) && return abspath(name)
     end
-    for prefix in [Pkg.dir(), LOAD_PATH]
+    for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
