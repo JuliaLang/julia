@@ -419,13 +419,16 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
+	    cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
 	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
 	    echo "[core] eol = lf" >> "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
 	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
-	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
+	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe && \
+            mkdir -p $(DESTDIR)$(prefix)/usr/bin	&& \
+	    cd cygwin/usr/bin && \
+            cp mintty.exe stty.exe env.exe cygwin-console-helper.exe cygwin1.dll cygintl-8.dll cygiconv-2.dll cyggcc_s-1.dll $(DESTDIR)$(prefix)/usr/bin/ )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
@@ -569,3 +572,6 @@ endif
 	chmod a+x ./nsis/makensis.exe && \
 	chmod a+x busybox.exe && \
 	$(JLDOWNLOAD) PortableGit.7z https://github.com/msysgit/msysgit/releases/download/Git-1.9.5-preview20141217/PortableGit-1.9.5-preview20141217.7z
+	cd dist-extras && \
+	../contrib/windows/cygwin.sh
+
