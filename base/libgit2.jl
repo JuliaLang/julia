@@ -29,7 +29,6 @@ include("libgit2/diff.jl")
 include("libgit2/rebase.jl")
 include("libgit2/status.jl")
 include("libgit2/callbacks.jl")
-include("libgit2/repl.jl")
 include("libgit2/utils.jl")
 
 immutable State
