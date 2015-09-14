@@ -41,7 +41,6 @@ temp_pkg_dir() do
   Pkg.rm("Example")
   @test isempty(Pkg.installed())
   @test !isempty(Pkg.available("Example"))
-  @test_throws ErrorException Pkg.available("FakePackageDoesn'tExist")
   Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
   @test [keys(Pkg.installed())...] == ["Example"]
   Pkg.status("Example", iob)

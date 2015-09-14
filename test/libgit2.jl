@@ -69,7 +69,7 @@ end
 temp_dir() do dir
     repo_url = "https://github.com/JuliaLang/Example.jl"
     repo_path = joinpath(dir, "Example.Bare")
-    repo = LibGit2.clone(repo_url, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb)
+    repo = LibGit2.clone(repo_url, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
     finalize(repo)
     @test isdir(repo_path)
     @test isfile(joinpath(repo_path, LibGit2.GitConst.HEAD_FILE))
@@ -113,7 +113,7 @@ temp_dir() do dir_cache
     # create cache
     url = "https://github.com/JuliaLang/Example.jl"
     path_cache = joinpath(dir_cache, "Example.Bare")
-    repo = LibGit2.clone(url, path_cache, isbare = true, remote_cb = LibGit2.mirror_cb)
+    repo = LibGit2.clone(url, path_cache, isbare = true, remote_cb = LibGit2.mirror_cb())
     LibGit2.with(LibGit2.GitConfig, repo) do cfg
         credentials!(cfg)
     end
@@ -129,10 +129,10 @@ temp_dir() do dir_cache
         end
 
         LibGit2.fetch(repo)
-        refs1 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
+        refs1 = parse(Int, readchomp(pipeline(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
         LibGit2.fetch(repo, remoteurl=path_cache, refspecs =["+refs/*:refs/remotes/cache/*"])
-        refs2 = parse(Int, readchomp(pipe(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
+        refs2 = parse(Int, readchomp(pipeline(`find $(joinpath(path, ".git/refs"))`,`wc -l`)))
 
         finalize(repo)
         @test refs1 > 0
