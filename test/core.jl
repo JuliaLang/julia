@@ -3225,6 +3225,18 @@ let x = Array(Empty12394,1), y = [Empty12394()]
     @test_throws UndefRefError y==x
 end
 
+module TestRecursiveConstGlobalStructCtor
+const x = (1,2)
+const y = (x,(3,4))
+f() = (x,y,(5,6))
+end
+@test TestRecursiveConstGlobalStructCtor.f() == ((1,2),((1,2),(3,4)),(5,6))
+
+const const_array_int1 = Array{Int}
+const const_array_int2 = Array{Int}
+test_eq_array_int() = is(const_array_int1, const_array_int2)
+@test test_eq_array_int()
+
 # object_id of haspadding field
 immutable HasPadding
     x::Bool
@@ -3335,3 +3347,13 @@ foo12967(x, ::TupleType12967) = 2
 
 # issue #13083
 @test Void() === nothing
+
+# issue discovered in #11973
+for j = 1:1
+    x = try
+        error()
+        2
+    catch
+        continue
+    end
+end

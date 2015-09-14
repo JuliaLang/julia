@@ -28,9 +28,6 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
-# all subtypes should implement this
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
-
 write(io::IO, x) = throw(MethodError(write, (io, x)))
 function write(io::IO, xs...)
     local written::Int = 0
@@ -107,9 +104,6 @@ function write(io::IO, s::Symbol)
     return write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 
-# all subtypes should implement this
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
 
 function read{T <: Integer}(s::IO, ::Type{T})
@@ -131,9 +125,20 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
+function read!(s::IO, a::Vector{UInt8})
+    for i in 1:length(a)
+        a[i] = read(s, UInt8)
+    end
+end
+
 function read!{T}(s::IO, a::Array{T})
-    for i in eachindex(a)
-        a[i] = read(s, T)
+    if isbits(T)
+        nb::Int = length(a) * sizeof(T)
+        read!(s, reinterpret(UInt8, a, (nb,)))
+    else
+        for i in eachindex(a)
+            a[i] = read(s, T)
+        end
     end
     return a
 end
@@ -219,7 +224,7 @@ function readuntil(s::IO, t::AbstractString)
     return takebuf_string(out)
 end
 
-
+readline() = readline(STDIN)
 readline(s::IO) = readuntil(s, '\n')
 readchomp(x) = chomp!(readall(x))
 
@@ -308,3 +313,25 @@ ismarked(io::IO) = io.mark >= 0
 
 lock(::IO) = nothing
 unlock(::IO) = nothing
+reseteof(x::IO) = nothing
+
+const SZ_UNBUFFERED_IO = 65536
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+
+function isopen end
+function close end
+function flush end
+function wait_connected end
+function wait_readnb end
+function wait_readbyte end
+function wait_close end
+function nb_available end
+function readavailable end
+function isreadable end
+function iswritable end
+function copy end
+function eof end
+
+# all subtypes should implement this
+read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")

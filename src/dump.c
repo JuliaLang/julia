@@ -1756,6 +1756,14 @@ void jl_save_system_image_to_stream(ios_t *f)
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
+    // empty!(Core.ARGS)
+    if (jl_core_module != NULL) {
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
+        if (args != NULL) {
+            jl_array_del_end(args, jl_array_len(args));
+        }
+    }
+
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
     jl_serialize_value(f, jl_main_module);

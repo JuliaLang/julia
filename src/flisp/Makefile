@@ -1,37 +1,36 @@
-JULIAHOME = $(abspath ../..)
+JULIAHOME := $(abspath ../..)
+BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-BUILDDIR ?= .
+NAME := flisp
+EXENAME := $(NAME)
+LIBTARGET := lib$(NAME)
 
-NAME = flisp
-EXENAME = $(NAME)
-LIBTARGET = lib$(NAME)
-
-SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
+SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
 ifeq ($(USEMSVC), 1)
 SRCS += dirname.c
 endif
 
-HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 
-OBJS = $(SRCS:%.c=$(BUILDDIR)/%.o)
-DOBJS = $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
-LLTDIR = ../support
-LLT_release = $(BUILDDIR)/$(LLTDIR)/libsupport.a
-LLT_debug = $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
-LIBFILES_release = $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
-LIBFILES_debug = $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
-LIBS =
+OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
+LLTDIR := ../support
+LLT_release := $(BUILDDIR)/$(LLTDIR)/libsupport.a
+LLT_debug := $(BUILDDIR)/$(LLTDIR)/libsupport-debug.a
+LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
+LIBFILES_debug := $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
 
-FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
+FLAGS := -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
@@ -75,9 +74,9 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
 ifneq ($(USEMSVC), 1)
-CCLD = $(CC)
+CCLD := $(CC)
 else
-CCLD = $(LD)
+CCLD := $(LD)
 endif
 
 $(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj

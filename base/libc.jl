@@ -6,7 +6,7 @@ export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, ca
     errno, strerror, flush_cstdio, systemsleep, time
 @windows_only export GetLastError, FormatMessage
 
-include("errno.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
 

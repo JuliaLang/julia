@@ -170,15 +170,10 @@ function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream
     ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
 end
 
-function read!{T}(s::IOStream, a::Array{T})
-    if isbits(T)
-        nb = length(a)*sizeof(T)
-        if ccall(:ios_readall, UInt,
-                 (Ptr{Void}, Ptr{Void}, UInt), s.ios, a, nb) < nb
-            throw(EOFError())
-        end
-    else
-        invoke(read!, Tuple{IO, Array}, s, a)
+function read!(s::IOStream, a::Vector{UInt8})
+    if ccall(:ios_readall, UInt,
+             (Ptr{Void}, Ptr{Void}, UInt), s.ios, a, sizeof(a)) < sizeof(a)
+        throw(EOFError())
     end
     a
 end
