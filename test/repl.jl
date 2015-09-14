@@ -199,9 +199,7 @@ fakehistory = """
 # time: 2014-06-30 20:44:29 EDT
 # mode: julia
 \t2 + 2
-# time: 2014-06-30 20:44:29 EDT
-# mode: git
-\tinit"""
+"""
 
 # Test various history related issues
 begin
@@ -214,28 +212,23 @@ begin
     repl_mode = repl.interface.modes[1]
     shell_mode = repl.interface.modes[2]
     help_mode = repl.interface.modes[3]
-    git_mode = repl.interface.modes[4]
-    histp = repl.interface.modes[5]
-    prefix_mode = repl.interface.modes[6]
+    histp = repl.interface.modes[4]
+    prefix_mode = repl.interface.modes[5]
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
-                                                   :help  => help_mode,
-                                                   :git   => git_mode))
+                                                   :help  => help_mode))
 
     REPL.hist_from_file(hp, IOBuffer(fakehistory))
     REPL.history_reset_state(hp)
 
-    histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = git_mode.hist = hp
+    histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
     # Some manual setup
     s = LineEdit.init_state(repl.t, repl.interface)
 
     # Test that navigating history skips invalid modes
     # (in both directions)
-    LineEdit.history_prev(s, hp)
-    @test LineEdit.mode(s) == git_mode
-    @test buffercontents(LineEdit.buffer(s)) == "init"
     LineEdit.history_prev(s, hp)
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
@@ -252,15 +245,9 @@ begin
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
-    @test LineEdit.mode(s) == git_mode
-    @test buffercontents(LineEdit.buffer(s)) == "init"
-    LineEdit.history_next(s, hp)
 
     # Test that the same holds for prefix search
     ps = LineEdit.state(s, prefix_mode)
-    LineEdit.history_prev_prefix(ps, hp, "")
-    @test ps.parent == git_mode
-    @test LineEdit.input_string(ps) == "init"
     LineEdit.history_prev_prefix(ps, hp, "")
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "2 + 2"
