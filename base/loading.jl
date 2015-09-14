@@ -162,7 +162,7 @@ function __precompile__(isprecompilable::Bool=true)
     end
 end
 
-function require_filename(name::AbstractString)
+function require_modname(name::AbstractString)
     # This function can be deleted when the deprecation for `require`
     # is deleted.
     # While we could also strip off the absolute path, the user may be
@@ -192,7 +192,7 @@ function reload(name::AbstractString)
         error("use `include` instead of `reload` to load source files")
     else
         # reload("Package") is ok
-        require(symbol(require_filename(name)))
+        require(symbol(require_modname(name)))
     end
 end
 
