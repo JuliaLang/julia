@@ -38,6 +38,46 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
     end
 end
 
+doc"""
+```rst
+..  plan_dct!(A [, dims [, flags [, timelimit]]])
+
+Same as :func:`plan_dct`, but operates in-place on ``A``.
+```
+"""
+plan_dct!
+
+doc"""
+```rst
+..  plan_idct(A [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+:func:`plan_fft` except producing a function that computes :func:`idct`.
+The first two arguments have the same meaning as for :func:`idct`.
+```
+"""
+plan_idct
+
+doc"""
+```rst
+..  plan_dct(A [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized discrete cosine transform (DCT), similar to
+:func:`plan_fft` except producing a function that computes :func:`dct`.
+The first two arguments have the same meaning as for :func:`dct`.
+```
+"""
+plan_dct
+
+doc"""
+```rst
+..  plan_idct!(A [, dims [, flags [, timelimit]]])
+
+Same as :func:`plan_idct`, but operates in-place on ``A``.
+```
+"""
+plan_idct!
+
 function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
     X = Array(T, p.plan.sz)
     iK = inv_kind[K]
@@ -58,6 +98,57 @@ for f in (:dct, :dct!, :idct, :idct!)
         $pf{T<:Complex}(x::AbstractArray{T}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
     end
 end
+
+doc"""
+```rst
+..  dct(A [, dims])
+
+Performs a multidimensional type-II discrete cosine transform (DCT)
+of the array ``A``, using the unitary normalization of the DCT.
+The optional ``dims`` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along.  Most efficient if the size of ``A`` along the transformed
+dimensions is a product of small primes; see :func:`nextprod`.  See
+also :func:`plan_dct` for even greater efficiency.
+```
+"""
+dct
+
+doc"""
+```rst
+..  idct(A [, dims])
+
+Computes the multidimensional inverse discrete cosine transform (DCT)
+of the array ``A`` (technically, a type-III DCT with the unitary
+normalization).
+The optional ``dims`` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along.  Most efficient if the size of ``A`` along the transformed
+dimensions is a product of small primes; see :func:`nextprod`.  See
+also :func:`plan_idct` for even greater efficiency.
+```
+"""
+idct
+
+doc"""
+```rst
+..  dct!(A [, dims])
+
+Same as :func:`dct!`, except that it operates in-place
+on ``A``, which must be an array of real or complex floating-point
+values.
+```
+"""
+dct!
+
+doc"""
+```rst
+..  idct!(A [, dims])
+
+Same as :func:`idct!`, but operates in-place on ``A``.
+```
+"""
+idct!
 
 const sqrthalf = sqrt(0.5)
 const sqrt2 = sqrt(2.0)
