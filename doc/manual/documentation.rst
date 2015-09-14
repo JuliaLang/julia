@@ -123,6 +123,27 @@ Or for use with Julia's metaprogramming functionality:
     @doc "`add(a,b)` adds `a` and `b` together" add
     @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 
+Documentation written in non-toplevel blocks, such as ``if``, ``for``, and ``let``, are not
+automatically added to the documentation system. ``@doc`` must be used in these cases. For
+example:
+
+.. code-block:: julia
+
+    if VERSION > v"0.4"
+        "..."
+        f(x) = x
+    end
+
+will not add any documentation to ``f`` even when the condition is ``true`` and must instead
+be written as:
+
+.. code-block:: julia
+
+    if VERSION > v"0.4"
+        @doc "..." ->
+        f(x) = x
+    end
+
 Syntax Guide
 ------------
 
