@@ -1162,10 +1162,18 @@ static inline jl_module_t *topmod(jl_codectx_t *ctx)
 
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
-    if (jl_is_expr(e))
-        return ((jl_expr_t*)e)->etype;
-    if (jl_is_symbolnode(e))
-        return jl_symbolnode_type(e);
+    if (jl_is_expr(e)) {
+        jl_value_t *typ = ((jl_expr_t*)e)->etype;
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+        return typ;
+    }
+    if (jl_is_symbolnode(e)) {
+        jl_value_t *typ = jl_symbolnode_type(e);
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+        return typ;
+    }
     if (jl_is_gensym(e)) {
         int idx = ((jl_gensym_t*)e)->id;
         jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
