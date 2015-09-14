@@ -1134,3 +1134,7 @@ let
         @test op(A13024, B13024) == op(full(A13024), full(B13024))
     end
 end
+
+let A = 2. * speye(5,5)
+    @test full(spones(A)) == eye(full(A))
+end
