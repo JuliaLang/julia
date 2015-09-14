@@ -2,7 +2,7 @@
 
 import Base.copy, Base.==
 const verbose = false
-const libccalltest = joinpath(dirname(@__FILE__), "libccalltest")
+const libccalltest = "libccalltest"
 ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation

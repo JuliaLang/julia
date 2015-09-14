@@ -24,10 +24,17 @@ cd(dirname(@__FILE__)) do
 
 # @test !isempty(Libdl.find_library(["libccalltest"], [dirname(@__FILE__)]))
 
+# Find the private library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
+if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    private_libdir = dirname(abspath(Libdl.dlpath("libjulia-debug")))
+else
+    private_libdir = dirname(abspath(Libdl.dlpath("libjulia")))
+end
+
 # dlopen should be able to handle absolute and relative paths, with and without dlext
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(abspath("./libccalltest"))
+        dl = Libdl.dlopen_e(abspath(joinpath(private_libdir, "libccalltest")))
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
@@ -36,7 +43,7 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(join((abspath("./libccalltest"), string(".", Libdl.dlext))))
+        dl = Libdl.dlopen_e(abspath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")))
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
@@ -45,7 +52,7 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e("./libccalltest")
+        dl = Libdl.dlopen_e(relpath(joinpath(private_libdir, "libccalltest")))
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
@@ -54,7 +61,7 @@ end
 
 let dl = C_NULL
     try
-        dl = Libdl.dlopen_e(join(("./libccalltest", string(".", Libdl.dlext))))
+        dl = Libdl.dlopen_e(relpath(joinpath(private_libdir, "libccalltest.$(Libdl.dlext)")))
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
@@ -72,24 +79,20 @@ end
 
 # unqualified names present in DL_LOAD_PATH
 let dl = C_NULL
-    push!(Libdl.DL_LOAD_PATH, pwd())
     try
         dl = Libdl.dlopen_e("libccalltest")
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
-        pop!(Libdl.DL_LOAD_PATH)
     end
 end
 
 let dl = C_NULL
-    push!(Libdl.DL_LOAD_PATH, pwd())
     try
         dl = Libdl.dlopen_e(string("libccalltest",".",Libdl.dlext))
         @test dl != C_NULL
     finally
         Libdl.dlclose(dl)
-        pop!(Libdl.DL_LOAD_PATH)
     end
 end
 
@@ -134,12 +137,13 @@ end
 # test dlpath
 let dl = C_NULL
     try
-        dl = Libdl.dlopen("./libccalltest")
+        path = abspath(joinpath(private_libdir, "libccalltest"))
+        dl = Libdl.dlopen(path)
         @test dl != C_NULL
         @test Base.samefile(abspath(Libdl.dlpath(dl)),
-                            abspath(Libdl.dlpath("./libccalltest")))
+                            abspath(Libdl.dlpath(path)))
         @test Base.samefile(abspath(Libdl.dlpath(dl)),
-                            abspath(string("./libccalltest",".", Libdl.dlext)))
+                            string(path,".",Libdl.dlext))
     finally
         Libdl.dlclose(dl)
     end
@@ -151,7 +155,7 @@ end
 # test dlsym
 let dl = C_NULL
     try
-        dl = Libdl.dlopen("./libccalltest")
+        dl = Libdl.dlopen(abspath(joinpath(private_libdir, "libccalltest")))
         fptr = Libdl.dlsym(dl, :set_verbose)
         @test fptr != C_NULL
         @test_throws ErrorException Libdl.dlsym(dl, :foo)
