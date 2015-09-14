@@ -69,7 +69,7 @@ end
 
 function show(io::IO, f::Function)
     if isgeneric(f)
-        if is_exported_from_stdlib(f.env.name, f.env.module) || f.env.module === Main
+        if !isdefined(f.env, :module) || is_exported_from_stdlib(f.env.name, f.env.module) || f.env.module === Main
             print(io, f.env.name)
         else
             print(io, f.env.module, ".", f.env.name)
