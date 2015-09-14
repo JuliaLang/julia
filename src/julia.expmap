@@ -31,6 +31,7 @@
     add_library_mapping;
     utf8proc_*;
     jlbacktrace;
+    julia_type_to_llvm;
     _IO_stdin_used;
     __ZN4llvm23createLowerSimdLoopPassEv;
 
