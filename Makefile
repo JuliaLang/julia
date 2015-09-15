@@ -415,7 +415,7 @@ endif
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
 
 distclean dist-clean:
-	rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
+	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 dist:
 	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
@@ -513,32 +513,33 @@ full-source-dist: light-source-dist.tmp
 	cd ../ && tar -cz -T $$DIRNAME/full-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 
 clean: | $(CLEAN_TARGETS)
-	@$(MAKE) -C $(BUILDROOT)/base clean
-	@$(MAKE) -C $(BUILDROOT)/doc clean
-	@$(MAKE) -C $(BUILDROOT)/src clean
-	@$(MAKE) -C $(BUILDROOT)/ui clean
-	@$(MAKE) -C $(BUILDROOT)/test clean
-	@rm -f $(BUILDROOT)/julia
-	@rm -f $(BUILDROOT)/*.tar.gz
-	@rm -f $(build_bindir)/stringreplace \
-		$(BUILDROOT)/light-source-dist.tmp $(BUILDROOT)/light-source-dist.tmp1 \
-		$(BUILDROOT)/full-source-dist.tmp $(BUILDROOT)/full-source-dist.tmp1
-	@rm -fr $(build_private_libdir)
-# Temporarily add this line to the Makefile to remove extras
-	@rm -fr $(build_datarootdir)/julia/extras
+	@-$(MAKE) -C $(BUILDROOT)/base clean
+	@-$(MAKE) -C $(BUILDROOT)/doc clean
+	@-$(MAKE) -C $(BUILDROOT)/src clean
+	@-$(MAKE) -C $(BUILDROOT)/ui clean
+	@-$(MAKE) -C $(BUILDROOT)/test clean
+	-rm -f $(BUILDROOT)/julia
+	-rm -f $(BUILDROOT)/*.tar.gz
+	-rm -f $(build_bindir)/stringreplace \
+	   $(BUILDROOT)/light-source-dist.tmp $(BUILDROOT)/light-source-dist.tmp1 \
+	   $(BUILDROOT)/full-source-dist.tmp $(BUILDROOT)/full-source-dist.tmp1
+	-rm -fr $(build_private_libdir)
+# Teporarily add this line to the Makefile to remove extras
+	-rm -fr $(build_datarootdir)/julia/extras
+	-rm -f $(build_prefix)/.examples
 
 cleanall: clean
-	@$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
-	@rm -fr $(build_shlibdir)
+	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
+	-rm -fr $(build_shlibdir)
 ifeq ($(OS),WINNT)
-	@rm -rf $(build_prefix)/lib
+	-rm -rf $(build_prefix)/lib
 endif
-	@$(MAKE) -C $(BUILDROOT)/deps clean-libuv
+	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
 
 distcleanall: cleanall
-	@$(MAKE) -C $(BUILDROOT)/deps distcleanall
-	@$(MAKE) -C $(BUILDROOT)/doc cleanall
-	rm -fr $(build_prefix) $(build_staging)
+	@-$(MAKE) -C $(BUILDROOT)/deps distcleanall
+	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
+	-rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: default debug release check-whitespace release-candidate \
 	julia-debug julia-release julia-deps \
