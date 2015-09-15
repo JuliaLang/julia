@@ -58,10 +58,10 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
-                backend.in_eval = true
                 eval(Main, :(ans = $(Any[ans])[1]))
-                backend.in_eval = false
+                backend.in_eval = true
                 value = eval(Main, ast)
+                backend.in_eval = false
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
             end
@@ -160,10 +160,11 @@ immutable REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL)
+function run_repl(repl::AbstractREPL, consumer = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
+    consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
     backend
 end
