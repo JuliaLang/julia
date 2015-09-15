@@ -174,7 +174,11 @@ static Module *jl_Module;
 #endif
 static MDBuilder *mbuilder;
 static std::map<int, std::string> argNumberStrings;
+#ifdef LLVM38
+static legacy::FunctionPassManager *FPM;
+#else
 static FunctionPassManager *FPM;
+#endif
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
@@ -926,7 +930,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
     if (llvmf) {
         #ifndef LLVM35
         new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
-        #elif defined(LLVM37)
+        #elif defined(LLVM37) && !defined(LLVM38)
         GlobalAlias::create(cast<PointerType>(llvmf->getType()),
                             GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
         #else
@@ -5500,7 +5504,11 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(diff_gc_total_bytes_func, (void*)*jl_gc_diff_total_bytes);
 
     // set up optimization passes
+#ifdef LLVM38
+    FPM = new legacy::FunctionPassManager(m);
+#else
     FPM = new FunctionPassManager(m);
+#endif
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
@@ -5527,9 +5535,18 @@ static void init_julia_llvm_env(Module *m)
 #ifndef LLVM37
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
+#ifdef LLVM38
+    FPM->add(createTypeBasedAAWrapperPass());
+#else
     FPM->add(createTypeBasedAliasAnalysisPass());
-    if (jl_options.opt_level>=1)
+#endif
+    if (jl_options.opt_level>=1) {
+#ifdef LLVM38
+        FPM->add(createBasicAAWrapperPass());
+#else
         FPM->add(createBasicAliasAnalysisPass());
+#endif
+    }
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas

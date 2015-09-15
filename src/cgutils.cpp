@@ -463,7 +463,11 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
         CodeGenOpt::Aggressive // -O3
         ));
 
+#ifdef LLVM38
+    legacy::PassManager PM;
+#else
     PassManager PM;
+#endif
     if (!dump_as_bc) {
 #ifndef LLVM37
         PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
