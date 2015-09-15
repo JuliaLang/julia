@@ -65,7 +65,7 @@ function choosetests(choices = [])
                    "linalg/lapack", "linalg/tridiag", "linalg/bidiag",
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
-                   "linalg/generic", "linalg/uniformscaling"]
+                   "linalg/generic", "linalg/uniformscaling", "linalg/lq"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end
