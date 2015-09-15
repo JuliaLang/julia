@@ -452,7 +452,7 @@ function _start()
                 end
             else
                 _atreplinit(active_repl)
-                active_repl_backend = REPL.run_repl(active_repl)
+                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
             end
         end
     catch err
