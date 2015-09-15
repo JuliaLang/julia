@@ -507,24 +507,30 @@ function deserialize(s::SerializationState, ::Type{Function})
     if b==0
         name = deserialize(s)::Symbol
         if !isdefined(Base,name)
-            return (args...)->error("function $name not defined on process $(myid())")
+            f = (args...)->error("function $name not defined on process $(myid())")
+        else
+            f = getfield(Base,name)::Function
         end
-        return getfield(Base,name)::Function
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
         if !isdefined(mod,name)
-            return (args...)->error("function $name not defined on process $(myid())")
+            f = (args...)->error("function $name not defined on process $(myid())")
+        else
+            f = getfield(mod,name)::Function
         end
-        return getfield(mod,name)::Function
     elseif b==3
         env = deserialize(s)
-        return ccall(:jl_new_gf_internal, Any, (Any,), env)::Function
+        f = ccall(:jl_new_gf_internal, Any, (Any,), env)::Function
+    else
+        linfo = deserialize(s)
+        f = ccall(:jl_new_closure, Any, (Ptr{Void}, Ptr{Void}, Any), C_NULL, C_NULL, linfo)::Function
+        deserialize_cycle(s, f)
+        f.env = deserialize(s)
+        return f
     end
-    linfo = deserialize(s)
-    f = ccall(:jl_new_closure, Any, (Ptr{Void}, Ptr{Void}, Any), C_NULL, C_NULL, linfo)::Function
+    
     deserialize_cycle(s, f)
-    f.env = deserialize(s)
     return f
 end
 
