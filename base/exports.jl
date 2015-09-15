@@ -689,6 +689,8 @@ export
     qr,
     qrfact!,
     qrfact,
+    lqfact!,
+    lqfact,
     rank,
     scale!,
     scale,
