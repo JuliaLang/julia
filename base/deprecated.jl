@@ -101,6 +101,16 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     return C_NULL
 end
 
+deprecate(s::Symbol) = deprecate(current_module(), s)
+deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+
+macro deprecate_binding(old, new)
+    Expr(:toplevel,
+         Expr(:export, esc(old)),
+         Expr(:(=), esc(old), esc(new)),
+         Expr(:call, :deprecate, Expr(:quote, old)))
+end
+
 # 0.4 deprecations
 
 @deprecate split(x,y,l::Integer,k::Bool) split(x,y;limit=l,keep=k)
@@ -111,19 +121,17 @@ end
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export UdpSocket
 const TcpSocket = TCPSocket
-const UdpSocket = UDPSocket
+deprecate(:TcpSocket)
 const IpAddr = IPAddr
+deprecate(:IpAddr)
+@deprecate_binding UdpSocket UDPSocket
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
-export Nothing
-const Nothing = Void
-
-export None
-const None = Union{}
+@deprecate_binding Nothing Void
+@deprecate_binding None Union{}
 
 export apply
 @noinline function apply(f, args...)
@@ -150,16 +158,14 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-export String
-const String = AbstractString
+@deprecate_binding String AbstractString
 
-export Uint, Uint8, Uint16, Uint32, Uint64, Uint128
-const Uint = UInt
-const Uint8 = UInt8
-const Uint16 = UInt16
-const Uint32 = UInt32
-const Uint64 = UInt64
-const Uint128 = UInt128
+@deprecate_binding Uint    UInt
+@deprecate_binding Uint8   UInt8
+@deprecate_binding Uint16  UInt16
+@deprecate_binding Uint32  UInt32
+@deprecate_binding Uint64  UInt64
+@deprecate_binding Uint128 UInt128
 
 @deprecate zero{T}(::Type{Ptr{T}}) Ptr{T}(0)
 @deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
@@ -178,8 +184,7 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
-export Base64Pipe
-const Base64Pipe = Base64EncodePipe
+@deprecate_binding Base64Pipe Base64EncodePipe
 @deprecate base64 base64encode
 
 @deprecate prevind(a::Any, i::Integer)   i-1
@@ -208,8 +213,7 @@ const Base64Pipe = Base64EncodePipe
 @deprecate error(ex::Exception) throw(ex)
 @deprecate error{E<:Exception}(::Type{E}) throw(E())
 
-export MemoryError
-const MemoryError = OutOfMemoryError
+@deprecate_binding MemoryError OutOfMemoryError
 
 @deprecate map!(f::Callable, dest::StridedArray, A::StridedArray, B::Number) broadcast!(f, dest, A, B)
 @deprecate map!(f::Callable, dest::StridedArray, A::Number, B::StridedArray) broadcast!(f, dest, A, B)
@@ -542,17 +546,15 @@ function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
 
-const UnionType = Union
-export UnionType
+@deprecate_binding UnionType Union
 
-const MathConst = Irrational
+@deprecate_binding MathConst Irrational
 
 macro math_const(sym, val, def)
     depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
     :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
 end
-
-export MathConst, @math_const
+export @math_const
 
 # 11280, mmap
 
@@ -789,8 +791,7 @@ end
 
 @deprecate iseltype(x,T)  eltype(x) <: T
 
-const FloatingPoint = AbstractFloat
-export FloatingPoint
+@deprecate_binding FloatingPoint AbstractFloat
 
 # 11447
 

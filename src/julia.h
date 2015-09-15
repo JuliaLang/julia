@@ -301,6 +301,7 @@ typedef struct {
     unsigned constp:1;
     unsigned exportp:1;
     unsigned imported:1;
+    unsigned deprecated:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
