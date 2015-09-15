@@ -254,13 +254,35 @@ end
 @deprecate float64(s::AbstractString)   parse(Float64,s)
 @deprecate float32(s::AbstractString)   parse(Float32,s)
 
-for (f,t) in ((:integer, Integer), (:signed, Signed),
-              (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
-              (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
-              (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64),
-              (:uint128, UInt128))
+for (f,t) in ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned))
     @eval begin
         @deprecate $f(x::AbstractArray) round($t, x)
+    end
+end
+
+for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
+              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
+              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
+    ex1 = sprint(io->show_unquoted(io,:([parse($t,s) for s in a])))
+    ex2 = sprint(io->show_unquoted(io,:(round($t, a))))
+    name = Expr(:quote,f)
+    @eval begin
+        function ($f)(x::AbstractArray)
+            if all(y->isa(y,AbstractString), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex1, " instead."), $name)
+                return [parse($t,s) for s in x]
+            elseif all(y->isa(y,Number), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex2, " instead."), $name)
+                return round($t, x)
+            end
+            y = similar(x,$t)
+            i = 1
+            for e in x
+                y[i] = ($f)(e)
+                i += 1
+            end
+            y
+        end
     end
 end
 
@@ -346,13 +368,6 @@ end
 @deprecate integer(x::Ptr)   convert(UInt, x)
 @deprecate unsigned(x::Ptr)  convert(UInt, x)
 
-for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
-              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
-              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
-    @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
-    end
-end
 for (f,t) in ((:float32, Float32), (:float64, Float64))
     @eval begin
         @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
