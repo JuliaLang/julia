@@ -717,6 +717,30 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
+doc"""
+```rst
+..  plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
+except for :func:`rfft` instead of :func:`fft`.  The first two
+arguments, and the size of the transformed result, are the same as
+for :func:`rfft`.
+```
+"""
+plan_rfft
+
+doc"""
+```rst
+..  plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input unnormalized transform, similar to
+:func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
+The first two arguments and the size of the transformed result, are
+the same as for :func:`brfft`.
+```
+"""
+plan_brfft
+
 # FFTW r2r transforms (low-level interface)
 
 for f in (:r2r, :r2r!)

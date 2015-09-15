@@ -557,127 +557,6 @@ Run the function `f` using the `handler` as the handler.
 """
 Test.with_handler
 
-doc"""
-```rst
-..  plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_bfft`, but operates in-place on ``A``.
-```
-"""
-plan_bfft!
-
-doc"""
-```rst
-..  plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
-except for :func:`irfft` and :func:`brfft`, respectively.  The first
-three arguments have the same meaning as for :func:`irfft`.
-```
-"""
-plan_irfft
-
-doc"""
-```rst
-..  plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
-except for :func:`rfft` instead of :func:`fft`.  The first two
-arguments, and the size of the transformed result, are the same as
-for :func:`rfft`.
-```
-"""
-plan_rfft
-
-doc"""
-```rst
-..  plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
-matching the shape and type of ``A``.  (The first two arguments have
-the same meaning as for :func:`fft`.)  Returns an object ``P`` which
-represents the linear operator computed by the FFT, and which contains
-all of the information needed to compute ``fft(A, dims)`` quickly.
-
-To apply ``P`` to an array ``A``, use ``P * A``; in general, the
-syntax for applying plans is much like that of matrices.  (A plan
-can only be applied to arrays of the same size as the ``A`` for
-which the plan was created.)  You can also apply a plan with a
-preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
-A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
-apply the inverse plan with ``P \ Â`` (the inverse plan is cached
-and reused for subsequent calls to ``inv`` or ``\``), and apply the
-inverse plan to a pre-allocated output array ``A`` with
-``A_ldiv_B!(A, P, Â)``.
-
-The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
-to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
-will instead spend several seconds (or more) benchmarking different
-possible FFT algorithms and picking the fastest one; see the FFTW manual
-for more information on planner flags.  The optional ``timelimit`` argument
-specifies a rough upper bound on the allowed planning time, in seconds.
-Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A``
-to be overwritten with zeros during plan creation.
-
-:func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan
-that operates in-place on its argument (which must be an array of
-complex floating-point numbers).  :func:`plan_ifft` and so on
-are similar but produce plans that perform the equivalent of
-the inverse transforms :func:`ifft` and so on.
-```
-"""
-plan_fft
-
-doc"""
-```rst
-..  plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
-backwards transform :func:`bfft`.
-```
-"""
-plan_bfft
-
-doc"""
-```rst
-..  plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but operates in-place on ``A``.
-```
-"""
-plan_fft!
-
-doc"""
-```rst
-..  plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
-:func:`ifft`.
-```
-"""
-plan_ifft
-
-doc"""
-```rst
-..  plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input unnormalized transform, similar to
-:func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
-The first two arguments and the size of the transformed result, are
-the same as for :func:`brfft`.
-```
-"""
-plan_brfft
-
-doc"""
-```rst
-..  plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Same as :func:`plan_ifft`, but operates in-place on ``A``.
-```
-"""
-plan_ifft!
-
 # Base.Profile
 
 doc"""
@@ -2982,16 +2861,6 @@ julia> structinfo(StatStruct)
 fieldoffsets
 
 doc"""
-```rst
-..  fft!(A [, dims])
-
-Same as :func:`fft`, but operates in-place on ``A``,
-which must be an array of complex floating-point numbers.
-```
-"""
-fft!
-
-doc"""
     randn([rng], [dims...])
 
 Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
@@ -3018,13 +2887,6 @@ doc"""
 Modified Bessel function of the first kind of order `nu`, $I_\nu(x)$.
 """
 besseli
-
-doc"""
-    ifftshift(x, [dim])
-
-Undoes the effect of `fftshift`.
-"""
-ifftshift
 
 doc"""
     eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
@@ -3897,23 +3759,6 @@ doc"""
 Seek a stream relative to the current position.
 """
 skip
-
-doc"""
-```rst
-..  bfft(A [, dims])
-
-Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
-transform, which must be divided by the product of the sizes of the
-transformed dimensions in order to obtain the inverse. (This is slightly
-more efficient than :func:`ifft` because it omits a scaling step, which in
-some applications can be combined with other computational steps elsewhere.)
-
-.. math::
-
-   \operatorname{BDFT}(A)[k] = \operatorname{length}(A) \operatorname{IDFT}(A)[k]
-```
-"""
-bfft
 
 doc"""
     lu(A) -> L, U, p
@@ -5033,24 +4878,6 @@ For a given iterable object and iteration state, return the current item and the
 next
 
 doc"""
-```rst
-..  irfft(A, d [, dims])
-
-Inverse of :func:`rfft`: for a complex array ``A``, gives the
-corresponding real array whose FFT yields ``A`` in the first half.
-As for :func:`rfft`, ``dims`` is an optional subset of dimensions
-to transform, defaulting to ``1:ndims(A)``.
-
-``d`` is the length of the transformed real array along the ``dims[1]``
-dimension, which must satisfy ``div(d,2)+1 == size(A,dims[1])``.
-(This parameter cannot be inferred from ``size(A)`` since both
-``2*size(A,dims[1])-2`` as well as ``2*size(A,dims[1])-1`` are valid sizes
-for the transformed real array.)
-```
-"""
-irfft
-
-doc"""
     nnz(A)
 
 Returns the number of stored (filled) elements in a sparse matrix.
@@ -5306,15 +5133,6 @@ doc"""
 Removes and returns a value from a `Channel`. Blocks till data is available.
 """
 take!(::Channel)
-
-doc"""
-```rst
-..  ifft!(A [, dims])
-
-Same as :func:`ifft`, but operates in-place on ``A``.
-```
-"""
-ifft!
 
 doc"""
     sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -6746,20 +6564,6 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 notify
 
 doc"""
-    fftshift(x)
-
-Swap the first and second halves of each dimension of `x`.
-"""
-fftshift(x)
-
-doc"""
-    fftshift(x,dim)
-
-Swap the first and second halves of the given dimension of array `x`.
-"""
-fftshift(x,dim)
-
-doc"""
     unique(itr[, dim])
 
 Returns an array containing only the unique elements of the iterable `itr`, in the order that the first of each set of equivalent elements originally appears. If `dim` is specified, returns unique regions of the array `itr` along `dim`.
@@ -7181,15 +6985,6 @@ doc"""
 Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
 """
 symdiff
-
-doc"""
-```rst
-..  bfft!(A [, dims])
-
-Same as :func:`bfft`, but operates in-place on ``A``.
-```
-"""
-bfft!
 
 doc"""
     histrange(v, n)
@@ -7855,21 +7650,6 @@ doc"""
 Send the given value to the last `consume` call, switching to the consumer task. If the next `consume` call passes any values, they are returned by `produce`.
 """
 produce
-
-doc"""
-    ifft(A [, dims])
-
-Multidimensional inverse FFT.
-
-A one-dimensional inverse FFT computes
-
-$$\operatorname{IDFT}(A)[k] = \frac{1}{\operatorname{length}(A)}
-\sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi (n-1)(k-1)}
-{\operatorname{length}(A)} \right) A[n].$$
-
-A multidimensional inverse FFT simply performs this operation along each transformed dimension of `A`.
-"""
-ifft
 
 doc"""
     StackOverflowError()
@@ -8750,18 +8530,6 @@ doc"""
 Compute cosine of `x`, where `x` is in degrees
 """
 cosd
-
-doc"""
-```rst
-..  brfft(A, d [, dims])
-
-Similar to :func:`irfft` but computes an unnormalized inverse transform
-(similar to :func:`bfft`), which must be divided by the product
-of the sizes of the transformed dimensions (of the real output array)
-in order to obtain the inverse transform.
-```
-"""
-brfft
 
 doc"""
     cycle(iter)
@@ -11501,24 +11269,6 @@ doc"""
 For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $Bᴴ$
 """
 Ac_ldiv_Bc
-
-doc"""
-```rst
-..  rfft(A [, dims])
-
-Multidimensional FFT of a real array ``A``, exploiting the fact that
-the transform has conjugate symmetry in order to save roughly half
-the computational time and storage costs compared with :func:`fft`.
-If ``A`` has size ``(n_1, ..., n_d)``, the result has size
-``(div(n_1,2)+1, ..., n_d)``.
-
-The optional ``dims`` argument specifies an iterable subset of one or
-more dimensions of ``A`` to transform, similar to :func:`fft`.  Instead
-of (roughly) halving the first dimension of ``A`` in the result, the
-``dims[1]`` dimension is (roughly) halved in the same way.
-```
-"""
-rfft
 
 doc"""
 ```rst
