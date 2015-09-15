@@ -21,7 +21,8 @@ import
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, get_rounding,
-        set_rounding, maxintfloat, widen, significand, frexp, tryparse
+        set_rounding, maxintfloat, widen, significand, frexp, tryparse,
+        big
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
@@ -66,7 +67,20 @@ end
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-convert(::Type{BigFloat}, x::BigFloat) = x
+#convert(::Type{BigFloat}, x::BigFloat) = x
+
+#function convert(::Type{BigFloat}, x::BigFloat)
+function BigFloat(x::BigFloat)
+
+    precision(x) == get_bigfloat_precision() && return x  # no change if already at correct precision
+
+    z = BigFloat()
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    return z
+end
+
+
+
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
@@ -93,11 +107,64 @@ convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culo
 convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
 convert(::Type{BigFloat}, x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
+
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Cstring, Int32, Int32), &z, s, base, ROUNDING_MODE[end])
     err == 0 ? Nullable(z) : Nullable{BigFloat}()
 end
+
+# constructors with given precision:
+doc"""
+    BigFloat(x, precision)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part).
+"""
+function BigFloat(x, precision::Integer)
+    with_bigfloat_precision(precision) do
+        BigFloat(x)
+    end
+end
+
+doc"""
+    BigFloat(x, precision, rounding_mode)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part) and given rounding mode.
+"""
+function BigFloat(x, precision::Integer, rounding_mode::RoundingMode)
+    with_rounding(BigFloat, rounding_mode) do
+        BigFloat(x, precision)
+    end
+end
+
+doc"""
+    big(x, precision)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part).
+"""
+big(x, precision::Integer) = BigFloat(x, precision)
+
+function big(x::AbstractString, precision::Integer)
+    with_bigfloat_precision(precision) do
+        parse(BigFloat, x)
+    end
+end
+
+doc"""
+    big(x, precision, rounding_mode)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part) and given rounding mode.
+"""
+function big(x, precision::Integer, rounding_mode::RoundingMode)
+    with_rounding(BigFloat, rounding_mode) do
+        big(x, precision)
+    end
+end
+
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
@@ -854,5 +921,8 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
+
+convert(::Type{BigFloat}, x::BigFloat) = BigFloat(x)  # gives error if moved earlier
+
 
 end #module
