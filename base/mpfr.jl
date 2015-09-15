@@ -165,6 +165,7 @@ function big(x, precision::Integer, rounding_mode::RoundingMode)
     end
 end
 
+big(x, rounding_mode::RoundingMode) = big(x, get_bigfloat_precision(), rounding_mode)
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
@@ -875,7 +876,12 @@ function prevfloat(x::BigFloat)
     return z
 end
 
-eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+function eps(x::BigFloat)
+    with_bigfloat_precision(precision(x)) do
+        nextfloat(x) - x
+    end
+end
+eps(::Type{BigFloat}) = eps(BigFloat(1))
 
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
@@ -923,6 +929,5 @@ set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
 
 convert(::Type{BigFloat}, x::BigFloat) = BigFloat(x)  # gives error if moved earlier
-
 
 end #module
