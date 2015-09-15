@@ -164,7 +164,7 @@ func mandel(z complex128) int {
 
 func mandelperf() int {
 	mandel_sum := 0
-	// These loops are constructed as such because mandle is very sensitive to
+	// These loops are constructed as such because mandel is very sensitive to
 	// its input and this avoids very small floating point issues.
 	for re := -20.0; re <= 5; re += 1 {
 		for im := -10.0; im <= 10; im += 1 {
