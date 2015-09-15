@@ -93,6 +93,15 @@ macro enum(T,syms...)
             end
         end
         Base.show(io::IO,x::$(esc(typename))) = print(io, x, "::", $(esc(typename)))
+        function Base.show(io::IO,::Type{$(esc(typename))})
+            print(io, "Enum with ", length($vals), " member values:\n")
+            for (c, (sym, i)) in enumerate($vals)
+                print(io, sym)
+                if c != length($vals)
+                    print(io, ", ")
+                end
+            end
+        end
     end
     if isa(T,Symbol)
         for (sym,i) in vals
