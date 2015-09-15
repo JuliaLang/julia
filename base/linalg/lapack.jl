@@ -59,6 +59,7 @@ for (gbtrf, gbtrs, elty) in
      (:zgbtrf_,:zgbtrs_,:Complex128),
      (:cgbtrf_,:cgbtrs_,:Complex64))
     @eval begin
+
         # SUBROUTINE DGBTRF( M, N, KL, KU, AB, LDAB, IPIV, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, KL, KU, LDAB, M, N
@@ -78,6 +79,7 @@ for (gbtrf, gbtrs, elty) in
             @lapackerror
             AB, ipiv
         end
+
         # SUBROUTINE DGBTRS( TRANS, N, KL, KU, NRHS, AB, LDAB, IPIV, B, LDB, INFO)
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
@@ -107,6 +109,27 @@ for (gbtrf, gbtrs, elty) in
     end
 end
 
+"""
+    gbtrf!(kl, ku, m, AB) -> (AB, ipiv)
+
+Compute the LU factorization of a banded matrix `AB`. `kl` is the first
+subdiagonal containing a nonzero band, `ku` is the last superdiagonal
+containing one, and `m` is the first dimension of the matrix `AB`. Returns
+the LU factorization in-place and `ipiv`, the vector of pivots used.
+"""
+gbtrf!(kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix)
+
+"""
+    gbtrs!(trans, kl, ku, m, AB, ipiv, B)
+
+Solve the equation `AB * X = B`. `trans` determines the orientation of `AB`. It may
+be `N` (no transpose), `T` (transpose), or `C` (conjugate transpose). `kl` is the
+first subdiagonal containing a nonzero band, `ku` is the last superdiagonal
+containing one, and `m` is the first dimension of the matrix `AB`. `ipiv` is the vector
+of pivots returned from `gbtrf!`. Returns the vector or matrix `X`, overwriting `B` in-place.
+"""
+gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty, relty) in
     ((:dgebal_, :dgebak_, :Float64, :Float64),
@@ -114,6 +137,7 @@ for (gebal, gebak, elty, relty) in
      (:zgebal_, :zgebak_, :Complex128, :Float64),
      (:cgebal_, :cgebak_, :Complex64, :Float32))
     @eval begin
+
         #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          JOB
@@ -134,6 +158,7 @@ for (gebal, gebak, elty, relty) in
             @lapackerror
             ilo[1], ihi[1], scale
         end
+
         #     SUBROUTINE DGEBAK( JOB, SIDE, N, ILO, IHI, SCALE, M, V, LDV, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          JOB, SIDE
@@ -157,16 +182,29 @@ for (gebal, gebak, elty, relty) in
     end
 end
 
+"""
+    gebal!(job, A) -> (ilo, ihi, scale)
+
+Balance the matrix `A` before computing its eigensystem or Schur factorization.
+`job` can be one of `N` (`A` will not be permuted or scaled), `P` (`A` will only
+be permuted), `S` (`A` will only be scaled), or `B` (`A` will be both permuted
+and scaled). Modifies `A` in-place and returns `ilo`, `ihi`, and `scale`. If
+permuting was turned on, `A[i,j] = 0` if `j > i` and `1 < j < ilo` or `j > ihi`.
+`scale` contains information about the scaling/permutations performed.
+"""
+gebal!(job::Char, A::StridedMatrix)
+
+"""
+    gebak!(job, side, ilo, ihi, scale, V)
+
+Transform the eigenvectors `V` of a matrix balanced using `gebal!` to
+the unscaled/unpermuted eigenvectors of the original matrix. Modifies `V`
+in-place. `side` can be `L` (left eigenvectors are transformed) or `R`
+(right eigenvectors are transformed).
+"""
+gebak!(job::Char, side::Char, ilo::BlasInt, ihi::BlasInt, scale::Vector, V::StridedMatrix)
+
 # (GE) general matrices, direct decompositions
-# gebrd - reduction to bidiagonal form Q'*A*P=B where Q and P are orthogonal
-# gelqf - unpivoted LQ decomposition
-# geqlf - unpivoted QL decomposition
-# geqrf - unpivoted QR decomposition
-# gegp3 - pivoted QR decomposition
-# geqrt - unpivoted QR by WY representation
-# geqrt3! - recursive algorithm producing compact WY representation of Q
-# gerqf - unpivoted RQ decomposition
-# getrf - LU decomposition
 #
 # These mutating functions take as arguments all the values they
 # return, even if the value of the function does not depend on them
@@ -179,6 +217,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
      (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
      (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
+
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
         # .. Scalar Arguments ..
@@ -213,6 +252,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, d, e, tauq, taup
         end
+
         # SUBROUTINE DGELQF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -242,6 +282,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, tau
         end
+
         # SUBROUTINE DGEQLF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -271,6 +312,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, tau
         end
+
         # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -321,6 +363,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             return A, tau, jpvt
         end
+
         function geqrt!(A::StridedMatrix{$elty}, T::Matrix{$elty})
             chkstride1(A)
             m, n = size(A)
@@ -344,6 +387,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, T
         end
+
         function geqrt3!(A::StridedMatrix{$elty}, T::Matrix{$elty})
             chkstride1(A); chkstride1(T)
             m, n = size(A); p, q = size(T)
@@ -364,6 +408,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, T
         end
+
         ## geqrfp! - positive elements on diagonal of R - not defined yet
         # SUBROUTINE DGEQRFP( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -392,6 +437,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, tau
         end
+
         # SUBROUTINE DGERQF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -419,6 +465,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, tau
         end
+
         # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, M, N
@@ -440,6 +487,112 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         end
     end
 end
+
+"""
+    gebrd!(A) -> (A, d, e, tauq, taup)
+
+Reduce `A` in-place to bidiagonal form `A = QBP'`. Returns `A`, containing the
+bidiagonal matrix `B`; `d`, containing the diagonal elements of `B`; `e`,
+containing the off-diagonal elements of `B`; `tauq`, containing the
+elementary reflectors representing `Q`; and `taup`, containing the
+elementary reflectors representing `P`.
+"""
+gebrd!(A::StridedMatrix)
+
+"""
+    gelqf!(A, tau)
+
+Compute the `LQ` factorization of `A`, `A = LQ`. `tau` contains scalars
+which parameterize the elementary reflectors of the factorization. `tau`
+must have length greater than or equal to the smallest dimension of `A`.
+
+Returns
+`A` and `tau` modified in-place.
+"""
+gelqf!(A::StridedMatrix, tau::Vector)
+
+"""
+    geqlf!(A, tau)
+
+Compute the `QL` factorization of `A`, `A = QL`. `tau` contains scalars
+which parameterize the elementary reflectors of the factorization. `tau`
+must have length greater than or equal to the smallest dimension of `A`.
+
+Returns `A` and `tau` modified in-place.
+"""
+geqlf!(A::StridedMatrix, tau::Vector)
+
+"""
+    geqp3!(A, jpvt, tau)
+
+Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
+`P` is a pivoting matrix, represented by `jpvt`. `tau` stores the elementary
+reflectors. `jpvt` must have length length greater than or equal to `n` if `A`
+is an `(m x n)` matrix. `tau` must have length greater than or equal to the
+smallest dimension of `A`.
+
+`A`, `jpvt`, and `tau` are modified in-place.
+"""
+geqp3!(A::StridedMatrix, jpvt::Vector{BlasInt}, tau::Vector)
+
+"""
+    geqrt!(A, T)
+
+Compute the blocked `QR` factorization of `A`, `A = QR`. `T` contains upper
+triangular block reflectors which parameterize the elementary reflectors of
+the factorization. The first dimension of `T` sets the block size and it must
+be between 1 and `n`. The second dimension of `T` must equal the smallest
+dimension of `A`.
+
+Returns `A` and `T` modified in-place.
+"""
+geqrt!(A::StridedMatrix, T::Matrix)
+
+"""
+    geqrt3!(A, T)
+
+Recursively computes the blocked `QR` factorization of `A`, `A = QR`. `T`
+contains upper triangular block reflectors which parameterize the
+elementary reflectors of the factorization.  The first dimension of `T` sets the
+block size and it must be between 1 and `n`. The second dimension of `T` must
+equal the smallest dimension of `A`.
+
+Returns `A` and `T` modified in-place.
+"""
+geqrt3!(A::StridedMatrix, T::Matrix)
+
+"""
+    geqrf!(A, tau)
+
+Compute the `QR` factorization of `A`, `A = QR`. `tau` contains scalars
+which parameterize the elementary reflectors of the factorization. `tau`
+must have length greater than or equal to the smallest dimension of `A`.
+
+Returns `A` and `tau` modified in-place.
+"""
+geqrf!(A::StridedMatrix, tau::Vector)
+
+"""
+    gerqf!(A, tau)
+
+Compute the `RQ` factorization of `A`, `A = RQ`. `tau` contains scalars
+which parameterize the elementary reflectors of the factorization. `tau`
+must have length greater than or equal to the smallest dimension of `A`.
+
+Returns `A` and `tau` modified in-place.
+"""
+gerqf!(A::StridedMatrix, tau::Vector)
+
+"""
+    getrf!(A) -> (A, ipiv, info)
+
+Compute the pivoted `LU` factorization of `A`, `A = LU`.
+
+Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
+code which indicates success (`info = 0`), a singular value in `U`
+(`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
+"""
+getrf!(A::StridedMatrix, tau::Vector)
 
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
@@ -464,6 +617,7 @@ for (tzrzf, ormrz, elty) in
      (:ztzrzf_,:zunmrz_,:Complex128),
      (:ctzrzf_,:cunmrz_,:Complex64))
     @eval begin
+
  #      *       SUBROUTINE ZTZRZF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
  #   22 *
  #   23 *       .. Scalar Arguments ..
@@ -504,6 +658,7 @@ for (tzrzf, ormrz, elty) in
    # 27 *       ..
    # 28 *       .. Array Arguments ..
    # 29 *       COMPLEX*16         A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+
         function ormrz!(side::Char, trans::Char, A::StridedMatrix{$elty}, tau::StridedVector{$elty}, C::StridedMatrix{$elty})
             chktrans(trans)
             chkside(side)
@@ -536,6 +691,26 @@ for (tzrzf, ormrz, elty) in
     end
 end
 
+"""
+    ormrz!(side, trans, A, tau, C)
+
+Multiplies the matrix `C` by `Q` from the transformation supplied by
+`tzrzf!`. Depending on `side` or `trans` the multiplication can be
+left-sided (`side = L, Q*C`) or right-sided (`side = R, C*Q`) and `Q`
+can be unmodified (`trans = N`), transposed (`trans = T`), or conjugate
+transposed (`trans = C`). Returns matrix `C` which is modified in-place
+with the result of the multiplication.
+"""
+ormrz!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedMatrix)
+
+"""
+    tzrzf!(A) -> (A, tau)
+
+Transforms the upper trapezoidal matrix `A` to upper triangular form in-place.
+Returns `A` and `tau`, the scalar parameters for the elementary reflectors
+of the transformation.
+"""
+tzrzf!(A::StridedMatrix)
 
 ## (GE) general matrices, solvers with factorization, solver and inverse
 for (gels, gesv, getrs, getri, elty) in
@@ -659,6 +834,50 @@ for (gels, gesv, getrs, getri, elty) in
         end
     end
 end
+
+"""
+    gels!(trans, A, B) -> (F, B, ssr)
+
+Solves the linear equation `A * X = B`, `A.' * X =B`, or `A' * X = B` using
+a QR or LQ factorization. Modifies the matrix/vector `B` in place with the
+solution. `A` is overwritten with its `QR` or `LQ` factorization. `trans`
+may be one of `N` (no modification), `T` (transpose), or `C` (conjugate
+transpose). `gels!` searches for the minimum norm/least squares solution.
+`A` may be under or over determined. The solution is returned in `B`.
+"""
+gels!(trans::Char, A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    gesv!(A, B) -> (B, A, ipiv)
+
+Solves the linear equation `A * X = B` where `A` is a square matrix using
+the `LU` factorization of `A`. `A` is overwritten with its `LU`
+factorization and `B` is overwritten with the solution `X`. `ipiv` contains the
+pivoting information for the `LU` factorization of `A`.
+"""
+gesv!(A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    getrs!(trans, A, ipiv, B)
+
+Solves the linear equation `A * X = B`, `A.' * X =B`, or `A' * X = B` for
+square `A`. Modifies the matrix/vector `B` in place with the solution. `A`
+is the `LU` factorization from `getrf!`, with `ipiv` the pivoting
+information. `trans` may be one of `N` (no modification), `T` (transpose),
+or `C` (conjugate transpose).
+"""
+getrs!(trans::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+
+"""
+    getri!(A, ipiv)
+
+Computes the inverse of `A`, using its `LU` factorization found by
+`getrf!`. `ipiv` is the pivot information output and `A`
+contains the `LU` factorization of `getrf!`. `A` is overwritten with
+its inverse.
+"""
+getri!(A::StridedMatrix, ipiv::Vector{BlasInt})
+
 for (gesvx, elty) in
     ((:dgesvx_,:Float64),
      (:sgesvx_,:Float32))
@@ -710,7 +929,6 @@ for (gesvx, elty) in
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, work[1]
         end
-        #Wrapper for the no-equilibration, no-transpose calculation
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             n=size(A,1)
             X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, similar(A, $elty, n, n), similar(A, BlasInt, n), 'N', similar(A, $elty, n),  similar(A, $elty, n), B)
@@ -775,7 +993,41 @@ for (gesvx, elty, relty) in
             X, rcond, ferr, berr, rpgf
         end
     end
- end
+end
+
+"""
+    gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)
+
+Solves the linear equation `A * X = B` (`trans = N`), `A.' * X =B`
+(`trans = T`), or `A' * X = B` (`trans = C`) using the `LU` factorization
+of `A`. `fact` may be `E`, in which case `A` will be equilibrated and copied
+to `AF`; `F`, in which case `AF` and `ipiv` from a previous `LU` factorization
+are inputs; or `N`, in which case `A` will be copied to `AF` and then
+factored. If `fact = F`, `equed` may be `N`, meaning `A` has not been
+equilibrated; `R`, meaning `A` was multiplied by `diagm(R)` from the left;
+`C`, meaning `A` was multiplied by `diagm(C)` from the right; or `B`, meaning
+`A` was multiplied by `diagm(R)` from the left and `diagm(C)` from the right.
+If `fact = F` and `equed = R` or `B` the elements of `R` must all be positive.
+If `fact = F` and `equed = C` or `B` the elements of `C` must all be positive.
+
+Returns the solution `X`; `equed`, which is an output if `fact` is not `N`,
+and describes the equilibration that was performed; `R`, the row equilibration
+diagonal; `C`, the column equilibration diagonal; `B`, which may be overwritten
+with its equilibrated form `diagm(R)*B` (if `trans = N` and `equed = R,B`) or
+`diagm(C)*B` (if `trans = T,C` and `equed = C,B`); `rcond`, the reciprocal
+condition number of `A` after equilbrating; `ferr`, the forward error bound for
+each solution vector in `X`; `berr`, the forward error bound for each solution
+vector in `X`; and `work`, the reciprocal pivot growth factor.
+"""
+gesvx!(fact::Char, trans::Char, A::StridedMatrix, AF::StridedMatrix,
+    ipiv::Vector{BlasInt}, equed::Char, R::Vector, C::Vector, B::StridedVecOrMat)
+
+"""
+    gesvx!(A, B)
+
+The no-equilibration, no-transpose simplification of `gesvx!`.
+"""
+gesvx!(A::StridedMatrix, B::StridedVecOrMat)
 
 for (gelsd, gelsy, elty) in
     ((:dgelsd_,:dgelsy_,:Float64),
@@ -821,7 +1073,6 @@ for (gelsd, gelsy, elty) in
             end
             subsetrows(B, newB, n), rnk[1]
         end
-
 #       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
 #      $                   WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -964,6 +1215,28 @@ for (gelsd, gelsy, elty, relty) in
     end
 end
 
+"""
+    gelsd!(A, B, rcond) -> (B, rnk)
+
+Computes the least norm solution of `A * X = B` by finding the `SVD`
+factorization of `A`, then dividing-and-conquering the problem. `B`
+is overwritten with the solution `X`. Singular values below `rcond`
+will be treated as zero. Returns the solution in `B` and the effective rank
+of `A` in `rnk`.
+"""
+gelsd!(A::StridedMatrix, B::StridedVecOrMat, rcond::Real)
+
+"""
+    gelsy!(A, B, rcond) -> (B, rnk)
+
+Computes the least norm solution of `A * X = B` by finding the full `QR`
+factorization of `A`, then dividing-and-conquering the problem. `B`
+is overwritten with the solution `X`. Singular values below `rcond`
+will be treated as zero. Returns the solution in `B` and the effective rank
+of `A` in `rnk`.
+"""
+gelsy!(A::StridedMatrix, B::StridedVecOrMat, rcond::Real)
+
 for (gglse, elty) in ((:dgglse_, :Float64),
                       (:sgglse_, :Float32),
                       (:zgglse_, :Complex128),
@@ -1013,6 +1286,15 @@ for (gglse, elty) in ((:dgglse_, :Float64),
         end
     end
 end
+
+"""
+    gglse!(A, c, B, d) -> (X,res)
+
+Solves the equation `A * x = c` where `x` is subject to the equality
+constraint `B * x = d`. Uses the formula `||c - A*x||^2 = 0` to solve.
+Returns `X` and the residual sum-of-squares.
+"""
+gglse!(A::StridedMatrix, c::StridedVector, B::StridedMatrix, d::StridedVector)
 
 # (GE) general matrices eigenvalue-eigenvector and singular value decompositions
 for (geev, gesvd, gesdd, ggsvd, elty, relty) in
@@ -1256,6 +1538,58 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         end
     end
 end
+
+"""
+    geev!(jobvl, jobvr, A) -> (W, VL, VR)
+
+Finds the eigensystem of `A`. If `jobvl = N`, the left eigenvectors of
+`A` aren't computed. If `jobvr = N`, the right eigenvectors of `A`
+aren't computed. If `jobvl = V` or `jobvr = V`, the corresponding
+eigenvectors are computed. Returns the eigenvalues in `W`, the right
+eigenvectors in `VR`, and the left eigenvectors in `VL`.
+"""
+geev!(jobvl::Char, jobvr::Char, A::StridedMatrix)
+
+"""
+    gesdd!(job, A) -> (U, S, VT)
+
+Finds the singular value decomposition of `A`, `A = U * S * V'`,
+using a divide and conquer approach. If `job = A`, all the columns of `U` and
+the rows of `V'` are computed. If `job = N`, no columns of `U` or rows of `V'`
+are computed. If `job = O`, `A` is overwritten with the columns of (thin) `U`
+and the rows of (thin) `V'`. If `job = S`, the columns of (thin) `U` and the
+rows of (thin) `V'` are computed and returned separately.
+"""
+gesdd!(job::Char, A::StridedMatrix)
+
+"""
+    gesvd!(jobu, jobvt, A) -> (U, S, VT)
+
+Finds the singular value decomposition of `A`, `A = U * S * V'`.
+If `jobu = A`, all the columns of `U` are computed. If `jobvt = A` all the rows
+of `V'` are computed. If `jobu = N`, no columns of `U` are computed. If
+`jobvt = N` no rows of `V'` are computed. If `jobu = O`, `A` is overwritten with
+the columns of (thin) `U`. If `jobvt = O`, `A` is overwritten with the rows
+of (thin) `V'`. If `jobu = S`, the columns of (thin) `U` are computed
+and returned separately. If `jobvt = S` the rows of (thin) `V'` are
+computed and returned separately. `jobu` and `jobvt` can't both be `O`.
+
+Returns `U`, `S`, and `Vt`, where `S` are the singular values of `A`.
+"""
+gesvd!(jobu::Char, jobvt::Char, A::StridedMatrix)
+
+"""
+    ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
+
+Finds the generalized singular value decomposition of `A` and `B`, `U'*A*Q = D1*R`
+and `V'*B*Q = D2*R`. `D1` has `alpha` on its diagonal and `D2` has `beta` on its
+diagonal. If `jobu = U`, the orthogonal/unitary matrix `U` is computed. If
+`jobv = V` the orthogonal/unitary matrix `V` is computed. If `jobq = Q`,
+the orthogonal/unitary matrix `Q` is computed. If `job{u,v,q} = N`, that
+matrix is not computed.
+"""
+ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::Matrix, B::Matrix)
+
 ## Expert driver and generalized eigenvalue problem
 for (geevx, ggev, elty) in
     ((:dgeevx_,:dggev_,:Float64),
@@ -1275,71 +1609,70 @@ for (geevx, ggev, elty) in
    #       DOUBLE PRECISION   A( LDA, * ), RCONDE( * ), RCONDV( * ),
    #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
    #      $                   WI( * ), WORK( * ), WR( * )
-    function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
-        n = chksquare(A)
-        lda = max(1,stride(A,2))
-        wr = similar(A, $elty, n)
-        wi = similar(A, $elty, n)
-        if balanc ∉ ['N', 'P', 'S', 'B']
-            throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
-        end
-        ldvl = 0
-        if jobvl == 'V'
-            ldvl = n
-        elseif jobvl == 'N'
+        function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+            n = chksquare(A)
+            lda = max(1,stride(A,2))
+            wr = similar(A, $elty, n)
+            wi = similar(A, $elty, n)
+            if balanc ∉ ['N', 'P', 'S', 'B']
+                throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+            end
             ldvl = 0
-        else
-            throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
-        end
-        VL = similar(A, $elty, ldvl, n)
-        ldvr = 0
-        if jobvr == 'V'
-            ldvr = n
-        elseif jobvr == 'N'
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 0
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
+            VL = similar(A, $elty, ldvl, n)
             ldvr = 0
-        else
-            throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
-        end
-        VR = similar(A, $elty, ldvr, n)
-        ilo = Array(BlasInt, 1)
-        ihi = Array(BlasInt, 1)
-        scale = similar(A, $elty, n)
-        abnrm = Array($elty, 1)
-        rconde = similar(A, $elty, n)
-        rcondv = similar(A, $elty, n)
-        work = Array($elty, 1)
-        lwork::BlasInt = -1
-        iworksize = 0
-        if sense == 'N' || sense == 'E'
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 0
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
+            VR = similar(A, $elty, ldvr, n)
+            ilo = Array(BlasInt, 1)
+            ihi = Array(BlasInt, 1)
+            scale = similar(A, $elty, n)
+            abnrm = Array($elty, 1)
+            rconde = similar(A, $elty, n)
+            rcondv = similar(A, $elty, n)
+            work = Array($elty, 1)
+            lwork::BlasInt = -1
             iworksize = 0
-        elseif sense == 'V' || sense == 'B'
-            iworksize = 2*n - 2
-        else
-            throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
+            if sense == 'N' || sense == 'E'
+                iworksize = 0
+            elseif sense == 'V' || sense == 'B'
+                iworksize = 2*n - 2
+            else
+                throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
+            end
+            iwork = Array(BlasInt, iworksize)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(blasfunc(geevx)), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                       &balanc, &jobvl, &jobvr, &sense,
+                       &n, A, &lda, wr,
+                       wi, VL, &max(1,ldvl), VR,
+                       &max(1,ldvr), ilo, ihi, scale,
+                       abnrm, rconde, rcondv, work,
+                       &lwork, iwork, info)
+                lwork = convert(BlasInt, work[1])
+                work = Array($elty, lwork)
+            end
+            @lapackerror
+            A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
         end
-        iwork = Array(BlasInt, iworksize)
-        info = Array(BlasInt, 1)
-        for i = 1:2
-            ccall(($(blasfunc(geevx)), liblapack), Void,
-                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                   Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                   &balanc, &jobvl, &jobvr, &sense,
-                   &n, A, &lda, wr,
-                   wi, VL, &max(1,ldvl), VR,
-                   &max(1,ldvr), ilo, ihi, scale,
-                   abnrm, rconde, rcondv, work,
-                   &lwork, iwork, info)
-            lwork = convert(BlasInt, work[1])
-            work = Array($elty, lwork)
-        end
-        @lapackerror
-        A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
-    end
-
     #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
 #      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -1547,6 +1880,35 @@ for (geevx, ggev, elty, relty) in
     end
 end
 
+"""
+    geevx!(balanc, jobvl, jobvr, sense, A) -> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)
+
+Finds the eigensystem of `A` with matrix balancing. If `jobvl = N`, the
+left eigenvectors of `A` aren't computed. If `jobvr = N`, the right
+eigenvectors of `A` aren't computed. If `jobvl = V` or `jobvr = V`, the
+corresponding eigenvectors are computed. If `balanc = N`, no balancing is
+performed. If `balanc = P`, `A` is permuted but not scaled. If
+`balanc = S`, `A` is scaled but not permuted. If `balanc = B`, `A` is
+permuted and scaled. If `sense = N`, no reciprocal condition numbers are
+computed. If `sense = E`, reciprocal condition numbers are computed for
+the eigenvalues only. If `sense = V`, reciprocal condition numbers are
+computed for the right eigenvectors only. If `sense = B`, reciprocal
+condition numbers are computed for the right eigenvectors and the
+eigenvectors. If `sense = E,B`, the right and left eigenvectors must be
+computed.
+"""
+geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix)
+
+"""
+    ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
+
+Finds the generalized eigendecomposition of `A` and `B`. If `jobvl = N`,
+the left eigenvectors aren't computed. If `jobvr = N`, the right
+eigenvectors aren't computed. If `jobvl = V` or `jobvr = V`, the
+corresponding eigenvectors are computed.
+"""
+ggev!(jobvl::Char, jobvr::Char, A::StridedMatrix, B::StridedMatrix)
+
 # One step incremental condition estimation of max/min singular values
 for (laic1, elty) in
     ((:dlaic1_,:Float64),
@@ -1611,7 +1973,6 @@ for (laic1, elty, relty) in
         end
     end
 end
-
 
 # (GT) General tridiagonal, decomposition, solver and direct solver
 for (gtsv, gttrf, gttrs, elty) in
@@ -1707,6 +2068,38 @@ for (gtsv, gttrf, gttrs, elty) in
     end
 end
 
+"""
+    gtsv!(dl, d, du, B)
+
+Solves the equation `A * X = B` where `A` is a tridiagonal matrix with
+`dl` on the subdiagonal, `d` on the diagonal, and `du` on the
+superdiagonal.
+
+Overwrites `B` with the solution `X` and returns it.
+"""
+gtsv!(dl::Vector, d::Vector, du::Vector, B::StridedVecOrMat)
+
+"""
+    gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)
+
+Finds the `LU` factorization of a tridiagonal matrix with `dl` on the
+subdiagonal, `d` on the diagonal, and `du` on the superdiagonal.
+
+Modifies `dl`, `d`, and `du` in-place and returns them and the second
+superdiagonal `du2` and the pivoting vector `ipiv`.
+"""
+gttrf!(dl::Vector, d::Vector, du::Vector)
+
+"""
+    gttrs!(trans, dl, d, du, du2, ipiv, B)
+
+Solves the equation `A * X = B` (`trans = N`), `A.' * X = B` (`trans = T`),
+or `A' * X = B` (`trans = C`) using the `LU` factorization computed by
+`gttrf!`. `B` is overwritten with the solution `X`.
+"""
+gttrs!(trans::Char, dl::Vector, d::Vector, du::Vector, du2::Vector,
+       ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
 for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
     ((:dorglq_,:dorgqr_,:dorgql_,:dorgrq_,:dormlq_,:dormqr_,:dormql_,:dormrq_,:dgemqrt_,:Float64),
@@ -1714,6 +2107,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
      (:zunglq_,:zungqr_,:zungql_,:zungrq_,:zunmlq_,:zunmqr_,:zunmql_,:zunmrq_,:zgemqrt_,:Complex128),
      (:cunglq_,:cungqr_,:cungql_,:cungrq_,:cunmlq_,:cunmqr_,:cunmql_,:cunmrq_,:cgemqrt_,:Complex64))
     @eval begin
+
         # SUBROUTINE DORGLQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
@@ -2087,8 +2481,89 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
     end
 end
 
+"""
+    orglq!(A, tau, k = length(tau))
+
+Explicitly finds the matrix `Q` of a `LQ` factorization after calling
+`gelqf!` on `A`. Uses the output of `gelqf!`. `A` is overwritten by `Q`.
+"""
+orglq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+
+"""
+    orgqr!(A, tau, k = length(tau))
+
+Explicitly finds the matrix `Q` of a `QR` factorization after calling
+`geqrf!` on `A`. Uses the output of `geqrf!`. `A` is overwritten by `Q`.
+"""
+orgqr!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+
+"""
+    orgql!(A, tau, k = length(tau))
+
+Explicitly finds the matrix `Q` of a `QL` factorization after calling
+`geqlf!` on `A`. Uses the output of `geqlf!`. `A` is overwritten by `Q`.
+"""
+orgql!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+
+"""
+    orgrq!(A, tau, k = length(tau))
+
+Explicitly finds the matrix `Q` of a `RQ` factorization after calling
+`gerqf!` on `A`. Uses the output of `gerqf!`. `A` is overwritten by `Q`.
+"""
+orgrq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+
+"""
+    ormlq!(side, trans, A, tau, C)
+
+Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+(`trans = C`) for `side = L` or the equivalent right-sided multiplication
+for `side = R` using `Q` from a `LQ` factorization of `A` computed using
+`gelqf!`. `C` is overwritten.
+"""
+ormlq!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+
+"""
+    ormqr!(side, trans, A, tau, C)
+
+Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+(`trans = C`) for `side = L` or the equivalent right-sided multiplication
+for `side = R` using `Q` from a `QR` factorization of `A` computed using
+`geqrf!`. `C` is overwritten.
+"""
+ormqr!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+
+"""
+    ormql!(side, trans, A, tau, C)
+
+Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+(`trans = C`) for `side = L` or the equivalent right-sided multiplication
+for `side = R` using `Q` from a `QL` factorization of `A` computed using
+`geqlf!`. `C` is overwritten.
+"""
+ormql!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+
+"""
+    ormrq!(side, trans, A, tau, C)
+
+Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+(`trans = C`) for `side = L` or the equivalent right-sided multiplication
+for `side = R` using `Q` from a `RQ` factorization of `A` computed using
+`gerqf!`. `C` is overwritten.
+"""
+ormrq!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+
+"""
+    gemqrt!(side, trans, V, T, C)
+
+Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
+(`trans = C`) for `side = L` or the equivalent right-sided multiplication
+for `side = R` using `Q` from a `QR` factorization of `A` computed using
+`geqrt!`. `C` is overwritten.
+"""
+gemqrt!(side::Char, trans::Char, V::Matrix, T::Matrix, C::StridedVecOrMat)
+
 # (PO) positive-definite symmetric matrices,
-# Cholesky decomposition, solvers (direct and factored) and inverse.
 for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
     ((:dposv_,:dpotrf_,:dpotri_,:dpotrs_,:dpstrf_,:Float64,:Float64),
      (:sposv_,:spotrf_,:spotri_,:spotrs_,:spstrf_,:Float32,:Float32),
@@ -2212,6 +2687,61 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
     end
 end
 
+"""
+    posv!(uplo, A, B) -> (A, B)
+
+Finds the solution to `A * X = B` where `A` is a symmetric or Hermitian
+positive definite matrix. If `uplo = U` the upper Cholesky decomposition
+of `A` is computed. If `uplo = L` the lower Cholesky decomposition of `A`
+is computed. `A` is overwritten by its Cholesky decomposition. `B` is
+overwritten with the solution `X`.
+"""
+posv!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    potrf!(uplo, A)
+
+Computes the Cholesky (upper if `uplo = U`, lower if `uplo = L`)
+decomposition of positive-definite matrix `A`. `A` is overwritten and
+returned with an info code.
+"""
+potrf!(uplo::Char, A::StridedMatrix)
+
+"""
+    potri!(uplo, A)
+
+Computes the inverse of positive-definite matrix `A` after calling
+`potrf!` to find its (upper if `uplo = U`, lower if `uplo = L`) Cholesky
+decomposition.
+
+`A` is overwritten by its inverse and returned.
+"""
+potri!(uplo::Char, A::StridedMatrix)
+
+"""
+    potrs!(uplo, A, B)
+
+Finds the solution to `A * X = B` where `A` is a symmetric or Hermitian
+positive definite matrix whose Cholesky decomposition was computed by
+`potrf!`. If `uplo = U` the upper Cholesky decomposition of `A` was
+computed. If `uplo = L` the lower Cholesky decomposition of `A` was
+computed. `B` is overwritten with the solution `X`.
+"""
+potrs!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    pstrf!(uplo, A, tol) -> (A, piv, rank, info)
+
+Computes the (upper if `uplo = U`, lower if `uplo = L`) pivoted Cholesky
+decomposition of positive-definite matrix `A` with a user-set tolerance
+`tol`. `A` is overwritten by its Cholesky decomposition.
+
+Returns `A`, the pivots `piv`, the rank of `A`, and an `info` code. If `info = 0`,
+the factorization succeeded. If `info = i > 0 `, then `A` is indefinite or
+rank-deficient.
+"""
+pstrf!(uplo::Char, A::StridedMatrix, tol::Real)
+
 ## (PT) positive-definite, symmetric, tri-diagonal matrices
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
 for (ptsv, pttrf, elty, relty) in
@@ -2261,6 +2791,25 @@ for (ptsv, pttrf, elty, relty) in
         end
     end
 end
+
+"""
+    ptsv!(D, E, B)
+
+Solves `A * X = B` for positive-definite tridiagonal `A`. `D` is the
+diagonal of `A` and `E` is the off-diagonal. `B` is overwritten with the
+solution `X` and returned.
+"""
+ptsv!(D::Vector, E::Vector, B::StridedVecOrMat)
+
+"""
+    pttrf!(D, E)
+
+Computes the LDLt factorization of a positive-definite tridiagonal matrix
+with `D` as diagonal and `E` as off-diagonal. `D` and `E` are overwritten
+and returned.
+"""
+pttrf!(D::Vector, E::Vector)
+
 for (pttrs, elty, relty) in
     ((:dpttrs_,:Float64,:Float64),
      (:spttrs_,:Float32,:Float32))
@@ -2322,6 +2871,15 @@ for (pttrs, elty, relty) in
     end
 end
 
+"""
+    pttrs!(D, E, B)
+
+Solves `A * X = B` for positive-definite tridiagonal `A` with diagonal
+`D` and off-diagonal `E` after computing `A`'s LDLt factorization using
+`pttrf!`. `B` is overwritten with the solution `X`.
+"""
+pttrs!(D::Vector, E::Vector, B::StridedVecOrMat)
+
 ## (TR) triangular matrices: solver and inverse
 for (trtri, trtrs, elty) in
     ((:dtrtri_,:dtrtrs_,:Float64),
@@ -2376,6 +2934,27 @@ for (trtri, trtrs, elty) in
         end
     end
 end
+
+"""
+    trtri!(uplo, diag, A)
+
+Finds the inverse of (upper if `uplo = U`, lower if `uplo = L`)
+triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
+If `diag = U`, all diagonal elements of `A` are one. `A` is overwritten
+with its inverse.
+"""
+trtri!(uplo::Char, diag::Char, A::StridedMatrix)
+
+"""
+    trtrs!(uplo, trans, diag, A, B)
+
+Solves `A * X = B` (`trans = N`), `A.' * X = B` (`trans = T`), or
+`A' * X = B` (`trans = C`) for (upper if `uplo = U`, lower if `uplo = L`)
+triangular matrix `A`. If `diag = N`, `A` has non-unit diagonal elements.
+If `diag = U`, all diagonal elements of `A` are one. `B` is overwritten
+with the solution `X`.
+"""
+trtrs!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix, B::StridedVecOrMat)
 
 #Eigenvector computation and condition number estimation
 for (trcon, trevc, trrfs, elty) in
@@ -2630,6 +3209,46 @@ for (trcon, trevc, trrfs, elty, relty) in
     end
 end
 
+"""
+    trcon!(norm, uplo, diag, A)
+
+Finds the reciprocal condition number of (upper if `uplo = U`, lower if
+`uplo = L`) triangular matrix `A`. If `diag = N`, `A` has non-unit
+diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
+If `norm = I`, the condition number is found in the infinity norm. If
+`norm = O` or `1`, the condition number is found in the one norm.
+"""
+trcon!(norm::Char, uplo::Char, diag::Char, A::StridedMatrix)
+
+"""
+    trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))
+
+Finds the eigensystem of an upper triangular matrix `T`. If `side = R`,
+the right eigenvectors are computed. If `side = L`, the left
+eigenvectors are computed. If `side = B`, both sets are computed. If
+`howmny = A`, all eigenvectors are found. If `howmny = B`, all
+eigenvectors are found and backtransformed using `VL` and `VR`. If
+`howmny = S`, only the eigenvectors corresponding to the values in
+`select` are computed.
+"""
+trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix,
+        VL::StridedMatrix = similar(T), VR::StridedMatrix = similar(T))
+
+"""
+    trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)
+
+Estimates the error in the solution to `A * X = B` (`trans = N`),
+`A.' * X = B` (`trans = T`), `A' * X = B` (`trans = C`) for `side = L`,
+or the equivalent equations a right-handed `side = R` `X * A` after
+computing `X` using `trtrs!`. If `uplo = U`, `A` is upper triangular.
+If `uplo = L`, `A` is lower triangular. If `diag = N`, `A` has non-unit
+diagonal elements. If `diag = U`, all diagonal elements of `A` are one.
+`Ferr` and `Berr` are optional inputs. `Ferr` is the forward error and
+`Berr` is the backward error, each component-wise.
+"""
+trrfs!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix, B::StridedVecOrMat,
+       X::StridedVecOrMat, Ferr::StridedVector, Berr::StridedVector)
+
 ## (ST) Symmetric tridiagonal - eigendecomposition
 for (stev, stebz, stegr, stein, elty) in
     ((:dstev_,:dstebz_,:dstegr_,:dstein_,:Float64),
@@ -2638,8 +3257,6 @@ for (stev, stebz, stegr, stein, elty) in
 #     , (:cstev_,:Complex64)
      )
     @eval begin
-        #*  DSTEV computes all eigenvalues and, optionally, eigenvectors of a
-        #*  real symmetric tridiagonal matrix A.
         function stev!(job::Char, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
             if length(ev) != n - 1
@@ -2687,14 +3304,6 @@ for (stev, stebz, stegr, stein, elty) in
                 @lapackerror
             w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
         end
-        #*  DSTEGR computes selected eigenvalues and, optionally, eigenvectors
-        #*  of a real symmetric tridiagonal matrix T. Any such unreduced matrix has
-        #*  a well defined set of pairwise different real eigenvalues, the corresponding
-        #*  real eigenvectors are pairwise orthogonal.
-        #*
-        #*  The spectrum may be computed either completely or partially by specifying
-        #*  either an interval (VL,VU] or a range of indices IL:IU for the desired
-        #*  eigenvalues.
         function stegr!(jobz::Char, range::Char, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             n = length(dv)
             if length(ev) != n - 1
@@ -2734,13 +3343,7 @@ for (stev, stebz, stegr, stein, elty) in
             @lapackerror
             w[1:m[1]], Z[:,1:m[1]]
         end
-        #*  DSTEIN computes the eigenvectors of a real symmetric tridiagonal
-        #*  matrix T corresponding to specified eigenvalues, using inverse
-        #*  iteration.
-        #      SUBROUTINE DSTEIN( N, D, E, M, W, IBLOCK, ISPLIT, Z, LDZ, WORK,
-        #     $                   IWORK, IFAIL, INFO )
-        # We allow the user to specify exactly which eigenvectors to get by
-        # specifying the eigenvalues (which may be approximate) via w_in
+
         function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
             n = length(dv)
             if length(ev_in) != n - 1
@@ -2797,12 +3400,60 @@ stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,
 # Allow user to specify just one eigenvector to get in stein!
 stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
+"""
+    stev!(job, dv, ev) -> (dv, Zmat)
+
+Computes the eigensystem for a symmetric tridiagonal matrix with `dv` as
+diagonal and `ev` as off-diagonal. If `job = N` only the eigenvalues are
+found and returned in `dv`. If `job = V` then the eigenvectors are also found
+and returned in `Zmat`.
+"""
+stev!(job::Char, dv::Vector, ev::Vector)
+
+"""
+    stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
+
+Computes the eigenvalues for a symmetric tridiagonal matrix with `dv` as
+diagonal and `ev` as off-diagonal. If `range = A`, all the eigenvalues
+are found. If `range = V`, the eigenvalues in the half-open interval
+`(vl, vu]` are found. If `range = I`, the eigenvalues with indices between
+`il` and `iu` are found. If `order = B`, eigvalues are ordered within a
+block. If `order = E`, they are ordered across all the blocks.
+`abstol` can be set as a tolerance for convergence.
+"""
+stebz!(range::Char, order::Char, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::Vector, ev::Vector)
+
+"""
+    stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
+
+Computes the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
+(`jobz = V`) for a symmetric tridiagonal matrix with `dv` as diagonal
+and `ev` as off-diagonal. If `range = A`, all the eigenvalues
+are found. If `range = V`, the eigenvalues in the half-open interval
+`(vl, vu]` are found. If `range = I`, the eigenvalues with indices between
+`il` and `iu` are found. The eigenvalues are returned in `w` and the eigenvectors
+in `Z`.
+"""
+stegr!(jobz::Char, range::Char, dv::Vector, ev::Vector, vl::Real, vu::Real, il::Integer, iu::Integer)
+
+"""
+    stein!(dv, ev_in, w_in, iblock_in, isplit_in)
+
+Computes the eigenvectors for a symmetric tridiagonal matrix with `dv`
+as diagonal and `ev_in` as off-diagonal. `w_in` specifies the input
+eigenvalues for which to find corresponding eigenvectors. `iblock_in`
+specifies the submatrices corresponding to the eigenvalues in `w_in`.
+`isplit_in` specifies the splitting points between the submatrix blocks.
+"""
+stein!(dv::Vector, ev_in::Vector, w_in::Vector, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+
 ## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
 for (syconv, sysv, sytrf, sytri, sytrs, elty) in
     ((:dsyconv_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
      (:ssyconv_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32))
     @eval begin
+
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO, WAY
@@ -2964,6 +3615,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         end
     end
 end
+
 ## (SY) hermitian matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
 for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
@@ -3129,6 +3781,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         end
     end
 end
+
 for (sysv, sytrf, sytri, sytrs, elty, relty) in
     ((:zsysv_,:zsytrf_,:zsytri_,:zsytrs_,:Complex128, :Float64),
      (:csysv_,:csytrf_,:csytri_,:csytrs_,:Complex64, :Float32))
@@ -3276,6 +3929,100 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         end
     end
 end
+
+"""
+    syconv!(uplo, A, ipiv) -> (A, work)
+
+Converts a symmetric matrix `A` (which has been factorized into a
+triangular matrix) into two matrices `L` and `D`. If `uplo = U`, `A`
+is upper triangular. If `uplo = L`, it is lower triangular. `ipiv` is
+the pivot vector from the triangular factorization. `A` is overwritten
+by `L` and `D`.
+"""
+syconv!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+
+"""
+    sysv!(uplo, A, B) -> (B, A, ipiv)
+
+Finds the solution to `A * X = B` for symmetric matrix `A`. If `uplo = U`,
+the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
+`B` is overwritten by the solution `X`. `A` is overwritten by its
+Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
+factorization.
+"""
+sysv!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    sytrf!(uplo, A) -> (A, ipiv)
+
+Computes the Bunch-Kaufman factorization of a symmetric matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, and a pivot vector `ipiv`.
+"""
+sytrf!(uplo::Char, A::StridedMatrix)
+
+"""
+    sytri!(uplo, A, ipiv)
+
+Computes the inverse of a symmetric matrix `A` using the results of
+`sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
+the lower half is stored. `A` is overwritten by its inverse.
+"""
+sytri!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+
+"""
+    sytrs!(uplo, A, ipiv, B)
+
+Solves the equation `A * X = B` for a symmetric matrix `A` using the
+results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
+If `uplo = L`, the lower half is stored. `B` is overwritten by the
+solution `X`.
+"""
+sytrs!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+
+
+"""
+    hesv!(uplo, A, B) -> (B, A, ipiv)
+
+Finds the solution to `A * X = B` for Hermitian matrix `A`. If `uplo = U`,
+the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
+`B` is overwritten by the solution `X`. `A` is overwritten by its
+Bunch-Kaufman factorization. `ipiv` contains pivoting information about the
+factorization.
+"""
+hesv!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
+
+"""
+    hetrf!(uplo, A) -> (A, ipiv)
+
+Computes the Bunch-Kaufman factorization of a Hermitian matrix `A`. If
+`uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
+half is stored.
+
+Returns `A`, overwritten by the factorization, and a pivot vector.
+"""
+hetrf!(uplo::Char, A::StridedMatrix)
+
+"""
+    hetri!(uplo, A, ipiv)
+
+Computes the inverse of a Hermitian matrix `A` using the results of
+`sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
+the lower half is stored. `A` is overwritten by its inverse.
+"""
+hetri!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+
+"""
+    hetrs!(uplo, A, ipiv, B)
+
+Solves the equation `A * X = B` for a Hermitian matrix `A` using the
+results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
+If `uplo = L`, the lower half is stored. `B` is overwritten by the
+solution `X`.
+"""
+hetrs!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
 
 # Symmetric (real) eigensolvers
 for (syev, syevr, sygvd, elty) in
@@ -3574,6 +4321,44 @@ for (syev, syevr, sygvd, elty, relty) in
     end
 end
 
+"""
+    syev!(jobz, uplo, A)
+
+Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
+(`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
+of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
+"""
+syev!(jobz::Char, uplo::Char, A::StridedMatrix)
+
+"""
+    syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)
+
+Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
+(`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
+of `A` is used. If `uplo = L`, the lower triangle of `A` is used. If
+`range = A`, all the eigenvalues are found. If `range = V`, the
+eigenvalues in the half-open interval `(vl, vu]` are found.
+If `range = I`, the eigenvalues with indices between `il` and `iu` are
+found. `abstol` can be set as a tolerance for convergence.
+
+The eigenvalues are returned in `W` and the eigenvectors in `Z`.
+"""
+syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix, vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+
+"""
+    sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (w, A, B)
+
+Finds the generalized eigenvalues (`jobz = N`) or eigenvalues and
+eigenvectors (`jobz = V`) of a symmetric matrix `A` and symmetric
+positive-definite matrix `B`. If `uplo = U`, the upper triangles
+of `A` and `B` are used. If `uplo = L`, the lower triangles of `A` and
+`B` are used. If `itype = 1`, the problem to solve is
+`A * x = lambda * B * x`. If `itype = 2`, the problem to solve is
+`A * B * x = lambda * x`. If `itype = 3`, the problem to solve is
+`B * A * x = lambda * x`.
+"""
+sygvd!(itype::Integer, jobz::Char, uplo::Char, A::StridedMatrix, B::StridedMatrix)
+
 ## (BD) Bidiagonal matrices - singular value decomposition
 for (bdsqr, relty, elty) in
     ((:dbdsqr_,:Float64,:Float64),
@@ -3581,10 +4366,6 @@ for (bdsqr, relty, elty) in
      (:zbdsqr_,:Float64,:Complex128),
      (:cbdsqr_,:Float32,:Complex64))
     @eval begin
-        #*> DBDSQR computes the singular values and, optionally, the right and/or
-        #*> left singular vectors from the singular value decomposition (SVD) of
-        #*> a real N-by-N (upper or lower) bidiagonal matrix B using the implicit
-        #*> zero-shift QR algorithm.
         function bdsqr!(uplo::Char, d::Vector{$relty}, e_::Vector{$relty},
             Vt::StridedMatrix{$elty}, U::StridedMatrix{$elty}, C::StridedMatrix{$elty})
 
@@ -3630,6 +4411,18 @@ for (bdsqr, relty, elty) in
         end
     end
 end
+
+"""
+    bdsqr!(uplo, d, e_, Vt, U, C) -> (d, Vt, U, C)
+
+Computes the singular value decomposition of a bidiagonal matrix with
+`d` on the diagonal and `e_` on the off-diagonal. If `uplo = U`, `e_` is
+the superdiagonal. If `uplo = L`, `e_` is the subdiagonal. Can optionally also
+compute the product `Q' * C`.
+
+Returns the singular values in `d`, and the matrix `C` overwritten with `Q' * C`.
+"""
+bdsqr!(uplo::Char, d::Vector, e_::Vector, Vt::StridedMatrix, U::StridedMatrix, C::StridedMatrix)
 
 #Defined only for real types
 for (bdsdc, elty) in
@@ -3687,7 +4480,21 @@ for (bdsdc, elty) in
     end
 end
 
-# Estimate condition number
+"""
+    bdsdc!(uplo, compq, d, e_) -> (d, e, u, vt, q, iq)
+
+Computes the singular value decomposition of a bidiagonal matrix with `d` on the
+diagonal and `e_` on the off-diagonal using a divide and conqueq method.
+If `uplo = U`, `e_` is the superdiagonal. If `uplo = L`, `e_` is the subdiagonal.
+If `compq = N`, only the singular values are found. If `compq = I`, the singular
+values and vectors are found. If `compq = P`, the singular values
+and vectors are found in compact form. Only works for real types.
+
+Returns the singular values in `d`, and if `compq = P`, the compact singular
+vectors in `iq`.
+"""
+bdsdc!(uplo::Char, compq::Char, d::Vector, e_::Vector)
+
 for (gecon, elty) in
     ((:dgecon_,:Float64),
      (:sgecon_,:Float32))
@@ -3755,7 +4562,16 @@ for (gecon, elty, relty) in
     end
 end
 
-# Hessenberg form
+"""
+    gecon!(normtype, A, anorm)
+
+Finds the reciprocal condition number of matrix `A`. If `normtype = I`,
+the condition number is found in the infinity norm. If `normtype = O` or
+`1`, the condition number is found in the one norm. `A` must be the
+result of `getrf!` and `anorm` is the norm of `A` in the relevant norm.
+"""
+gecon!(normtype::Char, A::StridedMatrix, anorm)
+
 for (gehrd, elty) in
     ((:dgehrd_,:Float64),
      (:sgehrd_,:Float32),
@@ -3794,7 +4610,16 @@ for (gehrd, elty) in
 end
 gehrd!(A::StridedMatrix) = gehrd!(1, size(A, 1), A)
 
-# construct Q from Hessenberg
+"""
+    gehrd!(ilo, ihi, A) -> (A, tau)
+
+Converts a matrix `A` to Hessenberg form. If `A` is balanced with `gebal!`
+then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
+`ilo = 1` and `ihi = size(A,2)`. `tau` contains the elementary reflectors of
+the factorization.
+"""
+gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix)
+
 for (orghr, elty) in
     ((:dorghr_,:Float64),
      (:sorghr_,:Float32),
@@ -3833,7 +4658,15 @@ for (orghr, elty) in
         end
     end
 end
-# Schur forms
+
+"""
+    orghr!(ilo, ihi, A, tau)
+
+Explicitly finds `Q`, the orthogonal/unitary matrix from `gehrd!`. `ilo`,
+`ihi`, `A`, and `tau` must correspond to the input/output to `gehrd!`.
+"""
+orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix, tau::StridedVector)
+
 for (gees, gges, elty) in
     ((:dgees_,:dgges_,:Float64),
      (:sgees_,:sgges_,:Float32))
@@ -4018,7 +4851,31 @@ for (gees, gges, elty, relty) in
         end
     end
 end
-# Reorder Schur forms
+
+"""
+    gees!(jobvs, A) -> (A, vs, w)
+
+Computes the eigenvalues (`jobvs = N`) or the eigenvalues and Schur
+vectors (`jobvs = V`) of matrix `A`. `A` is overwritten by its Schur form.
+
+Returns `A`, `vs` containing the Schur vectors, and `w`, containing the
+eigenvalues.
+"""
+gees!(jobvs::Char, A::StridedMatrix)
+
+
+"""
+    gges!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)
+
+Computes the generalized eigenvalues, generalized Schur form, left Schur
+vectors (`jobsvl = V`), or right Schur vectors (`jobvsr = V`) of `A` and
+`B`.
+
+The generalized eigenvalues are returned in `alpha` and `beta`. The left Schur
+vectors are returned in `vsl` and the right Schur vectors are returned in `vsr`.
+"""
+gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix, B::StridedMatrix)
+
 for (trexc, trsen, tgsen, elty) in
     ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),
      (:strexc_, :strsen_, :stgsen_, :Float32))
@@ -4309,7 +5166,39 @@ for (trexc, trsen, tgsen, elty) in
     end
 end
 
-# Solves the real Sylvester matrix equation: op(A)*X +- X*op(B) = scale*C and A and B are both upper quasi triangular.
+"""
+    trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
+
+Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
+vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
+and `ilst` specify the reordering of the vectors.
+"""
+trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix, Q::StridedMatrix)
+
+"""
+    trsen!(compq, job, select, T, Q) -> (T, Q, w)
+
+Reorder the Schur factorization of a matrix and optionally finds reciprocal
+condition numbers. If `job = N`, no condition numbers are found. If `job = E`,
+only the condition number for this cluster of eigenvalues is found. If
+`job = V`, only the condition number for the invariant subspace is found.
+If `job = B` then the condition numbers for the cluster and subspace are
+found. If `compq = V` the Schur vectors `Q` are updated. If `compq = N`
+the Schur vectors are not modified. `select` determines which
+eigenvalues are in the cluster.
+
+Returns `T`, `Q`, and reordered eigenvalues in `w`.
+"""
+trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix, Q::StridedMatrix)
+
+"""
+    tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
+
+Reorders the vectors of a generalized Schur decomposition. `select` specifices
+the eigenvalues in each cluster.
+"""
+tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix)
+
 for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                    (:strsyl_, :Float32, :Float32),
                    (:ztrsyl_, :Complex128, :Float64),
@@ -4342,5 +5231,18 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
     end
 end
 
+"""
+    trsyl!(transa, transb, A, B, C, isgn=1) -> (C, scale)
+
+Solves the Sylvester matrix equation `A * X +/- X * B = scale*C` where `A` and
+`B` are both quasi-upper triangular. If `transa = N`, `A` is not modified.
+If `transa = T`, `A` is transposed. If `transa = C`, `A` is conjugate
+transposed. Similarly for `transb` and `B`. If `isgn = 1`, the equation
+`A * X + X * B = scale * C` is solved. If `isgn = -1`, the equation
+`A * X - X * B = scale * C` is solved.
+
+Returns `X` (overwriting `C`) and `scale`.
+"""
+trsyl!(transa::Char, transb::Char, A::StridedMatrix, B::StridedMatrix, C::StridedMatrix, isgn::Int=1)
 
 end # module
