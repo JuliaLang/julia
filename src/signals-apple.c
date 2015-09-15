@@ -9,7 +9,7 @@
 #include <sys/_types/_ucontext64.h>
 #else
 #define __need_ucontext64_t
-#include <machine/_structs.h>
+#include <sys/_structs.h>
 #endif
 
 static mach_port_t segv_port = 0;
