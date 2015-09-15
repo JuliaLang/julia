@@ -1399,6 +1399,21 @@ extern "C" void jl_write_malloc_log(void)
 
 // --- constant determination ---
 
+static void show_source_loc(JL_STREAM *out, jl_codectx_t *ctx)
+{
+    if (ctx == NULL) return;
+    jl_printf(out, "in %s at %s:%d", ctx->linfo->name->name, ctx->linfo->file->name, ctx->lineno);
+}
+
+extern "C" void jl_binding_deprecation_warning(jl_binding_t *b);
+
+static void cg_bdw(jl_binding_t *b, jl_codectx_t *ctx)
+{
+    jl_binding_deprecation_warning(b);
+    show_source_loc(JL_STDERR, ctx);
+    jl_printf(JL_STDERR, "\n");
+}
+
 // try to statically evaluate, NULL if not possible
 extern "C"
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
@@ -1451,8 +1466,10 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         s = (jl_sym_t*)jl_globalref_name(ex);
         if (s && jl_is_symbol(s)) {
             jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
-            if (b && b->constp)
+            if (b && b->constp) {
+                if (b->deprecated) cg_bdw(b, ctx);
                 return b->value;
+            }
         }
         return NULL;
     }
@@ -1467,8 +1484,10 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                     s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
-                        if (b && b->constp)
+                        if (b && b->constp) {
+                            if (b->deprecated) cg_bdw(b, ctx);
                             return b->value;
+                        }
                     }
                 }
                 else if (fptr == &jl_f_tuple || fptr == &jl_f_instantiate_type) {
@@ -2983,6 +3002,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             p->addIncoming(bval, not_found);
             return julia_binding_gv(builder.CreateBitCast(p, jl_ppvalue_llvmt));
         }
+        if (b->deprecated) cg_bdw(b, ctx);
     }
     if (pbnd) *pbnd = b;
     return julia_binding_gv(b);
