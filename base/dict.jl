@@ -8,14 +8,15 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
-function in(p, a::Associative)
-    if !isa(p,Pair)
-        error("""Associative collections only contain Pairs;
-                 Either look for e.g. A=>B instead, or use the `keys` or `values`
-                 function if you are looking for a key or value respectively.""")
-    end
+function in(p::Pair, a::Associative)
     v = get(a,p[1],secret_table_token)
     !is(v, secret_table_token) && (v == p[2])
+end
+
+function in(p, a::Associative)
+    error("""Associative collections only contain Pairs;
+             Either look for e.g. A=>B instead, or use the `keys` or `values`
+             function if you are looking for a key or value respectively.""")
 end
 
 function summary(t::Associative)
