@@ -5752,7 +5752,6 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
   SmallVector<std::string,10> attr;
   for( StringMap<bool>::const_iterator it = HostFeatures.begin(); it != HostFeatures.end(); it++  )
   {
-    std::cerr << it->getKey().str() << std::endl;
     std::string att =it->getValue()?it->getKey().str():std::string("-") + it->getKey().str();
     attr.append( 1, att );
   }
