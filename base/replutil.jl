@@ -38,6 +38,14 @@ writemime(io::IO, ::MIME"text/plain", t::Associative) =
 writemime(io::IO, ::MIME"text/plain", t::Union{KeyIterator, ValueIterator}) =
     showkv(io, t, limit=true)
 
+function writemime(io::IO, ::MIME"text/plain", t::Task)
+    show(io, t)
+    if t.state == :failed
+        println(io)
+        showerror(io, CapturedException(t.result, t.backtrace))
+    end
+end
+
 
 # showing exception objects as descriptive error messages
 

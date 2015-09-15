@@ -7,10 +7,6 @@ Task(f) = Task(()->f())
 
 function show(io::IO, t::Task)
     print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
-    if t.state == :failed
-        println(io)
-        show(io, CapturedException(t.result, t.backtrace))
-    end
 end
 
 # Container for a captured exception and its backtrace. Can be serialized.
