@@ -37,7 +37,7 @@ func init() {
 
 	// These are here so that toggling the BLAS implementation does not make imports unused
 	_ = cgo.Implementation{}
-	_ = blas64.General
+	_ = blas64.General{}
 }
 
 // fibonacci
