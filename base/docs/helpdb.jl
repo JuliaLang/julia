@@ -6144,7 +6144,7 @@ doc"""
 
 The distance between `x` and the next larger representable floating-point value of the same `DataType` as `x`.
 """
-eps(::FloatingPoint)
+eps(::AbstractFloat)
 
 doc"""
     rem1(x,m)
