@@ -2059,7 +2059,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     }
 
     // create and initialize new type
-    ndt = jl_new_uninitialized_datatype(istuple ? ntp : dt->nfields);
+    ndt = jl_new_uninitialized_datatype(istuple ? ntp : dt->nfields, 2); // TODO
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
@@ -3148,12 +3148,12 @@ extern void jl_init_int32_int64_cache(void);
 void jl_init_types(void)
 {
     // create base objects
-    jl_datatype_type = jl_new_uninitialized_datatype(10);
+    jl_datatype_type = jl_new_uninitialized_datatype(10, 1);
     jl_set_typeof(jl_datatype_type, jl_datatype_type);
-    jl_typename_type = jl_new_uninitialized_datatype(7);
-    jl_sym_type = jl_new_uninitialized_datatype(0);
+    jl_typename_type = jl_new_uninitialized_datatype(7, 1);
+    jl_sym_type = jl_new_uninitialized_datatype(0, 1);
     jl_symbol_type = jl_sym_type;
-    jl_simplevector_type = jl_new_uninitialized_datatype(1);
+    jl_simplevector_type = jl_new_uninitialized_datatype(1, 1);
 
     jl_emptysvec = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, 1);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);

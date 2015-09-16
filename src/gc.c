@@ -1734,21 +1734,25 @@ static int push_root(jl_value_t *v, int d, int bits)
     else if (gc_typeof(vt) == (jl_value_t*)jl_datatype_type) {
         jl_datatype_t *dt = (jl_datatype_t*)vt;
         size_t dtsz;
-        if (dt == jl_datatype_type)
-            dtsz = NWORDS(sizeof(jl_datatype_t) + jl_datatype_nfields(v)*sizeof(jl_fielddesc_t))*sizeof(void*);
-        else
+        if (dt == jl_datatype_type) {
+            size_t fieldsize =
+                jl_fielddesc_size(((jl_datatype_t*)v)->fielddesc_type);
+            dtsz = NWORDS(sizeof(jl_datatype_t) +
+                          jl_datatype_nfields(v) * fieldsize) * sizeof(void*);
+        } else {
             dtsz = jl_datatype_size(dt);
+        }
         MARK(v, bits = gc_setmark(v, dtsz, GC_MARKED_NOESC));
         int nf = (int)jl_datatype_nfields(dt);
         // TODO check if there is a perf improvement for objects with a lot of fields
         // int fdsz = sizeof(void*)*nf;
         // void** children = alloca(fdsz);
         // int ci = 0;
-        jl_fielddesc_t* fields = dt->fields;
         for(int i=0; i < nf; i++) {
-            if (fields[i].isptr) {
+            if (jl_field_isptr(dt, i)) {
                 nptr++;
-                jl_value_t **slot = (jl_value_t**)((char*)v + fields[i].offset);
+                jl_value_t **slot = (jl_value_t**)((char*)v +
+                                                   jl_field_offset(dt, i));
                 jl_value_t *fld = *slot;
                 if (fld) {
                     verify_parent2("object", v, slot, "field(%d)", i);
