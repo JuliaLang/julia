@@ -104,6 +104,10 @@ function terminline(io::IO, md::Italic)
     with_output_format(:underline, terminline, io, md.text)
 end
 
+function terminline(io::IO, md::LineBreak)
+    println(io)
+end
+
 function terminline(io::IO, md::Image)
     print(io, "(Image: $(md.alt))")
 end

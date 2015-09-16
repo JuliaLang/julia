@@ -826,6 +826,8 @@ end
 
 @deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
 
+# 0.5 deprecations
+
 # 12839
 const AsyncStream = IO
 deprecate(:AsyncStream)
