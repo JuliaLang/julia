@@ -465,7 +465,7 @@ ifeq ($(OS), WINNT)
 	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
 
 	# build nsis package
-	$(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) $(JULIAHOME)/contrib/windows/build-installer.nsi
+	$(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi)
 
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
