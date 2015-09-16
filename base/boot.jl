@@ -211,17 +211,6 @@ else
 end
 
 abstract AbstractString
-abstract DirectIndexString <: AbstractString
-
-immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
-end
-
-immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
-end
-
-typealias ByteString Union{ASCIIString,UTF8String}
 
 abstract Exception
 immutable BoundsError        <: Exception
@@ -256,6 +245,18 @@ type SymbolNode
     typ
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
+
+abstract DirectIndexString <: AbstractString
+
+immutable ASCIIString <: DirectIndexString
+    data::Array{UInt8,1}
+end
+
+immutable UTF8String <: AbstractString
+    data::Array{UInt8,1}
+end
+
+typealias ByteString Union{ASCIIString,UTF8String}
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
