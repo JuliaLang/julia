@@ -636,10 +636,6 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 }
 
 
-static Value *emit_reg2mem(Value *v, jl_codectx_t *ctx) {
-    return v;
-}
-
 // --- utilities ---
 
 extern "C" {
@@ -2771,8 +2767,8 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
             idx++;
         }
         assert(idx == nfargs);
-        result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0],nfargs));
-        return mark_julia_type(emit_reg2mem(result, ctx), jlretty);
+        result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
+        return mark_julia_type(result, jlretty);
     }
     return mark_julia_type(emit_jlcall(theFptr, theF, &args[1], nargs, ctx), jl_any_type); // (typ will be patched up by caller)
 }

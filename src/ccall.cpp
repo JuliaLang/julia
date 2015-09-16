@@ -788,7 +788,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
 
-    return mark_julia_type(emit_reg2mem(inst, ctx), rtt);
+    return mark_julia_type(inst, rtt);
 }
 
 // --- code generator for ccall itself ---

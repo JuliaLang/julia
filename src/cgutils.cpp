@@ -1107,7 +1107,6 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
         if (elty == jl_pvalue_llvmt) {
             null_pointer_check(elt, ctx);
         }
-        elt = emit_reg2mem(elt, ctx);
     //}
     if (isbool)
         return mark_julia_type(builder.CreateTrunc(elt, T_int1), jltype);
@@ -1905,7 +1904,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 }
                 idx++;
             }
-            return mark_julia_type(emit_reg2mem(strct, ctx), ty);
+            return mark_julia_type(strct, ty);
         }
         Value *f1 = NULL;
         int fieldStart = ctx->gc.argDepth;
