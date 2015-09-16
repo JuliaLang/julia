@@ -174,8 +174,10 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH := $(shell gcc -print-multiarch)
-private_libdir := $(prefix)/lib/$(MULTIARCH)/julia
-libdir := $(prefix)/lib/$(MULTIARCH)/
+libdir = $(prefix)/lib/$(MULTIARCH)
+private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
+build_libdir = $(build_prefix)/lib/$(MULTIARCH)
+build_private_libdir = $(build_prefix)/lib/$(MULTIARCH)/julia
 endif
 
 # LLVM Options
