@@ -712,6 +712,7 @@ void jl_get_builtin_hooks(void)
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
+    jl_typeerror_type = (jl_datatype_t*)core("TypeError");
 
 #ifdef SEGV_EXCEPTION
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
@@ -732,7 +733,6 @@ DLLEXPORT void jl_get_system_hooks(void)
 
     jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
     jl_argumenterror_type = (jl_datatype_t*)basemod("ArgumentError");
-    jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_initerror_type = (jl_datatype_t*)basemod("InitError");
