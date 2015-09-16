@@ -1756,7 +1756,7 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
     else if (jl_is_quotenode(fld) && jl_is_long(jl_fieldref(fld,0)))
         idx = jl_unbox_long(jl_fieldref(fld,0))-1;
     for(size_t i=0; i < jl_svec_len(ty->types); i++) {
-        if (!(ty->fields[i].isptr || (idx >= 0 && (size_t)idx != i)))
+        if (!(jl_field_isptr(ty,i) || (idx >= 0 && (size_t)idx != i)))
             return false;
     }
     return true;
@@ -2570,7 +2570,7 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
                 if (jl_is_leaf_type((jl_value_t*)sty) && jl_subtype(rhst, ft, 0)) {
                     // TODO: attempt better codegen for approximate types
                     jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
-                    if (sty->fields[idx].isptr) // emit rhs
+                    if (jl_field_isptr(sty, idx)) // emit rhs
                         *ret = emit_expr(args[3], ctx);
                     else
                         *ret = emit_unboxed(args[3], ctx);

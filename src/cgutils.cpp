@@ -727,7 +727,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
             for(i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_svecref(jst->types, i);
                 Type *lty;
-                if (jst->fields[i].isptr)
+                if (jl_field_isptr(jst, i))
                     lty = jl_pvalue_llvmt;
                 else
                     lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
@@ -764,8 +764,9 @@ static bool is_datatype_all_pointers(jl_datatype_t *dt)
 {
     size_t i, l = jl_datatype_nfields(dt);
     for(i=0; i < l; i++) {
-        if (!dt->fields[i].isptr)
+        if (!jl_field_isptr(dt, i)) {
             return false;
+        }
     }
     return true;
 }
@@ -1848,7 +1849,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             builder.CreateGEP(builder.CreateBitCast(strct.V, T_pint8),
                               ConstantInt::get(T_size, jl_field_offset(sty,idx0)));
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
-        if (sty->fields[idx0].isptr) {
+        if (jl_field_isptr(sty, idx0)) {
             Value *r = boxed(rhs, ctx);
             builder.CreateStore(r,
                                 builder.CreateBitCast(addr, jl_ppvalue_llvmt));
@@ -1912,7 +1913,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             }
         }
         size_t j = 0;
-        if (nf > 0 && sty->fields[0].isptr && nargs>1) {
+        if (nf > 0 && jl_field_isptr(sty, 0) && nargs>1) {
             // emit first field before allocating struct to save
             // a couple store instructions. avoids initializing
             // the first field to NULL, and sometimes the GC root
@@ -1940,7 +1941,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             make_gcroot(strct, ctx);
         }
         for(size_t i=j; i < nf; i++) {
-            if (sty->fields[i].isptr) {
+            if (jl_field_isptr(sty, i)) {
                 builder.CreateStore(
                         V_null,
                         builder.CreatePointerCast(
@@ -1952,7 +1953,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         bool need_wb = false;
         for(size_t i=j+1; i < nargs; i++) {
             jl_cgval_t rhs = emit_expr(args[i],ctx);
-            if (sty->fields[i-1].isptr && !rhs.isboxed) {
+            if (jl_field_isptr(sty, i - 1) && !rhs.isboxed) {
                 if (!needroots) {
                     // if this struct element needs boxing and we haven't rooted
                     // the struct, root it now.

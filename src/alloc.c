@@ -298,8 +298,9 @@ DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uin
         jl_set_nth_field(jv, i, args[i]);
     }
     for(size_t i=na; i < nf; i++) {
-        if (type->fields[i].isptr)
+        if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
+        }
     }
     return jv;
 }
@@ -535,11 +536,18 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
     return dt;
 }
 
-jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
+jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
+                                             int8_t fielddesc_type)
 {
+    // fielddesc_type is specified manually for builtin types
+    // and is (will be) calculated automatically for user defined types.
+    uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
     jl_datatype_t *t = (jl_datatype_t*)
         newobj((jl_value_t*)jl_datatype_type,
-               NWORDS(sizeof(jl_datatype_t) + nfields*sizeof(jl_fielddesc_t)));
+               NWORDS(sizeof(jl_datatype_t) + nfields * fielddesc_size));
+    // fielddesc_type should only be assigned here. It can cause data
+    // corruption otherwise.
+    t->fielddesc_type = fielddesc_type;
     t->nfields = nfields;
     return t;
 }
@@ -549,15 +557,22 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     size_t sz = 0, alignm = 1;
     int ptrfree = 1;
 
+    assert(0 <= st->fielddesc_type && st->fielddesc_type <= 2);
+
+    uint64_t max_offset = (((uint64_t)1) <<
+                           (1 << (3 + st->fielddesc_type))) - 1;
+    uint64_t max_size = max_offset >> 1;
+
     for(size_t i=0; i < jl_datatype_nfields(st); i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
         if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
             fsz = jl_datatype_size(ty);
-            if (__unlikely(fsz > JL_FIELD_MAX_SIZE))
+            // Should never happen
+            if (__unlikely(fsz > max_size))
                 jl_throw(jl_overflow_exception);
             al = ((jl_datatype_t*)ty)->alignment;
-            st->fields[i].isptr = 0;
+            jl_field_setisptr(st, i, 0);
             if (((jl_datatype_t*)ty)->haspadding)
                 st->haspadding = 1;
         }
@@ -566,7 +581,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (fsz > MAX_ALIGN)
                 fsz = MAX_ALIGN;
             al = fsz;
-            st->fields[i].isptr = 1;
+            jl_field_setisptr(st, i, 1);
             ptrfree = 0;
         }
         if (al != 0) {
@@ -577,10 +592,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        if (__unlikely(sz > JL_FIELD_MAX_OFFSET))
+        jl_field_setoffset(st, i, sz);
+        jl_field_setsize(st, i, fsz);
+        if (__unlikely(max_offset - sz < fsz))
             jl_throw(jl_overflow_exception);
-        st->fields[i].offset = sz;
-        st->fields[i].size = fsz;
         sz += fsz;
     }
     st->alignment = alignm;
@@ -612,7 +627,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
             t = jl_bool_type;
     }
     if (t == NULL)
-        t = jl_new_uninitialized_datatype(jl_svec_len(fnames));
+        t = jl_new_uninitialized_datatype(jl_svec_len(fnames), 2); // TODO
     else
         tn = t->name;
     // init before possibly calling jl_new_typename
