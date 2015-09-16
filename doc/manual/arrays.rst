@@ -433,9 +433,9 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(::AbstractArray{T<:Number,1}) at operators.jl:374
-    square{T<:Number}(::AbstractArray{T<:Number,2}) at operators.jl:375
-    square{T<:Number}(::AbstractArray{T<:Number,N}) at operators.jl:377
+    square{T<:Number}(::AbstractArray{T<:Number,1}) at operators.jl:380
+    square{T<:Number}(::AbstractArray{T<:Number,2}) at operators.jl:381
+    square{T<:Number}(::AbstractArray{T<:Number,N}) at operators.jl:383
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])

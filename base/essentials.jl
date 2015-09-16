@@ -17,7 +17,6 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-
 # constructors for Core types in boot.jl
 call(T::Type{BoundsError}) = Core.call(T)
 call(T::Type{BoundsError}, args...) = Core.call(T, args...)

@@ -1208,7 +1208,7 @@ As it happens, types are all composite values and thus all have a type of
     julia> typeof(DataType)
     DataType
 
-    julia> typeof(UnionType)
+    julia> typeof(Union)
     DataType
 
 :obj:`DataType` is its own type.
