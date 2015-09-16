@@ -3024,7 +3024,7 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
     return mark_julia_type(v, jl_any_type);
 }
 
-static jl_cgval_t emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool isboxed)
+static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx, bool isboxed)
 {
     bool isglobal = is_global(sym, ctx);
     if (isglobal) {
@@ -3260,14 +3260,18 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
     if (jl_is_symbol(expr)) {
         if (!valuepos) return jl_cgval_t(); // value not used, no point in doing codegen for it
         jl_sym_t *sym = (jl_sym_t*)expr;
-        return emit_var(sym, (jl_value_t*)jl_any_type, ctx, isboxed);
+        return emit_var(sym, ctx, isboxed);
     }
     if (jl_is_symbolnode(expr)) {
         if (!valuepos) return jl_cgval_t(); // value not used, no point in doing codegen for it
         jl_sym_t *sym = jl_symbolnode_sym(expr);
-        return remark_julia_type(
-                emit_var(sym, jl_symbolnode_type(expr), ctx, isboxed),
-                jl_symbolnode_type(expr)); // patch up typ to match SymbolNode.type
+        jl_value_t *typ = jl_symbolnode_type(expr);
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+        jl_cgval_t val = emit_var(sym, ctx, isboxed);
+        if (val.isboxed)
+            val = remark_julia_type(val, typ); // patch up typ to match SymbolNode.type
+        return val; // patch up typ to match SymbolNode.type
     }
     if (jl_is_gensym(expr)) {
         if (!valuepos) return jl_cgval_t(); // value not used, no point in doing codegen for it
