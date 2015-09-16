@@ -510,3 +510,10 @@ for T = (Float32, Float64)
     @test [-3u:u:3u;] == [Compat.linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [Compat.linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
+
+if VERSION < v"0.4.0-dev+768"
+    @test @compat(Void) === Nothing
+else
+    @test @compat(Void) === Void
+end
+@test Ptr{Void} == @compat(Ptr{Void})

@@ -36,9 +36,9 @@ wherever you want to use syntax that differs in the latest Julia
 
 Currently, the `@compat` macro supports the following syntaxes:
 
-* `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction. (Also works for DataStructures.OrderedDict)
+* `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction. (Also works for `DataStructures.OrderedDict`)
 
-* `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction. (Also works for DataStructures.OrderedDict)
+* `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction. (Also works for `DataStructures.OrderedDict`)
 
 * `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
 
@@ -53,6 +53,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat f(t::Timer)` - mimic the Julia 0.4 Timer class
 
 * `@compat Vector{Int}()`, `@compat Vector{UInt8}(n)`, `@compat Array{Float32}(2,2)` - Julia 0.4-style array constructors.
+
+* `@compat Void` - `Nothing` on 0.3 (`Ptr{Void}` is not changed).
 
 ## Type Aliases
 
