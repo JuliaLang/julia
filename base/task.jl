@@ -164,7 +164,11 @@ function task_done_hook(t::Task)
                 end
             end
         end
-        wait()
+        # if a finished task accidentally gets into the queue, wait()
+        # could return. in that case just take the next task off the queue.
+        while true
+            wait()
+        end
     end
 end
 

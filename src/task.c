@@ -368,7 +368,9 @@ JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 extern int jl_in_gc;
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
-    if (t->state == done_sym || t->state == failed_sym) {
+    if (t->state == done_sym || t->state == failed_sym ||
+        // task started but stkbuf NULL'd => finish_task ran
+        (t->last != NULL && t->stkbuf == NULL && t != jl_current_task)) {
         if (t->exception != jl_nothing)
             jl_throw(t->exception);
         return t->result;
