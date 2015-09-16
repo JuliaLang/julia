@@ -80,7 +80,7 @@ julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia
 julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
-julia-libccalltest:
+julia-libccalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libccalltest
 
 julia-src-release julia-src-debug : julia-src-% : julia-deps
