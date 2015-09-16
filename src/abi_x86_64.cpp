@@ -133,7 +133,8 @@ void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
     else if (jl_datatype_size(ty) <= 16) {
         size_t i;
         for (i = 0; i < jl_datatype_nfields(ty); ++i) {
-            classifyType(accum, jl_field_type(ty,i), offset + jl_field_offset(ty,i));
+            classifyType(accum, jl_field_type((jl_datatype_t*)ty,i),
+                         offset + jl_field_offset((jl_datatype_t*)ty,i));
         }
     }
     else {
