@@ -529,7 +529,7 @@ function deserialize(s::SerializationState, ::Type{Function})
         f.env = deserialize(s)
         return f
     end
-    
+
     deserialize_cycle(s, f)
     return f
 end
