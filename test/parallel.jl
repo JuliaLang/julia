@@ -517,3 +517,13 @@ let A = Any[]
     end
     @test length(A) == 1
 end
+
+# issue #13168
+function f13168(n)
+    val = 0
+    for i=1:n val+=sum(rand(n,n)^2) end
+    val
+end
+let t = schedule(@task f13168(100))
+    @test schedule(t) === t
+end
