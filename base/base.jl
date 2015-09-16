@@ -11,6 +11,13 @@ type SystemError <: Exception
     SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 
+type TypeError <: Exception
+    func::Symbol
+    context::AbstractString
+    expected::Type
+    got
+end
+
 type ParseError <: Exception
     msg::AbstractString
 end
