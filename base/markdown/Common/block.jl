@@ -15,11 +15,14 @@ function paragraph(stream::IO, md::MD)
     p = Paragraph()
     push!(md, p)
     skipwhitespace(stream)
+    prev_char = '\n'
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
             char == '\r' && peek(stream) == '\n' && read(stream, Char)
-            if blankline(stream) || parse(stream, md, breaking = true)
+            if prev_char == '\\'
+                write(buffer, '\n')
+            elseif blankline(stream) || parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')
@@ -27,6 +30,7 @@ function paragraph(stream::IO, md::MD)
         else
             write(buffer, char)
         end
+        prev_char = char
     end
     p.content = parseinline(seek(buffer, 0), md)
     return true
