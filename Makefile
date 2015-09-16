@@ -98,7 +98,13 @@ julia-sysimg-release : julia-inference julia-ui-release
 julia-sysimg-debug : julia-inference julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
+JULIA_ENABLE_DOCBUILD ?= 1
+julia-genstdlib : julia-sysimg-$(JULIA_BUILD_MODE)
+ifeq ($(JULIA_ENABLE_DOCBUILD), 1)
+	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) doc/genstdlib.jl)
+endif
+
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-genstdlib
 
 debug release : % : julia-%
 
