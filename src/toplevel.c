@@ -138,7 +138,6 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         // to pick up new types from Base
         jl_errorexception_type = NULL;
         jl_argumenterror_type = NULL;
-        jl_typeerror_type = NULL;
         jl_methoderror_type = NULL;
         jl_loaderror_type = NULL;
         jl_initerror_type = NULL;
