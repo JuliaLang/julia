@@ -208,7 +208,7 @@ function result{T}(dlmstore::DLMStore{T})
     cells = dlmstore.data
     sbuff = dlmstore.sbuff
 
-    if (lastcol < ncols) || (lastrow < nrows)
+    if (nrows > 0) && ((lastcol < ncols) || (lastrow < nrows))
         while lastrow <= nrows
             (lastcol == ncols) && (lastcol = 0; lastrow += 1)
             for cidx in (lastcol+1):ncols
