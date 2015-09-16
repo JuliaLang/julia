@@ -142,7 +142,7 @@ export
     # errors
     BoundsError, DivideError, DomainError, Exception, InexactError,
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
-    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
+    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GlobalRef, NewvarNode, GenSym,
@@ -210,20 +210,8 @@ else
     typealias UInt UInt32
 end
 
-abstract AbstractString
-abstract DirectIndexString <: AbstractString
-
-immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
-end
-
-immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
-end
-
-typealias ByteString Union{ASCIIString,UTF8String}
-
 abstract Exception
+
 immutable BoundsError        <: Exception
     a::Any
     i::Any
@@ -244,18 +232,25 @@ immutable UndefVarError      <: Exception
     var::Symbol
 end
 immutable InterruptException <: Exception end
-type TypeError <: Exception
-    func::Symbol
-    context::AbstractString
-    expected::Type
-    got
-end
+
+abstract AbstractString
+abstract DirectIndexString <: AbstractString
 
 type SymbolNode
     name::Symbol
     typ
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
+
+immutable ASCIIString <: DirectIndexString
+    data::Array{UInt8,1}
+end
+
+immutable UTF8String <: AbstractString
+    data::Array{UInt8,1}
+end
+
+typealias ByteString Union{ASCIIString,UTF8String}
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
