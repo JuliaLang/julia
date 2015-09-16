@@ -3674,9 +3674,10 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = NULL;
     if (sret)
-        sretPtr = AI++; //const Argument &fArg = *AI++;
+        sretPtr = AI++;
 
-    for (size_t i=0; i < nargs; i++) {
+    size_t FParamIndex = 0;
+    for (size_t i = 0; i < nargs; i++) {
         Value *val = AI++;
         jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i);
 
@@ -3687,8 +3688,18 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             }
             else {
                 Type *t = julia_type_to_llvm(jargty);
-                val = builder.CreatePointerCast(val, t->getPointerTo());
-                val = builder.CreateAlignedLoad(val, 1); // make no alignment assumption about pointer from C
+                if (type_is_ghost(t)) {
+                    if (specsig) {
+                        continue; // ghost types are skipped by the specsig method signature
+                    }
+                    else {
+                        val = boxed(ghostValue(jargty), &ctx, jargty);
+                    }
+                }
+                else {
+                    val = builder.CreatePointerCast(val, t->getPointerTo());
+                    val = builder.CreateAlignedLoad(val, 1); // make no alignment assumption about pointer from C
+                }
             }
         }
         else {
@@ -3698,7 +3709,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
 
         // figure out how to repack this type
-        Type *at = specsig ? theFptr->getFunctionType()->getParamType(i) : jl_pvalue_llvmt;
+        Type *at = specsig ? theFptr->getFunctionType()->getParamType(FParamIndex++) : jl_pvalue_llvmt;
         if (val->getType() != at) {
             if (at == jl_pvalue_llvmt) {
                 assert(jl_is_leaf_type(jargty));
