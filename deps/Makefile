@@ -263,12 +263,12 @@ include $(SRCDIR)/$1.version
 ifneq ($(NO_GIT),1)
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
-$$($2_SRC_FILE): | $$(SRCDIR)/srccache
-	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$@
-$5/$1: | $$($2_SRC_FILE)
+$$($2_SRC_FILE)/HEAD: | $$(SRCDIR)/srccache
+	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$(dir $$@)
+$5/$1/.git/HEAD: | $$($2_SRC_FILE)/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
-	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	git clone -q --depth=10 --branch $$($2_BRANCH) $$(SRCDIR)/srccache/$1.git $$@
+	-cd $$($2_SRC_FILE) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	git clone -q --depth=10 --branch $$($2_BRANCH) $$($2_SRC_FILE) $5/$1
 	cd $5/$1 && git remote set-url origin $$($2_GIT_URL)
 	touch -c $5/$1/$3
 ifneq ($5,$$(BUILDDIR))
@@ -276,25 +276,14 @@ $$(BUILDDIR)/$1:
 	mkdir -p $$@
 $5/$1/$3: | $$(BUILDDIR)/$1
 endif
-$5/$1/$3: $$(SRCDIR)/$1.version | $5/$1
+$5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
-ifeq ($5,.)
-ifeq (exists, $$(shell [ -d $5/$1/.git ] && echo exists ))
 $5/$1/$4: $5/$1/.git/HEAD
-endif
-ifeq (exists, $$(shell [ -d $$(JULIAHOME)/.git/modules/deps/$1 ] && echo exists ))
-# also allow backwards compatibility with an existing git-submodule:
-$5/$1/$4: $$(JULIAHOME)/.git/modules/deps/$1/HEAD
-endif
-else #unconditionally add dependency on expected location
-$5/$1/$4: $5/$1/.git/HEAD
-$5/$1/.git/HEAD: | $5/$1
-endif
 
 else # NO_GIT
 
