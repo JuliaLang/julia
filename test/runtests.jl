@@ -517,3 +517,14 @@ else
     @test @compat(Void) === Void
 end
 @test Ptr{Void} == @compat(Ptr{Void})
+
+# MemoryError -> OutOfMemoryError
+# Base64Pipe -> Base64EncodePipe
+# UdpSocket -> UDPSocket
+f141(::Type{OutOfMemoryError}) = true
+f141(::Type{Base64EncodePipe}) = true
+f141(::Type{UDPSocket}) = true
+
+@test f141(OutOfMemoryError)
+@test f141(Base64EncodePipe)
+@test f141(UDPSocket)
