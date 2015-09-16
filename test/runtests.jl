@@ -438,13 +438,13 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 @test @compat typeof(Array{Float16}(5)) == Array{Float16,1}
 @test @compat length(Array{Float16}(5)) == 5
 
-@test @compat typeof(Array{String}(2,2)) == Array{String,2}
-@test @compat size(Array{String}(2,2)) == (2,2)
+@test @compat typeof(Array{AbstractString}(2,2)) == Array{AbstractString,2}
+@test @compat size(Array{AbstractString}(2,2)) == (2,2)
 
 @test @compat typeof(Array{Rational{Int}}(2,2,2,2,2)) == Array{Rational{Int},5}
 @test @compat size(Array{Rational{Int}}(2,2,2,2,2)) == (2,2,2,2,2)
 
-@compat utf8(Mmap.mmap(@__FILE__(),Vector{Uint8},11,1)) == "sing Compat"
+@compat utf8(Mmap.mmap(@__FILE__(),Vector{UInt8},11,1)) == "sing Compat"
 
 @test base64encode("hello world") == "aGVsbG8gd29ybGQ="
 
