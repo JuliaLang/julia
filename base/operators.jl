@@ -88,8 +88,14 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
+immutable ElementwiseMaxFun end
+call(::ElementwiseMaxFun, x, y) = max(x,y)
+
+immutable ElementwiseMinFun end
+call(::ElementwiseMinFun, x, y) = min(x, y)
+
 for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
-               (:$,:$), (:min,:(MinFun())), (:max,:(MaxFun())), (:kron,:kron))
+               (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so

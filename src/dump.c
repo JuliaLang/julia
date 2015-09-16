@@ -563,7 +563,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
                 jl_serialize_value(s, b->value);
                 jl_serialize_value(s, b->globalref);
                 jl_serialize_value(s, b->owner);
-                write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
+                write_int8(s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
                 jl_serialize_gv(s, (jl_value_t*)b);
             }
         }
@@ -1426,6 +1426,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
             if (b->owner != NULL) jl_gc_wb(m, b->owner);
             int8_t flags = read_int8(s);
+            b->deprecated = (flags>>3) & 1;
             b->constp = (flags>>2) & 1;
             b->exportp = (flags>>1) & 1;
             b->imported = (flags) & 1;
