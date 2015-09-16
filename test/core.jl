@@ -3335,3 +3335,12 @@ foo12967(x, ::TupleType12967) = 2
 
 # issue #13083
 @test Void() === nothing
+
+# PR 11888
+immutable A11888{T}
+    a::NTuple{16,T}
+end
+
+typealias B11888{T} A11888{A11888{A11888{T}}}
+
+@test sizeof(B11888{B11888{Int64}}) == (1 << 24) * 8
