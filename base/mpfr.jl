@@ -877,7 +877,7 @@ function prevfloat(x::BigFloat)
 end
 
 function eps(x::BigFloat)
-    with_bigfloat_precision(precision(x)) do
+    with_bigfloat_precision(Int(precision(x))) do
         nextfloat(x) - x
     end
 end
