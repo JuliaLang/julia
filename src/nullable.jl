@@ -23,8 +23,8 @@ end
 
 convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
 
-convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
-convert(   ::Type{Nullable   }, ::Void) = Nullable{Union()}()
+@compat convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
+@compat convert(   ::Type{Nullable   }, ::Void) = Nullable{Union()}()
 
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull

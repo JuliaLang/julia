@@ -438,13 +438,13 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 @test @compat typeof(Array{Float16}(5)) == Array{Float16,1}
 @test @compat length(Array{Float16}(5)) == 5
 
-@test @compat typeof(Array{String}(2,2)) == Array{String,2}
-@test @compat size(Array{String}(2,2)) == (2,2)
+@test @compat typeof(Array{AbstractString}(2,2)) == Array{AbstractString,2}
+@test @compat size(Array{AbstractString}(2,2)) == (2,2)
 
 @test @compat typeof(Array{Rational{Int}}(2,2,2,2,2)) == Array{Rational{Int},5}
 @test @compat size(Array{Rational{Int}}(2,2,2,2,2)) == (2,2,2,2,2)
 
-@compat utf8(Mmap.mmap(@__FILE__(),Vector{Uint8},11,1)) == "sing Compat"
+@compat utf8(Mmap.mmap(@__FILE__(),Vector{UInt8},11,1)) == "sing Compat"
 
 @test base64encode("hello world") == "aGVsbG8gd29ybGQ="
 
@@ -510,3 +510,10 @@ for T = (Float32, Float64)
     @test [-3u:u:3u;] == [Compat.linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [Compat.linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
+
+if VERSION < v"0.4.0-dev+768"
+    @test @compat(Void) === Nothing
+else
+    @test @compat(Void) === Void
+end
+@test Ptr{Void} == @compat(Ptr{Void})

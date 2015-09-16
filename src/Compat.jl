@@ -410,6 +410,9 @@ function _compat(ex::Expr)
             end
         elseif VERSION < v"0.4.0-dev" && f == :Union
             ex = Expr(:call,:Union,ex.args[2:end]...)
+        elseif ex == :(Ptr{Void})
+            # Do no change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
+            return ex
         end
     elseif ex.head == :macrocall
         f = ex.args[1]
@@ -426,6 +429,12 @@ function _compat(ex::Expr)
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
+end
+function _compat(ex::Symbol)
+    if VERSION < v"0.4.0-dev+768" && ex == :Void
+        return :Nothing
+    end
+    return ex
 end
 _compat(ex) = ex
 
