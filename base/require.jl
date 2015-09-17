@@ -67,7 +67,7 @@ end
 
 # remote/parallel load
 
-function source_path(default::Union(AbstractString,Void)="")
+function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
