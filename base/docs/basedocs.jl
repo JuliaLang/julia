@@ -70,6 +70,61 @@ keywords[:export] = doc"""
       Test.bar(1) # 1
   """
 
+keywords[:abstract] = doc"""
+  `abstract` declares a type that cannot be instantiated, and serves only as a node in the type graph,
+  thereby describing sets of related concrete types: those concrete types which are their descendants.
+  Abstract types form the conceptual hierarchy which makes Julia’s type system more than just a collection of object implementations.
+  For example:
+
+      abstract Number
+      abstract Real <: Number
+
+  `abstract Number` has no supertype, whereas `abstract Real` is an abstract subtype of `Number`.
+  """
+
+keywords[:module] = doc"""
+  `module` declares a Module, which is a separate global variable workspace.  Within a module, you can control which names from other modules are visible (via importing), and specify which of your names are intended to be public (via exporting). For example:
+
+      module
+      import Base.show
+      export MyType, foo
+
+      type MyType
+          x
+      end
+
+      bar(x) = 2x
+      foo(a::MyType) = bar(a.x) + 1
+      show(io, a::MyType) = print(io, "MyType $(a.x)")
+      end
+
+  Modules allow you to create top-level definitions without worrying about name conflicts when your code is used together with somebody else’s.
+  """
+
+keywords[:baremodule] = doc"""
+  `baremodule` declares a module that does not contain `using Base`, `import Base.call`,
+  or a definition of `eval`.  It does still import `Core`.
+  """
+
+keywords[:bitstype] = doc"""
+  `bitstype` declares a concrete type whose data consists of plain old bits. Classic examples of bits types are integers and floating-point values.  Some example built-in bits type declarations:
+
+      bitstype 32 Char
+      bitstype 8  Bool <: Integer
+
+  The first parameter indicates how many bits of storage the type requires. Currently, only sizes that are multiples of 8 bits are supported. The second parameter gives the name of the type.  The `Bool` declaration shows how a bits type can be optionally declared to be a subtype of some supertype.
+  """
+
+keywords[:macro] = doc"""
+  `macro` defines a method to include generated code in the final body of a program. A macro maps a tuple of arguments to a returned expression, and the resulting expression is compiled directly rather than requiring a runtime `eval()` call. Macro arguments may include expressions, literal values, and symbols. For example:
+
+      macro sayhello(name)
+          return :( println("Hello, ", $name) )
+      end
+
+  This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted expression is expanded to interpolate the value of the argument into the final expression.
+  """
+
 keywords[:const] = doc"""
   `const` is used to declare global variables which are also constant.
   In almost all code (and particularly performance sensitive code)
