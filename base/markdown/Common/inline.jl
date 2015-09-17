@@ -106,6 +106,43 @@ function footnote_link(stream::IO, md::MD)
     end
 end
 
+@trigger '<' ->
+function autolink(stream::IO, md::MD)
+    withstream(stream) do
+        startswith(stream, '<') || return
+        url = readuntil(stream, '>')
+        url ≡ nothing && return
+        _is_link(url) && return Link(url, url)
+        _is_mailto(url) && return Link(url, url)
+        return
+    end
+end
+
+# This list is taken from the commonmark spec
+# http://spec.commonmark.org/0.19/#absolute-uri
+const _allowable_schemes = Set(split("coap doi javascript aaa aaas about acap cap cid crid data dav dict dns file ftp geo go gopher h323 http https iax icap im imap info ipp iris iris.beep iris.xpc iris.xpcs iris.lwz ldap mailto mid msrp msrps mtqp mupdate news nfs ni nih nntp opaquelocktoken pop pres rtsp service session shttp sieve sip sips sms snmp,soap.beep soap.beeps tag tel telnet tftp thismessage tn3270 tip tv urn vemmi ws wss xcon xcon-userid xmlrpc.beep xmlrpc.beeps xmpp z39.50r z39.50s
+adiumxtra afp afs aim apt,attachment aw beshare bitcoin bolo callto chrome,chrome-extension com-eventbrite-attendee content cvs,dlna-playsingle dlna-playcontainer dtn dvb ed2k facetime feed finger fish gg git gizmoproject gtalk hcp icon ipn irc irc6 ircs itms jar jms keyparc lastfm ldaps magnet maps market,message mms ms-help msnim mumble mvn notes oid palm paparazzi platform proxy psyc query res resource rmi rsync rtmp secondlife sftp sgn skype smb soldat spotify ssh steam svn teamspeak
+things udp unreal ut2004 ventrilo view-source webcal wtai wyciwyg xfire xri ymsgr"))
+
+function _is_link(s::AbstractString)
+    '<' in s && return false
+
+    m = match(r"^(.*)://(\S+?)(:\S*)?$", s)
+    m ≡ nothing && return false
+    scheme = lowercase(m.captures[1])
+    return scheme in _allowable_schemes
+end
+
+# non-normative regex from the HTML5 spec
+const _email_regex = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+
+function _is_mailto(s::AbstractString)
+    length(s) < 6 && return false
+    # slicing strings is a bit risky, but this equality check is safe
+    lowercase(s[1:6]) == "mailto:" || return false
+    return ismatch(_email_regex, s[6:end])
+end
+
 # –––––––––––
 # Punctuation
 # –––––––––––
