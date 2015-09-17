@@ -3161,7 +3161,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     // it's a local variable or closure variable
     jl_varinfo_t &vi = ctx->vars[s];
     if (!vi.memloc && !vi.hasGCRoot && vi.used
-            && !vi.isArgument && !is_stable_expr(r, ctx) && !vi.value.isghost) {
+            && !vi.isArgument && !is_stable_expr(r, ctx)) {
         Instruction *newroot = cast<Instruction>(emit_local_slot(ctx->gc.argSpaceSize++, ctx));
         newroot->removeFromParent(); // move it to the gc frame basic block so it can be reused as needed
         newroot->insertAfter(ctx->gc.last_gcframe_inst);
@@ -3201,6 +3201,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else {
             // SSA variable w/o gcroot, just track the value info
+            assert(vi.isSA);
             if (store_unboxed_p(vi.value.typ) && rval_info.ispointer) { // emit a copy of boxed isbits values. TODO: elid this copy if unnecessary
                 rval_info = mark_julia_type(
                         emit_unbox(julia_type_to_llvm(vi.value.typ), rval_info, vi.value.typ),
@@ -4164,6 +4165,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (!jl_is_type(typ))
             typ = (jl_value_t*)jl_any_type;
         varinfo.value = mark_julia_type((Value*)NULL, typ);
+        varinfo.hasGCRoot = true;
     }
 
     // step 3. some variable analysis
@@ -4600,10 +4602,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
             jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
             assert(jl_is_symbol(vname));
             jl_varinfo_t &varinfo = ctx.vars[vname];
-            varinfo.memloc = builder.CreatePointerCast(
-                    emit_nthptr_addr(envArg, i + offsetof(jl_svec_t,data) / sizeof(void*)),
-                    jl_ppvalue_llvmt);
-            varinfo.hasGCRoot = true;
+            if (!varinfo.value.isghost) {
+                varinfo.memloc = builder.CreatePointerCast(
+                        emit_nthptr_addr(envArg, i + offsetof(jl_svec_t,data) / sizeof(void*)),
+                        jl_ppvalue_llvmt);
+            }
         }
     }
 
@@ -4618,6 +4621,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         assert(!varinfo.memloc); // arguments shouldn't also be in the closure env
         if (varinfo.value.isghost) {
             // no need to explicitly load/store a ghost value
+            varinfo.hasGCRoot = true;
             continue;
         }
         if (store_unboxed_p(s, &ctx)) {
@@ -4634,8 +4638,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
         jl_varinfo_t &varinfo = ctx.vars[s];
         if (varinfo.memloc || varinfo.isArgument)
             continue; // gc root already created
-        if (store_unboxed_p(s, &ctx)) {
-            varinfo.hasGCRoot = true;
+        if (store_unboxed_p(s, &ctx) ||
+                (varinfo.value.isghost && !varinfo.usedUndef)) {
+            varinfo.hasGCRoot = true; // will never need a gc-root for this
         }
         else if (varinfo.hasGCRoot) {
             Value *lv = emit_local_slot(varnum, &ctx);
