@@ -173,11 +173,13 @@ setdiff!(s, Set([2,4,5,6]))
 @test !(Set([1,2,3]) >= Set([1,2,4]))
 @test !(Set([1,2,3]) <= Set([1,2,4]))
 
-# issubset, symdiff
+# issubset, symdiff, disjoint
 for (l,r) in ((Set([1,2]),     Set([3,4])),
               (Set([5,6,7,8]), Set([7,8,9])),
               (Set([1,2]),     Set([3,4])),
               (Set([5,6,7,8]), Set([7,8,9])),
+              (Set(),          Set()),
+              (Set(),          Set([1,2,3])),
               (Set([1,2,3]),   Set()),
               (Set([1,2,3]),   Set([1])),
               (Set([1,2,3]),   Set([1,2])),
@@ -189,6 +191,8 @@ for (l,r) in ((Set([1,2]),     Set([3,4])),
     @test issubset(l, union(l,r))
     @test issubset(r, union(l,r))
     @test isequal(union(intersect(l,r),symdiff(l,r)), union(l,r))
+    @test isdisjoint(l,l) == isempty(l)
+    @test isdisjoint(l,r) == isempty(intersect(l,r))
 end
 @test ⊆(Set([1]), Set([1,2]))
 @test ⊊(Set([1]), Set([1,2]))

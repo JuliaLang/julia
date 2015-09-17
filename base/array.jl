@@ -956,6 +956,23 @@ function intersect(v1, vs...)
     ret
 end
 
+"""
+    isdisjoint(v1, v2) -> Bool
+
+Returns whether the collections `v1` and `v2` are disjoint.
+"""
+function _isdisjoint(v1, v2)
+    for v in v1
+        v in v2 && return false
+    end
+    true
+end
+function isdisjoint(v1, v2)
+    # Iterate over the smaller set
+    # Use a function call to ensure type stability
+    length(v1)<=length(v2) ? _isdisjoint(v1,v2) : _isdisjoint(v2,v1)
+end
+
 function union(vs...)
     ret = Array(promote_eltype(vs...),0)
     seen = Set()

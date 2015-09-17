@@ -775,6 +775,7 @@ export
     in,
     intersect!,
     intersect,
+    isdisjoint,
     isempty,
     issubset,
     keys,

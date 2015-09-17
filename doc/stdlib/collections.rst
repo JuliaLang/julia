@@ -993,6 +993,12 @@ Set-Like Collections
 
    Return ``true`` if ``A`` is a subset of or equal to ``S``.
 
+.. function:: isdisjoint(v1, v2) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Returns whether the collections ``v1`` and ``v2`` are disjoint.
+
 Fully implemented by:
 
 - :obj:`IntSet`
