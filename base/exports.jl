@@ -131,6 +131,23 @@ export
     WString,
     Zip,
 
+# Traits and related functions
+    IsAnything,
+    IsNothing,
+    IsCallable,
+    IsBits,
+    Isimmutable,
+    IsLeafType,
+    IsContiguous,
+    HasFastLinearIndex,
+    Not,
+    Trait,
+    istrait,
+    trait,
+    @traitdef,
+    @traitimpl,
+    @traitfn,
+
 # Ccall types
     Cchar,
     Cdouble,

@@ -49,6 +49,10 @@ include("pointer.jl")
 include("refpointer.jl")
 include("functors.jl")
 
+# traits
+include("traits.jl")
+#include("traits-bootstrap-tests.jl")
+
 # array structures
 include("abstractarray.jl")
 include("subarray.jl")
