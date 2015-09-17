@@ -73,6 +73,12 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `typealias Irrational MathConst` - `MathConst` has been renamed to `Irrational` [#11922](https://github.com/JuliaLang/julia/pull/11922)
 
+* `typealias UDPSocket UdpSocket` - `UdpSocket` has been renamed to `UDPSocket` [#8175](https://github.com/JuliaLang/julia/pull/8175)
+
+* `typealias Base64EncodePipe Base64Pipe` - `Base64Pipe` has been renamed to `Base64EncodePipe` [#9157](https://github.com/JuliaLang/julia/pull/9157)
+
+* `typealias OutOfMemoryError MemoryError` - `MemoryError` has been renamed to `OutOfMemoryError` [#10503](https://github.com/JuliaLang/julia/pull/10503)
+
 ## New functions
 
 * `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator.

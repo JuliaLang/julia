@@ -670,4 +670,19 @@ else
     const linspace = Base.linspace
 end
 
+if VERSION < v"0.4.0-dev+436"
+    export UDPSocket
+    const UDPSocket = UdpSocket
+end
+
+if VERSION < v"0.4.0-dev+2340"
+    export Base64EncodePipe
+    const Base64EncodePipe = Base64Pipe
+end
+
+if VERSION < v"0.4.0-dev+3837"
+    export OutOfMemoryError
+    const OutOfMemoryError = MemoryError
+end
+
 end # module
