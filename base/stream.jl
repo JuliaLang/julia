@@ -935,6 +935,7 @@ function uv_write(s::LibuvStream, p::Ptr, n::UInt)
                 s, p, n, uvw,
                 uv_jl_writecb_task::Ptr{Void})
     if err < 0
+        Libc.free(uvw)
         uv_error("write", err)
     end
     ct = current_task()
