@@ -132,3 +132,43 @@ let
     showerror(buff, MethodError(convert, Tuple{Type, Float64}))
     showerror(buff, MethodError(convert, Tuple{DataType, Float64}))
 end
+
+# Issue #13032
+withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
+
+    # Make sure editor doesn't error when no ENV editor is set.
+    @test isa(Base.editor(), Array)
+
+    # Invalid editor
+    ENV["JULIA_EDITOR"] = ""
+    @test_throws ErrorException Base.editor()
+
+    # Note: The following testcases should work regardless of whether these editors are
+    # installed or not.
+
+    # Editor on the path.
+    ENV["JULIA_EDITOR"] = "vim"
+    @test Base.editor() == ["vim"]
+
+    # Absolute path to editor.
+    ENV["JULIA_EDITOR"] = "/usr/bin/vim"
+    @test Base.editor() == ["/usr/bin/vim"]
+
+    # Editor on the path using arguments.
+    ENV["JULIA_EDITOR"] = "subl -w"
+    @test Base.editor() == ["subl", "-w"]
+
+    # Absolute path to editor with spaces.
+    ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl"
+    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"]
+
+    # Paths with spaces and arguments (#13032).
+    ENV["JULIA_EDITOR"] = "/Applications/Sublime\\ Text.app/Contents/SharedSupport/bin/subl -w"
+    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+
+    ENV["JULIA_EDITOR"] = "'/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl' -w"
+    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+
+    ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
+    @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+end
