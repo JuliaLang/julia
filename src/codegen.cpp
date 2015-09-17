@@ -530,6 +530,7 @@ typedef struct {
     std::string funcName;
     jl_sym_t *vaName;  // name of vararg argument
     bool vaStack;      // varargs stack-allocated
+    bool sret;
     int nReqArgs;
     int lineno;
     std::vector<bool> boundsCheck;
@@ -2714,7 +2715,6 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
                                         jl_value_t **args, size_t nargs,
                                         jl_codectx_t *ctx)
 {
-    Value *result;
     if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->specFunctionObject!=NULL) {
         // emit specialized call site
         jl_value_t *jlretty = jl_ast_rettype(f->linfo, f->linfo->ast);
@@ -2722,7 +2722,14 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
         FunctionType *cft = cf->getFunctionType();
         size_t nfargs = cft->getNumParams();
         Value **argvals = (Value**) alloca(nfargs*sizeof(Value*));
+        bool sret = cf->hasStructRetAttr();
         unsigned idx = 0;
+        Value *result;
+        if (sret) {
+            result = emit_static_alloca(cft->getParamType(0)->getContainedType(0), ctx);
+            argvals[idx] = result;
+            idx++;
+        }
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
             jl_value_t *jt = jl_nth_slot_type(f->linfo->specTypes,i);
@@ -2767,8 +2774,9 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
             idx++;
         }
         assert(idx == nfargs);
-        result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
-        return mark_julia_type(result, jlretty);
+        CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
+        call->setAttributes(cf->getAttributes());
+        return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, jlretty);
     }
     return mark_julia_type(emit_jlcall(theFptr, theF, &args[1], nargs, ctx), jl_any_type); // (typ will be patched up by caller)
 }
@@ -3811,6 +3819,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     jl_codectx_t ctx;
     ctx.f = cw;
     ctx.linfo = lam;
+    ctx.sret = false;
     allocate_gc_frame(0, b0, &ctx);
 
     // Save the Function object reference
@@ -3824,15 +3833,17 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     lam->cFunctionList = list2;
 
     // See whether this function is specsig or jlcall
-    bool specsig;
+    bool specsig, jlfunc_sret;
     Function *theFptr;
     if (lam->specFunctionObject != NULL) {
         theFptr = (Function*)lam->specFunctionObject;
         specsig = true;
+        jlfunc_sret = theFptr->hasStructRetAttr();
     }
     else {
         theFptr = (Function*)lam->functionObject;
         specsig = false;
+        jlfunc_sret = false;
     }
     assert(theFptr);
 
@@ -3844,7 +3855,17 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (sret)
         sretPtr = AI++;
 
+    Value *result;
     size_t FParamIndex = 0;
+    if (jlfunc_sret) {
+        if (sret)
+            result = sretPtr;
+        else
+            result = builder.CreateAlloca(theFptr->getFunctionType()->getParamType(0)->getContainedType(0));
+        args.push_back(result);
+        FParamIndex++;
+    }
+
     for (size_t i = 0; i < nargs; i++) {
         Value *val = AI++;
         jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i);
@@ -3920,7 +3941,12 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     // Create the call
     Value *r;
     if (specsig) {
-        r = builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args));
+        CallInst *call = builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args));
+        call->setAttributes(theFptr->getAttributes());
+        if (jlfunc_sret)
+            r = builder.CreateLoad(result);
+        else
+            r = call;
     }
     else {
         r = emit_jlcall(theFptr, literal_pointer_val((jl_value_t*)ff), 0, nargs, &ctx);
@@ -3933,6 +3959,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (r->getType() != jl_pvalue_llvmt) {
             r = boxed(mark_julia_type(r, jlrettype), &ctx, jlrettype);
         }
+    }
+    else if (sret && jlfunc_sret) {
+        // nothing to do
     }
     else if (!type_is_ghost(crt)) {
         if (sret)
@@ -3998,7 +4027,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
+static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f, bool sret)
 {
     std::stringstream funcName;
     const std::string &fname = f->getName().str();
@@ -4012,9 +4041,9 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
                                    funcName.str(), f->getParent());
     addComdat(w);
     Function::arg_iterator AI = w->arg_begin();
-    AI++; //const Argument &fArg = *AI++;
+    /* const Argument &fArg = */ *AI++;
     Value *argArray = AI++;
-    //const Argument &argCount = *AI++;
+    /* const Argument &argCount = *AI++; */
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", w);
 
     builder.SetInsertPoint(b0);
@@ -4022,13 +4051,21 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     builder.SetCurrentDebugLocation(noDbg);
 
     jl_codectx_t ctx;
+    ctx.f = w;
     ctx.linfo = lam;
+    ctx.sret = false;
     allocate_gc_frame(0, b0, &ctx);
 
     size_t nargs = jl_array_dim0(jl_lam_args(ast));
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
+    Value *result;
+    if (sret) {
+        result = builder.CreateAlloca(f->getFunctionType()->getParamType(0)->getContainedType(0));
+        args[idx] = result;
+        idx++;
+    }
     for(size_t i=0; i < nargs; i++) {
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         Type *lty = julia_type_to_llvm(ty);
@@ -4048,9 +4085,16 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     }
     // TODO: consider pulling the function pointer out of fArg so these
     // wrappers can be reused for different functions of the same type.
-    Value *r = builder.CreateCall(prepare_call(f), ArrayRef<Value*>(&args[0], nfargs));
-    if (r->getType() != jl_pvalue_llvmt) {
-        r = boxed(mark_julia_type(r, jl_ast_rettype(lam, (jl_value_t*)ast)), &ctx);
+    CallInst *call = builder.CreateCall(prepare_call(f), ArrayRef<Value*>(&args[0], nfargs));
+    call->setAttributes(f->getAttributes());
+    Value *r;
+    if (sret || call->getType() != jl_pvalue_llvmt) {
+        jl_value_t *ty = jl_ast_rettype(lam, (jl_value_t*)ast);
+        jl_cgval_t r_typed = sret ? mark_julia_slot(result, ty) : mark_julia_type(call, ty);
+        r = boxed(r_typed, &ctx);
+    }
+    else {
+        r = call;
     }
 
     builder.CreateRet(r);
@@ -4215,8 +4259,15 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
     funcName << "_" << globalUnique++;
 
+    ctx.sret = false;
     if (specsig) { // assumes !va
         std::vector<Type*> fsig(0);
+        Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
+        if (rt != jl_pvalue_llvmt && rt != T_void && deserves_sret(jlrettype, rt)) {
+            ctx.sret = true;
+            fsig.push_back(rt->getPointerTo());
+            rt = T_void;
+        }
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
             if (type_is_ghost(ty))
@@ -4225,17 +4276,18 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 ty = PointerType::get(ty,0);
             fsig.push_back(ty);
         }
-        Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), m);
+        if (ctx.sret)
+            f->addAttribute(1, Attribute::StructRet);
         addComdat(f);
         if (lam->specFunctionObject == NULL) {
             lam->specFunctionObject = (void*)f;
             lam->specFunctionID = jl_assign_functionID(f);
         }
         if (lam->functionObject == NULL) {
-            Function *fwrap = gen_jlcall_wrapper(lam, ast, f);
+            Function *fwrap = gen_jlcall_wrapper(lam, ast, f, ctx.sret);
             lam->functionObject = (void*)fwrap;
             lam->functionID = jl_assign_functionID(fwrap);
         }
@@ -4401,7 +4453,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             varinfo.dinfo = ctx.dbuilder->createParameterVariable(
                 SP,                                 // Scope (current function will be fill in later)
                 argname->name,                      // Variable name
-                i+1,                                // Argument number (1-based)
+                ctx.sret + i + 1,                                // Argument number (1-based)
                 topfile,                            // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,  // Line
                 // Variable type
@@ -4416,7 +4468,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 julia_type_to_di(varinfo.value.typ, ctx.dbuilder, specsig), // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
-                i+1);                   // Argument number (1-based)
+                ctx.sret + i + 1);                   // Argument number (1-based)
 #endif
         }
         if (va) {
@@ -4424,10 +4476,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
                 ctx.vaName->name,       // Variable name
-                nreq + 1,               // Argument number (1-based)
+                ctx.sret + nreq + 1,               // Argument number (1-based)
                 topfile,                    // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(ctx.vars[ctx.vaName].value.typ,ctx.dbuilder,false));
+                julia_type_to_di(ctx.vars[ctx.vaName].value.typ, ctx.dbuilder, false));
 #else
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,   // Tag
@@ -4435,10 +4487,10 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 ctx.vaName->name,                   // Variable name
                 topfile,                             // File
                 ctx.lineno == -1 ? 0 : ctx.lineno,  // Line (for now, use lineno of the function)
-                julia_type_to_di(ctx.vars[ctx.vaName].value.typ,ctx.dbuilder,false),      // Variable type
+                julia_type_to_di(ctx.vars[ctx.vaName].value.typ, ctx.dbuilder, false),      // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
-                nreq + 1);              // Argument number (1-based)
+                ctx.sret + nreq + 1);              // Argument number (1-based)
 #endif
         }
         for(i=0; i < vinfoslen; i++) {
@@ -4697,6 +4749,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // step 12. move args into local variables
     Function::arg_iterator AI = f->arg_begin();
+    if (ctx.sret)
+        AI++; // skip sret slot
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         jl_varinfo_t &vi = ctx.vars[s];
@@ -4923,7 +4977,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
             Value *retval;
-            Type *retty = f->getReturnType();
+            Type *retty = ctx.sret ? f->getFunctionType()->getParamType(0)->getContainedType(0) : f->getReturnType();
             if (retty == jl_pvalue_llvmt) {
                 retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true),&ctx,expr_type(stmt,&ctx));
             }
@@ -4937,7 +4991,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
-            if (type_is_ghost(retty))
+            if (ctx.sret)
+                builder.CreateStore(retval, ctx.f->arg_begin());
+            if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
             else
                 builder.CreateRet(retval);
@@ -5023,8 +5079,15 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         std::string funcName = lam->name->name;
         funcName = "julia_" + funcName;
         if (specsig) { // assumes !va
-            jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
             std::vector<Type*> fsig(0);
+            jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
+            Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
+            bool sret = false;
+            if (rt != jl_pvalue_llvmt && rt != T_void && deserves_sret(jlrettype, rt)) {
+                sret = true;
+                fsig.push_back(rt->getPointerTo());
+                rt = T_void;
+            }
             for (size_t i=0; i < jl_nparams(lam->specTypes); i++) {
                 Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
                 if (type_is_ghost(ty))
@@ -5033,9 +5096,10 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                     ty = PointerType::get(ty,0);
                 fsig.push_back(ty);
             }
-            Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
             Function *f = Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage, funcName,
                                            shadow_module);
+            if (sret)
+                f->addAttribute(1, Attribute::StructRet);
 
         if (lam->specFunctionObject == NULL) {
             lam->specFunctionObject = (void*)f;
