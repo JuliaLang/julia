@@ -286,11 +286,7 @@ typedef struct _jl_datatype_t {
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
-    union {
-        jl_fielddesc8_t fields8[0];
-        jl_fielddesc16_t fields16[0];
-        jl_fielddesc32_t fields32[0];
-    };
+    size_t fields[];
 } jl_datatype_t;
 
 typedef struct {
@@ -714,26 +710,26 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
     static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)       \
     {                                                                   \
         if (st->fielddesc_type == 0) {                                  \
-            return st->fields8[i].f;                                    \
+            return ((jl_fielddesc8_t*)st->fields)[i].f;                 \
         }                                                               \
         else if (st->fielddesc_type == 1) {                             \
-            return st->fields16[i].f;                                   \
+            return ((jl_fielddesc16_t*)st->fields)[i].f;                \
         }                                                               \
         else {                                                          \
-            return st->fields32[i].f;                                   \
+            return ((jl_fielddesc32_t*)st->fields)[i].f;                \
         }                                                               \
     }                                                                   \
     static inline void jl_field_set##f(jl_datatype_t *st, int i,        \
                                        uint32_t val)                    \
     {                                                                   \
         if (st->fielddesc_type == 0) {                                  \
-            st->fields8[i].f = val;                                     \
+            ((jl_fielddesc8_t*)st->fields)[i].f = val;                  \
         }                                                               \
         else if (st->fielddesc_type == 1) {                             \
-            st->fields16[i].f = val;                                    \
+            ((jl_fielddesc16_t*)st->fields)[i].f = val;                 \
         }                                                               \
         else {                                                          \
-            st->fields32[i].f = val;                                    \
+            ((jl_fielddesc32_t*)st->fields)[i].f = val;                 \
         }                                                               \
     }
 
