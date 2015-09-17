@@ -117,7 +117,7 @@ lufact(A::SparseMatrixCSC) = lufact(float(A))
 
 function show(io::IO, f::UmfpackLU)
     println(io, "UMFPACK LU Factorization of a $(f.m)-by-$(f.n) sparse matrix")
-    f.numeric != C_NULL && println(f.numeric)
+    f.numeric != C_NULL && println(io, f.numeric)
 end
 
 ## Wrappers for UMFPACK functions
