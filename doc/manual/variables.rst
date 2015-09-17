@@ -142,7 +142,7 @@ adopt the following conventions:
 - Names of variables are in lower case.
 - Word separation can be indicated by underscores (``'_'``), but use of
   underscores is discouraged unless the name would be hard to read otherwise.
-- Names of ``Type``\ s and ``Modules``\ s begin with a capital letter and word separation is
+- Names of ``Type``\ s and ``Module``\ s begin with a capital letter and word separation is
   shown with upper camel case instead of underscores.
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.
