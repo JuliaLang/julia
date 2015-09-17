@@ -107,7 +107,7 @@ deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any),
 macro deprecate_binding(old, new)
     Expr(:toplevel,
          Expr(:export, esc(old)),
-         Expr(:(=), esc(old), esc(new)),
+         Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
