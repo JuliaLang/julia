@@ -933,7 +933,7 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
 static bool deserves_sret(jl_value_t *dt, Type *T)
 {
     assert(jl_is_datatype(dt));
-    return jl_datatype_size(dt) > sizeof(void*) && !T->isFloatingPointTy();
+    return (size_t)jl_datatype_size(dt) > sizeof(void*) && !T->isFloatingPointTy();
 }
 
 // --- generating various field accessors ---
