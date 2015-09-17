@@ -901,7 +901,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``\ , which should have a size corresponding to ``(size(src,2),size(src,1))``\ . No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 
-.. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A, [B,]; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    .. Docstring generated from Julia source
 
