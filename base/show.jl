@@ -983,7 +983,7 @@ function alignment(
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
-    a = []
+    a = Tuple{Int, Int}[]
     for j in cols
         l = r = 0
         for i in rows
