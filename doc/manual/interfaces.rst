@@ -151,7 +151,7 @@ Abstract Arrays
 Methods to implement                                                                                    Brief description
 ========================================================== ============================================ =======================================================================================
 :func:`size(A) <size>`                                                                                  Returns a tuple containing the dimensions of A
-:func:`Base.linearindexing(Type) <Base.linearindexing>`                                                 Returns either ``Base.LinearFast()`` or ``Base.LinearSlow``. See the description below.
+:func:`Base.linearindexing(Type) <Base.linearindexing>`                                                 Returns either ``Base.LinearFast()`` or ``Base.LinearSlow()``. See the description below.
 :func:`getindex(A, i::Int) <getindex>`                                                                  (if ``LinearFast``) Linear scalar indexing
 :func:`getindex(A, i1::Int, ..., iN::Int) <getindex>`                                                   (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexing
 :func:`setindex!(A, v, i::Int) <getindex>`                                                              (if ``LinearFast``) Scalar indexed assignment
