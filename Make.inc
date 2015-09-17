@@ -100,7 +100,6 @@ USE_GPL_LIBS ?= 1
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
 bindir = $(prefix)/bin
 libdir = $(prefix)/lib
-private_libdir = $(libdir)/julia
 libexecdir = $(prefix)/libexec
 datarootdir = $(prefix)/share
 docdir = $(datarootdir)/doc/julia
@@ -114,7 +113,6 @@ build_prefix = $(JULIAHOME)/usr
 build_staging = $(build_prefix)-staging
 build_bindir = $(build_prefix)/bin
 build_libdir = $(build_prefix)/lib
-build_private_libdir = $(build_prefix)/lib/julia
 build_libexecdir = $(build_prefix)/libexec
 build_datarootdir = $(build_prefix)/share
 build_docdir = $(build_datarootdir)/doc/julia
@@ -123,6 +121,16 @@ build_man1dir = $(build_mandir)/man1
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
+# This used for debian packaging, to conform to library layout guidelines
+ifeq ($(MULTIARCH_INSTALL), 1)
+MULTIARCH = $(shell gcc -print-multiarch)
+libdir = $(prefix)/lib/$(MULTIARCH)
+build_libdir = $(build_prefix)/lib/$(MULTIARCH)
+endif
+
+# Private library directories
+private_libdir = $(libdir)/julia
+build_private_libdir = $(build_libdir)/julia
 
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
 build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
@@ -135,15 +143,6 @@ sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysco
 
 INSTALL_F = $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M = $(JULIAHOME)/contrib/install.sh 755
-
-# This used for debian packaging, to conform to library layout guidelines
-ifeq ($(MULTIARCH_INSTALL), 1)
-MULTIARCH = $(shell gcc -print-multiarch)
-libdir = $(prefix)/lib/$(MULTIARCH)
-private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
-build_libdir = $(build_prefix)/lib/$(MULTIARCH)
-build_private_libdir = $(build_prefix)/lib/$(MULTIARCH)/julia
-endif
 
 # LLVM Options
 LLVMROOT = $(build_prefix)
