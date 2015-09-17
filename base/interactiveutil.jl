@@ -2,7 +2,14 @@
 
 # editing files
 
-function edit(file::AbstractString, line::Integer)
+doc"""
+    editor()
+
+Determines the editor to use when running functions like `edit`. Returns an Array compatible
+for use within backticks. You can change the editor by setting JULIA_EDITOR, VISUAL, or
+EDITOR as an environmental variable.
+"""
+function editor()
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -10,39 +17,37 @@ function edit(file::AbstractString, line::Integer)
     else
         default_editor = "emacs"
     end
-    editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
-    if ispath(editor)
-        if isreadable(editor)
-            edpath = realpath(editor)
-            edname = basename(edpath)
-        else
-            error("can't find \"$editor\"")
-        end
-    else
-        edpath = edname = editor
-    end
+    # Note: the editor path can include spaces (if escaped) and flags.
+    command = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
+    isempty(command) && error("editor is empty")
+    return command
+end
+
+function edit(file::AbstractString, line::Integer)
+    command = editor()
+    name = basename(first(command))
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         f = find_source_file(file)
         f !== nothing && (file = f)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
-    if startswith(edname, "emacs") || edname == "gedit"
-        spawn(`$edpath +$line $file`)
-    elseif edname == "vi" || edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
-        run(`$edpath +$line $file`)
-    elseif edname == "textmate" || edname == "mate" || edname == "kate"
-        spawn(`$edpath $file -l $line`)
-    elseif startswith(edname, "subl") || edname == "atom"
-        spawn(`$(shell_split(edpath)) $file:$line`)
-    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
+    if startswith(name, "emacs") || name == "gedit"
+        spawn(`$command +$line $file`)
+    elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+        run(`$command +$line $file`)
+    elseif name == "textmate" || name == "mate" || name == "kate"
+        spawn(`$command $file -l $line`)
+    elseif startswith(name, "subl") || name == "atom"
+        spawn(`$command $file:$line`)
+    elseif OS_NAME == :Windows && (name == "start" || name == "open")
         spawn(`cmd /c start /b $file`)
         println(no_line_msg)
-    elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
+    elseif OS_NAME == :Darwin && (name == "start" || name == "open")
         spawn(`open -t $file`)
         println(no_line_msg)
     else
-        run(`$(shell_split(edpath)) $file`)
+        run(`$command $file`)
         println(no_line_msg)
     end
     nothing
