@@ -102,8 +102,6 @@ end
 serialize(s::SerializationState, x::Bool) = x ? writetag(s.io, TRUE_TAG) :
                                                 writetag(s.io, FALSE_TAG)
 
-serialize(s::SerializationState, ::Ptr) = error("cannot serialize a pointer")
-
 serialize(s::SerializationState, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::SerializationState, t::Tuple)
@@ -646,8 +644,6 @@ function deserialize_datatype(s::SerializationState)
     end
     deserialize(s, t)
 end
-
-deserialize{T}(s::SerializationState, ::Type{Ptr{T}}) = convert(Ptr{T}, 0)
 
 function deserialize(s::SerializationState, ::Type{Task})
     t = Task(()->nothing)

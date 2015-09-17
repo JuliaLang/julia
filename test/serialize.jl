@@ -39,7 +39,9 @@ end
 
 # Ptr
 create_serialization_stream() do s
-    @test_throws ErrorException serialize(s, C_NULL)
+    serialize(s, C_NULL)
+    seekstart(s)
+    @test deserialize(s) === C_NULL
 end
 
 # Integer
