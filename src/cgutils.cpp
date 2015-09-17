@@ -790,6 +790,12 @@ static bool is_tupletype_homogeneous(jl_svec_t *t)
     return true;
 }
 
+static bool deserves_sret(jl_value_t *dt, Type *T)
+{
+    assert(jl_is_datatype(dt));
+    return jl_datatype_size(dt) > sizeof(void*) && !T->isFloatingPointTy();
+}
+
 // --- generating various field accessors ---
 
 static Value *emit_nthptr_addr(Value *v, ssize_t n)
