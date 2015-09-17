@@ -700,17 +700,17 @@ imply multiplication:
     julia> (x-1)(x+1)
     ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
     Closest candidates are:
-      Union(!Matched::Any...)
       BoundsError()
       BoundsError(!Matched::Any...)
+      DivideError()
       ...
 
     julia> x(x+1)
     ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
     Closest candidates are:
-      Union(!Matched::Any...)
       BoundsError()
       BoundsError(!Matched::Any...)
+      DivideError()
       ...
 
 Both expressions are interpreted as function application: any

@@ -15,6 +15,7 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
+
 # constructors for Core types in boot.jl
 call(T::Type{BoundsError}) = Core.call(T)
 call(T::Type{BoundsError}, args...) = Core.call(T, args...)
@@ -49,6 +50,7 @@ call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 call(T::Type{Void}) = Core.call(Void)
+
 
 # The specialization for 1 arg is important when running with --inline=no, see #11158
 call{T}(::Type{T}, arg) = convert(T, arg)::T
