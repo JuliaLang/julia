@@ -3375,3 +3375,7 @@ immutable EmptyIIOtherField13175
 end
 @test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) == EmptyIIOtherField13175(EmptyImmutable13175(), 1.0)
 @test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) != EmptyIIOtherField13175(EmptyImmutable13175(), 2.0)
+
+# issue #13183
+gg13183{X}(x::X...) = 1==0 ? gg13183(x, x) : 0
+@test gg13183(5) == 0
