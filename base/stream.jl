@@ -1000,12 +1000,13 @@ write(s::LibuvStream, p::Ptr, n::Integer) = buffer_or_write(s, p, n)
 
 function uv_writecb_task(req::Ptr{Void}, status::Cint)
     d = uv_req_data(req)
-    @assert d != C_NULL
-    if status < 0
-        err = UVError("write",status)
-        schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
-    else
-        schedule(unsafe_pointer_to_objref(d)::Task)
+    if d != C_NULL
+        if status < 0
+            err = UVError("write",status)
+            schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+        else
+            schedule(unsafe_pointer_to_objref(d)::Task)
+        end
     end
     Libc.free(req)
     nothing
