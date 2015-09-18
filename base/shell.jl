@@ -81,7 +81,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
                     if done(s,k)
                         error("unterminated double quote")
                     end
-                    if s[k] == '"' || s[k] == '$'
+                    if s[k] == '"' || s[k] == '$' || s[k] == '\\'
                         update_arg(s[i:j-1]); i = k
                         c, k = next(s,k)
                     end
@@ -125,34 +125,56 @@ function shell_split(s::AbstractString)
     args
 end
 
+"Quote by enclosing in single quotes"
+function _quote_via_single_quote(word::AbstractString)
+    # Quote by enclosing in single quotes, and replace all single
+    # quotes with backslash-quote
+    quoted = "'" * replace(word, r"'", "'\\''") * "'"
+    # Remove empty leading or trailing quotes
+    quoted = replace(quoted, r"^''", "")
+    quoted = replace(quoted, r"'''$(?!\n)", "'")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+"Quote by enclosing in double quotes"
+function _quote_via_double_quote(word::AbstractString)
+    # Quote by enclosing in double quotes and escaping certain special
+    # characters with a backslash, and by escaping all exclamation
+    # marks with a backslash
+    quoted = "\"" * replace(word, r"(?=[$`\"\\])", "\\") * "\""
+    quoted = replace(quoted, r"!", "\"\\!\"\"")
+    # Remove empty leading or trailing quotes
+    quoted = replace(quoted, r"^\"\"", "")
+    quoted = replace(quoted, r"!\"\"$(?!\n)", "!")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+"Quote by escaping with backslashes"
+function _quote_via_backslash(word::AbstractString)
+    # Quote by escaping all non-alphanumeric characters with a
+    # backslash, and by enclosing all newlines with single quotes
+    quoted = replace(word, r"(?=[^-0-9a-zA-Z_./\n])", "\\")
+    quoted = replace(quoted, r"\n", "'\\n'")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+function _quote_shell_word(word::AbstractString)
+    # Return the shortest string
+    quotes = [_quote_via_single_quote(word),
+              _quote_via_double_quote(word),
+              _quote_via_backslash(word)]
+    shortest = findmin(map(length, quotes))[2]
+    return quotes[shortest]
+end
+
 function print_shell_word(io::IO, word::AbstractString)
-    if isempty(word)
-        print(io, "''")
-    end
-    has_single = false
-    has_special = false
-    for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
-            has_special = true
-            if c == '\''
-                has_single = true
-            end
-        end
-    end
-    if !has_special
-        print(io, word)
-    elseif !has_single
-        print(io, '\'', word, '\'')
-    else
-        print(io, '"')
-        for c in word
-            if c == '"' || c == '$'
-                print(io, '\\')
-            end
-            print(io, c)
-        end
-        print(io, '"')
-    end
+    print(io, _quote_shell_word(word))
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
