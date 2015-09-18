@@ -1,12 +1,12 @@
 # SHA initial hash values and constants
 
 # Hash constant words K for SHA1
-const K1 = Uint32[
+const K1 = UInt32[
     0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6
 ]
 
 # Initial hash value H for SHA1
-const SHA1_initial_hash_value = Uint32[
+const SHA1_initial_hash_value = UInt32[
     0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0
 ]
 

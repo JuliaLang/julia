@@ -10,9 +10,9 @@ abstract SHA2_CTX_SMALL <: SHA_CTX
 # SHA2 needs to due to its two different Sigma_* functions
 type SHA1_CTX <: SHA_CTX
     state::Array{UInt32,1}
-    bytecount::Uint64
-    buffer::Array{Uint8,1}
-    W::Array{Uint32,1}
+    bytecount::UInt64
+    buffer::Array{UInt8,1}
+    W::Array{UInt32,1}
 end
 
 # SHA-224/256/384/512 Context Structures
@@ -54,11 +54,11 @@ digestlen(::Type{SHA256_CTX}) = 32
 digestlen(::Type{SHA384_CTX}) = 48
 digestlen(::Type{SHA512_CTX}) = 64
 
-state_type(::Type{SHA1_CTX}) = Uint32
-state_type(::Type{SHA224_CTX}) = Uint32
-state_type(::Type{SHA256_CTX}) = Uint32
-state_type(::Type{SHA384_CTX}) = Uint64
-state_type(::Type{SHA512_CTX}) = Uint64
+state_type(::Type{SHA1_CTX}) = UInt32
+state_type(::Type{SHA224_CTX}) = UInt32
+state_type(::Type{SHA256_CTX}) = UInt32
+state_type(::Type{SHA384_CTX}) = UInt64
+state_type(::Type{SHA512_CTX}) = UInt64
 
 # short_blocklen is the size of a block minus the width of bytecount
 short_blocklen{T<:SHA_CTX}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
@@ -69,12 +69,12 @@ for ALG in ["SHA224", "SHA256", "SHA384", "SHA512"]
     TYPE = symbol("$(ALG)_CTX")
     HASH_VAL = symbol("$(ALG)_initial_hash_value")
     @eval begin
-        $TYPE() = $TYPE(copy($HASH_VAL), 0, zeros(Uint8, blocklen($TYPE)))
+        $TYPE() = $TYPE(copy($HASH_VAL), 0, zeros(UInt8, blocklen($TYPE)))
     end
 end
 
 # SHA1 is special; he needs extra workspace
-SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(Uint8, blocklen(SHA1_CTX)), Array(Uint32, 80))
+SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(UInt8, blocklen(SHA1_CTX)), Array(UInt32, 80))
 
 # Make printing these types a little friendlier
 import Base.show
@@ -83,4 +83,3 @@ show(io::IO, ::SHA224_CTX) = write(io, "SHA-224 hash state")
 show(io::IO, ::SHA256_CTX) = write(io, "SHA-256 hash state")
 show(io::IO, ::SHA384_CTX) = write(io, "SHA-384 hash state")
 show(io::IO, ::SHA512_CTX) = write(io, "SHA-512 hash state")
-

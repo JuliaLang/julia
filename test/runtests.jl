@@ -106,9 +106,9 @@ print("Testing on one million a's (chunked clumsily)")
 nerrors_old = nerrors
 for idx in 1:length(sha_funcs)
     ctx = sha_types[idx]()
-    SHA.update!(ctx, so_many_as[1:int(1.3*SHA.blocklen(typeof(ctx)))])
-    SHA.update!(ctx, so_many_as[int(1.3*SHA.blocklen(typeof(ctx)))+1:int(1.7*SHA.blocklen(typeof(ctx)))])
-    SHA.update!(ctx, so_many_as[int(1.7*SHA.blocklen(typeof(ctx)))+1:end])
+    SHA.update!(ctx, so_many_as[1:round(Int, 1.3*SHA.blocklen(typeof(ctx)))])
+    SHA.update!(ctx, so_many_as[round(Int, 1.3*SHA.blocklen(typeof(ctx)))+1:round(Int, 1.7*SHA.blocklen(typeof(ctx)))])
+    SHA.update!(ctx, so_many_as[round(Int, 1.7*SHA.blocklen(typeof(ctx)))+1:end])
     hash = bytes2hex(SHA.digest!(ctx))
     if hash != answers[sha_funcs[idx]][end]
         print("\n")
