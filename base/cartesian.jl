@@ -2,7 +2,7 @@
 
 module Cartesian
 
-export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif
+export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 ### Cartesian-specific macros
 
