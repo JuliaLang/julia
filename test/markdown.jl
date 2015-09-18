@@ -213,24 +213,20 @@ end
 
 ref(x) = Reference(x)
 
-if Base.USE_GPL_LIBS
-
-ref(fft)
+ref(mean)
 
 writemime(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-fft_ref = md"Behaves like $(ref(fft))"
-@test plain(fft_ref) == "Behaves like fft (see Julia docs)\n"
-@test html(fft_ref) == "<p>Behaves like fft &#40;see Julia docs&#41;</p>\n"
+mean_ref = md"Behaves like $(ref(mean))"
+@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
+@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
 
 writemime(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(fft_ref) == "<p>Behaves like <a href=\"test\">fft &#40;see Julia docs&#41;</a></p>\n"
-
-end # USE_GPL_LIBS
+@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
