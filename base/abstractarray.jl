@@ -300,11 +300,24 @@ end
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 
-function copy!(dest::AbstractArray, src::AbstractArray)
+copy!(dest::AbstractArray, src::AbstractArray) =
+    copy!(linearindexing(dest), dest, linearindexing(src), src)
+
+function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::AbstractArray)
     n = length(src)
     n > length(dest) && throw(BoundsError(dest, n))
     @inbounds for i = 1:n
         dest[i] = src[i]
+    end
+    return dest
+end
+
+function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::AbstractArray)
+    n = length(src)
+    n > length(dest) && throw(BoundsError(dest, n))
+    i = 0
+    @inbounds for a in src
+        dest[i+=1] = a
     end
     return dest
 end
@@ -394,6 +407,8 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 start(A::AbstractArray) = (@_inline_meta(); itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray,i) = done(i[1], i[2])
+
+iterstate(i) = i
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
@@ -1013,7 +1028,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i in eachindex(A)
+    for i in eachindex(A,B)
         if !isequal(A[i], B[i])
             return false
         end
@@ -1037,7 +1052,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i in eachindex(A)
+    for i in eachindex(A,B)
         if !(A[i]==B[i])
             return false
         end
