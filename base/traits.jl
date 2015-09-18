@@ -210,7 +210,7 @@ macro traitfn(tfn)
     tmp1 = :($tmp1())
     addtoargs!(tmp1, args)
     tmp2 = :($fname($curmod.trait($trait)))
-    addtoargs!(tmp2, striparg(args))
+    addtoargs!(tmp2, stripType(striparg(args)))
     fwrap = :($tmp1 = ($curmod.@_inline_meta(); $tmp2))
 
     # The function containing the logic
@@ -252,6 +252,11 @@ striparg{T}(args::Array{T,1}) = [striparg(args[i]) for i=1:arraylen(args)]
 striparg(a::Symbol) = a
 striparg(a::Expr) = a.args[1]
 
+# :(Type{X}) -> X, X->X
+stripType{T}(args::Array{T,1}) = [stripType(args[i]) for i=1:arraylen(args)]
+stripType(a::Symbol) = a
+stripType(a::Expr) = (a.head==:curly && a.args[1]==:Type) ? a.args[2] : a
+
 ####
 # Some trait definitions
 ####
@@ -273,19 +278,20 @@ typealias IsNothing{X} Not{IsAnything{X}}
     end
 end
 
-# # from reflection.jl (need to be moved elsewhere because they don't bootstrap here)
 # "Trait of all isbits-types"
 # @traitdef IsBits{X}
-# @generated trait{X}(::Type{IsBits{X}}) =
+# @generated function trait{X}(::Type{IsBits{X}})
 #     isbits(X) ? :(IsBits{X}) : :(Not{IsBits{X}})
+# end
 
 # "Trait of all immutable types"
 # @traitdef IsImmutable{X}
-# @generated trait{X}(::Type{IsImmutable{X}}) =
+# @generated function trait{X}(::Type{IsImmutable{X}})
 #     X.mutable ? :(Not{IsImmutable{X}}) : :(IsImmutable{X})
+# end
 
 # "Trait of all leaf types types"
 # @traitdef IsLeafType{X}
-# @generated trait{X}(::Type{IsLeafType{X}}) =
+# @generated function trait{X}(::Type{IsLeafType{X}})
 #     X.mutable ? :(Not{IsLeafType{X}}) : :(IsLeafType{X})
-
+# end

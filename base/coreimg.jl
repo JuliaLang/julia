@@ -41,10 +41,10 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 
-# # traits
+#  traits
 getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
 include("traits.jl")
-#include("traits-bootstrap-tests.jl")
+include("traits-bootstrap-tests.jl")
 
 # core array operations
 include("abstractarray.jl")
