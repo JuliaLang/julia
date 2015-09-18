@@ -79,7 +79,7 @@ function next(s::UTF8String, i::Int)
 end
 
 function first_utf8_byte(ch::Char)
-    c = reinterpret(UInt32, ch)
+    c = UInt32(ch)
     c < 0x80    ? c%UInt8 :
     c < 0x800   ? ((c>>6)  | 0xc0)%UInt8 :
     c < 0x10000 ? ((c>>12) | 0xe0)%UInt8 :
@@ -166,7 +166,7 @@ function string(a::Union{ByteString,Char}...)
     s = Array(UInt8,0)
     for d in a
         if isa(d,Char)
-            c = reinterpret(UInt32, d::Char)
+            c = UInt32(d::Char)
             if c < 0x80
                 push!(s, c%UInt8)
             elseif c < 0x800

@@ -184,9 +184,9 @@ function write(s::IOStream, c::Char)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    Int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
+    Int(ccall(:ios_pututf8, Int32, (Ptr{Void}, UInt32), s.ios, c))
 end
-read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
+read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString

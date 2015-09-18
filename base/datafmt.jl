@@ -10,7 +10,7 @@ import Base: _default_delims, tryparse_internal
 export countlines, readdlm, readcsv, writedlm, writecsv
 
 
-const invalid_dlm = Char(0xfffffffe)
+const invalid_dlm = reinterpret(Char, 0xfffffffe)
 const offs_chunk_size = 5000
 
 countlines(f::AbstractString,eol::Char='\n') = open(io->countlines(io,eol),f)::Int

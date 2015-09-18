@@ -7,8 +7,8 @@ convert{T<:Number}(::Type{T}, x::Char) = convert(T, UInt32(x))
 
 rem{T<:Number}(x::Char, ::Type{T}) = rem(UInt32(x), T)
 
-typemax(::Type{Char}) = Char(typemax(UInt32))
-typemin(::Type{Char}) = Char(typemin(UInt32))
+typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
+typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
 
 size(c::Char) = ()
 size(c::Char,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
@@ -38,8 +38,8 @@ isless(x::Char, y::Integer) = isless(UInt32(x), y)
 isless(x::Integer, y::Char) = isless(x, UInt32(y))
 
 -(x::Char, y::Char) = Int(x) - Int(y)
--(x::Char, y::Integer) = reinterpret(Char, Int32(x) - Int32(y))
-+(x::Char, y::Integer) = reinterpret(Char, Int32(x) + Int32(y))
+-(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
++(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
 
 bswap(x::Char) = Char(bswap(UInt32(x)))
