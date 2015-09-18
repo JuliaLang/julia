@@ -308,24 +308,24 @@ let fname = tempname()
     rm(fname)
 end
 
-let cmd = AbstractString[]
-    # Ensure that quoting works
-    @test Base.shell_split("foo bar baz") == ["foo", "bar", "baz"]
-    @test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
-    @test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
-    @test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
+# Ensure that quoting works
+@test Base.shell_split("foo bar baz") == ["foo", "bar", "baz"]
+@test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
+@test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
+@test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
 
-    # "Over quoted"
-    @test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
-    @test Base.shell_split("\"foo\\ bar\" baz") == ["foo\\ bar", "baz"]
+# "Over quoted"
+@test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
+@test Base.shell_split("\"foo\\ bar\" baz") == ["foo\\ bar", "baz"]
 
-    # Ensure that shell_split handles quoted spaces
-    cmd = ["/Volumes/External HD/program", "-a"]
+# Ensure that shell_split handles quoted spaces
+let cmd = ["/Volumes/External HD/program", "-a"]
     @test Base.shell_split("/Volumes/External\\ HD/program -a") == cmd
     @test Base.shell_split("'/Volumes/External HD/program' -a") == cmd
     @test Base.shell_split("\"/Volumes/External HD/program\" -a") == cmd
+end
 
-    # Backticks should automatically quote where necessary
-    cmd = ["foo bar", "baz"]
+# Backticks should automatically quote where necessary
+let cmd = ["foo bar", "baz"]
     @test string(`$cmd`) == "`'foo bar' baz`"
 end
