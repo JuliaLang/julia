@@ -721,17 +721,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         end)
 
     # Set up shell mode
+    function quote_string(str::AbstractString)
+        "\"" * replace(str, r"\"", "\\\"") * "\""
+    end
+    function unescape_string(expr::Expr)
+        @assert expr.head === :call
+        @assert length(expr.args) == 2
+        @assert expr.args[1] === :esc
+        expr.args[2]
+    end
     shell_mode = Prompt("shell> ";
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         keymap_func_data = repl,
         complete = ShellCompletionProvider(repl),
-        # Transform "foo bar baz" into `foo bar baz` (shell quoting)
-        # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
-        # special)
+        # Pass into Base.repl_cmd for processing (handles `cd` special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
+            Expr(:call, :(Base.repl_cmd),
+                 unescape_string(:(esc($(parse(quote_string(line)))))),
+                 outstream(repl))
         end)
 
     ################################# Stage II #############################

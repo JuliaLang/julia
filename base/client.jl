@@ -39,8 +39,8 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+function repl_cmd(line, out)
+    shell = shell_split(get(ENV,"JULIA_SHELL", get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
     if Base.basename(shell[1]) == "fish"
@@ -49,21 +49,28 @@ function repl_cmd(cmd, out)
         shell = "/bin/sh"
     end
 
-    if isempty(cmd.exec)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
+    cmds = Base.shell_split(escape_string(line))
+    if isempty(cmds)
+        # The command consists of white space only; do nothing
+    elseif cmds[1] == "cd"
         new_oldpwd = pwd()
-        if length(cmd.exec) > 2
+        if length(cmds) > 2
             throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
+        elseif length(cmds) == 2
+            dir = cmds[2]
             if dir == "-"
                 if !haskey(ENV, "OLDPWD")
                     error("cd: OLDPWD not set")
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                # We cannot use the result of shell_split here,
+                # because it removes quotes. We thus pass the whole
+                # line (including the initial "cd") to "echo". We then
+                # remove the initial "cd".
+                cmd = "echo $line"
+                unixcmd = `$shell -c $cmd`
+                cd(@windows? dir : replace(readchomp(unixcmd), r"^cd ", ""))
             end
         else
             cd()
@@ -71,7 +78,17 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        # We use two shell levels: An outer one process the shell
+        # metacharacters (output redirection, command pipelines,
+        # etc.), and an inner one to redirect stdout, stderr etc. so
+        # that it doesn't interfere with the REPL's connection to the
+        # terminal.
+        # TODO: Use Cmd's I/O redirection to avoid the inner shell
+        # level? This might also allow using fish as shell (see
+        # above).
+        unixcmd = isa(STDIN, TTY) ? `$shell -i -c ($line)` : `$shell -c ($line)`
+        wincmd = Cmd(Vector{ByteString}(cmds))
+        run(ignorestatus(@windows? wincmd : unixcmd))
     end
     nothing
 end
