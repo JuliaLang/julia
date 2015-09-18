@@ -76,11 +76,6 @@ function repl_cmd(cmd, out)
     nothing
 end
 
-function repl_hook(input::AbstractString)
-    Expr(:call, :(Base.repl_cmd),
-         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
-end
-
 display_error(er) = display_error(er, [])
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
