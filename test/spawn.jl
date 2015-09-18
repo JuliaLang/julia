@@ -329,3 +329,5 @@ end
 let cmd = ["foo bar", "baz"]
     @test string(`$cmd`) == "`'foo bar' baz`"
 end
+
+@test Base.shell_split("\"\\\\\"") == ["\\"]
