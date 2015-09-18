@@ -59,7 +59,7 @@ immutable CartesianRange{I<:CartesianIndex}
     stop::I
 end
 
-iterstate{CR<:CartesianRange,CI<:CartesianIndex}(i::Tuple{CR,CI}) = i[2]
+iterstate{CR<:CartesianRange,CI<:CartesianIndex}(i::Tuple{CR,CI}) = Base._sub2ind(i[1].stop.I, i[2].I)
 
 @generated function CartesianRange{N}(I::CartesianIndex{N})
     startargs = fill(1, N)
