@@ -328,6 +328,18 @@ end
 # Backticks should automatically quote where necessary
 let cmd = ["foo bar", "baz"]
     @test string(`$cmd`) == "`'foo bar' baz`"
+
+    # Test various difficult strings, and test multiple quoting levels
+    strs = ByteString["", "asdf", "'", "\"", "\\", " ", "\$",
+                      "a\"bc\"d", "'012'3", " a ", "\n", "\\n", "\t",
+                      "echo hello", " \${LANG}", "\"println(ARGS)\""]
+    for level in 1:3
+        cmd = Cmd(strs)
+        quoted = Base.shell_escape(cmd)
+        strs2 = Base.shell_split(quoted)
+        @test strs2 == strs
+        strs = ByteString[Base.shell_escape(str) for str in strs]
+    end
 end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]

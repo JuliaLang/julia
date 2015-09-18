@@ -125,34 +125,64 @@ function shell_split(s::AbstractString)
     args
 end
 
+"Quote by enclosing in single quotes"
+function _quote_via_single_quote(word::AbstractString)
+    # Quote by enclosing in single quotes, and replace all single
+    # quotes with backslash-quote
+    quoted = "'" * replace(word, r"'", "'\\''") * "'"
+    # Remove empty leading or trailing quotes
+    quoted = replace(quoted, r"^''", "")
+    quoted = replace(quoted, r"'''$(?!\n)", "'")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+"Quote by enclosing in double quotes"
+function _quote_via_double_quote(word::AbstractString)
+    # Quote by enclosing in double quotes and escaping certain special
+    # characters with a backslash, and by escaping all exclamation
+    # marks with a backslash
+    quoted = "\"" * replace(word, r"(?=[$`\"\\])", "\\") * "\""
+    quoted = replace(quoted, r"!", "\"\\!\"\"")
+    # Remove empty leading or trailing quotes
+    quoted = replace(quoted, r"^\"\"", "")
+    quoted = replace(quoted, r"!\"\"$(?!\n)", "!")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+"Quote by escaping with backslashes"
+function _quote_via_backslash(word::AbstractString)
+    # Quote by escaping all non-alphanumeric characters with a
+    # backslash, and by enclosing all newlines with single quotes
+    quoted = replace(word, r"(?=[^-0-9a-zA-Z_./\n])", "\\")
+    quoted = replace(quoted, r"\n", "'\\n'")
+    if isempty(quoted)
+        quoted = "''"
+    end
+    quoted
+end
+"Score a quoted string (lower is better)"
+function _score_quoted(quoted::AbstractString)
+    # Prefer shorted strings, and penalize backslashes (which are
+    # arguably more confusing than quotes)
+    length(quoted) + count(c -> c=='\\', quoted)
+end
+"Quote a word so that it is safe to use with Posix sh"
+function _quote_shell_word(word::AbstractString)
+    # Return the "best" string
+    quotes = [_quote_via_single_quote(word),
+              _quote_via_double_quote(word),
+              _quote_via_backslash(word)]
+    scores = map(_score_quoted, quotes)
+    best = findmin(scores)[2]
+    return quotes[best]
+end
+
 function print_shell_word(io::IO, word::AbstractString)
-    if isempty(word)
-        print(io, "''")
-    end
-    has_single = false
-    has_special = false
-    for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
-            has_special = true
-            if c == '\''
-                has_single = true
-            end
-        end
-    end
-    if !has_special
-        print(io, word)
-    elseif !has_single
-        print(io, '\'', word, '\'')
-    else
-        print(io, '"')
-        for c in word
-            if c == '"' || c == '$'
-                print(io, '\\')
-            end
-            print(io, c)
-        end
-        print(io, '"')
-    end
+    print(io, _quote_shell_word(word))
 end
 
 function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
