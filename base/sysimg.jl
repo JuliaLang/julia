@@ -91,8 +91,8 @@ include("iobuffer.jl")
 include("string.jl")
 include("unicode.jl")
 include("parse.jl")
-include("shell.jl")
 include("regex.jl")
+include("shell.jl")
 include("base64.jl")
 importall .Base64
 

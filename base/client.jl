@@ -39,7 +39,7 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_cmd(cmd, out)
+function repl_cmd(line, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
@@ -49,21 +49,24 @@ function repl_cmd(cmd, out)
         shell = "/bin/sh"
     end
 
-    if isempty(cmd.exec)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
+    cmds = split(line)
+    if isempty(cmds)
+        # The command consists of white space only; do nothing
+    elseif cmds[1] == "cd"
         new_oldpwd = pwd()
-        if length(cmd.exec) > 2
+        if length(cmds) > 2
             throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
+        elseif length(cmds) == 2
+            dir = cmds[2]
             if dir == "-"
                 if !haskey(ENV, "OLDPWD")
                     error("cd: OLDPWD not set")
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cmd = "echo $dir"
+                unixcmd = `$shell -c $cmd`
+                cd(@windows? dir : readchomp(unixcmd))
             end
         else
             cd()
@@ -71,7 +74,16 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        # We use two shell levels: An outer one process the shell
+        # metacharacters (output redirection, command pipelines,
+        # etc.), and an inner one to redirect stdout, stderr etc. so
+        # that it doesn't interfere with the REPL's connection to the
+        # terminal.
+        parline = "($line)"
+        ttyflag = isa(STDIN, TTY) ? "-i" : ""
+        unixcmd = `$shell $ttyflag -c $parline`
+        wincmd = Cmd(Vector{ByteString}(shell_split(line)))
+        run(ignorestatus(@windows? wincmd : unixcmd))
     end
     nothing
 end

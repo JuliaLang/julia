@@ -1,5 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Shell escaping
+strs = ByteString["", "asdf", "'", "\"", "\\", " ", "\$",
+                  "a\"bc\"d", "'012'3", " a ", "\n", "\\n", "\t",
+                  "echo hello", " \${LANG}", "\"println(ARGS)\""]
+for level in 1:3
+    cmd = Cmd(strs)
+    quoted = Base.shell_escape(cmd)
+    strs2 = Base.shell_split(quoted)
+    @test strs2 == strs
+    strs = ByteString[Base.shell_escape(str) for str in strs]
+end
+
 # REPL tests
 isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers

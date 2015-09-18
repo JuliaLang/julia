@@ -327,5 +327,5 @@ let cmd = AbstractString[]
 
     # Backticks should automatically quote where necessary
     cmd = ["foo bar", "baz"]
-    @test string(`$cmd`) == "`'foo bar' baz`"
+    @test string(`$cmd`) in ["`'foo bar' baz`", "`foo\\ bar baz`"]
 end
