@@ -101,6 +101,16 @@ let n=10
         # cond
         @test cond(Hermitian(asym)) ≈ cond(asym)
 
+        # det
+        @test det(asym) ≈ det(Hermitian(asym, :U))
+        @test det(asym) ≈ det(Hermitian(asym, :L))
+        if eltya <: Real
+            @test det(asym) ≈ det(Symmetric(asym, :U))
+            @test det(asym) ≈ det(Symmetric(asym, :L))
+        end
+        @test det(a + a.') ≈ det(Symmetric(a + a.', :U))
+        @test det(a + a.') ≈ det(Symmetric(a + a.', :L))
+
         # rank
         let A = a[:,1:5]*a[:,1:5]'
             @test rank(A) == rank(Hermitian(A))
