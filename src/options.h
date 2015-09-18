@@ -99,7 +99,7 @@
 
 // defaults for # threads
 #define NUM_THREADS_NAME		"JULIA_NUM_THREADS"
-#define DEFAULT_NUM_THREADS		8
+#define DEFAULT_NUM_THREADS		4
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME		"JULIA_EXCLUSIVE"
