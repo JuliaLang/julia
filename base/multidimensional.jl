@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims
+import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims, iterstate
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
@@ -58,6 +58,8 @@ immutable CartesianRange{I<:CartesianIndex}
     start::I
     stop::I
 end
+
+iterstate{CR<:CartesianRange,CI<:CartesianIndex}(i::Tuple{CR,CI}) = i[2]
 
 @generated function CartesianRange{N}(I::CartesianIndex{N})
     startargs = fill(1, N)
