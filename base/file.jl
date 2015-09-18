@@ -168,6 +168,25 @@ function mktempdir(parent=tempdir())
     systemerror(:mktempdir, p == C_NULL)
     return bytestring(p)
 end
+
+# Find and return the path to a command.
+function which(cmd::AbstractString)
+    if !isempty(dirname(cmd))
+        # `cmd` seems to be a relative path
+        if isfile(cmd)
+            return Nullable(utf8(cmd))
+        end
+    else
+        # find `cmd` from the PATH
+        for path in split(ENV["PATH"], ':')
+            cmd_path = joinpath(path, cmd)
+            if isfile(cmd_path)
+                return Nullable(utf8(cmd_path))
+            end
+        end
+    end
+    return Nullable{UTF8String}()
+end
 end
 
 @windows_only begin
