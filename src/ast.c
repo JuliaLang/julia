@@ -516,6 +516,18 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
     return scm_to_julia(e,0);
 }
 
+// this is used to parse a line of shell input
+DLLEXPORT jl_value_t *jl_parse_shell_line(const char *str, size_t len,
+                                          int interpolate)
+{
+    value_t s = cvalue_static_cstrn(str, len);
+    value_t e = fl_applyn(2, symbol_value(symbol("jl-parse-shell-string")),
+                          s, interpolate?FL_T:FL_F);
+    if (e == FL_EOF)
+        return jl_nothing;
+    return scm_to_julia(e,0);
+}
+
 // this is for parsing one expression out of a string, keeping track of
 // the current position.
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,

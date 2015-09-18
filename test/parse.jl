@@ -16,6 +16,22 @@ function parseall(str)
     end
 end
 
+# command literals
+@test ` \n '\n' "\n" `.exec == ["n","\\n","\\n"]
+@test ` \\ '\' "\\" `.exec == ["\\","\\","\\"]
+@test ` \" '"' "\"" `.exec == ["\"","\"","\""]
+@test ` \$ '$' "\$" `.exec == ["\$","\$","\$"]
+@test ` \' "'" `.exec == ["'","'"]
+@test ` \  ' ' " " `.exec == [" "," "," "]
+@test `a"b" 'c d'e`.exec == ["ab","c de"]
+
+# issue #3150
+macro test3150()
+    f="a"
+    esc(quote g="b" ; `echo $($f) $g` end)
+end
+@test @test3150().exec == ["echo","a","b"]
+
 # issue #9684
 let
     for (ex1, ex2) in [("5.≠x", "5.!=x"),

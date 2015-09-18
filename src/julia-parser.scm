@@ -1637,22 +1637,84 @@
       (error "incomplete: invalid \"`\" syntax") ; NOTE: changing this may affect code in base/client.jl
       c))
 
+(define (filter-out-empty-str e)
+  (filter (lambda (s) (not (and (string? s) (= (length s) 0)))) e))
+
+(define (space? c) (memv c '(#\space #\newline #\tab)))
+
 (define (parse-backquote s)
-  (let ((b (open-output-string))
-        (p (ts:port s)))
-    (let loop ((c (read-char p)))
-      (if (eqv? c #\`)
-          #t
-          (begin (if (eqv? c #\\)
-                     (let ((nextch (read-char p)))
-                       (if (eqv? nextch #\`)
-                           (write-char nextch b)
-                           (begin (write-char #\\ b)
-                                  (write-char (not-eof-2 nextch) b))))
-                     (write-char (not-eof-2 c) b))
-                 (loop (read-char p)))))
-    (let ((str (io.tostring! b)))
-      `(macrocall @cmd ,str))))
+  `(call (top cmd_gen) ,(parse-shell s #t #t)))
+
+(define (parse-shell s interpolate in-backticks)
+  (define (push-str b e)
+    (cons (io.tostring! b) e))
+  (define (push-arg e es)
+    (cons (reverse (if (length> e 2) (filter-out-empty-str e) e)) es))
+  (let ((p (ts:port s)))
+    (let loop ((c (read-char p))
+               (b (open-output-string))
+               (e '(tuple))
+               (es '(tuple))
+               (mode 0)) ; 0:ignore-space, 1:normal, 2:"...", 3:'...'
+      (cond
+        ((if in-backticks (eqv? c #\`) (eof-object? c))
+         (let ((result
+                 (case mode
+                   ((0) es)
+                   ((1) (push-arg (push-str b e) es))
+                   ((2) (error "unterminated double quote"))
+                   ((3) (error "unterminated single quote")))))
+               (reverse result)))
+
+        ; escape
+        ((and (eqv? c #\\) (< mode 3))
+         (let ((nextc (not-eof-2 (read-char p))))
+           (begin
+             (if (and (= mode 2) (not (memv nextc '(#\$ #\" #\\))))
+                 (write-char #\\ b))
+             (write-char nextc b)))
+         (loop (read-char p) b e es (max 1 mode)))
+
+        ; ignore space
+        ((and (space? c) (= mode 0))
+         (loop (read-char p) b e es 0))
+
+        ; end argument
+        ((and (space? c) (= mode 1))
+         (loop (read-char p)
+               (open-output-string)
+               '(tuple)
+               (push-arg (push-str b e) es)
+               0))
+
+        ; start double quotes
+        ((and (eqv? c #\") (< mode 2))
+         (loop (read-char p) b e es 2))
+
+        ; end double quotes
+        ((and (eqv? c #\") (= mode 2))
+         (loop (read-char p) b e es 1))
+
+        ; start single quotes
+        ((and (eqv? c #\') (< mode 2))
+         (loop (read-char p) b e es 3))
+
+        ; end single quotes
+        ((and (eqv? c #\') (= mode 3))
+         (loop (read-char p) b e es 1))
+
+        ; interpolate
+        ((and interpolate (eqv? c #\$) (< mode 3))
+         (let ((ex (parse-interpolate s)))
+           (loop (read-char p)
+                 (open-output-string)
+                 (cons ex (push-str b e))
+                 es
+                 (max 1 mode))))
+
+        (else
+         (write-char (not-eof-2 c) b)
+         (loop (read-char p) b e es (max 1 mode)))))))
 
 (define (not-eof-3 c)
   (if (eof-object? c)
@@ -2024,10 +2086,7 @@
            (take-token s)
            (let ((ps (parse-string-literal s #f)))
              (if (length> ps 1)
-                 `(string ,@(filter (lambda (s)
-                                      (not (and (string? s)
-                                                (= (length s) 0))))
-                                    ps))
+                 `(string ,@(filter-out-empty-str ps))
                  (car ps))))
 
           ;; macro call

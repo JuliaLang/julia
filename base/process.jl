@@ -649,7 +649,7 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    :(cmd_gen($(shell_parse(str)[1])))
+    :(cmd_gen($(shell_parse(str))))
 end
 
 wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end

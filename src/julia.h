@@ -1204,6 +1204,7 @@ void jl_init_restored_modules(jl_array_t *init_order);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
+DLLEXPORT jl_value_t *jl_parse_shell_line(const char *str, size_t len, int interpolate);
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                       int pos0, int greedy);
 DLLEXPORT int jl_parse_depwarn(int warn);

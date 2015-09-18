@@ -156,6 +156,10 @@
                                (loop (nreconc (cdr expr) exprs))
                                (loop (cons expr exprs))))))))))
 
+(define (jl-parse-shell-string s interpolate)
+  (let ((inp (make-token-stream (open-input-string s))))
+    (parser-wrap (lambda () (parse-shell inp interpolate #f)))))
+
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str filename)
   (jl-parser-set-stream filename (open-input-string str)))

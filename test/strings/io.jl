@@ -145,8 +145,8 @@ else
     primary_encoding = "UTF-32BE"
     primary_path = replace(joinpath(unicodedir, primary_encoding*".unicode"),"\\","\\\\\\\\")
     run(`perl -e "
-        $$fname = \"$primary_path\";
-        open(UNICODEF, \">\", \"$$fname\")         or die \"can\'t open $$fname: $$!\";
+        \$fname = \"$primary_path\";
+        open(UNICODEF, \">\", \"\$fname\")         or die \"can\'t open \$fname: \$!\";
         binmode(UNICODEF);
         print UNICODEF pack \"N*\", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff;
         close(UNICODEF);"` )

@@ -379,27 +379,25 @@ end
 
 function shell_completions(string, pos)
     # First parse everything up to the current position
-    scs = string[1:pos]
-    local args, last_parse
-    try
-        args, last_parse = Base.shell_parse(scs, true)
-    catch
-        return UTF8String[], 0:-1, false
-    end
-    # Now look at the last thing we parsed
-    isempty(args.args[end].args) && return UTF8String[], 0:-1, false
-    arg = args.args[end].args[end]
-    if all(s -> isa(s, AbstractString), args.args[end].args)
-        # Treat this as a path (perhaps give a list of commands in the future as well?)
-        return complete_path(join(args.args[end].args), pos)
-    elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
-        r = first(last_parse):prevind(last_parse, last(last_parse))
-        partial = scs[r]
+    partial = string[1:pos]
+    ex = Base.shell_parse(partial)
+
+    if isexpr(ex, :incomplete) || isexpr(ex, :error)
+        frange, method_name_end = find_start_brace(partial)
+        partial = partial[frange]
         ret, range = completions(partial, endof(partial))
-        range += first(r) - 1
+        range += first(frange) - 1
         return ret, range, true
     end
-    return UTF8String[], 0:-1, false
+
+    # Now look at the last thing we parsed
+    a = ex.args[end].args
+    if length(a) > 0 && all(s->isa(s,AbstractString), a)
+        # Treat this as a path (perhaps give a list of commands in the future as well?)
+        return complete_path(join(a), pos)
+    end
+
+    UTF8String[], 0:-1, false
 end
 
 end # module
