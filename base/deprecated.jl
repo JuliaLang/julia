@@ -158,8 +158,6 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-@deprecate_binding String AbstractString
-
 @deprecate_binding Uint    UInt
 @deprecate_binding Uint8   UInt8
 @deprecate_binding Uint16  UInt16
