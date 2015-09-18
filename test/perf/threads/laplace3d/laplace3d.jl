@@ -1,7 +1,7 @@
 ## 3D Laplace equation
 
 using Base.Cartesian
-using Base.Threading
+using Base.Threads
 
 const sixth = 1.0f0/6.0f0
 const error_tol = 0.00001

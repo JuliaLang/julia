@@ -2,7 +2,7 @@
 ##
 ## Added threaded implementation (2015-04-06)
 
-using Base.Threading
+using Base.Threads
 
 #STOCKCORR - The original, unoptimised code that simulates two correlated assets
 function stockcorr()

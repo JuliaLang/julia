@@ -23,8 +23,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-module Atomics
-
 using Base.Intrinsics: llvmcall
 
 import Base: setindex!, getindex
@@ -82,4 +80,3 @@ for (typ, lt) in atomicintsmap
     end
 end
 
-end

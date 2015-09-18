@@ -14,7 +14,7 @@
 # commented out in both because of issue #10527.
 
 #using PyPlot
-using Base.Threading
+using Base.Threads
 
 include("circshift.jl")
 

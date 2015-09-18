@@ -299,9 +299,8 @@ include("deprecated.jl")
 include("docs/helpdb.jl")
 include("docs/basedocs.jl")
 
-# threading stuff
-include("threading.jl")
-include("atomics.jl")
+# threads
+include("threads.jl")
 
 function __init__()
     # Base library init
