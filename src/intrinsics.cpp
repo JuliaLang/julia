@@ -1010,7 +1010,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (!newtyp && r->getType() != x->getType())
             // cast back to the exact original type (e.g. float vs. int) before remarking as a julia type
             r = builder.CreateBitCast(r, x->getType());
-        return mark_julia_type(r, newtyp ?: xinfo.typ);
+        return mark_julia_type(r, newtyp ? newtyp : xinfo.typ);
     }
     }
     assert(0);
