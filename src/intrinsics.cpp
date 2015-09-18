@@ -43,7 +43,7 @@ namespace JL_I {
         // pointer access
         pointerref, pointerset,
         // c interface
-        ccall, cglobal, jl_alloca, llvmcall
+        ccall, cglobal, llvmcall
     };
 };
 
@@ -1345,12 +1345,6 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
-    HANDLE(jl_alloca,1) {
-        *newtyp = jl_voidpointer_type;
-        AllocaInst *AI = builder.CreateAlloca(T_int8, JL_INT(x));
-        AI->setAlignment(16);
-        return AI;
-    }
     HANDLE(ceil_llvm,1) {
         x = FP(x);
         return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil,
@@ -1503,6 +1497,5 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(check_top_bit);
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
-    ADD_I(jl_alloca);
     ADD_I(llvmcall);
 }
