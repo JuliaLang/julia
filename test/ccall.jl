@@ -209,3 +209,12 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
     end
 end
+
+# issue 13031
+foo13031(x) = Cint(1)
+foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},))
+ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
+
+foo13031(x,y,z) = z
+foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
+ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)

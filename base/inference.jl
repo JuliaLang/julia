@@ -225,7 +225,8 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
         if d > MAX_TYPE_DEPTH
             R = t.name.primary
         else
-            Q = map(x->limit_type_depth(x, d+1, false, vars), P)
+            stillcov = cov && (t.name === Tuple.name)
+            Q = map(x->limit_type_depth(x, d+1, stillcov, vars), P)
             if !cov && any(p->contains_is(vars,p), Q)
                 R = t.name.primary
                 inexact = true
@@ -577,6 +578,9 @@ const limit_tuple_depth_ = function (t,d::Int)
         # also limit within Union types.
         # may have to recur into other stuff in the future too.
         return Union{map(x->limit_tuple_depth_(x,d+1), t.types)...}
+    end
+    if isa(t,TypeVar)
+        return limit_tuple_depth_(t.ub, d)
     end
     if !(isa(t,DataType) && t.name === Tuple.name)
         return t

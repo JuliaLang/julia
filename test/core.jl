@@ -3344,3 +3344,27 @@ end
 typealias B11888{T} A11888{A11888{A11888{T}}}
 
 @test sizeof(B11888{B11888{Int64}}) == (1 << 24) * 8
+
+# issue #13175
+immutable EmptyImmutable13175 end
+immutable EmptyIIOtherField13175
+    x::EmptyImmutable13175
+    y::Float64
+end
+@test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) == EmptyIIOtherField13175(EmptyImmutable13175(), 1.0)
+@test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) != EmptyIIOtherField13175(EmptyImmutable13175(), 2.0)
+
+# issue #13183
+gg13183{X}(x::X...) = 1==0 ? gg13183(x, x) : 0
+@test gg13183(5) == 0
+
+# issue 8932 (llvm return type legalizer error)
+immutable Vec3_8932
+   x::Float32
+   y::Float32
+   z::Float32
+end
+f8932(a::Vec3_8932, b::Vec3_8932) = Vec3_8932(a.x % b.x, a.y % b.y, a.z % b.z)
+a8932 = Vec3_8932(1,1,1)
+b8932 = Vec3_8932(2,2,2)
+@test f8932(a8932, b8932) == Vec3_8932(1.0, 1.0, 1.0)

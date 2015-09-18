@@ -88,7 +88,7 @@ If you want to edit the body of a method docstring, run the `doc/genstdlib.jl` s
 If you want to edit an existing docstring signature, you **first** have to change the signature in the `doc/stdlib` `..function` or `..data` definition (not the auto-generated content) and *then*
 edit the helpdb.jl or inline method docstrings.  The existing signatures in the `doc/stdlib/*.rst` files are pattern matched to base docstrings and the new content overwrites the content in `doc/stdlib/`.
 The signature definitions **must** be in sync or else the pattern match will fail and documentation will be lost in the result.
-To add entirely new methods to the `stdlib` documentation, first add the signature in the appropriate `rst/stdlib/*.rst` file before writing the docstring, rebuilding Julia, and re-running `doc/genstdlib.jl`.
+To add entirely new methods to the `stdlib` documentation, first add the signature in the appropriate `doc/stdlib/*.rst` file before writing the docstring, rebuilding Julia, and re-running `doc/genstdlib.jl`.
 
 It is encouraged to write all new docstrings in Markdown markup.  If you need to write a more complicated docstring that contains cross-references or citations it can be written in a restructured text codeblock.
 Many of the existing docstrings are currently restructured text codeblocks and these will be transitioned to Markdown over time.  RST codeblocks are delineated with the triple-quote (\`\`\`rst  \`\`\`) Makdown codeblock syntax.

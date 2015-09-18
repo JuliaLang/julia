@@ -325,6 +325,11 @@ DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
     return f;
 }
 
+DLLEXPORT jl_fptr_t jl_linfo_fptr(jl_lambda_info_t *linfo)
+{
+    return linfo->fptr;
+}
+
 DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_module_t *ctx)
 {
