@@ -147,6 +147,8 @@ uint64_t *user_ticks;
 uint64_t *join_ticks;
 #endif
 
+static uv_barrier_t thread_init_done;
+
 // thread function: used by all except the main thread
 void ti_threadfun(void *arg)
 {
@@ -167,7 +169,7 @@ void ti_threadfun(void *arg)
     while (ta->state == TI_THREAD_INIT)
         cpu_pause();
     cpu_lfence();
-
+    uv_barrier_wait(&thread_init_done);
     // initialize this thread in the thread group
     tg = ta->tg;
     ti_threadgroup_initthread(tg, ti_tid);
@@ -289,6 +291,9 @@ void jl_start_threads(void)
     jl_all_task_states[0].system_id = pthread_self();
 #endif
     targs = (ti_threadarg_t **)malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
+
+    uv_barrier_init(&thread_init_done, jl_n_threads);
+
     for (i = 0;  i < jl_n_threads - 1;  ++i) {
         targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
         targs[i]->state = TI_THREAD_INIT;
@@ -315,6 +320,8 @@ void jl_start_threads(void)
         cpu_sfence();
         targs[i]->state = TI_THREAD_WORK;
     }
+
+    uv_barrier_wait(&thread_init_done);
 
     // free the argument array; the threads will free their arguments
     free(targs);
