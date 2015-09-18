@@ -261,14 +261,14 @@ end
 # issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
 a = UInt32[48,0]
 b = UTF32String(a)
-@test b=="0"
+@test b == "0"
 a[1] = 65
-@test b=="A"
+@test b == "A"
 c = Char['0','\0']
 d = UTF32String(c)
-@test d=="0"
+@test d == "0"
 c[1] = 'A'
-@test d=="A"
+@test d == "A"
 
 # iteration
 @test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
@@ -480,7 +480,7 @@ str = "abcdef\uff\uffff\u10ffffABCDEF"
 
 foomap(ch) = (ch > 65)
 foobar(ch) = Char(0xd800)
-foobaz(ch) = Char(0x200000)
+foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test_throws UnicodeError map(foomap, utf16(str))
 @test_throws UnicodeError map(foobar, utf16(str))
 @test_throws UnicodeError map(foobaz, utf16(str))
