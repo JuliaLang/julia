@@ -2271,7 +2271,7 @@ promote
 doc"""
     @schedule
 
-Wrap an expression in a `Task` and add it to the scheduler's queue.
+Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
 """
 :@schedule
 
@@ -4462,7 +4462,7 @@ erfinv
 doc"""
     @async
 
-Wraps an expression in a closure and schedules it to run on the local machine. Also adds it to the set of items that the nearest enclosing `@sync` waits for.
+Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local machine's scheduler queue. Additionally it adds the task to the set of items that the nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...` block to create a new scope with copies of all variables referenced in the expression.
 """
 :@async
 
