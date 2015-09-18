@@ -955,7 +955,7 @@ ifneq ($(USEMSVC), 1)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
 		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
 else
-DSFMT_CFLAGS += -Wl,-dll,-def:../libdSFMT.def
+DSFMT_CFLAGS += -Wl,-dll,-def:../../libdSFMT.def
 endif
 ifeq ($(ARCH), x86_64)
 DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
