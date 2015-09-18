@@ -173,8 +173,6 @@ A key part in defining an ``AbstractArray`` subtype is :func:`Base.linearindexin
 
 This distinction determines which scalar indexing methods the type must define. ``LinearFast()`` arrays are simple: just define :func:`getindex(A::ArrayType, i::Int) <getindex>`.  When the array is subsequently indexed with a multidimensional set of indices, the fallback :func:`getindex(A::AbstractArray, I...)` efficiently converts the indices into one linear index and then calls the above method. ``LinearSlow()`` arrays, on the other hand, require methods to be defined for each supported dimensionality with ``ndims(A)`` ``Int`` indices.  For example, the builtin ``SparseMatrix`` type only supports two dimensions, so it just defines :func:`getindex(A::SparseMatrix, i::Int, j::Int)`.  The same holds for :func:`setindex!`.
 
-The result of indexing an AbstractArray can itself be an array (for instance when indexing by a ``Range``). The AbstractArray fallback methods use :func:`similar` to create an ``Array`` of the appropriate size and element type, which is filled in using the basic indexing method described above. When implementing an array wrapper you often want the result to be wrapped as well, which can be accomplished by defining ``Base.similar{T}(A::YourArrayType, ::Type{T}, dims::Dims)`` to create the appropriate wrapped array.
-
 Returning to the sequence of squares from above, we could instead define it as a subtype of an ``AbstractArray{Int, 1}``:
 
 .. doctest::
@@ -258,7 +256,7 @@ Notice that this is a ``LinearSlow`` array, so we must manually define :func:`ge
      2.0  5.0  8.0
      3.0  6.0  9.0
 
-Since the ``SparseArray`` is mutable, we were able to override :func:`similar`.  This means that when a base function needs to return an array, it's able to return a new ``SparseArray``:
+The result of indexing an AbstractArray can itself be an array (for instance when indexing by a ``Range``). The AbstractArray fallback methods use :func:`similar` to allocate an ``Array`` of the appropriate size and element type, which is filled in using the basic indexing method described above. However, when implementing an array wrapper you often want the result to be wrapped as well:
 
 .. doctest::
 
@@ -266,6 +264,16 @@ Since the ``SparseArray`` is mutable, we were able to override :func:`similar`. 
     2x3 SparseArray{Float64,2}:
      1.0  4.0  7.0
      2.0  5.0  8.0
+
+In this example it is accomplished by defining ``Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`` to create the appropriate wrapped array. For this to work it's important that ``SparseArray`` is mutable (supports ``setindex!``). :func:`similar` is also used to allocate result arrays for arithmetic on `AbstractArray`s, for instance:
+
+.. doctest::
+
+    julia> A + 4
+    3x3 SparseArray{Float64,2}:
+     5.0   8.0  11.0
+     6.0   9.0  12.0
+     7.0  10.0  13.0
 
 In addition to all the iterable and indexable methods from above, these types can also interact with each other and use all of the methods defined in the standard library for ``AbstractArrays``:
 
