@@ -72,6 +72,19 @@ using Base.Test
 @traitfn g{X; !Tr1{X}}(x::X, y...) = 99
 @test g(5.0, 7, 8)==99
 
+## With macros
+@traitfn @generated ggg{X; Tr1{X}}(x::X) = ( x<:Array ? :(x[1]+1) : :(x))
+#@traitfn @generated ggg{X; Tr1{X}}(x::X) = ( println(x); x<:Array ? :(x[1]+1) : :(x))
+@test ggg(5)==5
+@traitimpl Tr1{AbstractArray}
+a = Array(Any,1) # Array(Int,1) does not work yet!?
+a[1] = 5
+@test ggg(a)==6
+
+# traitfn with Type
+@traitfn ggt{X; Tr1{X}}(::Type{X}, y) = (X,y)
+@test ggt(Array, 5)==(Array, 5)
+
 ######
 # Other tests
 #####

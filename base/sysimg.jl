@@ -15,7 +15,7 @@ eval(m,x) = Core.eval(m,x)
 
 include("exports.jl")
 
-if true
+if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
@@ -51,7 +51,7 @@ include("functors.jl")
 
 # traits
 include("traits.jl")
-include("traits-bootstrap-tests.jl")
+#include("traits-bootstrap-tests.jl") # also activate the printing above
 
 # array structures
 include("abstractarray.jl")

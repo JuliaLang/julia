@@ -278,20 +278,20 @@ typealias IsNothing{X} Not{IsAnything{X}}
     end
 end
 
-# "Trait of all isbits-types"
-# @traitdef IsBits{X}
-# @generated function trait{X}(::Type{IsBits{X}})
-#     isbits(X) ? :(IsBits{X}) : :(Not{IsBits{X}})
-# end
+"Trait of all isbits-types"
+@traitdef IsBits{X}
+@generated function trait{X}(::Type{IsBits{X}})
+    isbits(X) ? :(IsBits{X}) : :(Not{IsBits{X}})
+end
 
-# "Trait of all immutable types"
-# @traitdef IsImmutable{X}
-# @generated function trait{X}(::Type{IsImmutable{X}})
-#     X.mutable ? :(Not{IsImmutable{X}}) : :(IsImmutable{X})
-# end
+"Trait of all immutable types"
+@traitdef IsImmutable{X}
+@generated function trait{X}(::Type{IsImmutable{X}})
+    X.mutable ? :(Not{IsImmutable{X}}) : :(IsImmutable{X})
+end
 
-# "Trait of all leaf types types"
-# @traitdef IsLeafType{X}
-# @generated function trait{X}(::Type{IsLeafType{X}})
-#     X.mutable ? :(Not{IsLeafType{X}}) : :(IsLeafType{X})
-# end
+"Trait of all leaf types types"
+@traitdef IsLeafType{X}
+@generated function trait{X}(::Type{IsLeafType{X}})
+    X.mutable ? :(Not{IsLeafType{X}}) : :(IsLeafType{X})
+end

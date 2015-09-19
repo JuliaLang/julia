@@ -26,22 +26,50 @@ call(::Type{Matrix}) = Array{Any}(0, 0)
 function call{P<:Ptr,T<:Ptr}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
     return RefArray(a) # effectively a no-op
 end
-function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+
+## Replacing this if-else with traitfns:
+# function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+#     if (!isbits(T) && T <: eltype(P))
+#         # this Array already has the right memory layout for the requested Ref
+#         return RefArray(a,1,false) # root something, so that this function is type-stable
+#     else
+#         ptrs = Array(P, length(a)+1)
+#         roots = Array(Any, length(a))
+#         for i = 1:length(a)
+#             root = cconvert(P, a[i])
+#             ptrs[i] = unsafe_convert(P, root)::P
+#             roots[i] = root
+#         end
+#         ptrs[length(a)+1] = C_NULL
+#         return RefArray(ptrs,1,roots)
+#     end
+# end
+
+"Make a trait custom trait (just for illustration)"
+@traitdef IsJustRight{P,T}
+@generated function trait{P,T}(::Type{IsJustRight{P,T}})
     if (!isbits(T) && T <: eltype(P))
-        # this Array already has the right memory layout for the requested Ref
-        return RefArray(a,1,false) # root something, so that this function is type-stable
+        return :(IsJustRight{P,T})
     else
-        ptrs = Array(P, length(a)+1)
-        roots = Array(Any, length(a))
-        for i = 1:length(a)
-            root = cconvert(P, a[i])
-            ptrs[i] = unsafe_convert(P, root)::P
-            roots[i] = root
-        end
-        ptrs[length(a)+1] = C_NULL
-        return RefArray(ptrs,1,roots)
+        return :(Not{IsJustRight{P,T}})
     end
 end
+@traitfn function call{P<:Ptr,T; IsJustRight{P,T}}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+    # this Array already has the right memory layout for the requested Ref
+    return RefArray(a,1,false) # root something, so that this function is type-stable
+end
+@traitfn function call{P<:Ptr,T; !IsJustRight{P,T}}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+    ptrs = Array(P, length(a)+1)
+    roots = Array(Any, length(a))
+    for i = 1:length(a)
+        root = cconvert(P, a[i])
+        ptrs[i] = unsafe_convert(P, root)::P
+        roots[i] = root
+    end
+    ptrs[length(a)+1] = C_NULL
+    return RefArray(ptrs,1,roots)
+end
+
 cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
 cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
 
@@ -54,7 +82,9 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 size{_,N}(a::Array{_,N}) = asize_from(a, 1)::NTuple{N,Int}
 
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+#elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+@traitfn elsize{T;  IsBits{T}}(a::Array{T}) = sizeof(T)
+@traitfn elsize{T; !IsBits{T}}(a::Array{T}) = sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 strides{T}(a::Array{T,1}) = (1,)
@@ -75,13 +105,24 @@ function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
-    if isbits(T)
-        unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
-    else
-        for i=0:n-1
-            @inbounds arrayset(dest, src[i+soffs], i+doffs)
-        end
+# function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+#     if isbits(T)
+#         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+#     else
+#         for i=0:n-1
+#             @inbounds arrayset(dest, src[i+soffs], i+doffs)
+#         end
+#     end
+#     return dest
+# end
+
+@traitfn function unsafe_copy!{T; IsBits{T}}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+    unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+    return dest
+end
+@traitfn function unsafe_copy!{T; !IsBits{T}}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+    for i=0:n-1
+        @inbounds arrayset(dest, src[i+soffs], i+doffs)
     end
     return dest
 end
