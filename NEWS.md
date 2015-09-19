@@ -278,6 +278,8 @@ Library improvements
 
     * Capture groups in regular expressions can now be named using PCRE syntax, `(?P<group_name>...)`. Capture group matches can be accessed by name by indexing a `Match` object with the name of the group ([#11566]).
 
+    * `countlines()` now counts all lines, not just non-empty ([#11947]).
+
   * Array and AbstractArray improvements
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end` ([#8432]).
