@@ -70,7 +70,10 @@ end
         Int32(1), Int32(2))) == 3
 
 # Test whether declarations work properly
-# These tests only work properly for llvm 3.5+
+# This test only work properly for llvm 3.5+
+# On llvm <3.5+ even though the the compilation fails on the first try,
+# llvm still adds the intrinsice declaration to the module and subsequent calls
+# are succesfull.
 if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
 
 function undeclared_ceil(x::Float64)
@@ -81,10 +84,6 @@ end
 
 end
 
-# KNOWN ISSUE: although the llvmcall in undeclare_ceil did error(), the LLVM
-# module contains the generated IR referencing the ceil intrinsic. At some
-# point, a declaration for that intrinsic is added, breaking any future
-# llvmcall((conflicting declaration, ...), ...). Not an issue in LLVM 3.5+.
 function declared_floor(x::Float64)
     llvmcall(
         ("""declare double @llvm.floor.f64(double)""",
@@ -102,6 +101,7 @@ function doubly_declared_floor(x::Float64)
     Float64, Tuple{Float64}, x+1)-1
 end
 @test_approx_eq doubly_declared_floor(4.2) 4.
+
 function doubly_declared2_trunc(x::Float64)
     a = llvmcall(
         ("""declare double @llvm.trunc.f64(double)""",
