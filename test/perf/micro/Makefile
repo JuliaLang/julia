@@ -17,7 +17,7 @@ endif
 
 #Which BLAS library am I using?
 ifeq ($(USE_SYSTEM_BLAS), 0)
-BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/
+BLASDIR=$(JULIAHOME)/deps/build/openblas/
 LIBBLAS=$(BLASDIR)libopenblas.a
 endif
 
@@ -31,15 +31,15 @@ FFLAGS+= -static-libgfortran
 endif
 
 #Which libm library am I using?
-LIBMDIR = $(JULIAHOME)/deps/openlibm/
+LIBMDIR = $(JULIAHOME)/deps/build/openlibm/
 ifeq ($(USE_SYSTEM_LIBM), 0)
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
-DSFMTDIR = $(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
-RMATHDIR = $(JULIAHOME)/deps/Rmath-julia-$(RMATH_JULIA_VER)
+DSFMTDIR = $(JULIAHOME)/deps/build/dsfmt-$(DSFMT_VER)
+RMATHDIR = $(JULIAHOME)/deps/build/Rmath-julia-$(RMATH_JULIA_VER)
 
 default: benchmarks.html
 
@@ -81,7 +81,7 @@ benchmarks/fortran%.csv: bin/fperf%
 
 benchmarks/go.csv: export GOPATH=$(abspath gopath)
 benchmarks/go.csv: perf.go
-	CGO_LDFLAGS="-L$(JULIAHOME)/deps -lopenblas" go get github.com/gonum/blas/cgo
+	CGO_LDFLAGS="-L$(BLASDIR) -lopenblas" go get github.com/gonum/blas/cgo
 	go get github.com/gonum/matrix/mat64
 	go get github.com/gonum/stat
 	for t in 1 2 3 4 5; do go run $<; done >$@
