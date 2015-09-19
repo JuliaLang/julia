@@ -881,6 +881,5 @@ set_bigfloat_precision(1000)
 b = BigFloat(3.1, 100)
 @test a == b
 
-a = big("3.1", 10, RoundDown)
-b = big("3.1", 10, RoundUp)
-@test b - a == eps(a)
+
+@test_throws ArgumentError eps(nextfloat(BigFloat(0.0)))

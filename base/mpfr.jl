@@ -877,11 +877,19 @@ function prevfloat(x::BigFloat)
 end
 
 function eps(x::BigFloat)
-    with_bigfloat_precision(Int(precision(x))) do
+    distance = with_bigfloat_precision(Int(precision(x))) do
         nextfloat(x) - x
     end
+
+    if distance == BigFloat(0.0)
+        throw(ArgumentError("eps not defined for tiny numbers"))
+    end
+
+    return distance
 end
+
 eps(::Type{BigFloat}) = eps(BigFloat(1))
+
 
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
