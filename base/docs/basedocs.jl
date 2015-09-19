@@ -125,6 +125,119 @@ keywords[:macro] = doc"""
   This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted expression is expanded to interpolate the value of the argument into the final expression.
   """
 
+keywords[:importall] = doc"""
+  `importall` imports all names exported by the specified module, as if `import` were used individually on all of them.  For example:
+
+      importall Distributions
+
+  As with `import`, functions imported by `importall` can be extended.
+  """
+
+keywords[:local] = doc"""
+  `local` introduces a new local variable. For example:
+
+      function foo(n)
+        x = 0
+        for i = 1:n
+          local x
+          x = i
+        end
+        x
+      end
+
+      julia> foo(10)
+      0
+
+  Here `local x` introduces a separate `x` inside the loop, so the function returns `0`.
+  """
+
+keywords[:global] = doc"""
+  `global x` makes `x` in the current scope and its inner scopes refer to the global variable of that name.   In the example below, `global` is needed so the function can modify the global variable `z`:
+
+      z=3
+      function foo()
+          global z=6
+      end
+
+      julia> foo()
+      6
+      julia> z
+      6
+
+  Without the `global` declaration in `foo()`, a new local variable would have been created inside foo(), and the `z` in the global scope would have remained equal to `3`.
+  """
+
+keywords[:let] = doc"""
+  `let` statements allocate new variable bindings each time they run. Whereas an assignment modifies an existing value location, `let` creates new locations. This difference is only detectable in the case of variables that outlive their scope via closures.
+  The `let` syntax accepts a comma-separated series of assignments and variable names:
+
+      let var1 = value1, var2, var3 = value3
+          code
+      end
+
+  The assignments are evaluated in order, with each right-hand side evaluated in the scope before the new variable on the left-hand side has been introduced. Therefore it makes sense to write something like `let x = x`, since the two `x` variables are distinct and have separate storage.
+  """
+
+keywords[:quote] = doc"""
+  `quote` creates multiple expression objects in a block without using the explicit `Expr` constructor. For example:
+
+      ex = quote
+          x = 1
+          y = 2
+          x + y
+      end
+
+  Unlike the other means of quoting, `:( ... )`, this form introduces `QuoteNode` elements to the expression tree, which must be considered when directly manipulating the tree. For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
+  """
+
+keywords[symbol("'")] = doc"""
+  `'` is the conjugate transposition operator:
+
+      > A = reshape(1:4, 2,2)
+      2x2 Array{Int64,2}:
+       1  3
+       2  4
+
+      > A'
+      2x2 Array{Int64,2}:
+       1  2
+       3  4
+
+      > B = A + im
+      2x2 Array{Complex{Int64},2}:
+       1+1im  3+1im
+       2+1im  4+1im
+
+      > B'
+      2x2 Array{Complex{Int64},2}:
+       1-1im  2-1im
+       3-1im  4-1im
+  """
+
+keywords[symbol(".'")] = doc"""
+  `.'` is the transposition operator:
+
+      > A = reshape(1:4, 2,2)
+      2x2 Array{Int64,2}:
+       1  3
+       2  4
+
+      > A.'
+      2x2 Array{Int64,2}:
+       1  2
+       3  4
+
+      > B = A + im
+      2x2 Array{Complex{Int64},2}:
+       1+1im  3+1im
+       2+1im  4+1im
+
+      > B.'
+      2x2 Array{Complex{Int64},2}:
+       1+1im  2+1im
+       3+1im  4+1im
+  """
+
 keywords[:const] = doc"""
   `const` is used to declare global variables which are also constant.
   In almost all code (and particularly performance sensitive code)
