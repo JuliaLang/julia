@@ -78,6 +78,10 @@ benchmarks/fortran%.csv: bin/fperf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
 benchmarks/go.csv: perf.go
+	go get github.com/gonum/blas
+	CGO_LDFLAGS="$(LIBBLAS) -lm" go install github.com/gonum/blas/cgo
+	go get github.com/gonum/matrix/mat64
+	go get github.com/gonum/stat
 	for t in 1 2 3 4 5; do go run $<; done >$@
 
 benchmarks/julia.csv: perf.jl
