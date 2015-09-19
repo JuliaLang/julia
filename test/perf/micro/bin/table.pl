@@ -19,8 +19,8 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
-our $julia_ver = `julia -v | cut -f3 -d" "`;
-our $fortran_ver = `gfortran-4.8 -v 2>&1 | grep "gcc version" | cut -f3 -d" "`;
+our $julia_ver = `../../../julia -v | cut -f3 -d" "`;
+our $fortran_ver = `gfortran -v 2>&1 | grep "gcc version" | cut -f3 -d" "`;
 our $python_ver = `python -V 2>&1 | cut -f2 -d" "`;
 our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`;
 our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
