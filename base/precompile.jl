@@ -501,8 +501,6 @@ precompile(Base.set_valid_processes, (Array{Int, 1}, ))
 
 
 # Speed up repl help
-if Base.USE_GPL_LIBS
-    sprint(Markdown.term, @doc fft)
-    sprint(Docs.repl_search, "fft")
-    sprint(Docs.repl_corrections, "fft")
-end
+sprint(Markdown.term, @doc mean)
+sprint(Docs.repl_search, "mean")
+sprint(Docs.repl_corrections, "meen")
