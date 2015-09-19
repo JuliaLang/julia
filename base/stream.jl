@@ -719,7 +719,8 @@ end
 function init_pipe!(pipe::LibuvPipe;
                     readable::Bool = false,
                     writable::Bool = false,
-                    julia_only::Bool = true)
+                    julia_only::Bool = true,
+                    loop = eventloop())
     if pipe.status != StatusUninit
         error("pipe is already initialized")
     end
@@ -727,8 +728,8 @@ function init_pipe!(pipe::LibuvPipe;
         malloc_julia_pipe!(pipe)
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint,
-        (Ptr{Void}, Int32, Int32, Int32),
-        pipe.handle, writable, readable, julia_only))
+        (Ptr{Void}, Ptr{Void}, Int32, Int32, Int32),
+        pipe.handle, loop, writable, readable, julia_only))
     pipe.status = StatusInit
     pipe
 end

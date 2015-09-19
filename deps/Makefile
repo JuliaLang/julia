@@ -626,19 +626,19 @@ ifneq ($(LLVM_LLDB_TAR),)
 endif # LLVM_LLDB_TAR
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
-	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang ) || \
-		(cd llvm-$(LLVM_VER)/tools/clang  && \
+	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
+		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang ) || \
+		(cd $(LLVM_SRC_DIR)/tools/clang  && \
 		git pull --ff-only) && \
-		cd llvm-$(LLVM_VER)/tools/clang && \
+		cd $(LLVM_SRC_DIR)/tools/clang && \
 		git checkout $(LLVM_GIT_VER_CLANG)
 endif # BUILD_LLVM_CLANG
 ifeq ($(BUILD_LLDB),1)
-	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
-		git clone $(LLVM_GIT_URL_LLDB) llvm-$(LLVM_VER)/tools/lldb ) || \
-		(cd llvm-$(LLVM_VER)/tools/lldb  && \
+	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
+		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb ) || \
+		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
 		git pull --ff-only) && \
-		cd llvm-$(LLVM_VER)/tools/lldb && \
+		cd $(LLVM_SRC_DIR)/tools/lldb && \
 		git checkout $(LLVM_GIT_VER_LLDB)
 endif # BUILD_LLDB
 endif # LLVM_VER
