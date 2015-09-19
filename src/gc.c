@@ -1316,8 +1316,6 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     return pfl;
 }
 
-//extern void jl_unmark_symbols(void);
-
 static void gc_sweep_once(int sweep_mask)
 {
 #ifdef GC_TIME
@@ -1336,12 +1334,6 @@ static void gc_sweep_once(int sweep_mask)
     sweep_big(sweep_mask);
 #ifdef GC_TIME
     jl_printf(JL_STDOUT, "GC sweep big %.2f (freed %d/%d with %d rst)\n", (clock_now() - t0)*1000, big_freed, big_total, big_reset);
-    t0 = clock_now();
-#endif
-    //if (sweep_mask == GC_MARKED)
-    //    jl_unmark_symbols();
-#ifdef GC_TIME
-    jl_printf(JL_STDOUT, "GC sweep symbols %.2f\n", (clock_now() - t0)*1000);
 #endif
 }
 
