@@ -256,7 +256,7 @@ Notice that this is a ``LinearSlow`` array, so we must manually define :func:`ge
      2.0  5.0  8.0
      3.0  6.0  9.0
 
-The result of indexing an AbstractArray can itself be an array (for instance when indexing by a ``Range``). The AbstractArray fallback methods use :func:`similar` to allocate an ``Array`` of the appropriate size and element type, which is filled in using the basic indexing method described above. However, when implementing an array wrapper you often want the result to be wrapped as well:
+The result of indexing an ``AbstractArray`` can itself be an array (for instance when indexing by a ``Range``). The ``AbstractArray`` fallback methods use :func:`similar` to allocate an ``Array`` of the appropriate size and element type, which is filled in using the basic indexing method described above. However, when implementing an array wrapper you often want the result to be wrapped as well:
 
 .. doctest::
 
@@ -265,7 +265,7 @@ The result of indexing an AbstractArray can itself be an array (for instance whe
      1.0  4.0  7.0
      2.0  5.0  8.0
 
-In this example it is accomplished by defining ``Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`` to create the appropriate wrapped array. For this to work it's important that ``SparseArray`` is mutable (supports ``setindex!``). :func:`similar` is also used to allocate result arrays for arithmetic on `AbstractArray`s, for instance:
+In this example it is accomplished by defining ``Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`` to create the appropriate wrapped array. For this to work it's important that ``SparseArray`` is mutable (supports ``setindex!``). :func:`similar` is also used to allocate result arrays for arithmetic on ``AbstractArray``s, for instance:
 
 .. doctest::
 
