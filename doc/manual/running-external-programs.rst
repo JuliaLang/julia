@@ -257,7 +257,7 @@ This expression invokes the ``echo`` command with three words as
 arguments: "hello", "\|", and "sort". The result is that a single line
 is printed: "hello \| sort". Inside of backticks, a "\|" is just a
 literal pipe character. How, then, does one construct a pipeline?
-Instead of using "\|" inside of backticks, one uses :func:`pipe`:
+Instead of using "\|" inside of backticks, one uses :func:`pipeline`:
 
 .. doctest::
 
