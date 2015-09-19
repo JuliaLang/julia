@@ -69,7 +69,11 @@ int mandel(double complex z) {
 }
 
 int mandelperf() {
-    int mandel_sum = 0;
+    /* The initialization on the next two lines is deliberately written to
+     * prevent gcc from optimizing away the entire loop.
+     * (First observed in gcc 4.9.2) */ 	
+    static volatile int mandel_sum_init = 0;
+    int mandel_sum = mandel_sum_init;
     for (int re=-20; re<=5; re+=1) {
         for (int im=-10; im<=10; im+=1) {
             int m = mandel(re/10.0+I*im/10.0);
