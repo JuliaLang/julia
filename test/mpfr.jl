@@ -867,12 +867,15 @@ end
 # test constructors and `big` with additional precision and rounding mode:
 
 for prec in (10, 100, 1000)
-    set_bigfloat_precision(prec)
+    for val in (pi, eu)
 
-    a = big("3.1", RoundDown)
-    b = big("3.1", RoundUp)
+        @show prec, val
 
-    @test b - a == eps(a)
+        a = BigFloat(val, prec, RoundDown)
+        b = BigFloat(val, prec, RoundUp)
+
+        @test b - a == BigFloat(eps(a), prec)
+    end
 end
 
 set_bigfloat_precision(100)
