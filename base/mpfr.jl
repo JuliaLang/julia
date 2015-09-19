@@ -138,33 +138,6 @@ function BigFloat(x, precision::Integer, rounding_mode::RoundingMode)
     end
 end
 
-doc"""
-    big(x, precision)
-
-Create a `BigFloat` representation of `x` with given precision (number of bits in
-the fractional part).
-"""
-big(x, precision::Integer) = BigFloat(x, precision)
-
-function big(x::AbstractString, precision::Integer)
-    with_bigfloat_precision(precision) do
-        parse(BigFloat, x)
-    end
-end
-
-doc"""
-    big(x, precision, rounding_mode)
-
-Create a `BigFloat` representation of `x` with given precision (number of bits in
-the fractional part) and given rounding mode.
-"""
-function big(x, precision::Integer, rounding_mode::RoundingMode)
-    with_rounding(BigFloat, rounding_mode) do
-        big(x, precision)
-    end
-end
-
-big(x, rounding_mode::RoundingMode) = big(x, get_bigfloat_precision(), rounding_mode)
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
