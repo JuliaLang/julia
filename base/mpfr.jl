@@ -915,7 +915,10 @@ function string(x::BigFloat)
         buf = Array(UInt8, lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    return bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+
+    repr = bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+    return repr == "inf" ? "Inf" : repr
+
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
