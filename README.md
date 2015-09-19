@@ -129,6 +129,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
 
+* `@doc`, `@doc_str` and `@doc_mstr` have been added. On 0.3 if Docile is available it will use its definitions, else these are no-ops.
+
 ## Other changes
 
 * `Dict(ks, vs)` is now `Dict(zip(ks, vs))` [#8521](https://github.com/JuliaLang/julia/pull/8521)

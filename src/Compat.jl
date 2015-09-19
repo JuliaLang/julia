@@ -45,6 +45,17 @@ if VERSION < v"0.4.0-dev+412"
     eval(Base, :(const IPAddr = IpAddr))
 end
 
+if VERSION < v"0.4.0-dev+1501"
+    try
+        import Docile: @doc_str, @doc_mstr, @doc
+    catch
+        macro doc_str(x) x end
+        macro doc_mstr(x) x end
+        macro doc(ex) esc(ex.args[end]) end
+    end
+    export @doc_str, @doc_mstr, @doc
+end
+
 if VERSION < v"0.4.0-dev+2197"
     Base.IPv4(ipstr::AbstractString) = Base.parseipv4(ipstr)
     Base.IPv6(ipstr::AbstractString) = Base.parseipv6(ipstr)
