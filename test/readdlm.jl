@@ -225,3 +225,6 @@ for data in ["A B C", "A B C\n"]
     @test hdr == AbstractString["A" "B" "C"]
     @test data == Array(Float64, 0, 3)
 end
+
+# fix #13179 parsing unicode lines with default delmiters
+@test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n")), Any[1 "α"; 2 "β"], Any)
