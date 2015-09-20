@@ -4,6 +4,9 @@ include $(JULIAHOME)/deps/Versions.make
 
 NODEJSBIN = nodejs
 
+#Use python2 for Python 2.x
+PYTHON = python3
+
 ifeq ($(OS), WINNT)
 MATHEMATICABIN = MathKernel
 else ifeq ($(OS), Darwin)
@@ -19,10 +22,9 @@ LIBBLAS=$(BLASDIR)libopenblas.a
 endif
 
 FFLAGS=-fexternal-blas
+#gfortran cannot multiply matrices using 64-bit external BLAS.
 ifeq ($(findstring gfortran, $(FC)), gfortran)
 ifeq ($(USE_BLAS64), 1)
-#gfortran cannot multiply matrices using 64-bit external BLAS.
-#External BLAS usage is turned OFF.
 FFLAGS=
 endif
 FFLAGS+= -static-libgfortran
@@ -88,7 +90,7 @@ benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
-	for t in 1 2 3 4 5; do python $<; done >$@
+	for t in 1 2 3 4 5; do $(PYTHON) $<; done >$@
 
 benchmarks/matlab.csv: perf.m
 	for t in 1 2 3 4 5; do matlab -nojvm -singleCompThread -r 'perf; perf; exit' | grep ^matlab | tail -8; done >$@
