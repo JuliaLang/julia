@@ -419,7 +419,7 @@ function _compat(ex::Expr)
             else
                 Expr(:tuple, args...)
             end
-        elseif VERSION < v"0.4.0-dev" && f == :Union
+        elseif VERSION < v"0.4.0-dev+5379" && f == :Union
             ex = Expr(:call,:Union,ex.args[2:end]...)
         elseif ex == :(Ptr{Void})
             # Do no change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
@@ -438,6 +438,9 @@ function _compat(ex::Expr)
         if ex.args[end] == :Timer || ex.args[end] == :(Base.Timer)
             ex.args[end] = :(Compat.Timer2)
         end
+    elseif ex.head == :quote && isa(ex.args[1], Symbol)
+        # Passthrough
+        return ex
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end

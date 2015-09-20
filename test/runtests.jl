@@ -31,9 +31,8 @@ td[1] = 1.0
 
 @test @compat(Dict()) == Dict()
 @test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
-if VERSION >= v"0.3.0-"
-    @test @compat(Dict([(1, 1)])) == d
-end
+@test @compat(Dict([(1, 1)])) == d
+@test @compat(Dict(:Void => :Nothing)) == Dict([(:Void, :Nothing)])
 
 d2 = Dict{Symbol,Dict{Symbol,Int}}()
 d2[:a] = Dict{Symbol,Int}()
@@ -543,3 +542,10 @@ f141(::Type{UDPSocket}) = true
 @test f141(OutOfMemoryError)
 @test f141(Base64EncodePipe)
 @test f141(UDPSocket)
+
+# Union syntax
+if VERSION < v"0.4.0-dev+5379"
+    @test @compat(Union{}) == None
+    @test @compat(Union{Int,Float64}) == Union(Int,Float64)
+    @test @compat(:(Union{})) == :(Union())
+end
