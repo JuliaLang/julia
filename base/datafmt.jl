@@ -360,7 +360,7 @@ colval{T<:Char, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Arra
 colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
-    dlm_parse(s.data, UInt32(eol)%UInt8, UInt32(dlm)%UInt8, UInt32(qchar)%UInt8, UInt32(cchar)%UInt8,
+    dlm_parse(s.data, reinterpret(UInt32,eol)%UInt8, reinterpret(UInt32,dlm)%UInt8, reinterpret(UInt32,qchar)%UInt8, reinterpret(UInt32,cchar)%UInt8,
               ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
 end
 
