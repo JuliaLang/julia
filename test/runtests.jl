@@ -62,21 +62,6 @@ ns = length(d.slots)
 @test @compat rsplit("a,b,,c", ',', keep=false) == ["a", "b", "c"]
 @test @compat rsplit("a,b,,c", ',', keep=true) == ["a", "b", "", "c"]
 
-# We test that the following doc-syntax does not raise in 0.3.
-# and that the methods are still defined.
-doc"foo $latex$"
-function foo_doc() end
-
-doc"""multi-line"""
-function foo_mdoc() end
-
-@doc "docstring" ->
-function foo_macrodoc() end
-
-@test foo_doc() == nothing
-@test foo_mdoc() == nothing
-@test foo_macrodoc() == nothing
-
 if VERSION < v"0.4.0-dev+1387"
     @test isdefined(Main, :AbstractString)
 end
