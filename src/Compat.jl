@@ -438,6 +438,9 @@ function _compat(ex::Expr)
         if ex.args[end] == :Timer || ex.args[end] == :(Base.Timer)
             ex.args[end] = :(Compat.Timer2)
         end
+    elseif ex.head == :quote && isa(ex.args[1], Symbol)
+        # Passthrough
+        return ex
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end

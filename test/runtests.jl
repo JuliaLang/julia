@@ -31,9 +31,8 @@ td[1] = 1.0
 
 @test @compat(Dict()) == Dict()
 @test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
-if VERSION >= v"0.3.0-"
-    @test @compat(Dict([(1, 1)])) == d
-end
+@test @compat(Dict([(1, 1)])) == d
+@test @compat(Dict(:Void => :Nothing)) == Dict([(:Void, :Nothing)])
 
 d2 = Dict{Symbol,Dict{Symbol,Int}}()
 d2[:a] = Dict{Symbol,Int}()
