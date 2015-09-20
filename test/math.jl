@@ -157,6 +157,14 @@ for T in (Float32, Float64)
     @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
     @test_approx_eq tan(x) sin(x)/cos(x)
     @test_approx_eq tanh(x) sinh(x)/cosh(x)
+
+    #Edge cases
+    @test isinf(log(zero(T)))
+    @test isnan(log(convert(T,NaN)))
+    @test_throws DomainError log(-one(T))
+    @test isinf(log1p(-one(T)))
+    @test isnan(log1p(convert(T,NaN)))
+    @test_throws DomainError log1p(convert(T,-2.0))
 end
 
 for T in (Int, Float64, BigFloat)
