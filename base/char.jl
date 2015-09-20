@@ -45,8 +45,37 @@ isless(x::Integer, y::Char) = isless(x, UInt32(y))
 bswap(x::Char) = Char(bswap(UInt32(x)))
 
 print(io::IO, c::Char) = (write(io, c); nothing)
+
+const hex_chars = UInt8['0':'9';'a':'z']
+
 function show(io::IO, c::Char)
-    print(io, '\'')
-    print_escaped(io, utf32(c), "'")
-    print(io, '\'')
+    if c <= '\\'
+        b = c == '\0' ? 0x30 :
+            c == '\a' ? 0x61 :
+            c == '\b' ? 0x62 :
+            c == '\t' ? 0x74 :
+            c == '\n' ? 0x6e :
+            c == '\v' ? 0x76 :
+            c == '\f' ? 0x66 :
+            c == '\r' ? 0x72 :
+            c == '\e' ? 0x65 :
+            c == '\'' ? 0x27 :
+            c == '\\' ? 0x5c : 0xff
+        if b != 0xff
+            write(io, 0x27, 0x5c, b, 0x27)
+            return
+        end
+    end
+    if isprint(c)
+        write(io, 0x27, c, 0x27)
+    else
+        u = UInt32(c)
+        write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
+        d = max(2, 8 - (leading_zeros(u) >> 2))
+        while 0 < d
+            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+        end
+        write(io, 0x27)
+    end
+    return
 end
