@@ -9,8 +9,11 @@ import Base: _default_delims, tryparse_internal
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 
+invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
+invalid_dlm(::Type{UInt8})  = 0xfe
+invalid_dlm(::Type{UInt16}) = 0xfffe
+invalid_dlm(::Type{UInt32}) = 0xfffffffe
 
-const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
 countlines(f::AbstractString,eol::Char='\n') = open(io->countlines(io,eol),f)::Int
@@ -27,10 +30,10 @@ function countlines(io::IO, eol::Char='\n')
     nl
 end
 
-readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm, T, '\n'; opts...)
+readdlm(input, T::Type; opts...) = readdlm(input, invalid_dlm(Char), T, '\n'; opts...)
 readdlm(input, dlm::Char, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts...)
 
-readdlm(input; opts...) = readdlm(input, invalid_dlm, '\n'; opts...)
+readdlm(input; opts...) = readdlm(input, invalid_dlm(Char), '\n'; opts...)
 readdlm(input, dlm::Char; opts...) = readdlm(input, dlm, '\n'; opts...)
 
 readdlm(input, dlm::Char, eol::Char; opts...) = readdlm_auto(input, dlm, Float64, eol, true; opts...)
@@ -231,7 +234,7 @@ end
 
 
 function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
-    ign_empty = (dlm == invalid_dlm)
+    ign_empty = (dlm == invalid_dlm(Char))
     quotes = get(optsd, :quotes, true)
     comments = get(optsd, :comments, true)
     comment_char = get(optsd, :comment_char, '#')
@@ -365,7 +368,7 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
     all_ascii = (D <: UInt8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
     (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, eol%UInt8, dlm%UInt8, qchar%UInt8, cchar%UInt8, ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
     ncols = nrows = col = 0
-    is_default_dlm = (dlm == UInt32(invalid_dlm) % D)
+    is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""
     # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment, 5: skipstart
     state = (skipstart > 0) ? 5 : 0
