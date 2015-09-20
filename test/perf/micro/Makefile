@@ -91,7 +91,7 @@ benchmarks/python.csv: perf.py
 	for t in 1 2 3 4 5; do python $<; done >$@
 
 benchmarks/matlab.csv: perf.m
-	for t in 1 2 3 4 5; do matlab -nosplash -nodesktop -nojvm -r 'perf;exit' 2>/dev/null | grep '^matlab,'; done >$@
+	for t in 1 2 3 4 5; do matlab -nojvm -singleCompThread -r 'perf; perf; exit' | grep ^matlab | tail -8; done >$@
 
 benchmarks/octave.csv: perf.m
 	for t in 1 2 3 4 5; do octave -q --eval perf 2>/dev/null; done >$@
