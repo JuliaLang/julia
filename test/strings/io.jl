@@ -54,15 +54,17 @@ cx = Any[
 ]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == convert(UInt32, cx[i,2])
-    @test string(cx[i,2]) == unescape_string(cx[i,3])
-    if isascii(cx[i,2]) || !isprint(cx[i,2])
-        @test cx[i,3] == escape_string(string(cx[i,2]))
+    cp, ch, st = cx[i,:]
+    @test cp == convert(UInt32, ch)
+    @test string(ch) == unescape_string(st)
+    if isascii(ch) || !isprint(ch)
+        @test st == escape_string(string(ch))
     end
     for j = 1:size(cx,1)
-        str = string(cx[i,2], cx[j,2])
+        str = string(ch, cx[j,2])
         @test str == unescape_string(escape_string(str))
     end
+    @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
 end
 
 for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
