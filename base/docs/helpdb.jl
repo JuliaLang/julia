@@ -1538,8 +1538,9 @@ cconvert
 
 doc"""
     |>(x, f)
+    |>(x, y, ..., f)
 
-Applies a function to the preceding argument. This allows for easy function chaining.
+Applies a function to the preceding argument(s). This allows for easy function chaining.
 
 ```jldoctest
 julia> [1:5;] |> x->x.^2 |> sum |> inv
