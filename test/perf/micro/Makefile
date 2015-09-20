@@ -4,6 +4,9 @@ include $(JULIAHOME)/deps/Versions.make
 
 NODEJSBIN = nodejs
 
+#Use python2 for Python 2.x
+PYTHON = python3
+
 ifeq ($(OS), WINNT)
 MATHEMATICABIN = MathKernel
 else ifeq ($(OS), Darwin)
@@ -87,7 +90,7 @@ benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
-	for t in 1 2 3 4 5; do python $<; done >$@
+	for t in 1 2 3 4 5; do $(PYTHON) $<; done >$@
 
 benchmarks/python3.csv: perf.py
 	for t in 1 2 3 4 5; do python3 $<; done | sed 's/^python/python3/g' >$@
