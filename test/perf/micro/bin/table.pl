@@ -22,6 +22,7 @@ our @benchmarks = qw(
 our $julia_ver = `../../../julia -v | cut -f3 -d" "`;
 our $fortran_ver = `gfortran -v 2>&1 | grep "gcc version" | cut -f3 -d" "`;
 our $python_ver = `python -V 2>&1 | cut -f2 -d" "`;
+our $python3_ver = `python3 -V 2>&1 | cut -f2 -d" "`;
 our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`;
 our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
 our $octave_ver = `octave -v | grep version | cut -f4 -d" "`;
@@ -36,6 +37,7 @@ our %systems = (
   "fortran"    => ["Fortran"     , "gcc $fortran_ver" ],
   "julia"      => ["Julia"       , $julia_ver  ],
   "python"     => ["Python"      , $python_ver ],
+  "python3"    => ["Python"      , $python3_ver],
   "matlab"     => ["Matlab"      , "R$matlab_ver" ],
   "octave"     => ["Octave"      , $octave_ver ],
   "r"          => ["R"           , $R_ver ],
@@ -47,7 +49,7 @@ our %systems = (
   "java"       => ["Java"        , $java_ver ],
 );
 
-our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua java);
+our @systems = qw(fortran julia python python3 r matlab octave mathematica javascript go lua java);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
