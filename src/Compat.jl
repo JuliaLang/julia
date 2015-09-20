@@ -419,7 +419,7 @@ function _compat(ex::Expr)
             else
                 Expr(:tuple, args...)
             end
-        elseif VERSION < v"0.4.0-dev" && f == :Union
+        elseif VERSION < v"0.4.0-dev+5379" && f == :Union
             ex = Expr(:call,:Union,ex.args[2:end]...)
         elseif ex == :(Ptr{Void})
             # Do no change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768

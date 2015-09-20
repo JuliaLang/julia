@@ -542,3 +542,10 @@ f141(::Type{UDPSocket}) = true
 @test f141(OutOfMemoryError)
 @test f141(Base64EncodePipe)
 @test f141(UDPSocket)
+
+# Union syntax
+if VERSION < v"0.4.0-dev+5379"
+    @test @compat(Union{}) == None
+    @test @compat(Union{Int,Float64}) == Union(Int,Float64)
+    @test @compat(:(Union{})) == :(Union())
+end

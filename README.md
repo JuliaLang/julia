@@ -56,6 +56,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Void` - `Nothing` on 0.3 (`Ptr{Void}` is not changed).
 
+* `@compat Union{args...}` - `Union(args...)` on 0.3. [#11432](https://github.com/JuliaLang/julia/pull/11432)
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
