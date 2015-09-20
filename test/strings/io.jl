@@ -64,6 +64,7 @@ for i = 1:size(cx,1)
         str = string(ch, cx[j,2])
         @test str == unescape_string(escape_string(str))
     end
+    @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
 end
 
 for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
