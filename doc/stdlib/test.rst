@@ -46,8 +46,8 @@ To use the default handler, the macro :func:`@test` can be used directly::
    in anonymous at test.jl:62
    in do_test at test.jl:37
 
-As seen in the examples above, failures or errors will print the abstract
-syntax tree of the expression in question.
+As seen in the examples above, failures or errors will print a backtrace for the expression in 
+question.
 
 Another macro is provided to check if the given expression throws an exception of type ``extype``,
 :func:`@test_throws`::
