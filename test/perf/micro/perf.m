@@ -6,9 +6,6 @@
 function perf()
 
 	warning off;
-	if exist('OCTAVE_VERSION') == 0
-    	maxNumCompThreads(1);
-	end
 	
 	f = fib(20);
 	assert(f == 6765)
