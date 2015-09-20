@@ -6,7 +6,7 @@ include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "fenv_co
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
     RoundNearestTiesAway, RoundNearestTiesUp,
-    get_rounding, set_rounding, with_rounding,
+    rounding, setrounding,
     get_zero_subnormals, set_zero_subnormals
 
 ## rounding modes ##
@@ -41,25 +41,26 @@ function from_fenv(r::Integer)
     end
 end
 
-set_rounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
-get_rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Int32, ())
+setrounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
+rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Int32, ())
 
-set_rounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = set_rounding_raw(T,to_fenv(r))
-get_rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(get_rounding_raw(T))
+setrounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = setrounding_raw(T,to_fenv(r))
+rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(rounding_raw(T))
 
-function with_rounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
-    old_rounding_raw = get_rounding_raw(T)
-    set_rounding(T,rounding)
+
+function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
+    old_rounding_raw = rounding_raw(T)
+    setrounding(T,rounding)
     try
         return f()
     finally
-        set_rounding_raw(T,old_rounding_raw)
+        setrounding_raw(T,old_rounding_raw)
     end
 end
 
 
 # Should be equivalent to:
-#   with_rounding(Float64,r) do
+#   setrounding(Float64,r) do
 #       convert(T,x)
 #   end
 # but explicit checks are currently quicker (~20x).

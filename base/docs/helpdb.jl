@@ -1238,20 +1238,6 @@ For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
 """
 Ac_rdiv_B
 
-doc"""
-```rst
-..  set_rounding(T, mode)
-
-Set the rounding mode of floating point type ``T``, controlling the
-rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
-:func:`/` and :func:`sqrt`) and type conversion.
-
-Note that this may affect other types, for instance changing the rounding
-mode of ``Float64`` will change the rounding mode of ``Float32``. See
-``get_rounding`` for available modes
-```
-"""
-set_rounding
 
 doc"""
     linspace(start, stop, n=100)
@@ -1700,7 +1686,7 @@ julia> Float32(1/3, RoundUp)
 0.33333334f0
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float32
 
@@ -3122,7 +3108,7 @@ doc"""
 ..  round([T,] x, [digits, [base]], [r::RoundingMode])
 
 ``round(x)`` rounds ``x`` to an integer value according to the default
-rounding mode (see :func:`get_rounding`), returning a value of the same type as
+rounding mode (see :func:`rounding`), returning a value of the same type as
 ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
 integer, with ties (fractional values of 0.5) being rounded to the even
 integer.
@@ -3854,7 +3840,7 @@ julia> Float64(pi, RoundUp)
 3.1415926535897936
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float64
 
@@ -6222,7 +6208,7 @@ isreadonly
 
 doc"""
 ```rst
-..  get_rounding(T)
+..  rounding(T)
 
 Get the current floating point rounding mode for type ``T``, controlling
 the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
@@ -6232,7 +6218,7 @@ Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
 ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
 ```
 """
-get_rounding
+rounding
 
 doc"""
 ```rst
@@ -6447,18 +6433,33 @@ Like `broadcast_function`, but for `broadcast!`.
 broadcast!_function
 
 doc"""
-    with_rounding(f::Function, T, mode)
+```rst
+..  setrounding(T, mode)
+
+Set the rounding mode of floating point type ``T``, controlling the
+rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
+:func:`/` and :func:`sqrt`) and type conversion.
+
+Note that this may affect other types, for instance changing the rounding
+mode of ``Float64`` will change the rounding mode of ``Float32``. See
+``rounding`` for available modes
+```
+"""
+setrounding(T, mode)
+
+doc"""
+    setrounding(f::Function, T, mode)
 
 Change the rounding mode of floating point type `T` for the duration of `f`. It is logically equivalent to:
 
-    old = get_rounding(T)
-    set_rounding(T, mode)
+    old = rounding(T)
+    setrounding(T, mode)
     f()
-    set_rounding(T, old)
+    setrounding(T, old)
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
-with_rounding
+setrounding(f::Function, T, mode)
 
 doc"""
     sleep(seconds)
@@ -7808,11 +7809,11 @@ Join path components into a full path. If some argument is an absolute path, the
 joinpath
 
 doc"""
-    get_bigfloat_precision()
+    precision(BigFloat)
 
 Get the precision (in bits) currently used for `BigFloat` arithmetic.
 """
-get_bigfloat_precision
+precision(::Type{BigFloat})
 
 doc"""
     homedir() -> AbstractString
@@ -8441,16 +8442,16 @@ Compute $e^x$.
 exp
 
 doc"""
-    with_bigfloat_precision(f::Function,precision::Integer)
+    setprecision(f::Function, precision::Integer)
 
 Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
 
-    old = get_bigfloat_precision()
-    set_bigfloat_precision(precision)
+    old = precision(BigFloat)
+    setprecision(BigFloat, precision)
     f()
-    set_bigfloat_precision(old)
+    setprecision(BigFloat, old)
 """
-with_bigfloat_precision
+setprecision
 
 doc"""
     searchindex(string, substring, [start])
@@ -9527,11 +9528,11 @@ Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modi
 issorted
 
 doc"""
-    set_bigfloat_precision(x::Int64)
+    setprecision(x::Int64)
 
 Set the precision (in bits) to be used to `BigFloat` arithmetic.
 """
-set_bigfloat_precision
+setprecision
 
 doc"""
     isbits(T)
