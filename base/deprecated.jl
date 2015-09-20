@@ -160,6 +160,7 @@ end
 
 @deprecate_binding String AbstractString
 
+# 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
 @deprecate_binding Uint    UInt
 @deprecate_binding Uint8   UInt8
 @deprecate_binding Uint16  UInt16
