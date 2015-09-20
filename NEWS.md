@@ -1615,6 +1615,7 @@ Too numerous to mention.
 [#11849]: https://github.com/JuliaLang/julia/issues/11849
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11947]: https://github.com/JuliaLang/julia/issues/11947
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12025]: https://github.com/JuliaLang/julia/issues/12025
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
