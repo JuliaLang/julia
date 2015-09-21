@@ -26,46 +26,46 @@ OLD_STDOUT = STDOUT
 catch_out = IOStream("")
 rd, wr = redirect_stdout()
 
-@testset "no errors" begin
+@testset "no errors" let
     @test true
     @test 1 == 1
 end
 
 try
 
-@testset "outer" begin
-    @testset "inner1" begin
+@testset "outer" let
+    @testset "inner1" let
         @test true
         @test false
         @test 1 == 1
         @test 2 == :foo
         @test 3 == 3
-        @testset "d" begin
+        @testset "d" let
             @test 4 == 4
         end
-        @testset begin
+        @testset let
             @test :blank != :notblank
         end
     end
-    @testset "inner1" begin
+    @testset "inner1" let
         @test 1 == 1
         @test 2 == 2
         @test 3 == :bar
         @test 4 == 4
         @test_throws ErrorException 1+1
         @test_throws ErrorException error()
-        @testset "errrrr" begin
+        @testset "errrrr" let
             @test "not bool"
             @test error()
         end
     end
 
-    @testset "loop with desc" begin
+    @testset "loop with desc" let
         @testloop "loop1 $T" for T in (Float32, Float64)
             @test 1 == T(1)
         end
     end
-    @testset "loops without desc" begin
+    @testset "loops without desc" let
         @testloop for T in (Float32, Float64)
             @test 1 == T(1)
         end
@@ -74,7 +74,7 @@ try
         end
     end
     srand(123)
-    @testset "some loops fail" begin
+    @testset "some loops fail" let
         @testloop for i in 1:5
             @test i <= rand(1:10)
         end

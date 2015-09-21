@@ -458,12 +458,13 @@ end
 #-----------------------------------------------------------------------
 
 """
-    @testset "description" begin ... end
-    @testset begin ... end
+    @testset "description" let ... end
+    @testset let ... end
 
 Starts a new test set. The test results will be recorded, and if there
 are any `Fail`s or `Error`s, an exception will be thrown only at the end,
-along with a summary of the test results.
+along with a summary of the test results. Wrapping your test in a `let` block
+creates a new scope that isolates your tests from other test sets.
 """
 macro testset(args...)
     # Parse arguments to do determine if any options passed in

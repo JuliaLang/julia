@@ -116,12 +116,12 @@ the tests failed, or could not be evaluated due to an error, the
 test set will then throw a ``TestSetException``.
 
 
-.. function:: @testset "description" begin ... end
-              @testset begin ... end
+.. function:: @testset "description" let ... end
+              @testset let ... end
 
    .. Docstring generated from Julia source
 
-   Starts a new test set. The test results will be recorded, and if there are any ``Fail``\ s or ``Error``\ s, an exception will be thrown only at the end, along with a summary of the test results.
+   Starts a new test set. The test results will be recorded, and if there are any ``Fail``\ s or ``Error``\ s, an exception will be thrown only at the end, along with a summary of the test results. Wrapping your test in a ``let`` block creates a new scope that isolates your tests from other test sets.
 
 .. function:: @testloop "description $v" for v in (...) ... end
               @testloop for x in (...), y in (...) ... end
@@ -132,7 +132,7 @@ test set will then throw a ``TestSetException``.
 
 We can put our tests for the ``foo(x)`` function in a test set::
 
-    julia> @testset "Foo Tests" begin
+    julia> @testset "Foo Tests" let
                @test foo("a")   == 1
                @test foo("ab")  == 4
                @test foo("abc") == 9
@@ -142,8 +142,8 @@ We can put our tests for the ``foo(x)`` function in a test set::
 
 Test sets can all also be nested::
 
-    julia> @testset "Foo Tests" begin
-               @testset "Animals" begin
+    julia> @testset "Foo Tests" let
+               @testset "Animals" let
                    @test foo("cat") == 9
                    @test foo("dog") == foo("cat")
                end
@@ -159,16 +159,16 @@ In the event that a nested test set has no failures, as happened here,
 it will be hidden in the summary. If we do have a test failure, only
 the details for the failed test sets will be shown::
 
-    julia> @testset "Foo Tests" begin
-               @testset "Animals" begin
-                   @testset "Felines" begin
+    julia> @testset "Foo Tests" let
+               @testset "Animals" let
+                   @testset "Felines" let
                        @test foo("cat") == 9
                    end
-                   @testset "Canines" begin
+                   @testset "Canines" let
                        @test foo("dog") == 9
                    end
                end
-               @testset "Arrays" begin
+               @testset "Arrays" let
                    @test foo(zeros(2)) == 4
                    @test foo(ones(4)) == 15
                end
