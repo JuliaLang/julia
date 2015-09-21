@@ -231,7 +231,6 @@ var benchmarks = []struct {
 	{
 		name: "parse_int",
 		fn: func(b *testing.B) {
-			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				for k := 0; k < 1000; k++ {
 					n := rnd.Uint32()
