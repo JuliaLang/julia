@@ -481,7 +481,7 @@ DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
-    if (b->deprecated) {
+    if (b->deprecated && jl_options.depwarn) {
         if (b->owner)
             jl_printf(JL_STDERR, "WARNING: %s.%s is deprecated", b->owner->name->name, b->name->name);
         else
