@@ -520,43 +520,6 @@ Return `true` iff an array is heap-ordered according to the given order.
 """
 Collections.isheap
 
-# Base.Test
-
-doc"""
-    @test_throws(extype, ex)
-
-Test that the expression `ex` throws an exception of type `extype` and calls the current handler to handle the result.
-"""
-:(Test.@test_throws)
-
-doc"""
-    @test_approx_eq_eps(a, b, tol)
-
-Test two floating point numbers `a` and `b` for equality taking in account a margin of tolerance given by `tol`.
-"""
-:(Test.@test_approx_eq_eps)
-
-doc"""
-    @test(ex)
-
-Test the expression `ex` and calls the current handler to handle the result.
-"""
-:(Test.@test)
-
-doc"""
-    @test_approx_eq(a, b)
-
-Test two floating point numbers `a` and `b` for equality taking in account small numerical errors.
-"""
-:(Test.@test_approx_eq)
-
-doc"""
-    with_handler(f, handler)
-
-Run the function `f` using the `handler` as the handler.
-"""
-Test.with_handler
-
 # Base.Profile
 
 doc"""
