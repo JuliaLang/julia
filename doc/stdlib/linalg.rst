@@ -155,6 +155,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
+.. function:: ldltfact!(::SymTridiagonal) -> LDLt
+
+   .. Docstring generated from Julia source
+
+   Same as ``ldltfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    .. Docstring generated from Julia source
@@ -289,21 +295,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    factorization to a tuple; where possible, using :func:`eigfact` is
    recommended.
 
-.. function:: eigvals(A,[irange,][vl,][vu])
+.. function:: eigvals(A,[irange,][vl,][vu]) -> values
 
    .. Docstring generated from Julia source
 
-   Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
-   :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
-   only a subset of the eigenvalues by specifying either a :class:`UnitRange`
-   ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
-   ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``\ . If ``A`` is ``Symmetric``\ , ``Hermitian`` or ``SymTridiagonal``\ , it is possible to calculate only a subset of the eigenvalues by specifying either a ``UnitRange`` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
 
-   For general non-symmetric matrices it is possible to specify how the matrix
-   is balanced before the eigenvector calculation. The option ``permute=true``
-   permutes the matrix to become closer to upper triangular, and ``scale=true``
-   scales the matrix by its diagonal elements to make rows and columns more
-   equal in norm. The default is ``true`` for both options.
+   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns moreequal in norm. The default is ``true`` for both options.
+
+.. function:: eigvals!(A,[irange,][vl,][vu]) -> values
+
+   .. Docstring generated from Julia source
+
+   Same as ``eigvals``\ , but saves space by overwriting the input ``A`` (and ``B``\ ), instead of creating a copy.
 
 .. function:: eigmax(A)
 
@@ -507,6 +511,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
+
+.. function:: givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
+
+   .. Docstring generated from Julia source
+
+   Computes the tuple ``(G, r) = givens(f, g, i1, i2)`` where ``G`` is a Givens rotation and ``r`` is a scalar such that ``G*x=y`` with ``x[i1]=f``\ , ``x[i2]=g``\ , ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The arguments ``f`` and ``g`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
+
+.. function:: givens{T}(::AbstractArray{T}, ::Integer, ::Integer, ::Integer) -> {Givens, T}
+
+   .. Docstring generated from Julia source
+
+   Computes the tuple ``(G, r) = givens(A, i1, i2, col)`` where ``G`` is Givens rotation and ``r`` is a scalar such that ``G*A[:,col]=y`` with ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The element type of ``A`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
 
 .. function:: triu(M)
 
