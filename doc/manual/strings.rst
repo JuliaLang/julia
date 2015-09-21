@@ -439,6 +439,49 @@ backslash:
     julia> print("I have \$100 in my account.\n")
     I have $100 in my account.
 
+Triple-Quoted Strings Literals
+------------------------------
+
+When strings are created using triple-quotes (``"""..."""``) they have some
+special behavior that can be useful for creating longer blocks of text. First,
+if the opening ``"""`` is followed by a newline, the newline is stripped from
+the resulting string.
+
+::
+
+    """hello"""
+
+is equivalent to
+
+::
+
+    """
+    hello"""
+
+but
+
+::
+
+    """
+
+    hello"""
+
+will contain a literal newline at the beginning. Trailing whitespace is left
+unaltered. They can contain ``"`` symbols without escaping. Triple-quoted strings
+are also dedented to the level of the least-indented line. This is useful for
+defining strings within code that is indented. For example:
+
+.. doctest::
+
+    julia> str = """
+               Hello,
+               world.
+             """
+    "  Hello,\n  world.\n"
+
+In this case the final (empty) line before the closing ``"""`` sets the
+indentation level.
+
 Common Operations
 -----------------
 
