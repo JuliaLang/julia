@@ -259,11 +259,11 @@ var benchmarks = []struct {
 		name: "quicksort",
 		fn: func(b *testing.B) {
 			lst := make([]float64, 5000)
-			for k := 0; k < len(lst); k++ {
-				lst[k] = rand.Float64()
-			}
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
+				for k := range lst {
+					lst[k] = rnd.Float64()
+				}
 				qsort_kernel(lst, 0, len(lst)-1)
 			}
 		},
