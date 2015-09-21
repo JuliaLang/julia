@@ -91,6 +91,9 @@ end
 type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
 field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
 
+"""isbitszero computes whether the bit-pattern of the argument is composed of only zero bits"""
+isbitszero(x::ANY) = ccall(:jl_bitszero, Cint, (Any,), x) != 0
+
 # return all instances, for types that can be enumerated
 function instances end
 

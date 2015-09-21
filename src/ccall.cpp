@@ -1191,6 +1191,29 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             }
         }
     }
+    if (fptr == (void *) &jl_bitszero ||
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name,"jl_bitszero"))) {
+        assert(lrt == T_int32);
+        assert(!isVa);
+        assert(nargt==1);
+        jl_value_t *argi = args[4];
+        assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
+        jl_value_t *jargty = expr_type(argi, ctx);
+        if (jl_is_bitstype(jargty)) {
+            Type *largty = julia_type_to_llvm(jargty);
+            Value *arg = emit_unboxed(argi, ctx);
+            arg = emit_unbox(largty, arg, jargty);
+            if (!largty->isIntegerTy() && !largty->isPointerTy()) {
+                largty = IntegerType::get(jl_LLVMContext, largty->getPrimitiveSizeInBits());
+                arg = builder.CreateBitCast(arg, largty);
+            }
+            Value *iszero = builder.CreateICmpEQ(arg, ConstantInt::getNullValue(largty));
+            JL_GC_POP();
+            return mark_or_box_ccall_result(builder.CreateSExt(iszero, lrt),
+                    args[2], rt, static_rt, ctx);
+        }
+    }
 
     // save place before arguments, for possible insertion of temp arg
     // area saving code.

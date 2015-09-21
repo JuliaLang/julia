@@ -535,6 +535,90 @@ JL_CALLABLE(jl_f_kwcall)
     return jl_apply(m, args, nargs);
 }
 
+// the following assumes 16-byte chunks are optimal
+// and that the minimum alignment of v is n
+static int iszero(uint8_t* v, size_t n)
+{
+    if (n >= sizeof(uint64_t)) {
+        size_t n64 = n / sizeof(uint64_t);
+        uint64_t *v64 = (uint64_t*)v;
+        // simd loop
+        while (n64--) {
+            if (*v64++)
+                return 0;
+        }
+        v = (uint8_t*)v64;
+        n = n % sizeof(uint64_t);
+    }
+    // post-loop
+    while (n--) {
+        if (*v++)
+            return 0;
+    }
+    return 1;
+}
+
+static int jl_bitszero_ty(jl_datatype_t *dt, uint8_t *v)
+{
+    size_t sz = jl_datatype_size(dt);
+    size_t nf = jl_datatype_nfields(dt);
+    size_t f;
+    if (dt->haspadding || nf == 0)
+        return iszero(v, sz);
+    for (f = 0; f < nf; f++) {
+        size_t offs = dt->fields[f].offset;
+        uint8_t*vo = v + offs;
+        if (dt->fields[f].isptr) {
+            jl_value_t *f = *(jl_value_t**)vo;
+            if (f != NULL)
+                return 0;
+        }
+        else {
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_svecref(dt->types, f);
+            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
+            if (fieldtype->haspadding) {
+                if (!jl_bitszero_ty(fieldtype, vo))
+                    return 0;
+            }
+            else {
+                if (!iszero(vo, dt->fields[f].size))
+                    return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+DLLEXPORT
+int jl_bitszero(jl_value_t *v)
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+    if (jl_is_svec(v)) {
+        return jl_svec_len(v) == 0;
+    }
+    if (jl_is_datatype(v)) {
+        return 0;
+    }
+    if (jl_is_array(v)) {
+        size_t i, len = jl_array_len(v);
+        jl_datatype_t *elty = (jl_datatype_t*)jl_tparam0(dt);
+        if (!jl_is_datatype(elty))
+            return 0;
+        uint8_t *data = jl_array_data(v);
+        size_t elsize = ((jl_array_t*)v)->elsize;
+        if (((jl_array_t*)v)->ptrarray)
+            return iszero((uint8_t*)jl_data_ptr(v), len * sizeof(jl_value_t*));
+        if (!elty->haspadding)
+            return iszero(data, elsize * len);
+        for (i = 0; i < len; i++) {
+            if (!jl_bitszero_ty(elty, (uint8_t*)jl_data_ptr(v) + elsize * i))
+                return 0;
+        }
+        return 1;
+    }
+    return jl_bitszero_ty(dt, (uint8_t*)jl_data_ptr(v));
+}
+
 // eval -----------------------------------------------------------------------
 
 extern int jl_lineno;
