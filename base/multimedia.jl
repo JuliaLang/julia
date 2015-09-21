@@ -205,6 +205,12 @@ for mime in ["application/atom+xml", "application/ecmascript",
     global istextmime(::MIME{Symbol(mime)}) = true
 end
 
+immutable MIMEData{mime}
+    data::Vector{UInt8}
+end
+writemime{mime <: MIME}(io::IO,::MIME"text/plain",data::MIMEData{MIME"text/plain"}) = write(io,data.data)
+writemime{mime <: MIME}(io::IO,::mime,data::MIMEData{mime}) = write(io,data.data)
+
 ###########################################################################
 # We have an abstract AbstractDisplay class that can be subclassed in order to
 # define new rich-display output devices.  A typical subclass should
