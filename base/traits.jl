@@ -191,7 +191,7 @@ macro traitfn(tfn)
     fhead = tfn.args[1]
     fbody = tfn.args[2]
     fname = fhead.args[1].args[1]
-    args = [fhead.args[i] for i=2:arraylen(fhead.args)]
+    args = insertdummy([fhead.args[i] for i=2:arraylen(fhead.args)])
     typs = [fhead.args[1].args[i] for i=3:arraylen(fhead.args[1].args)]
     trait = fhead.args[1].args[2].args[1]
     if isnegated(trait)
@@ -210,7 +210,7 @@ macro traitfn(tfn)
     tmp1 = :($tmp1())
     addtoargs!(tmp1, args)
     tmp2 = :($fname($curmod.trait($trait)))
-    addtoargs!(tmp2, stripType(striparg(args)))
+    addtoargs!(tmp2, striparg(args))
     fwrap = :($tmp1 = ($curmod.@_inline_meta(); $tmp2))
 
     # The function containing the logic
@@ -248,14 +248,14 @@ end
 isnegated(t::Expr) = t.head==:call
 
 # [:(x::X)] -> [:x]
-striparg{T}(args::Array{T,1}) = [striparg(args[i]) for i=1:arraylen(args)]
+striparg{T}(args::Array{T,1}) = Any[striparg(args[i]) for i=1:arraylen(args)]
 striparg(a::Symbol) = a
 striparg(a::Expr) = a.args[1]
 
-# :(Type{X}) -> X, X->X
-stripType{T}(args::Array{T,1}) = [stripType(args[i]) for i=1:arraylen(args)]
-stripType(a::Symbol) = a
-stripType(a::Expr) = (a.head==:curly && a.args[1]==:Type) ? a.args[2] : a
+# insert dummy: ::X -> gensym()::X
+insertdummy{T}(args::Array{T,1}) = Any[insertdummy(args[i]) for i=1:arraylen(args)]
+insertdummy(a::Symbol) = a
+insertdummy(a::Expr) = (a.head==:(::) && arraylen(a.args)==1) ? Expr(:(::), gensym(), a.args[1]) : a
 
 ####
 # Some trait definitions

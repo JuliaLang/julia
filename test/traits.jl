@@ -85,6 +85,10 @@ a[1] = 5
 @traitfn ggt{X; Tr1{X}}(::Type{X}, y) = (X,y)
 @test ggt(Array, 5)==(Array, 5)
 
+# traitfn with ::X
+@traitfn gg27{X; Tr1{X}}(::X) = X
+@test gg27([1])==Array{Int,1}
+
 ######
 # Other tests
 #####

@@ -91,4 +91,8 @@ a[1] = 5
 @traitfn ggt{X; Tr1{X}}(::Type{X}, y) = (X,y)
 @assert_ ggt(Array, 5)==(Array, 5)
 
+# traitfn with ::X
+@traitfn gg27{X; Tr1{X}}(::X) = X
+@assert_ gg27(a)==Array{Int,1}
+
 println("Traits tests done")
