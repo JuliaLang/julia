@@ -21,7 +21,7 @@ import (
 	"math/cmplx"
 	"math/rand"
 	"strconv"
-	"time"
+	"testing"
 
 	"github.com/gonum/blas/blas64"
 	"github.com/gonum/blas/cgo"
@@ -78,6 +78,8 @@ func qsort_kernel(a []float64, lo, hi int) []float64 {
 	return a
 }
 
+var rnd = rand.New(rand.NewSource(1))
+
 // randmatstat
 
 func randmatstat(t int) (float64, float64) {
@@ -94,10 +96,10 @@ func randmatstat(t int) (float64, float64) {
 	qTmp := mat64.NewDense(2*n, 2*n, nil)
 	for i := 0; i < t; i++ {
 		for i := range ad {
-			ad[i] = rand.NormFloat64()
-			bd[i] = rand.NormFloat64()
-			cd[i] = rand.NormFloat64()
-			dd[i] = rand.NormFloat64()
+			ad[i] = rnd.NormFloat64()
+			bd[i] = rnd.NormFloat64()
+			cd[i] = rnd.NormFloat64()
+			dd[i] = rnd.NormFloat64()
 		}
 		a := mat64.NewDense(n, n, ad)
 		b := mat64.NewDense(n, n, bd)
@@ -132,13 +134,13 @@ func randmatstat(t int) (float64, float64) {
 func randmatmul(n int) *mat64.Dense {
 	aData := make([]float64, n*n)
 	for i := range aData {
-		aData[i] = rand.Float64()
+		aData[i] = rnd.Float64()
 	}
 	a := mat64.NewDense(n, n, aData)
 
 	bData := make([]float64, n*n)
 	for i := range bData {
-		bData[i] = rand.Float64()
+		bData[i] = rnd.Float64()
 	}
 	b := mat64.NewDense(n, n, bData)
 	var c mat64.Dense
@@ -194,106 +196,109 @@ func print_perf(name string, time float64) {
 
 // run tests
 
-func assert(b bool) {
-	if b != true {
-		panic("assert failed")
+func assert(b *testing.B, t bool) {
+	if t != true {
+		b.Fatal("assert failed")
 	}
 }
 
 func main() {
-	assert(fib(20) == 6765)
-	tmin := float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		_ = fib(20)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
+	for _, bm := range benchmarks {
+		print_perf(bm.name, runBenchmarkFor(bm.fn))
 	}
-	print_perf("fib", tmin)
+}
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		var m uint64
-		var n uint32
-		for k := 0; k < 1000; k++ {
-			n = rand.Uint32()
-			s := fmt.Sprintf("%x", n)
-			m, _ = strconv.ParseUint(s, 16, 32)
-		}
-		assert(uint32(m) == n)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("parse_int", tmin)
+func runBenchmarkFor(fn func(*testing.B)) (seconds float64) {
+	bm := testing.Benchmark(fn)
+	return bm.T.Seconds() / float64(bm.N)
+}
 
-	assert(mandelperf() == 14791)
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		_ = mandelperf()
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("mandel", tmin)
+var benchmarks = []struct {
+	name string
+	fn   func(*testing.B)
+}{
+	{
+		name: "fib",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if fib(20) != 6765 {
+					b.Fatal("unexpected value for fib(20)")
+				}
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		lst := make([]float64, 5000)
-		for k := 0; k < len(lst); k++ {
-			lst[k] = rand.Float64()
-		}
-		t := time.Now()
-		qsort_kernel(lst, 0, len(lst)-1)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("quicksort", tmin)
+	{
+		name: "parse_int",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				for k := 0; k < 1000; k++ {
+					n := rnd.Uint32()
+					m, _ := strconv.ParseUint(fmt.Sprintf("%x", n), 16, 32)
+					if uint32(m) != n {
+						b.Fatal("incorrect value for m")
+					}
+				}
+			}
+		},
+	},
 
-	assert(math.Abs(pisum()-1.644834071848065) < 1e-6)
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		pisum()
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("pi_sum", tmin)
+	{
+		name: "mandel",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if mandelperf() != 14791 {
+					b.Fatal("unexpected value for mandelperf")
+				}
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		c1, c2 := randmatstat(1000)
-		assert(0.5 < c1)
-		assert(c1 < 1.0)
-		assert(0.5 < c2)
-		assert(c2 < 1.0)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("rand_mat_stat", tmin)
+	{
+		name: "quicksort",
+		fn: func(b *testing.B) {
+			lst := make([]float64, 5000)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for k := range lst {
+					lst[k] = rnd.Float64()
+				}
+				qsort_kernel(lst, 0, len(lst)-1)
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		c := randmatmul(1000)
-		assert(c.At(0, 0) >= 0)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("rand_mat_mul", tmin)
+	{
+		name: "pi_sum",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if math.Abs(pisum()-1.644834071848065) >= 1e-6 {
+					b.Fatal("pi_sum out of range")
+				}
+			}
+		},
+	},
+
+	{
+		name: "rand_mat_stat",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				c1, c2 := randmatstat(1000)
+				assert(b, 0.5 < c1)
+				assert(b, c1 < 1.0)
+				assert(b, 0.5 < c2)
+				assert(b, c2 < 1.0)
+			}
+		},
+	},
+
+	{
+		name: "rand_mat_mul",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				c := randmatmul(1000)
+				assert(b, c.At(0, 0) >= 0)
+			}
+		},
+	},
 }

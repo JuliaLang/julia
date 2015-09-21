@@ -92,6 +92,9 @@ benchmarks/julia.csv: perf.jl
 benchmarks/python.csv: perf.py
 	for t in 1 2 3 4 5; do $(PYTHON) $<; done >$@
 
+benchmarks/python3.csv: perf.py
+	for t in 1 2 3 4 5; do python3 $<; done | sed 's/^python/python3/g' >$@
+
 benchmarks/matlab.csv: perf.m
 	for t in 1 2 3 4 5; do matlab -nojvm -singleCompThread -r 'perf; perf; exit' | grep ^matlab | tail -8; done >$@
 
@@ -122,6 +125,7 @@ BENCHMARKS = \
 	benchmarks/go.csv \
 	benchmarks/julia.csv \
 	benchmarks/python.csv \
+	benchmarks/python3.csv \
 	benchmarks/matlab.csv \
 	benchmarks/octave.csv \
 	benchmarks/r.csv \
