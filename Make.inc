@@ -634,10 +634,6 @@ endif
 endif
 endif
 
-ifeq ($(USE_SYSTEM_LLVM), 1)
-JCPPFLAGS+=-DSYSTEM_LLVM
-endif
-
 ifeq ($(origin LLVM_CONFIG), undefined)
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG := llvm-config$(EXE)
@@ -645,6 +641,11 @@ else
 LLVM_CONFIG := $(build_bindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
+
+ifeq ($(USE_SYSTEM_LLVM), 1)
+JCPPFLAGS+=-DSYSTEM_LLVM
+LLVM_VER := $(shell $(LLVM_CONFIG) --version)
+endif # SYSTEM_LLVM
 
 ifeq ($(BUILD_OS),$(OS))
 LLVM_CONFIG_HOST := $(LLVM_CONFIG)
@@ -657,7 +658,7 @@ ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
 LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
 endif
 endif
-endif # SYSTEM_LLVM
+endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG := pcre2-config
