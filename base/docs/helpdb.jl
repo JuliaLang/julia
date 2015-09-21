@@ -9764,21 +9764,19 @@ Computes `x*y+z` without rounding the intermediate result `x*y`. On some systems
 fma
 
 doc"""
-```rst
-..  eigvals(A,[irange,][vl,][vu])
 
-Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
-:class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
-only a subset of the eigenvalues by specifying either a :class:`UnitRange`
-``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
-``vu`` for the lower and upper boundaries of the eigenvalues.
+    eigvals(A,[irange,][vl,][vu]) -> values
 
-For general non-symmetric matrices it is possible to specify how the matrix
-is balanced before the eigenvector calculation. The option ``permute=true``
-permutes the matrix to become closer to upper triangular, and ``scale=true``
-scales the matrix by its diagonal elements to make rows and columns more
-equal in norm. The default is ``true`` for both options.
-```
+Returns the eigenvalues of `A`. If `A` is `Symmetric`, `Hermitian` or `SymTridiagonal`,
+it is possible to calculate only a subset of the eigenvalues by specifying either a
+`UnitRange` `irange` covering indices of the sorted eigenvalues, or a pair `vl` and `vu`
+for the lower and upper boundaries of the eigenvalues.
+
+For general non-symmetric matrices it is possible to specify how the matrix is balanced
+before the eigenvector calculation. The option `permute=true` permutes the matrix to
+become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
+elements to make rows and columns moreequal in norm. The default is `true` for both
+options.
 """
 eigvals
 
