@@ -16,7 +16,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/cmplx"
 	"math/rand"
@@ -204,13 +206,20 @@ func assert(b *testing.B, t bool) {
 
 func main() {
 	for _, bm := range benchmarks {
-		print_perf(bm.name, runBenchmarkFor(bm.fn))
+		seconds, err := runBenchmarkFor(bm.fn)
+		if err != nil {
+			log.Fatalf("%s %s", bm.name, err)
+		}
+		print_perf(bm.name, seconds)
 	}
 }
 
-func runBenchmarkFor(fn func(*testing.B)) (seconds float64) {
+func runBenchmarkFor(fn func(*testing.B)) (seconds float64, err error) {
 	bm := testing.Benchmark(fn)
-	return bm.T.Seconds() / float64(bm.N)
+	if (bm == testing.BenchmarkResult{}) {
+		return 0, errors.New("failed")
+	}
+	return bm.T.Seconds() / float64(bm.N), nil
 }
 
 var benchmarks = []struct {
@@ -234,7 +243,7 @@ var benchmarks = []struct {
 			for i := 0; i < b.N; i++ {
 				for k := 0; k < 1000; k++ {
 					n := rnd.Uint32()
-					m, _ := strconv.ParseUint(fmt.Sprintf("%x", n), 16, 32)
+					m, _ := strconv.ParseUint(strconv.FormatUint(uint64(n), 16), 16, 32)
 					if uint32(m) != n {
 						b.Fatal("incorrect value for m")
 					}
