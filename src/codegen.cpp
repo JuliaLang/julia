@@ -831,7 +831,7 @@ static Function *to_function(jl_lambda_info_t *li)
     JL_SIGATOMIC_END();
     if (dump_compiles_stream != NULL) {
         uint64_t this_time = jl_hrtime();
-        jl_printf(dump_compiles_stream, "%lu\t\"", this_time-last_time);
+        jl_printf(dump_compiles_stream, "%llu\t\"", (unsigned long long)(this_time-last_time));
         jl_static_show(dump_compiles_stream, (jl_value_t*)li);
         jl_printf(dump_compiles_stream, "\"\n");
         last_time = this_time;
