@@ -515,7 +515,7 @@ export float32_isvalid, float64_isvalid
 @deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
 
 # 12087
-@deprecate call(P::Base.DFT.Plan, A) P * A
+#@deprecate call(P::Base.DFT.Plan, A) P * A
 for f in (:plan_fft, :plan_ifft, :plan_bfft, :plan_fft!, :plan_ifft!, :plan_bfft!, :plan_rfft)
     @eval @deprecate $f(A, dims, flags) $f(A, dims; flags=flags)
     @eval @deprecate $f(A, dims, flags, tlim) $f(A, dims; flags=flags, timelimit=tlim)
@@ -936,3 +936,5 @@ end
 
 #14335
 @deprecate super(T::DataType) supertype(T)
+
+@deprecate isgeneric(f) true

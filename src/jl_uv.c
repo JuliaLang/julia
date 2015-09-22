@@ -61,7 +61,7 @@ static void jl_uv_call_close_callback(void *val)
     else {
         cb = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module), jl_symbol("_uv_hook_close"));
     }
-    assert(cb && jl_is_function(cb));
+    assert(cb);
     jl_apply((jl_function_t*)cb, (jl_value_t**)&val, 1);
 }
 

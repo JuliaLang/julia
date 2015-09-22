@@ -311,7 +311,7 @@ end
 
 ## printing with color ##
 
-function with_output_color(f::Function, color::Symbol, io::IO, args...)
+function with_output_color(f, color::Symbol, io::IO, args...)
     buf = IOBuffer()
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(buf, args...)

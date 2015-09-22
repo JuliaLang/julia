@@ -10,7 +10,7 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
+function filtered_mod_names(ffunc, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = UTF8String[string(s) for s in ssyms]
@@ -319,16 +319,17 @@ end
 function complete_methods(ex_org::Expr)
     args_ex = DataType[]
     func, found = get_value(ex_org.args[1], Main)
-    (!found || (found && !isgeneric(func))) && return UTF8String[]
+    !found && return UTF8String[]
     for ex in ex_org.args[2:end]
         val, found = get_type(ex, Main)
         push!(args_ex, val)
     end
     out = UTF8String[]
-    t_in = Tuple{args_ex...} # Input types
+    t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
+    na = length(args_ex)+1
     for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(Tuple{method.sig.parameters[1 : min(length(args_ex), end)]...}, t_in) != Union{} &&
+        typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{} &&
             push!(out,string(method))
     end
     return out

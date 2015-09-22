@@ -188,6 +188,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
     jl_module_export(inm, sym);
 }
 
+extern "C" jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
 
 #ifdef __cplusplus
 extern "C"
@@ -208,5 +209,5 @@ void jl_init_intrinsic_functions()
 #undef ALIAS
 
     jl_set_const(inm, jl_symbol("intrinsic_call"),
-            (jl_value_t*)jl_new_closure(jl_f_intrinsic_call, (jl_value_t*)jl_symbol("intrinsic_call"), NULL));
+                 jl_mk_builtin_func("intrinsic_call", jl_f_intrinsic_call));
 }

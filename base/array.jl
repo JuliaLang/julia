@@ -296,8 +296,8 @@ function unsafe_getindex(A::Array, ::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{T<:Real}(A::Array, I::Range{T})
-    return [ A[to_index(i)] for i in I ]
+function getindex{S,T<:Real}(A::Array{S}, I::Range{T})
+    return S[ A[to_index(i)] for i in I ]
 end
 
 ## Indexing: setindex! ##
@@ -750,7 +750,7 @@ function findprev(testf::Function, A, start)
 end
 findlast(testf::Function, A) = findprev(testf, A, length(A))
 
-function find(testf::Function, A::AbstractArray)
+function find(testf, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)

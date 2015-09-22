@@ -212,25 +212,25 @@ function _eigs(A, B;
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
     matvecA(x) = A * x
     if !isgeneral           # Standard problem
-        matvecB(x) = x
+        matvecB = x -> x
         if !isshift         #    Regular mode
             mode       = 1
-            solveSI(x) = x
+            solveSI = x->x
         else                #    Shift-invert mode
             mode       = 3
             F = factorize(sigma==zero(T) ? A : A - UniformScaling(sigma))
-            solveSI(x) = F \ x
+            solveSI = x -> F \ x
         end
     else                    # Generalized eigenproblem
-        matvecB(x) = B * x
+        matvecB = x -> B * x
         if !isshift         #    Regular inverse mode
             mode       = 2
             F = factorize(B)
-            solveSI(x) = F \ x
+            solveSI = x -> F \ x
         else                #    Shift-invert mode
             mode       = 3
             F = factorize(sigma==zero(T) ? A : A-sigma*B)
-            solveSI(x) = F \ x
+            solveSI = x -> F \ x
         end
     end
 
