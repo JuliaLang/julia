@@ -45,16 +45,18 @@
                 (cdr expr)))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
-(define (expr-find-all p expr key)
-  (let ((found (if (p expr)
-                   (list (key expr))
-                   '())))
-    (if (or (atom? expr) (quoted? expr))
-        found
-        (apply nconc
-               found
-               (map (lambda (x) (expr-find-all p x key))
-                    (cdr expr))))))
+(define (expr-find-all p expr key (filt (lambda (x) #t)))
+  (if (filt expr)
+      (let ((found (if (p expr)
+                       (list (key expr))
+                       '())))
+        (if (or (atom? expr) (quoted? expr))
+            found
+            (apply nconc
+                   found
+                   (map (lambda (x) (expr-find-all p x key filt))
+                        (cdr expr)))))
+      '()))
 
 (define (butlast lst)
   (if (or (null? lst) (null? (cdr lst)))

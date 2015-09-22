@@ -22,45 +22,15 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
-
-# constructors for Core types in boot.jl
-call(T::Type{BoundsError}) = Core.call(T)
-call(T::Type{BoundsError}, args...) = Core.call(T, args...)
-call(T::Type{DivideError}) = Core.call(T)
-call(T::Type{DomainError}) = Core.call(T)
-call(T::Type{OverflowError}) = Core.call(T)
-call(T::Type{InexactError}) = Core.call(T)
-call(T::Type{OutOfMemoryError}) = Core.call(T)
-call(T::Type{ReadOnlyMemoryError}) = Core.call(T)
-call(T::Type{StackOverflowError}) = Core.call(T)
-call(T::Type{SegmentationFault}) = Core.call(T)
-call(T::Type{UndefRefError}) = Core.call(T)
-call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
-call(T::Type{InterruptException}) = Core.call(T)
-call(T::Type{TypeError}, func::Symbol, context::AbstractString, expected::Type, got) = Core.call(T, func, context, expected, got)
-call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
-call(T::Type{GlobalRef}, modu, name::Symbol) = Core.call(T, modu, name)
-call(T::Type{ASCIIString}, d::Array{UInt8,1}) = Core.call(T, d)
-call(T::Type{UTF8String}, d::Array{UInt8,1}) = Core.call(T, d)
-call(T::Type{TypeVar}, args...) = Core.call(T, args...)
-call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
-call(T::Type{Expr}, args::ANY...) = _expr(args...)
-call(T::Type{LineNumberNode}, f::Symbol, n::Int) = Core.call(T, f, n)
-call(T::Type{LabelNode}, n::Int) = Core.call(T, n)
-call(T::Type{GotoNode}, n::Int) = Core.call(T, n)
-call(T::Type{QuoteNode}, x::ANY) = Core.call(T, x)
-call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
-call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
-call(T::Type{Module}, args...) = Core.call(T, args...)
-call(T::Type{Task}, f::Function) = Core.call(T, f)
-call(T::Type{GenSym}, n::Int) = Core.call(T, n)
-call(T::Type{WeakRef}) = Core.call(T)
-call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
-call(T::Type{Void}) = Core.call(Void)
+const call = (f,args...)->f(args...)
 
 # The specialization for 1 arg is important when running with --inline=no, see #11158
 call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T
+
+# `convert` fallbacks for constructors defined in boot.jl
+(T::Type{ASCIIString})(args...) = convert(T, args...)
+(T::Type{UTF8String})(args...) = convert(T, args...)
 
 convert{T}(::Type{T}, x::T) = x
 
@@ -161,13 +131,7 @@ end
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
-    if isa(f,DataType)
-        args = tuple(Type{f}, args...)
-        f = f.name.module.call
-    end
-    if isgeneric(f)
-        ccall(:jl_compile_hint, Void, (Any, Any), f, Tuple{args...})
-    end
+    ccall(:jl_compile_hint, Void, (Any, Any), f, Tuple{args...})
 end
 
 esc(e::ANY) = Expr(:escape, e)

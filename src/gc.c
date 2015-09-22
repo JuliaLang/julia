@@ -455,9 +455,8 @@ static void schedule_finalization(void *o, void *f)
 static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 {
     jl_function_t *f = (jl_function_t*)ff;
-    assert(jl_is_function(f));
     JL_TRY {
-        jl_apply(f, (jl_value_t**)&o, 1);
+        jl_do_call(f, (jl_value_t**)&o, 1);
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
@@ -1925,6 +1924,7 @@ static int push_root(jl_value_t *v, int d, int bits)
             dtsz = jl_datatype_size(dt);
         }
         MARK(v, bits = gc_setmark(v, dtsz, GC_MARKED_NOESC));
+
         int nf = (int)jl_datatype_nfields(dt);
         // TODO check if there is a perf improvement for objects with a lot of fields
         // int fdsz = sizeof(void*)*nf;
@@ -2039,8 +2039,7 @@ static void pre_mark(void)
     }
 
     jl_mark_box_caches();
-    gc_push_root(jl_unprotect_stack_func, 0);
-    gc_push_root(jl_bottom_func, 0);
+    //gc_push_root(jl_unprotect_stack_func, 0);
     gc_push_root(jl_typetype_type, 0);
 
     // constants

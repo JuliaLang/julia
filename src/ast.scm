@@ -221,8 +221,6 @@
 ;; whether var is assigned once
 (define (vinfo:set-sa! v a)    (set-car! (cddr v) (set-bit (caddr v) 16 a)))
 ;; occurs undef: mask 32
-;; whether var is called (occurs in function call head position)
-(define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
 
 (define var-info-for assq)
 

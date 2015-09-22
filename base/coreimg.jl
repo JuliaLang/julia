@@ -2,7 +2,7 @@
 
 Main.Core.eval(Main.Core, :(baremodule Inference
 using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
+            _apply, typeassert, apply_type, svec
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 
 eval(x) = Core.eval(Inference,x)

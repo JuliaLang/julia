@@ -467,6 +467,7 @@ function uv_connectioncb(stream::Ptr{Void}, status::Cint)
         sock.ccb(sock, status)
     end
     err === nothing ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
+    nothing
 end
 
 ## BUFFER ##
