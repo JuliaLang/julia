@@ -3368,3 +3368,8 @@ f8932(a::Vec3_8932, b::Vec3_8932) = Vec3_8932(a.x % b.x, a.y % b.y, a.z % b.z)
 a8932 = Vec3_8932(1,1,1)
 b8932 = Vec3_8932(2,2,2)
 @test f8932(a8932, b8932) == Vec3_8932(1.0, 1.0, 1.0)
+
+# issue #13261
+f13261() = (x = (error("oops"),); +(x...))
+g13261() = f13261()
+@test_throws ErrorException g13261()
