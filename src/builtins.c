@@ -329,12 +329,6 @@ JL_CALLABLE(jl_f_is)
     return jl_egal(args[0],args[1]) ? jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f_no_function)
-{
-    jl_error("invalid function object");
-    return jl_nothing;
-}
-
 JL_CALLABLE(jl_f_typeof)
 {
     JL_NARGS(typeof, 1, 1);
@@ -369,7 +363,7 @@ JL_CALLABLE(jl_f_sizeof)
     return jl_box_long(jl_datatype_size(dt));
 }
 
-JL_CALLABLE(jl_f_subtype)
+JL_CALLABLE(jl_f_issubtype)
 {
     JL_NARGS(subtype, 2, 2);
     if (!jl_is_typevar(args[0]))
@@ -403,23 +397,12 @@ JL_CALLABLE(jl_f_typeassert)
 
 static jl_function_t *jl_append_any_func;
 
-JL_CALLABLE(jl_f_apply)
+JL_CALLABLE(jl_f__apply)
 {
-    JL_NARGSV(apply, 2);
-    jl_function_t *f;
-    jl_function_t *call_func = (jl_function_t*)args[0];
-    assert(jl_is_function(call_func));
-    if (jl_is_function(args[1])) {
-        f = (jl_function_t*)args[1];
-        --nargs; ++args; /* args[1] becomes args[0] */
-    }
-    else { /* do generic call(args...) instead */
-        f = call_func;
-        // protect "function" arg from splicing
-        args[1] = (jl_value_t*)jl_svec1(args[1]);
-    }
+    JL_NARGSV(apply, 1);
+    jl_function_t *f = args[0];
     if (nargs == 2) {
-        if (f->fptr == &jl_f_svec) {
+        if (f == jl_builtin_svec) {
             if (jl_is_svec(args[1]))
                 return args[1];
             if (jl_is_array(args[1])) {
@@ -523,52 +506,6 @@ JL_CALLABLE(jl_f_apply)
     jl_value_t *result = jl_apply(f, newargs, n);
     JL_GC_POP();
     return result;
-}
-
-JL_CALLABLE(jl_f_kwcall)
-{
-    if (nargs < 4)
-        jl_error("internal error: malformed keyword argument call");
-    jl_function_t *f;
-    jl_function_t *call_func = (jl_function_t*)args[0];
-    assert(jl_is_function(call_func));
-    size_t nkeys = jl_unbox_long(args[1]);
-    size_t pa = 4 + 2*nkeys;
-    jl_array_t *container = (jl_array_t*)args[pa-1];
-    assert(jl_array_len(container) > 0);
-    f = (jl_function_t*)args[pa-2];
-    if (!jl_is_function(f)) {
-        // do generic call(args...; kws...) instead
-        // switch (f container pa...) to (container f pa...)
-        args[pa-2] = args[pa-1];     // TODO: this might not be safe
-        args[pa-1] = (jl_value_t*)f;
-        f = call_func;
-        pa--;
-    }
-
-    if (!jl_is_gf(f))
-        jl_exceptionf(jl_argumenterror_type, "function does not accept keyword arguments");
-    jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
-    if (sorter == NULL) {
-        jl_exceptionf(jl_argumenterror_type, "function %s does not accept keyword arguments",
-                      jl_symbol_name(jl_gf_name(f)));
-    }
-
-    for(size_t i=0; i < nkeys*2; i+=2) {
-        jl_cellset(container, i  , args[2+i]);
-        jl_cellset(container, i+1, args[2+i+1]);
-    }
-
-    args += pa-1;
-    nargs -= pa-1;
-    assert(jl_is_gf(sorter));
-    jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, args, nargs, 1);
-    if (m == jl_bottom_func) {
-        jl_no_method_error(f, args+1, nargs-1);
-        // unreachable
-    }
-
-    return jl_apply(m, args, nargs);
 }
 
 // eval -----------------------------------------------------------------------
@@ -706,7 +643,7 @@ JL_CALLABLE(jl_f_svec)
 
 // composite types ------------------------------------------------------------
 
-JL_CALLABLE(jl_f_get_field)
+JL_CALLABLE(jl_f_getfield)
 {
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
@@ -735,7 +672,7 @@ JL_CALLABLE(jl_f_get_field)
     return fval;
 }
 
-JL_CALLABLE(jl_f_set_field)
+JL_CALLABLE(jl_f_setfield)
 {
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
@@ -765,7 +702,7 @@ JL_CALLABLE(jl_f_set_field)
     return args[2];
 }
 
-JL_CALLABLE(jl_f_field_type)
+JL_CALLABLE(jl_f_fieldtype)
 {
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
@@ -985,78 +922,9 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 
 // internal functions ---------------------------------------------------------
 
-extern int jl_in_inference;
-extern int jl_boot_file_loaded;
-int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m);
-
-static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
+JL_CALLABLE(jl_f_apply_type)
 {
-    int i;
-    for(i=0; i < jl_array_len(e->args); i++) {
-        jl_value_t *ei = jl_exprarg(e,i);
-        if (jl_is_lambda_info(ei)) {
-            jl_lambda_info_t *li = (jl_lambda_info_t*)ei;
-            if (!jl_is_expr(li->ast)) {
-                li->ast = jl_uncompress_ast(li, li->ast);
-                jl_gc_wb(li, li->ast);
-            }
-            jl_expr_t *a = (jl_expr_t*)li->ast;
-            if (jl_lam_capt(a)->length > 0 && jl_eval_with_compiler_p(a, jl_lam_body(a), 1, m))
-                return 1;
-        }
-        if (jl_is_expr(ei) && jl_eval_inner_with_compiler((jl_expr_t*)ei, m))
-            return 1;
-    }
-    return 0;
-}
-
-void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer)
-{
-    JL_LOCK(codegen);
-    assert(linfo);
-    assert(linfo->specTypes);
-    // to run inference on all thunks. slows down loading files.
-    // NOTE: if this call to inference is removed, type_annotate in inference.jl
-    // needs to be updated to infer inner functions.
-    if (linfo->inferred == 0) {
-        if (!jl_in_inference) {
-            if (!jl_is_expr(linfo->ast)) {
-                linfo->ast = jl_uncompress_ast(linfo, linfo->ast);
-                jl_gc_wb(linfo, linfo->ast);
-            }
-            assert(jl_is_expr(linfo->ast));
-            if (always_infer ||
-                jl_eval_with_compiler_p((jl_expr_t*)linfo->ast, jl_lam_body((jl_expr_t*)linfo->ast), 1, linfo->module) ||
-                // if this function doesn't need to be compiled, but contains inner
-                // functions that do and that capture variables, we need to run
-                // inference on the whole thing to propagate types into the inner
-                // functions. caused issue #12794
-                jl_eval_inner_with_compiler(jl_lam_body((jl_expr_t*)linfo->ast), linfo->module)) {
-                jl_type_infer(linfo, linfo->specTypes, linfo);
-            }
-        }
-    }
-    jl_compile_linfo(linfo, NULL);
-    if (jl_boot_file_loaded && jl_is_expr(linfo->ast)) {
-        linfo->ast = jl_compress_ast(linfo, linfo->ast);
-        jl_gc_wb(linfo, linfo->ast);
-    }
-    JL_UNLOCK(codegen);
-}
-
-JL_CALLABLE(jl_trampoline)
-{
-    assert(jl_is_func(F));
-    jl_function_t *f = (jl_function_t*)F;
-    if (!f->linfo->specTypes) f->linfo->specTypes = jl_anytuple_type; // no gc_wb needed
-    jl_trampoline_compile_linfo(f->linfo, 0);
-    jl_generate_fptr(f);
-    return jl_apply(f, args, nargs);
-}
-
-JL_CALLABLE(jl_f_instantiate_type)
-{
-    JL_NARGSV(instantiate_type, 1);
+    JL_NARGSV(apply_type, 1);
     if (!jl_is_datatype(args[0]) && !jl_is_typector(args[0])) {
         jl_type_error("Type{...} expression", (jl_value_t*)jl_type_type, args[0]);
     }
@@ -1083,20 +951,13 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    JL_TYPECHK(applicable, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("applicable: not a generic function");
-    return jl_method_lookup(jl_gf_mtable(args[0]),
-                            &args[1], nargs-1, 1) != jl_bottom_func ?
+    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
         jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
-    JL_TYPECHK(invoke, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("invoke: not a generic function");
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (jl_is_tuple(args[1])) {
@@ -1109,8 +970,8 @@ JL_CALLABLE(jl_f_invoke)
     }
     if (!jl_tuple_subtype(&args[2], nargs-2, (jl_datatype_t*)argtypes, 1))
         jl_error("invoke: argument type error");
-    jl_value_t *res = jl_gf_invoke((jl_function_t*)args[0],
-                                   (jl_tupletype_t*)argtypes, &args[2], nargs-2);
+    args[1] = args[0];  // move function directly in front of arguments
+    jl_value_t *res = jl_gf_invoke((jl_tupletype_t*)argtypes, &args[1], nargs-1);
     JL_GC_POP();
     return res;
 }
@@ -1218,10 +1079,31 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-static void add_builtin_func(const char *name, jl_fptr_t f)
+jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
+                                         jl_lambda_info_t *method);
+
+jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
-    add_builtin(name, (jl_value_t*)
-                jl_new_closure(f, (jl_value_t*)jl_symbol(name), NULL));
+    jl_sym_t *sname = jl_symbol(name);
+    jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type);
+    jl_lambda_info_t *li = jl_new_lambda_info(jl_nothing, jl_emptysvec, jl_core_module);
+    li->fptr = fptr;
+    li->name = sname;
+    // TODO jb/functions: what should li->ast be?
+    li->ast = (jl_value_t*)jl_exprn(lambda_sym,0); jl_gc_wb(li, li->ast);
+    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li);
+    return f;
+}
+
+jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
+{
+    assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
+    return jl_gf_mtable(b)->cache->func->fptr;
+}
+
+static void add_builtin_func(const char *name, jl_fptr_t fptr)
+{
+    add_builtin(name, jl_mk_builtin_func(name, fptr));
 }
 
 void jl_init_primitives(void)
@@ -1229,16 +1111,16 @@ void jl_init_primitives(void)
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("sizeof", jl_f_sizeof);
-    add_builtin_func("issubtype", jl_f_subtype);
+    add_builtin_func("issubtype", jl_f_issubtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
 
     // field access
-    add_builtin_func("getfield",  jl_f_get_field);
-    add_builtin_func("setfield!",  jl_f_set_field);
-    add_builtin_func("fieldtype", jl_f_field_type);
+    add_builtin_func("getfield",  jl_f_getfield);
+    add_builtin_func("setfield!",  jl_f_setfield);
+    add_builtin_func("fieldtype", jl_f_fieldtype);
     add_builtin_func("nfields", jl_f_nfields);
     add_builtin_func("isdefined", jl_f_isdefined);
 
@@ -1252,10 +1134,9 @@ void jl_init_primitives(void)
     add_builtin_func("invoke", jl_f_invoke);
 
     // internal functions
-    add_builtin_func("apply_type", jl_f_instantiate_type);
-    add_builtin_func("_apply", jl_f_apply);
-    add_builtin_func("kwcall", jl_f_kwcall);
-    add_builtin_func("_expr", jl_f_new_expr);
+    add_builtin_func("apply_type", jl_f_apply_type);
+    add_builtin_func("_apply", jl_f__apply);
+    add_builtin_func("_expr", jl_f__expr);
     add_builtin_func("svec", jl_f_svec);
 
     // builtin types
@@ -1280,6 +1161,7 @@ void jl_init_primitives(void)
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
+    add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
@@ -1392,16 +1274,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             else if (dv->name == jl_tuple_typename) {
                 n += jl_printf(out, "{}");
             }
-        }
-    }
-    else if (vt == jl_function_type) {
-        if (jl_is_gf(v)) {
-            n += jl_printf(out, "%s", jl_symbol_name(jl_gf_name(v)));
-        }
-        else {
-            n += jl_printf(out, "#<function ");
-            n += jl_static_show_x(out, (jl_value_t*)((jl_function_t*)v)->linfo, depth);
-            n += jl_printf(out, ">");
         }
     }
     else if (vt == jl_intrinsic_type) {
@@ -1641,13 +1513,22 @@ JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
 
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
-    if (!jl_is_tuple_type(type))
+    jl_value_t *ftype = jl_first_argument_datatype(type);
+    if (ftype == NULL)
         return jl_static_show(s, type);
     size_t n = 0;
+    if (jl_nparams(ftype)==0 || ftype == ((jl_datatype_t*)ftype)->name->primary) {
+        n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)ftype)->name->name));
+    }
+    else {
+        n += jl_printf(s, "(::");
+        n += jl_static_show(s, ftype);
+        n += jl_printf(s, ")");
+    }
     size_t tl = jl_nparams(type);
     n += jl_printf(s, "(");
     size_t i;
-    for (i = 0;i < tl;i++) {
+    for (i = 1; i < tl; i++) {
         jl_value_t *tp = jl_tparam(type, i);
         if (i != tl - 1) {
             n += jl_static_show(s, tp);

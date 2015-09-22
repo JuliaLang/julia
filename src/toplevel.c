@@ -38,8 +38,6 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
     assert(jl_base_module != NULL);
     // using Base
     jl_module_using(m, jl_base_module);
-    // import Base.call
-    jl_module_import(m, jl_base_module, jl_symbol("call"));
     m->std_imports = 1;
 }
 
@@ -49,7 +47,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
         jl_error("cannot call workspace() in incremental compile mode");
 
     // switch to a new top-level module
-    if (jl_current_module != jl_main_module && jl_current_module != NULL)
+    if (jl_current_module != jl_main_module && jl_current_module != NULL && jl_main_module != NULL)
         jl_error("Main can only be replaced from the top level");
 
     jl_module_t *old_main = jl_main_module;
@@ -405,6 +403,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == import_sym ||
          ((jl_expr_t*)e)->head == using_sym ||
          ((jl_expr_t*)e)->head == export_sym ||
+         ((jl_expr_t*)e)->head == thunk_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
@@ -508,10 +507,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
-        assert(jl_is_expr(thk->ast));
-        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module) ||
-            // interpreter doesn't handle closure environment
-            jl_lam_vars_captured((jl_expr_t*)thk->ast);
+        if (!jl_is_expr(thk->ast)) {
+            thk->ast = jl_uncompress_ast(thk, thk->ast);
+            jl_gc_wb(thk, thk->ast);
+        }
+        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
     }
     else {
         if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {
@@ -534,11 +534,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (ewc) {
-        thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_emptysvec, thk);
         if (!jl_in_inference) {
             jl_type_infer(thk, (jl_tupletype_t*)jl_typeof(jl_emptytuple), thk);
         }
-        result = jl_apply((jl_function_t*)thunk, NULL, 0);
+        jl_value_t *dummy_f_arg=NULL;
+        result = jl_call_method_internal(thk, &dummy_f_arg, 1);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);
@@ -584,7 +584,8 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         tt->name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_is_tuple_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
+        jl_subtype(super,(jl_value_t*)jl_type_type,0) ||
+        super == (jl_value_t*)jl_builtin_type) {
         jl_errorf("invalid subtyping in definition of %s",
                   jl_symbol_name(tt->name->name));
     }
@@ -626,173 +627,6 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-// empty generic function def
-// TODO: maybe have jl_method_def call this
-JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
-                                                 jl_value_t *bp_owner,
-                                                 jl_binding_t *bnd)
-{
-    jl_value_t *gf=NULL;
-
-    if (bnd && bnd->value != NULL && !bnd->constp)
-        jl_errorf("cannot define function %s; it already has a value",
-                  jl_symbol_name(bnd->name));
-    if (*bp != NULL) {
-        gf = *bp;
-        if (!jl_is_gf(gf))
-            jl_errorf("cannot define function %s; it already has a value",
-                      jl_symbol_name(name));
-    }
-    if (bnd)
-        bnd->constp = 1;
-    if (*bp == NULL) {
-        jl_module_t *module = (bnd ? bnd->owner : NULL);
-        gf = (jl_value_t*)jl_new_generic_function(name, module);
-        *bp = gf;
-        if (bp_owner) jl_gc_wb(bp_owner, gf);
-    }
-    return gf;
-}
-
-JL_DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
-                                       jl_value_t *bp_owner, jl_binding_t *bnd,
-                                       jl_svec_t *argdata, jl_function_t *f,
-                                       jl_value_t *isstaged,
-                                       jl_value_t *call_func, int iskw)
-{
-    jl_module_t *module = (bnd ? bnd->owner : NULL);
-    // argdata is svec({types...}, svec(typevars...))
-    jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
-    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
-    jl_value_t *gf = NULL;
-    JL_GC_PUSH4(&gf, &tvars, &argtypes, &f);
-
-    if (bnd && bnd->value != NULL && !bnd->constp) {
-        jl_errorf("cannot define function %s; it already has a value",
-                  jl_symbol_name(bnd->name));
-    }
-
-    if (*bp != NULL) {
-        gf = *bp;
-        if (!jl_is_gf(gf)) {
-            if (jl_is_datatype(gf)) {
-                // DataType: define `call`, for backwards compat with outer constructors
-                if (call_func == NULL)
-                    call_func = (jl_value_t*)jl_module_call_func(jl_current_module);
-                size_t na = jl_nparams(argtypes);
-                jl_svec_t *newargtypes = jl_alloc_svec(1 + na);
-                jl_lambda_info_t *new_linfo = NULL;
-                JL_GC_PUSH2(&newargtypes, &new_linfo);
-                new_linfo = jl_copy_lambda_info(f->linfo);
-                f = jl_new_closure(f->fptr, f->env, new_linfo);
-                size_t i=0;
-                if (iskw) {
-                    assert(na > 0);
-                    // for kw sorter, keep container argument first
-                    jl_svecset(newargtypes, 0, jl_tparam(argtypes, 0));
-                    i++;
-                }
-                jl_svecset(newargtypes, i, jl_wrap_Type(gf));
-                i++;
-                for(; i < na+1; i++) {
-                    jl_svecset(newargtypes, i, jl_tparam(argtypes, i-1));
-                }
-                argtypes = jl_apply_tuple_type(newargtypes);
-                JL_GC_POP();
-                gf = call_func;
-                name = call_sym;
-                // edit args, insert type first
-                if (!jl_is_expr(f->linfo->ast)) {
-                    f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
-                    jl_gc_wb(f->linfo, f->linfo->ast);
-                }
-                else {
-                    // Do not mutate the original ast since it might
-                    // be reused somewhere else
-                    f->linfo->ast = jl_copy_ast(f->linfo->ast);
-                    jl_gc_wb(f->linfo, f->linfo->ast);
-                }
-                jl_array_t *al = jl_lam_args((jl_expr_t*)f->linfo->ast);
-                if (jl_array_len(al) == 0) {
-                    al = jl_alloc_cell_1d(1);
-                    jl_exprargset(f->linfo->ast, 0, (jl_value_t*)al);
-                }
-                else {
-                    jl_array_grow_beg(al, 1);
-                }
-                if (iskw) {
-                    jl_cellset(al, 0, jl_cellref(al, 1));
-                    jl_cellset(al, 1, (jl_value_t*)jl_gensym());
-                }
-                else {
-                    jl_cellset(al, 0, (jl_value_t*)jl_gensym());
-                }
-            }
-            if (!jl_is_gf(gf)) {
-                jl_errorf("cannot define function %s; it already has a value",
-                          jl_symbol_name(name));
-            }
-        }
-        if (iskw) {
-            jl_methtable_t *mt = jl_gf_mtable(gf);
-            assert(!module);
-            module = mt->module;
-            bp = (jl_value_t**)&mt->kwsorter;
-            bp_owner = (jl_value_t*)mt;
-            gf = *bp;
-        }
-    }
-
-    // TODO
-    size_t na = jl_nparams(argtypes);
-    for(size_t i=0; i < na; i++) {
-        jl_value_t *elt = jl_tparam(argtypes,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_lambda_info_t *li = f->linfo;
-            jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
-                          jl_symbol_name(jl_lam_argname(li,i)),
-                          jl_symbol_name(name), jl_symbol_name(li->file),
-                          li->line);
-        }
-    }
-
-    int ishidden = !!strchr(jl_symbol_name(name), '#');
-    for(size_t i=0; i < jl_svec_len(tvars); i++) {
-        jl_value_t *tv = jl_svecref(tvars,i);
-        if (!jl_is_typevar(tv))
-            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
-            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      jl_symbol_name(((jl_tvar_t*)tv)->name),
-                      jl_symbol_name(name));
-            print_func_loc(JL_STDERR, f->linfo);
-            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
-        }
-    }
-
-    if (bnd) {
-        bnd->constp = 1;
-    }
-    if (*bp == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name, module);
-        *bp = gf;
-        if (bp_owner) jl_gc_wb(bp_owner, gf);
-    }
-    assert(jl_is_function(f));
-    assert(jl_is_tuple_type(argtypes));
-    assert(jl_is_svec(tvars));
-
-    jl_add_method((jl_function_t*)gf, argtypes, f, tvars, isstaged == jl_true);
-    if (jl_boot_file_loaded &&
-        f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
-        jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li, li->ast);
-        jl_gc_wb(li, li->ast);
-    }
-    JL_GC_POP();
-    return gf;
-}
-
 void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname)
 {
     jl_array_t *vinfo;
@@ -818,6 +652,134 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_
             }
         }
     }
+}
+
+// empty generic function def
+JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
+                                                 jl_binding_t *bnd)
+{
+    jl_value_t *gf=NULL;
+
+    assert(name && bp);
+    //if (bnd && bnd->value != NULL && !bnd->constp)
+    //    jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd)->name);
+    if (*bp != NULL) {
+        gf = *bp;
+        //if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)))
+        //    jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    }
+    if (bnd)
+        bnd->constp = 1;
+    if (*bp == NULL) {
+        jl_module_t *module = (bnd ? bnd->owner : NULL);
+        gf = (jl_value_t*)jl_new_generic_function(name, module);
+        *bp = gf;
+        if (bp_owner) jl_gc_wb(bp_owner, gf);
+    }
+    return gf;
+}
+
+jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
+{
+    if (jl_is_datatype(a)) {
+        if (got_tuple1)
+            return (jl_datatype_t*)a;
+        if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) < 1)
+                return NULL;
+            return first_arg_datatype(jl_tparam0(a), 1);
+        }
+        return NULL;
+    }
+    else if (jl_is_typevar(a)) {
+        return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
+    }
+    else if (jl_is_typector(a)) {
+        return first_arg_datatype(((jl_typector_t*)a)->body, got_tuple1);
+    }
+    else if (jl_is_uniontype(a)) {
+        jl_svec_t *ts = ((jl_uniontype_t*)a)->types;
+        if (jl_svec_len(ts) == 0) return NULL;
+        jl_datatype_t *dt = first_arg_datatype(jl_svecref(ts,0), got_tuple1);
+        if (dt == NULL) return NULL;
+        int i;
+        for(i=1; i < jl_svec_len(ts); i++) {
+            jl_datatype_t *ti = first_arg_datatype(jl_svecref(ts,i), got_tuple1);
+            if (ti==NULL || ti->name != dt->name)
+                return NULL;
+        }
+        return dt;
+    }
+    return NULL;
+}
+
+// get DataType of first tuple element, or NULL if cannot be determined
+jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
+{
+    return (jl_value_t*)first_arg_datatype(argtypes, 0);
+}
+
+JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
+{
+    // argdata is svec({types...}, svec(typevars...))
+    jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
+    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
+    jl_methtable_t *mt;
+    jl_sym_t *name;
+    JL_GC_PUSH1(&f);
+
+    if (!jl_is_lambda_info(f)) {
+        assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
+        f = jl_new_lambda_info((jl_value_t*)f, jl_emptysvec, jl_current_module);
+    }
+
+    assert(jl_is_lambda_info(f));
+    assert(jl_is_tuple_type(argtypes));
+    assert(jl_is_svec(tvars));
+    assert(jl_nparams(argtypes)>0);
+
+    jl_value_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
+    if (!(jl_is_type_type(ftype) ||
+          (jl_is_datatype(ftype) && (!((jl_datatype_t*)ftype)->abstract ||
+                                     jl_is_leaf_type(ftype)))))
+        jl_error("cannot add methods to an abstract type");
+    mt = ((jl_datatype_t*)ftype)->name->mt;
+    name = mt->name;
+
+    jl_check_static_parameter_conflicts(f, tvars, name);
+
+    // TODO
+    size_t na = jl_nparams(argtypes);
+    for(size_t i=0; i < na; i++) {
+        jl_value_t *elt = jl_tparam(argtypes,i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
+                          jl_symbol_name(jl_lam_argname(f,i)),
+                          jl_symbol_name(name), jl_symbol_name(f->file),
+                          f->line);
+        }
+    }
+
+    int ishidden = !!strchr(jl_symbol_name(name), '#');
+    for(size_t i=0; i < jl_svec_len(tvars); i++) {
+        jl_value_t *tv = jl_svecref(tvars,i);
+        if (!jl_is_typevar(tv))
+            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
+        if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
+            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
+                      jl_symbol_name(((jl_tvar_t*)tv)->name),
+                      jl_symbol_name(name));
+            print_func_loc(JL_STDERR, f);
+            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
+        }
+    }
+
+    jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
+    if (jl_boot_file_loaded && f->ast && jl_is_expr(f->ast)) {
+        f->ast = jl_compress_ast(f, f->ast);
+        jl_gc_wb(f, f->ast);
+    }
+    JL_GC_POP();
 }
 
 #ifdef __cplusplus

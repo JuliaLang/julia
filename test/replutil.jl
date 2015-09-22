@@ -103,10 +103,13 @@ let
     @test contains(err_str, "::InvokeType11007")
 end
 
-let
-    +() = nothing
-    err_str = @except_str 1 + 2 MethodError
-    @test contains(err_str, "Base.+")
+module __tmp_replutil
+using Base.Test
+import Main.@except_str
+global +
++() = nothing
+err_str = @except_str 1 + 2 MethodError
+@test contains(err_str, "Base.+")
 end
 
 let

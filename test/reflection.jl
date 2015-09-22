@@ -84,17 +84,6 @@ tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
-function funfun(x)
-    function internal(y)
-        return 2y
-    end
-    z = internal(3)
-    x
-end
-
-tag = Base.have_color ? string("(2y)",Base.text_colors[:red],"::Any") : "(2y)::ANY"
-@test warntype_hastag(funfun, Tuple{Float64}, tag)
-
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.text_colors[:red] : "ANY"
 iob = IOBuffer()
@@ -121,7 +110,7 @@ end
 i10165(::DataType) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
 @test i10165(AbstractArray{Int}) == 0
-@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{DataType,}
+@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),DataType}
 
 # fullname
 @test fullname(Base) == (:Base,)
@@ -183,18 +172,16 @@ let
     @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :c7648, :foo7648])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
-    @test !isgeneric(isa)
 end
 
 let
     using TestMod7648
     @test Base.binding_module(:a9475)==TestMod7648.TestModSub9475
     @test Base.binding_module(:c7648)==TestMod7648
-    @test isgeneric(foo7648)
     @test Base.function_name(foo7648)==:foo7648
     @test Base.function_module(foo7648, (Any,))==TestMod7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
-    @test TestMod7648.TestModSub9475.foo7648.env.defs==@which foo7648(5)
+    @test methods(TestMod7648.TestModSub9475.foo7648).defs==@which foo7648(5)
     @test TestMod7648==@which foo7648
     @test TestMod7648.TestModSub9475==@which a9475
 end
