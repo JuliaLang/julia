@@ -244,19 +244,15 @@ function gen_call_with_extracted_types(fcn, ex0)
                     Expr(:call, typesof, map(esc, args[2:end])...))
     end
     ex = expand(ex0)
-    if isa(ex, Expr) && ex.head == :call
-        return Expr(:call, fcn, esc(ex.args[1]),
-                    Expr(:call, typesof, map(esc, ex.args[2:end])...))
-    end
-    exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
-        # do nothing -> error
+        exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
-            isa(ex.args[1], TopNode) && ex.args[1].name == :apply
-            exret = Expr(:call, ex.args[1], fcn,
-                         Expr(:tuple, esc(ex.args[2])),
-                         Expr(:call, typesof, map(esc, ex.args[3:end])...))
+            isa(ex.args[1], TopNode) && ex.args[1].name == :_apply
+            # check for splatting
+            exret = Expr(:call, ex.args[1], ex.args[2], fcn,
+                        Expr(:tuple, esc(ex.args[3]),
+                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...))
@@ -272,7 +268,7 @@ function gen_call_with_extracted_types(fcn, ex0)
         end
     elseif ex.head == :thunk
         exret = Expr(:call, :error, "expression is not a function call, "
-                                  * "or is too complex for @which to analyze; "
+                                  * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
     exret
