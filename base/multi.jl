@@ -1429,17 +1429,18 @@ let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
-        env = thunk.env
-        if isa(env,Tuple)
-            for v in env
-                if isa(v,Box)
-                    v = v.contents
-                end
-                if isa(v,AbstractRemoteRef)
-                    p = v.where; break
-                end
-            end
-        end
+        # TODO jb/functions
+        #env = thunk.env
+        #if isa(env,Tuple)
+        #    for v in env
+        #        if isa(v,Box)
+        #            v = v.contents
+        #        end
+        #        if isa(v,AbstractRemoteRef)
+        #            p = v.where; break
+        #        end
+        #    end
+        #end
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
             nextidx += 1

@@ -841,6 +841,7 @@ static Value *literal_pointer_val(jl_value_t *p)
         // DataTypes are prefixed with a +
         return julia_gv("+", addr->name->name, addr->name->module, p);
     }
+    /*
     if (jl_is_func(p)) {
         jl_lambda_info_t *linfo = ((jl_function_t*)p)->linfo;
         // Functions are prefixed with a -
@@ -849,6 +850,7 @@ static Value *literal_pointer_val(jl_value_t *p)
         // Anonymous lambdas are prefixed with jl_method#
         return julia_gv("jl_method#", p);
     }
+    */
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
         // Type-inferred functions are prefixed with a -
@@ -1056,13 +1058,6 @@ static Value *emit_nthptr(Value *v, ssize_t n, MDNode *tbaa)
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, n);
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
-}
-
-static Value *emit_nthptr_recast(Value *v, ssize_t n, MDNode *tbaa, Type* ptype)
-{
-    // p = (jl_value_t**)v; *(ptype)&p[n]
-    Value *vptr = emit_nthptr_addr(v, n);
-    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
 
 static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype)
@@ -1484,8 +1479,6 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = jl_fieldref(e,0);
         goto type_of_constant;
     }
-    if (jl_is_lambda_info(e))
-        return (jl_value_t*)jl_function_type;
     if (jl_is_globalref(e)) {
         jl_value_t *v = static_eval(e, ctx);
         if (v == NULL)

@@ -220,15 +220,6 @@
                     stmts tuples
                     (cons (replace-end idx a n tuples last) ret)))))))
 
-(define (function-expr argl body)
-  (let ((t (llist-types argl))
-        (n (llist-vars argl)))
-    (if (has-dups n)
-        (error "function argument names not unique"))
-    (let ((argl (map make-decl n t)))
-      `(lambda ,argl
-         (scope-block ,body)))))
-
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body)
@@ -239,7 +230,7 @@
                              (if (pair? (caddr x))
                                  x
                                  `(|::| ,(arg-name x) (curly Vararg Any)))
-                         (arg-name x))))
+                             (arg-name x))))
                    argl)))
     `(lambda ,argl
        (scope-block ,body))))
@@ -273,15 +264,18 @@
         (else
          (error "malformed type parameter list"))))
 
-(define (method-expr-name m)
-  (let ((lhs (cadr m)))
-    (cond ((symbol? lhs)       lhs)
-          ((eq? (car lhs) 'kw) (cadr lhs))
-          (else                lhs))))
+(define (method-expr-name m) (cadr m))
+
+(define (unwrap-getfield-expr e)
+  (if (and (length= e 4) (eq? (car e) 'call) (equal? (cadr e) '(top getfield)))
+      (cadr (last e))
+      e))
 
 (define (method-expr-static-parameters m)
-  (if (eq? (car (cadr (caddr m))) 'lambda)
-      (cadr (cadr (caddr m)))
+  (if (eq? (car (caddr m)) 'block)
+      (map (lambda (x)
+	     (cadr (caddr (caddr x))))
+	   (butlast (cdr (caddr m))))
       '()))
 
 (define (sym-ref? e)
@@ -311,20 +305,29 @@
            (error "function static parameter names not unique"))
        (if (any (lambda (x) (memq x names)) anames)
            (error "function argument and static parameter names must be distinct")))
-     (if (not (or (sym-ref? name)
-                  (and (pair? name) (eq? (car name) 'kw)
-                       (sym-ref? (cadr name)))))
+     (if (and name (not (sym-ref? name)))
          (error (string "invalid method name \"" (deparse name) "\"")))
      (let* ((types (llist-types argl))
-            (body  (method-lambda-expr argl body)))
-       (if (null? sparams)
-           `(method ,name (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec)))
-		    ,body ,isstaged)
-           `(method ,name
-                    (call (lambda ,names
-                            (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec) ,@names)))
-                          ,@(symbols->typevars names bounds #t))
-                    ,body ,isstaged))))))
+            (body  (method-lambda-expr argl body))
+            (mdef
+             (if (null? sparams)
+                 `(method ,name (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec)))
+                          ,body ,isstaged)
+                 (let* ((gss (map (lambda (x) (make-jlgensym)) names))
+                        (renames (map cons names gss)))
+                   `(method ,name
+                            (block
+                             ,@(map make-assignment gss (symbols->typevars names bounds #t))
+                             (call (top svec) (curly Tuple ,@(dots->vararg
+                                                              (map (lambda (x) (rename-vars x renames))
+                                                                   types)))
+                                   (call (top svec) ,@gss)))
+                            ,body ,isstaged)))))
+       (if (and (symbol? name) (not (eq? name 'call)))
+           `(block (method ,name)  ;; first make sure is initialized
+                   ,mdef
+                   ,name)          ;; return function
+           mdef)))))
 
 (define (const-default? x)
   (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))))
@@ -335,6 +338,7 @@
          (body  (if (and (pair? body) (eq? (car body) 'block))
                     body
                     `(block ,body)))
+         (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let ((l (if (null? pargl) '() (last pargl))))
                    (if (vararg? l)
@@ -379,22 +383,10 @@
          (keyword-sparam-names
           (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-          (mangled (symbol (string "__"
-                                   (undot-name name)
-                                   "#"
-                                   (string.sub (string (gensym)) 1)
-                                   "__")))
+          (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
+				   (string (current-julia-module-counter)))))
           (flags (map (lambda (x) (gensy)) vals)))
       `(block
-        ;; call with keyword args pre-sorted - original method code goes here
-        ,(method-def-expr-
-          mangled sparams
-          `(,@vars ,@restkw ,@pargl ,@vararg)
-          `(block
-            ,@(if (null? lno) '()
-                  (list (append (car lno) (list (undot-name name)))))
-            ,@stmts) isstaged)
-
         ;; call with no keyword args
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
@@ -414,16 +406,24 @@
                                 (list `(... ,(arg-name (car vararg))))))))
           #f)
 
+        ;; call with keyword args pre-sorted - original method code goes here
+        ,(method-def-expr-
+          mangled sparams
+          `((|::| ,mangled (call (top typeof) ,mangled)) ,@vars ,@restkw ,@pargl ,@vararg)
+          `(block
+            ,@(if (null? lno) '()
+                  ;; TODO jb/functions get a better `name` for functions specified by type
+                  (list (append (car lno) (list (undot-name name)))))
+            ,@stmts) isstaged)
+
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
-          (list 'kw name) (filter
-                           ;; remove sparams that don't occur, to avoid printing
-                           ;; the warning twice
-                           (lambda (s)
-                             (let ((name (if (symbol? s) s (cadr s))))
-                               (expr-contains-eq name (cons 'list argl))))
-                           positional-sparams)
-          `((:: ,kw (top Array)) ,@pargl ,@vararg)
+          name
+          (filter ;; remove sparams that don't occur, to avoid printing the warning twice
+           (lambda (s) (let ((name (if (symbol? s) s (cadr s))))
+                         (expr-contains-eq name (cons 'list argl))))
+           positional-sparams)
+          `((|::| ,(gensy) (call (|.| Core 'kwftype) ,ftype)) (:: ,kw (top Array)) ,@pargl ,@vararg)
           `(block
             (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
@@ -527,11 +527,11 @@
                          ;; then add only one next argument
                          `(block
                            ,@prologue
-                           (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
+                           (call ,(arg-name (car req)) ,@kw ,@(map arg-name (cdr passed)) ,(car vals)))
                          ;; otherwise add all
                          `(block
                            ,@prologue
-                           (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
+                           (call ,(arg-name (car req)) ,@kw ,@(map arg-name (cdr passed)) ,@vals)))))
                (method-def-expr name sp (append kw passed) body #f)))
            (iota (length opt)))
     ,(method-def-expr name sparams overall-argl body isstaged))))
@@ -680,23 +680,24 @@
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
-          (cons `(call call ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+          (cons `(call (|::| (curly Type ,name)) ,@sig)
                 params)
-          (cons `(call (curly call ,@method-params)
-                       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+          (cons `(call (curly (|::| (curly Type ,name)) ,@method-params) ,@sig)
                 params))
       (if (null? method-params)
-          (cons `(call (curly call ,@(map (lambda (p b) `(<: ,p ,b)) params bounds))
-                       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@params)))))
+          (cons `(call (curly (|::| (curly Type (curly ,name ,@params)))
+                              ,@(map (lambda (p b) `(<: ,p ,b)) params bounds))
+                       ,@sig)
                 params)
           ;; rename parameters that conflict with user-written method parameters
           (let ((new-params (map (lambda (p) (if (memq p method-params)
                                                  (gensy)
                                                  p))
                                  params)))
-            (cons `(call (curly call ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
+            (cons `(call (curly (|::| (curly Type (curly ,name ,@new-params)))
+                                ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
                                 ,@method-params)
-                         ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@new-params)))))
+                         ,@sig)
                   new-params)))))
 
 (define (ctor-def keyword name Tname params bounds method-params sig ctor-body body)
@@ -768,60 +769,43 @@
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (let ((dups (has-dups field-names)))
-        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
+       (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
                  (if (not (symbol? v))
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
-     (if (null? params)
-         `(block
-           (global ,name) (const ,name)
-           (composite_type ,name (call (top svec) ,@params)
-                           (call (top svec) ,@(map (lambda (x) `',x) field-names))
-                           ,super (call (top svec) ,@field-types) ,mut ,min-initialized)
-           (call
-            (lambda ()
-              (scope-block
-               (block
-                (global ,name) (global call)
-                ,@(map (lambda (c)
-                         (rewrite-ctor c name '() '() field-names field-types mut))
-                       defs2)))))
-           (null))
-         ;; parametric case
-         `(block
-           (scope-block
-            (block
-             (global ,name) (const ,name)
-             ,@(map (lambda (v) `(local ,v)) params)
-             ,@(map make-assignment params (symbols->typevars params bounds #t))
-             (composite_type ,name (call (top svec) ,@params)
-                             (call (top svec) ,@(map (lambda (x) `',x) field-names))
-                             ,super (call (top svec) ,@field-types) ,mut ,min-initialized)))
-           ;; "inner" constructors
-           (call
-            (lambda ()
-              (scope-block
-               (block
-                (global ,name) (global call)
-                ,@(map (lambda (c)
-                         (rewrite-ctor c name params bounds field-names field-types mut))
-                       defs2)))))
-           ;; "outer" constructors
-           ,@(if (and (null? defs)
-                      ;; don't generate an outer constructor if the type has
-                      ;; parameters not mentioned in the field types. such a
-                      ;; constructor would not be callable anyway.
-                      (every (lambda (sp)
-                               (expr-contains-eq sp (cons 'list field-types)))
-                             params))
-                 `((scope-block
-                    (block
-                     (global ,name)
-                     ,(default-outer-ctor name field-names field-types
-                        params bounds locs))))
-                 '())
-           (null))))))
+     `(block
+       (scope-block
+	(block
+	 (global ,name) (const ,name)
+	 ,@(map (lambda (v) `(local ,v)) params)
+	 ,@(map make-assignment params (symbols->typevars params bounds #t))
+	 (composite_type ,name (call (top svec) ,@params)
+			 (call (top svec) ,@(map (lambda (x) `',x) field-names))
+			 ,super (call (top svec) ,@field-types) ,mut ,min-initialized)))
+       ;; "inner" constructors
+       (scope-block
+	(block
+	 (global ,name)
+	 ,@(map (lambda (c)
+		  (rewrite-ctor c name params bounds field-names field-types mut))
+		defs2)))
+       ;; "outer" constructors
+       ,@(if (and (null? defs)
+		  (not (null? params))
+		  ;; don't generate an outer constructor if the type has
+		  ;; parameters not mentioned in the field types. such a
+		  ;; constructor would not be callable anyway.
+		  (every (lambda (sp)
+			   (expr-contains-eq sp (cons 'list field-types)))
+			 params))
+	     `((scope-block
+		(block
+		 (global ,name)
+		 ,(default-outer-ctor name field-names field-types
+		    params bounds locs))))
+	     '())
+       (null)))))
 
 (define (abstract-type-def-expr name params super)
   (receive
@@ -895,7 +879,7 @@
   (cond ((or (atom? e) (quoted? e)) e)
         ((or (eq? (car e) 'lambda)
              (eq? (car e) 'function)
-         (eq? (car e) 'stagedfunction)
+             (eq? (car e) 'stagedfunction)
              (eq? (car e) '->)) e)
         ((eq? (car e) 'return)
          `(block ,@(if ret `((= ,ret true)) '())
@@ -911,42 +895,57 @@
     (case (car e)
       ((function stagedfunction)
        (let ((name (cadr e)))
-         (if (pair? name)
-             (if (eq? (car name) 'call)
-                 (expand-binding-forms
-                  (if (and (pair? (cadr name))
-                           (eq? (car (cadr name)) 'curly))
-                      (method-def-expr (cadr (cadr name))
-                                       (cddr (cadr name))
-                                       (fix-arglist (cddr name))
-                                       (caddr e) (eq? (car e) 'stagedfunction))
-                      (method-def-expr (cadr name)
-                                       '()
-                                       (fix-arglist (cddr name))
-                                       (caddr e) (eq? (car e) 'stagedfunction))))
-                 (if (eq? (car name) 'tuple)
-                     (expand-binding-forms
-                      `(-> ,name ,(caddr e)))
-                     e))
-	     (if (and (length= e 2) (symbol? name))
-		 `(method ,name)
-		 e))))
+         (cond ((and (length= e 2) (symbol? name))  `(method ,name))
+               ((not (pair? name))                  e)
+               ((eq? (car name) 'tuple)
+                (expand-binding-forms `(-> ,name ,(caddr e))))
+               ((eq? (car name) 'call)
+                (let* ((head    (cadr name))
+                       (argl    (cddr name))
+                       (has-sp  (and (pair? head) (eq? (car head) 'curly)))
+                       (name    (if has-sp (cadr head) head))
+                       (sparams (if has-sp (cddr head) '()))
+                       (isstaged (eq? (car e) 'stagedfunction))
+                       ;; fill in first (closure) argument
+                       (farg    (if (decl? name)
+                                    name
+                                    (if (and (symbol? name)
+                                             ;; don't use function name for argument in staged
+                                             ;; functions, since we wouldn't want it to refer to
+                                             ;; the function's type.
+                                             (not isstaged)
+                                             ;; TODO jb/functions: better handle case where function name is
+                                             ;; overridden by a user argument name
+                                             (not (any (lambda (a)
+                                                         (and (not (and (decl? a) (length= a 2)))
+                                                              (not (and (pair? a) (eq? (car a) 'parameters)))
+                                                              (eq? (arg-name a) name)))
+                                                       argl)))
+                                        `(|::| ,name (call (|.| Core 'Typeof) ,name))
+                                        `(|::|       (call (|.| Core 'Typeof) ,name)))))
+                       (argl    (fix-arglist
+                                 (if (and (not (decl? name)) (eq? (undot-name name) 'call))
+                                     argl
+                                     (arglist-unshift argl farg))))
+                       (name    (if (decl? name) #f name)))
+                  (expand-binding-forms
+                   (method-def-expr name sparams
+                                    argl
+                                    (caddr e)
+                                    isstaged))))
+               (else e))))
 
       ((->)
-       (let ((a (cadr e))
-             (b (caddr e)))
-         (let ((a (if (and (pair? a)
-                           (eq? (car a) 'tuple))
-                      (cdr a)
-                      (list a))))
+       (let ((a    (cadr e))
+             (body (caddr e)))
+         (let ((argl (if (and (pair? a) (eq? (car a) 'tuple))
+			 (cdr a)
+			 (list a)))
+	       ;; TODO: always use a specific special name like #anon# or _, then ignore
+	       ;; this as a local variable name.
+	       (name (symbol (string "#" (current-julia-module-counter)))))
            (expand-binding-forms
-            (function-expr (fix-arglist a)
-                           `(block
-                             ,.(map (lambda (d)
-                                      `(= ,(cadr d)
-                                          (typeassert ,@(cdr d))))
-                                    (filter decl? a))
-                             ,b))))))
+	    `(function (call ,name ,@argl) ,body)))))
 
       ((let)
        (let ((ex (cadr e))
@@ -996,12 +995,17 @@
                     ((and (pair? (cadar binds))
                           (eq? (caadar binds) 'call))
                      ;; f()=c
-                     (let ((asgn (expand-binding-forms (car binds))))
+                     (let* ((asgn (butlast (expand-binding-forms (car binds))))
+                            (name (cadr (cadar binds)))
+                            (name (cond ((symbol? name) name)
+                                        ((and (pair? name) (eq? (car name) 'curly))
+                                         (cadr name))
+                                        (else (error "invalid let syntax")))))
                        (loop (cdr binds)
                              `(scope-block
                                (block
-                                (local ,(cadr asgn))
-                                (newvar ,(cadr asgn))
+                                (local ,name)
+                                (newvar ,name)
                                 ,asgn
                                 ,blk)))))
                     (else (error "invalid let syntax"))))
@@ -1143,15 +1147,17 @@
                  (params (cddr (cadr e)))
                  (type-ex (caddr e)))
              (receive
-              (params bounds)
-              (sparam-name-bounds params '() '())
-              `(call (lambda ,params
-                       (block
-                        (const ,name)
-                        (= ,name (call (top TypeConstructor)
-                                       (call (top svec) ,@params)
-                                       ,(expand-binding-forms type-ex)))))
-                     ,@(symbols->typevars params bounds #t))))
+              (params bounds) (sparam-name-bounds params '() '())
+	      `(block
+		(const ,name)
+		(= ,name
+		   (scope-block
+		    (block
+		     ,@(map (lambda (v) `(local ,v)) params)
+		     ,@(map make-assignment params (symbols->typevars params bounds #t))
+		     (call (top TypeConstructor)
+			   (call (top svec) ,@params)
+			   ,(expand-binding-forms type-ex))))))))
            (expand-binding-forms
             `(const (= ,(cadr e) ,(caddr e))))))
 
@@ -1290,33 +1296,34 @@
                                 `((quote ,(cadr a)) ,(caddr a)))
                               keys))))
      (if (null? restkeys)
-         `(call (top kwcall) (|.| ,(current-julia-module) 'call) ,(length keys) ,@keyargs
-                ,f (call (top Array) (top Any) ,(* 2 (length keys)))
-                ,@pa)
+         `(call (call (top kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
          (let ((container (make-jlgensym)))
            `(block
-             (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
+             (= ,container (cell1d ,@keyargs))
              ,@(map (lambda (rk)
-                    (let* ((k (make-jlgensym))
-                           (v (make-jlgensym))
-                           (push-expr `(ccall 'jl_cell_1d_push2 Void
-                                             (tuple Any Any Any)
-                                             ,container
-                                             (|::| ,k (top Symbol))
-                                             ,v)))
-                      (if (vararg? rk)
-                          `(for (= (tuple ,k ,v) ,(cadr rk))
-                                ,push-expr)
-                          `(block (= (tuple ,k ,v) ,rk)
-                                  ,push-expr))))
-                  restkeys)
-             ,(let ((kw-call `(call (top kwcall) (|.| ,(current-julia-module) 'call) ,(length keys) ,@keyargs
-                                    ,f ,container ,@pa)))
-                (if (not (null? keys))
-                    kw-call
-                    `(if (call (top isempty) ,container)
-                         (call ,f ,@pa)
-                         ,kw-call)))))))))
+                      (let* ((k (make-jlgensym))
+                             (v (make-jlgensym))
+                             (push-expr `(ccall 'jl_cell_1d_push2 Void
+                                                (tuple Any Any Any)
+                                                ,container
+                                                (|::| ,k (top Symbol))
+                                                ,v)))
+                        (if (vararg? rk)
+                            `(for (= (tuple ,k ,v) ,(cadr rk))
+                                  ,push-expr)
+                            `(block (= (tuple ,k ,v) ,rk)
+                                    ,push-expr))))
+                    restkeys)
+             ,(if (not (null? keys))
+                  `(call (call (top kwfunc) ,f) ,container ,f ,@pa)
+                  (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
+                         (pa         (cddr (car expr_stmts)))
+                         (stmts      (cdr expr_stmts)))
+                    `(block
+                      ,@stmts
+                      (if (call (top isempty) ,container)
+                          (call ,f ,@pa)
+                          (call (call (top kwfunc) ,f) ,container ,f ,@pa)))))))))))
 
 (define (expand-transposed-op e ops)
   (let ((a (caddr e))
@@ -1565,7 +1572,7 @@
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
-                     `(call (top _apply) (|.| ,(current-julia-module) 'call) ,f ,@(tuple-wrap argl '())))))
+                     `(call (top _apply) ,f ,@(tuple-wrap argl '())))))
 
                  ((and (eq? (cadr e) '*) (length= e 4))
                   (expand-transposed-op
@@ -2196,7 +2203,7 @@
                         (cdr r))))
                (else (let* ((g (gensy))
                             (stmts (cons g
-                                         (cons `(local! ,g) (to-lff e g tail)))))
+                                         (cons `(local ,g) (to-lff e g tail)))))
                        (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
 
         ((line)
@@ -2207,13 +2214,13 @@
          (cond ((and (eq? dest #t) (not tail))
                 (let ((g (gensy)))
                   (list* g
-                         `(local! ,g)
+                         `(local ,g)
                          (to-lff e g #f))))
                (else (let* ((g (if (jlgensym? dest) (gensy) dest))
                             (stmts (cons `(trycatch ,(fix-try-block-returns
                                                       (to-blk (to-lff (cadr e) g tail)))
                                                      ,(to-blk (to-lff (caddr e) g tail)))
-                                          ())))
+                                         ())))
                        (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
 
         ((&&)
@@ -2224,19 +2231,20 @@
         ((block)
          (if (length= e 2)
              (to-lff (cadr e) dest tail)
-             (let* ((g (make-jlgensym))
+             (let* ((val (last e))
+		    (g (make-jlgensym))
                     (stmts
                      (let loop ((tl (cdr e)))
                        (if (null? tl) '()
                            (if (null? (cdr tl))
-                               (cond ((or tail (eq? dest #f) (symbol-like? dest))
+                               (cond ((or tail (eq? dest #f) (symbol-like? dest) (symbol-like? val))
                                       (blk-tail (to-lff (car tl) dest tail)))
                                      (else
                                       (blk-tail (to-lff (car tl) g tail))))
                                (cons (to-blk (to-lff (car tl) #f #f))
                                      (loop (cdr tl))))))))
                (if (and (eq? dest #t) (not tail))
-                   (cons g (reverse stmts))
+                   (cons (if (symbol-like? val) val g) (reverse stmts))
                    (if (and tail (null? stmts))
                        (cons '(return (null))
                              '())
@@ -2302,7 +2310,7 @@
          (if dest
              ;; convert to typeassert or decl based on whether it's in
              ;; value or statement position.
-             (to-lff `(typeassert ,@(cdr e)) dest tail)
+             (to-lff `(call (top typeassert) ,@(cdr e)) dest tail)
              (to-lff `(decl ,@(cdr e)) dest tail)))
 
         ((unnecessary-tuple)
@@ -2312,15 +2320,28 @@
              (to-lff '(null) dest tail)))
 
         ((method)
-         (if (and dest (not tail))
-             (let ((ex (to-lff (method-expr-name e) dest tail))
+         (if dest
+             (let ((ex (to-lff (or (method-expr-name e) '(null)) dest tail))
                    (fu (to-lff e #f #f)))
                (cons (car ex)
                      (append fu (cdr ex))))
-             (map-to-lff e dest tail)))
+             (let ((ex (if (length= e 2)
+			   e
+			   ;; leave the block in the type argument in place; its
+			   ;; statements are lifted to the top level by cl-convert.
+			   `(method ,(cadr e) ,(caddr e)
+				    ,(car (to-lff (cadddr e) #f #f))
+				    ,(last e)))))
+               (cons (if tail `(return ,ex) ex)
+                     '()))))
 
-        ((module)
-	 (cons e '()))
+        ((module) (cons e '()))
+	;; TODO: something needs to be done here, but things seem to depend
+	;; on the current somewhat-broken behavior in a fragile way.
+	#;((toplevel)  ;; don't move things out of toplevel blocks
+	 (let ((r (map-to-lff e dest tail)))
+	   (let ((ex `(toplevel ,@(reverse (cdr r)) ,@((if tail cdadr cdr) (car r)))))
+	     (cons (if tail `(return ,ex) ex) '()))))
 
         ((symbolicgoto symboliclabel)
          (cons (if tail '(return (null)) '(null))
@@ -2366,9 +2387,9 @@ So far only the second case can actually occur.
                (list v))))
         ((=)
          (let ((v (decl-var (cadr e))))
-           (if (or (jlgensym? v) (memq v env))
-               '()
-               (list v))))
+	   (if (or (jlgensym? v) (memq v env))
+	       '()
+	       (list v))))
         (else
          (apply append! (map (lambda (x) (find-assigned-vars x env))
                              e))))))
@@ -2385,7 +2406,6 @@ So far only the second case can actually occur.
                                  e))))))
 
 (define (find-local-decls  e) (find-decls 'local  e))
-(define (find-local!-decls e) (find-decls 'local! e))
 (define (find-global-decls e) (find-decls 'global e))
 
 (define (find-locals e env glob)
@@ -2393,7 +2413,6 @@ So far only the second case can actually occur.
    (append! (check-dups (find-local-decls e))
             ;; const decls on non-globals also introduce locals
             (diff (find-decls 'const e) glob)
-            (find-local!-decls e)
             (find-assigned-vars e env))))
 
 (define (remove-local-decls e)
@@ -2457,11 +2476,9 @@ So far only the second case can actually occur.
 	     (error "module expression not at top level"))
 
             (else
-             ;; form (local! x) adds a local to a normal (non-scope) block
-             (let ((newenv (append (declared-local!-vars e) env)))
-               (map (lambda (x)
-                      (add-local-decls x newenv implicitglobals))
-                    e))))))
+	     (map (lambda (x)
+		    (add-local-decls x env implicitglobals))
+		  e)))))
 
 (define (identify-locals e) (add-local-decls e '() '()))
 
@@ -2469,14 +2486,7 @@ So far only the second case can actually occur.
   (map (lambda (x) (decl-var (cadr x)))
        (filter (lambda (x)
                  (and (pair? x)
-                      (or (eq? (car x) 'local)
-                          (eq? (car x) 'local!))))
-               (cdr e))))
-(define (declared-local!-vars e)
-  (map cadr
-       (filter (lambda (x)
-                 (and (pair? x)
-                      (eq? (car x) 'local!)))
+                      (eq? (car x) 'local)))
                (cdr e))))
 
 ; e - expression
@@ -2587,55 +2597,31 @@ So far only the second case can actually occur.
           (put! tbl (cadr e) #t)
           (map (lambda (x) (find-symbolic-label-refs x tbl)) e))))
 
-(define (find-symbolic-labels e)
-  (let ((defs (table))
-        (refs (table)))
-    (find-symbolic-label-defs e defs)
-    (find-symbolic-label-refs e refs)
-    (table.foldl
-     (lambda (label v labels)
-       (if (has? refs label)
-           (cons label labels)
-           labels))
-     '() defs)))
-
-(define (rename-symbolic-labels- e relabel)
-  (cond
-   ((or (not (pair? e)) (quoted? e)) e)
-   ((eq? (car e) 'symbolicgoto)
-    (let ((newlabel (assq (cadr e) relabel)))
-      (if newlabel `(symbolicgoto ,(cdr newlabel)) e)))
-   ((eq? (car e) 'symboliclabel)
-    (let ((newlabel (assq (cadr e) relabel)))
-      (if newlabel `(symboliclabel ,(cdr newlabel)) e)))
-   (else (map (lambda (x) (rename-symbolic-labels- x relabel)) e))))
-
-(define (rename-symbolic-labels e)
-  (let* ((labels (find-symbolic-labels e))
-         (relabel (pair-with-gensyms labels)))
-    (rename-symbolic-labels- e relabel)))
-
-(define (max-jlgensym e)
-  (if (or (not (pair? e)) (quoted? e))
-      -1
-      (if (jlgensym? e) (cadr e)
-          (foldl (lambda (x l) (max (max-jlgensym x) l)) -1 e))))
+(define (make-gensym-generator)
+  (let ((jlgensym-counter 0))
+    (lambda ()
+      (begin0 `(jlgensym ,jlgensym-counter)
+              (set! jlgensym-counter (+ 1 jlgensym-counter))))))
 
 (define (renumber-jlgensym- e tbl next-jlgensym)
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
+   ((eq? (car e) 'lambda)
+    (let* ((next  (make-gensym-generator))
+	   (body  (renumber-jlgensym- (lam:body e) (table) next))
+	   (count (cadr (next)))
+	   (vi    (caddr e)))
+      `(lambda ,(cadr e)
+	 (,(car vi) ,(cadr vi) ,count ,(last vi))
+	 ,body)))
    ((jlgensym? e)
-      (let ((n (get tbl (cadr e) #f)))
-        (if n n
+    (let ((n (get tbl (cadr e) #f)))
+      (if n n
           (let ((n (next-jlgensym))) (put! tbl (cadr e) n) n))))
    (else (map (lambda (x) (renumber-jlgensym- x tbl next-jlgensym)) e))))
 
 (define (renumber-jlgensym e)
-  (let ((jlgensym-counter 0))
-    (define (next-jlgensym)
-      (begin0 `(jlgensym ,jlgensym-counter)
-              (set! jlgensym-counter (+ 1 jlgensym-counter))))
-    (renumber-jlgensym- e (table) next-jlgensym)))
+  (renumber-jlgensym- e #f error))
 
 (define (lambda-all-vars e)
   (append (lam:vars e)
@@ -2659,9 +2645,49 @@ So far only the second case can actually occur.
 (define (free-vars e)
   (table.keys (free-vars- e (table) *free-vars-secret-value*)))
 
-; convert each lambda's (locals ...) to
-;   ((localvars...) var-info-lst captured-var-infos)
-; where var-info-lst is a list of var-info records
+(define (filter2 f a b) (append (filter f a) (filter f b)))
+
+(define (analyze-vars-lambda e env captvars sp new-sp)
+  (let* ((args (lam:args e))
+	 (locl (cdr (caddr e)))
+	 (allv (nconc (map arg-name args) locl))
+	 (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
+		      ;; add variables referenced in declared types for free vars
+		      (dv (apply nconc (map (lambda (v)
+					      (let ((vi (var-info-for v env)))
+						(if vi (free-vars (vinfo:type vi)) '())))
+					    fv))))
+		 (append (diff dv fv) fv)))
+	 (glo  (find-global-decls (lam:body e)))
+	 ;; make var-info records for vars introduced by this lambda
+	 (vi   (nconc
+		(map (lambda (decl) (make-var-info (decl-var decl)))
+		     args)
+		(map make-var-info locl)))
+	 ;; captured vars: vars from the environment that occur
+	 ;; in our set of free variables (fv).
+	 (cv    (filter2 (lambda (v) (and (memq (vinfo:name v) fv)
+					  (not (memq (vinfo:name v) glo))))
+			 env (map make-var-info sp)))
+	 (bod   (analyze-vars
+		 (flatten-blocks (lam:body e))
+		 (append vi
+			 ;; new environment: add our vars
+			 (filter (lambda (v)
+				   (and (not (memq (vinfo:name v) allv))
+					(not (memq (vinfo:name v) glo))))
+				 env))
+		 cv (delete-duplicates (append new-sp sp)))))
+    ;; mark all the vars we capture as captured
+    (for-each (lambda (v) (vinfo:set-capt! v #t))
+	      cv)
+    `(lambda ,args
+       (,vi ,cv 0 ,new-sp)
+       ,bod)))
+
+;; convert each lambda's (locals ...) to
+;;   (var-info-lst captured-var-infos gensyms static_params)
+;; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars sp)
   (if (or (atom? e) (quoted? e))
       e
@@ -2677,14 +2703,6 @@ So far only the second case can actually occur.
                  (if (assq (car vi) captvars)
                      (vinfo:set-iasg! vi #t)))))
          `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars sp)))
-        #;((or (eq? (car e) 'local) (eq? (car e) 'local!))
-         '(null))
-        ((typeassert)
-         ;(let ((vi (var-info-for (cadr e) env)))
-         ;  (if vi
-         ;      (begin (vinfo:set-type! vi (caddr e))
-         ;           (cadr e))
-         `(call (top typeassert) ,(cadr e) ,(caddr e)))
         ((decl |::|)
          ; handle var::T declaration by storing the type in the var-info
          ; record. for non-symbols or globals, emit a type assertion.
@@ -2700,50 +2718,12 @@ So far only the second case can actually occur.
                       '(null))
                `(call (top typeassert) ,(cadr e) ,(caddr e)))))
         ((lambda)
-         (let* ((args (lam:args e))
-                (locl (cdr (caddr e)))
-                (allv (nconc (map arg-name args) locl))
-                (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
-                             ;; add variables referenced in declared types for free vars
-                             (dv (apply nconc (map (lambda (v)
-                                                     (let ((vi (var-info-for v env)))
-                                                       (if vi (free-vars (vinfo:type vi)) '())))
-                                                   fv))))
-                        (append (diff dv fv) fv)))
-                (glo  (find-global-decls (lam:body e)))
-                ;; make var-info records for vars introduced by this lambda
-                (vi   (nconc
-                       (map (lambda (decl) (make-var-info (decl-var decl)))
-                            args)
-                       (map make-var-info locl)))
-                ;; captured vars: vars from the environment that occur
-                ;; in our set of free variables (fv).
-                (cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
-                                                (not (memq
-                                                      (vinfo:name v) glo))))
-                               env))
-                ;; count of GenSym references in this function (or an array of their types)
-                (gensym_types (+ (max-jlgensym (lam:body e)) 1))
-                (bod   (analyze-vars
-                        (lam:body e)
-                        (append vi
-                                ;; new environment: add our vars
-                                (filter (lambda (v)
-                                          (and
-                                           (not (memq (vinfo:name v) allv))
-                                           (not (memq (vinfo:name v) glo))))
-                                        env))
-                        cv sp)))
-           ;; mark all the vars we capture as captured
-           (for-each (lambda (v) (vinfo:set-capt! v #t))
-                     cv)
-           `(lambda ,args
-              (,vi ,cv ,gensym_types ,sp)
-              ,bod)))
+	 (analyze-vars-lambda e env captvars sp '()))
 	((with-static-parameters)
 	 ;; (with-static-parameters func_expr sp_1 sp_2 ...)
-	 (analyze-vars (cadr e) env captvars
-		       (delete-duplicates (append sp (cddr e)))))
+	 (assert (eq? (car (cadr e)) 'lambda))
+	 (analyze-vars-lambda (cadr e) env captvars sp
+			      (cddr e)))
         ((method)
          (let ((vi (var-info-for (method-expr-name e) env)))
            (if vi
@@ -2757,9 +2737,9 @@ So far only the second case can actually occur.
 	     `(method ,(cadr e))
 	     `(method ,(cadr e)
 		      ,(analyze-vars (caddr  e) env captvars sp)
-		      ,(analyze-vars (cadddr e) env captvars
-				     (delete-duplicates
-				      (append sp (method-expr-static-parameters e))))
+		      ,(begin (assert (eq? (car (cadddr e)) 'lambda))
+			      (analyze-vars-lambda (cadddr e) env captvars sp
+						   (method-expr-static-parameters e)))
 		      ,(caddddr e))))
 	((module) e)
         (else (cons (car e)
@@ -2768,10 +2748,404 @@ So far only the second case can actually occur.
 
 (define (analyze-variables e) (analyze-vars e '() '() '()))
 
+#|
+ * #14009 type growth issue (now worse with specialized closures)
+ * fix `localize` and get all tests passing
+ - don't specialize slots where a function is passed but not called
+
+ - filter method tables and caches before `dump` to remove references to
+   replaced modules --- those where eval(m->parent, m->name) != m
+
+ 1. Figure out how to pass in static parameters in --compile=no mode, fix --compile=all.
+
+*3. Figure out closure serialization. maybe only fully serialize types from
+ Main.__hidden__
+ idea: record the max module->counter after lowering is complete. anything higher than
+ this might be nondeterministic, and needs to be serialized in full.
+
+ 4. Staged functions containing closures are probably not lowered correctly
+ (jl_instantiate_staged).
+
+
+ 6. reduce amount of specialization on closure types somehow
+
+*6.1. cache_arg1 should actually look at arg 2 now for most functions
+
+*8. improve typing of closure fields; remove Box for single-assigned vars;
+
+ 8.1. specialized Box{T} for mutable bindings with declared types. remove redundant Boxes.
+
+*8.2. inference for known-type non-constant functions
+
+ 9. propagate static parameters into closure types, so e.g. closure method
+ signatures can depend on them.
+
+
+ 10. nice deprecation for `call` overloading
+
+ 13. better handle local method definitions inside `if` blocks, etc.
+
+ 14. don't allocate MethodTable for abstract types
+
+ 15. decide what if anything to do about method overwrite warnings in core constructors
+
+ 16. is there a more efficient way to have huge #s of types with only default constructors?
+|#
+
+;; template for generating a closure type with parameters
+(define (type-for-closure-parameterized name P fields types super)
+  (let ((n (length P)))
+    `(thunk
+      (lambda ()
+	((,@(map (lambda (p) `(,p Any 18)) P))
+	 () 0 ())
+	(block (global ,name) (const ,name)
+	       ,@(map (lambda (p) `(= ,p (call (top TypeVar) ',p (top Any) true))) P)
+	       (composite_type ,name (call (top svec) ,@P)
+			       (call (top svec) ,@(map (lambda (v) `',v) fields))
+			       ,super
+			       (call (top svec) ,@types) #f ,(length fields))
+	       (return (null)))))))
+
+;; ... and without parameters
+(define (type-for-closure name fields super)
+  `(thunk (lambda ()
+	    (() () 0 ())
+	    (block (global ,name) (const ,name)
+		   (composite_type ,name (call (top svec))
+				   (call (top svec) ,@(map (lambda (v) `',v) fields))
+				   ,super
+				   (call (top svec) ,@(map (lambda (v) 'Any) fields))
+				   #f ,(length fields))
+		   (return (null))))))
+
+(define (vinfo:not-capt vi)
+  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 5))))
+
+(define (clear-capture-bits vinfos)
+  (map vinfo:not-capt vinfos))
+
+(define (convert-lambda lam fname interp)
+  `(lambda ,(lam:args lam)
+     (,(clear-capture-bits (car (lam:vinfo lam)))
+      ()
+      ,(caddr (lam:vinfo lam))
+      ,(cadddr (lam:vinfo lam)))
+     ,(add-box-inits-to-body
+       lam
+       (cl-convert (cadddr lam) fname lam (table) #f interp))))
+
+(define (convert-for-type-decl rhs t)
+  (if (eq? t 'Any)
+      rhs
+      `(call (top typeassert)
+	     (call (top convert) ,t ,rhs)
+	     ,t)))
+
+(define (convert-assignment var rhs fname lam interp)
+  (let ((vi (assq var (car  (lam:vinfo lam))))
+	(cv (assq var (cadr (lam:vinfo lam)))))
+    (let* ((vt  (or (and vi (vinfo:type vi))
+		    (and cv (vinfo:type cv))
+		    'Any))
+	   (rhs (convert-for-type-decl rhs
+				       (if (eq? vt 'Any)
+					   vt
+					   (cl-convert vt fname lam #f #f interp)))))
+      (cond
+       ((and cv (vinfo:asgn cv) (vinfo:capt cv))
+	`(call (top setfield!)
+               ,(if interp
+                    `($ ,var)
+                    `(call (top getfield) ,fname (inert ,var)))
+	       (inert contents)
+	       ,rhs))
+       ((and vi (vinfo:asgn vi) (vinfo:capt vi))
+	`(call (top setfield!) ,var (inert contents) ,rhs))
+       (else
+	`(= ,var ,rhs))))))
+
+(define (arg-type-lowered a)
+  (let ((t (arg-type a)))
+    (if (vararg? t)
+	`(call (top apply_type) Vararg ,(cadr t))
+	t)))
+
+;; replace leading (function) argument type with `typ`
+(define (fix-function-arg-type te typ iskw namemap)
+  (let* ((typapp (caddr te))
+         (types  (pattern-replace
+		  (pattern-set
+		   (pattern-lambda (call (call (top (-/ getfield)) (-/ Core) (quote (-/ Typeof))) name)
+				   (get namemap name __)))
+		  (cdddr typapp)))
+         (newtypes
+          (if iskw
+              `(,(car types) ,(cadr types) ,typ ,@(cdddr types))
+              `(,typ ,@(cdr types)))))
+    `(call (top svec) (call (top apply_type) Tuple ,@newtypes)
+	   ,(cadddr te))))
+
+(define (lift-toplevel e)
+  (if (atom? e) (cons e '())
+      (let* ((rec (map lift-toplevel e))
+	     (e2  (map car rec))
+	     (tl  (apply append (map cdr rec))))
+	(if (eq? (car e) 'toplevel-butlast)
+	    (cons (last e2) (append tl (butlast (cdr e2))))
+	    (cons e2 tl)))))
+
+(define (add-box-inits-to-body lam body)
+  (let ((args (map arg-name (lam:args lam)))
+	(vis  (car (lam:vinfo lam)))
+	(lnos (take-while (lambda (x) (and (pair? x) (eq? (car x) 'line)))
+			  (cdr body))))
+    ;; insert Box allocations for captured/assigned arguments
+    `(,(car body)
+      ,@lnos
+      ,@(apply append
+	       (map (lambda (arg)
+		      (let ((vi (assq arg vis)))
+			(if (and vi (vinfo:asgn vi) (vinfo:capt vi))
+			    `((= ,arg (call (top Box) ,arg)))
+			    '())))
+		    args))
+      ,@(list-tail body (+ 1 (length lnos))))))
+
+;; clear capture bit for vars assigned once at the top
+(define (lambda-optimize-vars! lam)
+  (assert (eq? (car lam) 'lambda))
+  (let ((vi (car (lam:vinfo lam))))
+    (if (and (any vinfo:capt vi)
+	     (any vinfo:sa vi))
+	(let ((leading
+	       (map cadr
+		    (filter assignment?
+			    (take-while (lambda (e)
+					  (or (atom? e)
+					      (memq (car e) '(quote top line inert local
+								    implicit-global global
+								    const newvar = null method))))
+					(lam:body lam))))))
+	  (for-each (lambda (v)
+		      (if (and (vinfo:sa v) (memq (car v) leading))
+			  (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+		    vi)))
+    lam))
+
+(define (is-var-boxed? v lam)
+  (or (let ((vi (assq v (car (lam:vinfo lam)))))
+	(and vi (vinfo:asgn vi) (vinfo:capt vi)))
+      (let ((cv (assq v (cadr (lam:vinfo lam)))))
+	(and cv (vinfo:asgn cv) (vinfo:capt cv)))))
+
+(define (closure-convert e) (cl-convert e #f #f #f #f #f))
+
+(define (map-cl-convert exprs fname lam namemap toplevel interp)
+  (if toplevel
+      (let loop ((exprs exprs)
+		 (stmts '()))
+	(if (null? exprs)
+	    (reverse! stmts)
+	    (let* ((x (lift-toplevel (cl-convert (car exprs) fname lam namemap #f interp))))
+	      (loop (cdr exprs)
+		    (cons (car x) (revappend (cdr x) stmts))))))
+      (map (lambda (x) (cl-convert x fname lam namemap #f interp)) exprs)))
+
+(define (cl-convert e fname lam namemap toplevel interp)
+  (if (and (not lam)
+	   (not (and (pair? e) (memq (car e) '(lambda method macro)))))
+      (if (atom? e) e
+	  (cons (car e) (map-cl-convert (cdr e) fname lam namemap toplevel interp)))
+      (cond
+       ((symbol? e)
+	(let ((vi (assq e (car  (lam:vinfo lam))))
+	      (cv (assq e (cadr (lam:vinfo lam)))))
+	  (cond ((eq? e fname) e)
+		(cv
+		 (let ((access (if interp
+                                   `($ (call (top QuoteNode) ,e))
+                                   `(call (top getfield) ,fname (inert ,e)))))
+		   (if (and (vinfo:asgn cv) (vinfo:capt cv))
+		       `(call (top getfield) ,access (inert contents))
+		       access)))
+		(vi
+		 (if (and (vinfo:asgn vi) (vinfo:capt vi))
+		     `(call (top getfield) ,e (inert contents))
+		     e))
+		(else e))))
+       ((atom? e) e)
+       (else
+	(case (car e)
+	  ((quote top line break inert) e)
+	  ((=)
+	   (let ((var (cadr e))
+		 (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
+	     (convert-assignment var rhs fname lam interp)))
+	  ((newvar)
+	   (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+	     (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
+		 `(= ,(cadr e) (call (top Box)))
+		 e)))
+	  ((local)
+	   (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+	     (if (and vi (vinfo:asgn vi) (vinfo:capt vi)
+		      ;; avoid redundant box for vars with newvar nodes
+		      (not (any (lambda (x) (and (length= x 2)
+						 (eq? (car x) 'newvar) (eq? (cadr x) (cadr e))))
+				(lam:body lam))))
+		 `(= ,(cadr e) (call (top Box)))
+		 `(newvar ,(cadr e)))))
+	  ((const)
+	   (if (or (assq (cadr e) (car  (lam:vinfo lam)))
+		   (assq (cadr e) (cadr (lam:vinfo lam))))
+	       '(null)
+	       e))
+          ((macro)
+           (if (atom? (caddr e))
+               e
+               (let ((lam2 (caddr e)))
+                 `(macro ,(cadr e)
+                    (lambda ,(cadr lam2)
+                      (,(clear-capture-bits (car (lam:vinfo lam2)))
+                       ,@(cdr (lam:vinfo lam2)))
+                      ,(add-box-inits-to-body
+                        lam2
+                        (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))))))
+	  ((method)
+           (let* ((name  (method-expr-name e))
+                  (short (length= e 2))  ;; function f end
+                  (lam2  (if short #f (cadddr e)))
+                  (vis   (if short '(() () ()) (lam:vinfo lam2)))
+                  (cvs   (map car (cadr vis)))
+                  (local? (and lam (symbol? name)
+                               (or (assq name (car  (lam:vinfo lam)))
+                                   (assq name (cadr (lam:vinfo lam))))))
+                  (sig      (and (not short) (caddr e)))
+                  (sp-inits (if short '() (if (eq? (car sig) 'block)
+                                              (butlast (cdr sig))
+                                              '())))
+                  (sig      (and sig (if (eq? (car sig) 'block)
+                                         (last sig)
+                                         sig))))
+             (if (and local? (expr-contains-p (lambda (x)
+                                                (and (assignment? x) (eq? (cadr x) name)))
+                                              (lam:body lam)))
+                 ;; TODO jb/functions better error message here
+                 (error (string "assignment to local function " name)))
+             (if (not local?) ;; not a local function; will not be closure converted to a new type
+                 (cond (short e)
+                       ((null? cvs)
+                        `(toplevel-butlast
+                          ,@sp-inits
+                          (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                  (lambda ,(cadr lam2)
+                                    (,(clear-capture-bits (car vis))
+                                     ,@(cdr vis))
+                                    ,(add-box-inits-to-body
+                                      lam2
+                                      (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))
+                                  ,(last e))))
+                       (else
+                        (let* ((newlam (to-goto-form
+                                        (renumber-jlgensym
+                                         (convert-lambda lam2 '|#anon| #t))))
+                               (vi (lam:vinfo newlam))
+                               ;; insert `list` expression heads to make the lambda vinfo
+                               ;; lists quotable
+                               (newlam `(lambda (list ,@(cadr newlam))
+                                          (list (list ,@(map (lambda (l) (cons 'list l))
+                                                             (car vi)))
+                                                (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
+                                          ,@(cdddr newlam))))
+                          `(block
+                            ,@sp-inits
+                            (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                    ,(julia-expand-macros `(quote ,newlam))
+                                    ,(last e))))))
+                 ;; local case - lift to a new type at top level
+                 (let* ((exists (get namemap name #f))
+                        (tname  (or exists
+                                    (and name
+                                         (symbol (string "#" name "#" (current-julia-module-counter))))))
+                        (cvs   (delete-duplicates
+                                (apply append
+                                       ;; merge captured vars from all definitions
+                                       cvs
+                                       (map (lambda (methdef)
+                                              (map car (cadr (lam:vinfo (cadddr methdef)))))
+                                            (expr-find-all
+                                             (lambda (ex)
+                                               (and (eq? (car ex) 'method)
+                                                    (not (eq? ex e))
+                                                    (length> ex 2)
+                                                    (eq? (method-expr-name ex)
+                                                         name)))
+                                             (lam:body lam)
+                                             identity
+                                             (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))))
+                        (typedef  ;; expression to define the type
+                         (let* ((fieldtypes (map (lambda (v)
+						   (if (is-var-boxed? v lam)
+						       'Any ;; TODO
+						       (gensy)))
+						 cvs))
+				(para (filter (lambda (v) (not (eq? v 'Any))) fieldtypes)))
+			   (if (null? para)
+			       (type-for-closure tname cvs '(top Function))
+			       (type-for-closure-parameterized tname para cvs fieldtypes '(top Function)))))
+                        (mk-closure  ;; expression to make the closure
+                         (let* ((var-exprs (map (lambda (v)
+                                                  (let ((cv (assq v (cadr (lam:vinfo lam)))))
+                                                    (if cv
+                                                        `(call (top getfield) ,fname (inert ,v))
+                                                        v)))
+                                                cvs))
+                                (P (filter identity (map (lambda (v ve)
+                                                           (if (is-var-boxed? v lam)
+                                                               #f
+                                                               `(call (top typeof) ,ve)))
+                                                         cvs var-exprs))))
+                           `(new ,(if (null? P)
+                                      tname
+                                      `(call (top apply_type) ,tname ,@P))
+                                 ,@var-exprs)))
+                        (iskw ;; TODO jb/functions need more robust version of this
+                         (contains (lambda (x) (eq? x 'kwftype)) sig)))
+                   `(toplevel-butlast
+                     ,@(if exists
+                           '()
+                           (list
+                            (begin (and name (put! namemap name tname))
+                                   typedef)))
+                     ,@sp-inits
+                     ,@(if short '()
+                           `((method #f
+                                     ,(fix-function-arg-type sig tname iskw namemap)
+                                     ,(convert-lambda lam2
+                                                      (if iskw
+                                                          (caddr (lam:args lam2))
+                                                          (car (lam:args lam2)))
+                                                      #f)
+                                     ,(last e))))
+                     ,(if exists
+                          '(null)
+                          (convert-assignment name mk-closure fname lam interp)))))))
+	  ((lambda)  ;; should only happen inside (thunk ...)
+	   `(lambda ,(cadr e)
+	      (,(clear-capture-bits (car (lam:vinfo e)))
+	       () ,@(cddr (lam:vinfo e)))
+	      (block
+	       ,@(map-cl-convert (cdr (lam:body e)) 'anon
+				 (lambda-optimize-vars! e)
+				 (table) #t interp))))
+	  (else (cons (car e)
+		      (map-cl-convert (cdr e) fname lam namemap toplevel interp))))))))
+
 (define (not-bool e)
   (cond ((memq e '(true #t))  'false)
-        ((memq e '(false #f)) 'true)
-        (else                 `(call (top !) ,e))))
+	((memq e '(false #f)) 'true)
+	(else                 `(call (top !) ,e))))
 
 ;; remove if, _while, block, break-block, and break
 ;; replaced with goto and gotoifnot
@@ -2816,15 +3190,6 @@ So far only the second case can actually occur.
           (if (symbol? e) (emit e) #f)
           (case (car e)
             ((call)  (emit (goto-form e)))
-            ((=)     (let ((vt (vinfo:type
-                                (or (var-info-for (cadr e) vi) '(#f Any)))))
-                       (if (not (eq? vt 'Any))
-                           (emit `(= ,(cadr e)
-                                     (call (top typeassert)
-                                           (call (top convert) ,vt
-                                                 ,(goto-form (caddr e)))
-                                           ,vt)))
-                           (emit `(= ,(cadr e) ,(goto-form (caddr e)))))))
             ((if) (let ((test     `(gotoifnot ,(goto-form (cadr e)) _))
                         (end-jump `(goto _))
                         (tail     (and (pair? (caddr e))
@@ -2943,22 +3308,22 @@ So far only the second case can actually occur.
                    (error (string "`global " vname "`: " vname " is local variable in the enclosing scope"))
                    #f)))
             ((implicit-global) #f)
-            ((local!) #f)
             ((jlgensym) #f)
-            ((local)
-             ;; emit (newvar x) where captured locals are introduced.
-             (let* ((vname (cadr e))
-                    (vinf  (var-info-for vname vi)))
-               (if (and vinf
-                        (not (and (pair? code)
-                                  (equal? (car code) `(newvar ,vname)))))
-                   (emit `(newvar ,vname))
-                   #f)))
+	    ((local) #f)
             ((newvar)
              ;; avoid duplicate newvar nodes
              (if (not (and (pair? code) (equal? (car code) e)))
                  (emit e)
                  #f))
+            ((method)
+             ;; fix residual blocks in method def type sig
+             (if (and (length> e 2) (eq? (car (caddr e)) 'block))
+                 (let ((sig (caddr e)))
+                   (for-each (lambda (x) (emit (goto-form x)))
+                             (butlast (cdr sig)))
+                   (emit (goto-form `(method ,(cadr e) ,(last sig)
+                                             ,@(cdddr e)))))
+                 (emit (goto-form e))))
             (else  (emit (goto-form e))))))
     (compile e '())
     (let* ((stmts (reverse! code))
@@ -2998,12 +3363,19 @@ So far only the second case can actually occur.
 
 ;; expander entry point
 
+(define (julia-expand-for-cl-convert ex)  ;; expand up to closure-convert
+  (analyze-variables
+   (flatten-scopes
+    (identify-locals
+     (julia-expand0 ex)))))
+
 (define (julia-expand1 ex)
   (to-goto-form
-    (analyze-variables
-     (renumber-jlgensym
+   (renumber-jlgensym
+    (closure-convert
+     (analyze-variables
       (flatten-scopes
-       (identify-locals ex))))))
+       (identify-locals ex)))))))
 
 (define (julia-expand01 ex)
   (to-LFF

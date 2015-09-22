@@ -21,7 +21,6 @@ JL_DLLEXPORT jl_value_t *jl_false;
 jl_tvar_t     *jl_typetype_tvar;
 jl_datatype_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
-jl_datatype_t *jl_function_type;
 jl_datatype_t *jl_box_type;
 jl_value_t *jl_box_any_type;
 jl_typename_t *jl_box_typename;
@@ -33,7 +32,6 @@ jl_typename_t *jl_array_typename;
 jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type=NULL;
 jl_value_t *jl_array_symbol_type;
-jl_function_t *jl_bottom_func;
 jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_ascii_string_type;
 jl_datatype_t *jl_utf8_string_type;
@@ -92,18 +90,18 @@ jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
-jl_sym_t *static_typeof_sym; jl_sym_t *kw_sym;
+jl_sym_t *static_typeof_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
-jl_sym_t *global_sym; jl_sym_t *tuple_sym;
+jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
 jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
-jl_sym_t *meta_sym; jl_sym_t *arrow_sym;
+jl_sym_t *meta_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 
 typedef struct {
@@ -277,17 +275,6 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-JL_DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
-                                           jl_lambda_info_t *linfo)
-{
-    jl_function_t *f = (jl_function_t*)jl_gc_alloc_3w(); assert(NWORDS(sizeof(jl_function_t))==3);
-    jl_set_typeof(f, jl_function_type);
-    f->fptr = (fptr!=NULL ? fptr : linfo->fptr);
-    f->env = env;
-    f->linfo = linfo;
-    return f;
-}
-
 JL_DLLEXPORT jl_fptr_t jl_linfo_fptr(jl_lambda_info_t *linfo)
 {
     return linfo->fptr;
@@ -321,7 +308,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
     li->module = ctx;
     li->sparams = sparams;
     li->tfunc = jl_nothing;
-    li->fptr = &jl_trampoline;
+    li->fptr = NULL;
     li->roots = NULL;
     li->functionObjects.functionObject = NULL;
     li->functionObjects.specFunctionObject = NULL;
@@ -336,7 +323,6 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
     li->specializations = NULL;
     li->name = anonymous_sym;
     li->def = li;
-    li->capt = NULL;
     return li;
 }
 
@@ -352,7 +338,6 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->unspecialized = linfo->unspecialized;
     new_linfo->specializations = linfo->specializations;
     new_linfo->def = linfo->def;
-    new_linfo->capt = linfo->capt;
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;
     new_linfo->fptr = linfo->fptr;
@@ -522,17 +507,59 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 
 // allocating types -----------------------------------------------------------
 
-JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name)
+jl_sym_t *jl_demangle_typename(jl_sym_t *s)
+{
+    char *n = jl_symbol_name(s);
+    if (n[0] != '#')
+        return s;
+    char *end = strrchr(n, '#');
+    int32_t len;
+    if (end == n || end == n+1)
+        len = strlen(n) - 1;
+    else
+        len = (end-n) - 1;
+    return jl_symbol_n(&n[1], len);
+}
+
+jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
+{
+    jl_methtable_t *mt = (jl_methtable_t*)jl_gc_allocobj(sizeof(jl_methtable_t));
+    jl_set_typeof(mt, jl_methtable_type);
+    mt->name = jl_demangle_typename(name);
+    mt->module = module;
+    mt->defs = (jl_methlist_t*)jl_nothing;
+    mt->cache = (jl_methlist_t*)jl_nothing;
+    mt->cache_arg1 = (jl_array_t*)jl_nothing;
+    mt->cache_targ = (jl_array_t*)jl_nothing;
+    mt->max_args = 0;
+    mt->kwsorter = NULL;
+#ifdef JL_GF_PROFILE
+    mt->ncalls = 0;
+#endif
+    return mt;
+}
+
+JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *module)
 {
     jl_typename_t *tn=(jl_typename_t*)newobj((jl_value_t*)jl_typename_type, NWORDS(sizeof(jl_typename_t)));
     tn->name = name;
-    tn->module = jl_current_module;
+    tn->module = module;
     tn->primary = NULL;
     tn->cache = jl_emptysvec;
     tn->linearcache = jl_emptysvec;
     tn->names = NULL;
     tn->uid = jl_assign_type_uid();
+    tn->mt = NULL;
+    JL_GC_PUSH1(&tn);
+    tn->mt = jl_new_method_table(name, module);
+    jl_gc_wb(tn, tn->mt);
+    JL_GC_POP();
     return tn;
+}
+
+JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name)
+{
+    return jl_new_typename_in(name, jl_current_module);
 }
 
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
@@ -875,15 +902,6 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
     return jl_false;
 }
 
-JL_DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
-{
-    jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
-    jl_set_typeof(box, jl_box_any_type);
-    // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
-    *(jl_value_t**)box = v;
-    return box;
-}
-
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
@@ -899,7 +917,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     return ex;
 }
 
-JL_CALLABLE(jl_f_new_expr)
+JL_CALLABLE(jl_f__expr)
 {
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);

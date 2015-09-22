@@ -129,7 +129,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
+    Box, Function, Builtin, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -148,7 +148,8 @@ export
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
     # arrayref, arrayset, arraysize,
-    # _apply, kwcall,
+    # _apply,
+    kwfunc,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
@@ -213,6 +214,9 @@ end
 
 abstract AbstractString
 
+function Typeof end
+(f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
+
 abstract Exception
 immutable BoundsError        <: Exception
     a::Any
@@ -251,10 +255,12 @@ abstract DirectIndexString <: AbstractString
 
 immutable ASCIIString <: DirectIndexString
     data::Array{UInt8,1}
+    ASCIIString(d::Array{UInt8,1}) = new(d)
 end
 
 immutable UTF8String <: AbstractString
     data::Array{UInt8,1}
+    UTF8String(d::Array{UInt8,1}) = new(d)
 end
 
 typealias ByteString Union{ASCIIString,UTF8String}
@@ -263,6 +269,18 @@ include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 eval(e::ANY) = eval(Main, e)
 eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+
+kwfunc(f::ANY) = typeof(f).name.mt.kwsorter
+
+function kwftype(t::ANY)
+    mt = t.name.mt
+    if isdefined(mt, :kwsorter)
+    else
+        # TODO jb/functions decide naming convention for these
+        mt.kwsorter = ccall(:jl_new_generic_function, Any, (Any, Any), t.name.name, mt.module)
+    end
+    typeof(mt.kwsorter)
+end
 
 # constructors for built-in types
 
@@ -291,19 +309,21 @@ Void() = nothing
 
 Expr(args::ANY...) = _expr(args...)
 
-_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:TopNode, :Symbol)
 _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
-eval(:(Core.call(::Type{LineNumberNode}, f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
-eval(:(Core.call(::Type{GlobalRef}, m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+_new(:Box, :ANY)
+eval(:((::Type{Box})() = $(Expr(:new, :Box))))
+eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
+eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
 
-Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
+Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f, 0)::Task
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,

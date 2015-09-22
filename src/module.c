@@ -24,10 +24,10 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = NULL;
-    m->call_func = NULL;
     m->istopmod = 0;
     m->std_imports = 0;
     m->uuid = uv_now(uv_default_loop());
+    m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -38,6 +38,11 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     jl_module_export(m, name);
     JL_GC_POP();
     return m;
+}
+
+uint32_t jl_module_next_counter(jl_module_t *m)
+{
+    return ++(m->counter);
 }
 
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
@@ -140,11 +145,11 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m,
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", jl_symbol_name(b->owner->name), jl_symbol_name(var));
-            if (!b->imported && (b2->value==NULL || jl_is_function(b2->value))) {
-                if (b2->value && !jl_is_gf(b2->value)) {
-                    jl_errorf("error in method definition: %s.%s cannot be extended", jl_symbol_name(b->owner->name), jl_symbol_name(var));
-                }
-                else {
+            if (!b->imported && (b2->value==NULL /*|| jl_is_function(b2->value)*/)) {
+                //if (b2->value && !jl_is_gf(b2->value)) {
+                //    jl_errorf("error in method definition: %s.%s cannot be extended", jl_symbol_name(b->owner->name), jl_symbol_name(var));
+                //} else
+                {
                     if (jl_base_module && m->std_imports && b->owner == jl_base_module) {
                         jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
                         if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
@@ -503,7 +508,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
         jl_value_t *v = b->value;
-        if (v && (jl_is_type(v) || (jl_is_function(v) && jl_is_gf(v)))) {
+        if (v && (jl_is_type(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
             jl_printf(JL_STDERR, ", use ");
             if (b->owner && strcmp(jl_symbol_name(b->owner->name), "Base") == 0 &&
                 strcmp(jl_symbol_name(b->name), "Uint") == 0) {
@@ -537,7 +542,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
     if (b->constp && b->value != NULL) {
         if (!jl_egal(rhs, b->value)) {
             if (jl_typeof(rhs) != jl_typeof(b->value) ||
-                jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs)) {
+                jl_is_type(rhs) /*|| jl_is_function(rhs)*/ || jl_is_module(rhs)) {
                 jl_errorf("invalid redefinition of constant %s",
                           jl_symbol_name(b->name));
             }
@@ -591,8 +596,9 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
+            int hidden = jl_symbol_name(b->name)[0]=='#';
             if ((b->exportp || ((imported || b->owner == m) && (all || m == jl_main_module))) &&
-                !b->deprecated) {
+                !b->deprecated && !hidden) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
                 jl_cellset(a, jl_array_dim0(a)-1, (jl_value_t*)b->name);
@@ -610,7 +616,7 @@ JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 jl_function_t *jl_module_get_initializer(jl_module_t *m)
 {
     jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
-    if (f == NULL || !jl_is_function(f))
+    if (f == NULL /*|| !jl_is_function(f)*/)
         return NULL;
     return (jl_function_t*)f;
 }
@@ -632,17 +638,6 @@ JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
                                            jl_exception_in_transit));
         }
     }
-}
-
-jl_function_t *jl_module_call_func(jl_module_t *m)
-{
-    if (m->call_func == NULL) {
-        jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
-        if (cf == NULL || !jl_is_function(cf) || !jl_is_gf(cf))
-            cf = jl_bottom_func;
-        m->call_func = cf;
-    }
-    return m->call_func;
 }
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)

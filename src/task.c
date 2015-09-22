@@ -243,7 +243,7 @@ static void NOINLINE JL_NORETURN start_task(void)
     }
     else {
         JL_TRY {
-            res = jl_apply(t->start, NULL, 0);
+            res = jl_do_call(t->start, NULL, 0);
         }
         JL_CATCH {
             res = jl_exception_in_transit;
@@ -900,7 +900,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    //jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
     JL_GC_POP();
 #endif
 
@@ -951,7 +951,7 @@ void jl_init_tasks(void)
                                             jl_any_type, jl_sym_type,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
-                                            jl_any_type, jl_function_type),
+                                            jl_any_type, jl_any_type),
                                    0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
@@ -959,7 +959,7 @@ void jl_init_tasks(void)
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 
-    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_emptysvec, NULL);
+    //jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_emptysvec, NULL);
 }
 
 // Initialize a root task using the given stack.
