@@ -152,6 +152,39 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
         foo()
     " --depwarn=error`)
 
+    # test deprecated bindings
+    let code = """
+        module Foo
+            import Base: @deprecate_binding
+
+            const NotDeprecated = true
+            @deprecate_binding Deprecated NotDeprecated
+        end
+
+        Foo.Deprecated
+        """
+
+        @test !success(`$exename -E "$code" --depwarn=error`)
+
+        @unix_only let out  = Pipe(),
+                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out))
+
+            wait(proc)
+            close(out.in)
+            @test success(proc)
+            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated."
+        end
+
+        @unix_only let out  = Pipe(),
+                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
+
+            wait(proc)
+            close(out.in)
+            @test success(proc)
+            @test isempty(readall(out))
+        end
+    end
+
     # --inline
     @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
