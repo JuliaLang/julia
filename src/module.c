@@ -482,10 +482,12 @@ DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
     if (b->deprecated && jl_options.depwarn) {
+        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
+            jl_printf(JL_STDERR, "WARNING: ");
         if (b->owner)
-            jl_printf(JL_STDERR, "WARNING: %s.%s is deprecated", b->owner->name->name, b->name->name);
+            jl_printf(JL_STDERR, "%s.%s is deprecated", b->owner->name->name, b->name->name);
         else
-            jl_printf(JL_STDERR, "WARNING: %s is deprecated", b->name->name);
+            jl_printf(JL_STDERR, "%s is deprecated", b->name->name);
         jl_value_t *v = b->value;
         if (v && (jl_is_type(v) || (jl_is_function(v) && jl_is_gf(v)))) {
             jl_printf(JL_STDERR, ", use ");
@@ -493,6 +495,12 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
             jl_printf(JL_STDERR, " instead");
         }
         jl_printf(JL_STDERR, ".\n");
+        if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) {
+            if (b->owner)
+                jl_errorf("deprecated binding: %s.%s", b->owner->name->name, b->name->name);
+            else
+                jl_errorf("deprecated binding: %s", b->name->name);
+        }
     }
 }
 
