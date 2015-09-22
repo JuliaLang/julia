@@ -937,7 +937,6 @@ function uv_write(s::LibuvStream, p::Ptr, n::UInt)
     end
     ct = current_task()
     uv_req_set_data(uvw,ct)
-    ct.state = :waiting
     stream_wait(ct)
     return Int(n)
 end
