@@ -58,6 +58,9 @@ try
             @test "not bool"
             @test error()
         end
+
+        error("exceptions in testsets should be caught")
+        @test 1 == 1 # this test will not be run
     end
 
     @testset "loop with desc" begin
@@ -89,7 +92,7 @@ catch ex
     @test isa(ex, Test.TestSetException)
     @test ex.pass  == 21
     @test ex.fail  == 5
-    @test ex.error == 2
+    @test ex.error == 3
 end
 
 # Test @test_approx_eq
