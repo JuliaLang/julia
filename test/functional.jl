@@ -121,6 +121,9 @@ let i = 0
     end
 end
 
+@test length(zip(cycle(1:3), 1:7)) == 7
+@test length(zip(cycle(1:3), 1:7, cycle(1:3))) == 7
+
 # repeated
 # --------
 

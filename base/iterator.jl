@@ -210,3 +210,11 @@ next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
 repeated(x, n::Int) = take(repeated(x), n)
+
+# Zips with infinite length components
+
+length{I<:Union{Cycle,Repeated},Z<:AbstractZipIterator}(z::Zip{I,Z}) = length(z.z)
+length{I1<:Union{Cycle,Repeated},I2<:Union{Cycle,Repeated}}(z::Zip2{I1,I2}) = length(z.b) # inherit behaviour, error
+length{I1,I2<:Union{Cycle,Repeated}}(z::Zip2{I1,I2}) = length(z.a)
+length{I1<:Union{Cycle,Repeated},I2}(z::Zip2{I1,I2}) = length(z.b)
+
