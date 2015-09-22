@@ -81,7 +81,7 @@ benchmarks/fortran%.csv: bin/fperf%
 
 benchmarks/go.csv: export GOPATH=$(abspath gopath)
 benchmarks/go.csv: perf.go
-	CGO_LDFLAGS="-L$(JULIAHOME)/deps -lopenblas" go get github.com/gonum/blas/cgo
+	CGO_LDFLAGS="-L$(BLASDIR) -lopenblas" go get github.com/gonum/blas/cgo
 	go get github.com/gonum/matrix/mat64
 	go get github.com/gonum/stat
 	for t in 1 2 3 4 5; do go run $<; done >$@
