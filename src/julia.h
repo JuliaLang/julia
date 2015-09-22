@@ -1442,7 +1442,6 @@ typedef struct _jl_handler_t {
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     struct _jl_task_t *parent;
-    struct _jl_task_t *last;
     jl_value_t *tls;
     jl_sym_t *state;
     jl_value_t *consumers;
