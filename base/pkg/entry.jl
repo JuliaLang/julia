@@ -635,7 +635,7 @@ end
 
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
-function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=false, commitish::AbstractString="HEAD")
+function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=false, commitish::AbstractString="HEAD")
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     with(GitRepo,"METADATA") do repo
         LibGit2.isdirty(repo, pkg) && throw(PkgError("METADATA/$pkg is dirty – commit or stash changes to tag"))
