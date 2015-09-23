@@ -1340,3 +1340,10 @@ copy!(B, A)
 @test A + 1 == B + 1
 @test 2*A == 2*B
 @test A/3 == B/3
+
+# issue #13250
+x13250 = zeros(3)
+x13250[UInt(1):UInt(2)] = 1.0
+@test x13250[1] == 1.0
+@test x13250[2] == 1.0
+@test x13250[3] == 0.0
