@@ -234,13 +234,6 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
-
 # misc useful functions & macros
 include("util.jl")
 
@@ -291,6 +284,13 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# Documentation
+
+include("markdown/Markdown.jl")
+include("docs/Docs.jl")
+using .Docs
+using .Markdown
 
 # deprecated functions
 include("deprecated.jl")
