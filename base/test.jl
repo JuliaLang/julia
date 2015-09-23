@@ -110,11 +110,14 @@ function Base.show(io::IO, t::Error)
         print(  io, "       Value: ", t.value)
     elseif t.test_type == :test_error
         println(io, "  Test threw an exception of type ", typeof(t.value))
-        # don't print an empty expression. Probably from an error thrown in
-        # a @testset and we don't have the expression for it
-        if t.orig_expr != :()
-            println(io, "  Expression: ", t.orig_expr)
-        end
+        println(io, "  Expression: ", t.orig_expr)
+        # Capture error message and indent to match
+        errmsg = sprint(showerror, t.value, t.backtrace)
+        print(io, join(map(line->string("  ",line),
+                            split(errmsg, "\n")), "\n"))
+    elseif t.test_type == :nontest_error
+        # we had an error outside of a @test
+        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
         # Capture error message and indent to match
         errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
@@ -496,7 +499,7 @@ macro testset(args...)
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record($ts, Error(:test_error, :(), err, catch_backtrace()))
+            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
         end
         pop_testset()
         finish($ts)
