@@ -217,7 +217,7 @@ DLLEXPORT int jl_running_on_valgrind()
 {
     return RUNNING_ON_VALGRIND;
 }
-
+DLLEXPORT void jl_gc_add_stackmap(void*);
 static int jl_load_sysimg_so()
 {
 #ifndef _OS_WINDOWS_
@@ -269,6 +269,11 @@ static int jl_load_sysimg_so()
     if (sysimg_data) {
         size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
         jl_restore_system_image_data(sysimg_data, len);
+        const char *sysimg_stackmaps = (const char*)jl_dlsym_e(jl_sysimg_handle, "__LLVM_StackMaps");
+        if (sysimg_stackmaps) {
+            printf("Stkmaps : %p\n", sysimg_stackmaps);
+            jl_gc_add_stackmap(sysimg_stackmaps);
+        } else abort();
         return 0;
     }
     return -1;

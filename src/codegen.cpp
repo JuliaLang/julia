@@ -24,6 +24,7 @@
 #ifdef LLVM38
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/IR/Dominators.h>
 #endif
 #ifdef LLVM37
 #include "llvm/IR/LegacyPassManager.h"
@@ -86,6 +87,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/CodeGen/GCs.h>
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -657,6 +659,7 @@ jl_value_t *jl_get_cpu_name(void)
 static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
 
 #include "cgutils.cpp"
+#include "GCRootsPass.cpp"
 
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
@@ -1133,7 +1136,8 @@ Function* CloneFunctionToModule(Function *F, Module *destModule)
                                       F->getName(),
                                       destModule);
     VMap[F] = NewF;
-
+    NewF->addFnAttr("no-frame-pointer-elim-non-leaf");
+    NewF->setGC("statepoint-example");
     Function::arg_iterator DestI = NewF->arg_begin();
     for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
         DestI->setName(I->getName());    // Copy the name over...
@@ -2017,14 +2021,14 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
 #ifdef LLVM37
             Value *answer = builder.CreateCall(prepare_call(memcmp_func),
                             {
-                            builder.CreatePointerCast(arg1.V, T_pint8),
-                            builder.CreatePointerCast(arg2.V, T_pint8),
+                                bitcast( arg1.V, T_pint8),
+                                bitcast( arg2.V, T_pint8),
                             ConstantInt::get(T_size, sz)
                             });
 #else
             Value *answer = builder.CreateCall3(prepare_call(memcmp_func),
-                    builder.CreatePointerCast(arg1.V, T_pint8),
-                    builder.CreatePointerCast(arg2.V, T_pint8),
+                                                bitcast( arg1.V, T_pint8),
+                                                bitcast( arg2.V, T_pint8),
                     ConstantInt::get(T_size, sz));
 #endif
             return builder.CreateICmpEQ(answer, ConstantInt::get(T_int32, 0));
@@ -2033,10 +2037,10 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
             Type *atp = at->getPointerTo();
             Value *varg1 = arg1.V;
             if (varg1->getType() != atp)
-                builder.CreatePointerCast(varg1, atp);
+                bitcast( varg1, atp);
             Value *varg2 = arg2.V;
             if (varg2->getType() != atp)
-                builder.CreatePointerCast(varg2, atp);
+                bitcast( varg2, atp);
             jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             size_t l = jl_svec_len(types);
@@ -2483,8 +2487,8 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
                             builder.SetInsertPoint(ownedBB);
                             // load owner pointer
                             Value *own_ptr = builder.CreateLoad(
-                                builder.CreateBitCast(builder.CreateConstGEP1_32(
-                                    builder.CreateBitCast(ary.V,T_pint8), jl_array_data_owner_offset(nd)),
+                                                                bitcast( builder.CreateConstGEP1_32(
+                                                                                 bitcast( ary.V,T_pint8), jl_array_data_owner_offset(nd)),
                                     jl_ppvalue_llvmt));
                             builder.CreateBr(mergeBB);
                             builder.SetInsertPoint(mergeBB);
@@ -2625,7 +2629,7 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
                 Value *types_len = emit_datatype_nfields(ty);
                 Value *idx = emit_unbox(T_size, emit_unboxed(args[2], ctx), (jl_value_t*)jl_long_type);
                 emit_bounds_check(ty, (jl_value_t*)jl_datatype_type, idx, types_len, ctx);
-                Value *fieldtyp = builder.CreateLoad(builder.CreateGEP(builder.CreateBitCast(types_svec, jl_ppvalue_llvmt), idx));
+                Value *fieldtyp = builder.CreateLoad(builder.CreateGEP(bitcast( types_svec, jl_ppvalue_llvmt), idx));
                 *ret = mark_julia_type(fieldtyp, expr_type(expr, ctx));
                 JL_GC_POP();
                 return true;
@@ -2687,8 +2691,10 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
     else
         myargs = Constant::getNullValue(jl_ppvalue_llvmt);
 #ifdef LLVM37
-    Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
-                                        ConstantInt::get(T_int32,nargs)});
+    /*Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs, ConstantInt::get(T_int32,nargs)});*/
+    CallInst *call = builder.CreateGCStatepointCall(ctx->linfo->specFunctionID, 0, prepare_call(theFptr), {theF, myargs, ConstantInt::get(T_int32,nargs)}, ArrayRef<Value*>(), ArrayRef<Value*>());
+      Value *result = builder.CreateGCResult(call, jl_pvalue_llvmt);
+    /*Value *result = builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::experimental_patchpoint, { jl_pvalue_llvmt }), { theF, myargs, ConstantInt::get(T_int32,nargs) });*/
 #else
     Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
                                         ConstantInt::get(T_int32,nargs));
@@ -2757,7 +2763,7 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
                     // can lazy load on demand, no copy needed
                     Value *argv = arg.V;
                     if (argv->getType() != at)
-                        builder.CreatePointerCast(argv, at);
+                        bitcast( argv, at);
                     argvals[idx] = argv;
                 }
                 else {
@@ -2774,9 +2780,17 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
             idx++;
         }
         assert(idx == nfargs);
-        CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
+        
+        CallInst *call;
+        if (sret)
+            call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
+        else
+            call = builder.CreateGCStatepointCall(ctx->linfo->specFunctionID, 0, prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs), ArrayRef<Value*>(), ArrayRef<Value*>());
         call->setAttributes(cf->getAttributes());
-        return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, jlretty);
+        //TODO remove sret special case and move attributes around
+        if (!sret)
+            result = builder.CreateGCResult(call, cf->getReturnType());
+        return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(result, jlretty);
     }
     return mark_julia_type(emit_jlcall(theFptr, theF, &args[1], nargs, ctx), jl_any_type); // (typ will be patched up by caller)
 }
@@ -2980,9 +2994,9 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
         b = jl_get_binding(m, s);
         if (b == NULL) {
             // var not found. switch to delayed lookup.
-            Constant *initnul = ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt);
+            Constant *initnul = ConstantPointerNull::get((PointerType*)jl_ppvalue_llvmt);
             GlobalVariable *bindinggv =
-                new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
+                new GlobalVariable(*jl_Module, jl_ppvalue_llvmt,
                                    false, GlobalVariable::PrivateLinkage,
                                    initnul, "delayedvar");
             Value *cachedval = builder.CreateLoad(bindinggv);
@@ -3005,10 +3019,10 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             builder.CreateBr(have_val);
             ctx->f->getBasicBlockList().push_back(have_val);
             builder.SetInsertPoint(have_val);
-            PHINode *p = builder.CreatePHI(jl_pvalue_llvmt, 2);
+            PHINode *p = builder.CreatePHI(jl_ppvalue_llvmt, 2);
             p->addIncoming(cachedval, currentbb);
             p->addIncoming(bval, not_found);
-            return julia_binding_gv(builder.CreateBitCast(p, jl_ppvalue_llvmt));
+            return julia_binding_gv(p);
         }
         if (b->deprecated) cg_bdw(b, ctx);
     }
@@ -3065,7 +3079,7 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx, bool isboxed)
                 // if the jl_box_t in the closure env, it will be const in the function
                 load = tbaa_decorate(tbaa_const, load);
             }
-            bp = builder.CreatePointerCast(load, jl_ppvalue_llvmt);
+            bp = bitcast( load, jl_ppvalue_llvmt);
         }
         if (vi.isArgument ||  // arguments are always defined
             ((vi.closureidx == -1 || !vi.isAssigned) && !vi.usedUndef)) {
@@ -3089,7 +3103,7 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx, bool isboxed)
         Type *T = julia_type_to_llvm(vi.value.typ)->getPointerTo();
         Value *v = vi.value.V;
         if (v->getType() != T)
-            v = builder.CreatePointerCast(v, T);
+            v = bitcast( v, T);
         return mark_julia_type(builder.CreateLoad(v, true), vi.value.typ);
     }
     else {
@@ -3199,7 +3213,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 return;
             }
             if (vi.isBox) {
-                bp = builder.CreatePointerCast(builder.CreateLoad(bp), jl_ppvalue_llvmt);
+                bp = bitcast( builder.CreateLoad(bp), jl_ppvalue_llvmt);
             }
             builder.CreateStore(rval, bp, vi.isVolatile);
             if (vi.isBox) {
@@ -3456,8 +3470,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
                 bp = vi.memloc;
                 if (vi.isBox) {
                     // bp is a jl_box_t*
-                    bp = builder.CreatePointerCast(builder.CreateLoad(bp), jl_ppvalue_llvmt);
-                    bp_owner = builder.CreateBitCast(bp, jl_pvalue_llvmt);
+                    bp = bitcast( builder.CreateLoad(bp), jl_ppvalue_llvmt);
+                    bp_owner = bitcast( bp, jl_pvalue_llvmt);
                 }
             }
         }
@@ -3698,7 +3712,7 @@ emit_gcpops(jl_codectx_t *ctx)
             builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
             Instruction *gcpop =
                 (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
-            builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
+            builder.CreateStore(bitcast( builder.CreateLoad(gcpop),
                                                       jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
         }
@@ -3721,9 +3735,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     newgcframe->setOperand(0, ConstantInt::get(T_int32, 2 + gc->argSpaceSize + gc->maxDepth)); // fix up the size of the gc frame
     gc->tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + gc->argSpaceSize)); // fix up the offset to the temp slot space
     builder.CreateStore(ConstantInt::get(T_size, (gc->argSpaceSize + gc->maxDepth) << 1),
-                        builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
+                        bitcast( builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
     builder.CreateStore(builder.CreateLoad(prepare_global(jlpgcstack_var)),
-                        builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
+                        bitcast( builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     builder.CreateStore(newgcframe, prepare_global(jlpgcstack_var));
     // Initialize the slots for temporary variables to NULL
     for (int i = 0; i < gc->argSpaceSize; i++) {
@@ -3873,7 +3887,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         // figure out how to unpack this type
         if (isref & (2<<i)) {
             if (!jl_isbits(jargty)) {
-                val = builder.CreatePointerCast(val, jl_pvalue_llvmt);
+                val = bitcast( val, jl_pvalue_llvmt);
             }
             else {
                 Type *t = julia_type_to_llvm(jargty);
@@ -3886,7 +3900,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     }
                 }
                 else {
-                    val = builder.CreatePointerCast(val, t->getPointerTo());
+                    val = bitcast( val, t->getPointerTo());
                     val = builder.CreateAlignedLoad(val, 1); // make no alignment assumption about pointer from C
                 }
             }
@@ -3912,7 +3926,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     Value *mem = emit_allocobj(jl_datatype_size(jargty));
                     builder.CreateStore(literal_pointer_val((jl_value_t*)jargty),
                                         emit_typeptr_addr(mem));
-                    builder.CreateAlignedStore(val, builder.CreateBitCast(mem, val->getType()->getPointerTo()), 16); // julia's gc gives 16-byte aligned addresses
+                    builder.CreateAlignedStore(val, bitcast( mem, val->getType()->getPointerTo()), 16); // julia's gc gives 16-byte aligned addresses
                     val = mem;
                 }
                 if (specsig)
@@ -4075,7 +4089,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
                                           ConstantInt::get(T_size, i));
         Value *theArg = builder.CreateLoad(argPtr);
         if (lty != NULL && lty != jl_pvalue_llvmt) {
-            theArg = builder.CreatePointerCast(theArg, PointerType::get(lty,0));
+            theArg = bitcast( theArg, PointerType::get(lty,0));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
                 theArg = builder.CreateLoad(theArg);
         }
@@ -4301,6 +4315,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
             lam->functionID = jl_assign_functionID(f);
         }
     }
+    f->setGC("statepoint-example");
+    f->addFnAttr("no-frame-pointer-elim-non-leaf");
+    
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
@@ -4655,7 +4672,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             assert(jl_is_symbol(vname));
             jl_varinfo_t &varinfo = ctx.vars[vname];
             if (!varinfo.value.isghost) {
-                varinfo.memloc = builder.CreatePointerCast(
+                varinfo.memloc = bitcast(
                         emit_nthptr_addr(envArg, i + offsetof(jl_svec_t,data) / sizeof(void*)),
                         jl_ppvalue_llvmt);
             }
@@ -5238,7 +5255,7 @@ static void init_julia_llvm_env(Module *m)
         dbuilder.getOrCreateArray(diargs));
 #endif
 
-    jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
+    jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 1);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
     two_pvalue_llvmt.push_back(jl_pvalue_llvmt);
     two_pvalue_llvmt.push_back(jl_pvalue_llvmt);
@@ -5438,25 +5455,30 @@ static void init_julia_llvm_env(Module *m)
     jltypeerror_func->setDoesNotReturn();
     add_named_global(jltypeerror_func, (void*)&jl_type_error_rt_line);
 
-    std::vector<Type *> args_2ptrs(0);
-    args_2ptrs.push_back(jl_pvalue_llvmt);
-    args_2ptrs.push_back(jl_pvalue_llvmt);
+    std::vector<Type *> args_bnd_val;
+    args_bnd_val.push_back(jl_ppvalue_llvmt);
+    args_bnd_val.push_back(jl_pvalue_llvmt);
     jlcheckassign_func =
-        Function::Create(FunctionType::get(T_void, args_2ptrs, false),
+        Function::Create(FunctionType::get(T_void, args_bnd_val, false),
                          Function::ExternalLinkage,
                          "jl_checked_assignment", m);
     add_named_global(jlcheckassign_func, (void*)&jl_checked_assignment);
 
-    std::vector<Type *> args_1ptr(0);
-    args_1ptr.push_back(jl_pvalue_llvmt);
+    std::vector<Type *> args_1bnd;
+    args_1bnd.push_back(jl_ppvalue_llvmt);
     jldeclareconst_func =
-        Function::Create(FunctionType::get(T_void, args_1ptr, false),
+        Function::Create(FunctionType::get(T_void, args_1bnd, false),
                          Function::ExternalLinkage,
                          "jl_declare_constant", m);
     add_named_global(jldeclareconst_func, (void*)&jl_declare_constant);
-
+    
+    std::vector<Type *> args_1ptr(0);
+    args_1ptr.push_back(jl_pvalue_llvmt);
+    std::vector<Type *> args_2ptrs(0);
+    args_2ptrs.push_back(jl_pvalue_llvmt);
+    args_2ptrs.push_back(jl_pvalue_llvmt);
     jlgetbindingorerror_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt, args_2ptrs, false),
+        Function::Create(FunctionType::get(jl_ppvalue_llvmt, args_2ptrs, false),
                          Function::ExternalLinkage,
                          "jl_get_binding_or_error", m);
     add_named_global(jlgetbindingorerror_func, (void*)&jl_get_binding_or_error);
@@ -5550,7 +5572,7 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
-    mdargs.push_back(jl_pvalue_llvmt);
+    mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
@@ -5566,7 +5588,7 @@ static void init_julia_llvm_env(Module *m)
     funcdefargs.push_back(jl_pvalue_llvmt);
     funcdefargs.push_back(jl_ppvalue_llvmt);
     funcdefargs.push_back(jl_pvalue_llvmt);
-    funcdefargs.push_back(jl_pvalue_llvmt);
+    funcdefargs.push_back(jl_ppvalue_llvmt);
     jlgenericfunction_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, funcdefargs, false),
                          Function::ExternalLinkage,
@@ -5828,7 +5850,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
     //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
-
+    FPM->add(new GCRootsPass());
     FPM->doInitialization();
 }
 
@@ -6037,6 +6059,8 @@ extern "C" void jl_init_codegen(void)
                               "jl_box32", (void*)&jl_box32, m);
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
                               "jl_box64", (void*)&jl_box64, m);
+
+    linkStatepointExampleGC();
 }
 
 // for debugging from gdb

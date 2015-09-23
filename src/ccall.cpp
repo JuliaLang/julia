@@ -221,7 +221,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     ctx->f->getBasicBlockList().push_back(ccall_bb);
     builder.SetInsertPoint(ccall_bb);
     llvmf = builder.CreateLoad(llvmgv);
-    return builder.CreatePointerCast(llvmf,funcptype);
+    return bitcast( llvmf,funcptype);
 }
 
 // --- ABI Implementations ---
@@ -259,13 +259,13 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
         if (tojulia) {
             Type *ptarget_type = PointerType::get(target_type, 0);
             if (v->getType() != ptarget_type)
-                v = builder.CreatePointerCast(v, ptarget_type);
+                v = bitcast( v, ptarget_type);
             return builder.CreateAlignedLoad(v, 1); // unknown alignment from C
         }
         else {
             // julia_to_native should already have done the alloca and store
             if (v->getType() != target_type)
-                v = builder.CreatePointerCast(v, target_type);
+                v = bitcast( v, target_type);
             return v;
         }
     }
@@ -277,12 +277,12 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
 
     assert(from_type->isPointerTy() == target_type->isPointerTy()); // expect that all ABIs consider all pointers to be equivalent
     if (target_type->isPointerTy()) {
-        return builder.CreatePointerCast(v, target_type);
+        return bitcast( v, target_type);
     }
 
     // simple integer and float widening & conversion cases
     if (from_type->getPrimitiveSizeInBits() > 0 && target_type->getPrimitiveSizeInBits() == from_type->getPrimitiveSizeInBits()) {
-        return builder.CreateBitCast(v, target_type);
+        return bitcast( v, target_type);
     }
     if (target_type->isFloatingPointTy() && from_type->isFloatingPointTy()) {
         if (target_type->getPrimitiveSizeInBits() > from_type->getPrimitiveSizeInBits())
@@ -304,7 +304,7 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
     // we need to use this alloca copy trick instead
     // NOTE: it is assumed that the ABI has ensured that sizeof(from_type) == sizeof(target_type)
     Value *mem = emit_static_alloca(target_type, ctx);
-    builder.CreateStore(v, builder.CreatePointerCast(mem, from_type->getPointerTo()));
+    builder.CreateStore(v, bitcast( mem, from_type->getPointerTo()));
     return builder.CreateLoad(mem);
 }
 
@@ -371,7 +371,7 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
         if (!jl_is_abstracttype(ety)) {
             if (jl_is_mutable_datatype(ety)) {
                 // no copy, just reference the data field
-                return builder.CreateBitCast(jvinfo.V, to);
+                return bitcast( jvinfo.V, to);
             }
             else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) {
                 // yes copy
@@ -384,15 +384,15 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
                 }
                 else {
                     nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                                    builder.CreateGEP(builder.CreatePointerCast(emit_typeof(jvinfo), T_pint32),
+                                                                             builder.CreateGEP(bitcast( emit_typeof(jvinfo), T_pint32),
                                         ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
                                     false));
                     ai = builder.CreateAlloca(T_int8, nbytes);
                     *needStackRestore = true;
                 }
                 ai->setAlignment(16);
-                builder.CreateMemCpy(ai, builder.CreateBitCast(jvinfo.V, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
-                return builder.CreateBitCast(ai, to);
+                builder.CreateMemCpy(ai, bitcast( jvinfo.V, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+                return bitcast( ai, to);
             }
         }
         // emit maybe copy
@@ -403,23 +403,23 @@ static Value *julia_to_native(Type *to, jl_value_t *jlto, const jl_cgval_t &jvin
         BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(),"after",ctx->f);
         Value *ismutable = builder.CreateTrunc(
                 tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                        builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint8),
+                                                                builder.CreateGEP(bitcast( jvt, T_pint8),
                             ConstantInt::get(T_size, offsetof(jl_datatype_t,mutabl))),
                         false)),
                 T_int1);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
-        Value *p1 = builder.CreatePointerCast(jvinfo.V, to);
+        Value *p1 = bitcast( jvinfo.V, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                    builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint32),
+                                                                        builder.CreateGEP(bitcast( jvt, T_pint32),
                         ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
         builder.CreateMemCpy(ai, jvinfo.V, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
-        Value *p2 = builder.CreatePointerCast(ai, to);
+        Value *p2 = bitcast( ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
         PHINode *p = builder.CreatePHI(to, 2);
@@ -1104,7 +1104,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
         jl_cgval_t ary = emit_expr(argi, ctx);
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(boxed(ary, ctx)),lrt),
+        return mark_or_box_ccall_result(bitcast( emit_arrayptr(boxed(ary, ctx)),lrt),
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_value_ptr ||
@@ -1137,7 +1137,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ary = emit_unbox(largty, emit_unboxed(argi, ctx), tti);
         }
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
+        return mark_or_box_ccall_result(bitcast( ary, lrt),
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_is_leaf_type ||
@@ -1183,7 +1183,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     emit_expr(args[6], ctx);
                     emit_expr(args[8], ctx);
                     JL_GC_POP();
-                    return mark_or_box_ccall_result(builder.CreateBitCast(llvmf, lrt),
+                    return mark_or_box_ccall_result(bitcast( llvmf, lrt),
                                                     args[2], rt, static_rt, ctx);
                 }
                 JL_CATCH {
@@ -1241,7 +1241,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else {
             // XXX: result needs a GC root here if result->getType() == jl_pvalue_llvmt
             result = sret_val.V;
-            argvals[0] = builder.CreateBitCast(result, fargt_sig.at(0));
+            argvals[0] = bitcast( result, fargt_sig.at(0));
         }
     }
 
@@ -1414,7 +1414,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(newst.isboxed);
             // copy the data from the return value to the new struct
             // julia gc is aligned 16, otherwise use default alignment for alloca pointers
-            builder.CreateAlignedStore(result, builder.CreateBitCast(newst.V, prt->getPointerTo()), newst.V->getType() == jl_pvalue_llvmt ? 16 : 0);
+            builder.CreateAlignedStore(result, bitcast( newst.V, prt->getPointerTo()), newst.V->getType() == jl_pvalue_llvmt ? 16 : 0);
             return newst;
         }
         else if (jlrt != prt) {

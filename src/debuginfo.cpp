@@ -168,6 +168,8 @@ struct revcomp {
     { return lhs>rhs; }
 };
 
+extern "C" DLLEXPORT void jl_gc_add_stackmap(void*);
+
 class JuliaJITEventListener: public JITEventListener
 {
 #ifndef USE_MCJIT
@@ -420,6 +422,15 @@ public:
             objectmap[Addr] = tmp;
         }
 #endif
+        void *stackmap = 0;
+        for (object::SectionRef s : obj.sections()) {
+            s.getName(sName);
+            if (sName.equals(StringRef(".llvm_stackmaps"))) {
+                stackmap = (void*)L.getSectionLoadAddress(s);
+            }
+        }
+        if (stackmap)
+            jl_gc_add_stackmap(stackmap);
     }
 
     // must implement if we ever start freeing code

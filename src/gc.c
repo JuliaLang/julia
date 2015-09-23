@@ -252,6 +252,11 @@ static arraylist_t finalizer_list;
 static arraylist_t finalizer_list_marked;
 static arraylist_t to_finalize;
 
+// stackmaps
+
+static arraylist_t stackmaps_todo;
+static htable_t stackmap_entries;
+
 static int check_timeout = 0;
 #define should_timeout() 0
 
@@ -1992,7 +1997,7 @@ static void gc_mark_task_stack(jl_task_t*,int);
 void prepare_sweep(void)
 {
 }
-
+static void parse_all_stackmaps(void);
 void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
@@ -2055,6 +2060,7 @@ void jl_gc_collect(int full)
         END
 
         // 3. walk roots
+        parse_all_stackmaps();
         pre_mark();
         visit_mark_stack(GC_MARKED_NOESC);
 
@@ -2257,29 +2263,6 @@ void *allocb(size_t sz)
     return &b->data[0];
 }
 
-/* this function is horribly broken in that it is unable to fix the bigval_t pointer chain after the realloc
- * so it is basically just completely invalid in the bigval_t case
-void *reallocb(void *b, size_t sz)
-{
-    buff_t *buff = gc_val_buf(b);
-    if (buff->pooled) {
-        void* b2 = allocb(sz);
-        memcpy(b2, b, page_metadata(buff)->osize);
-        return b2;
-    }
-    else {
-        size_t allocsz = LLT_ALIGN(sz + sizeof(bigval_t), 16);
-        if (allocsz < sz)  // overflow in adding offs, size was "negative"
-            jl_throw(jl_memory_exception);
-        bigval_t *bv = bigval_header(buff);
-        bv = (bigval_t*)realloc_a16(bv, allocsz, bv->sz&~3);
-        if (bv == NULL)
-            jl_throw(jl_memory_exception);
-        return &bv->data[0];
-    }
-}
-*/
-
 DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     size_t allocsz = sz + sizeof_jl_taggedvalue_t;
@@ -2395,6 +2378,9 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list, 0);
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
+
+    arraylist_new(&stackmaps_todo, 0);
+    htable_new(&stackmap_entries, 0);
 
     collect_interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
@@ -2643,6 +2629,171 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
         jl_throw(jl_memory_exception);
 
     return b;
+}
+
+
+DLLEXPORT void jl_gc_add_stackmap(void *addr)
+{
+    arraylist_push(&stackmaps_todo, addr);
+}
+
+typedef struct {
+    uint8_t version;
+    uint8_t _0;
+    uint16_t _1;
+    uint32_t n_func;
+    uint32_t n_consts;
+    uint32_t n_rec;
+} __attribute__((packed)) StkHeader;
+typedef struct {
+    uint64_t fptr;
+    uint64_t stack_sz;
+    uint64_t n_rec;
+} __attribute__((packed)) StkSize;
+typedef struct {
+    uint64_t id;
+    uint32_t ip_offset;
+    uint16_t _0;
+    uint16_t n_loc;
+} __attribute__((packed)) StkRecord;
+typedef struct {
+    uint8_t type;
+    uint8_t sz;
+    uint16_t dwarf_reg;
+    int32_t data;
+} __attribute__((packed)) StkLoc;
+typedef struct {
+    uint16_t dwarf_reg;
+    uint8_t _0;
+    uint8_t sz;
+} __attribute__((packed)) StkLiveOut;
+#include <stdio.h>
+
+static void parse_stackmap(char *data0)
+{
+    char *data = (char*)data0;
+    StkHeader *hdr = (StkHeader*)data;
+    data = (char*)(hdr+1);
+    //fprintf(stderr, "Stkmap %d %d %d %d\n", hdr->version, hdr->n_func, hdr->n_consts, hdr->n_rec);
+    StkSize *sz_rec = (StkSize*)data;
+    StkSize *current_sz_rec = sz_rec; // for when we read records 
+    assert(hdr->version == 2); // add function n_rec
+    for (int i = 0; i < hdr->n_func; i++) {
+        //fprintf(stderr, "Stk size : %d | %p [%d records]\n", sz_rec->stack_sz, sz_rec->fptr, sz_rec->n_rec);
+        assert(sz_rec->n_rec > 0);
+        sz_rec++;
+    }
+    uint64_t *consts = (uint64_t*)sz_rec;
+    for (int i = 0; i < hdr->n_consts; i++) {
+        //fprintf(stderr, "Const %p\n", *consts);
+        consts++;
+    }
+    StkRecord *rec = (StkRecord*)consts;
+    int n_rec_in_current = current_sz_rec->n_rec;
+    for (int i = 0; i < hdr->n_rec; i++) {
+        if (n_rec_in_current == 0) {
+            current_sz_rec++;
+            n_rec_in_current = current_sz_rec->n_rec;
+        }
+        n_rec_in_current--;
+        //fprintf(stderr, "Rec %d +0x%x %p\n", rec->id, rec->ip_offset, current_sz_rec->fptr + rec->ip_offset);
+        ptrhash_put(&stackmap_entries, (void*)(current_sz_rec->fptr + rec->ip_offset), (void*)rec);
+        int n_loc = rec->n_loc;
+        rec++;
+        StkLoc *loc = (StkLoc*)rec;
+        for (int j = 0; j < n_loc; j++) {
+            //fprintf(stderr, "\tloc %d R%d %p (%d)\n",  loc->type, loc->dwarf_reg, loc->data, loc->sz);
+            loc++;
+        }
+        int n_liveout = *((uint16_t*)loc+1);
+        StkLiveOut *liveout = (StkLiveOut*)((uint32_t*)loc+1);
+        for (int j = 0; j < n_liveout; j++) {
+            //fprintf(stderr, "\tliveout R%d %d\n", liveout->dwarf_reg, liveout->sz);
+            liveout++;
+        }
+        data = (char*)liveout;
+        if ((data - data0) % 8 != 0)
+            data += 4;
+        rec = (StkRecord*)data;
+    }
+}
+
+#include <libunwind.h>
+
+static void parse_all_stackmaps(void)
+{
+    while (stackmaps_todo.len) {
+        void *stackmap = arraylist_pop(&stackmaps_todo);
+        parse_stackmap((char*)stackmap);
+    }
+
+    
+    unw_context_t ctx;
+    unw_cursor_t cur;
+    uint64_t rip, rsp, rbp;
+    if (unw_getcontext(&ctx))
+        abort();
+    if (unw_init_local(&cur, &ctx))
+        abort();
+    int step;
+    while ((step = unw_step(&cur)) > 0) {
+        if (unw_get_reg(&cur, UNW_REG_IP, &rip))
+            abort();
+        if (unw_get_reg(&cur, UNW_REG_SP, &rsp))
+            abort();
+        if (unw_get_reg(&cur, UNW_X86_64_RBP, &rbp))
+            abort();
+        StkRecord *rec = (StkRecord*)ptrhash_get(&stackmap_entries, (void*)rip);
+        if (rec != HT_NOTFOUND) {
+            //fprintf(stderr, "stackmap ip %p sp %p bp %p : %p\n", rip, rsp, rbp, rec);
+            for (int i = 0; i < rec->n_loc; i++) {
+                StkLoc *loc = (StkLoc*)(rec+1) + i;
+                if (loc->type == 4) {
+                    // constant, do nothing
+                } else if (loc->type == 2) {
+                    uint64_t base;
+                    // I think libunwind already uses dwarf register numbers but well
+                    if (loc->dwarf_reg == 7) {
+                        base = rsp;
+                        fprintf(stderr, "sp relative :(\n");
+                        abort();
+                    }
+                    else if (loc->dwarf_reg == 6) {
+                        base = rbp;
+                    }
+                    else {
+                        fprintf(stderr, "unsupported dwarf reg %d\n", loc->dwarf_reg);
+                        abort();
+                    }
+                    assert(loc->sz == sizeof(void*));
+                    void* gc_ptr = *(void**)(base + loc->data);
+                    //fprintf(stderr, "gc ptr %p:\n", gc_ptr);
+                    if (!jl_is_datatype(jl_typeof(gc_ptr))) {
+                        fprintf(stderr, "not a live gc pointer\n");
+                        abort();
+                    }/* else
+                        jl_(jl_typeof((jl_value_t*)gc_ptr));*/
+                    gc_push_root(gc_ptr, 0);
+                } else {
+                    fprintf(stderr, "unknown stackmap loc type %d\n", loc->type);
+                    abort();
+                }
+            }
+        } else {
+            //fprintf(stderr, "no stackmap ip %p sp %p bp %p\n", (void*)rip, (void*)rsp, (void*)rbp);
+        }
+    }
+    if (step < 0) {
+        fprintf(stderr, "unwind error %d\n", step);
+        abort();
+    }
+    else {
+        fprintf(stderr, "unwind done hi %p sp %p\n", jl_stack_hi, rsp);
+        if (jl_stack_hi > rsp) {
+            fprintf(stderr, "looks like it failed\n");
+            abort();
+        }
+    }
 }
 
 #ifdef __cplusplus

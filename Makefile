@@ -168,6 +168,7 @@ $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
 endif
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
+	objcopy --globalize-symbol=__LLVM_StackMaps $<
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
