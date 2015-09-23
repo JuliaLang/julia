@@ -176,7 +176,7 @@ function which(cmd::AbstractString)
         if isfile(cmd)
             return Nullable(utf8(cmd))
         end
-    else
+    elseif haskey(ENV, "PATH")
         # find `cmd` from the PATH
         for path in split(ENV["PATH"], ':')
             cmd_path = joinpath(path, cmd)
