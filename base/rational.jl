@@ -57,6 +57,15 @@ function show(io::IO, x::Rational)
     show(io, den(x))
 end
 
+function read{T<:Integer}(s::IO, ::Type{Rational{T}})
+    r = read(s,T)
+    i = read(s,T)
+    r//i
+end
+function write(s::IO, z::Rational)
+    write(s,num(z),den(z))
+end
+
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
 convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x), convert(T,1))
 

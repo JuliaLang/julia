@@ -36,6 +36,8 @@ truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
+@test write(io, Complex{Float64}(0)) == 16
+@test write(io, Rational{Int64}(1//2)) == 16
 close(io)
 @test_throws ArgumentError write(io,UInt8[0])
 @test_throws ArgumentError seek(io,0)

@@ -75,8 +75,7 @@ function read{T<:Real}(s::IO, ::Type{Complex{T}})
     Complex{T}(r,i)
 end
 function write(s::IO, z::Complex)
-    write(s,real(z))
-    write(s,imag(z))
+    write(s,real(z),imag(z))
 end
 
 ## equality and hashing of complex numbers ##
