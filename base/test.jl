@@ -555,7 +555,13 @@ macro testloop(args...)
     blk = quote
         $ts = DefaultTestSet($(esc(desc)))
         add_testset($ts)
-        $(esc(tests))
+        try
+            $(esc(tests))
+        catch err
+            # something in the test block threw an error. Count that as an
+            # error in this test set
+            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
+        end
         pop_testset()
         finish($ts)
     end
