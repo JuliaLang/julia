@@ -1361,7 +1361,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             LLVM37_param(cast<PointerType>(strct.V->getType()->getScalarType())->getElementType())
             strct.V, 0, idx);
         assert(!jt->mutabl);
-        return typed_load(addr, NULL, jfty, ctx, NULL);
+        return typed_load(addr, NULL, jfty, ctx, tbaa_immut);
     }
     else {
         assert(strct.V->getType()->isVectorTy());
