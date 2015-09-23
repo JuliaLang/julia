@@ -311,6 +311,11 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","
 
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+"""
+    isidentifier(s) -> Bool
+
+Returns whether the string s is valid identifier.
+"""
 function isidentifier(s::AbstractString)
     i = start(s)
     done(s, i) && return false
@@ -322,6 +327,19 @@ function isidentifier(s::AbstractString)
     end
     return true
 end
+
+"""
+    isidentifier(s) -> Bool
+
+Returns whether symbol contianis charaters that is parsed as a valid identifier in Julia code.
+
+Internally Julia allows any sequence of characters in a `Symbol` (exept`\0`s),
+and macros automatically use variable names containing `#` in order to
+avoid naming collision with the surrounding code. In order for the parser to
+recognize a variable, it uses a limited set of characters (greatly extended by Unicode).
+`isidentifier()` makes it possible to query the parser directly whether a symbol contains
+valid characters.
+"""
 isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0

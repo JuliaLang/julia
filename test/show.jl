@@ -302,3 +302,13 @@ function f13127()
     takebuf_string(buf)
 end
 @test f13127() == "f"
+
+# isidentifier
+@test isidentifier("x")==true
+@test isidentifier("x1")==true
+@test isidentifier("x.1")==false
+@test isidentifier("1x")==false
+@test isidentifier(symbol("x"))==true
+@test isidentifier(symbol("x1"))==true
+@test isidentifier(symbol("x.1"))==false
+@test isidentifier(symbol("1x"))==false
