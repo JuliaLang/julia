@@ -1131,6 +1131,26 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 
 is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
 is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+
+"""
+     isidentifier(s) -> Bool
+
+Return whether the symbol or string `s` contains characters that are parsed as
+a valid identifier in Julia code.
+
+Internally Julia allows any sequence of characters in a `Symbol` (except `\0`s),
+and macros automatically use variable names containing `#` in order to avoid
+naming collision with the surrounding code. In order for the parser to
+recognize a variable, it uses a limited set of characters (greatly extended by
+Unicode). `isidentifier()` makes it possible to query the parser directly
+whether a symbol contains valid characters.
+
+# Examples
+```jldoctest
+julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
+(true, false)
+```
+"""
 function isidentifier(s::AbstractString)
     isempty(s) && return false
     (s == "true" || s == "false") && return false
@@ -1151,7 +1171,7 @@ Return `true` if the symbol can be used as an operator, `false` otherwise.
 
 # Examples
 ```jldoctest
-julia> Base.isoperator(:+), Base.isoperator(:f)
+julia> Meta.isoperator(:+), Meta.isoperator(:f)
 (true, false)
 ```
 """
@@ -1164,7 +1184,7 @@ Return `true` if the symbol can be used as a unary (prefix) operator, `false` ot
 
 # Examples
 ```jldoctest
-julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isunaryoperator(:f)
+julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
 (true, true, false)
 ```
 """
@@ -1178,7 +1198,7 @@ Return `true` if the symbol can be used as a binary (infix) operator, `false` ot
 
 # Examples
 ```jldoctest
-julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoperator(:f)
+julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
 (true, false, false)
 ```
 """
@@ -1194,7 +1214,7 @@ Return `true` if the symbol can be used as a postfix operator, `false` otherwise
 
 # Examples
 ```jldoctest
-julia> Base.ispostfixoperator(Symbol("'")), Base.ispostfixoperator(Symbol("'ᵀ")), Base.ispostfixoperator(:-)
+julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
 (true, true, false)
 ```
 """
