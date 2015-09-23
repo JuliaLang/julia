@@ -2,7 +2,7 @@
 
 # check that libgit2 has been installed correctly
 
-const LIBGIT2_VER = v"0.23.0"
+const LIBGIT2_VER = v"0.23.1"
 
 function check_version()
     v = LibGit2.version()
