@@ -16,18 +16,24 @@ functionality.
 Basic Stream I/O
 ----------------
 
-All Julia streams expose at least a :func:`read` and a :func:`write` method, taking the stream as their first argument, e.g.::
+All Julia streams expose at least a :func:`read` and a :func:`write` method,
+taking the stream as their first argument, e.g.::
 
-    julia> write(STDOUT,"Hello World")
+    julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
     Hello World
 
     julia> read(STDIN,Char)
 
     '\n'
 
-Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example,
+Note that :func:`write` returns 11, the number of bytes (in ``"Hello World"``) written to :const:`STDOUT`,
+but this return value is suppressed with the ``;``.
+
+Here Enter was pressed again so that Julia would read the newline. Now, as you can see from this example,
 :func:`write` takes the data to write as its second argument, while :func:`read` takes the type of the
-data to be read as the second argument. For example, to read a simple byte array, we could do::
+data to be read as the second argument.
+
+For example, to read a simple byte array, we could do::
 
     julia> x = zeros(UInt8,4)
     4-element Array{UInt8,1}:
@@ -80,11 +86,15 @@ or :func:`read` if you wanted to read by character instead::
 Text I/O
 --------
 
-Note that the write method mentioned above operates on binary streams. In particular, values do not get converted to any canonical text
+Note that the :func:`write` method mentioned above operates on binary streams.
+In particular, values do not get converted to any canonical text
 representation but are written out as is::
 
-    julia> write(STDOUT,0x61)
+    julia> write(STDOUT,0x61);  # suppress return value 1 with ;
     a
+
+Note that ``a`` is written to :const:`STDOUT` by the :func:`write` function and
+that the returned value is ``1`` (since ``0x61`` is one byte).
 
 For text I/O, use the :func:`print` or :func:`show` methods, depending on your needs (see the standard library reference for a detailed discussion of
 the difference between the two)::
