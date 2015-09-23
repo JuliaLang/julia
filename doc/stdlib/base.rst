@@ -630,8 +630,8 @@ Generic Functions
 
    .. doctest::
 
-   	julia> method_exists(length, Tuple{Array})
-   	true
+      julia> method_exists(length, Tuple{Array})
+      true
 
 .. function:: applicable(f, args...) -> Bool
 
