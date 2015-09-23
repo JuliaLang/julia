@@ -284,6 +284,8 @@ $5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
 $5/$1/$4: $5/$1/.git/HEAD
+$$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
+	touch -c $$@
 
 else # NO_GIT
 
@@ -1764,8 +1766,8 @@ distclean-osxunwind:
 		$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)
 
 
-get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
-configure-osxunwind: get-osxunwind
+get-osxunwind: $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
+configure-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile
 compile-osxunwind: $(OSXUNWIND_OBJ_SOURCE)
 check-osxunwind: compile-osxunwind
 install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
