@@ -137,12 +137,12 @@ keywords[:local] = doc"""
   `local` introduces a new local variable. For example:
 
       function foo(n)
-        x = 0
-        for i = 1:n
-          local x
-          x = i
-        end
-        x
+          x = 0
+          for i = 1:n
+              local x
+              x = i
+          end
+          x
       end
 
       julia> foo(10)
