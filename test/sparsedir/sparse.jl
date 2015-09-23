@@ -48,7 +48,7 @@ de33 = eye(3)
 # also side-checks sparse ref
 for i = 1 : 10
     a = sprand(5, 4, 0.5)
-    @test all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5,2:4]]] == a)
+    @test all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5:5,2:4]]] == a)
 end
 
 # sparse ref
@@ -460,13 +460,13 @@ let a = spzeros(Int, 10, 10)
     @test countnz(a) == 0
     a[1,:] = 1
     @test countnz(a) == 10
-    @test a[1,:] == sparse(ones(Int,1,10))
+    @test a[1,:] == sparse(ones(Int,10))
     a[:,2] = 2
     @test countnz(a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
 
     a[1,:] = 1:10
-    @test a[1,:] == sparse([1:10;]')
+    @test a[1,:] == sparse([1:10;])
     a[:,2] = 1:10
     @test a[:,2] == sparse([1:10;])
 end
