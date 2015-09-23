@@ -58,7 +58,7 @@ function Base.map(f::Function, walker::GitRevWalker;
                   by::Cint = GitConst.SORT_NONE,
                   rev::Bool=false,
                   count::Int=0)
-    res = nothing
+    res = []
     sort!(walker, by=by, rev=rev)
     if !iszero(oid)
         push!(walker, oid)
@@ -73,9 +73,6 @@ function Base.map(f::Function, walker::GitRevWalker;
     repo = repository(walker)
     while !done(walker, s)
         val = f(s[1], repo)
-        if res == nothing
-            res = Array(typeof(val),0)
-        end
         push!(res, val)
         val, s = next(walker, s)
         c +=1
@@ -97,12 +94,11 @@ function Base.count(f::Function, walker::GitRevWalker;
     end
     s = start(walker)
 
-    val = true
     repo = repository(walker)
     while !done(walker, s) && val
         val = f(s[1], repo)
         _, s = next(walker, s)
-        c += 1
+        c += (val == true)
     end
     return c
 end

@@ -26,14 +26,6 @@ module GitConst
     const REF_SYMBOLIC = Cint(2)
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
-    # file
-    const FILEMODE_NEW             = Cint(00000)
-    const FILEMODE_TREE            = Cint(16384)
-    const FILEMODE_BLOB            = Cint(33188)
-    const FILEMODE_BLOB_EXECUTABLE = Cint(33261)
-    const FILEMODE_LINK            = Cint(40960)
-    const FILEMODE_COMMIT          = Cint(57344)
-
     # checkout
     const CHECKOUT_NONE                    = Cuint(0)
     const CHECKOUT_SAFE                    = Cuint(1 << 0)
@@ -262,4 +254,12 @@ module GitConst
                                REPOSITORY_OPEN_BARE      = 1<<2) # open repository as a bare repo
 
     @enum(GIT_BRANCH, BRANCH_LOCAL = 1, BRANCH_REMOTE = 2)
+
+    @enum(GIT_FILEMODE, FILEMODE_UNREADABLE          = 0o000000,
+                        FILEMODE_TREE                = 0o040000,
+                        FILEMODE_BLOB                = 0o100644,
+                        FILEMODE_BLOB_EXECUTABLE     = 0o100755,
+                        FILEMODE_LINK                = 0o120000,
+                        FILEMODE_COMMIT              = 0o160000)
+
 end

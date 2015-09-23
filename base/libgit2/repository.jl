@@ -139,6 +139,8 @@ function peel(obj::GitObject, obj_type::Cint)
     return git_otype(peeled_ptr_ptr[])
 end
 
+peel{T <: GitObject}(::Type{T}, obj::GitObject) = peel(obj, getobjecttype(T))
+
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
@@ -203,4 +205,3 @@ function remotes(repo::GitRepo)
                   (Ptr{Void}, Ptr{Void}), out, repo.ptr)
     return convert(Vector{AbstractString}, out[])
 end
-

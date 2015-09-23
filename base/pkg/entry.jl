@@ -55,8 +55,7 @@ function add(pkg::AbstractString, vers::VersionSet)
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
-            current_barnch = LibGit2.branch(repo)
-            if current_barnch == branch
+            if LibGit2.branch(repo) == branch
                 if LibGit2.isdiff(repo, "origin/$branch")
                     outdated = :yes
                 else
@@ -187,9 +186,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
 end
 
 function status(io::IO, pkg::AbstractString, msg::AbstractString)
-    @printf io " - %-29s " pkg
-    @printf io "%-19s" msg
-    println(io)
+    @printf io " - %-29s %-19s\n" pkg msg
 end
 
 function clone(url::AbstractString, pkg::AbstractString)
