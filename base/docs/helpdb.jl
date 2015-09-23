@@ -8067,8 +8067,8 @@ Determine whether the given generic function has a method matching the given :ob
 
 .. doctest::
 
-	julia> method_exists(length, Tuple{Array})
-	true
+   julia> method_exists(length, Tuple{Array})
+   true
 ```
 """
 method_exists
