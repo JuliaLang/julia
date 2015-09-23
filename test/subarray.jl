@@ -388,7 +388,7 @@ sA[:] = -3
 sA = sub(A, 1:3, 3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
-@test sA == A[1:3,3,2:5]
+@test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3;]
