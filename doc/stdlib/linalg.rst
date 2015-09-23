@@ -901,13 +901,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``\ , which should have a size corresponding to ``(size(src,2),size(src,1))``\ . No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 
-.. function:: eigs(A, [B,]; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    .. Docstring generated from Julia source
 
    Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
-   real symmetric or general nonsymmetric matrices respectively. If ``B`` is
-   provided, the generalized eigenproblem is solved.
+   real symmetric or general nonsymmetric matrices respectively.
 
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
@@ -943,6 +942,49 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       --------------- ---------------------------------- ----------------------------------
       ``nothing``     ordinary (forward)                 :math:`A`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
+      =============== ================================== ==================================
+
+.. function:: eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+
+   .. Docstring generated from Julia source
+
+   Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using Lanczos or Arnoldi iterations for
+   real symmetric or general nonsymmetric matrices respectively.
+
+   The following keyword arguments are supported:
+    * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
+
+       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+    * ``which``: type of eigenvalues to compute. See the note below.
+
+      ========= ======================================================================================================================
+      ``which`` type of eigenvalues
+      --------- ----------------------------------------------------------------------------------------------------------------------
+      ``:LM``   eigenvalues of largest magnitude (default)
+      ``:SM``   eigenvalues of smallest magnitude
+      ``:LR``   eigenvalues of largest real part
+      ``:SR``   eigenvalues of smallest real part
+      ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
+      ========= ======================================================================================================================
+
+    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+    * ``maxiter``: Maximum number of iterations (default = 300)
+    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
+    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
+    * ``v0``: starting vector from which to start the iterations
+
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
+
+      =============== ================================== ==================================
+      ``sigma``       iteration mode                     ``which`` refers to the problem
+      --------------- ---------------------------------- ----------------------------------
+      ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
+      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
       =============== ================================== ==================================
 
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
