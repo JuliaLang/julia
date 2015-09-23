@@ -63,7 +63,7 @@ function read{T<:AbstractString}(readable::Vector{T})
     return lines
 end
 
-function read(readable::Union(IO,Base.AbstractCmd))
+function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)

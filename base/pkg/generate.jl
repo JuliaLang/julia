@@ -135,8 +135,8 @@ end
 
 function license(pkg::AbstractString,
                  license::AbstractString,
-                 years::Union(Int,AbstractString),
-                 authors::Union(AbstractString,Array);
+                 years::Union{Int,AbstractString},
+                 authors::Union{AbstractString,Array};
                  force::Bool=false)
     file = genfile(pkg,"LICENSE.md",force) do io
         if !haskey(LICENSES,license)
