@@ -696,6 +696,30 @@ let
     @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
 end
 
+# mapranked
+let
+
+    local a, b
+
+    b = mapranked((x,y) -> sum(x)+sum(y), ones(2,3,4), 1, ones(2,3,4),1)
+    @test size(b) === (3,4)
+    @test all(b.== 4)
+    b = mapranked((x,y) -> sum(x)+sum(y), ones(2,3,4), 2, ones(2,3,4),2)
+    @test size(b) === (4,)
+    @test all(b.==12)
+    a = rand(5,5)
+    @test mapranked(x-> maximum(-x), a, 0) == -a
+    @test mapranked(x-> maximum(-x), a, 1) == vec(maximum(-a,1))
+
+    b = rand(5)
+    @test mapranked(*,reverse(b)',0,b,0) == b*reverse(b)'
+    @test mapranked(*,reverse(b),0,b',0) == reverse(b)*b'
+
+    # other types than Number
+    @test mapranked((x,y)-> prod(x)*prod(y), ["1" "2"; "3" "4"], 1, ["a" "b"; "c" "d"], 1) == ["13ac", "24bd"]
+    @test mapranked(prod,["1"],1) == ["1"]
+
+end
 
 # single multidimensional index
 let

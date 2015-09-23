@@ -548,6 +548,7 @@ export
     linspace,
     logspace,
     mapslices,
+    mapranked,
     max,
     maxabs,
     maxabs!,

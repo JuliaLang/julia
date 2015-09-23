@@ -1227,6 +1227,73 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
+function mapranked(f::Function, A::AbstractArray, rank::Int)
+    const dots = Ellipsis()
+    sizeA = size(A)[1+rank:end]
+    iter = CartesianRange(sizeA)
+    idx = first(iter)
+    r1 = f(A[dots,idx])
+    if !isa(r1, AbstractArray) || ndims(r1) == 0
+        R = similar([r1], sizeA...)
+    else
+        R = similar(r1, size(r1)..., sizeA...)
+    end
+
+    R[dots, idx] = r1
+    firsti = true
+    for idx in iter
+        if firsti
+            firsti = false
+        else
+            R[dots, idx] = f(A[dots,idx])
+        end
+    end
+    return R
+end
+
+function mapranked(f::Function, A::AbstractArray, rankA::Int, B::AbstractArray, rankB::Int)
+    const dots = Ellipsis()
+    const downcast = Base.IteratorsMD.downcast
+    sizeA = size(A)[1+rankA:end]
+    sizeB = size(B)[1+rankB:end]
+    if sizeA == sizeB
+        sizeR = sizeA
+    else # broadcast
+        na = length(sizeA)
+        nb = length(sizeB)
+        n = min(na,nb)
+        a = Int[sizeA[1:n]...]
+        b = Int[sizeB[1:n]...]
+        if !all((a .== b) | (a .== 1) | (b .== 1))
+            throw(DimensionMismatch("remaining dimensions do not agree and cannot be broadcasted"))
+        end
+        if na >= nb
+            sizeR = (max(a,b)..., sizeA[n+1:end]...)
+        else
+            sizeR = (max(a,b)..., sizeB[n+1:end]...)
+        end
+    end
+    iter = CartesianRange(sizeR)
+    idx = first(iter)
+    r1 = f(A[dots,downcast(idx, sizeA)], B[dots, downcast(idx, sizeB)])
+
+    if !isa(r1, AbstractArray) || ndims(r1) == 0
+        R = similar([r1], sizeR...)
+    else
+        R = similar(r1, size(r1)..., sizeR...)
+    end
+
+    R[dots, idx] = r1
+    firsti = true
+    for idx in iter
+        if firsti
+            firsti = false
+        else
+            R[dots, idx] = f(A[dots,downcast(idx, sizeA)], B[dots, downcast(idx, sizeB)])
+        end
+    end
+    return R
+end
 
 # using promote_type
 function promote_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
