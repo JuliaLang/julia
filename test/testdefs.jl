@@ -10,13 +10,18 @@ function runtests(name)
 end
 
 function propagate_errors(a,b)
-    if isa(a,Exception)
+    err_stop = haskey(ENV, "JL_TESTFAILURE_STOP")
+    err = false
+    if isa(a, Exception) || isa(b, Exception)
+        err = true
+    end
+    if isa(a,Exception) && err_stop
         rethrow(a)
     end
-    if isa(b,Exception)
+    if isa(b,Exception) && err_stop
         rethrow(b)
     end
-    nothing
+    err
 end
 
 # looking in . messes things up badly
