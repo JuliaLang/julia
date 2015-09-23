@@ -489,7 +489,15 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         jl_value_t *v = b->value;
         if (v && (jl_is_type(v) || (jl_is_function(v) && jl_is_gf(v)))) {
             jl_printf(JL_STDERR, ", use ");
-            jl_static_show(JL_STDERR, v);
+            if (b->owner && strcmp(b->owner->name->name, "Base") == 0 &&
+                strcmp(b->name->name, "Uint") == 0) {
+                // TODO: Suggesting type b->value is wrong for typealiases.
+                // Uncommon in Base, hardcoded here for now, see #13221
+                jl_printf(JL_STDERR, "UInt");
+            }
+            else {
+                jl_static_show(JL_STDERR, v);
+            }
             jl_printf(JL_STDERR, " instead");
         }
         jl_printf(JL_STDERR, ".\n");
