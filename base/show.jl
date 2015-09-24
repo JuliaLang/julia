@@ -1143,7 +1143,7 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
     nd = ndims(a)-2
     for I in CartesianRange(tail)
         idxs = I.I
-        if limit
+        if !limit
             for i = 1:nd
                 ii = idxs[i]
                 if size(a,i+2) > 10
