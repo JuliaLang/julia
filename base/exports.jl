@@ -63,6 +63,7 @@ export
     FileOffset,
     Filter,
     FloatRange,
+    FormatString,
     Hermitian,
     UniformScaling,
     InsertionSort,
@@ -1369,6 +1370,7 @@ export
     @show,
     @printf,
     @sprintf,
+    @f_str,
 
     # profiling
     @time,

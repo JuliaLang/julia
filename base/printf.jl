@@ -2,7 +2,8 @@
 
 module Printf
 using Base.Grisu
-export @printf, @sprintf
+import Base: print, string
+export @printf, @sprintf, FormatString, @f_str
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union{Float64,Float32,Float16}
@@ -1171,6 +1172,33 @@ macro sprintf(args...)
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
     push!(letexpr.args[1].args, :(takebuf_string(out)))
     letexpr
+end
+
+
+## Formatted output as a function-call
+
+immutable FormatString{S} end
+
+FormatString(str::AbstractString) = FormatString{symbol(str)}
+
+macro f_str(arg)
+    :(FormatString{symbol($arg)})
+end
+
+@generated function print{format}(io::IO, ::Type{FormatString{format}}, args...)
+    fmt = string(format)
+    allargs = [:(args[$d]) for d = 1:length(args)]
+    quote
+        @printf(io, $fmt, $(allargs...))
+    end
+end
+
+print{F<:FormatString}(::Type{F}, args...) = print(STDOUT, F, args...)
+
+function string{F<:FormatString}(::Type{F}, args...)
+    io = IOBuffer()
+    print(io, F, args...)
+    takebuf_string(io)
 end
 
 end # module
