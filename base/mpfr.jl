@@ -51,10 +51,10 @@ type BigFloat <: AbstractFloat
     sign::Cint
     exp::Clong
     d::Ptr{Culong}
-    function BigFloat()
-        N = get_bigfloat_precision()
+    function BigFloat(; prec=get_bigfloat_precision())
+
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, Base.GMP._mpfr_clear_func)
         return z
     end
@@ -74,7 +74,7 @@ Converts the `BigFloat` `x` to a `BigFloat` with the current global precision.
 Note that this makes a *copy* of `x` even if the precision of `x` is already
 the current global precision.
 """
-function BigFloat(x::BigFloat)
+function call(::Type{BigFloat}, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
@@ -833,28 +833,21 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
 function nextfloat(x::BigFloat)
-    with_bigfloat_precision(precision(x)) do
-        z = BigFloat()
-        ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-        ccall((:mpfr_nextabove, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
-        return z
-    end
-
+    z = BigFloat(prec=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_nextabove, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
+    return z
 end
 
 function prevfloat(x::BigFloat)
-    with_bigfloat_precision(precision(x)) do
-        z = BigFloat()
-        ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
-        ccall((:mpfr_nextbelow, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
-        return z
-    end
+    z = BigFloat(prec=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_nextbelow, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
+    return z
 end
 
 function eps(x::BigFloat)
-    distance = with_bigfloat_precision(precision(x)) do
-        nextfloat(x) - x
-    end
+    BigFloat(nextfloat(x) - x, prec=precision(x))
     distance == big(0.0) && throw(ArgumentError("eps not defined for tiny numbers"))
     return distance
 end
@@ -910,6 +903,5 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
 
-convert(::Type{BigFloat}, x::BigFloat) = BigFloat(x)  # gives error if moved earlier
 
-end #module
+end # module
