@@ -156,6 +156,10 @@ typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexi
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 
+// In imaging mode, cache a fast mapping of Function * to code address
+// because this is queried in the hot path
+static std::map<Function *, uint64_t> emitted_function_symtab;
+
 #ifdef USE_MCJIT
 class FunctionMover : public ValueMaterializer
 {
@@ -233,16 +237,18 @@ public:
                 if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
                     // Check whether we already emitted it once
+                    if (emitted_function_symtab.find(shadow) != emitted_function_symtab.end())
+                        return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
-                    if (addr == 0) {
-                        Function *oldF = destModule->getFunction(F->getName());
-                        if (oldF)
-                            return oldF;
-                        return CloneFunctionProto(F);
-                    }
-                    else {
+                    if (addr) {
+                        emitted_function_symtab[shadow] = addr;
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
+
+                    Function *oldF = destModule->getFunction(F->getName());
+                    if (oldF)
+                        return oldF;
+                    return CloneFunctionProto(F);
                 }
                 else if (!F->isDeclaration()) {
                     return CloneFunctionProto(F);
