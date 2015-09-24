@@ -218,6 +218,9 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def visit_document(self, node):
         self.new_state(0)
+        self.new_state(0)
+        self.add_text("---\nlayout: default\n---\n")
+        self.end_state(wrap=False)
 
     def depart_document(self, node):
         self.end_state()
