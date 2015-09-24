@@ -190,3 +190,6 @@ let
 end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
+
+# issue #13264
+@test isa((@which vcat(1...)), Method)
