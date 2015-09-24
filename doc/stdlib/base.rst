@@ -893,7 +893,7 @@ System
 
    Get the local machine's host name.
 
-.. function:: getipaddr()
+.. function:: getipaddr() -> IPAddr
 
    .. Docstring generated from Julia source
 
