@@ -871,37 +871,35 @@ is fully asynchronous.
 The following::
 
     @sync for i in 1:3
-        @async print(i, " Foo ", " Bar ")
+        @async write(STDOUT, string(i), " Foo ", " Bar ")
     end
 
 results in::
 
     123 Foo  Foo  Foo  Bar  Bar  Bar
 
-This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
-internally, the writing of each argument yields to other tasks while waiting for
-that part of the I/O to complete.
+This is happening because, while the ``write`` call is synchronous, the writing of
+each argument yields to other tasks while waiting for that part of the I/O to complete.
 
-``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
-during a call. Consequently changing ``print`` to ``println`` in the above example
-results in::
+``print`` and ``println`` "lock" the stream during a call. Consequently changing ``write`` to
+``println`` in the above example results in::
 
     1 Foo  Bar
     2 Foo  Bar
     3 Foo  Bar
 
-For other functions and streams, etc, you could lock your writes with a ``ReentrantLock``
-like this::
+You can lock your writes with a ``ReentrantLock`` like this::
 
     l = ReentrantLock()
     @sync for i in 1:3
         @async begin
             lock(l)
             try
-                print(i, " Foo ", " Bar ")
+                write(STDOUT, string(i), " Foo ", " Bar ")
             finally
                 unlock(l)
             end
+        end
     end
 
 
