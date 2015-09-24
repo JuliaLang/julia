@@ -115,6 +115,13 @@ function Base.show(io::IO, t::Error)
         errmsg = sprint(showerror, t.value, t.backtrace)
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
+    elseif t.test_type == :nontest_error
+        # we had an error outside of a @test
+        println(io, "  Got an exception of type $(typeof(t.value)) outside of a @test")
+        # Capture error message and indent to match
+        errmsg = sprint(showerror, t.value, t.backtrace)
+        print(io, join(map(line->string("  ",line),
+                            split(errmsg, "\n")), "\n"))
     end
 end
 
@@ -487,7 +494,13 @@ macro testset(args...)
     quote
         $ts = DefaultTestSet($desc)
         add_testset($ts)
-        $(esc(tests))
+        try
+            $(esc(tests))
+        catch err
+            # something in the test block threw an error. Count that as an
+            # error in this test set
+            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
+        end
         pop_testset()
         finish($ts)
     end
@@ -542,7 +555,13 @@ macro testloop(args...)
     blk = quote
         $ts = DefaultTestSet($(esc(desc)))
         add_testset($ts)
-        $(esc(tests))
+        try
+            $(esc(tests))
+        catch err
+            # something in the test block threw an error. Count that as an
+            # error in this test set
+            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
+        end
         pop_testset()
         finish($ts)
     end
