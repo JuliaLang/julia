@@ -144,7 +144,7 @@ class MarkdownWriter(writers.Writer):
     def __init__(self, builder):
         writers.Writer.__init__(self)
         self.builder = builder
-        self.translator_class = self.builder.translator_class or TextTranslator
+        self.translator_class = self.builder.translator_class or MarkdownTranslator
 
     def translate(self):
         visitor = self.translator_class(self.document, self.builder)
@@ -152,8 +152,7 @@ class MarkdownWriter(writers.Writer):
         self.output = visitor.body
 
 
-class TextTranslator(nodes.NodeVisitor):
-    sectionchars = '*=-~"+`'
+class MarkdownTranslator(nodes.NodeVisitor):
 
     def __init__(self, document, builder):
         nodes.NodeVisitor.__init__(self, document)
@@ -166,7 +165,6 @@ class TextTranslator(nodes.NodeVisitor):
             self.nl = os.linesep
         else:
             self.nl = '\n'
-        self.sectionchars = builder.config.text_sectionchars
         self.states = [[]]
         self.stateindent = [0]
         self.list_counter = []
@@ -232,7 +230,6 @@ class TextTranslator(nodes.NodeVisitor):
         raise nodes.SkipNode
 
     def visit_section(self, node):
-        self._title_char = self.sectionchars[self.sectionlevel]
         self.sectionlevel += 1
 
     def depart_section(self, node):
@@ -268,20 +265,11 @@ class TextTranslator(nodes.NodeVisitor):
         pass
 
     def visit_title(self, node):
-        if isinstance(node.parent, nodes.Admonition):
-            self.add_text(node.astext()+': ')
-            raise nodes.SkipNode
         self.new_state(0)
+        self.add_text('#' * self.sectionlevel + ' ')
 
     def depart_title(self, node):
-        if isinstance(node.parent, nodes.section):
-            char = self._title_char
-        else:
-            char = '^'
-        text = ''.join(x[1] for x in self.states.pop() if x[0] == -1)
-        self.stateindent.pop()
-        self.states[-1].append(
-            (0, ['', text, '%s' % (char * column_width(text)), '']))
+        self.end_state()
 
     def visit_subtitle(self, node):
         pass
@@ -870,10 +858,10 @@ class TextTranslator(nodes.NodeVisitor):
         self.add_text('*')
 
     def visit_literal(self, node):
-        self.add_text('"')
+        self.add_text('`')
 
     def depart_literal(self, node):
-        self.add_text('"')
+        self.add_text('`')
 
     def visit_subscript(self, node):
         self.add_text('_')
@@ -946,13 +934,12 @@ class TextTranslator(nodes.NodeVisitor):
         raise nodes.SkipNode
 
     def visit_math(self, node):
-        self.builder.warn('using "math" markup without a Sphinx math extension '
-                          'active, please use one of the math extensions '
-                          'described at http://sphinx-doc.org/ext/math.html',
-                          (self.builder.current_docname, node.line))
-        raise nodes.SkipNode
+        self.add_text('$')
+        self.add_text(node['latex'])
+        self.add_text('$')
 
-    visit_math_block = visit_math
+    def depart_math(self, node):
+        pass
 
     def unknown_visit(self, node):
         raise NotImplementedError('Unknown node: ' + node.__class__.__name__)
