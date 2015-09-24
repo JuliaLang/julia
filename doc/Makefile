@@ -1,6 +1,6 @@
 # Makefile for Sphinx documentation
 
-default: html
+default: markdown
 
 # You can set these variables from the command line.
 SPHINXOPTS       :=
@@ -65,6 +65,17 @@ clean:
 	-rm -rf _build/*
 
 cleanall: clean
+
+SPHINX_DIR = ../deps/build/julia-env/lib/python2.7/site-packages/sphinx
+
+markdown: $(SPHINX_BUILD)
+	@cp writers/markdown.py $(SPHINX_DIR)/writers/
+	@cp builders/markdown.py $(SPHINX_DIR)/builders/
+	@grep -q markdown $(SPHINX_DIR)/builders/__init__.py || \
+	(echo "BUILTIN_BUILDERS['markdown'] = ('markdown', 'MarkdownBuilder')" >> $(SPHINX_DIR)/builders/__init__.py)
+	$(SPHINXBUILD) -b markdown $(ALLSPHINXOPTS) $(BUILDDIR)/_build/markdown
+	@echo
+	@echo "Build finished. The Markdown pages are in _build/markdown."
 
 html: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/_build/html
