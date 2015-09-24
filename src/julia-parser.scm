@@ -1223,7 +1223,7 @@
                        '(block)
                        #f
                        finalb)
-                 (let* ((var (parse-eq* s))
+                 (let* ((var (if nl (parse-eq s) (parse-eq* s)))
                         (var? (and (not nl) (or (symbol? var) (and (length= var 2) (eq? (car var) '$)))))
                         (catch-block (if (eq? (require-token s) 'finally)
                                          '(block)
