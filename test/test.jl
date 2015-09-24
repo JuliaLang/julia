@@ -58,6 +58,9 @@ try
             @test "not bool"
             @test error()
         end
+
+        error("exceptions in testsets should be caught")
+        @test 1 == 1 # this test will not be run
     end
 
     @testset "loop with desc" begin
@@ -78,6 +81,11 @@ try
         @testloop for i in 1:5
             @test i <= rand(1:10)
         end
+        # should add 3 errors and 3 passing tests
+        @testloop for i in 1:6
+            i % 2 == 0 || error("error outside of test")
+            @test true # only gets run if the above passed
+        end
     end
 end
     # These lines shouldn't be called
@@ -87,9 +95,9 @@ catch ex
     redirect_stdout(OLD_STDOUT)
 
     @test isa(ex, Test.TestSetException)
-    @test ex.pass  == 21
+    @test ex.pass  == 24
     @test ex.fail  == 5
-    @test ex.error == 2
+    @test ex.error == 6
 end
 
 # Test @test_approx_eq
