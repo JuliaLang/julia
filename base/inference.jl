@@ -783,6 +783,8 @@ function precise_container_types(args, types, vtypes, sv)
             if any(isvarargtype, result[i])
                 return nothing
             end
+        elseif ti === Union{}
+            return nothing
         elseif ti<:Tuple && (i==n || !isvatuple(ti))
             result[i] = ti.parameters
         elseif ti<:AbstractArray && i==n
@@ -2813,7 +2815,7 @@ function inlining_pass(e::Expr, sv, ast)
                     newargs[i-3] = aarg.args[2:end]
                 elseif isa(aarg, Tuple)
                     newargs[i-3] = Any[ QuoteNode(x) for x in aarg ]
-                elseif (t<:Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
+                elseif (t<:Tuple) && t !== Union{} && !isvatuple(t) && effect_free(aarg,sv,true)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
                     tp = t.parameters
                     newargs[i-3] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]
