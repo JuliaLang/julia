@@ -152,7 +152,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
         foo()
     " --depwarn=error`)
 
-    # test deprecated bindings
+    # test deprecated bindings, #13269
     let code = """
         module Foo
             import Base: @deprecate_binding
@@ -166,6 +166,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
 
         @test !success(`$exename -E "$code" --depwarn=error`)
 
+        # FIXME these should also be run on windows once the bug causing them to hang gets fixed
         @unix_only let out  = Pipe(),
                        proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out))
 
