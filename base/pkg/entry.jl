@@ -35,7 +35,7 @@ end
 
 function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
-    editor != nothing ||
+    editor !== nothing ||
         throw(PkgError("set the EDITOR environment variable to an edit command"))
     editor = Base.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
@@ -216,7 +216,7 @@ function clone(url_or_pkg::AbstractString)
     else
         url = url_or_pkg
         m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || throw(PkgError("can't determine package name from URL: $url"))
+        m !== nothing || throw(PkgError("can't determine package name from URL: $url"))
         pkg = m.captures[1]
     end
     clone(url,pkg)
@@ -383,7 +383,7 @@ function pull_request(dir::AbstractString, commit::AbstractString="", url::Abstr
         end
 
         m = match(LibGit2.GITHUB_REGEX, url)
-        m == nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
+        m === nothing && throw(PkgError("not a GitHub repo URL, can't make a pull request: $url"))
         owner, owner_repo = m.captures[2:3]
         user = GitHub.user()
         info("Forking $owner/$owner_repo to $user")
@@ -419,11 +419,11 @@ function publish(branch::AbstractString)
         # get changed files
         for path in LibGit2.diff_files(repo, "origin/$branch", LibGit2.GitConst.HEAD_FILE)
             m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
-            m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+            m !== nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
             pkg, ver = m.captures; ver = convert(VersionNumber,ver)
             sha1 = readchomp(joinpath("METADATA",path))
             old = LibGit2.cat(repo, LibGit2.GitBlob, "origin/$branch:$path")
-            old != nothing && old != sha1 && throw(PkgError("$pkg v$ver SHA1 changed in METADATA – refusing to publish"))
+            old !== nothing && old != sha1 && throw(PkgError("$pkg v$ver SHA1 changed in METADATA – refusing to publish"))
             with(GitRepo, pkg) do pkg_repo
                 tag_name = "v$ver"
                 tag_commit = LibGit2.revparseid(pkg_repo, "$(tag_name)^{commit}")
@@ -551,7 +551,7 @@ function write_tag_metadata(repo::GitRepo, pkg::AbstractString, ver::VersionNumb
     content = with(GitRepo,pkg) do pkg_repo
         LibGit2.cat(pkg_repo, LibGit2.GitBlob, "$commit:REQUIRE")
     end
-    reqs = content != nothing ? Reqs.read(split(content, '\n', keep=false)) : Reqs.Line[]
+    reqs = content !== nothing ? Reqs.read(split(content, '\n', keep=false)) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)

@@ -89,7 +89,7 @@ function inbase(m::Module)
         parent === m ? false : inbase(parent)
     end
 end
-fileurl(file) = let f = find_source_file(file); f == nothing ? "" : "file://"*f; end
+fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
     M = m.func.code.module

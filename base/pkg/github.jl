@@ -151,7 +151,7 @@ end
 
 function normalize_url(url::AbstractString)
     m = match(LibGit2.GITHUB_REGEX,url)
-    m == nothing ? url : "https://github.com/$(m.captures[1]).git"
+    m === nothing ? url : "https://github.com/$(m.captures[1]).git"
 end
 
 end # module

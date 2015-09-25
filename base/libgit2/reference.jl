@@ -182,7 +182,7 @@ function Base.map(f::Function, bi::GitBranchIter)
     s = start(bi)
     while !done(bi, s)
         val = f(s[1:2])
-        if res == nothing
+        if res === nothing
             res = Array(typeof(val),0)
         end
         push!(res, val)
