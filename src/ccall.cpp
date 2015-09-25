@@ -601,7 +601,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
         // make sure args are rooted
         if (toboxed && (needroot || might_need_root(argi))) {
-            make_gcroot(v, ctx);
+            make_gcrooted(v, ctx);
         }
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
         argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
@@ -1262,9 +1262,6 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         sretboxed = sret_val.isboxed;
     }
 
-    // save argument depth until after we're done emitting arguments
-    int last_depth = ctx->gc.argDepth;
-
     // number of parameters to the c function
     for(i = 4; i < nargs + 1; i += 2) {
         // Current C function parameter
@@ -1329,7 +1326,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     need_private_copy(jargty, byRef), false, ai + 1, ctx, &needStackRestore);
         // make sure args are rooted
         if (toboxed && (needroot || might_need_root(argi))) {
-            make_gcroot(v, ctx);
+            make_gcrooted(v, ctx);
         }
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
         argvals[ai + sret] = llvm_type_rewrite(v, largty,
@@ -1419,7 +1416,6 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                      Intrinsic::stackrestore)),
                            stacksave);
     }
-    ctx->gc.argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx->f->addFnAttr(Attribute::StackProtectReq);
     }
