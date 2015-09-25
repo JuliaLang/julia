@@ -71,3 +71,26 @@ linenum = @__LINE__; f12977(; args...) = ()
 loc = functionloc(f12977)
 @test endswith(loc[1], "backtrace.jl")
 @test loc[2] == linenum
+
+code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p, skipC)
+
+@noinline function test_throw_commoning(x)
+    if x==1; throw(AssertionError()); end
+    if x==2; throw(AssertionError()); end
+end
+
+let
+    local b1, b2
+    try
+        test_throw_commoning(1)
+    catch
+        b1 = catch_backtrace()
+    end
+    try
+        test_throw_commoning(2)
+    catch
+        b2 = catch_backtrace()
+    end
+    @test code_loc(b1[4])[1] == code_loc(b2[4])[1] == :test_throw_commoning
+    @test code_loc(b1[4])[3] != code_loc(b2[4])[3]
+end
