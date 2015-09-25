@@ -439,7 +439,7 @@ for (typ, ref, sup, fnc) in (
         end
     end
 
-    if fnc != nothing
+    if fnc !== nothing
         @eval function Base.finalize(obj::$typ)
             if obj.ptr != C_NULL
                 ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)

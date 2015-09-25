@@ -102,7 +102,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
         diff = diff_tree(repo, tree1, tree2)
         for i in 1:count(diff)
             delta = diff[i]
-            delta == nothing && break
+            delta === nothing && break
             if delta.status in filter
                 push!(files, bytestring(delta.new_file.path))
             end
@@ -125,7 +125,7 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
         set!(cfg, "remote.$remote.url", url)
 
         m = match(GITHUB_REGEX,url)
-        if m != nothing
+        if m !== nothing
             push = "git@github.com:$(m.captures[1]).git"
             if push != url
                 set!(cfg, "remote.$remote.pushurl", push)
@@ -199,7 +199,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                  set_head::Bool=true)         # set as head reference on exit
     # try to lookup branch first
     branch_ref = force ? nothing : lookup_branch(repo, branch_name)
-    if branch_ref == nothing
+    if branch_ref === nothing
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
              with(head(repo)) do head_ref
@@ -265,10 +265,10 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
 
     # search for commit to get a commit object
     obj = get(GitAnyObject, repo, Oid(commit))
-    obj == nothing && return
+    obj === nothing && return
     try
         peeled = peel(obj, GitConst.OBJ_COMMIT)
-        peeled == nothing && return
+        peeled === nothing && return
         opts = force ? CheckoutOptions(checkout_strategy = GitConst.CHECKOUT_FORCE) :
                        CheckoutOptions()
         try
@@ -317,7 +317,7 @@ end
 """ git reset [--soft | --mixed | --hard] <commit> """
 function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.RESET_MIXED)
     obj = get(GitAnyObject, repo, commit)
-    obj == nothing && return
+    obj === nothing && return
     try
         reset!(repo, obj, mode)
     finally
@@ -408,7 +408,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             try
                 rbs = GitRebase(repo, head_ann, upst_ann)
                 try
-                    while (rbs_op = next(rbs)) != nothing
+                    while (rbs_op = next(rbs)) !== nothing
                         commit(rbs, sig)
                     end
                     finish(rbs, sig)

@@ -28,7 +28,7 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
     obj = revparse(repo, comittish)
     try
         cmt = peel(obj, GitConst.OBJ_COMMIT)
-        cmt == nothing && return nothing
+        cmt === nothing && return nothing
         return GitAnnotated(repo, Oid(cmt))
     finally
         finalize(obj)
@@ -54,7 +54,7 @@ end
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     ann_cmt_oid = commit(ann)
     cmt = get(GitCommit, repo, ann_cmt_oid)
-    cmt == nothing && return false # could not find commit tree
+    cmt === nothing && return false # could not find commit tree
     try
         checkout_tree(repo, cmt)
         with(head(repo)) do head_ref
@@ -104,7 +104,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
     elseif isset(mp, Cint(GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY))
         GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY
     end
-    if ffPref == nothing
+    if ffPref === nothing
         warn("Unknown merge preference: $(mp).")
         return false
     end
@@ -138,7 +138,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
         end
     end
 
-    if mergeResult == nothing
+    if mergeResult === nothing
         warn("Unknown merge analysis result: $(ma). Merging is not possible.")
         return false
     end

@@ -78,7 +78,7 @@ end
 """ Returns id of a found object """
 function revparseid(repo::GitRepo, objname::AbstractString)
     obj = revparse(repo, objname)
-    obj == nothing && return Oid()
+    obj === nothing && return Oid()
     oid = Oid(obj.ptr)
     finalize(obj)
     return oid
