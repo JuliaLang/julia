@@ -5,6 +5,8 @@
 abstract Factorization{T}
 
 eltype{T}(::Type{Factorization{T}}) = T
+transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
+ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
 
 macro assertposdef(A, info)
    :(($info)==0 ? $A : throw(PosDefException($info)))
