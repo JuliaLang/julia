@@ -77,6 +77,11 @@ markdown: $(SPHINX_BUILD)
 	@echo
 	@echo "Build finished. The Markdown pages are in _build/markdown."
 
+xml: $(SPHINX_BUILD)
+	$(SPHINXBUILD) -b xml $(ALLSPHINXOPTS) $(BUILDDIR)/_build/xml
+	@echo
+	@echo "Build finished. The XML pages are in _build/xml."
+
 html: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/_build/html
 	@echo

@@ -125,8 +125,8 @@ class TextWrapper(textwrap.TextWrapper):
             cur_line.append(reversed_chunks.pop())
 
 
-MAXWIDTH = 70
-STDINDENT = 3
+MAXWIDTH = 92
+STDINDENT = 4
 
 
 def my_wrap(text, width=MAXWIDTH, **kwargs):
@@ -269,7 +269,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def visit_title(self, node):
         self.new_state(0)
-        self.add_text('#' * self.sectionlevel + ' ')
+        self.add_text('#'*self.sectionlevel + ' ')
 
     def depart_title(self, node):
         self.end_state()
