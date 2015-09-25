@@ -399,7 +399,7 @@ struct jl_cgval_t {
     bool isimmutable; // V points to something that is definitely immutable (e.g. not stack allocated)
     //bool isstack; // points to stack-allocated memory
     //bool isarg; // derived from an argument
-    bool needsgcroot; // this value needs a gcroot
+    mutable bool needsgcroot; // this value needs a gcroot
     jl_cgval_t(Value *V, bool isboxed, jl_value_t *typ) : // general constructor (with pointer type auto-detect)
         V(V), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen contexts
         typ(typ),
@@ -646,7 +646,9 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
     if (type_is_ghost(julia_type_to_llvm(typ))) {
         return ghostValue(typ);
     }
-    return jl_cgval_t(literal_pointer_val(jv), true, typ);
+    jl_cgval_t constant(literal_pointer_val(jv), true, typ);
+    constant.needsgcroot = false;
+    return constant;
 }
 
 
@@ -2795,7 +2797,7 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
                     // can lazy load on demand, no copy needed
                     Value *argv = arg.V;
                     if (argv->getType() != at)
-                        builder.CreatePointerCast(argv, at);
+                        argv = builder.CreatePointerCast(argv, at);
                     argvals[idx] = argv;
                 }
                 else {
@@ -4823,6 +4825,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i));
                 theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ);
             }
+            theArg.needsgcroot = false;
 
             Value *lv = vi.memloc;
             if (lv == NULL) {
