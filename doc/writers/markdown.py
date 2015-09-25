@@ -238,14 +238,11 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_section(self, node):
         self.sectionlevel -= 1
 
-    def visit_topic(self, node):
+    def visit_sidebar(self, node):
         self.new_state(0)
 
-    def depart_topic(self, node):
+    def depart_sidebar(self, node):
         self.end_state()
-
-    visit_sidebar = visit_topic
-    depart_sidebar = depart_topic
 
     def visit_rubric(self, node):
         self.new_state(0)
@@ -261,30 +258,12 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_compound(self, node):
         pass
 
-    def visit_glossary(self, node):
-        pass
-
-    def depart_glossary(self, node):
-        pass
-
     def visit_title(self, node):
         self.new_state(0)
         self.add_text('#'*self.sectionlevel + ' ')
 
     def depart_title(self, node):
         self.end_state()
-
-    def visit_subtitle(self, node):
-        pass
-
-    def depart_subtitle(self, node):
-        pass
-
-    def visit_attribution(self, node):
-        self.add_text('-- ')
-
-    def depart_attribution(self, node):
-        pass
 
     def visit_desc(self, node):
         pass
@@ -359,35 +338,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_desc_content(self, node):
         self.end_state()
 
-    def visit_figure(self, node):
-        self.new_state()
-
-    def depart_figure(self, node):
-        self.end_state()
-
-    def visit_caption(self, node):
-        pass
-
-    def depart_caption(self, node):
-        pass
-
-    def visit_productionlist(self, node):
-        self.new_state()
-        names = []
-        for production in node:
-            names.append(production['tokenname'])
-        maxlen = max(len(name) for name in names)
-        lastname = None
-        for production in node:
-            if production['tokenname']:
-                self.add_text(production['tokenname'].ljust(maxlen) + ' ::=')
-                lastname = production['tokenname']
-            elif lastname is not None:
-                self.add_text('%s    ' % (' '*len(lastname)))
-            self.add_text(production.astext() + self.nl)
-        self.end_state(wrap=False)
-        raise nodes.SkipNode
-
     def visit_footnote(self, node):
         self._footnote = node.children[0].astext().strip()
         self.new_state(len(self._footnote) + 3)
@@ -407,53 +357,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def visit_label(self, node):
         raise nodes.SkipNode
-
-    def visit_legend(self, node):
-        pass
-
-    def depart_legend(self, node):
-        pass
-
-    # XXX: option list could use some better styling
-
-    def visit_option_list(self, node):
-        pass
-
-    def depart_option_list(self, node):
-        pass
-
-    def visit_option_list_item(self, node):
-        self.new_state(0)
-
-    def depart_option_list_item(self, node):
-        self.end_state()
-
-    def visit_option_group(self, node):
-        self._firstoption = True
-
-    def depart_option_group(self, node):
-        self.add_text('     ')
-
-    def visit_option(self, node):
-        if self._firstoption:
-            self._firstoption = False
-        else:
-            self.add_text(', ')
-
-    def depart_option(self, node):
-        pass
-
-    def visit_option_string(self, node):
-        pass
-
-    def depart_option_string(self, node):
-        pass
-
-    def visit_option_argument(self, node):
-        self.add_text(node['delimiter'])
-
-    def depart_option_argument(self, node):
-        pass
 
     def visit_description(self, node):
         pass
@@ -566,26 +469,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.table = None
         self.end_state(wrap=False)
 
-    def visit_acks(self, node):
-        self.new_state(0)
-        self.add_text(', '.join(n.astext() for n in node.children[0].children) +
-                      '.')
-        self.end_state()
-        raise nodes.SkipNode
-
-    def visit_image(self, node):
-        if 'alt' in node.attributes:
-            self.add_text(_('[image: %s]') % node['alt'])
-        self.add_text(_('[image]'))
-        raise nodes.SkipNode
-
-    def visit_transition(self, node):
-        indent = sum(self.stateindent)
-        self.new_state(0)
-        self.add_text('=' * (MAXWIDTH - indent))
-        self.end_state()
-        raise nodes.SkipNode
-
     def visit_bullet_list(self, node):
         self.list_counter.append(-1)
 
@@ -642,12 +525,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.add_text(', ')
         raise nodes.SkipNode
 
-    def visit_classifier(self, node):
-        self.add_text(' : ')
-
-    def depart_classifier(self, node):
-        self.end_state(end=None)
-
     def visit_definition(self, node):
         self.new_state()
 
@@ -678,24 +555,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_field_body(self, node):
         self.end_state()
-
-    def visit_centered(self, node):
-        pass
-
-    def depart_centered(self, node):
-        pass
-
-    def visit_hlist(self, node):
-        pass
-
-    def depart_hlist(self, node):
-        pass
-
-    def visit_hlistcol(self, node):
-        pass
-
-    def depart_hlistcol(self, node):
-        pass
 
     def visit_admonition(self, node):
         self.new_state(0)
@@ -732,12 +591,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     visit_seealso = _visit_admonition
     depart_seealso = _make_depart_admonition('seealso')
 
-    def visit_versionmodified(self, node):
-        self.new_state(0)
-
-    def depart_versionmodified(self, node):
-        self.end_state()
-
     def visit_literal_block(self, node):
         self.new_state()
 
@@ -750,33 +603,11 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_doctest_block(self, node):
         self.end_state(wrap=False)
 
-    def visit_line_block(self, node):
-        self.new_state()
-        self.lineblocklevel += 1
-
-    def depart_line_block(self, node):
-        self.lineblocklevel -= 1
-        self.end_state(wrap=False, end=None)
-        if not self.lineblocklevel:
-            self.add_text('\n')
-
-    def visit_line(self, node):
-        pass
-
-    def depart_line(self, node):
-        self.add_text('\n')
-
     def visit_block_quote(self, node):
         self.new_state()
 
     def depart_block_quote(self, node):
         self.end_state()
-
-    def visit_compact_paragraph(self, node):
-        pass
-
-    def depart_compact_paragraph(self, node):
-        pass
 
     def visit_paragraph(self, node):
         if not isinstance(node.parent, nodes.Admonition) or \
@@ -794,33 +625,19 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def visit_index(self, node):
         raise nodes.SkipNode
 
-    def visit_toctree(self, node):
-        raise nodes.SkipNode
-
     def visit_substitution_definition(self, node):
         raise nodes.SkipNode
 
-    def visit_pending_xref(self, node):
+    def visit_compact_paragraph(self, node):
         pass
 
-    def depart_pending_xref(self, node):
+    def depart_compact_paragraph(self, node):
         pass
 
     def visit_reference(self, node):
         pass
 
     def depart_reference(self, node):
-        pass
-
-    def visit_number_reference(self, node):
-        text = nodes.Text(node.get('title', '#'))
-        self.visit_Text(text)
-        raise nodes.SkipNode
-
-    def visit_download_reference(self, node):
-        pass
-
-    def depart_download_reference(self, node):
         pass
 
     def visit_emphasis(self, node):
@@ -846,13 +663,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_literal_strong(self, node):
         self.add_text('**')
-
-    def visit_abbreviation(self, node):
-        self.add_text('')
-
-    def depart_abbreviation(self, node):
-        if node.hasattr('explanation'):
-            self.add_text(' (%s)' % node['explanation'])
 
     def visit_title_reference(self, node):
         self.add_text('*')
@@ -892,12 +702,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_Text(self, node):
         pass
 
-    def visit_generated(self, node):
-        pass
-
-    def depart_generated(self, node):
-        pass
-
     def visit_inline(self, node):
         if 'xref' in node['classes'] or 'term' in node['classes']:
             self.add_text('*')
@@ -906,29 +710,13 @@ class MarkdownTranslator(nodes.NodeVisitor):
         if 'xref' in node['classes'] or 'term' in node['classes']:
             self.add_text('*')
 
-    def visit_container(self, node):
-        pass
-
-    def depart_container(self, node):
-        pass
-
     def visit_problematic(self, node):
         self.add_text('>>')
 
     def depart_problematic(self, node):
         self.add_text('<<')
 
-    def visit_system_message(self, node):
-        self.new_state(0)
-        self.add_text('<SYSTEM MESSAGE: %s>' % node.astext())
-        self.end_state()
-        raise nodes.SkipNode
-
     def visit_comment(self, node):
-        raise nodes.SkipNode
-
-    def visit_meta(self, node):
-        # only valid for HTML
         raise nodes.SkipNode
 
     def visit_raw(self, node):
