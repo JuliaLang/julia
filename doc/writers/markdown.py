@@ -592,9 +592,15 @@ class MarkdownTranslator(nodes.NodeVisitor):
     depart_seealso = _make_depart_admonition('seealso')
 
     def visit_literal_block(self, node):
-        self.new_state()
+        if node.has_key('language') and node['language'] != 'julia':
+            self.new_state(0)
+            self.add_text('```' + node['language'] + '\n')
+        else:
+            self.new_state()
 
     def depart_literal_block(self, node):
+        if node.has_key('language') and node['language'] != 'julia':
+            self.add_text('\n```')
         self.end_state(wrap=False)
 
     def visit_doctest_block(self, node):
