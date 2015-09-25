@@ -9,7 +9,7 @@ import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transp
     ctranspose, ctranspose!, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
     imag, inv, isapprox, kron, ndims, power_by_squaring, print_matrix, promote_rule, real,
     round, setindex!, show, similar, size, transpose, transpose!, trunc, unsafe_getindex,
-    unsafe_setindex!
+    unsafe_setindex!, untranspose
 
 export
 # Modules
@@ -130,31 +130,14 @@ export
     \,
     /,
     A_ldiv_B!,
-    A_ldiv_Bc,
-    A_ldiv_Bt,
     A_mul_B!,
-    A_mul_Bc,
     A_mul_Bc!,
-    A_mul_Bt,
     A_mul_Bt!,
-    A_rdiv_Bc,
-    A_rdiv_Bt,
-    Ac_ldiv_B,
-    Ac_ldiv_Bc,
-    Ac_mul_B,
     Ac_mul_B!,
-    Ac_mul_Bc,
     Ac_mul_Bc!,
-    Ac_rdiv_B,
-    Ac_rdiv_Bc,
-    At_ldiv_B,
-    At_ldiv_Bt,
-    At_mul_B,
     At_mul_B!,
-    At_mul_Bt,
     At_mul_Bt!,
-    At_rdiv_B,
-    At_rdiv_Bt,
+    mul!,
 
 # Constants
     I

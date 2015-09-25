@@ -921,12 +921,6 @@ Divide two integers or rational numbers, giving a `Rational` result.
 """
 Base.(:(//))
 
-doc"""
-    At_mul_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅B$
-"""
-At_mul_B
 
 doc"""
     methods(f, [types])
@@ -1231,12 +1225,6 @@ Airy function derivative $\operatorname{Bi}'(x)$.
 """
 airybiprime
 
-doc"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
-"""
-Ac_rdiv_B
 
 doc"""
 ```rst
@@ -2366,12 +2354,6 @@ By default, the `redisplay` functions simply call `display`. However, some displ
 """
 redisplay
 
-doc"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A⋅Bᴴ$
-"""
-A_mul_Bc
 
 doc"""
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -2489,12 +2471,6 @@ This behavior of this function varies slightly across platforms. See <https://no
 """
 watch_file
 
-doc"""
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᵀ / Bᵀ$
-"""
-At_rdiv_Bt
 
 doc"""
     isinteractive() -> Bool
@@ -2503,12 +2479,6 @@ Determine whether Julia is running an interactive session.
 """
 isinteractive
 
-doc"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᵀ⋅Bᵀ$
-"""
-At_mul_Bt
 
 doc"""
     sum!(r, A)
@@ -3178,12 +3148,6 @@ Create an `IO`-like object for creating zeroed-out mmapped-memory that is not ti
 """
 Mmap.Anonymous
 
-doc"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A / Bᴴ$
-"""
-A_rdiv_Bc
 
 doc"""
 ```rst
@@ -6098,7 +6062,7 @@ Return an iterator over all values in a collection. `collect(values(d))` returns
 values
 
 doc"""
-    A_mul_B!(Y, A, B) -> Y
+    mul!(Y, A, B) -> Y
 
 Calculates the matrix-matrix or matrix-vector product $A⋅B$ and stores the
 result in `Y`, overwriting the existing value of `Y`. Note that `Y` must not
@@ -6113,7 +6077,7 @@ julia> Y
  7.0  7.0
 ```
 """
-A_mul_B!
+mul!
 
 doc"""
     ntuple(f::Function, n)
@@ -6122,13 +6086,6 @@ Create a tuple of length `n`, computing each element as `f(i)`, where `i` is the
 """
 ntuple
 
-doc"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ / Bᴴ$
-
-"""
-Ac_rdiv_Bc
 
 doc"""
     selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
@@ -8315,12 +8272,6 @@ A type assertion failure, or calling an intrinsic function with an incorrect arg
 """
 TypeError
 
-doc"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A / Bᵀ$
-"""
-A_rdiv_Bt
 
 doc"""
     pwd() -> AbstractString
@@ -9029,12 +8980,6 @@ Test whether a floating point number is subnormal
 """
 issubnormal
 
-doc"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $B$
-"""
-Ac_ldiv_B
 
 doc"""
     NullException()
@@ -9287,12 +9232,6 @@ Get the number of available processes.
 """
 nprocs
 
-doc"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ⋅B$
-"""
-Ac_mul_B
 
 doc"""
 ```rst
@@ -9303,12 +9242,6 @@ doc"""
 """
 qrfact!
 
-doc"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᵀ / B$
-"""
-At_rdiv_B
 
 doc"""
     coth(x)
@@ -9541,12 +9474,6 @@ the closest value to ``x`` representable by ``T``.
 """
 convert
 
-doc"""
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᵀ$
-"""
-A_ldiv_Bt
 
 doc"""
     applicable(f, args...) -> Bool
@@ -9612,12 +9539,6 @@ options.
 """
 eigvals
 
-doc"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A$ \ $Bᴴ$
-"""
-A_ldiv_Bc
 
 doc"""
 ```rst
@@ -10218,19 +10139,7 @@ Return the key matching argument `key` if one exists in `collection`, otherwise 
 """
 getkey
 
-doc"""
-    At_ldiv_Bt(A, B)
 
-For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $Bᵀ$
-"""
-At_ldiv_Bt
-
-doc"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ Bᴴ$
-"""
-Ac_mul_Bc
 
 doc"""
     acotd(x)
@@ -10274,13 +10183,6 @@ Hurwitz zeta function $\zeta(s, z)$.  (This is equivalent to
 the Riemann zeta function $\zeta(s)$ for the case of `z=1`.)
 """
 zeta(s,z)
-
-doc"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $A⋅Bᵀ$
-"""
-A_mul_Bt
 
 doc"""
     vecnorm(A, [p])
@@ -10774,12 +10676,6 @@ Union each element of `iterable` into set `s` in-place.
 """
 union!
 
-doc"""
-    At_ldiv_B(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᵀ$ \ $B$
-"""
-At_ldiv_B
 
 doc"""
     dot(x, y)
@@ -11017,12 +10913,6 @@ Performs a right rotation operation.
 """
 ror
 
-doc"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors $A$ and $B$, calculates $Aᴴ$ \ $Bᴴ$
-"""
-Ac_ldiv_Bc
 
 doc"""
 ```rst

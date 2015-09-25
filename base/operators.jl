@@ -159,29 +159,6 @@ transpose(x) = x
 ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
-# transposed multiply
-*(a::Transpose{true},  b::AbstractArray)    = Ac_mul_B(a.data, b)
-*(a::Transpose{false}, b::AbstractArray)    = At_mul_B(a.data, b)
-*(a::AbstractArray,    b::Transpose{true})  = A_mul_Bc(a, b.data)
-*(a::AbstractArray,    b::Transpose{false}) = A_mul_Bt(a, b.data)
-*(a::Transpose{true},  b::Transpose{true})  = Ac_mul_Bc(a.data, b.data)
-*(a::Transpose{false}, b::Transpose{false}) = At_mul_Bt(a.data, b.data)
-
-# transposed divide
-/(a::Transpose{true},  b::AbstractArray)    = Ac_rdiv_B(a.data, b)
-/(a::Transpose{false}, b::AbstractArray)    = At_rdiv_B(a.data, b)
-/(a::AbstractArray,    b::Transpose{true})  = A_rdiv_Bc(a, b.data)
-/(a::AbstractArray,    b::Transpose{false}) = A_rdiv_Bt(a, b.data)
-/(a::Transpose{true},  b::Transpose{true})  = Ac_rdiv_Bc(a.data, b.data)
-/(a::Transpose{false}, b::Transpose{false}) = At_rdiv_Bt(a.data, b.data)
-
-\(a::Transpose{true},  b::AbstractArray)    = Ac_ldiv_B(a.data, b)
-\(a::Transpose{false}, b::AbstractArray)    = At_ldiv_B(a.data, b)
-\(a::AbstractArray,    b::Transpose{true})  = A_ldiv_Bc(a, b.data)
-\(a::AbstractArray,    b::Transpose{false}) = A_ldiv_Bt(a, b.data)
-\(a::Transpose{true},  b::Transpose{true})  = Ac_ldiv_Bc(a.data, b.data)
-\(a::Transpose{false}, b::Transpose{false}) = At_ldiv_Bt(a.data, b.data)
-
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
 eltype(::Type) = Any
