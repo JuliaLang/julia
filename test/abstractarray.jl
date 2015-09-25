@@ -452,6 +452,12 @@ function test_vcat_depwarn(::Type{TestAbstractArray})
     end
 end
 
+# Issue 13315
+function test_13315(::Type{TestAbstractArray})
+    U = UInt(1):UInt(2)
+    @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
+end
+
 #----- run tests -------------------------------------------------------------#
 
 for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
@@ -471,3 +477,4 @@ test_map(TestAbstractArray)
 test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
 test_vcat_depwarn(TestAbstractArray)
+test_13315(TestAbstractArray)
