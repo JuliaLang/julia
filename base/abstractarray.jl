@@ -738,7 +738,7 @@ function hcat(X::Number...)
 end
 
 function vcat{T}(V::AbstractVector{T}...)
-    n = 0
+    n::Int = 0
     for Vk in V
         n += length(Vk)
     end
