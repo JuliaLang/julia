@@ -43,17 +43,6 @@ ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag(A.data) .== 0)
 issym{T<:Real,S}(A::Hermitian{T,S}) = true
 issym{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
 issym(A::Symmetric) = true
-transpose(A::Symmetric) = A
-ctranspose{T<:Real}(A::Symmetric{T}) = A
-function ctranspose(A::Symmetric)
-    AC = ctranspose(A.data)
-    return Symmetric(AC, ifelse(A.uplo == 'U', :L, :U))
-end
-function transpose(A::Hermitian)
-    AT = transpose(A.data)
-    return Hermitian(AT, ifelse(A.uplo == 'U', :L, :U))
-end
-ctranspose(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
 
 #tril/triu

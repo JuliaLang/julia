@@ -403,19 +403,6 @@ function ccopy!(B, A)
     end
 end
 
-function transpose(A::StridedMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
-    transpose!(B, A)
-end
-function ctranspose(A::StridedMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
-    ctranspose!(B, A)
-end
-ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
-
-transpose(x::StridedVector) = [ transpose(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::StridedVector{T}) = T[ ctranspose(x[j]) for i=1, j=1:size(x,1) ]
-
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])
 

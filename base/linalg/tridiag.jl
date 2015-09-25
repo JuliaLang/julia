@@ -65,8 +65,6 @@ end
 for func in (:round, :trunc, :floor, :ceil)
     @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), ($func)(T,M.ev))
 end
-transpose(M::SymTridiagonal) = M #Identity operation
-ctranspose(M::SymTridiagonal) = conj(M)
 
 function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
     absn = abs(n)
@@ -325,9 +323,6 @@ for func in (:round, :trunc, :floor, :ceil)
         Tridiagonal(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.du2))
     end
 end
-
-transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
-ctranspose(M::Tridiagonal) = conj(transpose(M))
 
 function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     if n == 0

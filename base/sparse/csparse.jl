@@ -189,16 +189,8 @@ function transpose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     ftranspose!(T, S, IdFun())
 end
 
-function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    ftranspose(S, IdFun())
-end
-
 function ctranspose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     ftranspose!(T, S, ConjFun())
-end
-
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    ftranspose(S, ConjFun())
 end
 
 # Compute the elimination tree of A using triu(A) returning the parent vector.

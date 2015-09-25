@@ -127,8 +127,6 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
 end
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
-transpose(D::Diagonal) = D
-ctranspose(D::Diagonal) = conj(D)
 
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)

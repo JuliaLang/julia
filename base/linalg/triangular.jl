@@ -255,15 +255,6 @@ function tril!(A::UnitLowerTriangular,k::Integer=0)
     return tril!(LowerTriangular(A.data),k)
 end
 
-transpose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(transpose(A.data))
-ctranspose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(ctranspose(A.data))
-
 transpose!{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(copytri!(A.data, 'L'))
 transpose!{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(copytri!(A.data, 'L'))
 transpose!{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(copytri!(A.data, 'U'))

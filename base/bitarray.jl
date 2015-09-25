@@ -1557,10 +1557,6 @@ function filter(f, Bs::BitArray)
     Bs[boolmap]
 end
 
-## Transpose ##
-
-transpose(B::BitVector) = reshape(copy(B), 1, length(B))
-
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
 # http://www.hackersdelight.org/HDcode/transpose8.c.txt
 function transpose8x8(x::UInt64)
@@ -1609,43 +1605,6 @@ function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, 
     end
     return
 end
-
-function transpose(B::BitMatrix)
-    l1 = size(B, 1)
-    l2 = size(B, 2)
-    Bt = falses(l2, l1)
-
-    cgap1, cinc1 = _div64(l1), _mod64(l1)
-    cgap2, cinc2 = _div64(l2), _mod64(l2)
-
-    Bc = B.chunks
-    Btc = Bt.chunks
-
-    nc = length(Bc)
-
-    for i = 1:8:l1
-
-        msk8_1 = UInt64(0xff)
-        if (l1 < i + 7)
-            msk8_1 >>>= i + 7 - l1
-        end
-
-        for j = 1:8:l2
-            x = form_8x8_chunk(Bc, i, j, l1, cgap1, cinc1, nc, msk8_1)
-            x = transpose8x8(x)
-
-            msk8_2 = UInt64(0xff)
-            if (l2 < j + 7)
-                msk8_2 >>>= j + 7 - l2
-            end
-
-            put_8x8_chunk(Btc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
-        end
-    end
-    return Bt
-end
-
-ctranspose(B::BitArray) = transpose(B)
 
 ## Permute array dims ##
 

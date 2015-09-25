@@ -38,6 +38,7 @@ include("error.jl")
 include("bool.jl")
 include("number.jl")
 include("int.jl")
+include("transpose.jl")
 include("operators.jl")
 include("pointer.jl")
 
