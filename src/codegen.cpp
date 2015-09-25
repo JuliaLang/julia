@@ -4974,6 +4974,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
             if (do_coverage)
                 coverageVisitLine(filename, lno);
+            ctx.lineno = lno;
         }
         if (jl_is_labelnode(stmt)) {
             if (prevlabel) continue;
