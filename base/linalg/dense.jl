@@ -519,9 +519,9 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     RA, QA = schur(A)
     RB, QB = schur(B)
 
-    D = -Ac_mul_B(QA,C*QB)
+    D = -QA'*(C*QB)
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    scale!(QA*A_mul_Bc(Y,QB), inv(scale))
+    scale!(QA*(Y*QB'), inv(scale))
 end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
 
@@ -529,9 +529,9 @@ sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T
 function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
     R, Q = schur(A)
 
-    D = -Ac_mul_B(Q,C*Q)
+    D = -Q'*(C*Q)
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    scale!(Q*A_mul_Bc(Y,Q), inv(scale))
+    scale!(Q*(Y*Q'), inv(scale))
 end
 lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
 lyap{T<:Number}(a::T, c::T) = -c/(2a)

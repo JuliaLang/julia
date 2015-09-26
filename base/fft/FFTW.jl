@@ -4,7 +4,7 @@ module FFTW
 
 import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
 
-import Base: show, *, convert, unsafe_convert, size, strides, ndims, pointer, A_mul_B!
+import Base: show, *, convert, unsafe_convert, size, strides, ndims, pointer, mul!
 
 export r2r, r2r!, plan_r2r, plan_r2r!
 
@@ -611,7 +611,7 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     end
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
+function mul!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
@@ -683,12 +683,12 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
                        normalization(Y, p.region))
         end
 
-        function A_mul_B!(y::StridedArray{$Tc}, p::rFFTWPlan{$Tr,$FORWARD}, x::StridedArray{$Tr})
+        function mul!(y::StridedArray{$Tc}, p::rFFTWPlan{$Tr,$FORWARD}, x::StridedArray{$Tr})
             assert_applicable(p, x, y)
             unsafe_execute!(p, x, y)
             return y
         end
-        function A_mul_B!(y::StridedArray{$Tr}, p::rFFTWPlan{$Tc,$BACKWARD}, x::StridedArray{$Tc})
+        function mul!(y::StridedArray{$Tr}, p::rFFTWPlan{$Tc,$BACKWARD}, x::StridedArray{$Tc})
             assert_applicable(p, x, y)
             unsafe_execute!(p, x, y) # note: may overwrite x as well as y!
             return y
@@ -856,7 +856,7 @@ function plan_inv{T<:fftwNumber,K,inplace,N}(p::r2rFFTWPlan{T,K,inplace,N})
                              1:length(iK)))
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
+function mul!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y

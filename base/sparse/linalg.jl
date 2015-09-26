@@ -35,11 +35,14 @@ end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
-for (f, op, transp) in ((:A_mul_B, :identity, false),
-                        (:Ac_mul_B, :ctranspose, true),
-                        (:At_mul_B, :transpose, true))
+typealias SparseTransposeCSC{T,A<:SparseMatrixCSC} MatrixTranspose{false, T, A}
+typealias SparseCTransposeCSC{T,A<:SparseMatrixCSC} MatrixTranspose{true, T, A}
+
+for (SparseT, op, transp) in ((:SparseMatrixCSC, :identity, false),
+                        (:SparseCTransposeCSC, :ctranspose, true),
+                        (:SparseTransposeCSC, :transpose, true))
     @eval begin
-        function $(symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+        function mul!(α::Number, A::$SparseT, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
             if $transp
                 A.n == size(C, 1) || throw(DimensionMismatch())
                 A.m == size(B, 1) || throw(DimensionMismatch())
@@ -72,23 +75,20 @@ for (f, op, transp) in ((:A_mul_B, :identity, false),
             C
         end
 
-        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
+        function *{TA,Tx}(A::$SparseT{TA}, x::StridedVector{Tx})
             T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, x, zero(T), similar(x, T, A.n))
+            mul!(one(T), A, x, zero(T), similar(x, T, A.n))
         end
-        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
+        function *{TA,Tx}(A::$SparseT{TA}, B::StridedMatrix{Tx})
             T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
+            mul!(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
         end
     end
 end
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
-A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-
+mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)

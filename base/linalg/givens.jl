@@ -4,14 +4,15 @@
 abstract AbstractRotation{T}
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
+ctranspose(R::AbstractRotation) = error("all subtypes of AbstractRotation must define their own ctranspose method")
 
 function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
+    mul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function *{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
+    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
 
 immutable Givens{T} <: AbstractRotation{T}
@@ -263,45 +264,45 @@ end
 
 getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
 
-A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
-function A_mul_B!(G::Givens, A::AbstractVecOrMat)
-    m, n = size(A, 1), size(A, 2)
-    if G.i2 > m
-        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
-    end
-    @inbounds @simd for i = 1:n
-        tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
-        A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
-        A[G.i1,i] = tmp
-    end
-    return A
-end
-function A_mul_Bc!(A::AbstractVecOrMat, G::Givens)
-    m, n = size(A, 1), size(A, 2)
-    if G.i2 > n
-        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
-    end
-    @inbounds @simd for i = 1:m
-        tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
-        A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
-        A[i,G.i1] = tmp
-    end
-    return A
-end
-function A_mul_B!(G::Givens, R::Rotation)
-    push!(R.rotations, G)
-    return R
-end
-function A_mul_B!(R::Rotation, A::AbstractMatrix)
-    @inbounds for i = 1:length(R.rotations)
-        A_mul_B!(R.rotations[i], A)
-    end
-    return A
-end
-function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
-    @inbounds for i = 1:length(R.rotations)
-        A_mul_Bc!(A, R.rotations[i])
-    end
-    return A
-end
+# A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
+# function A_mul_B!(G::Givens, A::AbstractVecOrMat)
+#     m, n = size(A, 1), size(A, 2)
+#     if G.i2 > m
+#         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+#     end
+#     @inbounds @simd for i = 1:n
+#         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
+#         A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
+#         A[G.i1,i] = tmp
+#     end
+#     return A
+# end
+# function A_mul_Bc!(A::AbstractVecOrMat, G::Givens)
+#     m, n = size(A, 1), size(A, 2)
+#     if G.i2 > n
+#         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+#     end
+#     @inbounds @simd for i = 1:m
+#         tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
+#         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
+#         A[i,G.i1] = tmp
+#     end
+#     return A
+# end
+# function A_mul_B!(G::Givens, R::Rotation)
+#     push!(R.rotations, G)
+#     return R
+# end
+# function A_mul_B!(R::Rotation, A::AbstractMatrix)
+#     @inbounds for i = 1:length(R.rotations)
+#         A_mul_B!(R.rotations[i], A)
+#     end
+#     return A
+# end
+# function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
+#     @inbounds for i = 1:length(R.rotations)
+#         A_mul_Bc!(A, R.rotations[i])
+#     end
+#     return A
+# end
 *{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))

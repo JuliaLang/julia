@@ -94,9 +94,10 @@ end
 *(A::Matrix, D::Diagonal) = scale(A,D.diag)
 *(D::Diagonal, A::Matrix) = scale(D.diag,A)
 
-A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
-At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
-Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
+# TODO: What to do about 2-arg A*_mul_B*?
+# A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
+# At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
+# Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})

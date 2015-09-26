@@ -90,34 +90,48 @@ ntc(::AbstractVector) = 'N'
 ntc(::Covector{true}) = 'C'
 ntc(::Covector{false}) = 'T'
 
-typealias StridedMatOrTranspose{T,C,A<:StridedMatrix} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}}
+typealias StridedMatOrTrans{T,C,A<:StridedVecOrMat} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}, Covector{C,T,A}}
+typealias AbstractMatOrTrans{T,C} Union{AbstractMatrix{T}, Covector{C,T}}
+
+## There is a huge combinatorial explosion here. There are 4 mostly-orthoganol
+# dimensions:
+#
+# * Mutation:  (Mutating, non-mutating). This can be a simple fallback
+# * Shape:     (Mat*Mat; Vec*Mat; Mat*Vec). Plus some Vec*Vec with combinations of:
+# * Transpose: (A, Aᵀ, Aᴴ) × (B, Bᵀ, Bᴴ).
+# * Implementation: (BLAS, Strided, generic)
+#
+# The key to staying sane is keeping the number of combinations on any one
+# name relatively limited.
 
 # Vector-vector multiplication
 *(x::Covector{true}, y::AbstractVector) = dot(untranspose(x), y)
-*(x::Covector{false}, y::AbstractVector) = dot(conj(untranspose(x)), y)
+*(x::Covector{false}, y::AbstractVector) = dot(conj(untranspose(x)), y) # TODO: don't conjugate twice!
 *{T<:BlasReal,A<:StridedVector}(x::Covector{true, T, A}, y::StridedVector{T}) = BLAS.dot(untranspose(x), y)
 *{T<:BlasReal,A<:StridedVector}(x::Covector{false, T, A}, y::StridedVector{T}) = BLAS.dot(untranspose(x), y)
 *{T<:BlasComplex,A<:StridedVector}(x::Covector{true, T, A}, y::StridedVector{T}) = BLAS.dotc(untranspose(x), y)
 *{T<:BlasComplex,A<:StridedVector}(x::Covector{false, T, A}, y::StridedVector{T}) = BLAS.dotu(untranspose(x), y)
-# TODO: outer products
-
-typealias StridedMatOrTranspose{T,C,A<:StridedMatrix} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}}
+# Note: outer products formed using gemv, with Covector behaving like a matrix
+# But we need to disallow Covector*Covector since that looks like gemm
+*(x::Covector, y::Covector) = throw(ArgumentError("cannot multiply covector by a covector"))
+mul!(z, x::Covector, y::Covector) = dot(conj(untranspose(x)), y) # TODO: don't conjugate twice!
 
 # Matrix-vector multiplication
-function (*){T<:BlasFloat,S}(A::StridedMatOrTranspose{T}, x::StridedVector{S})
+function (*){T<:BlasFloat,S}(A::StridedMatOrTrans{T}, x::StridedVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
     mul!(similar(x, TS, mul_shape(A, x)), A, convert(AbstractVector{TS}, x))
 end
-function (*){T,S}(A::AbstractMatrix{T}, x::AbstractVector{S})
+function (*){T,S}(A::AbstractMatOrTrans{T}, x::AbstractVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
     mul!(similar(x,TS,mul_shape(A, x)),A,x)
 end
-(*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B
+(*)(A::AbstractVector, B::AbstractMatOrTrans) = reshape(A,length(A),1)*B # TODO: this could be done better
+mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatOrTrans) = mul!(C,reshape(A,length(A),1),B)
 
-mul!{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatOrTranspose{T}, x::StridedVector{T}) = gemv!(y, ntc(A), untranspose(A), x)
+mul!{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatOrTrans{T}, x::StridedVector{T}) = gemv!(y, ntc(A), untranspose(A), x)
 for elty in (Float32,Float64)
     @eval begin
-        function mul!(y::StridedVector{Complex{$elty}}, A::StridedMatOrTranspose{Complex{$elty}}, x::StridedVector{$elty})
+        function mul!(y::StridedVector{Complex{$elty}}, A::StridedMatOrTrans{Complex{$elty}}, x::StridedVector{$elty})
             Afl = reinterpret($elty,untranspose(A),(2size(A,1),size(A,2)))
             yfl = reinterpret($elty,y)
             gemv!(yfl,ntc(A),Afl,x)
@@ -125,17 +139,17 @@ for elty in (Float32,Float64)
         end
     end
 end
-mul!(y::StridedVector, A::StridedMatOrTranspose, x::StridedVector) = generic_matvecmul!(y, ntc(A), untranspose(A), x)
+mul!(y::StridedVector, A::StridedMatOrTrans, x::StridedVector) = generic_matvecmul!(y, ntc(A), untranspose(A), x)
 
 # Matrix-matrix multiplication
-function (*){T,S}(A::AbstractMatrix{T}, B::StridedMatOrTranspose{S})
+function (*){T,S}(A::AbstractMatOrTrans{T}, B::AbstractMatOrTrans{S})
     TS = promote_type(arithtype(T), arithtype(S))
-    mul!(similar(B, TS, mul_shape(A, B)), A, B)
+    mul!(similar(untranspose(B), TS, mul_shape(A, B)), A, B)
 end
-mul!{T<:BlasFloat}(C::StridedMatOrTranspose{T}, A::StridedMatOrTranspose{T}, B::StridedMatOrTranspose{T}) = gemm_wrapper!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
+mul!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatOrTrans{T}, B::StridedMatOrTrans{T}) = gemm_wrapper!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
 for elty in (Float32,Float64)
     @eval begin
-        function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
+        function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedMatOrTrans{Complex{$elty}}, B::StridedMatOrTrans{$elty})
             Afl = reinterpret($elty, untranspose(A), (2size(A,1), size(A,2)))
             Cfl = reinterpret($elty, C, (2size(C,1), size(C,2)))
             gemm_wrapper!(Cfl, ntc(A), ntc(B), Afl, B)
@@ -143,7 +157,7 @@ for elty in (Float32,Float64)
         end
     end
 end
-mul!(C::StridedMatrix, A::StridedMatOrTranspose, B::StridedMatOrTranspose) = generic_matmatmul!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
+mul!(C::StridedMatrix, A::StridedMatOrTrans, B::StridedMatOrTrans) = generic_matmatmul!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
 
 # Supporting functions for matrix multiplication
 
