@@ -50,7 +50,7 @@ end
 
 # test behavior of shallow and deep copying
 let a = Any[[1]], q = QuoteNode([1])
-    ca = copy(a); dca = deepcopy(a)
+    ca = copy(a); dca = @inferred(deepcopy(a))
     @test ca !== a
     @test ca[1] === a[1]
     @test dca !== a
