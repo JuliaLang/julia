@@ -91,6 +91,9 @@ let
     catch
         b2 = catch_backtrace()
     end
-    @test code_loc(b1[4])[1] == code_loc(b2[4])[1] == :test_throw_commoning
-    @test code_loc(b1[4])[3] != code_loc(b2[4])[3]
+    ind1 = find(:test_throw_commoning .== map(b->code_loc(b)[1], b1))
+    ind2 = find(:test_throw_commoning .== map(b->code_loc(b)[1], b2))
+    @test !isempty(ind1)
+    @test !isempty(ind2)
+    @test code_loc(b1[ind1])[3] != code_loc(b2[ind2])[3]
 end
