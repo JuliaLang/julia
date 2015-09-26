@@ -718,4 +718,21 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
     end
 end
 
+#-----------------------------------------------------------------------
+# Deprecated support for old with_handler functionality
+# Supports the old handler functionality with a test set
+immutable DeprecatedTestSet <: AbstractTestSet
+    handler
+end
+record(ts::DeprecatedTestSet, t) = ts.handler(t)
+finish(ts::DeprecatedTestSet) = nothing
+
+function with_handler(f::Function, handler)
+    ts = DeprecatedTestSet(handler)
+    add_testset(ts)
+    f()
+    pop_testset()
+    finish(ts)
+end
+
 end # module
