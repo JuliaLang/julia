@@ -452,12 +452,17 @@ JL_CALLABLE(jl_f_apply)
     jl_value_t **newargs;
     int onstack = (n < jl_page_size/sizeof(jl_value_t*));
     JL_GC_PUSHARGS(newargs, onstack ? n : 1);
+    jl_svec_t *arg_heap = NULL;
     if (!onstack) {
         // put arguments on the heap if there are too many
-        jl_value_t *argarr = (jl_value_t*)jl_alloc_cell_1d(n);
-        newargs[0] = argarr;
-        newargs = jl_cell_data(argarr);
+        arg_heap = jl_alloc_svec(n);
+        newargs[0] = (jl_value_t*)arg_heap;
+        newargs = jl_svec_data(arg_heap);
     }
+    // GC Note: here we assume that the the return value of `jl_svecref`,
+    //          `jl_cellref` will not be young if `arg_heap` becomes old
+    //          since they are allocated before `arg_heap`. Otherwise,
+    //          we need to add write barrier for !onstack
     n = 0;
     for(i=1; i < nargs; i++) {
         if (jl_is_svec(args[i])) {
@@ -468,8 +473,13 @@ JL_CALLABLE(jl_f_apply)
         }
         else if (jl_is_tuple(args[i])) {
             size_t al = jl_nfields(args[i]);
-            for(j=0; j < al; j++)
+            for(j=0; j < al; j++) {
+                // jl_fieldref may allocate.
                 newargs[n++] = jl_fieldref(args[i], j);
+                if (arg_heap) {
+                    jl_gc_wb(arg_heap, newargs[n - 1]);
+                }
+            }
         }
         else {
             size_t al = jl_array_len(args[i]);
@@ -1502,7 +1512,8 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, ")");
     }
     else if (jl_is_linenode(v)) {
-        n += jl_printf(out, "# line %"PRIuPTR" %s", jl_linenode_line(v), jl_linenode_file(v)->name);
+        n += jl_printf(out, "# line %"PRIuPTR" %s",
+                       jl_linenode_line(v), jl_linenode_file(v)->name);
     }
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
@@ -1545,8 +1556,8 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     else if (jl_typeis(v,jl_loaderror_type)) {
         n += jl_printf(out, "LoadError(at ");
         n += jl_static_show_x(out, jl_fieldref(v, 0), depth);
-        n += jl_printf(out, " line ");
-        n += jl_static_show_x(out, jl_fieldref(v, 1), depth);
+        // Access the field directly to avoid allocation
+        n += jl_printf(out, " line %" PRIdPTR, ((intptr_t*)v)[1]);
         n += jl_printf(out, ": ");
         n += jl_static_show_x(out, jl_fieldref(v, 2), depth);
         n += jl_printf(out, ")");
@@ -1579,6 +1590,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
                     //jl_fielddesc_t f = t->fields[i];
                     n += jl_printf(out, "=");
                 }
+                // FIXME: this line can allocate
                 fldval = jl_get_nth_field(v, i);
                 n += jl_static_show_x(out, fldval, depth);
                 if (istuple && tlen==1)
