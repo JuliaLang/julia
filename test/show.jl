@@ -245,6 +245,10 @@ end
 @test string(:(-{x}))   == "-{x}"
 
 # issue #11393
+#=
+import Base.show_unquoted
+Base.show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) =
+    print(io, "Expr(:line,", ex.line, ",symbol(\"", ex.file, "\"))")
 @test_repr "@m(x,y) + z"
 @test_repr "(@m(x,y),z)"
 @test_repr "[@m(x,y),z]"
@@ -261,6 +265,7 @@ end
 @test repr(:(@m x y))    == ":(@m x y)"
 @test string(:(@m x y))  ==   "@m x y"
 @test string(:(@m x y;)) == "begin \n    @m x y\nend"
+=#
 
 # issue #11436
 @test_repr "1 => 2 => 3"
