@@ -5,7 +5,7 @@
 # Note: deepcopy_internal(::Any, ::ObjectIdDict) is
 #       only exposed for specialization by libraries
 
-deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
+deepcopy(x) = deepcopy_internal(x, ObjectIdDict())::typeof(x)
 
 deepcopy_internal(x::Union{Symbol,LambdaInfo,TopNode,GlobalRef,DataType,Union,Task},
                   stackdict::ObjectIdDict) = x
