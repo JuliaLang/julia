@@ -1998,9 +1998,11 @@ typedef struct _jl_typestack_t {
 } jl_typestack_t;
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
-                                jl_typestack_t *stack, int check);
+                                jl_typestack_t *stack, int check,
+                                ssize_t *est_size);
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
-                           jl_typestack_t *stack, int check);
+                           jl_typestack_t *stack, int check,
+                           ssize_t *est_size);
 
 static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
                                      jl_value_t **iparams)
@@ -2049,9 +2051,24 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
 
     jl_datatype_t *ndt=NULL;
     jl_svec_t *ftypes;
+    jl_svec_t *ndt_types = istuple ? p : dt->types;
+    uint8_t desc_type = 2;
+    if (ndt_types) {
+        ssize_t est_size = 0;
+        ndt_types = inst_all(ndt_types, env, n, stack, 1, &est_size);
+        // Use the maximum of the field size since we don't record
+        // the maximum field size independently
+        if (est_size < 0 || est_size >= (1 << 15)) {
+            desc_type = 2;
+        } else if (est_size >= (1 << 7)) {
+            desc_type = 1;
+        } else {
+            desc_type = 0;
+        }
+    }
 
     // move array of instantiated parameters to heap; we need to keep it
-    JL_GC_PUSH2(&p, &ndt);
+    JL_GC_PUSH3(&p, &ndt, &ndt_types);
     if (p == NULL) {
         p = jl_alloc_svec_uninit(ntp);
         for(unsigned i=0; i < ntp; i++)
@@ -2059,7 +2076,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     }
 
     // create and initialize new type
-    ndt = jl_new_uninitialized_datatype(istuple ? ntp : dt->nfields, 2); // TODO
+    ndt = jl_new_uninitialized_datatype(istuple ? ntp : dt->nfields, desc_type);
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
@@ -2087,13 +2104,16 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     if (istuple)
         ndt->super = jl_any_type;
     else
-        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super,
+                                                  env, n, stack, 1, NULL);
     jl_gc_wb(ndt, ndt->super);
     ftypes = dt->types;
     if (ftypes != NULL) {
         if (!istuple) {
             // recursively instantiate the types of the fields
-            ndt->types = inst_all(ftypes, env, n, stack, 1);
+            if (!ndt_types)
+                ndt_types = inst_all(ftypes, env, n, stack, 1, NULL);
+            ndt->types = ndt_types;
             jl_gc_wb(ndt, ndt->types);
         }
         if (!isabstract) {
@@ -2180,22 +2200,43 @@ static jl_datatype_t *inst_tupletype_unchecked_uncached(jl_svec_t *p)
     return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 0, 1, NULL, NULL, 0);
 }
 
+// The rule for est_size:
+//   * When est_size is not NULL, the function might return NULL but will never
+//     preform a type instantiation that might be recursive
+//   * NULL is returned if the result may not be safe to fully construct
+//   * If *est_size < 0, no size estimation is done.
+//   * If it is possible to estimate the size of the returned type or array of
+//     types, *est_size is incremented by such size, otherwise *est_size is set
+//     to -1 which will disable size estimation for subsequence constructions
+//
+// Note: Returning NULL and setting *est_size to -1 does not imply each other.
+//       It is possible to return NULL with a possitive *est_size (pointer
+//       types that is not safe to construct) and it is also possible to
+//       return non-NULL with *est_size set to -1 (TypeVar or other non-types)
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
-                           jl_typestack_t *stack, int check)
+                           jl_typestack_t *stack, int check, ssize_t *est_size)
 {
     size_t i;
     size_t lp = jl_svec_len(p);
     jl_svec_t *np = jl_alloc_svec(lp);
+    int has_null = 0;
     JL_GC_PUSH1(&np);
     for(i=0; i < lp; i++) {
-        jl_svecset(np, i, (jl_value_t*)inst_type_w_(jl_svecref(p,i), env, n, stack, check));
+        jl_value_t *sub_type = inst_type_w_(jl_svecref(p,i), env, n,
+                                            stack, check, est_size);
+        if (!sub_type)
+            has_null = 1;
+        jl_svecset(np, i, sub_type);
     }
     JL_GC_POP();
+    if (has_null)
+        return NULL;
     return np;
 }
 
 static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
-                                 jl_typestack_t *stack, int check)
+                                 jl_typestack_t *stack, int check,
+                                 ssize_t *est_size)
 {
     jl_datatype_t *tt = (jl_datatype_t*)t;
     jl_svec_t *tp = tt->parameters;
@@ -2214,28 +2255,84 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
         cacheable = 0; isabstract = 1;
     }
     int i;
+    int has_null = 0;
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
+        iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0, est_size);
         jl_value_t *pi = iparams[i];
-        check_tuple_parameter(pi, i, ntp);
-        if (!isabstract && !jl_is_leaf_type(pi)) {
-            cacheable = 0; isabstract = 1;
-        }
-        if (cacheable && jl_has_typevars_(pi,0))
+        if (!pi) {
+            has_null = 1;
             cacheable = 0;
+            isabstract = 1;
+        } else {
+            check_tuple_parameter(pi, i, ntp);
+            if (!isabstract && !jl_is_leaf_type(pi)) {
+                cacheable = 0;
+                isabstract = 1;
+            }
+            if (cacheable && jl_has_typevars_(pi, 0)) {
+                cacheable = 0;
+            }
+        }
     }
-    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, isabstract,
-                                       stack, env, n);
+    if (est_size && isabstract) {
+        *est_size = -1;
+    }
+    if (has_null) {
+        JL_GC_POP();
+        return NULL;
+    }
+    jl_value_t *result = inst_datatype(tt, ip_heap, iparams, ntp, cacheable,
+                                       isabstract, stack, env, n);
     JL_GC_POP();
     return result;
 }
 
+// Calculate the size of the type `t` as a field (i.e. abstract, mutable and
+// non-pointerfree types will return sizeof(void*)).
+static void estimate_type_size(jl_value_t *t, ssize_t *est_size)
+{
+    if (!est_size)
+        return;
+    if (*est_size < 0)
+        return;
+    if (jl_is_uniontype(t)) {
+        *est_size += sizeof(void*);
+        return;
+    }
+    if (!jl_is_datatype(t)) {
+        *est_size = -1;
+        return;
+    }
+    jl_datatype_t *tt = (jl_datatype_t*)t;
+    // Mutable and abstract types are always pointer size
+    if (tt->abstract || tt->mutabl) {
+        *est_size += sizeof(void*);
+        return;
+    }
+    if (!jl_is_leaf_type(t)) {
+        // Non leaf immutable type. Give up
+        *est_size = -1;
+        return;
+    }
+    if (!tt->pointerfree) {
+        *est_size += sizeof(void*);
+    } else {
+        *est_size += tt->size;
+    }
+}
+
+// If est_size is not NULL, returning NULL means the type may not be safe
+// to instantiate, *est_size < 0 means the size cannot be estimated
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
-                                jl_typestack_t *stack, int check)
+                                jl_typestack_t *stack, int check,
+                                ssize_t *est_size)
 {
     size_t i, j;
-    if (n == 0) return t;
+    if (n == 0) {
+        estimate_type_size(t, est_size);
+        return t;
+    }
     if (jl_is_typevar(t)) {
         for(i=0; i < n; i++) {
             if (env[i*2] == t) {
@@ -2245,32 +2342,58 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                      ((jl_tvar_t*)t)->name->name,
                                      t, val);
                 }
+                estimate_type_size(val, est_size);
                 return val;
             }
         }
+        if (est_size)
+            *est_size = -1;
         return (jl_value_t*)t;
     }
     if (jl_is_uniontype(t)) {
-        jl_svec_t *p = inst_all(((jl_uniontype_t*)t)->types, env, n, stack, 1);
+        ssize_t new_est_size = 0;
+        if (est_size && *est_size >= 0) {
+            *est_size += sizeof(void*);
+            est_size = &new_est_size;
+        }
+        jl_svec_t *p = inst_all(((jl_uniontype_t*)t)->types, env, n, stack,
+                                1, est_size);
+        if (!p)
+            return NULL;
         JL_GC_PUSH1(&p);
         jl_value_t *res = (jl_value_t*)jl_type_union(p);
         JL_GC_POP();
         return res;
     }
-    if (!jl_is_datatype(t))
+    if (!jl_is_datatype(t)) {
+        if (est_size)
+            *est_size = -1;
         return t;
+    }
     jl_datatype_t *tt = (jl_datatype_t*)t;
     jl_svec_t *tp = tt->parameters;
-    if (tp == jl_emptysvec)
+    if (tp == jl_emptysvec) {
+        estimate_type_size(t, est_size);
         return (jl_value_t*)t;
+    }
     jl_typename_t *tn = tt->name;
     jl_value_t *tc = tn->primary;
     // don't instantiate "Foo" without parameters inside Foo
-    if (t == tc && stack!=NULL)
+    if (t == tc && stack!=NULL) {
+        estimate_type_size(t, est_size);
         return (jl_value_t*)t;
+    }
     assert(jl_is_datatype(tc));
     if (tn == jl_tuple_typename)
-        return inst_tuple_w_(t, env, n, stack, check);
+        return inst_tuple_w_(t, env, n, stack, check, est_size);
+    if (est_size) {
+        if (*est_size >= 0 && (tt->abstract || tt->mutabl)) {
+            *est_size += sizeof(void*);
+        } else {
+            *est_size = -1;
+        }
+        return NULL;
+    }
     size_t ntp = jl_svec_len(tp);
     assert(ntp == jl_svec_len(((jl_datatype_t*)tc)->parameters));
     jl_value_t **iparams;
@@ -2283,7 +2406,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         }
         else {
             jl_value_t *tv = jl_svecref(((jl_datatype_t*)tc)->parameters, i);
-            iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, elt != tv);
+            iparams[i] = inst_type_w_(elt, env, n, stack, elt != tv, NULL);
             if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
                 if (!jl_subtype(iparams[i], tv, 0)) {
                     jl_type_error_rt(tt->name->name->name,
@@ -2305,17 +2428,20 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             cacheable = 0;
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
-    if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
+    if (!bound && t == tc) {
+        JL_GC_POP();
+        return t;
+    }
 
-    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, NULL, iparams, ntp, cacheable, isabstract,
-                                       stack, env, n);
+    jl_value_t *result = inst_datatype(tt, NULL, iparams, ntp, cacheable,
+                                       isabstract, stack, env, n);
     JL_GC_POP();
     return result;
 }
 
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 {
-    return inst_type_w_((jl_value_t*)t, env, n, NULL, 1);
+    return inst_type_w_((jl_value_t*)t, env, n, NULL, 1, NULL);
 }
 
 jl_datatype_t *jl_wrap_Type(jl_value_t *t)
@@ -2342,9 +2468,10 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
         env[i*2] = jl_svecref(t->parameters,i);
         env[i*2+1] = env[i*2];
     }
-    t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
+    t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n,
+                                            &top, 1, NULL);
     jl_gc_wb(t, t->super);
-    t->types = inst_all(t->types, env, n, &top, 1);
+    t->types = inst_all(t->types, env, n, &top, 1, NULL);
     jl_gc_wb(t, t->types);
 }
 
