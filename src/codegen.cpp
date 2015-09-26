@@ -5821,6 +5821,10 @@ extern "C" void jl_init_codegen(void)
             );
     delete targetMachine;
     assert(jl_TargetMachine);
+#if defined(USE_MCJIT) && !defined(_CPU_ARM_)
+    // FastISel seems to be buggy for ARM. Ref #13321
+    jl_TargetMachine->setFastISel(true);
+#endif
 #if defined(LLVM38)
     engine_module->setDataLayout(jl_TargetMachine->createDataLayout());
 #elif defined(LLVM36) && !defined(LLVM37)
