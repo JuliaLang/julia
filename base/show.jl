@@ -331,7 +331,7 @@ end
 """
     isidentifier(s) -> Bool
 
-Returns whether symbol contianis charaters that is parsed as a valid identifier in Julia code.
+Returns whether symbol contains characters that are parsed as a valid identifier in Julia code.
 
 Internally Julia allows any sequence of characters in a `Symbol` (exept`\0`s),
 and macros automatically use variable names containing `#` in order to
