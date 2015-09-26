@@ -1591,6 +1591,30 @@
                          (call ,f ,@pa)
                          ,kw-call)))))))))
 
+(define (expand-transposed-op e ops)
+  (let ((a (caddr e))
+        (b (cadddr e)))
+    (cond ((ctrans? a)
+           (if (ctrans? b)
+               `(call ,(aref ops 0) #;Ac_mul_Bc ,(expand-forms (cadr a))
+                      ,(expand-forms (cadr b)))
+               `(call ,(aref ops 1) #;Ac_mul_B ,(expand-forms (cadr a))
+                      ,(expand-forms b))))
+          ((trans? a)
+           (if (trans? b)
+               `(call ,(aref ops 2) #;At_mul_Bt ,(expand-forms (cadr a))
+                      ,(expand-forms (cadr b)))
+               `(call ,(aref ops 3) #;At_mul_B ,(expand-forms (cadr a))
+                      ,(expand-forms b))))
+          ((ctrans? b)
+           `(call ,(aref ops 4) #;A_mul_Bc ,(expand-forms a)
+                  ,(expand-forms (cadr b))))
+          ((trans? b)
+           `(call ,(aref ops 5) #;A_mul_Bt ,(expand-forms a)
+                  ,(expand-forms (cadr b))))
+          (else
+           `(call ,(cadr e) ,(expand-forms a) ,(expand-forms b))))))
+
 (define (lower-update-op e)
   (expand-forms
    (expand-update-operator
@@ -1812,6 +1836,14 @@
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
                      `(call (top _apply) (|.| ,(current-julia-module) 'call) ,f ,@(tuple-wrap argl '())))))
+                 ((and (eq? (cadr e) '/) (length= e 4))
+                  (expand-transposed-op
+                   e
+                   #(Ac_rdiv_Bc Ac_rdiv_B At_rdiv_Bt At_rdiv_B A_rdiv_Bc A_rdiv_Bt)))
+                 ((and (eq? (cadr e) '\\) (length= e 4))
+                  (expand-transposed-op
+                   e
+                   #(Ac_ldiv_Bc Ac_ldiv_B At_ldiv_Bt At_ldiv_B A_ldiv_Bc A_ldiv_Bt)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
