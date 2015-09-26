@@ -883,7 +883,6 @@ static std::string generate_func_sig(
 
             t = julia_struct_to_llvm(tti);
             if (t == NULL || t == T_void) {
-                JL_GC_POP();
                 std::stringstream msg;
                 msg << "ccall: the type of argument ";
                 msg << i+1;
@@ -1283,6 +1282,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         bool needroot = false;
         if (jl_is_abstract_ref_type(jargty)) {
             if (addressOf) {
+                JL_GC_POP();
                 emit_error("ccall: & on a Ref{T} argument is invalid", ctx);
                 return jl_cgval_t();
             }
