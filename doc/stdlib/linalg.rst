@@ -1294,7 +1294,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    An object of type ``UniformScaling``, representing an identity matrix of any size.
 
 LAPACK Functions
---------------
+----------------
 
 .. module:: Base.LinAlg.LAPACK
 
