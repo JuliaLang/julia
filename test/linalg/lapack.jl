@@ -36,7 +36,7 @@ let # Test gglse
     end
 end
 
-let # bdsqr & throw for bdsdc
+let # gebrd, bdsqr & throw for bdsdc
     n = 10
     for elty in (Float32, Float64)
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
@@ -51,6 +51,13 @@ let # bdsqr & throw for bdsdc
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
 
         @test_throws ArgumentError LAPACK.bdsdc!('U','Z',d,e)
+
+        A = rand(elty,n,n)
+        B = copy(A)
+        B, d, e, tauq, taup = LAPACK.gebrd!(B)
+        U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+        s, _ = LAPACK.bdsqr!('U',d,e[1:n-1],Vt, U, C)
+        @test s ≈ svdvals(A)
     end
 end
 
