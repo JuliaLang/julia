@@ -124,7 +124,7 @@ end
 mul!{T<:BlasFloat}(C::StridedMatrix{T}, x::StridedVector{T}, y::StridedCovector{T}) = BLAS.ger!(one(T), x, untranspose(y), C)
 # TODO: Add specializations for BLAS Complex*Float and/or Float*Complex?
 function mul!(C::AbstractMatrix, x::AbstractVector, y::Covector)
-    for j=1:size(C,2), i=1:size(C,1)
+    for j=1:size(C,2), i=1:size(C,1) # TODO: move to generic.jl or use something pre-existing
         C[i,j] = x[i]*y[j]
     end
     C

@@ -3,8 +3,8 @@
 
 abstract AbstractRotation{T}
 
-transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
-ctranspose(R::AbstractRotation) = error("all subtypes of AbstractRotation must define their own ctranspose method")
+transpose(R::AbstractRotation) = TensorTranspose{false}(R)
+ctranspose(R::AbstractRotation) = TensorTranspose{true}(R)
 
 function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
@@ -32,8 +32,8 @@ convert{T}(::Type{Rotation{T}}, R::Rotation) = Rotation{T}([convert(Givens{T}, g
 convert{T}(::Type{AbstractRotation{T}}, G::Givens) = convert(Givens{T}, G)
 convert{T}(::Type{AbstractRotation{T}}, R::Rotation) = convert(Rotation{T}, R)
 
-ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
-ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
+# ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
+# ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
@@ -264,45 +264,48 @@ end
 
 getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
 
-# A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
-# function A_mul_B!(G::Givens, A::AbstractVecOrMat)
-#     m, n = size(A, 1), size(A, 2)
-#     if G.i2 > m
-#         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
-#     end
-#     @inbounds @simd for i = 1:n
-#         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
-#         A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
-#         A[G.i1,i] = tmp
-#     end
-#     return A
-# end
-# function A_mul_Bc!(A::AbstractVecOrMat, G::Givens)
-#     m, n = size(A, 1), size(A, 2)
-#     if G.i2 > n
-#         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
-#     end
-#     @inbounds @simd for i = 1:m
-#         tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
-#         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
-#         A[i,G.i1] = tmp
-#     end
-#     return A
-# end
-# function A_mul_B!(G::Givens, R::Rotation)
-#     push!(R.rotations, G)
-#     return R
-# end
-# function A_mul_B!(R::Rotation, A::AbstractMatrix)
-#     @inbounds for i = 1:length(R.rotations)
-#         A_mul_B!(R.rotations[i], A)
-#     end
-#     return A
-# end
-# function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
-#     @inbounds for i = 1:length(R.rotations)
-#         A_mul_Bc!(A, R.rotations[i])
-#     end
-#     return A
-# end
+# TODO: mul!(A,B) mutates the non-Rotation argument; change to 3-arg?
+mul!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
+function mul!(G::Givens, A::AbstractVecOrMat)
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > m
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
+    @inbounds @simd for i = 1:n
+        tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
+        A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
+        A[G.i1,i] = tmp
+    end
+    return A
+end
+function mul!{T,GT<:Givens}(A::AbstractVecOrMat, Gc::TensorTranspose{true, T, GT})
+    G = untranspose(Gc)
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > n
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
+    @inbounds @simd for i = 1:m
+        tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
+        A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
+        A[i,G.i1] = tmp
+    end
+    return A
+end
+function mul!(G::Givens, R::Rotation)
+    push!(R.rotations, G)
+    return R
+end
+function mul!(R::Rotation, A::AbstractMatrix)
+    @inbounds for i = 1:length(R.rotations)
+        mul!(R.rotations[i], A)
+    end
+    return A
+end
+function mul!{T,RT<:Rotation}(A::AbstractMatrix, Rc::TensorTranspose{true, T, RT})
+    R = untranspose(Rc)
+    @inbounds for i = 1:length(R.rotations)
+        mul!(A, R.rotations[i]')
+    end
+    return A
+end
 *{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
