@@ -110,21 +110,40 @@ end
 
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
-macro repl(ex)
+macro repl(ex) repl(ex) end
+
+function repl(s::Symbol)
     quote
-        # Fuzzy Searching
-        $(isexpr(ex, Symbol)) && repl_search($(string(ex)))
-        if $(isa(ex, Symbol)) &&
-                !(isdefined($(current_module()), $(Expr(:quote, ex))) ||
-                  haskey(keywords, $(Expr(:quote, ex))))
-            repl_corrections($(string(ex)))
-        else
-            if $(isfield(ex) ? :(isa($(esc(ex.args[1])), DataType)) : false)
-                $(isfield(ex) ? :(fielddoc($(esc(ex.args[1])), $(ex.args[2]))) : nothing)
+        repl_search($(string(s)))
+        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($(string(s)))
+        $(_repl(s))
+    end
+end
+
+isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] == symbol("@r_str") && !isempty(x.args[2])
+
+repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
+
+repl(str::AbstractString) = :(apropos($str))
+
+repl(other) = nothing
+
+function _repl(x)
+    docs = :(@doc $(esc(x)))
+    try
+        # Handles function call syntax where each argument is a symbol.
+        isexpr(x, :call) && (docs = Base.gen_call_with_extracted_types(doc, x))
+    end
+    if isfield(x)
+        quote
+            if isa($(esc(x.args[1])), DataType)
+                fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
             else
-                $((isa(ex,Symbol) || isfield(ex) || isexpr(ex,:macrocall)) ? :(@doc ($(esc(ex)))) : Base.gen_call_with_extracted_types(doc, ex))
+                $docs
             end
         end
+    else
+        docs
     end
 end
 
