@@ -53,7 +53,7 @@ function add_all_docs_mod(m::Module)
     try
         add_all_docs_meta(m,Docs.meta(m))
     end
-    for name in names(m)
+    for name in names(m, true)
         try
             sub_m = getfield(m,name)
             isa(sub_m, Module) || continue

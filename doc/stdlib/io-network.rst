@@ -107,7 +107,14 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Write the canonical binary representation of a value to the given stream.
+   Write the canonical binary representation of a value to the given stream. Returns the number of bytes written into the stream.
+
+   You can write multiple values with the same :func:``write`` call. i.e. the following are equivalent:
+
+   .. code-block:: julia
+
+       write(stream, x, y...)
+       write(stream, x) + write(stream, y...)
 
 .. function:: read(stream, type)
 
