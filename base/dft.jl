@@ -91,12 +91,12 @@ To apply ``P`` to an array ``A``, use ``P * A``; in general, the
 syntax for applying plans is much like that of matrices.  (A plan
 can only be applied to arrays of the same size as the ``A`` for
 which the plan was created.)  You can also apply a plan with a
-preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
+preallocated output array ``Ã‚`` by calling ``A_mul_B!(Ã‚, plan,
 A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
-apply the inverse plan with ``P \ Â`` (the inverse plan is cached
+apply the inverse plan with ``P \ Ã‚`` (the inverse plan is cached
 and reused for subsequent calls to ``inv`` or ``\``), and apply the
 inverse plan to a pre-allocated output array ``A`` with
-``A_ldiv_B!(A, P, Â)``.
+``A_ldiv_B!(A, P, Ã‚)``.
 
 The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
 to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
@@ -395,7 +395,7 @@ fftshift(x,dim)
 ifftshift(x) = circshift(x, div([size(x)...],-2))
 
 doc"""
-    ifftshift(x)
+    ifftshift(x, [dim])
 
 Undoes the effect of `fftshift`.
 """
@@ -406,13 +406,6 @@ function ifftshift(x,dim)
     s[dim] = -div(size(x,dim),2)
     circshift(x, s)
 end
-
-doc"""
-    ifftshift(x, [dim])
-
-Undoes the effect of `fftshift`.
-"""
-ifftshift
 
 ##############################################################################
 
