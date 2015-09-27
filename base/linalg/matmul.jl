@@ -79,7 +79,7 @@ mul_shape(A::AbstractMatrix, B::AbstractVector) = (size(A,1),)
 mul_shape(A::AbstractVector, B::AbstractMatrix) = (length(A), size(B,2))
 # Matrix-Covector
 mul_shape(A::AbstractMatrix, B::Covector) = (size(A,1), length(B))
-mul_shape(A::Covector, B::AbstractMatrix) = (size(B,2),)
+# mul_shape(A::Covector, B::AbstractMatrix) = (size(B,2),) # Returns a covector
 # Vector-Covector
 mul_shape(A::Vector, B::Covector) = (lenth(A), length(B))
 
@@ -90,8 +90,7 @@ ntc(::AbstractVector) = 'N'
 ntc(::Covector{true}) = 'C'
 ntc(::Covector{false}) = 'T'
 
-typealias StridedMatOrTrans{T,C,A<:StridedVecOrMat} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}, Covector{C,T,A}}
-typealias AbstractMatOrTrans{T,C} Union{AbstractMatrix{T}, Covector{C,T}}
+typealias StridedMatOrTrans{T,C,A<:StridedVecOrMat} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}}
 
 ## There is a huge combinatorial explosion here. There are 4 mostly-orthoganol
 # dimensions:
@@ -121,13 +120,10 @@ function (*){T<:BlasFloat,S}(A::StridedMatOrTrans{T}, x::StridedVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
     mul!(similar(x, TS, mul_shape(A, x)), A, convert(AbstractVector{TS}, x))
 end
-function (*){T,S}(A::AbstractMatOrTrans{T}, x::AbstractVector{S})
+function (*){T,S}(A::AbstractMatrix{T}, x::AbstractVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
     mul!(similar(x,TS,mul_shape(A, x)),A,x)
 end
-(*)(A::AbstractVector, B::AbstractMatOrTrans) = reshape(A,length(A),1)*B # TODO: this could be done better
-mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatOrTrans) = mul!(C,reshape(A,length(A),1),B)
-
 mul!{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatOrTrans{T}, x::StridedVector{T}) = gemv!(y, ntc(A), untranspose(A), x)
 for elty in (Float32,Float64)
     @eval begin
@@ -139,10 +135,20 @@ for elty in (Float32,Float64)
         end
     end
 end
-mul!(y::StridedVector, A::StridedMatOrTrans, x::StridedVector) = generic_matvecmul!(y, ntc(A), untranspose(A), x)
+mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector) = generic_matvecmul!(y, ntc(A), untranspose(A), x)
+
+# Vector-matrix multiplication only works with implicit trailing singleton dimensions...
+(*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B # TODO: deprecate it?
+mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatrix) = mul!(C,reshape(A,length(A),1),B)
+
+# Covector-matrix multiplication returns a covector; v'*A*v is associative and a scalar
+# v'A => transpose(A'v), so we punt to gemv with a transpose
+*(x::Covector, A::AbstractMatrix) = (A'x')'
+mul!(C::Covector{true}, x::Covector, A::AbstractMatrix) = (mul!(untranspose(C), A', x'); C)
+mul!(C::Covector{false}, x::Covector, A::AbstractMatrix) = (conj!(mul!(untranspose(C), A', x')); C)
 
 # Matrix-matrix multiplication
-function (*){T,S}(A::AbstractMatOrTrans{T}, B::AbstractMatOrTrans{S})
+function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     TS = promote_type(arithtype(T), arithtype(S))
     mul!(similar(untranspose(B), TS, mul_shape(A, B)), A, B)
 end
@@ -157,7 +163,7 @@ for elty in (Float32,Float64)
         end
     end
 end
-mul!(C::StridedMatrix, A::StridedMatOrTrans, B::StridedMatOrTrans) = generic_matmatmul!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
+mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix) = generic_matmatmul!(C, ntc(A), ntc(B), untranspose(A), untranspose(B))
 
 # Supporting functions for matrix multiplication
 
