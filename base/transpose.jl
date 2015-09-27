@@ -34,6 +34,9 @@ ctranspose(T::Covector{true}) = T.data
 transpose(T::Covector{true}) = ConjugateArray(T.data)
 ctranspose(T::Covector{false}) = ConjugateArray(T.data)
 
+getindex(c::Covector{true}, i::Int) = ctranspose(c.data[i])
+getindex(c::Covector{false}, i::Int) = transpose(c.data[i])
+
 ## Undefined for arbitrary N
 transpose(A::AbstractArray) = error("transpose of 0- or 3+ dimensional arrays is undefined")
 ctranspose(A::AbstractArray) = error("ctranspose of 0- or 3+ dimensional arrays is undefined")

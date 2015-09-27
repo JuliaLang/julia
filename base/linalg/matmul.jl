@@ -81,7 +81,7 @@ mul_shape(A::AbstractVector, B::AbstractMatrix) = (length(A), size(B,2))
 mul_shape(A::AbstractMatrix, B::Covector) = (size(A,1), length(B))
 # mul_shape(A::Covector, B::AbstractMatrix) = (size(B,2),) # Returns a covector
 # Vector-Covector
-mul_shape(A::Vector, B::Covector) = (lenth(A), length(B))
+mul_shape(A::Vector, B::Covector) = (length(A), length(B))
 
 ntc(::AbstractMatrix) = 'N'
 ntc(::MatrixTranspose{true}) = 'C'
@@ -91,6 +91,7 @@ ntc(::Covector{true}) = 'C'
 ntc(::Covector{false}) = 'T'
 
 typealias StridedMatOrTrans{T,C,A<:StridedVecOrMat} Union{StridedMatrix{T}, MatrixTranspose{C,T,A}}
+typealias StridedCovector{T,C,A<:StridedVector} Covector{C,T,A}
 
 ## There is a huge combinatorial explosion here. There are 4 mostly-orthoganol
 # dimensions:
@@ -103,17 +104,31 @@ typealias StridedMatOrTrans{T,C,A<:StridedVecOrMat} Union{StridedMatrix{T}, Matr
 # The key to staying sane is keeping the number of combinations on any one
 # name relatively limited.
 
-# Vector-vector multiplication
+# Covector-vector dot products
 *(x::Covector{true}, y::AbstractVector) = dot(untranspose(x), y)
 *(x::Covector{false}, y::AbstractVector) = dot(conj(untranspose(x)), y) # TODO: don't conjugate twice!
 *{T<:BlasReal,A<:StridedVector}(x::Covector{true, T, A}, y::StridedVector{T}) = BLAS.dot(untranspose(x), y)
 *{T<:BlasReal,A<:StridedVector}(x::Covector{false, T, A}, y::StridedVector{T}) = BLAS.dot(untranspose(x), y)
 *{T<:BlasComplex,A<:StridedVector}(x::Covector{true, T, A}, y::StridedVector{T}) = BLAS.dotc(untranspose(x), y)
 *{T<:BlasComplex,A<:StridedVector}(x::Covector{false, T, A}, y::StridedVector{T}) = BLAS.dotu(untranspose(x), y)
-# Note: outer products formed using gemv, with Covector behaving like a matrix
-# But we need to disallow Covector*Covector since that looks like gemm
-*(x::Covector, y::Covector) = throw(ArgumentError("cannot multiply covector by a covector"))
-mul!(z, x::Covector, y::Covector) = dot(conj(untranspose(x)), y) # TODO: don't conjugate twice!
+# Vector-covector outer products
+# TODO: implement the typical BLAS conversion of the second argument?
+# function (*){T<:BlasFloat,S,C}(x::StridedVector{T}, y::StridedCovector{S,C})
+#     TS = promote_type(arithtype(T),arithtype(S))
+#     mul!(similar(untranspose(y), TS, mul_shape(x, y)), x, convert(Covector{C,TS}, y))
+# end
+function (*){T,S,C}(x::AbstractVector{T}, y::Covector{C,S})
+    TS = promote_type(arithtype(T),arithtype(S))
+    mul!(similar(x,TS,mul_shape(x, y)),x,y)
+end
+mul!{T<:BlasFloat}(C::StridedMatrix{T}, x::StridedVector{T}, y::StridedCovector{T}) = BLAS.ger!(one(T), x, untranspose(y), C)
+# TODO: Add specializations for BLAS Complex*Float and/or Float*Complex?
+function mul!(C::AbstractMatrix, x::AbstractVector, y::Covector)
+    for j=1:size(C,2), i=1:size(C,1)
+        C[i,j] = x[i]*y[j]
+    end
+    C
+end
 
 # Matrix-vector multiplication
 function (*){T<:BlasFloat,S}(A::StridedMatOrTrans{T}, x::StridedVector{S})
@@ -144,8 +159,8 @@ mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatrix) = mul!(C,reshape(A
 # Covector-matrix multiplication returns a covector; v'*A*v is associative and a scalar
 # v'A => transpose(A'v), so we punt to gemv with a transpose
 *(x::Covector, A::AbstractMatrix) = (A'x')'
-mul!(C::Covector{true}, x::Covector, A::AbstractMatrix) = (mul!(untranspose(C), A', x'); C)
-mul!(C::Covector{false}, x::Covector, A::AbstractMatrix) = (conj!(mul!(untranspose(C), A', x')); C)
+mul!(c::Covector{true}, x::Covector, A::AbstractMatrix) = (mul!(untranspose(c), A', x'); c)
+mul!(c::Covector{false}, x::Covector, A::AbstractMatrix) = (conj!(mul!(untranspose(c), A', x')); c)
 
 # Matrix-matrix multiplication
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
