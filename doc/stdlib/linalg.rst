@@ -1547,18 +1547,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Explicitly finds the matrix ``Q`` of a ``QR`` factorization after calling ``geqrf!`` on ``A``\ . Uses the output of ``geqrf!``\ . ``A`` is overwritten by ``Q``\ .
 
-.. function:: orgql!(A, tau, k = length(tau))
-
-   .. Docstring generated from Julia source
-
-   Explicitly finds the matrix ``Q`` of a ``QL`` factorization after calling ``geqlf!`` on ``A``\ . Uses the output of ``geqlf!``\ . ``A`` is overwritten by ``Q``\ .
-
-.. function:: orgrq!(A, tau, k = length(tau))
-
-   .. Docstring generated from Julia source
-
-   Explicitly finds the matrix ``Q`` of a ``RQ`` factorization after calling ``gerqf!`` on ``A``\ . Uses the output of ``gerqf!``\ . ``A`` is overwritten by ``Q``\ .
-
 .. function:: ormlq!(side, trans, A, tau, C)
 
    .. Docstring generated from Julia source
@@ -1570,18 +1558,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    .. Docstring generated from Julia source
 
    Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``QR`` factorization of ``A`` computed using ``geqrf!``\ . ``C`` is overwritten.
-
-.. function:: ormql!(side, trans, A, tau, C)
-
-   .. Docstring generated from Julia source
-
-   Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``QL`` factorization of ``A`` computed using ``geqlf!``\ . ``C`` is overwritten.
-
-.. function:: ormrq!(side, trans, A, tau, C)
-
-   .. Docstring generated from Julia source
-
-   Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``RQ`` factorization of ``A`` computed using ``gerqf!``\ . ``C`` is overwritten.
 
 .. function:: gemqrt!(side, trans, V, T, C)
 
@@ -1822,12 +1798,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Computes the generalized eigenvalues, generalized Schur form, left Schur vectors (``jobsvl = V``\ ), or right Schur vectors (``jobvsr = V``\ ) of ``A`` and ``B``\ .
 
    The generalized eigenvalues are returned in ``alpha`` and ``beta``\ . The left Schur vectors are returned in ``vsl`` and the right Schur vectors are returned in ``vsr``\ .
-
-.. function:: trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
-
-   .. Docstring generated from Julia source
-
-   Reorder the Schur factorization of a matrix. If ``compq = V``\ , the Schur vectors ``Q`` are reordered. If ``compq = N`` they are not modified. ``ifst`` and ``ilst`` specify the reordering of the vectors.
 
 .. function:: trsen!(compq, job, select, T, Q) -> (T, Q, w)
 

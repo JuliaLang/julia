@@ -2337,22 +2337,6 @@ Explicitly finds the matrix `Q` of a `QR` factorization after calling
 orgqr!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
 
 """
-    orgql!(A, tau, k = length(tau))
-
-Explicitly finds the matrix `Q` of a `QL` factorization after calling
-`geqlf!` on `A`. Uses the output of `geqlf!`. `A` is overwritten by `Q`.
-"""
-orgql!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
-
-"""
-    orgrq!(A, tau, k = length(tau))
-
-Explicitly finds the matrix `Q` of a `RQ` factorization after calling
-`gerqf!` on `A`. Uses the output of `gerqf!`. `A` is overwritten by `Q`.
-"""
-orgrq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
-
-"""
     ormlq!(side, trans, A, tau, C)
 
 Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
@@ -2371,26 +2355,6 @@ for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrf!`. `C` is overwritten.
 """
 ormqr!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
-
-"""
-    ormql!(side, trans, A, tau, C)
-
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
-(`trans = C`) for `side = L` or the equivalent right-sided multiplication
-for `side = R` using `Q` from a `QL` factorization of `A` computed using
-`geqlf!`. `C` is overwritten.
-"""
-ormql!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
-
-"""
-    ormrq!(side, trans, A, tau, C)
-
-Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
-(`trans = C`) for `side = L` or the equivalent right-sided multiplication
-for `side = R` using `Q` from a `RQ` factorization of `A` computed using
-`gerqf!`. `C` is overwritten.
-"""
-ormrq!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
 
 """
     gemqrt!(side, trans, V, T, C)
@@ -4947,15 +4911,6 @@ for (trsen, tgsen, elty) in
         end
     end
 end
-
-"""
-    trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
-
-Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
-vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
-and `ilst` specify the reordering of the vectors.
-"""
-trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix, Q::StridedMatrix)
 
 """
     trsen!(compq, job, select, T, Q) -> (T, Q, w)
