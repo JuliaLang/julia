@@ -395,7 +395,7 @@ fftshift(x,dim)
 ifftshift(x) = circshift(x, div([size(x)...],-2))
 
 doc"""
-    ifftshift(x)
+    ifftshift(x, [dim])
 
 Undoes the effect of `fftshift`.
 """
@@ -406,13 +406,6 @@ function ifftshift(x,dim)
     s[dim] = -div(size(x,dim),2)
     circshift(x, s)
 end
-
-doc"""
-    ifftshift(x, [dim])
-
-Undoes the effect of `fftshift`.
-"""
-ifftshift
 
 ##############################################################################
 

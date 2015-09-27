@@ -1463,12 +1463,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Computes the least norm solution of ``A * X = B`` by finding the full ``QR`` factorization of ``A``\ , then dividing-and-conquering the problem. ``B`` is overwritten with the solution ``X``\ . Singular values below ``rcond`` will be treated as zero. Returns the solution in ``B`` and the effective rank of ``A`` in ``rnk``\ .
 
-.. function:: gelsy!(A, B, rcond) -> (B, rnk)
-
-   .. Docstring generated from Julia source
-
-   Computes the least norm solution of ``A * X = B`` by finding the full ``QR`` factorization of ``A``\ , then dividing-and-conquering the problem. ``B`` is overwritten with the solution ``X``\ . Singular values below ``rcond`` will be treated as zero. Returns the solution in ``B`` and the effective rank of ``A`` in ``rnk``\ .
-
 .. function:: gglse!(A, c, B, d) -> (X,res)
 
    .. Docstring generated from Julia source
