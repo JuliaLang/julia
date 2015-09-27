@@ -543,6 +543,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
     // corruption otherwise.
     t->fielddesc_type = fielddesc_type;
     t->nfields = nfields;
+    t->haspadding = 0;
     return t;
 }
 
