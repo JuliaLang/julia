@@ -784,6 +784,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Compute the matrix exponential of ``A``, defined by
 
    .. math::
+
       e^A = \sum_{n=0}^{\infty} \frac{A^n}{n!}.
 
    For symmetric or Hermitian ``A``, an eigendecomposition (:func:`eigfact`) is used, otherwise the scaling and squaring algorithm (see [H05]_) is chosen.
@@ -901,13 +902,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``\ , which should have a size corresponding to ``(size(src,2),size(src,1))``\ . No in-place transposition is supported and unexpected results will happen if ``src`` and ``dest`` have overlapping memory regions.
 
-.. function:: eigs(A, [B,]; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    .. Docstring generated from Julia source
 
    Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
-   real symmetric or general nonsymmetric matrices respectively. If ``B`` is
-   provided, the generalized eigenproblem is solved.
+   real symmetric or general nonsymmetric matrices respectively.
 
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
@@ -943,6 +943,49 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       --------------- ---------------------------------- ----------------------------------
       ``nothing``     ordinary (forward)                 :math:`A`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
+      =============== ================================== ==================================
+
+.. function:: eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+
+   .. Docstring generated from Julia source
+
+   Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using Lanczos or Arnoldi iterations for
+   real symmetric or general nonsymmetric matrices respectively.
+
+   The following keyword arguments are supported:
+    * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
+
+       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+    * ``which``: type of eigenvalues to compute. See the note below.
+
+      ========= ======================================================================================================================
+      ``which`` type of eigenvalues
+      --------- ----------------------------------------------------------------------------------------------------------------------
+      ``:LM``   eigenvalues of largest magnitude (default)
+      ``:SM``   eigenvalues of smallest magnitude
+      ``:LR``   eigenvalues of largest real part
+      ``:SR``   eigenvalues of smallest real part
+      ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
+      ========= ======================================================================================================================
+
+    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+    * ``maxiter``: Maximum number of iterations (default = 300)
+    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
+    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
+    * ``v0``: starting vector from which to start the iterations
+
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
+
+      =============== ================================== ==================================
+      ``sigma``       iteration mode                     ``which`` refers to the problem
+      --------------- ---------------------------------- ----------------------------------
+      ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
+      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
       =============== ================================== ==================================
 
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
@@ -1249,3 +1292,526 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 .. data:: I
 
    An object of type ``UniformScaling``, representing an identity matrix of any size.
+
+LAPACK Functions
+----------------
+
+.. module:: Base.LinAlg.LAPACK
+
+:mod:`Base.LinAlg.LAPACK` provides wrappers for some of the LAPACK functions for
+linear algebra.  Those functions that overwrite one of the input
+arrays have names ending in ``'!'``.
+
+Usually a function has 4 methods defined, one each for ``Float64``,
+``Float32``, ``Complex128`` and ``Complex64`` arrays.
+
+.. currentmodule:: Base.LinAlg.LAPACK
+
+.. function:: gbtrf!(kl, ku, m, AB) -> (AB, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Compute the LU factorization of a banded matrix ``AB``\ . ``kl`` is the first subdiagonal containing a nonzero band, ``ku`` is the last superdiagonal containing one, and ``m`` is the first dimension of the matrix ``AB``\ . Returns the LU factorization in-place and ``ipiv``\ , the vector of pivots used.
+
+.. function:: gbtrs!(trans, kl, ku, m, AB, ipiv, B)
+
+   .. Docstring generated from Julia source
+
+   Solve the equation ``AB * X = B``\ . ``trans`` determines the orientation of ``AB``\ . It may be ``N`` (no transpose), ``T`` (transpose), or ``C`` (conjugate transpose). ``kl`` is the first subdiagonal containing a nonzero band, ``ku`` is the last superdiagonal containing one, and ``m`` is the first dimension of the matrix ``AB``\ . ``ipiv`` is the vector of pivots returned from ``gbtrf!``\ . Returns the vector or matrix ``X``\ , overwriting ``B`` in-place.
+
+.. function:: gebal!(job, A) -> (ilo, ihi, scale)
+
+   .. Docstring generated from Julia source
+
+   Balance the matrix ``A`` before computing its eigensystem or Schur factorization. ``job`` can be one of ``N`` (``A`` will not be permuted or scaled), ``P`` (``A`` will only be permuted), ``S`` (``A`` will only be scaled), or ``B`` (``A`` will be both permuted and scaled). Modifies ``A`` in-place and returns ``ilo``\ , ``ihi``\ , and ``scale``\ . If permuting was turned on, ``A[i,j] = 0`` if ``j > i`` and ``1 < j < ilo`` or ``j > ihi``\ . ``scale`` contains information about the scaling/permutations performed.
+
+.. function:: gebak!(job, side, ilo, ihi, scale, V)
+
+   .. Docstring generated from Julia source
+
+   Transform the eigenvectors ``V`` of a matrix balanced using ``gebal!`` to the unscaled/unpermuted eigenvectors of the original matrix. Modifies ``V`` in-place. ``side`` can be ``L`` (left eigenvectors are transformed) or ``R`` (right eigenvectors are transformed).
+
+.. function:: gebrd!(A) -> (A, d, e, tauq, taup)
+
+   .. Docstring generated from Julia source
+
+   Reduce ``A`` in-place to bidiagonal form ``A = QBP'``\ . Returns ``A``\ , containing the bidiagonal matrix ``B``\ ; ``d``\ , containing the diagonal elements of ``B``\ ; ``e``\ , containing the off-diagonal elements of ``B``\ ; ``tauq``\ , containing the elementary reflectors representing ``Q``\ ; and ``taup``\ , containing the elementary reflectors representing ``P``\ .
+
+.. function:: gelqf!(A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``LQ`` factorization of ``A``\ , ``A = LQ``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqlf!(A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QL`` factorization of ``A``\ , ``A = QL``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqrf!(A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QR`` factorization of ``A``\ , ``A = QR``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqp3!(A, jpvt, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3. ``P`` is a pivoting matrix, represented by ``jpvt``\ . ``tau`` stores the elementary reflectors. ``jpvt`` must have length length greater than or equal to ``n`` if ``A`` is an ``(m x n)`` matrix. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
+
+   ``A``\ , ``jpvt``\ , and ``tau`` are modified in-place.
+
+.. function:: gerqf!(A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``RQ`` factorization of ``A``\ , ``A = RQ``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqrt!(A, T)
+
+   .. Docstring generated from Julia source
+
+   Compute the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``T`` contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization. The first dimension of ``T`` sets the block size and it must be between 1 and ``n``\ . The second dimension of ``T`` must equal the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``T`` modified in-place.
+
+.. function:: geqrt3!(A, T)
+
+   .. Docstring generated from Julia source
+
+   Recursively computes the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``T`` contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.  The first dimension of ``T`` sets the block size and it must be between 1 and ``n``\ . The second dimension of ``T`` must equal the smallest dimension of ``A``\ .
+
+   Returns ``A`` and ``T`` modified in-place.
+
+.. function:: getrf!(A) -> (A, ipiv, info)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``LU`` factorization of ``A``\ , ``A = LU``\ .
+
+   Returns ``A``\ , modified in-place, ``ipiv``\ , the pivoting information, and an ``info`` code which indicates success (``info = 0``\ ), a singular value in ``U`` (``info = i``\ , in which case ``U[i,i]`` is singular), or an error code (``info < 0``\ ).
+
+.. function:: tzrzf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Transforms the upper trapezoidal matrix ``A`` to upper triangular form in-place. Returns ``A`` and ``tau``\ , the scalar parameters for the elementary reflectors of the transformation.
+
+.. function:: ormrz!(side, trans, A, tau, C)
+
+   .. Docstring generated from Julia source
+
+   Multiplies the matrix ``C`` by ``Q`` from the transformation supplied by ``tzrzf!``\ . Depending on ``side`` or ``trans`` the multiplication can be left-sided (``side = L, Q*C``\ ) or right-sided (``side = R, C*Q``\ ) and ``Q`` can be unmodified (``trans = N``\ ), transposed (``trans = T``\ ), or conjugate transposed (``trans = C``\ ). Returns matrix ``C`` which is modified in-place with the result of the multiplication.
+
+.. function:: gels!(trans, A, B) -> (F, B, ssr)
+
+   .. Docstring generated from Julia source
+
+   Solves the linear equation ``A * X = B``\ , ``A.' * X =B``\ , or ``A' * X = B`` using a QR or LQ factorization. Modifies the matrix/vector ``B`` in place with the solution. ``A`` is overwritten with its ``QR`` or ``LQ`` factorization. ``trans`` may be one of ``N`` (no modification), ``T`` (transpose), or ``C`` (conjugate transpose). ``gels!`` searches for the minimum norm/least squares solution. ``A`` may be under or over determined. The solution is returned in ``B``\ .
+
+.. function:: gesv!(A, B) -> (B, A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Solves the linear equation ``A * X = B`` where ``A`` is a square matrix using the ``LU`` factorization of ``A``\ . ``A`` is overwritten with its ``LU`` factorization and ``B`` is overwritten with the solution ``X``\ . ``ipiv`` contains the pivoting information for the ``LU`` factorization of ``A``\ .
+
+.. function:: getrs!(trans, A, ipiv, B)
+
+   .. Docstring generated from Julia source
+
+   Solves the linear equation ``A * X = B``\ , ``A.' * X =B``\ , or ``A' * X = B`` for square ``A``\ . Modifies the matrix/vector ``B`` in place with the solution. ``A`` is the ``LU`` factorization from ``getrf!``\ , with ``ipiv`` the pivoting information. ``trans`` may be one of ``N`` (no modification), ``T`` (transpose), or ``C`` (conjugate transpose).
+
+.. function:: getri!(A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Computes the inverse of ``A``\ , using its ``LU`` factorization found by ``getrf!``\ . ``ipiv`` is the pivot information output and ``A`` contains the ``LU`` factorization of ``getrf!``\ . ``A`` is overwritten with its inverse.
+
+.. function:: gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)
+
+   .. Docstring generated from Julia source
+
+   Solves the linear equation ``A * X = B`` (``trans = N``\ ), ``A.' * X =B`` (``trans = T``\ ), or ``A' * X = B`` (``trans = C``\ ) using the ``LU`` factorization of ``A``\ . ``fact`` may be ``E``\ , in which case ``A`` will be equilibrated and copied to ``AF``\ ; ``F``\ , in which case ``AF`` and ``ipiv`` from a previous ``LU`` factorization are inputs; or ``N``\ , in which case ``A`` will be copied to ``AF`` and then factored. If ``fact = F``\ , ``equed`` may be ``N``\ , meaning ``A`` has not been equilibrated; ``R``\ , meaning ``A`` was multiplied by ``diagm(R)`` from the left; ``C``\ , meaning ``A`` was multiplied by ``diagm(C)`` from the right; or ``B``\ , meaning ``A`` was multiplied by ``diagm(R)`` from the left and ``diagm(C)`` from the right. If ``fact = F`` and ``equed = R`` or ``B`` the elements of ``R`` must all be positive. If ``fact = F`` and ``equed = C`` or ``B`` the elements of ``C`` must all be positive.
+
+   Returns the solution ``X``\ ; ``equed``\ , which is an output if ``fact`` is not ``N``\ , and describes the equilibration that was performed; ``R``\ , the row equilibration diagonal; ``C``\ , the column equilibration diagonal; ``B``\ , which may be overwritten with its equilibrated form ``diagm(R)*B`` (if ``trans = N`` and ``equed = R,B``\ ) or ``diagm(C)*B`` (if ``trans = T,C`` and ``equed = C,B``\ ); ``rcond``\ , the reciprocal condition number of ``A`` after equilbrating; ``ferr``\ , the forward error bound for each solution vector in ``X``\ ; ``berr``\ , the forward error bound for each solution vector in ``X``\ ; and ``work``\ , the reciprocal pivot growth factor.
+
+.. function:: gesvx!(A, B)
+
+   .. Docstring generated from Julia source
+
+   The no-equilibration, no-transpose simplification of ``gesvx!``\ .
+
+.. function:: gelsd!(A, B, rcond) -> (B, rnk)
+
+   .. Docstring generated from Julia source
+
+   Computes the least norm solution of ``A * X = B`` by finding the ``SVD`` factorization of ``A``\ , then dividing-and-conquering the problem. ``B`` is overwritten with the solution ``X``\ . Singular values below ``rcond`` will be treated as zero. Returns the solution in ``B`` and the effective rank of ``A`` in ``rnk``\ .
+
+.. function:: gelsy!(A, B, rcond) -> (B, rnk)
+
+   .. Docstring generated from Julia source
+
+   Computes the least norm solution of ``A * X = B`` by finding the full ``QR`` factorization of ``A``\ , then dividing-and-conquering the problem. ``B`` is overwritten with the solution ``X``\ . Singular values below ``rcond`` will be treated as zero. Returns the solution in ``B`` and the effective rank of ``A`` in ``rnk``\ .
+
+.. function:: gglse!(A, c, B, d) -> (X,res)
+
+   .. Docstring generated from Julia source
+
+   Solves the equation ``A * x = c`` where ``x`` is subject to the equality constraint ``B * x = d``\ . Uses the formula ``||c - A*x||^2 = 0`` to solve. Returns ``X`` and the residual sum-of-squares.
+
+.. function:: geev!(jobvl, jobvr, A) -> (W, VL, VR)
+
+   .. Docstring generated from Julia source
+
+   Finds the eigensystem of ``A``\ . If ``jobvl = N``\ , the left eigenvectors of ``A`` aren't computed. If ``jobvr = N``\ , the right eigenvectors of ``A`` aren't computed. If ``jobvl = V`` or ``jobvr = V``\ , the corresponding eigenvectors are computed. Returns the eigenvalues in ``W``\ , the right eigenvectors in ``VR``\ , and the left eigenvectors in ``VL``\ .
+
+.. function:: gesdd!(job, A) -> (U, S, VT)
+
+   .. Docstring generated from Julia source
+
+   Finds the singular value decomposition of ``A``\ , ``A = U * S * V'``\ , using a divide and conquer approach. If ``job = A``\ , all the columns of ``U`` and the rows of ``V'`` are computed. If ``job = N``\ , no columns of ``U`` or rows of ``V'`` are computed. If ``job = O``\ , ``A`` is overwritten with the columns of (thin) ``U`` and the rows of (thin) ``V'``\ . If ``job = S``\ , the columns of (thin) ``U`` and the rows of (thin) ``V'`` are computed and returned separately.
+
+.. function:: gesvd!(jobu, jobvt, A) -> (U, S, VT)
+
+   .. Docstring generated from Julia source
+
+   Finds the singular value decomposition of ``A``\ , ``A = U * S * V'``\ . If ``jobu = A``\ , all the columns of ``U`` are computed. If ``jobvt = A`` all the rows of ``V'`` are computed. If ``jobu = N``\ , no columns of ``U`` are computed. If ``jobvt = N`` no rows of ``V'`` are computed. If ``jobu = O``\ , ``A`` is overwritten with the columns of (thin) ``U``\ . If ``jobvt = O``\ , ``A`` is overwritten with the rows of (thin) ``V'``\ . If ``jobu = S``\ , the columns of (thin) ``U`` are computed and returned separately. If ``jobvt = S`` the rows of (thin) ``V'`` are computed and returned separately. ``jobu`` and ``jobvt`` can't both be ``O``\ .
+
+   Returns ``U``\ , ``S``\ , and ``Vt``\ , where ``S`` are the singular values of ``A``\ .
+
+.. function:: ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
+
+   .. Docstring generated from Julia source
+
+   Finds the generalized singular value decomposition of ``A`` and ``B``\ , ``U'*A*Q = D1*R`` and ``V'*B*Q = D2*R``\ . ``D1`` has ``alpha`` on its diagonal and ``D2`` has ``beta`` on its diagonal. If ``jobu = U``\ , the orthogonal/unitary matrix ``U`` is computed. If ``jobv = V`` the orthogonal/unitary matrix ``V`` is computed. If ``jobq = Q``\ , the orthogonal/unitary matrix ``Q`` is computed. If ``job{u,v,q} = N``\ , that matrix is not computed.
+
+.. function:: geevx!(balanc, jobvl, jobvr, sense, A) -> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)
+
+   .. Docstring generated from Julia source
+
+   Finds the eigensystem of ``A`` with matrix balancing. If ``jobvl = N``\ , the left eigenvectors of ``A`` aren't computed. If ``jobvr = N``\ , the right eigenvectors of ``A`` aren't computed. If ``jobvl = V`` or ``jobvr = V``\ , the corresponding eigenvectors are computed. If ``balanc = N``\ , no balancing is performed. If ``balanc = P``\ , ``A`` is permuted but not scaled. If ``balanc = S``\ , ``A`` is scaled but not permuted. If ``balanc = B``\ , ``A`` is permuted and scaled. If ``sense = N``\ , no reciprocal condition numbers are computed. If ``sense = E``\ , reciprocal condition numbers are computed for the eigenvalues only. If ``sense = V``\ , reciprocal condition numbers are computed for the right eigenvectors only. If ``sense = B``\ , reciprocal condition numbers are computed for the right eigenvectors and the eigenvectors. If ``sense = E,B``\ , the right and left eigenvectors must be computed.
+
+.. function:: ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
+
+   .. Docstring generated from Julia source
+
+   Finds the generalized eigendecomposition of ``A`` and ``B``\ . If ``jobvl = N``\ , the left eigenvectors aren't computed. If ``jobvr = N``\ , the right eigenvectors aren't computed. If ``jobvl = V`` or ``jobvr = V``\ , the corresponding eigenvectors are computed.
+
+.. function:: gtsv!(dl, d, du, B)
+
+   .. Docstring generated from Julia source
+
+   Solves the equation ``A * X = B`` where ``A`` is a tridiagonal matrix with ``dl`` on the subdiagonal, ``d`` on the diagonal, and ``du`` on the superdiagonal.
+
+   Overwrites ``B`` with the solution ``X`` and returns it.
+
+.. function:: gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Finds the ``LU`` factorization of a tridiagonal matrix with ``dl`` on the subdiagonal, ``d`` on the diagonal, and ``du`` on the superdiagonal.
+
+   Modifies ``dl``\ , ``d``\ , and ``du`` in-place and returns them and the second superdiagonal ``du2`` and the pivoting vector ``ipiv``\ .
+
+.. function:: gttrs!(trans, dl, d, du, du2, ipiv, B)
+
+   .. Docstring generated from Julia source
+
+   Solves the equation ``A * X = B`` (``trans = N``\ ), ``A.' * X = B`` (``trans = T``\ ), or ``A' * X = B`` (``trans = C``\ ) using the ``LU`` factorization computed by ``gttrf!``\ . ``B`` is overwritten with the solution ``X``\ .
+
+.. function:: orglq!(A, tau, k = length(tau))
+
+   .. Docstring generated from Julia source
+
+   Explicitly finds the matrix ``Q`` of a ``LQ`` factorization after calling ``gelqf!`` on ``A``\ . Uses the output of ``gelqf!``\ . ``A`` is overwritten by ``Q``\ .
+
+.. function:: orgqr!(A, tau, k = length(tau))
+
+   .. Docstring generated from Julia source
+
+   Explicitly finds the matrix ``Q`` of a ``QR`` factorization after calling ``geqrf!`` on ``A``\ . Uses the output of ``geqrf!``\ . ``A`` is overwritten by ``Q``\ .
+
+.. function:: ormlq!(side, trans, A, tau, C)
+
+   .. Docstring generated from Julia source
+
+   Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``LQ`` factorization of ``A`` computed using ``gelqf!``\ . ``C`` is overwritten.
+
+.. function:: ormqr!(side, trans, A, tau, C)
+
+   .. Docstring generated from Julia source
+
+   Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``QR`` factorization of ``A`` computed using ``geqrf!``\ . ``C`` is overwritten.
+
+.. function:: gemqrt!(side, trans, V, T, C)
+
+   .. Docstring generated from Julia source
+
+   Computes ``Q * C`` (``trans = N``\ ), ``Q.' * C`` (``trans = T``\ ), ``Q' * C`` (``trans = C``\ ) for ``side = L`` or the equivalent right-sided multiplication for ``side = R`` using ``Q`` from a ``QR`` factorization of ``A`` computed using ``geqrt!``\ . ``C`` is overwritten.
+
+.. function:: posv!(uplo, A, B) -> (A, B)
+
+   .. Docstring generated from Julia source
+
+   Finds the solution to ``A * X = B`` where ``A`` is a symmetric or Hermitian positive definite matrix. If ``uplo = U`` the upper Cholesky decomposition of ``A`` is computed. If ``uplo = L`` the lower Cholesky decomposition of ``A`` is computed. ``A`` is overwritten by its Cholesky decomposition. ``B`` is overwritten with the solution ``X``\ .
+
+.. function:: potrf!(uplo, A)
+
+   .. Docstring generated from Julia source
+
+   Computes the Cholesky (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) decomposition of positive-definite matrix ``A``\ . ``A`` is overwritten and returned with an info code.
+
+.. function:: potri!(uplo, A)
+
+   .. Docstring generated from Julia source
+
+   Computes the inverse of positive-definite matrix ``A`` after calling ``potrf!`` to find its (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) Cholesky decomposition.
+
+   ``A`` is overwritten by its inverse and returned.
+
+.. function:: potrs!(uplo, A, B)
+
+   .. Docstring generated from Julia source
+
+   Finds the solution to ``A * X = B`` where ``A`` is a symmetric or Hermitian positive definite matrix whose Cholesky decomposition was computed by ``potrf!``\ . If ``uplo = U`` the upper Cholesky decomposition of ``A`` was computed. If ``uplo = L`` the lower Cholesky decomposition of ``A`` was computed. ``B`` is overwritten with the solution ``X``\ .
+
+.. function:: pstrf!(uplo, A, tol) -> (A, piv, rank, info)
+
+   .. Docstring generated from Julia source
+
+   Computes the (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) pivoted Cholesky decomposition of positive-definite matrix ``A`` with a user-set tolerance ``tol``\ . ``A`` is overwritten by its Cholesky decomposition.
+
+   Returns ``A``\ , the pivots ``piv``\ , the rank of ``A``\ , and an ``info`` code. If ``info = 0``\ , the factorization succeeded. If ``info = i > 0 `, then `A`` is indefinite or rank-deficient.
+
+.. function:: ptsv!(D, E, B)
+
+   .. Docstring generated from Julia source
+
+   Solves ``A * X = B`` for positive-definite tridiagonal ``A``\ . ``D`` is the diagonal of ``A`` and ``E`` is the off-diagonal. ``B`` is overwritten with the solution ``X`` and returned.
+
+.. function:: pttrf!(D, E)
+
+   .. Docstring generated from Julia source
+
+   Computes the LDLt factorization of a positive-definite tridiagonal matrix with ``D`` as diagonal and ``E`` as off-diagonal. ``D`` and ``E`` are overwritten and returned.
+
+.. function:: pttrs!(D, E, B)
+
+   .. Docstring generated from Julia source
+
+   Solves ``A * X = B`` for positive-definite tridiagonal ``A`` with diagonal ``D`` and off-diagonal ``E`` after computing ``A``\ 's LDLt factorization using ``pttrf!``\ . ``B`` is overwritten with the solution ``X``\ .
+
+.. function:: trtri!(uplo, diag, A)
+
+   .. Docstring generated from Julia source
+
+   Finds the inverse of (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) triangular matrix ``A``\ . If ``diag = N``\ , ``A`` has non-unit diagonal elements. If ``diag = U``\ , all diagonal elements of ``A`` are one. ``A`` is overwritten with its inverse.
+
+.. function:: trtrs!(uplo, trans, diag, A, B)
+
+   .. Docstring generated from Julia source
+
+   Solves ``A * X = B`` (``trans = N``\ ), ``A.' * X = B`` (``trans = T``\ ), or ``A' * X = B`` (``trans = C``\ ) for (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) triangular matrix ``A``\ . If ``diag = N``\ , ``A`` has non-unit diagonal elements. If ``diag = U``\ , all diagonal elements of ``A`` are one. ``B`` is overwritten with the solution ``X``\ .
+
+.. function:: trcon!(norm, uplo, diag, A)
+
+   .. Docstring generated from Julia source
+
+   Finds the reciprocal condition number of (upper if ``uplo = U``\ , lower if ``uplo = L``\ ) triangular matrix ``A``\ . If ``diag = N``\ , ``A`` has non-unit diagonal elements. If ``diag = U``\ , all diagonal elements of ``A`` are one. If ``norm = I``\ , the condition number is found in the infinity norm. If ``norm = O`` or ``1``\ , the condition number is found in the one norm.
+
+.. function:: trevc!(side, howmny, select, T, VL = similar(T), VR = similar(T))
+
+   .. Docstring generated from Julia source
+
+   Finds the eigensystem of an upper triangular matrix ``T``\ . If ``side = R``\ , the right eigenvectors are computed. If ``side = L``\ , the left eigenvectors are computed. If ``side = B``\ , both sets are computed. If ``howmny = A``\ , all eigenvectors are found. If ``howmny = B``\ , all eigenvectors are found and backtransformed using ``VL`` and ``VR``\ . If ``howmny = S``\ , only the eigenvectors corresponding to the values in ``select`` are computed.
+
+.. function:: trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)
+
+   .. Docstring generated from Julia source
+
+   Estimates the error in the solution to ``A * X = B`` (``trans = N``\ ), ``A.' * X = B`` (``trans = T``\ ), ``A' * X = B`` (``trans = C``\ ) for ``side = L``\ , or the equivalent equations a right-handed ``side = R`` ``X * A`` after computing ``X`` using ``trtrs!``\ . If ``uplo = U``\ , ``A`` is upper triangular. If ``uplo = L``\ , ``A`` is lower triangular. If ``diag = N``\ , ``A`` has non-unit diagonal elements. If ``diag = U``\ , all diagonal elements of ``A`` are one. ``Ferr`` and ``Berr`` are optional inputs. ``Ferr`` is the forward error and ``Berr`` is the backward error, each component-wise.
+
+.. function:: stev!(job, dv, ev) -> (dv, Zmat)
+
+   .. Docstring generated from Julia source
+
+   Computes the eigensystem for a symmetric tridiagonal matrix with ``dv`` as diagonal and ``ev`` as off-diagonal. If ``job = N`` only the eigenvalues are found and returned in ``dv``\ . If ``job = V`` then the eigenvectors are also found and returned in ``Zmat``\ .
+
+.. function:: stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
+
+   .. Docstring generated from Julia source
+
+   Computes the eigenvalues for a symmetric tridiagonal matrix with ``dv`` as diagonal and ``ev`` as off-diagonal. If ``range = A``\ , all the eigenvalues are found. If ``range = V``\ , the eigenvalues in the half-open interval ``(vl, vu]`` are found. If ``range = I``\ , the eigenvalues with indices between ``il`` and ``iu`` are found. If ``order = B``\ , eigvalues are ordered within a block. If ``order = E``\ , they are ordered across all the blocks. ``abstol`` can be set as a tolerance for convergence.
+
+.. function:: stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
+
+   .. Docstring generated from Julia source
+
+   Computes the eigenvalues (``jobz = N``\ ) or eigenvalues and eigenvectors (``jobz = V``\ ) for a symmetric tridiagonal matrix with ``dv`` as diagonal and ``ev`` as off-diagonal. If ``range = A``\ , all the eigenvalues are found. If ``range = V``\ , the eigenvalues in the half-open interval ``(vl, vu]`` are found. If ``range = I``\ , the eigenvalues with indices between ``il`` and ``iu`` are found. The eigenvalues are returned in ``w`` and the eigenvectors in ``Z``\ .
+
+.. function:: stein!(dv, ev_in, w_in, iblock_in, isplit_in)
+
+   .. Docstring generated from Julia source
+
+   Computes the eigenvectors for a symmetric tridiagonal matrix with ``dv`` as diagonal and ``ev_in`` as off-diagonal. ``w_in`` specifies the input eigenvalues for which to find corresponding eigenvectors. ``iblock_in`` specifies the submatrices corresponding to the eigenvalues in ``w_in``\ . ``isplit_in`` specifies the splitting points between the submatrix blocks.
+
+.. function:: syconv!(uplo, A, ipiv) -> (A, work)
+
+   .. Docstring generated from Julia source
+
+   Converts a symmetric matrix ``A`` (which has been factorized into a triangular matrix) into two matrices ``L`` and ``D``\ . If ``uplo = U``\ , ``A`` is upper triangular. If ``uplo = L``\ , it is lower triangular. ``ipiv`` is the pivot vector from the triangular factorization. ``A`` is overwritten by ``L`` and ``D``\ .
+
+.. function:: sysv!(uplo, A, B) -> (B, A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Finds the solution to ``A * X = B`` for symmetric matrix ``A``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``B`` is overwritten by the solution ``X``\ . ``A`` is overwritten by its Bunch-Kaufman factorization. ``ipiv`` contains pivoting information about the factorization.
+
+.. function:: sytrf!(uplo, A) -> (A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Computes the Bunch-Kaufman factorization of a symmetric matrix ``A``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored.
+
+   Returns ``A``\ , overwritten by the factorization, and a pivot vector ``ipiv``\ .
+
+.. function:: sytri!(uplo, A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Computes the inverse of a symmetric matrix ``A`` using the results of ``sytrf!``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``A`` is overwritten by its inverse.
+
+.. function:: sytrs!(uplo, A, ipiv, B)
+
+   .. Docstring generated from Julia source
+
+   Solves the equation ``A * X = B`` for a symmetric matrix ``A`` using the results of ``sytrf!``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``B`` is overwritten by the solution ``X``\ .
+
+.. function:: hesv!(uplo, A, B) -> (B, A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Finds the solution to ``A * X = B`` for Hermitian matrix ``A``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``B`` is overwritten by the solution ``X``\ . ``A`` is overwritten by its Bunch-Kaufman factorization. ``ipiv`` contains pivoting information about the factorization.
+
+.. function:: hetrf!(uplo, A) -> (A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Computes the Bunch-Kaufman factorization of a Hermitian matrix ``A``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored.
+
+   Returns ``A``\ , overwritten by the factorization, and a pivot vector.
+
+.. function:: hetri!(uplo, A, ipiv)
+
+   .. Docstring generated from Julia source
+
+   Computes the inverse of a Hermitian matrix ``A`` using the results of ``sytrf!``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``A`` is overwritten by its inverse.
+
+.. function:: hetrs!(uplo, A, ipiv, B)
+
+   .. Docstring generated from Julia source
+
+   Solves the equation ``A * X = B`` for a Hermitian matrix ``A`` using the results of ``sytrf!``\ . If ``uplo = U``\ , the upper half of ``A`` is stored. If ``uplo = L``\ , the lower half is stored. ``B`` is overwritten by the solution ``X``\ .
+
+.. function:: syev!(jobz, uplo, A)
+
+   .. Docstring generated from Julia source
+
+   Finds the eigenvalues (``jobz = N``\ ) or eigenvalues and eigenvectors (``jobz = V``\ ) of a symmetric matrix ``A``\ . If ``uplo = U``\ , the upper triangle of ``A`` is used. If ``uplo = L``\ , the lower triangle of ``A`` is used.
+
+.. function:: syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)
+
+   .. Docstring generated from Julia source
+
+   Finds the eigenvalues (``jobz = N``\ ) or eigenvalues and eigenvectors (``jobz = V``\ ) of a symmetric matrix ``A``\ . If ``uplo = U``\ , the upper triangle of ``A`` is used. If ``uplo = L``\ , the lower triangle of ``A`` is used. If ``range = A``\ , all the eigenvalues are found. If ``range = V``\ , the eigenvalues in the half-open interval ``(vl, vu]`` are found. If ``range = I``\ , the eigenvalues with indices between ``il`` and ``iu`` are found. ``abstol`` can be set as a tolerance for convergence.
+
+   The eigenvalues are returned in ``W`` and the eigenvectors in ``Z``\ .
+
+.. function:: sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (w, A, B)
+
+   .. Docstring generated from Julia source
+
+   Finds the generalized eigenvalues (``jobz = N``\ ) or eigenvalues and eigenvectors (``jobz = V``\ ) of a symmetric matrix ``A`` and symmetric positive-definite matrix ``B``\ . If ``uplo = U``\ , the upper triangles of ``A`` and ``B`` are used. If ``uplo = L``\ , the lower triangles of ``A`` and ``B`` are used. If ``itype = 1``\ , the problem to solve is ``A * x = lambda * B * x``\ . If ``itype = 2``\ , the problem to solve is ``A * B * x = lambda * x``\ . If ``itype = 3``\ , the problem to solve is ``B * A * x = lambda * x``\ .
+
+.. function:: bdsqr!(uplo, d, e_, Vt, U, C) -> (d, Vt, U, C)
+
+   .. Docstring generated from Julia source
+
+   Computes the singular value decomposition of a bidiagonal matrix with ``d`` on the diagonal and ``e_`` on the off-diagonal. If ``uplo = U``\ , ``e_`` is the superdiagonal. If ``uplo = L``\ , ``e_`` is the subdiagonal. Can optionally also compute the product ``Q' * C``\ .
+
+   Returns the singular values in ``d``\ , and the matrix ``C`` overwritten with ``Q' * C``\ .
+
+.. function:: bdsdc!(uplo, compq, d, e_) -> (d, e, u, vt, q, iq)
+
+   .. Docstring generated from Julia source
+
+   Computes the singular value decomposition of a bidiagonal matrix with ``d`` on the diagonal and ``e_`` on the off-diagonal using a divide and conqueq method. If ``uplo = U``\ , ``e_`` is the superdiagonal. If ``uplo = L``\ , ``e_`` is the subdiagonal. If ``compq = N``\ , only the singular values are found. If ``compq = I``\ , the singular values and vectors are found. If ``compq = P``\ , the singular values and vectors are found in compact form. Only works for real types.
+
+   Returns the singular values in ``d``\ , and if ``compq = P``\ , the compact singular vectors in ``iq``\ .
+
+.. function:: gecon!(normtype, A, anorm)
+
+   .. Docstring generated from Julia source
+
+   Finds the reciprocal condition number of matrix ``A``\ . If ``normtype = I``\ , the condition number is found in the infinity norm. If ``normtype = O`` or ``1``\ , the condition number is found in the one norm. ``A`` must be the result of ``getrf!`` and ``anorm`` is the norm of ``A`` in the relevant norm.
+
+.. function:: gehrd!(ilo, ihi, A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Converts a matrix ``A`` to Hessenberg form. If ``A`` is balanced with ``gebal!`` then ``ilo`` and ``ihi`` are the outputs of ``gebal!``\ . Otherwise they should be ``ilo = 1`` and ``ihi = size(A,2)``\ . ``tau`` contains the elementary reflectors of the factorization.
+
+.. function:: orghr!(ilo, ihi, A, tau)
+
+   .. Docstring generated from Julia source
+
+   Explicitly finds ``Q``\ , the orthogonal/unitary matrix from ``gehrd!``\ . ``ilo``\ , ``ihi``\ , ``A``\ , and ``tau`` must correspond to the input/output to ``gehrd!``\ .
+
+.. function:: gees!(jobvs, A) -> (A, vs, w)
+
+   .. Docstring generated from Julia source
+
+   Computes the eigenvalues (``jobvs = N``\ ) or the eigenvalues and Schur vectors (``jobvs = V``\ ) of matrix ``A``\ . ``A`` is overwritten by its Schur form.
+
+   Returns ``A``\ , ``vs`` containing the Schur vectors, and ``w``\ , containing the eigenvalues.
+
+.. function:: gges!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)
+
+   .. Docstring generated from Julia source
+
+   Computes the generalized eigenvalues, generalized Schur form, left Schur vectors (``jobsvl = V``\ ), or right Schur vectors (``jobvsr = V``\ ) of ``A`` and ``B``\ .
+
+   The generalized eigenvalues are returned in ``alpha`` and ``beta``\ . The left Schur vectors are returned in ``vsl`` and the right Schur vectors are returned in ``vsr``\ .
+
+.. function:: trsen!(compq, job, select, T, Q) -> (T, Q, w)
+
+   .. Docstring generated from Julia source
+
+   Reorder the Schur factorization of a matrix and optionally finds reciprocal condition numbers. If ``job = N``\ , no condition numbers are found. If ``job = E``\ , only the condition number for this cluster of eigenvalues is found. If ``job = V``\ , only the condition number for the invariant subspace is found. If ``job = B`` then the condition numbers for the cluster and subspace are found. If ``compq = V`` the Schur vectors ``Q`` are updated. If ``compq = N`` the Schur vectors are not modified. ``select`` determines which eigenvalues are in the cluster.
+
+   Returns ``T``\ , ``Q``\ , and reordered eigenvalues in ``w``\ .
+
+.. function:: tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
+
+   .. Docstring generated from Julia source
+
+   Reorders the vectors of a generalized Schur decomposition. ``select`` specifices the eigenvalues in each cluster.
+
+.. function:: trsyl!(transa, transb, A, B, C, isgn=1) -> (C, scale)
+
+   .. Docstring generated from Julia source
+
+   Solves the Sylvester matrix equation ``A * X +/- X * B = scale*C`` where ``A`` and ``B`` are both quasi-upper triangular. If ``transa = N``\ , ``A`` is not modified. If ``transa = T``\ , ``A`` is transposed. If ``transa = C``\ , ``A`` is conjugate transposed. Similarly for ``transb`` and ``B``\ . If ``isgn = 1``\ , the equation ``A * X + X * B = scale * C`` is solved. If ``isgn = -1``\ , the equation ``A * X - X * B = scale * C`` is solved.
+
+   Returns ``X`` (overwriting ``C``\ ) and ``scale``\ .
+

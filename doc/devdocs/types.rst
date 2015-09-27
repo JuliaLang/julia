@@ -366,8 +366,7 @@ type:
     in with_output_limit at ./show.jl:1255
     in showlimited at show.jl:1277
     in display at multimedia.jl:120
-    [inlined code] from multimedia.jl:151
-    in display at multimedia.jl:162
+    in display at multimedia.jl:151
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)
