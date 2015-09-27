@@ -66,12 +66,32 @@ C = Array(Int, size(A, 1), size(B, 2))
 @test At_mul_B!(C, A, B) == A'*B
 @test A_mul_Bt!(C, A, B) == A*B'
 @test At_mul_Bt!(C, A, B) == A'*B'
+@test Base.LinAlg.Ac_mul_Bt!(C, A, B) == A'*B.'
+
+#test DimensionMismatch for generic_matmatmul
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,A,ones(Int,4,4))
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
+
+#and for generic_matvecmul
+A = rand(5,5)
+B = rand(5)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(zeros(6),'N',A,B)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
+
 v = [1,2,3]
 C = Array(Int, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
 vf = map(Float64,v)
 C = Array(Float64, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
+
+# fallbacks & such for BlasFloats
+A = rand(Float64,6,6)
+B = rand(Float64,6,6)
+C = zeros(Float64,6,6)
+@test Base.LinAlg.At_mul_Bt!(C,A,B) == A.'*B.'
+@test Base.LinAlg.A_mul_Bc!(C,A,B) == A*B.'
+@test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
 
 # matrix algebra with subarrays of floats (stride != 1)
 A = reshape(map(Float64,1:20),5,4)
