@@ -404,20 +404,20 @@ function show_backtrace(io::IO, top_function::Symbol, t::Vector{Any}, set)
 end
 
 # process the backtrace, up to (but not including) top_function
-function process_backtrace(process_func::Function, top_function::Symbol, t, set)
+function process_backtrace(process_func::Function, top_function::Symbol, t, set; skipC = true)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#");
     last_inlinedat_file = ""; last_inlinedat_line = -1
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, true)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, skipC)
         if lkup === nothing
             continue
         end
         fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
 
-        if fromC; continue; end
+        if fromC && skipC; continue; end
         if i == 1 && fname == :error; continue; end
         if fname == top_function; break; end
         count += 1
