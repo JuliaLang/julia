@@ -1361,6 +1361,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: gelqf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``LQ`` factorization of ``A``\ , ``A = LQ``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqlf!(A, tau)
 
    .. Docstring generated from Julia source
@@ -1368,6 +1376,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Compute the ``QL`` factorization of ``A``\ , ``A = QL``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
 
    Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqlf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QL`` factorization of ``A``\ , ``A = QL``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
 
 .. function:: geqrf!(A, tau)
 
@@ -1377,6 +1393,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: geqrf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QR`` factorization of ``A``\ , ``A = QR``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqp3!(A, jpvt, tau)
 
    .. Docstring generated from Julia source
@@ -1384,6 +1408,22 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3. ``P`` is a pivoting matrix, represented by ``jpvt``\ . ``tau`` stores the elementary reflectors. ``jpvt`` must have length length greater than or equal to ``n`` if ``A`` is an ``(m x n)`` matrix. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
 
    ``A``\ , ``jpvt``\ , and ``tau`` are modified in-place.
+
+.. function:: geqp3!(A, jpvt) -> (A, jpvt, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3. ``P`` is a pivoting matrix, represented by ``jpvt``\ . ``jpvt`` must have length greater than or equal to ``n`` if ``A`` is an ``(m x n)`` matrix.
+
+   Returns ``A`` and ``jpvt``\ , modified in-place, and ``tau``\ , which stores the elementary reflectors.
+
+.. function:: geqp3!(A) -> (A, jpvt, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3.
+
+   Returns ``A``\ , modified in-place, ``jpvt``\ , which represents the pivoting matrix ``P``\ , and ``tau``\ , which stores the elementary reflectors.
 
 .. function:: gerqf!(A, tau)
 
@@ -1393,6 +1433,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: gerqf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``RQ`` factorization of ``A``\ , ``A = RQ``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqrt!(A, T)
 
    .. Docstring generated from Julia source
@@ -1401,6 +1449,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``T`` modified in-place.
 
+.. function:: geqrt!(A, nb) -> (A, T)
+
+   .. Docstring generated from Julia source
+
+   Compute the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``nb`` sets the block size and it must be between 1 and ``n``\ , the second dimension of ``A``\ .
+
+   Returns ``A``\ , modified in-place, and ``T``\ , which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqrt3!(A, T)
 
    .. Docstring generated from Julia source
@@ -1408,6 +1464,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Recursively computes the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``T`` contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.  The first dimension of ``T`` sets the block size and it must be between 1 and ``n``\ . The second dimension of ``T`` must equal the smallest dimension of ``A``\ .
 
    Returns ``A`` and ``T`` modified in-place.
+
+.. function:: geqrt3!(A) -> (A, T)
+
+   .. Docstring generated from Julia source
+
+   Recursively computes the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ .
+
+   Returns ``A``\ , modified in-place, and ``T``\ , which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.
 
 .. function:: getrf!(A) -> (A, ipiv, info)
 
