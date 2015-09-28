@@ -58,7 +58,9 @@ Building Julia with a different version of LLVM
 The default version of LLVM is specified in ``deps/Versions.make``.
 You can override it by creating a file called ``Make.user`` in the top-level directory and adding a line to it such as:
 
-    ``LLVM_VER = 3.5.0``
+```make
+LLVM_VER = 3.5.0
+```
 
 Besides the LLVM release numerals, you can
 also use ``LLVM_VER = svn`` to bulid against the latest development version

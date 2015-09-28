@@ -605,8 +605,8 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Pick a random element or array of random elements from the set of values specified by ``S``\ ; ``S`` can be
 
-     * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
-     * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
+   * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
 
    ``S`` defaults to ``Float64``\ .
 
