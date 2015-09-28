@@ -84,9 +84,14 @@ mul_shape(A::AbstractMatrix, B::Covector) = (size(A,1), length(B))
 mul_shape(A::Vector, B::Covector) = (length(A), length(B))
 
 ntc(::AbstractMatrix) = 'N'
+ntc{T<:Complex}(::MatrixTranspose{true, T}) = 'C'
+ntc{T<:Real}(::MatrixTranspose{true, T}) = 'T'
 ntc(::MatrixTranspose{true}) = 'C'
 ntc(::MatrixTranspose{false}) = 'T'
+
 ntc(::AbstractVector) = 'N'
+ntc{T<:Complex}(::Covector{true, T}) = 'C'
+ntc{T<:Real}(::Covector{true, T}) = 'T'
 ntc(::Covector{true}) = 'C'
 ntc(::Covector{false}) = 'T'
 
@@ -152,9 +157,9 @@ for elty in (Float32,Float64)
 end
 mul!(y::AbstractVector, A::AbstractMatrix, x::AbstractVector) = generic_matvecmul!(y, ntc(A), untranspose(A), x)
 
-# Vector-matrix multiplication only works with implicit trailing singleton dimensions...
-(*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B # TODO: deprecate it?
-mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatrix) = mul!(C,reshape(A,length(A),1),B)
+# # Vector-matrix multiplication only works with implicit trailing singleton dimensions...
+# (*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B # TODO: deprecate it?
+# mul!(C::AbstractMatrix, A::AbstractVector, B::AbstractMatrix) = mul!(C,reshape(A,length(A),1),B)
 
 # Covector-matrix multiplication returns a covector; v'*A*v is associative and a scalar
 # v'A => transpose(A'v), so we punt to gemv with a transpose
@@ -420,7 +425,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA, $nB), matrix B has dimensions ($mB, $nB)"))
+        throw(DimensionMismatch("matrix A has dimensions ($mA, $nA), matrix B has dimensions ($mB, $nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA, $nB)"))

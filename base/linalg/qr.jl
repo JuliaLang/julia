@@ -184,13 +184,19 @@ size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
 size(A::Union{QRPackedQ,QRCompactWYQ}, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
 size(A::Union{QRPackedQ,QRCompactWYQ}) = size(A, 1), size(A, 2)
 
-full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool=true) = A_mul_B!(A, thin ? eye(T, size(A.factors,1), minimum(size(A.factors))) : eye(T, size(A.factors,1)))
+full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool=true) = mul!(A, thin ? eye(T, size(A.factors,1), minimum(size(A.factors))) : eye(T, size(A.factors,1)))
 
 ## Multiplication by Q
 ### QB
-A_mul_B!{T<:BlasFloat}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','N',A.factors,A.T,B)
-A_mul_B!{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','N',A.factors,A.τ,B)
-function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
+typealias QRCompactWYQTranspose{T,A<:QRCompactWYQ} MatrixTranspose{true, T, A}
+typealias QRPackedQTranspose{T,A<:QRPackedQ} MatrixTranspose{true, T, A}
+
+typealias QRCompactWYQorTranspose{T,A<:QRCompactWYQ} Union{QRCompactWYQ{T}, QRCompactWYQTranspose{T}}
+typealias QRPackedQorTranspose{T,A<:QRPackedQ} Union{QRPackedQ{T}, QRPackedQTranspose{T}}
+
+mul!{T<:BlasFloat}(A::QRCompactWYQorTranspose{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L',ntc(A),untranspose(A).factors,untranspose(A).T,B)
+mul!{T<:BlasFloat}(A::QRPackedQorTranspose{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L',ntc(A),untranspose(A).factors,untranspose(A).τ,B)
+function mul!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -225,7 +231,7 @@ function (*){TA,Tb}(A::Union{QRPackedQ{TA},QRCompactWYQ{TA}}, b::StridedVector{T
     else
         throw(DimensionMismatch("vector must have length either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
-    A_mul_B!(Anew, bnew)
+    mul!(Anew, bnew)
 end
 function (*){TA,TB}(A::Union{QRPackedQ{TA},QRCompactWYQ{TA}}, B::StridedMatrix{TB})
     TAB = promote_type(TA, TB)
@@ -237,15 +243,12 @@ function (*){TA,TB}(A::Union{QRPackedQ{TA},QRCompactWYQ{TA}}, B::StridedMatrix{T
     else
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
-    A_mul_B!(Anew, Bnew)
+    mul!(Anew, Bnew)
 end
 
 ### QcB
-Ac_mul_B!{T<:BlasReal}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.factors,A.T,B)
-Ac_mul_B!{T<:BlasComplex}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.factors,A.T,B)
-Ac_mul_B!{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.factors,A.τ,B)
-Ac_mul_B!{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.factors,A.τ,B)
-function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
+function mul!{T}(Ac::QRPackedQTranspose{T}, B::AbstractVecOrMat{T})
+    A = untranspose(Ac)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
@@ -269,15 +272,15 @@ function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     end
     B
 end
-function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union{QRPackedQ{TQ},QRCompactWYQ{TQ}}, B::StridedArray{TB,N})
+function (*){TQ,TB,N}(Q::Union{QRPackedQorTranspose{TQ},QRCompactWYQorTranspose{TQ}}, B::StridedMatrix{TB,N})
     TQB = promote_type(TQ,TB)
-    return Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), copy_oftype(B, TQB))
+    return mul!(convert(AbstractMatrix{TQB}, Q), copy_oftype(B, TQB))
 end
 
 ### AQ
-A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
-A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
-function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
+mul!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQorTranspose{T}) = LAPACK.gemqrt!('R',ntc(B), untranspose(B).factors, untranspose(B).T, A)
+mul!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQorTranspose{T}) = LAPACK.ormqr!('R', ntc(B), untranspose(B).factors, untranspose(B).τ, A)
+function mul!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -302,17 +305,33 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     A
 end
 
-function (*){TA,TQ,N}(A::StridedArray{TA,N}, Q::Union{QRPackedQ{TQ},QRCompactWYQ{TQ}})
+function (*){TA,TQ,N}(A::StridedMatrix{TA,N}, Q::Union{QRPackedQorTranspose{TQ},QRCompactWYQorTranspose{TQ}})
     TAQ = promote_type(TA, TQ)
-    return A_mul_B!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+    return mul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
 ### AQc
-A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
-A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','C',B.factors,B.T,A)
-A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R','T',B.factors,B.τ,A)
-A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R','C',B.factors,B.τ,A)
-function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
+(*)(A::AbstractTriangular, B::QRCompactWYQTranspose) = full(A) * B
+mul!(A::AbstractTriangular, B::QRCompactWYQTranspose) = mul!(full!(A),B)
+# Ambiguities. Ugh.
+(*)(A::AbstractTriangular, B::QRPackedQTranspose) = full(A) * B
+mul!(A::AbstractTriangular, B::QRPackedQTranspose) = mul!(full!(A),B)
+
+function (*){TA,TB}(A::AbstractMatrix{TA}, Bc::Union{QRCompactWYQTranspose{TB},QRPackedQTranspose{TB}})
+    B = untranspose(Bc)
+    TAB = promote_type(TA,TB)
+    BB = convert(AbstractMatrix{TAB}, B)
+    if size(A,2) == size(B.factors, 1)
+        return mul!(copy_oftype(A, TAB), BB')
+    elseif size(A,2) == size(B.factors,2)
+        return mul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], BB')
+    else
+        throw(DimensionMismatch("Matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(Bc))"))
+    end
+end
+
+function mul!{T}(A::AbstractMatrix{T},Qc::QRPackedQTranspose{T})
+    Q = untranspose(Qc)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -336,21 +355,10 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
-function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union{QRCompactWYQ{TB},QRPackedQ{TB}})
-    TAB = promote_type(TA,TB)
-    BB = convert(AbstractMatrix{TAB}, B)
-    if size(A,2) == size(B.factors, 1)
-        return A_mul_Bc!(copy_oftype(A, TAB), BB)
-    elseif size(A,2) == size(B.factors,2)
-        return A_mul_Bc!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], BB)
-    else
-        throw(DimensionMismatch("Matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
-    end
-end
 
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(mul!(A[:Q]', b), 1:size(A, 2))); b)
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(mul!(A[:Q]', B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similarly to xgelsy
 function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
@@ -377,7 +385,7 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
         rnk += 1
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
+    A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),sub(mul!(getq(A)',sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
     B[1:nA,:] = sub(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
@@ -389,7 +397,7 @@ function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    Ac_mul_B!(A[:Q], sub(B, 1:m, :))
+    mul!(A[:Q], sub(B, 1:m, :))
     R = A[:R]
     @inbounds begin
         if n > m # minimum norm solution

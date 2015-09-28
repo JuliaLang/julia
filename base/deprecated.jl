@@ -875,10 +875,9 @@ end
 @deprecate A_mul_Bt!(c,a,b)   mul!(c,a,b.')
 @deprecate At_mul_Bt!(c,a,b)  mul!(c,a.',b.')
 
-# Givens multiplication
-@deprecate A_mul_B!(G1::LinAlg.Givens, G2::LinAlg.Givens)   mul!(G1,G2)
-@deprecate A_mul_B!(G::LinAlg.Givens, A::AbstractVecOrMat)  mul!(G, A)
-@deprecate A_mul_Bc!(A::AbstractVecOrMat, G::LinAlg.Givens) mul!(A, G)
-@deprecate A_mul_B!(G::LinAlg.Givens, R::LinAlg.Rotation)   mul!(G, R)
-@deprecate A_mul_B!(R::LinAlg.Rotation, A::AbstractMatrix)  mul!(R, A)
-@deprecate A_mul_Bc!(A::AbstractMatrix, R::LinAlg.Rotation) mul!(A, R)
+typealias _Tensor Union{LinAlg.AbstractRotation,AbstractArray}
+@deprecate A_mul_B!(A::_Tensor, B::_Tensor)  mul!(A, B)
+@deprecate A_mul_Bc!(A::_Tensor, B::_Tensor) mul!(A, B')
+@deprecate Ac_mul_B!(A::_Tensor, B::_Tensor) mul!(A', B)
+@deprecate A_mul_Bt!(A::_Tensor, B::_Tensor) mul!(A, B.')
+@deprecate At_mul_B!(A::_Tensor, B::_Tensor) mul!(A.', B)

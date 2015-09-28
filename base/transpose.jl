@@ -1,10 +1,12 @@
-# import Base: *, /, \, parent, call, transpose, ctranspose, size, getindex, length, linearindexing, unsafe_getindex
+# import Base: *, /, \, parent, call, convert, transpose, ctranspose, size, getindex, length, linearindexing, unsafe_getindex
 
 immutable MatrixTranspose{C,T,A} <: AbstractArray{T,2}
     data::A # A <: AbstractMatrix{T}
 end
 call{C,T}(::Type{MatrixTranspose{C}}, A::AbstractArray{T,2}) = MatrixTranspose{C,T,typeof(A)}(A)
 parent(T::MatrixTranspose) = T.data
+convert{T,C}(::Type{AbstractMatrix{T}}, At::MatrixTranspose{C,T}) = At
+convert{T,C}(::Type{AbstractMatrix{T}}, At::MatrixTranspose{C}) = MatrixTranspose{C}(convert(AbstractMatrix{T}, At.data))
 
 transpose{T}(A::AbstractArray{T,2}) = MatrixTranspose{false}(A)
 ctranspose{T}(A::AbstractArray{T,2}) = MatrixTranspose{true}(A)
