@@ -205,6 +205,9 @@ end
 
 @test replace("foo", "oo", uppercase) == "fOO"
 
+# Issue 13332
+@test replace("abc", 'b', 2.1) == "a2.1c"
+
 # chomp/chop
 @test chomp("foo\n") == "foo"
 @test chop("foob") == "foo"
