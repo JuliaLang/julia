@@ -1321,6 +1321,10 @@ arrays have names ending in ``'!'``.
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
 
+Note that the LAPACK API provided by Julia can and will change in the future. Since
+this API is not user-facing, there is no commitment to support/deprecate this specific
+set of functions in future releases.
+
 .. currentmodule:: Base.LinAlg.LAPACK
 
 .. function:: gbtrf!(kl, ku, m, AB) -> (AB, ipiv)
