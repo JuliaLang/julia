@@ -346,6 +346,10 @@ void init_stdio()
 char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
 #endif
 
+#ifdef JL_USE_OPROFILE_JITEVENTS
+char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
+#endif
+
 int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
@@ -517,6 +521,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
+    }
+#endif
+
+#if defined(JL_USE_OPROFILE_JITEVENTS)
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_oprofile_jitevents = 1;
     }
 #endif
 

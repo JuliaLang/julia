@@ -424,6 +424,10 @@ else
 LLVM_FLAGS += --disable-threads
 endif # USE_INTEL_JITEVENTS
 
+ifeq ($(USE_OPROFILE_JITEVENTS), 1)
+LLVM_FLAGS += --with-oprofile=/usr/
+endif # USE_OPROFILE_JITEVENTS
+
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
