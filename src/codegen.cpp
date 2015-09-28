@@ -731,6 +731,7 @@ static void alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     // CreateAlloca is OK here because alloc_local is only called during prologue setup
     Value *lv = builder.CreateAlloca(vtype, 0, s->name);
     vi.value = mark_julia_slot(lv, jt);
+    vi.value.isimmutable &= vi.isSA; // slot is not immutable if there are multiple assignments
     assert(vi.value.isboxed == false);
 #ifdef LLVM36
     if (ctx->debug_enabled) {
@@ -2012,7 +2013,9 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
                                         ConstantInt::get(T_int32,2));
 #endif
     ctx->gc.argDepth = argStart;
-    return mark_julia_type(result, true, jl_any_type); // (typ will be patched up by caller)
+    jl_cgval_t ret = mark_julia_type(result, true, jl_any_type); // (typ will be patched up by caller)
+    //ret.needsgcroot = arg1.needsgcroot || !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ);
+    return ret;
 }
 
 static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codectx_t *ctx)
@@ -2563,6 +2566,7 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
                     tbaa_decorate(tbaa_user, builder.CreateLoad(builder.CreateGEP(ctx->argArray, idx))),
                     true,
                     expr_type(expr, ctx));
+            ret->needsgcroot = false;
             JL_GC_POP();
             return true;
         }
