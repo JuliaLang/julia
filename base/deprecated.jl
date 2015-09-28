@@ -834,3 +834,11 @@ end
 # 12839
 const AsyncStream = IO
 deprecate(:AsyncStream)
+
+for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
+    @eval begin
+        @deprecate ($f)(w::LocalProcess, f::Function, args...)    ($f)(f, w::LocalProcess, args...)
+        @deprecate ($f)(w::Worker, f::Function, args...)          ($f)(f, w::Worker, args...)
+        @deprecate ($f)(id::Integer, f::Function, args...)        ($f)(f, id::Integer, args...)
+    end
+end

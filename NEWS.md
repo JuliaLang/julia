@@ -1,3 +1,27 @@
+Julia v0.5.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+Language changes
+----------------
+
+Command line option changes
+---------------------------
+
+Compiler/Runtime improvements
+-----------------------------
+
+Library improvements
+--------------------
+
+Deprecated or removed
+---------------------
+
+  * The function `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
+    the function argument as the first argument to allow for do-block syntax. [#13338]
+
 Julia v0.4.0 Release Notes
 ==========================
 
