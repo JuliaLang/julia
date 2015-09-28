@@ -59,6 +59,9 @@ $(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
 USE_INTEL_MKL := 1
 endif
 
+# Set to 1 to enable profiling with OProfile
+USE_OPROFILE_JITEVENTS ?= 0
+
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP := 0
 
@@ -837,6 +840,11 @@ endif
 # Intel VTune Amplifier
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
+endif
+
+# OProfile
+ifeq ($(USE_OPROFILE_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_OPROFILE_JITEVENTS
 endif
 
 # Intel libraries
