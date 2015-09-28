@@ -609,12 +609,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_doctest_block(self, node):
         self.end_state(wrap=False)
 
-    def visit_block_quote(self, node):
-        self.new_state()
-
-    def depart_block_quote(self, node):
-        self.end_state()
-
     def visit_paragraph(self, node):
         if not isinstance(node.parent, nodes.Admonition) or \
            isinstance(node.parent, addnodes.seealso):
