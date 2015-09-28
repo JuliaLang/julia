@@ -1282,6 +1282,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
             if ((unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
             *ret = mark_julia_type(fld, true, jl_any_type);
+            ret->needsgcroot = strct.needsgcroot || !strct.isimmutable;
             return true;
         }
         else if (is_tupletype_homogeneous(stt->types)) {
@@ -1352,11 +1353,13 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             builder.CreateGEP(builder.CreateBitCast(strct.V, T_pint8),
                               ConstantInt::get(T_size, jl_field_offset(jt,idx)));
         MDNode *tbaa = strct.isimmutable ? tbaa_immut : tbaa_user;
-        if (jl_field_isptr(jt,idx)) {
+        if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
-            return mark_julia_type(fldv, true, jfty);
+            jl_cgval_t ret = mark_julia_type(fldv, true, jfty);
+            ret.needsgcroot = strct.needsgcroot || !strct.isimmutable;
+            return ret;
         }
         else {
             int align = jl_field_offset(jt,idx);
