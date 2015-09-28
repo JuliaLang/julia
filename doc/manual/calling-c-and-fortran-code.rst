@@ -678,7 +678,7 @@ they act like zero-dimensional arrays.
 Special Reference Syntax for ccall (deprecated):
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    The ``&`` syntax is deprecated, use the ``Ref{T}`` argument type instead
+The ``&`` syntax is deprecated, use the ``Ref{T}`` argument type instead.
 
 A prefix ``&`` is used on an argument to ccall to indicate that a pointer
 to a scalar argument should be passed instead of the scalar value itself

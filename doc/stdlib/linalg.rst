@@ -71,39 +71,39 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-      ======================= ========================= ========================================
-      Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
-      ----------------------- ------------------------- ----------------------------------------
-      :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
-      :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
-      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
-      ======================= ========================= ========================================
+   ======================= ========================= ========================================
+   Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
+   ----------------------- ------------------------- ----------------------------------------
+   :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
+   :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
+   :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
+   ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ======================================= ====== ======================== =============
-      Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ----------- --------------------------------------- ------ ------------------------ -------------
-      ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
-      ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
-      ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
-      ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
-      ``F[:q]``   left permutation ``Vector``                                                      ✓
-      ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
-      ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
-      =========== ======================================= ====== ======================== =============
+   =========== ======================================= ====== ======================== =============
+   Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+   ----------- --------------------------------------- ------ ------------------------ -------------
+   ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
+   ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
+   ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
+   ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
+   ``F[:q]``   left permutation ``Vector``                                                      ✓
+   ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
+   ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
+   =========== ======================================= ====== ======================== =============
 
-      ================== ====== ======================== =============
-      Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ------------------ ------ ------------------------ -------------
-           ``/``            ✓
-           ``\``            ✓                       ✓             ✓
-           ``cond``         ✓                                     ✓
-           ``det``          ✓                       ✓             ✓
-           ``logdet``       ✓                       ✓
-           ``logabsdet``    ✓                       ✓
-           ``size``         ✓                       ✓
-      ================== ====== ======================== =============
+   ================== ====== ======================== =============
+   Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+   ------------------ ------ ------------------------ -------------
+        ``/``            ✓
+        ``\``            ✓                       ✓             ✓
+        ``cond``         ✓                                     ✓
+        ``det``          ✓                       ✓             ✓
+        ``logdet``       ✓                       ✓
+        ``logabsdet``    ✓                       ✓
+        ``size``         ✓                       ✓
+   ================== ====== ======================== =============
 
 .. function:: lufact!(A) -> LU
 
@@ -173,26 +173,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
-      ================ ================= ============== =====================================
-      Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-      ---------------- ----------------- -------------- -------------------------------------
-      ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-      ================ ================= ============== =====================================
+   ================ ================= ============== =====================================
+   Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
+   ---------------- ----------------- -------------- -------------------------------------
+   ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
+   ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
+   ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
+   ================ ================= ============== =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ============================================= ================== ===================== ==================
-      Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-      ----------- --------------------------------------------- ------------------ --------------------- ------------------
-      ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-      ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-      ``F[:p]``   pivot ``Vector``                                                                        ✓
-      ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-      =========== ============================================= ================== ===================== ==================
+   =========== ============================================= ================== ===================== ==================
+   Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
+   ----------- --------------------------------------------- ------------------ --------------------- ------------------
+   ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
+   ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
+   ``F[:p]``   pivot ``Vector``                                                                        ✓
+   ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
+   =========== ============================================= ================== ===================== ==================
 
    The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
 
@@ -204,17 +204,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
       The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
 
-         .. math::
+      .. math::
 
-            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+         Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
 
       where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
 
       The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
 
-         .. math::
+      .. math::
 
-            Q = I + Y T Y^T
+         Q = I + Y T Y^T
 
       where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
 
@@ -928,8 +928,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
-
-       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+      Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
@@ -971,8 +970,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
-
-       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+      Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================

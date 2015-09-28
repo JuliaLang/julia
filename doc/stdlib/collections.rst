@@ -1335,7 +1335,7 @@ changed efficiently.
 :obj:`PriorityQueue` also behaves similarly to a :obj:`Dict` in that keys can be
 inserted and priorities accessed or changed using indexing notation.
 
-  .. doctest::
+.. doctest::
 
     julia> # Julia code
            pq = Collections.PriorityQueue();
