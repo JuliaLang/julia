@@ -243,7 +243,7 @@ function process_options(opts::JLOptions, args::Vector{UTF8String})
         # load file immediately on all processors
         if opts.load != C_NULL
             @sync for p in procs()
-                @async remotecall_fetch(p, include, bytestring(opts.load))
+                @async remotecall_fetch(include, p, bytestring(opts.load))
             end
         end
         # eval expression

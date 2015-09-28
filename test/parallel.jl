@@ -4,7 +4,9 @@
 using Base.Test
 
 if nworkers() < 3
-    remotecall_fetch(1, () -> addprocs(3 - nworkers()))
+    remotecall_fetch(1) do
+        addprocs(3 - nworkers())
+    end
 end
 
 id_me = myid()
@@ -47,7 +49,9 @@ end
 function check_pids_all(S::SharedArray)
     pidtested = falses(size(S))
     for p in procs(S)
-        idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], S)
+        idxes_in_p = remotecall_fetch(p, S) do D
+            parentindexes(D.loc_subarr_1d)[1]
+        end
         @test all(sdata(S)[idxes_in_p] .== p)
         pidtested[idxes_in_p] = true
     end
@@ -60,18 +64,26 @@ a = convert(Array, d)
 partsums = Array(Int, length(procs(d)))
 @sync begin
     for (i, p) in enumerate(procs(d))
-        @async partsums[i] = remotecall_fetch(p, D->sum(D.loc_subarr_1d), d)
+        @async partsums[i] = remotecall_fetch(p, d) do D
+            sum(D.loc_subarr_1d)
+        end
     end
 end
 @test sum(a) == sum(partsums)
 
 d = Base.shmem_rand(dims)
 for p in procs(d)
-    idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
+    idxes_in_p = remotecall_fetch(p, d) do D
+        parentindexes(D.loc_subarr_1d)[1]
+    end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
     d[idxf] = Float64(idxf)
-    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == Float64(idxf)); D[idxl] = Float64(idxl); D[idxl];  end, d,idxf,idxl)
+    rv = remotecall_fetch(p, d,idxf,idxl) do D,idxf,idxl
+        assert(D[idxf] == Float64(idxf))
+        D[idxl] = Float64(idxl)
+        D[idxl]
+    end
     @test d[idxl] == rv
 end
 
@@ -90,7 +102,9 @@ a = rand(dims)
 
 d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
-    idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
+    idxes_in_p = remotecall_fetch(p, d) do D
+        parentindexes(D.loc_subarr_1d)[1]
+    end
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
     @test d[idxf] == p
@@ -115,7 +129,9 @@ S = SharedArray(fn, Int, sz)
 @test length(procs(S)) > 1
 @sync begin
     for p in procs(S)
-        @async remotecall_wait(p, D->fill!(D.loc_subarr_1d, myid()), S)
+        @async remotecall_wait(p, S) do D
+            fill!(D.loc_subarr_1d, myid())
+        end
     end
 end
 check_pids_all(S)
@@ -187,7 +203,7 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(pids_d[findfirst(id->(id != myid()), pids_d)], setindex!, d, 1.0, 1:10)
+remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 
@@ -220,8 +236,8 @@ map!(x->1, d)
 @test d[1,:] == fill(2, 1, 10)
 
 # Boundary cases where length(S) <= length(pids)
-@test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
-@test 3.0 == remotecall_fetch(id_other, D->D[1], Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
+@test 2.0 == remotecall_fetch(D->D[2], id_other, Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
+@test 3.0 == remotecall_fetch(D->D[1], id_other, Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
@@ -265,15 +281,15 @@ end
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
 a = ones(10^6)
-@test a == remotecall_fetch(id_other, (x)->x, a)
+@test a == remotecall_fetch((x)->x, id_other, a)
 
 # Not a bitstype, should be buffered
 s = [randstring() for x in 1:10^5]
-@test s == remotecall_fetch(id_other, (x)->x, s)
+@test s == remotecall_fetch((x)->x, id_other, s)
 
 #large number of small requests
 num_small_requests = 10000
-@test fill(id_other, num_small_requests) == [remotecall_fetch(id_other, myid) for i in 1:num_small_requests]
+@test fill(id_other, num_small_requests) == [remotecall_fetch(myid, id_other) for i in 1:num_small_requests]
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
@@ -283,7 +299,7 @@ for rr in rr_list
     @async let rr=rr
         try
             for i in 1:10
-                @test a == remotecall_fetch(id_other, (x)->x, a)
+                @test a == remotecall_fetch((x)->x, id_other, a)
                 yield()
             end
             put!(rr, :OK)
@@ -377,7 +393,7 @@ catch ex
 end
 
 try
-    remotecall_fetch(id_other, ()->throw(ErrorException("foobar")))
+    remotecall_fetch(()->throw(ErrorException("foobar")), id_other)
 catch ex
     @test typeof(ex) == RemoteException
     @test typeof(ex.captured) == CapturedException
@@ -396,7 +412,7 @@ DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 if DoFullTest
     # pmap tests
     # needs at least 4 processors dedicated to the below tests
-    ppids = remotecall_fetch(1, ()->addprocs(4))
+    ppids = remotecall_fetch(()->addprocs(4), 1)
     s = "abcdefghijklmnopqrstuvwxyz";
     ups = uppercase(s);
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
@@ -438,13 +454,15 @@ if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")
     println("Please ensure the remote error and backtrace is displayed on screen")
 
-    Base.remote_do(id_other, ()->throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE")))
+    Base.remote_do(id_other) do
+        throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE"))
+    end
     sleep(0.5)  # Give some time for the above error to be printed
 
 @unix_only begin
     function test_n_remove_pids(new_pids)
         for p in new_pids
-            w_in_remote = sort(remotecall_fetch(p, workers))
+            w_in_remote = sort(remotecall_fetch(workers, p))
             try
                 @test intersect(new_pids, w_in_remote) == new_pids
             catch e
@@ -456,7 +474,9 @@ if DoFullTest
             end
         end
 
-        @test :ok == remotecall_fetch(1, (p)->rmprocs(p; waitfor=5.0), new_pids)
+        @test :ok == remotecall_fetch(1, new_pids) do p
+            rmprocs(p; waitfor=5.0)
+        end
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
@@ -473,22 +493,30 @@ if DoFullTest
     end
 
     print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
-    new_pids = remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), hosts, sshflags)
+    new_pids = remotecall_fetch(1, hosts, sshflags) do h, sf
+        addprocs(h; sshflags=sf)
+    end
     @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with :auto\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags))
+    new_pids = sort(remotecall_fetch(1, ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags) do h, sf
+        addprocs(h; sshflags=sf)
+    end)
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), [("localhost", 2), ("127.0.0.1", 2), "localhost"], sshflags))
+    new_pids = sort(remotecall_fetch(1, [("localhost", 2), ("127.0.0.1", 2), "localhost"], sshflags) do h, sf
+        addprocs(h; sshflags=sf)
+    end)
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", num_workers)], sshflags))
+    new_pids = sort(remotecall_fetch(1, [("localhost", num_workers)], sshflags) do h, sf
+        addprocs(h; tunnel=true, sshflags=sf)
+    end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
 

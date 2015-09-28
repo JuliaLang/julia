@@ -185,14 +185,14 @@ function flush_gc_msgs(w::Worker)
     msgs = copy(w.add_msgs)
     if !isempty(msgs)
         empty!(w.add_msgs)
-        remote_do(w, add_clients, msgs)
+        remote_do(add_clients, w, msgs)
     end
 
     msgs = copy(w.del_msgs)
     if !isempty(msgs)
         empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
-        remote_do(w, del_clients, msgs)
+        remote_do(del_clients, w, msgs)
     end
 end
 
@@ -293,7 +293,7 @@ get_bind_addr(w::LocalProcess) = LPROC.bind_addr
 function get_bind_addr(w::Worker)
     if isnull(w.config.bind_addr)
         if w.id != myid()
-            w.config.bind_addr = remotecall_fetch(w.id, get_bind_addr, w.id)
+            w.config.bind_addr = remotecall_fetch(get_bind_addr, w.id, w.id)
         end
     end
     get(w.config.bind_addr)
@@ -317,7 +317,7 @@ function procs(pid::Integer)
             Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
         end
     else
-        remotecall_fetch(1, procs, pid)
+        remotecall_fetch(procs, 1, pid)
     end
 end
 
@@ -425,7 +425,7 @@ function deregister_worker(pg, pid)
             if PGRP.topology != :all_to_all
                 for rpid in workers()
                     try
-                        remote_do(rpid, deregister_worker, pid)
+                        remote_do(deregister_worker, rpid, pid)
                     catch
                     end
                 end
@@ -494,10 +494,10 @@ function RemoteRef(pid::Integer=myid())
 end
 
 function RemoteRef(f::Function, pid::Integer=myid())
-    remotecall_fetch(pid, (f, rrid) -> begin
+    remotecall_fetch(pid, f, next_rrid_tuple()) do f, rrid
         rv=lookup_ref(rrid, f)
         RemoteRef{typeof(rv.c)}(myid(), rrid[1], rrid[2])
-    end, f, next_rrid_tuple())
+    end
 end
 
 hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
@@ -522,7 +522,7 @@ function isready(rr::RemoteRef, args...)
     if rr.where == myid()
         isready(lookup_ref(rid).c, args...)
     else
-        remotecall_fetch(rr.where, id->isready(lookup_ref(rid).c, args...), rid)
+        remotecall_fetch(id->isready(lookup_ref(rid).c, args...), rr.where, rid)
     end
 end
 
@@ -698,28 +698,28 @@ function local_remotecall_thunk(f, args)
     # f(map(localize_ref,args)...)
 end
 
-function remotecall(w::LocalProcess, f, args...)
+function remotecall(f, w::LocalProcess, args...)
     rr = RemoteRef(w)
     schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
-function remotecall(w::Worker, f, args...)
+function remotecall(f, w::Worker, args...)
     rr = RemoteRef(w)
     #println("$(myid()) asking for $rr")
     send_msg(w, CallMsg{:call}(f, args, rr2id(rr)))
     rr
 end
 
-remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
+remotecall(f, id::Integer, args...) = remotecall(f, worker_from_id(id), args...)
 
 # faster version of fetch(remotecall(...))
-function remotecall_fetch(w::LocalProcess, f, args...)
+function remotecall_fetch(f, w::LocalProcess, args...)
     v=run_work_thunk(local_remotecall_thunk(f,args), false)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-function remotecall_fetch(w::Worker, f, args...)
+function remotecall_fetch(f, w::Worker, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
     oid = next_rrid_tuple()
@@ -731,13 +731,13 @@ function remotecall_fetch(w::Worker, f, args...)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-remotecall_fetch(id::Integer, f, args...) =
-    remotecall_fetch(worker_from_id(id), f, args...)
+remotecall_fetch(f, id::Integer, args...) =
+    remotecall_fetch(f, worker_from_id(id), args...)
 
 # faster version of wait(remotecall(...))
-remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
+remotecall_wait(f, w::LocalProcess, args...) = wait(remotecall(f, w, args...))
 
-function remotecall_wait(w::Worker, f, args...)
+function remotecall_wait(f, w::Worker, args...)
     prid = next_rrid_tuple()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
@@ -748,10 +748,10 @@ function remotecall_wait(w::Worker, f, args...)
     rr
 end
 
-remotecall_wait(id::Integer, f, args...) =
-    remotecall_wait(worker_from_id(id), f, args...)
+remotecall_wait(f, id::Integer, args...) =
+    remotecall_wait(f, worker_from_id(id), args...)
 
-function remote_do(w::LocalProcess, f, args...)
+function remote_do(f, w::LocalProcess, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
@@ -760,12 +760,12 @@ function remote_do(w::LocalProcess, f, args...)
     nothing
 end
 
-function remote_do(w::Worker, f, args...)
+function remote_do(f, w::Worker, args...)
     send_msg(w, RemoteDoMsg(f, args))
     nothing
 end
 
-remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
+remote_do(f, id::Integer, args...) = remote_do(f, worker_from_id(id), args...)
 
 # have the owner of rr call f on it
 function call_on_owner(f, rr::RemoteRef, args...)
@@ -773,7 +773,7 @@ function call_on_owner(f, rr::RemoteRef, args...)
     if rr.where == myid()
         f(rid, args...)
     else
-        remotecall_fetch(rr.where, f, rid, args...)
+        remotecall_fetch(f, rr.where, rid, args...)
     end
 end
 
@@ -818,7 +818,7 @@ function deliver_result(sock::IO, msg, oid, value)
         elseif wid == 1
             exit(1)
         else
-            remote_do(1, rmprocs, wid)
+            remote_do(rmprocs, 1, wid)
         end
     end
 end
@@ -1125,7 +1125,7 @@ function addprocs(manager::ClusterManager; kwargs...)
     # function returns to the caller.
     all_w = workers()
     for pid in all_w
-        remote_do(pid, set_valid_processes, all_w)
+        remote_do(set_valid_processes, pid, all_w)
     end
 
     sort!(launched_q)
@@ -1169,7 +1169,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
         exeflags = get(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
-        new_addresses = remotecall_fetch(frompid, launch_additional, cnt, cmd)
+        new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
         for address in new_addresses
             (bind_addr, port) = address
 
@@ -1183,7 +1183,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             let wconfig=wconfig
                 @async begin
                     pid = create_worker(manager, wconfig)
-                    remote_do(frompid, redirect_output_from_additional_worker, pid, port)
+                    remote_do(redirect_output_from_additional_worker, frompid, pid, port)
                     push!(launched_q, pid)
                 end
             end
@@ -1317,7 +1317,7 @@ let nextidx = 0
     end
 end
 
-spawnat(p, thunk) = sync_add(remotecall(p, thunk))
+spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
@@ -1335,13 +1335,13 @@ macro fetch(expr)
     expr = localize_vars(:(()->($expr)), false)
     quote
         thunk = $(esc(expr))
-        remotecall_fetch(chooseproc(thunk), thunk)
+        remotecall_fetch(thunk, chooseproc(thunk))
     end
 end
 
 macro fetchfrom(p, expr)
     expr = localize_vars(:(()->($expr)), false)
-    :(remotecall_fetch($(esc(p)), $(esc(expr))))
+    :(remotecall_fetch($(esc(expr)), $(esc(p))))
 end
 
 macro everywhere(ex)
@@ -1349,7 +1349,7 @@ macro everywhere(ex)
         sync_begin()
         thunk = ()->(eval(Main,$(Expr(:quote,ex))); nothing)
         for pid in workers()
-            async_run_thunk(()->remotecall_fetch(pid, thunk))
+            async_run_thunk(()->remotecall_fetch(thunk, pid))
             yield() # ensure that the remotecall_fetch has been started
         end
 
@@ -1365,7 +1365,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    Any[ remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n ]
+    Any[ remotecall(f, PGRP.workers[(i-1)%np+1].id, map(L->L[i], lsts)...) for i = 1:n ]
 end
 
 pmap(f) = f()
@@ -1427,7 +1427,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
                     (idx, fvals) = tasklet
                     busy_workers[pididx] = true
                     try
-                        results[idx] = remotecall_fetch(wpid, f, fvals...)
+                        results[idx] = remotecall_fetch(f, wpid, fvals...)
                     catch ex
                         if err_retry
                             push!(retryqueue, (idx,fvals, ex))
@@ -1482,7 +1482,7 @@ function preduce(reducer, f, N::Int)
 
     w_exec = Task[]
     for (idx,pid) in enumerate(all_w)
-        t = Task(()->remotecall_fetch(pid, f, first(chunks[idx]), last(chunks[idx])))
+        t = Task(()->remotecall_fetch(f, pid, first(chunks[idx]), last(chunks[idx])))
         schedule(t)
         push!(w_exec, t)
     end
@@ -1625,7 +1625,7 @@ end
 
 function check_same_host(pids)
     if myid() != 1
-        return remotecall_fetch(1, check_same_host, pids)
+        return remotecall_fetch(check_same_host, 1, pids)
     else
         # We checkfirst if all test pids have been started using the local manager,
         # else we check for the same bind_to addr. This handles the special case
@@ -1663,5 +1663,5 @@ function getindex(r::RemoteRef, args...)
     if r.where == myid()
         return getindex(fetch(r), args...)
     end
-    return remotecall_fetch(r.where, getindex, r, args...)
+    return remotecall_fetch(getindex, r.where, r, args...)
 end
