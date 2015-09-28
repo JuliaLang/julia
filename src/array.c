@@ -308,9 +308,12 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
     }
     else {
         size_t *adims = &a->nrows;
+        // jl_fieldref can allocate
+        JL_GC_PUSH1(&a);
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_fieldref(dims, i));
         }
+        JL_GC_POP();
     }
     return a;
 }
