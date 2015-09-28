@@ -149,12 +149,11 @@ macro test999_str(args...); args; end
 
 # issue 11970
 @test parseall("""
-macro f(args...) end; @f ""
+    macro f(args...) end; @f ""
 """) == Expr(:toplevel,
             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
             Expr(:macrocall,
-                 symbol("@f"), LineNumberNode(symbol("/cmn/julia/test/parse.jl"),1),
-                 ""))
+                 symbol("@f"), LineNumberNode(symbol(@__FILE__),1),""))
 
 # integer parsing
 @test is(parse(Int32,"0",36),Int32(0))

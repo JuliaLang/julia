@@ -289,7 +289,7 @@ let d = (@doc @m2_11993)
     No documentation found.
 
     ```julia
-    @m2_11993(__LOCATION__)
+    @m2_11993(&meta)
     ```
     """)
 end

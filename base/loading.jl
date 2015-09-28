@@ -290,8 +290,6 @@ function source_dir()
     p === nothing ? p : dirname(p)
 end
 
-macro __FILE__() source_path() end
-
 function include_from_node1(_path::AbstractString)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
@@ -461,3 +459,10 @@ function recompile_stale(mod, cachefile)
         end
     end
 end
+
+macro __MACROCALL_META__() :( $(symbol("&meta")) ) end
+macro __MACROCALL_LINE__() :( $(symbol("&meta")).args[1]) end
+macro __MACROCALL_FILE__() :( string($(symbol("&meta")).args[2]) ) end
+
+macro __LINE__() @__MACROCALL_LINE__ end
+macro __FILE__() @__MACROCALL_FILE__ end

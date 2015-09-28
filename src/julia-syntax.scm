@@ -1181,7 +1181,7 @@
                    (symbol? (cadr (cadr e))))
               `(macro ,(symbol (string #\@ (cadr (cadr e))))
                  ,(expand-binding-forms
-                   `(-> (tuple __LOCATION__ ,@(cddr (cadr e)))
+                   `(-> (tuple &meta ,@(cddr (cadr e)))
                         ,(caddr e)))))
              ((symbol? (cadr e))  ;; already expanded
               e)

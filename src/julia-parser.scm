@@ -2036,7 +2036,7 @@
            (with-space-sensitive
             (let* ((head (parse-unary-prefix s))
                    (t    (peek-token s))
-                   (loc (line-number-node s)))
+                   (loc  (line-number-node s)))
               (cond
                  ((ts:space? s)
                   `(macrocall ,(macroify-name head) ,loc

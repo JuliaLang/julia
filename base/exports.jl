@@ -1348,6 +1348,7 @@ export
 # Macros
     # parser internal
     @__FILE__,
+    @__LINE__,
     @int128_str,
     @uint128_str,
     @big_str,
