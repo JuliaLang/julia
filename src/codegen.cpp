@@ -35,6 +35,7 @@
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
 #ifdef LLVM37
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #else
 #include <llvm/Target/TargetLibraryInfo.h>
@@ -5752,7 +5753,9 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(llvm::createMemorySanitizerPass(true));
 #   endif
 #endif
-#ifndef LLVM37
+#ifdef LLVM37
+    FPM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
+#else
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
 #ifdef LLVM38
