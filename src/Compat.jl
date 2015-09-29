@@ -688,4 +688,14 @@ if VERSION < v"0.4.0-dev+3837"
     const OutOfMemoryError = MemoryError
 end
 
+if VERSION < v"0.5.0-dev+431"
+    for f in (:remotecall, :remotecall_fetch, :remotecall_wait, :remote_do)
+        @eval begin
+            ($f)(f, w::Base.LocalProcess, args...)   = ($f)(w, f, args...)
+            ($f)(f, w::Base.Worker, args...)         = ($f)(w, f, args...)
+            ($f)(f, id::Integer, args...)            = ($f)(id, f, args...)
+        end
+    end
+end
+
 end # module
