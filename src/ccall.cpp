@@ -589,7 +589,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         bool needroot = false;
         if (toboxed || !jl_isbits(tti)) {
             arg = emit_expr(argi, ctx, true);
-            if (toboxed && !arg.isboxed) {
+            if (toboxed && (!arg.isboxed || arg.needsgcroot)) {
                 needroot = true;
             }
         }
@@ -600,7 +600,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 
         Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
         // make sure args are rooted
-        if (toboxed && (needroot || might_need_root(argi))) {
+        if (needroot) {
             make_gcrooted(v, ctx);
         }
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
@@ -1314,7 +1314,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         else if (toboxed || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
-            if (toboxed && !arg.isboxed) {
+            if (toboxed && (!arg.isboxed || arg.needsgcroot)) {
                 needroot = true;
             }
         }
@@ -1325,7 +1325,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef, inReg,
                     need_private_copy(jargty, byRef), false, ai + 1, ctx, &needStackRestore);
         // make sure args are rooted
-        if (toboxed && (needroot || might_need_root(argi))) {
+        if (needroot) {
             make_gcrooted(v, ctx);
         }
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
