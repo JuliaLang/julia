@@ -830,4 +830,5 @@ end
 @deprecate Union(args...) Union{args...}
 
 # 12839
-@deprecate_binding AsyncStream IO
+const AsyncStream = IO
+deprecate(:AsyncStream)
