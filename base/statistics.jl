@@ -34,6 +34,10 @@ mean{T}(A::AbstractArray{T}, region) =
 
 ##### variances #####
 
+# faster computation of real(conj(x)*y)
+realXcY(x::Real, y::Real) = x*y
+realXcY(x::Complex, y::Complex) = real(x)*real(y) + imag(x)*imag(y)
+
 function var(iterable; corrected::Bool=true, mean=nothing)
     state = start(iterable)
     if done(iterable, state)
@@ -45,12 +49,12 @@ function var(iterable; corrected::Bool=true, mean=nothing)
         # Use Welford algorithm as seen in (among other places)
         # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
-        S = zero(M)
+        S = real(zero(M))
         while !done(iterable, state)
             value, state = next(iterable, state)
             count += 1
             new_M = M + (value - M) / count
-            S = S + (value - M) * (value - new_M)
+            S = S + realXcY(value - M, value - new_M)
             M = new_M
         end
         return S / (count - Int(corrected))
@@ -60,11 +64,11 @@ function var(iterable; corrected::Bool=true, mean=nothing)
         # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773,
         # Department of Computer Science, Stanford University,
         # because user can provide mean value that is different to mean(iterable)
-        sum2 = (value - mean::Number)^2
+        sum2 = abs2(value - mean::Number)
         while !done(iterable, state)
             value, state = next(iterable, state)
             count += 1
-            sum2 += (value - mean)^2
+            sum2 += abs2(value - mean)
         end
         return sum2 / (count - Int(corrected))
     else
@@ -74,7 +78,7 @@ end
 
 function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
     n = length(A)
-    n == 0 && return convert(momenttype(T), NaN)
+    n == 0 && return convert(real(momenttype(T)), NaN)
     return sumabs2(A) / (n - Int(corrected))
 end
 
@@ -89,7 +93,7 @@ function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
 end
 
 varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
-    varzm!(reducedim_initarray(A, region, 0, momenttype(T)), A; corrected=corrected)
+    varzm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A; corrected=corrected)
 
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
@@ -139,8 +143,8 @@ end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
-    n == 0 && return convert(momenttype(T), NaN)
-    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - Int(corrected)))
+    n == 0 && return convert(real(momenttype(T)), NaN)
+    n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
@@ -155,14 +159,15 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
 end
 
 varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
-    varm!(reducedim_initarray(A, region, 0, momenttype(T)), A, m; corrected=corrected)
+    varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
 
 
 function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
-    convert(momenttype(T), mean == 0 ? varzm(A; corrected=corrected) :
-                           mean === nothing ? varm(A, Base.mean(A); corrected=corrected) :
-                           isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
-                           throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::momenttype(T)
+    convert(real(momenttype(T)),
+            mean == 0 ? varzm(A; corrected=corrected) :
+            mean === nothing ? varm(A, Base.mean(A); corrected=corrected) :
+            isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
+            throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::real(momenttype(T))
 end
 
 function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
@@ -243,7 +248,7 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
 # core functions
 
-unscaled_covzm(x::AbstractVector) = dot(x, x)
+unscaled_covzm(x::AbstractVector) = sumabs2(x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
@@ -256,7 +261,7 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - Int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (length(x) - Int(corrected))
 
 covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
@@ -372,7 +377,7 @@ end
 
 # corzm (non-exported, with centered data)
 
-corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
+corzm{T}(x::AbstractVector{T}) = one(real(T))
 
 corzm(x::AbstractMatrix; vardim::Int=1) =
     (c = unscaled_covzm(x, vardim); cov2cor!(c, sqrt!(diag(c))))
@@ -408,7 +413,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) =
 
 # corm
 
-corm(x::AbstractVector, xmean) = corzm(x .- xmean)
+corm{T}(x::AbstractVector{T}, xmean) = one(real(T))
 
 corm(x::AbstractMatrix, xmean; vardim::Int=1) = corzm(x .- xmean; vardim=vardim)
 
@@ -419,12 +424,7 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
 
 # cor
 
-function cor(x::AbstractVector; mean=nothing)
-    mean == 0 ? corzm(x) :
-    mean === nothing ? corm(x, Base.mean(x)) :
-    isa(mean, Number) ? corm(x, mean) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+cor{T}(x::AbstractVector{T}; mean=nothing) = one(real(T))
 
 function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
     mean == 0 ? corzm(x; vardim=vardim) :
