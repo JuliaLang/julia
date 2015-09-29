@@ -34,9 +34,9 @@ function commit(repo::GitRepo,
     nparents = length(parents)
     parentptrs = Ptr{Void}[c.ptr for c in parents]
     @check ccall((:git_commit_create, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}, Ptr{Uint8},
+                 (Ptr{Oid}, Ptr{Void}, Ptr{UInt8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
-                  Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
+                  Ptr{UInt8}, Ptr{UInt8}, Ptr{Void},
                   Csize_t, Ptr{Ptr{Void}}),
                  commit_id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
                  author.ptr, committer.ptr,
