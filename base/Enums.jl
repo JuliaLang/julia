@@ -74,7 +74,7 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        bitstype 32 $(esc(T)) <: Enum
+        Base.@__doc__(bitstype 32 $(esc(T)) <: Enum)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             Intrinsics.box($(esc(typename)), convert(Int32, x))
