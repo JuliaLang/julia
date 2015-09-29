@@ -120,8 +120,6 @@ This is needed because :c:func:`jl_printf` caller :c:func:`jl_static_show`
 is passed an :code:`ios_t` stream by femtolisp's :c:func:`fl_print` function.
 Julia's :c:func:`jl_write` function has special handling for this::
 
-```c
-if (stream->type > UV_HANDLE_TYPE_MAX) {
-    return ios_write((ios_t*)stream, str, n);
-}
-```
+    if (stream->type > UV_HANDLE_TYPE_MAX) {
+        return ios_write((ios_t*)stream, str, n);
+    }

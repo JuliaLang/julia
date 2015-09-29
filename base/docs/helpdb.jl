@@ -4118,7 +4118,7 @@ Compute the LU factorization of ``A``. The return type of ``F`` depends on the t
 
 ======================= ========================= ========================================
 Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
------------------------ ------------------------- ----------------------------------------
+======================= ========================= ========================================
 :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
 :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
 :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
@@ -4128,7 +4128,7 @@ The individual components of the factorization ``F`` can be accessed by indexing
 
 =========== ======================================= ====== ======================== =============
 Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
------------ --------------------------------------- ------ ------------------------ -------------
+=========== ======================================= ====== ======================== =============
 ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
 ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
 ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
@@ -4140,7 +4140,7 @@ Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}
 
 ================== ====== ======================== =============
 Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
------------------- ------ ------------------------ -------------
+================== ====== ======================== =============
      ``/``            ✓
      ``\``            ✓                       ✓             ✓
      ``cond``         ✓                                     ✓
@@ -10017,7 +10017,7 @@ Computes the QR factorization of ``A``. The return type of ``F`` depends on the 
 
 ================ ================= ============== =====================================
 Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
----------------- ----------------- -------------- -------------------------------------
+================ ================= ============== =====================================
 ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
 ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
 ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
@@ -10029,7 +10029,7 @@ The individual components of the factorization ``F`` can be accessed by indexing
 
 =========== ============================================= ================== ===================== ==================
 Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
------------ --------------------------------------------- ------------------ --------------------- ------------------
+=========== ============================================= ================== ===================== ==================
 ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
 ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
 ``F[:p]``   pivot ``Vector``                                                                        ✓
@@ -11415,7 +11415,7 @@ the ``format`` string. The following codes can be used for constructing format s
 
 =============== ========= ===============================================================
 Code            Matches    Comment
---------------- --------- ---------------------------------------------------------------
+=============== ========= ===============================================================
 ``y``           1996, 96  Returns year of 1996, 0096
 ``m``           1, 01     Matches 1 or 2-digit months
 ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
