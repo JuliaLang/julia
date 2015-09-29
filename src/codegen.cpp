@@ -612,12 +612,12 @@ static jl_cgval_t emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 
 static void make_gcrooted(Value *v, jl_codectx_t *ctx);
+static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx);
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
 static jl_cgval_t emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx);
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
-static bool might_need_root(jl_value_t *ex);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx);
 static void finalize_gc_frame(jl_codectx_t *ctx);
@@ -2001,6 +2001,7 @@ static Value *emit_local_slot(int slot, jl_codectx_t *ctx)
 
 static void make_gcrooted(Value *v, jl_codectx_t *ctx) // TODO: this function should be removed
 {
+    assert(v->getType() == T_pjlvalue);
     Instruction *Inst = dyn_cast<Instruction>(v);
     if (Inst) { // ignore make_gcrooted(Constant) -- TODO: make this an error
         Value *froot = emit_local_slot(ctx->gc.argSpaceSize++, ctx);
@@ -2101,14 +2102,6 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
     return false;
 }
 
-// classify exprs that might need temporary rooting.
-static bool might_need_root(jl_value_t *ex)
-{
-    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
-            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
-            !jl_is_globalref(ex));
-}
-
 static jl_cgval_t emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx) // TODO: make this return a Value*
 {
     jl_cgval_t v = emit_expr(e, ctx);
@@ -2117,7 +2110,7 @@ static jl_cgval_t emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx) // TODO: m
         make_gcrooted(vbox, ctx);
         v = jl_cgval_t(vbox, true, v.typ); // XXX: bypasses the normal auto-unbox behavior for isghost!
     }
-    else if (might_need_root(e)) { // TODO: v.needsgcroot
+    else if (v.needsgcroot) {
         make_gcrooted(v.V, ctx);
     }
     return v;
@@ -2375,7 +2368,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         // emit values
         jl_cgval_t v1 = emit_unboxed(args[1], ctx);
-        if (v1.isboxed && v1.needsgcroot && might_need_root(args[1]))
+        if (v1.isboxed && v1.needsgcroot)
             make_gcrooted(v1.V, ctx);
         jl_cgval_t v2 = emit_unboxed(args[2], ctx); // unrooted!
         // FIXME: v.typ is roughly equiv. to expr_type, but with typeof(T) == Type{T} instead of DataType in a few cases
@@ -2933,14 +2926,8 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             if (isboxed) {
                 assert(at == T_pjlvalue && et == T_pjlvalue);
                 jl_cgval_t origval = i==0 ? theF : emit_expr(args[i], ctx);
-                argvals[idx] = boxed(origval, ctx, expr_type(args[i],ctx));
-                assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
-                // TODO: there should be a function emit_rooted that handles this, leaving
-                // the value rooted if it was already, to avoid redundant stores.
-                if (!origval.isboxed ||
-                    (might_need_root(args[i]) && !is_stable_expr(args[i], ctx))) {
-                    make_gcrooted(argvals[idx], ctx);
-                }
+                argvals[idx] = get_gcrooted(origval, ctx);
+                assert(!isa<UndefValue>(argvals[idx]));
             }
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
@@ -3238,7 +3225,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
             else {
                 slot = emit_unboxed(r, ctx);
-                if (slot.ispointer) { // emit a copy of boxed isbits values. TODO: elid this copy if unnecessary
+                if (!slot.isimmutable) { // emit a copy of values stored in mutable slots
                     slot = mark_julia_type(
                             emit_unbox(julia_type_to_llvm(declType), slot, declType),
                             false,
@@ -3247,12 +3234,12 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
         }
         else {
-            Value *rval = boxed(emit_expr(r, ctx, true), ctx);
-            if (!is_stable_expr(r, ctx)) {
+            slot = emit_expr(r, ctx, true);
+            if (slot.needsgcroot) {
                 // add a gc root for this GenSym node
-                make_gcrooted(rval, ctx);
+                make_gcrooted(slot.V, ctx);
+                slot.needsgcroot = false;
             }
-            slot = mark_julia_type(rval, true, declType);
         }
         ctx->gensym_SAvalues.at(idx) = slot; // now gensym_SAvalues[idx] contains the SAvalue
         assert(ctx->gensym_assigned.at(idx) = true); // (assignment, not comparison test)
@@ -3325,7 +3312,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         else {
             // SSA variable w/o gcroot, just track the value info
             assert(vi.isSA);
-            if (store_unboxed_p(vi.value.typ) && rval_info.ispointer) { // emit a copy of boxed isbits values. TODO: elid this copy if unnecessary
+            if (!rval_info.isimmutable && !rval_info.isboxed) { // emit a copy of values stored in mutable slots
                 rval_info = mark_julia_type(
                         emit_unbox(julia_type_to_llvm(vi.value.typ), rval_info, vi.value.typ),
                         false,
