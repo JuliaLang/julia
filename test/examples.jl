@@ -55,7 +55,10 @@ include(dc_path)
 w_set=filter!(x->x != myid(), workers())
 pid = length(w_set) > 0 ? w_set[1] : myid()
 
-remotecall_fetch(pid, f->(include(f); nothing), dc_path)
+remotecall_fetch(pid, dc_path) do f
+    include(f)
+    nothing
+end
 dc=RemoteRef(()->DictChannel(), pid)
 @test typeof(dc) == RemoteRef{DictChannel}
 

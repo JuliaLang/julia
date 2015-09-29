@@ -3609,7 +3609,7 @@ Returns the index of the current worker into the `pids` vector, i.e., the list o
 indexpids
 
 doc"""
-    remotecall_wait(id, func, args...)
+    remotecall_wait(func, id, args...)
 
 Perform `wait(remotecall(...))` in one message.
 """
@@ -6259,7 +6259,7 @@ Search for the first occurrence of the given characters within the given string.
 search
 
 doc"""
-    remotecall_fetch(id, func, args...)
+    remotecall_fetch(func, id, args...)
 
 Perform `fetch(remotecall(...))` in one message. Any remote exceptions are captured in a `RemoteException` and thrown.
 """
@@ -7370,7 +7370,7 @@ Determine whether a `RemoteRef` has a value stored to it. Note that this functio
 If the argument `RemoteRef` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for `r` in a separate task instead, or to use a local `RemoteRef` as a proxy:
 
     rr = RemoteRef()
-    @async put!(rr, remotecall_fetch(p, long_computation))
+    @async put!(rr, remotecall_fetch(long_computation, p))
     isready(rr)  # will not block
 """
 isready
@@ -9490,7 +9490,7 @@ Read all available data on the stream, blocking the task only if no data is avai
 readavailable
 
 doc"""
-    remotecall(id, func, args...)
+    remotecall(func, id, args...)
 
 Call a function asynchronously on the given arguments on the specified process. Returns a `RemoteRef`.
 """
