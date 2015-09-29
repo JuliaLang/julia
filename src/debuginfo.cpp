@@ -226,9 +226,9 @@ public:
         uint64_t SectionAddr = 0;
 #endif
         uint64_t SectionSize = 0;
-        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 
 #if defined(_OS_WINDOWS_)
+        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #if defined(_CPU_X86_64_)
         uint8_t *UnwindData = NULL;
         uint8_t *catchjmp = NULL;
@@ -966,7 +966,7 @@ public:
     RTDyldMemoryManagerOSX() {};
     ~RTDyldMemoryManagerOSX() override {};
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size);
+    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 };
 
 extern "C" void __register_frame(void*);
