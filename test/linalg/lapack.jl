@@ -241,8 +241,7 @@ end
 #orglq and friends errors
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
-    tau = zeros(elty,10)
-    A,tau = LAPACK.gelqf!(A,tau)
+    A,tau = LAPACK.gelqf!(A)
     @test_throws DimensionMismatch LAPACK.orglq!(A,tau,11)
     @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,tau,rand(elty,11,11))
@@ -254,8 +253,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test LAPACK.ormlq!('R','N',A,tau,eye(elty,10)) ≈ C
 
     A = rand(elty,10,10)
-    tau = zeros(elty,10)
-    A,tau = LAPACK.geqrf!(A,tau)
+    A,tau = LAPACK.geqrf!(A)
     @test_throws DimensionMismatch LAPACK.orgqr!(A,tau,11)
     B = copy(A)
     @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,eye(elty,10))
@@ -263,6 +261,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,zeros(elty,11),rand(elty,10,10))
+
+    A = rand(elty,10,10)
+    A,tau = LAPACK.geqlf!(A)
+
+    A = rand(elty,10,10)
+    A,tau = LAPACK.gerqf!(A)
 
     C = rand(elty,10,10)
     V = rand(elty,10,10)
@@ -418,6 +422,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq A\B C
     @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
     @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
+
+    @test LAPACK.potrs!('U',zeros(elty,0,0),ones(elty,0)) == ones(elty,0)
 end
 
 #gesvx
