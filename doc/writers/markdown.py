@@ -439,10 +439,10 @@ class MarkdownTranslator(nodes.NodeVisitor):
                 fmted_rows.append(cells)
 
         def writesep(char='-'):
-            out = ['+']
+            out = ['|']
             for width in realwidths:
                 out.append(char * (width+2))
-                out.append('+')
+                out.append('|')
             self.add_text(''.join(out) + self.nl)
 
         def writerow(row):
@@ -461,11 +461,8 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
         for i, row in enumerate(fmted_rows):
             if separator and i == separator:
-                writesep('=')
-            else:
                 writesep('-')
             writerow(row)
-        writesep('-')
         self.table = None
         self.end_state(wrap=False)
 
