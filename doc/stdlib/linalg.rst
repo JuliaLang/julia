@@ -928,6 +928,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
+
       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
@@ -970,6 +971,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
+
       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
