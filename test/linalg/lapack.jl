@@ -195,13 +195,27 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq A iA
 end
 
-#geev - complex is easier for now
-for elty in (Complex64, Complex128)
+#geev
+for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
     Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
     fA = eigfact(A)
     @test_approx_eq fA[:values] Aw
-    @test_approx_eq fA[:vectors] Avr
+    if elty <: Complex
+        @test_approx_eq fA[:vectors] Avr
+    else
+        evecs = complex(Avr, zeros(Avr))
+        i = 1
+        while i <= length(Aw)
+            if imag(Aw[i]) != 0.0
+                evecs[:, i]   = Avr[:, i] + im * Avr[:, i+1]
+                evecs[:, i+1] = Avr[:, i] - im * Avr[:, i+1]
+                i += 1
+            end
+            i += 1
+        end
+        @test_approx_eq fA[:vectors] evecs
+    end
 end
 
 #gtsv

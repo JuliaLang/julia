@@ -1557,7 +1557,7 @@ set of functions in future releases.
 
    .. Docstring generated from Julia source
 
-   Finds the eigensystem of ``A``\ . If ``jobvl = N``\ , the left eigenvectors of ``A`` aren't computed. If ``jobvr = N``\ , the right eigenvectors of ``A`` aren't computed. If ``jobvl = V`` or ``jobvr = V``\ , the corresponding eigenvectors are computed. Returns the eigenvalues in ``W``\ , the right eigenvectors in ``VR``\ , and the left eigenvectors in ``VL``\ .
+   Finds the eigensystem of ``A``\ . If ``jobvl = N``\ , the left eigenvectors of ``A`` aren't computed. If ``jobvr = N``\ , the right eigenvectors of ``A`` aren't computed. If ``jobvl = V`` or ``jobvr = V``\ , the corresponding eigenvectors are computed. Returns the eigenvalues in ``W``\ , the left eigenvectors in ``VL``\ , and the right eigenvectors in ``VR``\ . For real-valued ``A``\ , the eigenvectors for complex conjugate eigenvalues ``W[i]`` and ``W[i+1]`` are equal to ``VL[:,i]±im*VL[:,i+1]`` and ``VR[:,i]±im*VR[:,i+1]``\ .
 
 .. function:: gesdd!(job, A) -> (U, S, VT)
 
