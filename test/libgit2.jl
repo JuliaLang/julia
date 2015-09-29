@@ -2,7 +2,7 @@
 
 # check that libgit2 has been installed correctly
 
-const LIBGIT2_VER = v"0.23.1"
+const LIBGIT2_VER = v"0.23.0"
 
 function check_version()
     v = LibGit2.version()
@@ -72,7 +72,7 @@ temp_dir() do dir
     repo = LibGit2.clone(repo_url, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
     finalize(repo)
     @test isdir(repo_path)
-    @test isfile(joinpath(repo_path, LibGit2.GitConst.HEAD_FILE))
+    @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
 end
 
 # clone
@@ -173,7 +173,7 @@ temp_dir() do dir_cache
             credentials!(cfg)
         end
         oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-            LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.GitConst.SORT_TIME)
+            LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
         end
         @test length(oids) > 0
         finalize(repo)
@@ -181,7 +181,7 @@ temp_dir() do dir_cache
         LibGit2.with(LibGit2.GitRepo, path) do repo
             oid = LibGit2.Oid(oids[end])
             oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                LibGit2.map((oid,repo)->(oid,repo), walker, oid=oid, by=LibGit2.GitConst.SORT_TIME)
+                LibGit2.map((oid,repo)->(oid,repo), walker, oid=oid, by=LibGit2.Consts.SORT_TIME)
             end
             @test length(oids) > 0
         end

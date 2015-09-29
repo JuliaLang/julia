@@ -42,7 +42,7 @@ function read_tree!(idx::GitIndex, tree_id::Oid)
 end
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
-             flags::Cuint = GitConst.INDEX_ADD_DEFAULT)
+             flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     sa = StrArrayStruct(files...)
     try
         @check ccall((:git_index_add_all, :libgit2), Cint,
@@ -76,7 +76,7 @@ function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
 end
 
 function add!{T<:AbstractString}(repo::GitRepo, files::T...;
-             flags::Cuint = GitConst.INDEX_ADD_DEFAULT)
+             flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     with(GitIndex, repo) do idx
         add!(idx, files..., flags = flags)
         write!(idx)

@@ -228,7 +228,7 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
             LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
-            LibGit2.branch!(repo, branch, track=LibGit2.GitConst.REMOTE_ORIGIN)
+            LibGit2.branch!(repo, branch, track=LibGit2.Consts.REMOTE_ORIGIN)
             do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
             if do_pull
                 info("Pulling $pkg latest $branch...")
@@ -417,7 +417,7 @@ function publish(branch::AbstractString)
         ahead_local == 0 && throw(PkgError("There are no METADATA changes to publish"))
 
         # get changed files
-        for path in LibGit2.diff_files(repo, "origin/$branch", LibGit2.GitConst.HEAD_FILE)
+        for path in LibGit2.diff_files(repo, "origin/$branch", LibGit2.Consts.HEAD_FILE)
             m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
             m !== nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
             pkg, ver = m.captures; ver = convert(VersionNumber,ver)

@@ -27,7 +27,7 @@ end
 function GitAnnotated(repo::GitRepo, comittish::AbstractString)
     obj = revparse(repo, comittish)
     try
-        cmt = peel(obj, GitConst.OBJ_COMMIT)
+        cmt = peel(obj, Consts.OBJ_COMMIT)
         cmt === nothing && return nothing
         return GitAnnotated(repo, Oid(cmt))
     finally
@@ -60,7 +60,7 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
         with(head(repo)) do head_ref
             cmt_oid = Oid(cmt)
             msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
-            new_head_ref = if reftype(head_ref) == GitConst.REF_OID
+            new_head_ref = if reftype(head_ref) == Consts.REF_OID
                 target!(head_ref, cmt_oid, msg=msg)
             else
                 GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
@@ -75,7 +75,7 @@ end
 
 """ Merge changes into current head """
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, merge_opts::MergeOptions,
-                checkout_opts = CheckoutOptions(checkout_strategy = GitConst.CHECKOUT_SAFE))
+                checkout_opts = CheckoutOptions(checkout_strategy = Consts.CHECKOUT_SAFE))
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
@@ -91,37 +91,37 @@ Returns `true` if merge was successful, otherwise `false`
 """
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, options::MergeOptions)
     ma, mp = merge_analysis(repo, anns)
-    if isset(ma, Cint(GitConst.MERGE_ANALYSIS_UP_TO_DATE))
+    if isset(ma, Cint(Consts.MERGE_ANALYSIS_UP_TO_DATE))
         return true # no merge - everything is up to date
     end
 
     ffPref = if fastforward
-        GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY
-    elseif isset(mp, Cint(GitConst.MERGE_PREFERENCE_NONE))
-        GitConst.MERGE_PREFERENCE_NONE
-    elseif isset(mp, Cint(GitConst.MERGE_PREFERENCE_NO_FASTFORWARD))
-        GitConst.MERGE_PREFERENCE_NO_FASTFORWARD
-    elseif isset(mp, Cint(GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY))
-        GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY
+        Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
+    elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_NONE))
+        Consts.MERGE_PREFERENCE_NONE
+    elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_NO_FASTFORWARD))
+        Consts.MERGE_PREFERENCE_NO_FASTFORWARD
+    elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY))
+        Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
     end
     if ffPref === nothing
         warn("Unknown merge preference: $(mp).")
         return false
     end
 
-    mergeResult = if ffPref == GitConst.MERGE_PREFERENCE_NONE
-        if isset(ma, Cint(GitConst.MERGE_ANALYSIS_FASTFORWARD))
+    mergeResult = if ffPref == Consts.MERGE_PREFERENCE_NONE
+        if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
                 warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
                 false
             else
                 ffmerge!(repo, anns[1])
             end
-        elseif isset(ma, Cint(GitConst.MERGE_ANALYSIS_NORMAL))
+        elseif isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
             merge!(repo, anns, options)
         end
-    elseif ffPref == GitConst.MERGE_PREFERENCE_FASTFORWARD_ONLY
-        if isset(ma, Cint(GitConst.MERGE_ANALYSIS_FASTFORWARD))
+    elseif ffPref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
+        if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
                 warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
                 false
@@ -132,8 +132,8 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
             warn("Cannot perform fast-forward merge.")
             false
         end
-    elseif ffPref == GitConst.MERGE_PREFERENCE_NO_FASTFORWARD
-        if isset(ma, Cint(GitConst.MERGE_ANALYSIS_NORMAL))
+    elseif ffPref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
+        if isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
             merge!(repo, anns, options)
         end
     end

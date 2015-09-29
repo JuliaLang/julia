@@ -13,7 +13,7 @@ function GitRepo(path::AbstractString)
     return GitRepo(repo_ptr_ptr[])
 end
 
-function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(GitConst.REPOSITORY_OPEN_DEFAULT))
+function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     separator = @unix? ":" : ";"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open_ext, :libgit2), Cint,

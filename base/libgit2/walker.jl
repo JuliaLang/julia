@@ -40,8 +40,8 @@ function Base.push!(w::GitRevWalker, range::AbstractString)
     return w
 end
 
-function Base.sort!(w::GitRevWalker; by::Cint = GitConst.SORT_NONE, rev::Bool=false)
-    rev && (by |= GitConst.SORT_REVERSE)
+function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=false)
+    rev && (by |= Consts.SORT_REVERSE)
     ccall((:git_revwalk_sorting, :libgit2), Void, (Ptr{Void}, Cint), w.ptr, by)
     return w
 end
@@ -55,7 +55,7 @@ end
 function Base.map(f::Function, walker::GitRevWalker;
                   oid::Oid=Oid(),
                   range::AbstractString="",
-                  by::Cint = GitConst.SORT_NONE,
+                  by::Cint = Consts.SORT_NONE,
                   rev::Bool=false,
                   count::Int=0)
     res = []
@@ -83,7 +83,7 @@ end
 
 function Base.count(f::Function, walker::GitRevWalker;
                   oid::Oid=Oid(),
-                  by::Cint = GitConst.SORT_NONE,
+                  by::Cint = Consts.SORT_NONE,
                   rev::Bool=false)
     c = 0
     sort!(walker, by=by, rev=rev)

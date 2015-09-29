@@ -9,7 +9,7 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-include("libgit2/const.jl")
+include("libgit2/consts.jl")
 include("libgit2/types.jl")
 include("libgit2/error.jl")
 include("libgit2/signature.jl")
@@ -70,7 +70,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """ git diff-index HEAD [-- <path>]"""
-isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(repo, GitConst.HEAD_FILE, paths, cached=cached)
+isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """ git diff-index <treeish> [-- <path>]"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
@@ -92,7 +92,7 @@ end
 
 """ git diff --name-only --diff-filter=<filter> <branch1> <branch2> """
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
-                    filter::Set{Cint}=Set([GitConst.DELTA_ADDED, GitConst.DELTA_MODIFIED, GitConst.DELTA_DELETED]))
+                    filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
     tree1 = get(GitTree, repo, b1_id)
@@ -224,7 +224,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         if !isempty(track) # setup tracking
             try
                 with(GitConfig, repo) do cfg
-                    set!(cfg, "branch.$branch_name.remote", GitConst.REMOTE_ORIGIN)
+                    set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
                     set!(cfg, "branch.$branch_name.merge", name(branch_ref))
                 end
             catch
@@ -252,12 +252,12 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     isempty(commit) && return
 
     # grab head name
-    head_name = GitConst.HEAD_FILE
+    head_name = Consts.HEAD_FILE
     try
         with(head(repo)) do head_ref
             head_name = shortname(head_ref)
             # if it is HEAD use short OID instead
-            if head_name == GitConst.HEAD_FILE
+            if head_name == Consts.HEAD_FILE
                 head_name = string(Oid(head_ref))
             end
         end
@@ -267,9 +267,9 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     obj = get(GitAnyObject, repo, Oid(commit))
     obj === nothing && return
     try
-        peeled = peel(obj, GitConst.OBJ_COMMIT)
+        peeled = peel(obj, Consts.OBJ_COMMIT)
         peeled === nothing && return
-        opts = force ? CheckoutOptions(checkout_strategy = GitConst.CHECKOUT_FORCE) :
+        opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) :
                        CheckoutOptions()
         try
             # detach commit
@@ -315,7 +315,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
-function reset!(repo::GitRepo, commit::Oid, mode::Cint = GitConst.RESET_MIXED)
+function reset!(repo::GitRepo, commit::Oid, mode::Cint = Consts.RESET_MIXED)
     obj = get(GitAnyObject, repo, commit)
     obj === nothing && return
     try
@@ -344,10 +344,10 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     snd_id = revparseid(repo, snd)
     base_id = merge_base(repo, string(fst_id), string(snd_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=GitConst.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=GitConst.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
@@ -361,7 +361,7 @@ function merge!(repo::GitRepo;
     # merge into head branch
     with(head(repo)) do head_ref
         upst_anns = if !isempty(committish) # merge committish into HEAD
-            if committish == GitConst.FETCH_HEAD # merge FETCH_HEAD
+            if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
                 fheads = fetchheads(repo)
                 filter!(fh->fh.ismerge, fheads)
                 length(fheads) == 0 && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no fetch reference for this branch."))
@@ -435,12 +435,12 @@ function authors(repo::GitRepo)
         map((oid,repo)->with(get(GitCommit, repo, oid)) do cmt
                             author(cmt)::Signature
                         end,
-            walker) #, by = GitConst.SORT_TIME)
+            walker) #, by = Consts.SORT_TIME)
     end
 end
 
 function snapshot(repo::GitRepo)
-    head = Oid(repo, GitConst.HEAD_FILE)
+    head = Oid(repo, Consts.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
         with(GitIndex, repo) do idx
@@ -465,17 +465,17 @@ function snapshot(repo::GitRepo)
 end
 
 function restore(s::State, repo::GitRepo)
-    reset!(repo, GitConst.HEAD_FILE, "*")  # unstage everything
+    reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
         opts = CheckoutOptions(
-                checkout_strategy = GitConst.CHECKOUT_FORCE |     # check the index out to work
-                                    GitConst.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
+                checkout_strategy = Consts.CHECKOUT_FORCE |     # check the index out to work
+                                    Consts.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
         checkout_index(repo, Nullable(idx), options = opts)
 
         read_tree!(idx, s.index)  # restore index
     end
-    reset!(repo, s.head, GitConst.RESET_SOFT) # restore head
+    reset!(repo, s.head, Consts.RESET_SOFT) # restore head
 end
 
 function transact(f::Function, repo::GitRepo)
