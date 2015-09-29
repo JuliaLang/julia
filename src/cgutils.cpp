@@ -2206,13 +2206,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             return mark_julia_type(strct, false, ty);
         }
         Value *f1 = NULL;
-        bool needroots = false;
-        for (size_t i = 1;i < nargs;i++) {
-            if (might_need_root(args[i])) {
-                needroots = true;
-                break;
-            }
-        }
         size_t j = 0;
         if (nf > 0 && jl_field_isptr(sty, 0) && nargs>1) {
             // emit first field before allocating struct to save
@@ -2220,12 +2213,12 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             // the first field to NULL, and sometimes the GC root
             // for the new struct.
             jl_cgval_t fval_info = emit_expr(args[1],ctx);
-            f1 = boxed(fval_info, ctx);
+            f1 = get_gcrooted(fval_info, ctx);
             j++;
-            if (might_need_root(args[1]) || !fval_info.isboxed)
-                make_gcrooted(f1, ctx);
         }
         Value *strct = emit_allocobj(sty->size);
+        if (nf > j)
+            make_gcrooted(strct, ctx);
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                             emit_typeptr_addr(strct));
@@ -2234,11 +2227,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             if (!jl_subtype(expr_type(args[1],ctx), jl_field_type(sty,0), 0))
                 emit_typecheck(f1info, jl_field_type(sty,0), "new", ctx);
             emit_setfield(sty, strctinfo, 0, f1info, ctx, false, false);
-            if (nf > 1 && needroots)
-                make_gcrooted(strct, ctx);
-        }
-        else if (nf > 0 && needroots) {
-            make_gcrooted(strct, ctx);
         }
         for(size_t i=j; i < nf; i++) {
             if (jl_field_isptr(sty, i)) {
@@ -2251,22 +2239,17 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             }
         }
         bool need_wb = false;
+        // TODO: verify that nargs <= nf (currently handled by front-end)
         for(size_t i=j+1; i < nargs; i++) {
-            jl_cgval_t rhs = emit_expr(args[i],ctx);
+            jl_cgval_t rhs = emit_expr(args[i], ctx);
             if (jl_field_isptr(sty, i - 1) && !rhs.isboxed) {
-                if (!needroots) {
-                    // if this struct element needs boxing and we haven't rooted
-                    // the struct, root it now.
-                    make_gcrooted(strct, ctx);
-                    needroots = true;
-                }
                 need_wb = true;
             }
             if (rhs.isboxed) {
                 if (!jl_subtype(expr_type(args[i],ctx), jl_svecref(sty->types,i-1), 0))
                     emit_typecheck(rhs, jl_svecref(sty->types,i-1), "new", ctx);
             }
-            if (!need_wb && might_need_root(args[i]))
+            if (!need_wb && rhs.needsgcroot)
                 need_wb = true;
             emit_setfield(sty, strctinfo, i-1, rhs, ctx, false, need_wb);
         }
