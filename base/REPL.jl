@@ -734,6 +734,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
 
+
     ################################# Stage II #############################
 
     # Setup history

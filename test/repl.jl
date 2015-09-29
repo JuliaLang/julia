@@ -198,7 +198,8 @@ fakehistory = """
 \tls
 # time: 2014-06-30 20:44:29 EDT
 # mode: julia
-\t2 + 2"""
+\t2 + 2
+"""
 
 # Test various history related issues
 begin

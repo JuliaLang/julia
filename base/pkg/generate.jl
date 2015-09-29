@@ -2,25 +2,23 @@
 
 module Generate
 
-import ..Git, ..Read
+import ...LibGit2, ..Read, ...Pkg.PkgError
+importall ...LibGit2
 
-copyright_year() = readchomp(`date +%Y`)
-copyright_name(dir::AbstractString) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
-github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
+copyright_year() =  string(Dates.year(Dates.today()))
+copyright_name(repo::GitRepo) = LibGit2.getconfig(repo, "user.name", "")
+github_user() = LibGit2.getconfig("github.user", "")
 
-function git_contributors(dir::AbstractString, n::Int=typemax(Int))
+function git_contributors(repo::GitRepo, n::Int=typemax(Int))
     contrib = Dict()
-    tty = @windows? "CON:" : "/dev/tty"
-    for line in eachline(pipeline(tty, Git.cmd(`shortlog -nes`, dir=dir)))
-        m = match(r"\s*(\d+)\s+(.+?)\s+\<(.+?)\>\s*$", line)
-        m === nothing && continue
-        commits, name, email = m.captures
-        if haskey(contrib,email)
-            contrib[email][1] += parse(Int,commits)
+    for sig in LibGit2.authors(repo)
+        if haskey(contrib, sig.email)
+            contrib[sig.email][1] += 1
         else
-            contrib[email] = [parse(Int,commits), name]
+            contrib[sig.email] = [1, sig.name]
         end
     end
+
     names = Dict()
     for (commits,name) in values(contrib)
         names[name] = get(names,name,0) + commits
@@ -40,25 +38,31 @@ function package(
 )
     isnew = !ispath(pkg)
     try
-        if isnew
-            url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
+        repo = if isnew
+            url = isempty(user) ? "" : "https://github.com/$user/$pkg.jl.git"
             Generate.init(pkg,url,config=config)
         else
-            Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
+            repo = GitRepo(pkg)
+            if LibGit2.isdirty(repo)
+                finalize(repo)
+                throw(PkgError("$pkg is dirty – commit or stash your changes"))
+            end
+            repo
         end
 
-        Git.transact(dir=pkg) do
+        LibGit2.transact(repo) do repo
             if isempty(authors)
-                authors = isnew ? copyright_name(pkg) : git_contributors(pkg,5)
+                authors = isnew ? copyright_name(repo) : git_contributors(repo,5)
             end
-            Generate.license(pkg,license,years,authors,force=force)
-            Generate.readme(pkg,user,force=force)
-            Generate.entrypoint(pkg,force=force)
-            Generate.tests(pkg,force=force)
-            Generate.require(pkg,force=force)
-            Generate.travis(pkg,force=force)
-            Generate.appveyor(pkg,force=force)
-            Generate.gitignore(pkg,force=force)
+
+            files = [Generate.license(pkg,license,years,authors,force=force),
+                     Generate.readme(pkg,user,force=force),
+                     Generate.entrypoint(pkg,force=force),
+                     Generate.tests(pkg,force=force),
+                     Generate.require(pkg,force=force),
+                     Generate.travis(pkg,force=force),
+                     Generate.appveyor(pkg,force=force),
+                     Generate.gitignore(pkg,force=force) ]
 
             msg = """
             $pkg.jl $(isnew ? "generated" : "regenerated") files.
@@ -70,14 +74,14 @@ function package(
 
             Julia Version $VERSION [$(Base.GIT_VERSION_INFO.commit_short)]
             """
-
+            LibGit2.add!(repo, files..., flags = LibGit2.Consts.INDEX_ADD_FORCE)
             if isnew
                 info("Committing $pkg generated files")
-                Git.run(`commit -q -m $msg`, dir=pkg)
-            elseif Git.dirty(dir=pkg)
-                Git.run(`reset -q --`, dir=pkg)
+                LibGit2.commit(repo, msg)
+            elseif LibGit2.isdirty(repo)
+                LibGit2.remove!(repo, files...)
                 info("Regenerated files left unstaged, use `git add -p` to select")
-                open(io->print(io,msg), joinpath(Git.dir(pkg),"MERGE_MSG"), "w")
+                open(io->print(io,msg), joinpath(LibGit2.gitdir(repo),"MERGE_MSG"), "w")
             else
                 info("Regenerated files are unchanged")
             end
@@ -86,37 +90,63 @@ function package(
         isnew && rm(pkg, recursive=true)
         rethrow()
     end
+    return
 end
 
 function init(pkg::AbstractString, url::AbstractString=""; config::Dict=Dict())
     if !ispath(pkg)
         info("Initializing $pkg repo: $(abspath(pkg))")
-        Git.run(`init -q $pkg`)
-
-        for (key,val) in config
-            Git.run(`config $key $val`, dir=pkg)
+        repo = LibGit2.init(pkg)
+        try
+            with(GitConfig, repo) do cfg
+                for (key,val) in config
+                    LibGit2.set!(cfg, key, val)
+                end
+            end
+            LibGit2.commit(repo, "initial empty commit")
+        catch err
+            throw(PkgError("Unable to initialize $pkg package: $err"))
         end
-        Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
+    else
+        repo = GitRepo(pkg)
     end
-    isempty(url) && return
-    info("Origin: $url")
-    Git.run(`remote add origin $url`,dir=pkg)
-    Git.set_remote_url(url,dir=pkg)
-    Git.run(`config branch.master.remote origin`, dir=pkg)
-    Git.run(`config branch.master.merge refs/heads/master`, dir=pkg)
+    try
+        if !isempty(url)
+            info("Origin: $url")
+            with(LibGit2.GitRemote, repo, "origin", url) do rmt
+                LibGit2.save(rmt)
+            end
+            LibGit2.set_remote_url(repo, url)
+        end
+    end
+    return repo
 end
 
-function license(pkg::AbstractString, license::AbstractString,
+function genfile(f::Function, pkg::AbstractString, file::AbstractString, force::Bool=false)
+    path = joinpath(pkg,file)
+    if force || !ispath(path)
+        info("Generating $file")
+        mkpath(dirname(path))
+        open(f, path, "w")
+        return file
+    end
+    return ""
+end
+
+function license(pkg::AbstractString,
+                 license::AbstractString,
                  years::Union{Int,AbstractString},
                  authors::Union{AbstractString,Array};
                  force::Bool=false)
-    genfile(pkg,"LICENSE.md",force) do io
+    file = genfile(pkg,"LICENSE.md",force) do io
         if !haskey(LICENSES,license)
             licenses = join(sort!(collect(keys(LICENSES)), by=lowercase), ", ")
-            error("$license is not a known license choice, choose one of: $licenses.")
+            throw(PkgError("$license is not a known license choice, choose one of: $licenses."))
         end
         print(io, LICENSES[license](pkg, string(years), authors))
-    end || info("License file exists, leaving unmodified; use `force=true` to overwrite")
+    end
+    !isempty(file) || info("License file exists, leaving unmodified; use `force=true` to overwrite")
+    file
 end
 
 function readme(pkg::AbstractString, user::AbstractString=""; force::Bool=false)
@@ -252,18 +282,6 @@ function entrypoint(pkg::AbstractString; force::Bool=false)
         end # module
         """)
     end
-end
-
-function genfile(f::Function, pkg::AbstractString, file::AbstractString, force::Bool=false)
-    path = joinpath(pkg,file)
-    if force || !ispath(path)
-        info("Generating $file")
-        mkpath(dirname(path))
-        open(f, path, "w")
-        Git.run(`add -f $file`, dir=pkg)
-        return true
-    end
-    return false
 end
 
 copyright(years::AbstractString, authors::AbstractString) = "> Copyright (c) $years: $authors."
