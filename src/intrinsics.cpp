@@ -408,8 +408,8 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     if (!bt || !jl_is_bitstype(bt)) {
         // it's easier to throw a good error from C than llvm
         if (bt) targ = bt;
-        Value *arg1 = emit_boxed_rooted(targ, ctx).V;
-        Value *arg2 = emit_boxed_rooted(x, ctx).V;
+        Value *arg1 = get_gcrooted(emit_expr(targ, ctx), ctx);
+        Value *arg2 = get_gcrooted(emit_expr(x, ctx), ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
@@ -695,12 +695,12 @@ static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codect
 
 static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 {
-    jl_cgval_t parg = emit_boxed_rooted(e, ctx);
+    jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
 #ifdef LLVM37
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { parg.V, iarg });
+    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { get_gcrooted(parg, ctx), iarg });
 #else
-    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), parg.V, iarg);
+    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), get_gcrooted(parg, ctx), iarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {
@@ -758,13 +758,13 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
 
 static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
-    jl_cgval_t parg = emit_boxed_rooted(e, ctx);
-    Value *iarg = emit_boxed_rooted(i, ctx).V;
+    jl_cgval_t parg = emit_expr(e, ctx);
+    Value *iarg = get_gcrooted(emit_expr(i, ctx), ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlpset_func), { parg.V, xarg, iarg });
+    builder.CreateCall(prepare_call(jlpset_func), { get_gcrooted(parg, ctx), xarg, iarg });
 #else
-    builder.CreateCall3(prepare_call(jlpset_func), parg.V, xarg, iarg);
+    builder.CreateCall3(prepare_call(jlpset_func), get_gcrooted(parg, ctx), xarg, iarg);
 #endif
     return parg;
 }
@@ -901,7 +901,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *r;
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
-            Value *x = emit_boxed_rooted(args[1], ctx).V;
+            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x});
 #else
@@ -909,8 +909,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 #endif
         }
         else if (nargs == 2) {
-            Value *x = emit_boxed_rooted(args[1], ctx).V;
-            Value *y = emit_boxed_rooted(args[2], ctx).V;
+            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
+            Value *y = get_gcrooted(emit_expr(args[2], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y});
 #else
@@ -918,9 +918,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 #endif
         }
         else if (nargs == 3) {
-            Value *x = emit_boxed_rooted(args[1], ctx).V;
-            Value *y = emit_boxed_rooted(args[2], ctx).V;
-            Value *z = emit_boxed_rooted(args[3], ctx).V;
+            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
+            Value *y = get_gcrooted(emit_expr(args[2], ctx), ctx);
+            Value *z = get_gcrooted(emit_expr(args[3], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y, z});
 #else
