@@ -690,7 +690,7 @@ Connections between workers (using the in-built TCP/IP transport) is established
 
 - :func:`addprocs` is called on the master process with a :obj:`ClusterManager` object
 - :func:`addprocs` calls the appropriate :func:`launch` method which spawns
-required number of worker processes on appropriate machines
+  required number of worker processes on appropriate machines
 - Each worker starts listening on a free port and writes out its host, port information to :const:`STDOUT`
 - The cluster manager captures the stdout's of each worker and makes it available to the master process
 - The master process parses this information and sets up TCP/IP connections to each worker
