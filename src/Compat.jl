@@ -691,9 +691,10 @@ end
 if VERSION < v"0.5.0-dev+431"
     for f in (:remotecall, :remotecall_fetch, :remotecall_wait, :remote_do)
         @eval begin
-            ($f)(f, w::Base.LocalProcess, args...)   = ($f)(w, f, args...)
-            ($f)(f, w::Base.Worker, args...)         = ($f)(w, f, args...)
-            ($f)(f, id::Integer, args...)            = ($f)(id, f, args...)
+            import Base: $f
+            ($f)(f::Function, w::Base.LocalProcess, args...)   = ($f)(w, f, args...)
+            ($f)(f::Function, w::Base.Worker, args...)         = ($f)(w, f, args...)
+            ($f)(f::Function, id::Integer, args...)            = ($f)(id, f, args...)
         end
     end
 end
