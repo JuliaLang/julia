@@ -591,13 +591,13 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def visit_literal_block(self, node):
         if node.has_key('language') and node['language'] != 'julia':
             self.new_state(0)
-            self.add_text('```' + node['language'] + '\n')
+            self.add_text('```' + node['language'] + self.nl)
         else:
             self.new_state()
 
     def depart_literal_block(self, node):
         if node.has_key('language') and node['language'] != 'julia':
-            self.add_text('\n```')
+            self.add_text(self.nl + '```')
         self.end_state(wrap=False)
 
     def visit_doctest_block(self, node):
@@ -722,12 +722,21 @@ class MarkdownTranslator(nodes.NodeVisitor):
         raise nodes.SkipNode
 
     def visit_math(self, node):
-        self.add_text('$')
+        self.add_text('``')
         self.add_text(node['latex'])
-        self.add_text('$')
+        self.add_text('``')
 
     def depart_math(self, node):
         pass
+
+    def visit_displaymath(self, node):
+        self.new_state(0)
+        self.add_text('```math' + self.nl)
+        self.add_text(node['latex'])
+
+    def depart_displaymath(self, node):
+        self.add_text(self.nl + '```')
+        self.end_state(wrap=False)
 
     def unknown_visit(self, node):
         raise NotImplementedError('Unknown node: ' + node.__class__.__name__)
