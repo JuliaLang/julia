@@ -4079,39 +4079,39 @@ doc"""
 
 Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-   ======================= ========================= ========================================
-   Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
-   ----------------------- ------------------------- ----------------------------------------
-   :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
-   :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
-   :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
-   ======================= ========================= ========================================
+======================= ========================= ========================================
+Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
+----------------------- ------------------------- ----------------------------------------
+:func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
+:func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
+:func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
+======================= ========================= ========================================
 
 The individual components of the factorization ``F`` can be accessed by indexing:
 
-   =========== ======================================= ====== ======================== =============
-   Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-   ----------- --------------------------------------- ------ ------------------------ -------------
-   ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
-   ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
-   ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
-   ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
-   ``F[:q]``   left permutation ``Vector``                                                      ✓
-   ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
-   ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
-   =========== ======================================= ====== ======================== =============
+=========== ======================================= ====== ======================== =============
+Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+----------- --------------------------------------- ------ ------------------------ -------------
+``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
+``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
+``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
+``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
+``F[:q]``   left permutation ``Vector``                                                      ✓
+``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
+``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
+=========== ======================================= ====== ======================== =============
 
-   ================== ====== ======================== =============
-   Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-   ------------------ ------ ------------------------ -------------
-        ``/``            ✓
-        ``\``            ✓                       ✓             ✓
-        ``cond``         ✓                                     ✓
-        ``det``          ✓                       ✓             ✓
-        ``logdet``       ✓                       ✓
-        ``logabsdet``    ✓                       ✓
-        ``size``         ✓                       ✓
-   ================== ====== ======================== =============
+================== ====== ======================== =============
+Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+------------------ ------ ------------------------ -------------
+     ``/``            ✓
+     ``\``            ✓                       ✓             ✓
+     ``cond``         ✓                                     ✓
+     ``det``          ✓                       ✓             ✓
+     ``logdet``       ✓                       ✓
+     ``logabsdet``    ✓                       ✓
+     ``size``         ✓                       ✓
+================== ====== ======================== =============
 ```
 """
 lufact
@@ -5658,12 +5658,12 @@ doc"""
 Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
 with appropriate ``op`` values:
 
-    - with ``:register``/``:deregister`` when a worker is added / removed
-      from the Julia worker pool.
-    - with ``:interrupt`` when ``interrupt(workers)`` is called. The
-      :class:`ClusterManager` should signal the appropriate worker with an
-      interrupt signal.
-    - with ``:finalize`` for cleanup purposes.
+- with ``:register``/``:deregister`` when a worker is added / removed
+  from the Julia worker pool.
+- with ``:interrupt`` when ``interrupt(workers)`` is called. The
+  :class:`ClusterManager` should signal the appropriate worker with an
+  interrupt signal.
+- with ``:finalize`` for cleanup purposes.
 ```
 """
 manage
@@ -9134,9 +9134,9 @@ Compute the Pearson covariance between the vector(s) in `v1` and `v2`. Here, `v1
 
 This function accepts three keyword arguments:
 
--   `vardim`: the dimension of variables. When `vardim = 1`, variables are considered in columns while observations in rows; when `vardim = 2`, variables are in rows while observations in columns. By default, it is set to `1`.
--   `corrected`: whether to apply Bessel's correction (divide by `n-1` instead of `n`). By default, it is set to `true`.
--   `mean`: allow users to supply mean values that are known. By default, it is set to `nothing`, which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use `mean=0` to indicate that the input data are centered, and hence there's no need to subtract the mean.
+- `vardim`: the dimension of variables. When `vardim = 1`, variables are considered in columns while observations in rows; when `vardim = 2`, variables are in rows while observations in columns. By default, it is set to `1`.
+- `corrected`: whether to apply Bessel's correction (divide by `n-1` instead of `n`). By default, it is set to `true`.
+- `mean`: allow users to supply mean values that are known. By default, it is set to `nothing`, which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use `mean=0` to indicate that the input data are centered, and hence there's no need to subtract the mean.
 
 The size of the result depends on the size of `v1` and `v2`. When both `v1` and `v2` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size `(n1, n2)`, where `n1` and `n2` are the numbers of slices in `v1` and `v2`, which depend on the setting of `vardim`.
 
@@ -9978,26 +9978,26 @@ doc"""
 
 Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
-   ================ ================= ============== =====================================
-   Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-   ---------------- ----------------- -------------- -------------------------------------
-   ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-   ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-   ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-   ================ ================= ============== =====================================
+================ ================= ============== =====================================
+Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
+---------------- ----------------- -------------- -------------------------------------
+``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
+``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
+``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
+================ ================= ============== =====================================
 
 ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
 
 The individual components of the factorization ``F`` can be accessed by indexing:
 
-   =========== ============================================= ================== ===================== ==================
-   Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-   ----------- --------------------------------------------- ------------------ --------------------- ------------------
-   ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-   ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-   ``F[:p]``   pivot ``Vector``                                                                        ✓
-   ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-   =========== ============================================= ================== ===================== ==================
+=========== ============================================= ================== ===================== ==================
+Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
+----------- --------------------------------------------- ------------------ --------------------- ------------------
+``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
+``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
+``F[:p]``   pivot ``Vector``                                                                        ✓
+``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
+=========== ============================================= ================== ===================== ==================
 
 The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
 
@@ -10009,17 +10009,17 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
 
    The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
 
-      .. math::
+   .. math::
 
-         Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+      Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
 
    where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
 
    The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
 
-      .. math::
+   .. math::
 
-         Q = I + Y T Y^T
+      Q = I + Y T Y^T
 
    where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
 
