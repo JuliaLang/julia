@@ -130,10 +130,10 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
 end
 
 requires_list(pkg::AbstractString, avail::Dict=available(pkg)) =
-    collect(keys(Reqs.parse(requires_path(pkg,avail))))
+    collect(keys(Reqs.parse(requires_path(pkg,avail),pkg=pkg)))
 
 requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
-    Reqs.parse(requires_path(pkg,avail))
+    Reqs.parse(requires_path(pkg,avail),pkg=pkg)
 
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,Tuple{VersionNumber,Bool}}()

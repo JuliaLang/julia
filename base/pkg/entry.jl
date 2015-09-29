@@ -16,13 +16,13 @@ macro recover(ex)
 end
 
 function edit(f::Function, pkg::AbstractString, args...)
-    r = Reqs.read("REQUIRE")
-    reqs = Reqs.parse(r)
+    r = Reqs.read("REQUIRE", pkg=pkg)
+    reqs = Reqs.parse(r, pkg=pkg)
     avail = Read.available()
     !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
     rʹ = f(r,pkg,args...)
     rʹ == r && return false
-    reqsʹ = Reqs.parse(rʹ)
+    reqsʹ = Reqs.parse(rʹ,pkg=pkg)
     reqsʹ != reqs && resolve(reqsʹ,avail)
     Reqs.write("REQUIRE",rʹ)
     info("Package database updated")
@@ -34,9 +34,9 @@ function edit()
     editor !== nothing ||
         error("set the EDITOR environment variable to an edit command")
     editor = Base.shell_split(editor)
-    reqs = Reqs.parse("REQUIRE")
+    reqs = Reqs.parse("REQUIRE", pkg=pkg)
     run(`$editor REQUIRE`)
-    reqsʹ = Reqs.parse("REQUIRE")
+    reqsʹ = Reqs.parse("REQUIRE", pkg=pkg)
     reqs == reqsʹ && return info("Nothing to be done")
     info("Computing changes...")
     resolve(reqsʹ)
@@ -113,7 +113,7 @@ end
 
 function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
-    reqs = Reqs.parse("REQUIRE")
+    reqs = Reqs.parse("REQUIRE", pkg=pkgname)
     instd = Read.installed()
     required = sort!(collect(keys(reqs)))
     if !isempty(required)
@@ -166,7 +166,7 @@ function clone(url::AbstractString, pkg::AbstractString)
     end
     info("Computing changes...")
     if !edit(Reqs.add, pkg)
-        isempty(Reqs.parse("$pkg/REQUIRE")) && return
+        isempty(Reqs.parse("$pkg/REQUIRE", pkg=pkg)) && return
         resolve()
     end
 end
@@ -310,7 +310,7 @@ function update(branch::AbstractString)
         end
     end
     info("Computing changes...")
-    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
+    resolve(Reqs.parse("REQUIRE", pkg=pkg), avail, instd, fixed, free)
     # Don't use instd here since it may have changed
     updatehook(sort!(collect(keys(installed()))))
 end
@@ -713,10 +713,10 @@ end
 function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vector{AbstractString}; coverage::Bool=false)
     reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
-        tests_require = Reqs.parse(reqs_path)
+        tests_require = Reqs.parse(reqs_path, pkg=pkg)
         if (!isempty(tests_require))
             info("Computing test dependencies for $pkg...")
-            resolve(merge(Reqs.parse("REQUIRE"), tests_require))
+            resolve(merge(Reqs.parse("REQUIRE",pkg=pkg), tests_require))
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
