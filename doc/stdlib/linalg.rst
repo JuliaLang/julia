@@ -999,7 +999,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
       =============== ================================== ==================================
       ``sigma``       iteration mode                     ``which`` refers to the problem
-      --------------- ---------------------------------- ----------------------------------
+      =============== ================================== ==================================
       ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
       =============== ================================== ==================================

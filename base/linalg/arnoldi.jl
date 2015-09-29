@@ -88,7 +88,7 @@ The following keyword arguments are supported:
 
    =============== ================================== ==================================
    ``sigma``       iteration mode                     ``which`` refers to the problem
-   --------------- ---------------------------------- ----------------------------------
+   =============== ================================== ==================================
    ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
    real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
    =============== ================================== ==================================
