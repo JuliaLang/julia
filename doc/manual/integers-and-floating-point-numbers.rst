@@ -30,7 +30,7 @@ The following are Julia's primitive numeric types:
 
 ================  =======  ==============  ============== ==================
 Type              Signed?  Number of bits  Smallest value Largest value
-----------------  -------  --------------  -------------- ------------------
+================  =======  ==============  ============== ==================
 :class:`Int8`        ✓         8            -2^7             2^7 - 1
 :class:`UInt8`                 8             0               2^8 - 1
 :class:`Int16`       ✓         16           -2^15            2^15 - 1
@@ -48,7 +48,7 @@ Type              Signed?  Number of bits  Smallest value Largest value
 
 ================ ========= ==============
 Type             Precision Number of bits
----------------- --------- --------------
+================ ========= ==============
 :class:`Float16` half_          16
 :class:`Float32` single_        32
 :class:`Float64` double_        64
@@ -755,7 +755,7 @@ specified type or the type of a given variable.
 
 ====================== =====================================================
 Function               Description
----------------------- -----------------------------------------------------
+====================== =====================================================
 :func:`zero(x) <zero>` Literal zero of type ``x`` or type of variable ``x``
 :func:`one(x) <one>`   Literal one of type ``x`` or type of variable ``x``
 ====================== =====================================================

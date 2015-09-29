@@ -86,7 +86,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    =============== ========= ===============================================================
    Code            Matches    Comment
-   --------------- --------- ---------------------------------------------------------------
+   =============== ========= ===============================================================
    ``y``           1996, 96  Returns year of 1996, 0096
    ``m``           1, 01     Matches 1 or 2-digit months
    ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
@@ -476,7 +476,7 @@ Days of the Week:
 
 =============== ========= =============
 Variable        Abbr.     Value (Int)
---------------- --------- -------------
+=============== ========= =============
 ``Monday``      ``Mon``   1
 ``Tuesday``     ``Tue``   2
 ``Wednesday``   ``Wed``   3
@@ -490,7 +490,7 @@ Months of the Year:
 
 =============== ========= =============
 Variable        Abbr.     Value (Int)
---------------- --------- -------------
+=============== ========= =============
 ``January``     ``Jan``   1
 ``February``    ``Feb``   2
 ``March``       ``Mar``   3
