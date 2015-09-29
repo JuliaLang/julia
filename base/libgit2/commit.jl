@@ -47,7 +47,7 @@ end
 
 """Commit changes to repository"""
 function commit(repo::GitRepo, msg::AbstractString;
-                refname::AbstractString=GitConst.HEAD_FILE,
+                refname::AbstractString=Consts.HEAD_FILE,
                 author::Signature = Signature(repo),
                 committer::Signature = Signature(repo),
                 tree_id::Oid = Oid(),

@@ -80,12 +80,12 @@ immutable CheckoutOptions
     perfdata_cb::Ptr{Void}
     perfdata_payload::Ptr{Void}
 end
-CheckoutOptions(; checkout_strategy::Cuint = GitConst.CHECKOUT_SAFE,
+CheckoutOptions(; checkout_strategy::Cuint = Consts.CHECKOUT_SAFE,
                   disable_filters::Cint = zero(Cint),
                   dir_mode::Cuint = Cuint(0), # Cuint(0o755),
                   file_mode::Cuint = Cuint(0), #Cuint(0o644),
                   file_open_flags::Cint = zero(Cint),
-                  notify_flags::Cuint = GitConst.CHECKOUT_NOTIFY_NONE,
+                  notify_flags::Cuint = Consts.CHECKOUT_NOTIFY_NONE,
                   notify_cb::Ptr{Void} = Ptr{Void}(0),
                   notify_payload::Ptr{Void} = Ptr{Void}(0),
                   progress_cb::Ptr{Void} = Ptr{Void}(0),
@@ -169,9 +169,9 @@ immutable FetchOptions
     download_tags::Cint
 end
 FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
-               prune::Cint = GitConst.FETCH_PRUNE_UNSPECIFIED,
+               prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
                update_fetchhead::Cint = one(Cint),
-               download_tags::Cint = GitConst.REMOTE_DOWNLOAD_TAGS_AUTO
+               download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
 ) = FetchOptions(one(Cuint),
                  callbacks,
                  prune,
@@ -193,7 +193,7 @@ end
 CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
                fetch_opts::FetchOptions = FetchOptions(),
                bare::Cint = zero(Cint),
-               localclone::Cint = GitConst.CLONE_LOCAL_AUTO,
+               localclone::Cint = Consts.CLONE_LOCAL_AUTO,
                checkout_branch::Cstring = Cstring_NULL,
                repository_cb::Ptr{Void} = Ptr{Void}(0),
                repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
@@ -229,8 +229,8 @@ immutable DiffOptionsStruct
     old_prefix::Cstring
     new_prefix::Cstring
 end
-DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
-                    ignore_submodules::Cint = Cint(GitConst.SUBMODULE_IGNORE_UNSPECIFIED),
+DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
+                    ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
                     pathspec::StrArrayStruct = StrArrayStruct(),
                     notify_cb::Ptr{Void} = C_NULL,
                     notify_payload::Ptr{Void} = C_NULL,
@@ -240,7 +240,7 @@ DiffOptionsStruct(; flags::UInt32 = GitConst.DIFF_NORMAL,
                     max_size::Coff_t = Coff_t(512*1024*1024), #zero(Coff_t), #512Mb
                     old_prefix::Cstring = Cstring_NULL,
                     new_prefix::Cstring = Cstring_NULL
-)=DiffOptionsStruct(GitConst.DIFF_OPTIONS_VERSION,
+)=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
                     flags,
                     ignore_submodules,
                     pathspec,
@@ -286,8 +286,8 @@ MergeOptions(; tree_flags::Cint = Cint(0),
                rename_threshold::Cuint = Cuint(50),
                target_limit::Cuint = Cuint(200),
                metric::Ptr{Void} = C_NULL,
-               file_favor::Cint = Cint(GitConst.MERGE_FILE_FAVOR_NORMAL),
-               file_flags::Cuint =Cuint(GitConst.MERGE_FILE_DEFAULT)
+               file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+               file_flags::Cuint =Cuint(Consts.MERGE_FILE_DEFAULT)
 )=MergeOptions(one(Cuint),
                tree_flags,
                rename_threshold,
@@ -371,11 +371,11 @@ immutable StatusOptions
     flags::Cuint
     pathspec::StrArrayStruct
 end
-StatusOptions(; show::Cint = GitConst.STATUS_SHOW_INDEX_AND_WORKDIR,
-                flags::Cuint = GitConst.STATUS_OPT_INCLUDE_UNTRACKED |
-                               GitConst.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
-                               GitConst.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
-                               GitConst.STATUS_OPT_SORT_CASE_SENSITIVELY,
+StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
+                flags::Cuint = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
+                               Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
+                               Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
+                               Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
                 pathspec::StrArrayStruct = StrArrayStruct()
 )=StatusOptions(one(Cuint),
                 show,
@@ -482,30 +482,30 @@ end
 
 function getobjecttype{T<:GitObject}(::Type{T})
     return if T == GitCommit
-        GitConst.OBJ_COMMIT
+        Consts.OBJ_COMMIT
     elseif T == GitTree
-        GitConst.OBJ_TREE
+        Consts.OBJ_TREE
     elseif T == GitBlob
-        GitConst.OBJ_BLOB
+        Consts.OBJ_BLOB
     elseif T == GitTag
-        GitConst.OBJ_TAG
+        Consts.OBJ_TAG
     elseif T == GitAnyObject
-        GitConst.OBJ_ANY
+        Consts.OBJ_ANY
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
     end
 end
 
 function getobjecttype(obj_type::Cint)
-    return if obj_type == GitConst.OBJ_COMMIT
+    return if obj_type == Consts.OBJ_COMMIT
         GitCommit
-    elseif obj_type == GitConst.OBJ_TREE
+    elseif obj_type == Consts.OBJ_TREE
         GitTree
-    elseif obj_type == GitConst.OBJ_BLOB
+    elseif obj_type == Consts.OBJ_BLOB
         GitBlob
-    elseif obj_type == GitConst.OBJ_TAG
+    elseif obj_type == Consts.OBJ_TAG
         GitTag
-    elseif obj_type == GitConst.OBJ_ANY
+    elseif obj_type == Consts.OBJ_ANY
         GitAnyObject
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))

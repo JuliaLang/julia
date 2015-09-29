@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module GitConst
+module Consts
 
     const HEAD_FILE  = "HEAD"
     const FETCH_HEAD  = "FETCH_HEAD"
@@ -180,12 +180,6 @@ module GitConst
     const REBASE_OPERATION_FIXUP  = Cint(4)
     const REBASE_OPERATION_EXEC   = Cint(5)
 
-    # credentials
-    const CREDTYPE_USERPASS_PLAINTEXT = Cuint(1 << 0)
-    const CREDTYPE_SSH_KEY            = Cuint(1 << 1)
-    const CREDTYPE_SSH_CUSTOM         = Cuint(1 << 2)
-    const CREDTYPE_DEFAULT            = Cuint(1 << 3)
-
     # fetch_prune
     const FETCH_PRUNE_UNSPECIFIED = Cint(0)
     const FETCH_PRUNE             = Cint(1)
@@ -262,4 +256,11 @@ module GitConst
                         FILEMODE_LINK                = 0o120000,
                         FILEMODE_COMMIT              = 0o160000)
 
+    @enum(GIT_CREDTYPE, CREDTYPE_USERPASS_PLAINTEXT = Cuint(1 << 0),
+                        CREDTYPE_SSH_KEY            = Cuint(1 << 1),
+                        CREDTYPE_SSH_CUSTOM         = Cuint(1 << 2),
+                        CREDTYPE_DEFAULT            = Cuint(1 << 3),
+                        CREDTYPE_SSH_INTERACTIVE    = Cuint(1 << 4),
+                        CREDTYPE_USERNAME           = Cuint(1 << 5),
+                        CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
 end

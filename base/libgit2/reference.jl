@@ -8,7 +8,7 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     return GitReference(ref_ptr_ptr[])
 end
 
-function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = GitConst.HEAD_FILE;
+function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
                           force::Bool=false, msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
@@ -38,7 +38,7 @@ end
 
 function fullname(ref::GitReference)
     isempty(ref) && return ""
-    reftype(ref) == GitConst.REF_OID && return ""
+    reftype(ref) == Consts.REF_OID && return ""
     rname = ccall((:git_reference_symbolic_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
     rname == C_NULL && return ""
     return bytestring(rname)
@@ -111,7 +111,7 @@ end
 
 function lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    branch_type = remote ? GitConst.BRANCH_REMOTE : GitConst.BRANCH_LOCAL
+    branch_type = remote ? Consts.BRANCH_REMOTE : Consts.BRANCH_LOCAL
     err = ccall((:git_branch_lookup, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Cint),
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
@@ -148,7 +148,7 @@ function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
     return GitReference(ref_ptr_ptr[])
 end
 
-function GitBranchIter(r::GitRepo, flags::Cint=Cint(GitConst.BRANCH_LOCAL))
+function GitBranchIter(r::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     bi_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_branch_iterator_new, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, r.ptr, flags)

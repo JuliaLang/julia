@@ -74,7 +74,7 @@ function package(
 
             Julia Version $VERSION [$(Base.GIT_VERSION_INFO.commit_short)]
             """
-            LibGit2.add!(repo, files..., flags = LibGit2.GitConst.INDEX_ADD_FORCE)
+            LibGit2.add!(repo, files..., flags = LibGit2.Consts.INDEX_ADD_FORCE)
             if isnew
                 info("Committing $pkg generated files")
                 LibGit2.commit(repo, msg)

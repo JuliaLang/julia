@@ -37,7 +37,7 @@ end
 
 function Oid(ref::GitReference)
     isempty(ref) && return Oid()
-    reftype(ref) != GitConst.REF_OID && return Oid()
+    reftype(ref) != Consts.REF_OID && return Oid()
     oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
     oid_ptr == C_NULL && return Oid()
     return Oid(oid_ptr)

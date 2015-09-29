@@ -32,19 +32,25 @@ end
 function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload::Ptr{Void})
+    err = 1
     url = bytestring(url_ptr)
 
-    # for HTTPS use keyboard-interactive prompt
-    if startswith(url, "https")
+    if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
+        # use keyboard-interactive prompt
         username = prompt("Username for '$url'")
         pass     = prompt("Password for '$url'", password=true)
 
         err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring, Cstring),
                      cred, username, pass)
-        err != 0 && return Cint(err)
-    else
-        # for SSH we need key info, look for environment vars GITHUB_* as well
+        err == 0 && return Cint(0)
+    elseif isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY)) && err > 0
+        # use ssh-agent
+        err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Cstring), cred, username_ptr)
+        err == 0 && return Cint(0)
+    elseif isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_CUSTOM)) && err > 0
+        # for SSH we need key info, look for environment vars SSH_* as well
 
         # if username is not provided, then prompt for it
         username = if username_ptr == Cstring_NULL
@@ -53,33 +59,29 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             bytestring(username_ptr)
         end
 
-        publickey = if "GITHUB_PUB_KEY" in keys(ENV)
+        publickey = if "SSH_PUB_KEY" in keys(ENV)
             ENV["GITHUB_PUB_KEY"]
         else
             keydef = homedir()*"/.ssh/id_rsa.pub"
             prompt("Public key location", default=keydef)
         end
 
-        privatekey = if "GITHUB_PRV_KEY" in keys(ENV)
+        privatekey = if "SSH_PRV_KEY" in keys(ENV)
             ENV["GITHUB_PRV_KEY"]
         else
             keydef = homedir()*"/.ssh/id_rsa"
             prompt("Private key location", default=keydef)
         end
 
-        passphrase= if "GITHUB_PRV_KEY_PASS" in keys(ENV)
-            ENV["GITHUB_PRV_KEY_PASS"]
-        else
-            prompt("Private key passphrase", password=true)
-        end
+        passphrase= get(ENV,"SSH_PRV_KEY_PASS","0") == "0" ? "" : prompt("Private key passphrase", password=true)
 
         err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
                      cred, username, publickey, privatekey, passphrase)
-        err != 0 && return Cint(err)
+        err == 0 && return Cint(0)
     end
 
-    return Cint(0)
+    return Cint(err)
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
