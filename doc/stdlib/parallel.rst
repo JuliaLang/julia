@@ -264,7 +264,7 @@ General Parallel Computing Support
    If ``err_retry`` is ``true``, it retries a failed application of ``f`` on a different worker.
    If ``err_stop`` is ``true``, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
 
-.. function:: remotecall(id, func, args...)
+.. function:: remotecall(func, id, args...)
 
    .. Docstring generated from Julia source
 
@@ -296,13 +296,13 @@ General Parallel Computing Support
    * ``RemoteRef``\ : Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
    * ``Channel`` : Wait for and get the first available item from the channel.
 
-.. function:: remotecall_wait(id, func, args...)
+.. function:: remotecall_wait(func, id, args...)
 
    .. Docstring generated from Julia source
 
    Perform ``wait(remotecall(...))`` in one message.
 
-.. function:: remotecall_fetch(id, func, args...)
+.. function:: remotecall_fetch(func, id, args...)
 
    .. Docstring generated from Julia source
 
@@ -343,7 +343,7 @@ General Parallel Computing Support
    .. code-block:: julia
 
        rr = RemoteRef()
-       @async put!(rr, remotecall_fetch(p, long_computation))
+       @async put!(rr, remotecall_fetch(long_computation, p))
        isready(rr)  # will not block
 
 .. function:: close(Channel)
