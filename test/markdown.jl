@@ -199,8 +199,8 @@ let out =
 
     Some **bolded**
 
-      * list1
-      * list2
+    * list1
+    * list2
     """
     @test sprint(io -> writemime(io, "text/rst", book)) == out
 end

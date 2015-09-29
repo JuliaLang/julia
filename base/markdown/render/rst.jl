@@ -38,7 +38,7 @@ end
 
 function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, list.ordered ? "$i. " : "  * ")
+        print(io, list.ordered ? "$i. " : "* ")
         rstinline(io, item)
         println(io)
     end
