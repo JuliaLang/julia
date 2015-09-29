@@ -6046,6 +6046,12 @@ extern "C" void jl_init_codegen(void)
             JITEventListener::createIntelJITEventListener());
 #endif // JL_USE_INTEL_JITEVENTS
 
+#ifdef JL_USE_OPROFILE_JITEVENTS
+    if (jl_using_oprofile_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(
+            JITEventListener::createOProfileJITEventListener());
+#endif // JL_USE_OPROFILE_JITEVENTS
+
     BOX_F(int8,int8);  UBOX_F(uint8,uint8);
     BOX_F(int16,int16); UBOX_F(uint16,uint16);
     BOX_F(int32,int32); UBOX_F(uint32,uint32);

@@ -120,6 +120,9 @@ extern jl_array_t *jl_module_init_order;
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;
 #endif
+#ifdef JL_USE_OPROFILE_JITEVENTS
+extern char jl_using_oprofile_jitevents;
+#endif
 extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);
