@@ -963,7 +963,12 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
+   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any
+   element being nonzero is independently given by ``p`` (and hence the mean
+   density of nonzeros is also exactly ``p``). Nonzero values are sampled from
+   the distribution specified by ``rfn``. The uniform distribution is used in
+   case ``rfn`` is not specified. The optional ``rng`` argument specifies a
+   random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: sprandn(m,n,p)
 
