@@ -19,10 +19,21 @@ _expand_ = nothing
 
 setexpand!(f) = global _expand_ = f
 
-setexpand!() do str, obj
+function __bootexpand(str, obj)
     global docs = List((ccall(:jl_get_current_module, Any, ()), str, obj), docs)
-    (isa(obj, Expr) && obj.head == :call) ? nothing : esc(Expr(:toplevel, obj))
+    (isa(obj, Expr) && obj.head == :call) && return nothing
+    (isa(obj, Expr) && obj.head == :module) && return esc(Expr(:toplevel, obj))
+    esc(obj)
 end
+
+function __bootexpand(expr::Expr)
+    if expr.head !== :->
+        throw(ArgumentError("Wrong argument to @doc"))
+    end
+    __bootexpand(expr.args...)
+end
+
+setexpand!(__bootexpand)
 
 """
     DocBootstrap :: Module
