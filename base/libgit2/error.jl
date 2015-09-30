@@ -65,7 +65,7 @@ immutable GitError <: Exception
     code::Code
     msg::AbstractString
 end
-Base.show(io::IO, err::GitError) = print(io, "[Code:$(err.code), Class:$(err.class)]: $(err.msg)")
+Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$(err.class), $(err.msg))")
 
 function last_error()
     err = ccall((:giterr_last, :libgit2), Ptr{ErrorStruct}, ())
