@@ -7,7 +7,7 @@ New language features
 Language changes
 ----------------
 
-Command line option changes
+Command-line option changes
 ---------------------------
 
 Compiler/Runtime improvements
@@ -16,11 +16,16 @@ Compiler/Runtime improvements
 Library improvements
 --------------------
 
-Deprecated or removed
----------------------
+  *  The package system (`Pkg`) is now based on the libgit2 library, rather than running the `git` program, increasing performance (especially on Windows) ([#11196]).
+
+  * The `Base.Test` module now has a `@testset` feature to bundle
+    tests together and delay throwing an error until the end ([#13062]).
 
   * The function `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
-    the function argument as the first argument to allow for do-block syntax. [#13338]
+    the function argument as the first argument to allow for do-block syntax ([#13338]).
+
+Deprecated or removed
+---------------------
 
 Julia v0.4.0 Release Notes
 ==========================
@@ -1628,6 +1633,7 @@ Too numerous to mention.
 [#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
+[#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
 [#11279]: https://github.com/JuliaLang/julia/issues/11279
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
@@ -1639,6 +1645,7 @@ Too numerous to mention.
 [#11849]: https://github.com/JuliaLang/julia/issues/11849
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11947]: https://github.com/JuliaLang/julia/issues/11947
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12025]: https://github.com/JuliaLang/julia/issues/12025
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
@@ -1655,3 +1662,5 @@ Too numerous to mention.
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
 [#12727]: https://github.com/JuliaLang/julia/issues/12727
 [#12739]: https://github.com/JuliaLang/julia/issues/12739
+[#13062]: https://github.com/JuliaLang/julia/issues/13062
+[#13338]: https://github.com/JuliaLang/julia/issues/13338
