@@ -15,6 +15,7 @@ function temp_pkg_dir(fn::Function)
   end
 end
 
+
 # Test basic operations: adding or removing a package, status, free
 #Also test for the existence of REQUIRE and META_Branch
 temp_pkg_dir() do
@@ -162,4 +163,11 @@ end"""
           @test covlines[i] == covline
       end
   end
+end
+
+# issue #13373
+temp_pkg_dir() do
+    Pkg.generate("Foo", "MIT")
+    Pkg.tag("Foo")
+    Pkg.tag("Foo")
 end
