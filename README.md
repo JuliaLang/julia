@@ -141,6 +141,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * The unexported macro `Base.@math_const` was renamed to `Base.@irrational`, accessible as `Compat.@irrational` on either 0.3 or 0.4 [#11922](https://github.com/JuliaLang/julia/pull/11922)
 
+* `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia. [#13338](https://github.com/JuliaLang/julia/pull/13338)
+
 ## New types
 
 * [`Nullable` types](http://julia.readthedocs.org/en/latest/manual/types/?highlight=nullable#nullable-types-representing-missing-values) and their associated operations.

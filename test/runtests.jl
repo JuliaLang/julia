@@ -534,3 +534,8 @@ if VERSION < v"0.4.0-dev+5379"
     @test @compat(Union{Int,Float64}) == Union(Int,Float64)
     @test @compat(:(Union{})) == :(Union())
 end
+
+@test fetch(remotecall(() -> true, 1))
+@test remotecall_fetch(() -> true, 1)
+@test fetch(remotecall_wait(() -> true, 1))
+Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed but should print some output if it fails
