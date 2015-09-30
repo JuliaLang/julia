@@ -2,7 +2,7 @@
 
 module Pkg
 
-export Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry, Git
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
        update, resolve, register, tag, publish, generate, test,
        build, free, pin, PkgError
