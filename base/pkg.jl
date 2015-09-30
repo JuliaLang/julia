@@ -2,10 +2,9 @@
 
 module Pkg
 
-export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry, Git
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       update, resolve, register, tag, publish, generate, test,
-       build, free, pin, PkgError
+       update, resolve, test, build, free, pin, PkgError
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -14,7 +13,7 @@ type PkgError <: Exception
     msg::AbstractString
 end
 
-for file in split("dir github types reqs cache read query resolve write generate entry git")
+for file in split("dir github types reqs cache read query resolve write entry git")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
@@ -49,27 +48,8 @@ pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 update() = cd(Entry.update,Dir.getmetabranch())
 resolve() = cd(Entry.resolve)
 
-register(pkg::AbstractString) = cd(Entry.register,pkg)
-register(pkg::AbstractString, url::AbstractString) = cd(Entry.register,pkg,url)
-
-tag(pkg::AbstractString, sym::Symbol=:patch) = cd(Entry.tag,pkg,sym)
-tag(pkg::AbstractString, sym::Symbol, commit::AbstractString) = cd(Entry.tag,pkg,sym,false,commit)
-
-tag(pkg::AbstractString, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
-tag(pkg::AbstractString, ver::VersionNumber, commit::AbstractString; force::Bool=false) =
-    cd(Entry.tag,pkg,ver,force,commit)
-
-submit(pkg::AbstractString) = cd(Entry.submit,pkg)
-submit(pkg::AbstractString, commit::AbstractString) = cd(Entry.submit,pkg,commit)
-
-publish() = cd(Entry.publish,Dir.getmetabranch())
-
 build() = cd(Entry.build)
 build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
-
-generate(pkg::AbstractString, license::AbstractString; force::Bool=false, authors::Union{AbstractString,Array} = [], config::Dict=Dict()) =
-    cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
-
 
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
