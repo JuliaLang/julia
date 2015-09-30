@@ -2101,6 +2101,13 @@ Transform the given dimensions of array `A` using function `f`. `f` is called on
 mapslices
 
 doc"""
+    mapranked(f, A, r, [B, s])
+
+Transform the leading subarrays or slices of rank (number of dimensions) `r` respective `s` of the arrays `A` and `B` using the two-argument function `f`. For example, if `r` is 2 and `A` is 4-dimensional and `s` is 1 and `B` is 3-dimensional, then `f` is called on `(A[:,:,i,j], B[:, i,j])` for all `i` and `j`. The results are concatenated along the remaining dimensions. If the dimensions of the arrays of `A`-slices or rank `r` and `B`-slices of rank `s` disagree, the function broadcasts these arrays to a common size by expanding singleton dimensions. If `B` and `s` are omitted, call `f` on the `r`-slices of `A`.
+"""
+mapranked
+
+doc"""
     spdiagm(B, d[, m, n])
 
 Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and `d` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size of the resulting sparse matrix.

@@ -53,6 +53,8 @@ end
 end
 *(index::CartesianIndex,a::Integer)=*(a,index)
 
+@generated function downcast{N,M}(x::CartesianIndex{N}, r::NTuple{M, Int}) :(CartesianIndex{M}(tuple($([:(r[$i] == 1 ? 1 : x[$i]) for i in 1:M]...)))) end
+
 # Iteration
 immutable CartesianRange{I<:CartesianIndex}
     start::I
@@ -148,6 +150,7 @@ simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::
     meta = Expr(:meta, :inline)
     :($meta; CartesianIndex{$(N+1)}($(args...)))
 end
+
 
 end  # IteratorsMD
 
@@ -377,6 +380,18 @@ end
 @generated function _unsafe_setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
     :($(Expr(:meta, :inline)); unsafe_setindex!(A, v, $(cartindex_exprs(I, :I)...)))
 end
+
+
+## Ellipsis() represents a number of leading Colon()'s implied by the number of dimensions of the AbstractArray and the CartesianIndex
+
+type Ellipsis
+end
+
+
+@generated _setindex!{T,N,M}(l::LinearIndexing, A::AbstractArray{T,N}, x, ::Ellipsis, idx::Base.IteratorsMD.CartesianIndex{M}) = :($(Expr(:meta, :inline)); setindex!(A, x, $([Colon(:) for i in 1:N-M]...), idx))
+@generated _unsafe_setindex!{T,N,M}(l::LinearIndexing, A::AbstractArray{T,N}, x, ::Ellipsis, idx::Base.IteratorsMD.CartesianIndex{M}) = :($(Expr(:meta, :inline)); unsafe_setindex!(A, x, $([Colon(:) for i in 1:N-M]...), idx))
+@generated _getindex{T,N,M}(l::LinearIndexing, A::AbstractArray{T,N}, ::Ellipsis, idx::Base.IteratorsMD.CartesianIndex{M}) = :($(Expr(:meta, :inline)); getindex(A, $([Colon(:) for i in 1:N-M]...), idx))
+@generated _unsafe_getindex{T,N,M}(l::LinearIndexing, A::AbstractArray{T,N}, ::Ellipsis, idx::Base.IteratorsMD.CartesianIndex{M}) = :($(Expr(:meta, :inline)); unsafe_getindex(A, $([Colon(:) for i in 1:N-M]...), idx))
 
 
 ##
