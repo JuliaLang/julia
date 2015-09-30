@@ -25,11 +25,46 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
+
+"""
+    nnz(A)
+
+Returns the number of stored (filled) elements in a sparse matrix.
+"""
 nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
+"""
+    nonzeros(A)
+
+Return a vector of the structural nonzero values in sparse matrix `A`. This
+includes zeros that are explicitly stored in the sparse matrix. The returned
+vector points directly to the internal nonzero storage of `A`, and any
+modifications to the returned vector will mutate `A` as well. See `rowvals(A)`
+and `nzrange(A, col)`.
+"""
 nonzeros(S::SparseMatrixCSC) = S.nzval
 rowvals(S::SparseMatrixCSC) = S.rowval
+
+"""
+    nzrange(A, col)
+
+Return the range of indices to the structural nonzero values of a sparse matrix
+column. In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for
+convenient iterating over a sparse matrix :
+
+    A = sparse(I,J,V)
+    rows = rowvals(A)
+    vals = nonzeros(A)
+    m, n = size(A)
+    for i = 1:n
+       for j in nzrange(A, i)
+          row = rows[j]
+          val = vals[j]
+          # perform sparse wizardry...
+       end
+    end
+"""
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
@@ -215,6 +250,12 @@ end
 sparsevec(A::AbstractMatrix) = reshape(sparse(A), (length(A),1))
 sparsevec(S::SparseMatrixCSC) = vec(S)
 
+"""
+    sparsevec(D::Dict, [m])
+
+Create a sparse matrix of size `m x 1` where the row values are keys from
+the dictionary, and the nonzero values are the values from the dictionary.
+"""
 sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(collect(keys(d)), collect(values(d)), len)
 
 sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(values(d)))
@@ -223,6 +264,16 @@ sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, AddFun())
 
 sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), AddFun())
 
+"""
+    sparsevec(I, V, [m, combine])
+
+Create a sparse matrix `S` of size `m x 1` such that `S[I[k]] = V[k]`.
+Duplicates are combined using the `combine` function, which defaults to
+`+` if it is not provided. In julia, sparse vectors are really just sparse
+matrices with one column. Given Julia's Compressed Sparse Columns (CSC)
+storage format, a sparse column matrix with one column is sparse, whereas
+a sparse row matrix with one row ends up being dense.
+"""
 function sparsevec(I::AbstractVector, V, m::Integer, combine::Union{Function,Base.Func})
     nI = length(I)
     if isa(V, Number)
@@ -245,6 +296,12 @@ function sparsevec(I::AbstractVector, V, m::Integer, combine::Union{Function,Bas
     sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end
 
+"""
+    sparsevec(A)
+
+Convert a dense vector `A` into a sparse matrix of size `m x 1`. In julia,
+sparse vectors are really just sparse matrices with one column.
+"""
 function sparsevec(a::Vector)
     n = length(a)
     I = find(a)
@@ -255,8 +312,11 @@ end
 
 sparse(a::Vector) = sparsevec(a)
 
-## Construct a sparse matrix
+"""
+    sparse(A)
 
+Convert an AbstractMatrix `A` into a sparse matrix.
+"""
 sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
@@ -438,6 +498,18 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     I, J
 end
 
+"""
+```rst
+..  sprand([rng,] m,n,p [,rfn])
+
+Create a random ``m`` by ``n`` sparse matrix, in which the probability of any
+element being nonzero is independently given by ``p`` (and hence the mean
+density of nonzeros is also exactly ``p``). Nonzero values are sampled from
+the distribution specified by ``rfn``. The uniform distribution is used in
+case ``rfn`` is not specified. The optional ``rng`` argument specifies a
+random number generator, see :ref:`Random Numbers <random-numbers>`.
+```
+"""
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))
     N = m*n
@@ -461,15 +533,42 @@ end
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
 sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
+
+"""
+    sprandn(m,n,p)
+
+Create a random `m` by `n` sparse matrix with the specified (independent)
+probability `p` of any entry being nonzero, where nonzero values are
+sampled from the normal distribution.
+"""
 sprandn( m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
 
 truebools(r::AbstractRNG, n::Integer) = ones(Bool, n)
 sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,truebools,Bool)
+
+"""
+    sprandbool(m,n,p)
+
+Create a random `m` by `n` sparse boolean matrix with the specified
+(independent) probability `p` of any entry being `true`.
+"""
 sprandbool(m::Integer, n::Integer, density::AbstractFloat) = sprandbool(GLOBAL_RNG,m,n,density)
 
+"""
+    spones(S)
+
+Create a sparse matrix with the same structure as that of `S`, but with every nonzero
+element having the value `1.0`.
+"""
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
+"""
+    spzeros(m,n)
+
+Create a sparse matrix of size `m x n`. This sparse matrix will not contain any
+nonzero values. No storage will be allocated for nonzero values during construction.
+"""
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
 function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
@@ -477,12 +576,19 @@ function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
     SparseMatrixCSC(m, n, ones(Ti, n+1), Array(Ti, 0), Array(Tv, 0))
 end
 
+
 speye(n::Integer) = speye(Float64, n)
 speye(T::Type, n::Integer) = speye(T, n, n)
 speye(m::Integer, n::Integer) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)
 
+"""
+    speye(type,m[,n])
+
+Create a sparse identity matrix of specified type of size `m x m`. In case `n` is supplied,
+create a sparse identity matrix of size `m x n`.
+"""
 function speye(T::Type, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
     x = min(m,n)
@@ -2416,6 +2522,11 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::SparseMatrixCSC...)
     vcat(tmp_rows...)
 end
 
+"""
+    blkdiag(A...)
+
+Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+"""
 function blkdiag(X::SparseMatrixCSC...)
     num = length(X)
     mX = [ size(x, 1) for x in X ]
@@ -2565,6 +2676,15 @@ function spdiagm_internal(B, d)
     return (I,J,V)
 end
 
+"""
+    spdiagm(B, d[, m, n])
+
+Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and
+`d` is a tuple containing the positions of the diagonals. In the case the input contains only
+one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
+(instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
+of the resulting sparse matrix.
+"""
 function spdiagm(B, d, m::Integer, n::Integer)
     (I,J,V) = spdiagm_internal(B, d)
     return sparse(I,J,V,m,n)

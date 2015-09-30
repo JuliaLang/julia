@@ -410,4 +410,10 @@ end
 immutable NotEqZero <: Func{1} end
 call(::NotEqZero, x) = x != 0
 
+"""
+    countnz(A)
+
+Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
+For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
+"""
 countnz(a) = count(NotEqZero(), a)
