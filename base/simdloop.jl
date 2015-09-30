@@ -15,7 +15,7 @@ end
 #       symbol '=' range
 #       symbol 'in' range
 function parse_iteration_space(x)
-    (isa(x, Expr) && (x.head == :(=) || x.head == :in)) || throw(SimdError("= or in expected"))
+    (isa(x, Expr) && (x.head == :(=) || x.head == :in)) || throw(SimdError("`=` or `in` expected"))
     length(x.args) == 2 || throw(SimdError("simd range syntax is wrong"))
     isa(x.args[1], Symbol) || throw(SimdError("simd loop index must be a symbol"))
     x.args # symbol, range
@@ -36,6 +36,19 @@ end
 check_body!(x::QuoteNode) = check_body!(x.value)
 check_body!(x) = true
 
+function peel_outer_loop(x)
+    # this is a multidimensional for loop
+    if (isa(x, Expr) && x.head === :for &&
+        isa(x.args[1], Expr) && x.args[1].head === :block)
+        Expr(:for, x.args[1].args[1],
+             Expr(:block,
+                  Expr(:for, Expr(:block, x.args[1].args[2:end]...),
+                       x.args[2])))
+    else
+        x
+    end
+end
+
 # @simd splits a for loop into two loops: an outer scalar loop and
 # an inner loop marked with :simdloop. The simd_... functions define
 # the splitting.
@@ -54,7 +67,7 @@ function compile(x)
     (isa(x, Expr) && x.head == :for) || throw(SimdError("for loop expected"))
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
     check_body!(x)
-
+    x = peel_outer_loop(x)
     var,range = parse_iteration_space(x.args[1])
     r = gensym("r") # Range value
     j = gensym("i") # Iteration variable for outer loop

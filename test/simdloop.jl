@@ -125,3 +125,11 @@ crng = CartesianRange(CartesianIndex{0}(),
                       CartesianIndex{0}())
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
 @test indexes == collect(crng)
+
+# issue #13384
+let v = Tuple{Int,Int,Int}[]
+    @simd for i = 1:3, j = 1:3, k = 1:3
+        push!(v,(i,j,k))
+    end
+    @test length(v) == 3^3
+end
