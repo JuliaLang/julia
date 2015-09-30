@@ -876,13 +876,6 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 doc"""
-    countnz(A)
-
-Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
-"""
-countnz
-
-doc"""
     isnan(f) -> Bool
 
 Test whether a floating point number is not a number (NaN)
@@ -1594,25 +1587,6 @@ Compute the inverse cosine of `x`, where the output is in radians
 acos
 
 doc"""
-    nzrange(A, col)
-
-Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for convenient iterating over a sparse matrix :
-
-    A = sparse(I,J,V)
-    rows = rowvals(A)
-    vals = nonzeros(A)
-    m, n = size(A)
-    for i = 1:n
-       for j in nzrange(A, i)
-          row = rows[j]
-          val = vals[j]
-          # perform sparse wizardry...
-       end
-    end
-"""
-nzrange
-
-doc"""
     ispath(path) -> Bool
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
@@ -1692,13 +1666,6 @@ doc"""
 Scaled Bessel function of the third kind of order `nu`, $H^{(1)}_\nu(x) e^{-x i}$.
 """
 hankelh1x
-
-doc"""
-    blkdiag(A...)
-
-Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
-"""
-blkdiag
 
 doc"""
     replace(string, pat, r[, n])
@@ -2099,13 +2066,6 @@ doc"""
 Transform the given dimensions of array `A` using function `f`. `f` is called on each slice of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]` for all `i` and `j`.
 """
 mapslices
-
-doc"""
-    spdiagm(B, d[, m, n])
-
-Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and `d` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size of the resulting sparse matrix.
-"""
-spdiagm
 
 doc"""
     svdvals(A)
@@ -2602,13 +2562,6 @@ From an array view `A`, returns the corresponding indexes in the parent
 parentindexes
 
 doc"""
-    spones(S)
-
-Create a sparse matrix with the same structure as that of `S`, but with every nonzero element having the value `1.0`.
-"""
-spones
-
-doc"""
     display(x)
     display(d::Display, x)
     display(mime, x)
@@ -2906,13 +2859,6 @@ doc"""
 Get a hexadecimal string of the binary representation of a floating point number
 """
 num2hex
-
-doc"""
-    speye(type,m[,n])
-
-Create a sparse identity matrix of specified type of size `m x m`. In case `n` is supplied, create a sparse identity matrix of size `m x n`.
-"""
-speye
 
 doc"""
     count_ones(x::Integer) -> Integer
@@ -3251,20 +3197,6 @@ doc"""
 For matrices or vectors $A$ and $B$, calculates $A / Bᴴ$
 """
 A_rdiv_Bc
-
-doc"""
-    sparse(I,J,V,[m,n,combine])
-
-Create a sparse matrix `S` of dimensions `m x n` such that `S[I[k], J[k]] = V[k]`. The `combine` function is used to combine duplicates. If `m` and `n` are not specified, they are set to `maximum(I)` and `maximum(J)` respectively. If the `combine` function is not supplied, duplicates are added by default. All elements of `I` must satisfy `1 <= I[k] <= m`, and all elements of `J` must satisfy `1 <= J[k] <= n`.
-"""
-sparse(I, J, V, m=?, n=?, combine=?)
-
-doc"""
-    sparse(A)
-
-Convert an AbstractMatrix `A` into a sparse matrix.
-"""
-sparse(A)
 
 doc"""
 ```rst
@@ -4794,13 +4726,6 @@ For a given iterable object and iteration state, return the current item and the
 next
 
 doc"""
-    nnz(A)
-
-Returns the number of stored (filled) elements in a sparse matrix.
-"""
-nnz
-
-doc"""
     unshift!(collection, items...) -> collection
 
 Insert one or more `items` at the beginning of `collection`.
@@ -4833,13 +4758,6 @@ Construct a real symmetric tridiagonal matrix from the diagonal and upper diagon
 ```
 """
 SymTridiagonal
-
-doc"""
-    spzeros(m,n)
-
-Create a sparse matrix of size `m x n`. This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
-"""
-spzeros
 
 doc"""
     colon(start, [step], stop)
@@ -5726,13 +5644,6 @@ julia> trailing_zeros(2)
 trailing_zeros
 
 doc"""
-    etree(A[, post])
-
-Compute the elimination tree of a symmetric sparse matrix `A` from `triu(A)` and, optionally, its post-ordering permutation.
-"""
-etree
-
-doc"""
     isalnum(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is alphanumeric, or whether this is true for all elements of a string. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
@@ -5892,27 +5803,6 @@ doc"""
 Remainder after division, returning in the range (0,m\]
 """
 rem1
-
-doc"""
-    sparsevec(I, V, [m, combine])
-
-Create a sparse matrix `S` of size `m x 1` such that `S[I[k]] = V[k]`. Duplicates are combined using the `combine` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
-"""
-sparsevec(I, V)
-
-doc"""
-    sparsevec(D::Dict, [m])
-
-Create a sparse matrix of size `m x 1` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
-"""
-sparsevec(D::Dict)
-
-doc"""
-    sparsevec(A)
-
-Convert a dense vector `A` into a sparse matrix of size `m x 1`. In julia, sparse vectors are really just sparse matrices with one column.
-"""
-sparsevec(A)
 
 doc"""
     isalpha(c::Union{Char,AbstractString}) -> Bool
@@ -7093,13 +6983,6 @@ doc"""
 Get the file name part of a path.
 """
 basename
-
-doc"""
-    issparse(S)
-
-Returns `true` if `S` is sparse, and `false` otherwise.
-"""
-issparse
 
 doc"""
     ArgumentError(msg)
@@ -8868,13 +8751,6 @@ Compute the inverse hyperbolic secant of `x`
 asech
 
 doc"""
-    sprandn(m,n,p)
-
-Create a random `m` by `n` sparse matrix with the specified (independent) probability `p` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
-"""
-sprandn
-
-doc"""
 ```rst
 ..  ismarked(s)
 
@@ -10095,13 +9971,6 @@ Rounds (in the sense of `round`) `x` so that there are `digits` significant digi
 signif
 
 doc"""
-    sprandbool(m,n,p)
-
-Create a random `m` by `n` sparse boolean matrix with the specified (independent) probability `p` of any entry being `true`.
-"""
-sprandbool
-
-doc"""
     nextpow2(n)
 
 The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns `-nextpow2(-n)` for negative arguments.
@@ -10419,15 +10288,6 @@ Hurwitz zeta function $\zeta(s, z)$.  (This is equivalent to
 the Riemann zeta function $\zeta(s)$ for the case of `z=1`.)
 """
 zeta(s,z)
-
-doc"""
-```rst
-..  sprand([rng,] m,n,p [,rfn])
-
-Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
-```
-"""
-sprand
 
 doc"""
     A_mul_Bt(A, B)
@@ -10892,13 +10752,6 @@ doc"""
 Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 """
 exit
-
-doc"""
-    nonzeros(A)
-
-Return a vector of the structural nonzero values in sparse matrix `A`. This includes zeros that are explicitly stored in the sparse matrix. The returned vector points directly to the internal nonzero storage of `A`, and any modifications to the returned vector will mutate `A` as well. See `rowvals(A)` and `nzrange(A, col)`.
-"""
-nonzeros
 
 doc"""
     istext(m::MIME)
