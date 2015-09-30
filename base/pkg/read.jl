@@ -77,23 +77,26 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     else
         false
     end
-    res = true
-    for (ver,info) in avail
-        if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
-            if LibGit2.is_ancestor_of(head, info.sha1, crepo)
-                res = false
-                break
+    try
+        res = true
+        for (ver,info) in avail
+            if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
+                if LibGit2.is_ancestor_of(head, info.sha1, crepo)
+                    res = false
+                    break
+                end
+            elseif LibGit2.iscommit(info.sha1, prepo)
+                if LibGit2.is_ancestor_of(head, info.sha1, prepo)
+                    res = false
+                    break
+                end
+            else
+                Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
             end
-        elseif LibGit2.iscommit(info.sha1, prepo)
-            if LibGit2.is_ancestor_of(head, info.sha1, prepo)
-                res = false
-                break
-            end
-        else
-            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
+    finally
+        cache_has_head && LibGit2.finalize(crepo)
     end
-    cache_has_head && LibGit2.finalize(crepo)
     return res
 end
 
@@ -116,21 +119,23 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     end
     ancestors = VersionNumber[]
     descendants = VersionNumber[]
-    for (ver,info) in avail
-        sha1 = info.sha1
-        base = if cache_has_head && LibGit2.iscommit(sha1, crepo)
-            LibGit2.merge_base(crepo, head, sha1)
-        elseif LibGit2.iscommit(sha1, prepo)
-            LibGit2.merge_base(prepo, head, sha1)
-        else
-            Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
-            continue
+    try
+        for (ver,info) in avail
+            sha1 = info.sha1
+            base = if cache_has_head && LibGit2.iscommit(sha1, crepo)
+                LibGit2.merge_base(crepo, head, sha1)
+            elseif LibGit2.iscommit(sha1, prepo)
+                LibGit2.merge_base(prepo, head, sha1)
+            else
+                Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
+                continue
+            end
+            base == sha1 && push!(ancestors,ver)
+            base == head && push!(descendants,ver)
         end
-        base == sha1 && push!(ancestors,ver)
-        base == head && push!(descendants,ver)
+    finally
+        cache_has_head && LibGit2.finalize(crepo)
     end
-    cache_has_head && LibGit2.finalize(crepo)
-
     both = sort!(intersect(ancestors,descendants))
     isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
     if !isempty(descendants)
@@ -173,8 +178,8 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
+        prepo = LibGit2.GitRepo(pkg)
         try
-            prepo = LibGit2.GitRepo(pkg)
             try
                 ver = installed_version(pkg, prepo, ap)
                 fixed = isfixed(pkg, prepo, ap)
@@ -182,7 +187,7 @@ function installed(avail::Dict=available())
             catch e
                 pkgs[pkg] = (typemin(VersionNumber), true)
             finally
-                finalize(prepo)
+                LibGit2.finalize(prepo)
             end
         catch
             pkgs[pkg] = (typemin(VersionNumber), true)
