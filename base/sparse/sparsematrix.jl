@@ -247,11 +247,6 @@ function vec{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     SparseMatrixCSC(lS, 1, colptr, rowval, copy(S.nzval))
 end
 
-"""
-    sparse(A)
-
-Convert an AbstractMatrix `A` into a sparse matrix.
-"""
 sparsevec(A::AbstractMatrix) = reshape(sparse(A), (length(A),1))
 sparsevec(S::SparseMatrixCSC) = vec(S)
 
@@ -317,8 +312,11 @@ end
 
 sparse(a::Vector) = sparsevec(a)
 
-## Construct a sparse matrix
+"""
+    sparse(A)
 
+Convert an AbstractMatrix `A` into a sparse matrix.
+"""
 sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
@@ -500,6 +498,18 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     I, J
 end
 
+"""
+```rst
+..  sprand([rng,] m,n,p [,rfn])
+
+Create a random ``m`` by ``n`` sparse matrix, in which the probability of any
+element being nonzero is independently given by ``p`` (and hence the mean
+density of nonzeros is also exactly ``p``). Nonzero values are sampled from
+the distribution specified by ``rfn``. The uniform distribution is used in
+case ``rfn`` is not specified. The optional ``rng`` argument specifies a
+random number generator, see :ref:`Random Numbers <random-numbers>`.
+```
+"""
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))
     N = m*n
@@ -520,18 +530,6 @@ function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
     sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, AddFun())  # it will never need to combine
 end
 
-"""
-```rst
-..  sprand([rng,] m,n,p [,rfn])
-
-Create a random ``m`` by ``n`` sparse matrix, in which the probability of any
-element being nonzero is independently given by ``p`` (and hence the mean
-density of nonzeros is also exactly ``p``). Nonzero values are sampled from
-the distribution specified by ``rfn``. The uniform distribution is used in
-case ``rfn`` is not specified. The optional ``rng`` argument specifies a
-random number generator, see :ref:`Random Numbers <random-numbers>`.
-```
-"""
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
 sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
@@ -2683,7 +2681,7 @@ end
 
 Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and
 `d` is a tuple containing the positions of the diagonals. In the case the input contains only
-one diagonaly, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
+one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
 (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
 of the resulting sparse matrix.
 """
