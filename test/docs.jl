@@ -318,6 +318,9 @@ end
 
 @test isdefined(MacroGenerated, :_g)
 
+# Issue #13385.
+@test @doc(I) !== nothing
+
 # Issue #12700.
 @test @doc(DocsTest.@m) == doc"Inner.@m"
 
