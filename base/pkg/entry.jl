@@ -655,7 +655,7 @@ function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=
                 filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
                 existing = VersionNumber[tags...]
                 filter!(tags) do tag
-                    sha1 = LibGit2.revparseid(repo, "$tag^{commit}")
+                    sha1 = string(LibGit2.revparseid(repo, "$tag^{commit}"))
                     LibGit2.is_ancestor_of(sha1, commit, repo)
                 end
                 ancestors = VersionNumber[tags...]
