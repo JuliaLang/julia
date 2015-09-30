@@ -278,6 +278,7 @@ include("libgit2.jl")
 
 # package manager
 include("pkg.jl")
+const Git = Pkg.Git
 
 # profiler
 include("profile.jl")
