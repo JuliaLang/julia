@@ -419,7 +419,9 @@ static Function *resetstkoflw_func;
 static Function *diff_gc_total_bytes_func;
 
 // placeholder functions
-static Function *gcroot_func;
+Function *gcroot_func;
+Function *jlcall_frame_func;
+Function *jlcall_root_func;
 
 
 static std::vector<Type *> two_pvalue_llvmt;
@@ -545,10 +547,7 @@ typedef struct {
 struct jl_gcinfo_t {
     AllocaInst *gcframe;
     Value *ptlsStates;
-    GetElementPtrInst *tempSlot;
-    int maxDepth;
-    BasicBlock::iterator first_gcframe_inst;
-    BasicBlock::iterator last_gcframe_inst;
+    bool hasframe;
 };
 
 // Keeps tracks of all functions and compile units created during this cycle
@@ -1994,7 +1993,8 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 // Emit a gc-root slot indicator
 static Value* emit_local_slot(jl_codectx_t *ctx)
 {
-    CallInst *newroot = CallInst::Create(gcroot_func, "", /*InsertBefore=*/ctx->gc.gcframe);
+    CallInst *newroot = CallInst::Create(gcroot_func, "", /*InsertBefore*/ctx->gc.gcframe);
+    ctx->gc.hasframe = true;
     return newroot;
 }
 
@@ -2028,16 +2028,15 @@ static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 {
     // the temporary variables are after all local variables in the GC frame.
-    Value *largs = ctx->gc.tempSlot;
+    CallInst *largs = builder.CreateCall(jlcall_frame_func, ConstantInt::get(T_int32, args.size()));
     int slot = 0;
+    assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
         Value *arg = get_gcrooted(**I, ctx);
-        Value *idx = ConstantInt::get(T_int32, slot);
-        Value *newroot = builder.CreateGEP(largs, idx);
+        Value *newroot = builder.CreateGEP(largs, ConstantInt::get(T_int32, slot));
         builder.CreateStore(arg, newroot);
     }
-    if (slot > ctx->gc.maxDepth)
-        ctx->gc.maxDepth = slot;
+    ctx->gc.hasframe = true;
     return largs;
 }
 
@@ -3662,7 +3661,7 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
     // allocate a placeholder gc frame
     jl_gcinfo_t *gc = &ctx->gc;
-    gc->maxDepth = 0;
+    gc->hasframe = false;
 
 #ifdef JULIA_ENABLE_THREADING
     CallInst *calltls;
@@ -3687,32 +3686,6 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 #ifdef JL_DEBUG_BUILD
     gc->gcframe->setName("gcrootframe");
 #endif
-    gc->first_gcframe_inst = BasicBlock::iterator(gc->gcframe);
-    gc->tempSlot = (GetElementPtrInst*)builder.CreateConstGEP1_32(gc->gcframe, 2);
-#ifdef JL_DEBUG_BUILD
-    gc->tempSlot->setName("temproots");
-#endif
-    gc->last_gcframe_inst = BasicBlock::iterator((Instruction*)gc->tempSlot);
-}
-
-static void clear_gc_frame(jl_gcinfo_t *gc)
-{
-    // replace instruction uses with Undef first to avoid LLVM assertion failures
-    BasicBlock::iterator bbi = gc->first_gcframe_inst;
-    while (1) {
-        Instruction &iii = *bbi;
-        Type *ty = iii.getType();
-        if (ty != T_void)
-            iii.replaceAllUsesWith(UndefValue::get(ty));
-        if (bbi == gc->last_gcframe_inst) break;
-        bbi++;
-    }
-    // Remove GC frame creation
-    // (instructions from gc->gcframe to gc->last_gcframe_inst)
-    BasicBlock::InstListType &il = gc->gcframe->getParent()->getInstList();
-    il.erase(gc->first_gcframe_inst, gc->last_gcframe_inst);
-    // erase() erases up *to* the end point; erase last inst too
-    il.erase(gc->last_gcframe_inst);
 }
 
 static void
@@ -3732,60 +3705,34 @@ emit_gcpops(jl_codectx_t *ctx)
     }
 }
 
+void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcframe_inst, unsigned &argSpaceSize, unsigned &maxDepth);
 static void finalize_gc_frame(jl_codectx_t *ctx)
 {
     jl_gcinfo_t *gc = &ctx->gc;
-    builder.SetInsertPoint(&*++BasicBlock::iterator(gc->last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
-    // Initialize the slots for function variables to NULL
-    /* for inst in entry-basic-block(function)
-     *     if inst matches "gc-root"
-     *         slot = get-argument(inst)
-     *         newslot = CreateGEP(gc-frame) -> at InsertPoint(gc-frame)
-     *         Replace(slot, newslot) -> at InsertPoint(gc-frame)
-     *         CreateStore(NULL, newslot) -> at InsertPoint(gc-frame)
-     */
-    int argSpaceSize = 0;
-    Value *argSlot = NULL;
-    BasicBlock *entryblock = &ctx->f->getEntryBlock();
-    bool advance = false;
-    for(BasicBlock::iterator I = entryblock->begin(), E = gc->gcframe; I != E; advance && ++I, advance = true) {
-        if (CallInst *call = dyn_cast<CallInst>(I)) {
-            if (call->getCalledFunction() == gcroot_func) {
-                if (!argSlot) {
-                    argSlot = builder.CreateConstGEP1_32(gc->gcframe, 2);
-#ifdef JL_DEBUG_BUILD
-                    argSlot->setName("locals");
-#endif
-                }
-                Value *argTempi = builder.CreateGEP(argSlot, ConstantInt::get(T_int32, argSpaceSize++));
-                builder.CreateStore(V_null, argTempi);
-                argTempi->takeName(I);
-                I->replaceAllUsesWith(argTempi);
-                I = entryblock->getInstList().erase(I);
-                advance = false;
-            }
-        }
-    }
-    if (argSpaceSize + gc->maxDepth == 0) {
+    AllocaInst *newgcframe = gc->gcframe;
+    if (!gc->hasframe) {
         // 0 roots; remove gc frame entirely
-        clear_gc_frame(gc);
+        newgcframe->eraseFromParent();
         return;
     }
-    // Initialize the slots for temporary variables to NULL
-    for (int i = 0; i < gc->maxDepth; i++) {
-        Value *argTempi = builder.CreateGEP(ctx->gc.tempSlot, ConstantInt::get(T_int32, i));
-        builder.CreateStore(V_null, argTempi);
-    }
-    // Allocate the real GC frame
-    // n_frames++;
-    AllocaInst *newgcframe = gc->gcframe;
-    newgcframe->setOperand(0, ConstantInt::get(T_int32, 2 + argSpaceSize + gc->maxDepth)); // fix up the size of the gc frame
-    gc->tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
-    builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + gc->maxDepth) << 1),
+    // Finalize the jlcall argument frames
+    // optimize the gcframe
+    Instruction *last_gcframe_inst;
+    unsigned maxDepth, argSpaceSize;
+    jl_codegen_finalize_temp_arg(newgcframe, last_gcframe_inst, maxDepth, argSpaceSize);
+
+    builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
+    DebugLoc noDbg;
+    builder.SetCurrentDebugLocation(noDbg);
+
+    builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
                         builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
     builder.CreateStore(builder.CreateLoad(emit_pgcstack(ctx)),
                         builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
     builder.CreateStore(newgcframe, emit_pgcstack(ctx));
+
+    // Finish allocating the real GC frame
+    // n_frames++;
     emit_gcpops(ctx);
 }
 
@@ -3883,15 +3830,19 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
     // See whether this function is specsig or jlcall
     bool specsig, jlfunc_sret;
     Function *theFptr;
+    Value *myargs;
     if (lam->functionObjects.specFunctionObject != NULL) {
         theFptr = (Function*)lam->functionObjects.specFunctionObject;
         specsig = true;
         jlfunc_sret = theFptr->hasStructRetAttr();
+        myargs = NULL;
     }
     else {
         theFptr = (Function*)lam->functionObjects.functionObject;
         specsig = false;
         jlfunc_sret = false;
+        myargs = builder.CreateCall(jlcall_frame_func, ConstantInt::get(T_int32, nargs));
+        ctx.gc.hasframe = true;
     }
     assert(theFptr);
 
@@ -3967,7 +3918,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         // figure out how to repack this type
         if (!specsig) {
             Value *arg = boxed(inputarg, &ctx);
-            Value *slot = builder.CreateGEP(ctx.gc.tempSlot, ConstantInt::get(T_int32, FParamIndex++));
+            Value *slot = builder.CreateGEP(myargs, ConstantInt::get(T_int32, FParamIndex++));
             builder.CreateStore(arg, slot);
         }
         else {
@@ -4009,8 +3960,6 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         assert(nargs > 0);
         // for jlcall, we need to pass the function object even if it is a ghost.
         // here we reconstruct the function instance from its type (first elt of argt)
-        ctx.gc.maxDepth = FParamIndex;
-        Value *myargs = ctx.gc.tempSlot;
         Value *theF = literal_pointer_val((jl_value_t*)ff);
 #ifdef LLVM37
         Value *ret = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
@@ -5798,6 +5747,20 @@ static void init_julia_llvm_env(Module *m)
                      Function::ExternalLinkage,
                      "julia.gc_root_decl", m);
     add_named_global(gcroot_func, NULL);
+
+    Type* jlcall_frame_args[1] = { T_int32 };
+    jlcall_frame_func =
+        Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_frame_args), false),
+                     Function::ExternalLinkage,
+                     "julia.jlcall_frame_decl", m);
+    add_named_global(jlcall_frame_func, NULL);
+
+    Type* jlcall_root_args[2] = { T_ppjlvalue, T_int32 };
+    jlcall_root_func =
+        Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_root_args),  false),
+                     Function::ExternalLinkage,
+                     "julia.jlcall_root_decl", m);
+    add_named_global(jlcall_root_func, NULL);
 
     // set up optimization passes
 #ifdef LLVM38
