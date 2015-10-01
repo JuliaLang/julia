@@ -379,6 +379,8 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g -falign-functions
 endif
 
+JCPPFLAGS += -ftls-model=global-dynamic
+
 ifeq ($(USECCACHE), 1)
 # expand CC and CXX at declaration time because we will redefine them
 CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
@@ -497,6 +499,8 @@ else
 ifneq ($(XC_HOST),)
 XC_HOST := $(ARCH)$(shell echo $(XC_HOST) | sed "s/[^-]*\(.*\)$$/\1/")
 MARCH := $(subst _,-,$(ARCH))
+else # insert ARCH into HOST
+XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
@@ -528,6 +532,18 @@ ARCH := $(BUILD_OS)
 endif
 endif
 
+# Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
+ifeq ($(MARCH),)
+ifneq ($(findstring $(ARCH),i386 i486 i586 i686),)
+MARCH := pentium4
+endif
+endif
+
+ifneq ($(findstring $(MARCH),i386 i486 i586 i686 pentium pentium2 pentium3),)
+$(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binary, \
+pass 'MARCH=pentium4'.)
+endif
+
 ifneq ($(MARCH),)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
@@ -550,12 +566,6 @@ endif
 endif
 
 JULIA_CPU_TARGET ?= native
-
-# Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
-ifneq ($(findstring $(JULIA_CPU_TARGET),i386 i486 i586 i686 pentium pentium2 pentium3),)
-$(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binary, \
-pass 'MARCH=i686 JULIA_CPU_TARGET=pentium4', or 'MARCH=pentium4' if not building any dependencies.)
-endif
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)

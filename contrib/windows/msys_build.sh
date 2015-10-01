@@ -62,8 +62,7 @@ else
   bits=32
   archsuffix=86
   exc=sjlj
-  echo "override MARCH = i686" >> Make.user
-  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+  echo "override MARCH = pentium4" >> Make.user
   echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
   echo 'LIBBLASNAME = libopenblas' >> Make.user
 fi
