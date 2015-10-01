@@ -80,7 +80,7 @@ try
               """)
     end
     println(STDERR, "\nNOTE: The following 'LoadError: break me' indicates normal operation")
-    @test_throws ErrorException require(:FooBar)
+    @test_throws ErrorException Base.require(:FooBar)
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)

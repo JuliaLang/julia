@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # UTF-32 basic functions
 next(s::UTF32String, i::Int) = (Char(s.data[i]), i+1)
 endof(s::UTF32String) = length(s.data) - 1
@@ -13,15 +14,6 @@ const empty_utf32 = UTF32String(UInt32[0])
 convert(::Type{UTF32String}, c::Char) = UTF32String(UInt32[c, 0])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
-"""
-Converts an `AbstractString` to a `UTF32String`
-
-### Returns:
-*   `UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::AbstractString)
     len, flags = unsafe_checkstring(str)
     buf = Vector{UInt32}(len+1)
@@ -31,15 +23,6 @@ function convert(::Type{UTF32String}, str::AbstractString)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF32String` to a `UTF8String`
-
-### Returns:
-*   `UTF8String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF8String},  str::UTF32String)
     dat = str.data
     len = sizeof(dat) >>> 2
@@ -51,15 +34,6 @@ function convert(::Type{UTF8String},  str::UTF32String)
     return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
 
-"""
-Converts a `UTF8String` to a `UTF32String`
-
-### Returns:
-*   `::UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::UTF8String)
     dat = str.data
     # handle zero length string quickly
@@ -105,15 +79,6 @@ function convert(::Type{UTF32String}, str::UTF8String)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF16String` to `UTF32String`
-
-### Returns:
-*   `::UTF32String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF32String}, str::UTF16String)
     dat = str.data
     len = sizeof(dat)
@@ -136,15 +101,6 @@ function convert(::Type{UTF32String}, str::UTF16String)
     UTF32String(buf)
 end
 
-"""
-Converts a `UTF32String` to `UTF16String`
-
-### Returns:
-*   `::UTF16String`
-
-### Throws:
-*   `UnicodeError`
-"""
 function convert(::Type{UTF16String}, str::UTF32String)
     dat = str.data
     len = sizeof(dat)
@@ -166,8 +122,11 @@ function convert(::Type{UTF32String}, dat::AbstractVector{UInt32})
     @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
 end
 
-convert{T<:Union{Int32,Char}}(::Type{UTF32String}, data::AbstractVector{T}) =
+convert(::Type{UTF32String}, data::AbstractVector{Int32}) =
     convert(UTF32String, reinterpret(UInt32, convert(Vector{T}, data)))
+
+convert(::Type{UTF32String}, data::AbstractVector{Char}) =
+    convert(UTF32String, map(UInt32, data))
 
 convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVector{S}) =
     convert(T, utf32(v))
@@ -256,7 +215,7 @@ elseif sizeof(Cwchar_t) == 4
     const WString = UTF32String
     const wstring = utf32
 end
-wstring(s::Cwstring) = wstring(box(Ptr{Cwchar_t}, unbox(Cwstring,s)))
+wstring(s::Cwstring) = wstring(convert(Ptr{Cwchar_t}, s))
 
 # Cwstring is defined in c.jl, but conversion needs to be defined here
 # to have WString

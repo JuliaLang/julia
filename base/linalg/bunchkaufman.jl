@@ -50,6 +50,31 @@ function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     (issym(B) ? LAPACK.sytrs! : LAPACK.hetrs!)(B.uplo, B.LD, B.ipiv, R)
 end
 
+function det(F::BunchKaufman)
+    M = F.LD
+    p = F.ipiv
+    n = size(F.LD, 1)
+
+    i = 1
+    d = one(eltype(F))
+    while i <= n
+        if p[i] > 0
+            # 1x1 pivot case
+            d *= M[i,i]
+            i += 1
+        else
+            # 2x2 pivot case. Make sure not to square before the subtraction by scaling with the off-diagonal element. This is safe because the off diagonal is always large for 2x2 pivots.
+            if F.uplo == 'U'
+                d *= M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] - (issym(F) ? M[i, i + 1] : conj(M[i, i + 1])))
+            else
+                d *= M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] - (issym(F) ? M[i + 1, i] : conj(M[i + 1, i])))
+            end
+            i += 2
+        end
+    end
+    return d
+end
+
 ## reconstruct the original matrix
 ## TODO: understand the procedure described at
 ## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf

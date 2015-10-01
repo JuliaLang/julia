@@ -614,7 +614,7 @@ DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
     if (field > jl_datatype_nfields(ty))
         jl_error("This type does not have that many fields");
-    return ty->fields[field].offset;
+    return jl_field_offset(ty, field);
 }
 
 DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)

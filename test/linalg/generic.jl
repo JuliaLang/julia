@@ -56,10 +56,17 @@ y = ['a','b','c','d','e']
 α = 'f'
 @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
 @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
+@test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(-1:5))
+@test_throws ArgumentError Base.LinAlg.axpy!(α,x,collect(1:3),y,collect(1:5))
 @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))
+@test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,collect(1:2),['a','b'],collect(1:2))
 
+@test_throws ArgumentError diag(rand(10))
+@test !issym(ones(5,3))
+@test !ishermitian(ones(5,3))
+@test cross(ones(3),ones(3)) == zeros(3)
 
-
+@test trace(Bidiagonal(ones(5),zeros(4),true)) == 5
 
 # 2-argument version of scale
 a = reshape([1.:6;], (2,3))
@@ -69,6 +76,7 @@ a = reshape([1.:6;], (2,3))
 @test scale([1.; 2.], a) == a.*[1; 2]
 @test scale(a, [1; 2; 3]) == a.*[1 2 3]
 @test scale([1; 2], a) == a.*[1; 2]
+@test scale(eye(Int, 2), 0.5) == 0.5*eye(2)
 @test_throws DimensionMismatch scale(a, ones(2))
 @test_throws DimensionMismatch scale(ones(3), a)
 
@@ -115,9 +123,21 @@ for elty in [Float32,Float64,Complex64,Complex128]
     @test rank(one(elty))  == 1
     @test !isfinite(cond(zero(elty)))
     @test cond(a)          == one(elty)
+    @test cond(a,1)        == one(elty)
     @test issym(a)
     @test ishermitian(one(elty))
     @test det(a) == a
 end
 
 @test qr(big([0 1; 0 0]))[2] == [0 1; 0 0]
+
+@test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
+@test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
+@test_throws ArgumentError norm(ones(5,5),5)
+
+# test generic vecnorm for arrays of arrays
+let x = Vector{Int}[[1,2], [3,4]]
+    @test norm(x) ≈ sqrt(30)
+    @test norm(x, 1) ≈ sqrt(5) + 5
+    @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
+end

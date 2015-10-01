@@ -7,16 +7,12 @@ Task(f) = Task(()->f())
 
 function show(io::IO, t::Task)
     print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
-    if t.state == :failed
-        println(io)
-        show(io, CapturedException(t.result, t.backtrace))
-    end
 end
 
 # Container for a captured exception and its backtrace. Can be serialized.
 type CapturedException
     ex::Any
-    processed_bt::Array
+    processed_bt::Vector{Any}
 
     function CapturedException(ex, bt_raw)
         # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
@@ -24,19 +20,15 @@ type CapturedException
 
         # Process bt_raw so that it can be safely serialized
         bt_lines = Any[]
-        process_func(name, file, line, n) = push!(bt_lines, (name, file, line, n))
+        process_func(name, file, line, inlined_file, inlined_line, n) =
+            push!(bt_lines, (name, file, line, inlined_file, inlined_line, n))
         process_backtrace(process_func, :(:), bt_raw, 1:100) # Limiting this to 100 lines.
 
         new(ex, bt_lines)
     end
 end
 
-function show(io::IO, ce::CapturedException)
-    show(io, ce.ex)
-    for entry in ce.processed_bt
-        show_trace_entry(io, entry...)
-    end
-end
+showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 
 type CompositeException <: Exception
     exceptions::Array
@@ -45,9 +37,9 @@ end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 
-function show(io::IO, ex::CompositeException)
+function showerror(io::IO, ex::CompositeException)
     if length(ex) > 0
-        show(io, ex.exceptions[1])
+        showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
             print(io, "\n\n...and $remaining other exceptions.\n")
@@ -172,7 +164,11 @@ function task_done_hook(t::Task)
                 end
             end
         end
-        wait()
+        # if a finished task accidentally gets into the queue, wait()
+        # could return. in that case just take the next task off the queue.
+        while true
+            wait()
+        end
     end
 end
 

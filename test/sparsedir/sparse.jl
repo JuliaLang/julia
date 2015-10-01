@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Test
+
 # check sparse matrix construction
 @test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 
@@ -846,6 +848,8 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test A .- 3 == AF .- 3
     @test 3 .- A == 3 .- AF
     @test A .- B == AF .- BF
+    @test A - AF == zeros(AF)
+    @test AF - A == zeros(AF)
     @test A[1,:] .- B == AF[1,:] .- BF
     @test A[:,1] .- B == AF[:,1] .- BF
     @test A .- B[1,:] == AF .-  BF[1,:]
@@ -854,6 +858,7 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test A .+ 3 == AF .+ 3
     @test 3 .+ A == 3 .+ AF
     @test A .+ B == AF .+ BF
+    @test A + AF == AF + A
     @test (A .< B) == (AF .< BF)
     @test (A .!= B) == (AF .!= BF)
 
@@ -869,6 +874,7 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test BF .\ C == BF .\ CF
 
     @test A .^ 3 == AF .^ 3
+    @test 3 .^ A == 3 .^ AF
     @test A .^ BF[:,1] == AF .^ BF[:,1]
     @test BF[:,1] .^ A == BF[:,1] .^ AF
 end
@@ -878,6 +884,7 @@ A = sprandbool(5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
 @test_throws DimensionMismatch reinterpret(Int8,A,(20,))
 @test_throws DimensionMismatch reshape(A,(20,2))
+@test_throws ArgumentError squeeze(A,(1,1))
 
 # test similar with type conversion
 A = speye(5)
@@ -897,6 +904,8 @@ A = sprandbool(5,5,0.2)
 # test sparsevec
 A = sparse(ones(5,5))
 @test all(full(sparsevec(A)) .== ones(25))
+@test all(full(sparsevec([1:5;],1)) .== ones(5))
+@test_throws ArgumentError sparsevec([1:5;], [1:4;])
 
 #test sparse
 @test sparse(A) == A
@@ -1098,3 +1107,36 @@ A = sprand(10,10,0.2)
 p = randperm(10)
 q = randperm(10)
 @test Base.SparseMatrix.csc_permute(A, invperm(p), q) == full(A)[p, q]
+
+# issue #13008
+@test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
+@test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
+
+# issue #13024
+let
+    A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
+    B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
+
+    @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test A13024 $ B13024 == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
+    @test typeof(A13024 $ B13024) == SparseMatrixCSC{Bool,Int}
+
+    @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+    @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+    for op in (+, -, &, |, $, max, min)
+        @test op(A13024, B13024) == op(full(A13024), full(B13024))
+    end
+end
+
+let A = 2. * speye(5,5)
+    @test full(spones(A)) == eye(full(A))
+end

@@ -2,7 +2,7 @@
 
 import Base.copy, Base.==
 const verbose = false
-const libccalltest = joinpath(dirname(@__FILE__), "libccalltest")
+const libccalltest = "libccalltest"
 ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
@@ -73,7 +73,7 @@ b = unsafe_load(ccall((:cfptest, libccalltest), Ptr{Complex64}, (Ptr{Complex64},
 
 # Tests for native Julia data types
 @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), cf32)
-@test_throws ErrorException ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &cf32) #compile-time error
+@test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &cf32)
 
 # Tests for various sized data types (ByVal)
 type Struct1
@@ -209,3 +209,12 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
     end
 end
+
+# issue 13031
+foo13031(x) = Cint(1)
+foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},))
+ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
+
+foo13031(x,y,z) = z
+foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
+ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)

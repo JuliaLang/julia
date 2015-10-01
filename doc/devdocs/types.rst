@@ -360,13 +360,14 @@ type:
    svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
    ERROR: UndefRefError: access to undefined reference
     in getindex at ./essentials.jl:211
-    in show_delim_array at show.jl:214
-    in show at show.jl:242
-    in anonymous at show.jl:1280
-    in with_output_limit at ./show.jl:1257
-    in showlimited at show.jl:1279
+    in show_delim_array at show.jl:229
+    in show at show.jl:257
+    in anonymous at show.jl:1278
+    in with_output_limit at ./show.jl:1255
+    in showlimited at show.jl:1277
     in display at multimedia.jl:120
-    in display at multimedia.jl:151
+    [inlined code] from multimedia.jl:151
+    in display at multimedia.jl:162
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)
@@ -577,20 +578,20 @@ constraints that we just saw in ``typeintersect``.
 ``jltypes.c`` contains three closely related collections of functions
 for testing how types ``a`` and ``b`` are ordered:
 
-  - The ``subtype`` functions implement ``a <: b``. Among other uses, they
-    serve in matching function arguments against method signatures in
-    the function cache.
+- The ``subtype`` functions implement ``a <: b``. Among other uses, they
+  serve in matching function arguments against method signatures in
+  the function cache.
 
-  - The ``type_morespecific`` functions are used for imposing a partial
-    order on functions in method tables (from most-to-least
-    specific). Note that ``jl_type_morespecific(a,b,0)`` really means "is ``a``
-    at least as specific as ``b``?" and not "is ``a`` strictly more specific
-    than ``b``?"
+- The ``type_morespecific`` functions are used for imposing a partial
+  order on functions in method tables (from most-to-least
+  specific). Note that ``jl_type_morespecific(a,b,0)`` really means "is ``a``
+  at least as specific as ``b``?" and not "is ``a`` strictly more specific
+  than ``b``?"
 
-  - The ``type_match`` functions are similar to ``type_morespecific``, but
-    additionally accept (and employ) an environment to constrain
-    typevars. The related ``type_match_morespecific`` functions call
-    ``type_match`` with an argument ``morespecific=1``
+- The ``type_match`` functions are similar to ``type_morespecific``, but
+  additionally accept (and employ) an environment to constrain
+  typevars. The related ``type_match_morespecific`` functions call
+  ``type_match`` with an argument ``morespecific=1``
 
 All three of these take an argument, ``invariant``, which is set to 1 when
 comparing type parameters and otherwise is 0.

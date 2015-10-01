@@ -67,8 +67,8 @@ The :func:`Base.read` and :func:`Base.write` methods for these
 streams use :func:`ccall` to call ``libuv`` wrappers in :code:`src/jl_uv.c`, e.g.::
 
     stream.jl: function write(s::AsyncStream, p::Ptr, nb::Integer)
-                   -> ccall(:jl_write_no_copy, ...)
-      jl_uv.c:          -> int jl_write_no_copy(uv_stream_t *stream, ...)
+                   -> ccall(:jl_uv_write, ...)
+      jl_uv.c:          -> int jl_uv_write(uv_stream_t *stream, ...)
                             -> uv_write(uvw, stream, buf, ...)
 
 printf() during initialisation
@@ -101,9 +101,9 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
 
 :code:`ios.c` is still used by:
 
-    - :code:`julia/src/flisp/*.c`
-    - :code:`julia/src/dump.c` -- for serialisation file IO and for memory buffers.
-    - :code:`base/iostream.jl` -- for file IO (see :code:`base/fs.jl` for ``libuv`` equivalent).
+- :code:`julia/src/flisp/*.c`
+- :code:`julia/src/dump.c` -- for serialisation file IO and for memory buffers.
+- :code:`base/iostream.jl` -- for file IO (see :code:`base/fs.jl` for ``libuv`` equivalent).
 
 Use of :code:`ios.c` in these modules is mostly self-contained and
 separated from the ``libuv`` I/O system. However, there is `one place

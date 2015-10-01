@@ -118,11 +118,8 @@ end
 
 charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 
-# faster x+y that does no overflow checking
-fastplus(x::Char, y::UInt32) = reinterpret(Char, reinterpret(UInt32, x) + y)
-
-lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? fastplus(c,0x00000020) : c) : ccall(:utf8proc_tolower, Char, (UInt32,), c)
-uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? fastplus(c,0xffffffe0) : c) : ccall(:utf8proc_toupper, Char, (UInt32,), c)
+lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
 
 ############################################################################
 

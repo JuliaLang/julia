@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code, LaTeX
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, Table, Code, LaTeX
 import Base: writemime
 
 # Basics
@@ -10,6 +10,10 @@ import Base: writemime
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"""foo
+bar""" == MD(Paragraph(["foo bar"]))
+@test md"""foo\
+bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
 @test md"#no title" == MD(Paragraph(["#no title"]))
 @test md"# title" == MD(Header{1}("title"))
@@ -195,8 +199,8 @@ let out =
 
     Some **bolded**
 
-      * list1
-      * list2
+    * list1
+    * list2
     """
     @test sprint(io -> writemime(io, "text/rst", book)) == out
 end
@@ -209,24 +213,20 @@ end
 
 ref(x) = Reference(x)
 
-if Base.USE_GPL_LIBS
-
-ref(fft)
+ref(mean)
 
 writemime(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-fft_ref = md"Behaves like $(ref(fft))"
-@test plain(fft_ref) == "Behaves like fft (see Julia docs)\n"
-@test html(fft_ref) == "<p>Behaves like fft &#40;see Julia docs&#41;</p>\n"
+mean_ref = md"Behaves like $(ref(mean))"
+@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
+@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
 
 writemime(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(fft_ref) == "<p>Behaves like <a href=\"test\">fft &#40;see Julia docs&#41;</a></p>\n"
-
-end # USE_GPL_LIBS
+@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia

@@ -2,7 +2,14 @@
 
 # editing files
 
-function edit(file::AbstractString, line::Integer)
+doc"""
+    editor()
+
+Determines the editor to use when running functions like `edit`. Returns an Array compatible
+for use within backticks. You can change the editor by setting JULIA_EDITOR, VISUAL, or
+EDITOR as an environmental variable.
+"""
+function editor()
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -10,39 +17,37 @@ function edit(file::AbstractString, line::Integer)
     else
         default_editor = "emacs"
     end
-    editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
-    if ispath(editor)
-        if isreadable(editor)
-            edpath = realpath(editor)
-            edname = basename(edpath)
-        else
-            error("can't find \"$editor\"")
-        end
-    else
-        edpath = edname = editor
-    end
+    # Note: the editor path can include spaces (if escaped) and flags.
+    command = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
+    isempty(command) && error("editor is empty")
+    return command
+end
+
+function edit(file::AbstractString, line::Integer)
+    command = editor()
+    name = basename(first(command))
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         f = find_source_file(file)
         f !== nothing && (file = f)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
-    if startswith(edname, "emacs") || edname == "gedit"
-        spawn(`$edpath +$line $file`)
-    elseif edname == "vi" || edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
-        run(`$edpath +$line $file`)
-    elseif edname == "textmate" || edname == "mate" || edname == "kate"
-        spawn(`$edpath $file -l $line`)
-    elseif startswith(edname, "subl") || edname == "atom"
-        spawn(`$(shell_split(edpath)) $file:$line`)
-    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
+    if startswith(name, "emacs") || name == "gedit"
+        spawn(`$command +$line $file`)
+    elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+        run(`$command +$line $file`)
+    elseif name == "textmate" || name == "mate" || name == "kate"
+        spawn(`$command $file -l $line`)
+    elseif startswith(name, "subl") || name == "atom"
+        spawn(`$command $file:$line`)
+    elseif OS_NAME == :Windows && (name == "start" || name == "open")
         spawn(`cmd /c start /b $file`)
         println(no_line_msg)
-    elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
+    elseif OS_NAME == :Darwin && (name == "start" || name == "open")
         spawn(`open -t $file`)
         println(no_line_msg)
     else
-        run(`$(shell_split(edpath)) $file`)
+        run(`$command $file`)
         println(no_line_msg)
     end
     nothing
@@ -236,25 +241,21 @@ function gen_call_with_extracted_types(fcn, ex0)
         # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         return Expr(:call, fcn, esc(args[1]),
-                    Expr(:call, :typesof, map(esc, args[2:end])...))
+                    Expr(:call, typesof, map(esc, args[2:end])...))
     end
     ex = expand(ex0)
-    if isa(ex, Expr) && ex.head == :call
-        return Expr(:call, fcn, esc(ex.args[1]),
-                    Expr(:call, :typesof, map(esc, ex.args[2:end])...))
-    end
-    exret = Expr(:call, :error, "expression is not a function call or symbol")
     if !isa(ex, Expr)
-        # do nothing -> error
+        exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
-            isa(ex.args[1], TopNode) && ex.args[1].name == :apply
-            exret = Expr(:call, ex.args[1], fcn,
-                         Expr(:tuple, esc(ex.args[2])),
-                         Expr(:call, :typesof, map(esc, ex.args[3:end])...))
+            isa(ex.args[1], TopNode) && ex.args[1].name == :_apply
+            # check for splatting
+            exret = Expr(:call, ex.args[1], ex.args[2], fcn,
+                        Expr(:tuple, esc(ex.args[3]),
+                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
-                         Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+                         Expr(:call, typesof, map(esc, ex.args[2:end])...))
         end
     elseif ex.head == :body
         a1 = ex.args[1]
@@ -262,12 +263,12 @@ function gen_call_with_extracted_types(fcn, ex0)
             a11 = a1.args[1]
             if a11 == :setindex!
                 exret = Expr(:call, fcn, a11,
-                             Expr(:call, :typesof, map(esc, a1.args[2:end])...))
+                             Expr(:call, typesof, map(esc, a1.args[2:end])...))
             end
         end
     elseif ex.head == :thunk
         exret = Expr(:call, :error, "expression is not a function call, "
-                                  * "or is too complex for @which to analyze; "
+                                  * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
     exret
@@ -430,7 +431,7 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value, true)
+                bytes = summarysize(value)
                 if bytes < 10_000
                     @printf(head, "%6d bytes  ", bytes)
                 else
@@ -465,31 +466,58 @@ end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
 whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 
+#################################################################################
+
 """
-    summarysize(obj, recurse) => Int
+    Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
 
-summarysize is an estimate of the size of the object
-as if all iterables were allocated inline
-in general, this forms a conservative lower bound
-n the memory "controlled" by the object
-if recurse is true, then simply reachable memory
-should also be included, otherwise, only
-directly used memory should be included
-you should never ignore recurse in cases where recursion is possible"""
-summarysize(obj::ANY, recurse::Bool) = try convert(Int, sizeof(obj)); catch; Core.sizeof(obj); end
+Compute the amount of memory used by all unique objects reachable from the argument.
+Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
+"""
+summarysize(obj; exclude = Union{Module,Function,DataType,TypeName}) =
+    summarysize(obj, ObjectIdDict(), exclude)
 
-# these three cases override the exception that would be thrown by Core.sizeof
-summarysize(obj::Symbol, recurse::Bool) = 0
-summarysize(obj::DataType, recurse::Bool) = 0
-function summarysize(obj::Module, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for binding in names(obj, true)
-            if isdefined(obj, binding)
-                value = getfield(obj, binding)
-                if (value !== obj) # skip the self-recursive definition
-                    recurseok = !isa(value, Module) || module_parent(value) === obj
-                    size += summarysize(value, recurseok)::Int # recurse on anything that isn't a module
+summarysize(obj::Symbol, seen, excl) = 0
+
+function summarysize(obj::DataType, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(WORD_SIZE==64,4,0)
+    size += summarysize(obj.parameters, seen, excl)::Int
+    size += summarysize(obj.types, seen, excl)::Int
+    return size
+end
+
+summarysize(obj::TypeName, seen, excl) = Core.sizeof(obj)
+
+summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
+# define the general case separately to make sure it is not specialized for every type
+function _summarysize(obj::ANY, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = Core.sizeof(obj)
+    ft = typeof(obj).types
+    for i in 1:nfields(obj)
+        if !isbits(ft[i]) && isdefined(obj,i)
+            val = obj.(i)
+            if !isa(val,excl)
+                size += summarysize(val, seen, excl)::Int
+            end
+        end
+    end
+    return size
+end
+
+function summarysize(obj::Array, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size = Core.sizeof(obj)
+    # TODO: add size of jl_array_t
+    if !isbits(eltype(obj))
+        for i in 1:length(obj)
+            if ccall(:jl_array_isassigned, Cint, (Any, UInt), obj, i-1) == 1
+                val = obj[i]
+                if !isa(val, excl)
+                    size += summarysize(val, seen, excl)::Int
                 end
             end
         end
@@ -497,172 +525,74 @@ function summarysize(obj::Module, recurse::Bool)
     return size
 end
 
-function summarysize(obj::Task, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        if isdefined(obj, :code)
-            size += summarysize(obj.code, true)::Int
-        end
-        size += summarysize(obj.storage, true)::Int
-
-        size += summarysize(obj.backtrace, false)::Int
-        size += summarysize(obj.donenotify, false)::Int
-        size += summarysize(obj.exception, false)::Int
-        size += summarysize(obj.result, false)::Int
-    end
-    return size
-end
-
-function summarysize(obj::SimpleVector, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for val in obj
-            if val !== obj
-                size += summarysize(val, false)::Int
+function summarysize(obj::SimpleVector, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    size = Core.sizeof(obj)
+    for i in 1:length(obj)
+        if isassigned(obj, i)
+            val = obj[i]
+            if !isa(val, excl)
+                size += summarysize(val, seen, excl)::Int
             end
         end
     end
     return size
 end
 
-function summarysize(obj::Tuple, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for val in obj
-            if val !== obj && !isbits(val)
-                size += summarysize(val, false)::Int
+function summarysize(obj::Module, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    for binding in names(obj, true)
+        if isdefined(obj, binding)
+            value = getfield(obj, binding)
+            if !isa(value, Module) || module_parent(value) === obj
+                size += summarysize(value, seen, excl)::Int
             end
         end
     end
     return size
 end
 
-function summarysize(obj::Array, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        for i in 1:length(obj)
-            if isdefined(obj, i) && (val = obj[i]) !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::AbstractArray, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        for val in obj
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Associative, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        for (key, val) in obj
-            if key !== obj
-                size += summarysize(key, false)::Int
-            end
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Dict, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.keys, recurse)::Int
-    size += summarysize(obj.vals, recurse)::Int
-    size += summarysize(obj.slots, recurse)::Int
-    return size
-end
-
-summarysize(obj::Set, recurse::Bool) =
-    sizeof(obj) + summarysize(obj.dict, recurse)
-
-function summarysize(obj::Function, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse
-        size += summarysize(obj.env, true)::Int
-    end
+function summarysize(obj::Task, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
     if isdefined(obj, :code)
-        size += summarysize(obj.code, true)::Int
+        size += summarysize(obj.code, seen, excl)::Int
     end
+    size += summarysize(obj.storage, seen, excl)::Int
+    size += summarysize(obj.backtrace, seen, excl)::Int
+    size += summarysize(obj.donenotify, seen, excl)::Int
+    size += summarysize(obj.exception, seen, excl)::Int
+    size += summarysize(obj.result, seen, excl)::Int
+    # TODO: add stack size, and possibly traverse stack roots
     return size
 end
 
-function summarysize(obj::MethodTable, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.defs, recurse)::Int
-    size += summarysize(obj.cache, recurse)::Int
-    size += summarysize(obj.cache_arg1, recurse)::Int
-    size += summarysize(obj.cache_targ, recurse)::Int
+function summarysize(obj::MethodTable, seen, excl)
+    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    size += summarysize(obj.defs, seen, excl)::Int
+    size += summarysize(obj.cache, seen, excl)::Int
+    size += summarysize(obj.cache_arg1, seen, excl)::Int
+    size += summarysize(obj.cache_targ, seen, excl)::Int
     if isdefined(obj, :kwsorter)
-        size += summarysize(obj.kwsorter, recurse)::Int
+        size += summarysize(obj.kwsorter, seen, excl)::Int
     end
     return size
 end
 
-function summarysize(obj::Method, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.func, recurse)::Int
-    size += summarysize(obj.next, recurse)::Int
-    return size
-end
-
-function summarysize(obj::LambdaStaticData, recurse::Bool)
-    size::Int = sizeof(obj)
-    size += summarysize(obj.ast, true)::Int # always include the AST
-    size += summarysize(obj.sparams, true)::Int
-    if isdefined(obj, :roots)
-        size += summarysize(obj.roots, recurse)::Int
-    end
-    if isdefined(obj, :capt)
-        size += summarysize(obj.capt, false)::Int
-    end
-    return size
-end
-
-function summarysize(obj::Expr, recurse::Bool)
-    size::Int = sizeof(obj) + sizeof(obj.args)
-    if recurse
-        for arg in obj.args
-            size += summarysize(arg, isa(arg, Expr))::Int
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Box, recurse::Bool)
-    size::Int = sizeof(obj)
-    # ignore the recurse parameter for Box,
-    # even though it could in theory recurse
-    # since it is an internal construct
-    # used by codegen with very limited usage
-    if isdefined(obj, :contents)
-        if obj.contents !== obj
-            size += summarysize(obj.contents, false)::Int
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Ref, recurse::Bool)
-    size::Int = sizeof(obj)
-    if recurse && !isbits(eltype(obj))
-        try
-            val = obj[]
-            if val !== obj
-                size += summarysize(val, false)::Int
-            end
-        end
+function summarysize(m::Method, seen, excl)
+    size::Int = 0
+    while true
+        haskey(seen, m) ? (return size) : (seen[m] = true)
+        size += Core.sizeof(m)
+        size += summarysize(m.func, seen, excl)::Int
+        size += summarysize(m.sig, seen, excl)::Int
+        size += summarysize(m.tvars, seen, excl)::Int
+        size += summarysize(m.invokes, seen, excl)::Int
+        m.next === nothing && break
+        m = m.next::Method
     end
     return size
 end

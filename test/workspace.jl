@@ -1,11 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Issue #11948
 script = """
+# Issue #11948
 f(x) = x+1
 workspace()
 @assert !isdefined(:f)
 LastMain.f(2)
+
+# PR #12990
+io = IOBuffer()
+show(io, Pair)
+@assert takebuf_string(io) == "Pair{A,B}"
+@assert !Base.inbase(LastMain)
 """
 exename = joinpath(JULIA_HOME, Base.julia_exename())
 run(`$exename -f -e $script`)

@@ -50,14 +50,14 @@ bool use_sret(AbiState *state, jl_value_t *ty)
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 {
     if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return;
     size_t size = jl_datatype_size(ty);
     if (size <= 8)
         return;
-    *byRefAttr = *byRef = true;
+    *byRef = true;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)

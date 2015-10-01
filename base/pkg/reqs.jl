@@ -2,8 +2,8 @@
 
 module Reqs
 
-import Base: ==, hash
-
+import Base: ==
+import ...Pkg.PkgError
 using ..Types
 
 # representing lines of REQUIRE files
@@ -24,12 +24,12 @@ immutable Requirement <: Line
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,shift!(fields)[2:end])
         end
-        isempty(fields) && error("invalid requires entry: $content")
+        isempty(fields) && throw(PkgError("invalid requires entry: $content"))
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $content")
+            throw(PkgError("invalid requires entry for $package: $content"))
         versions = VersionNumber[fields...]
-        issorted(versions) || error("invalid requires entry for $package: $content")
+        issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
         new(content, package, VersionSet(versions), system)
     end
     function Requirement(package::AbstractString, versions::VersionSet, system::Vector{AbstractString}=AbstractString[])
@@ -53,6 +53,15 @@ end
 hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
+
+function read{T<:AbstractString}(readable::Vector{T})
+    lines = Line[]
+    for line in readable
+        line = chomp(line)
+        push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
+    end
+    return lines
+end
 
 function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]

@@ -30,7 +30,7 @@ function find_in_node_path(name, srcpath, node::Int=1)
     if myid() == node
         find_in_path(name, srcpath)
     else
-        remotecall_fetch(node, find_in_path, name, srcpath)
+        remotecall_fetch(find_in_path, node, name, srcpath)
     end
 end
 
@@ -67,7 +67,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
         if node == myid()
             content = open(readbytes, path_to_try)
         else
-            content = remotecall_fetch(node, open, readbytes, path_to_try)
+            content = remotecall_fetch(open, node, readbytes, path_to_try)
         end
         restored = _include_from_serialized(content)
         if restored !== nothing
@@ -83,7 +83,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
         myid() == 1 && recompile_stale(mod, path_to_try)
         restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
     else
-        content = remotecall_fetch(node, open, readbytes, path_to_try)
+        content = remotecall_fetch(open, node, readbytes, path_to_try)
         restored = _include_from_serialized(content)
     end
     # otherwise, continue search
@@ -118,7 +118,6 @@ end
 
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
-const package_loaded = Set{Symbol}()
 
 # used to optionally track dependencies when requiring a module:
 const _require_dependencies = Tuple{ByteString,Float64}[]
@@ -160,6 +159,40 @@ function __precompile__(isprecompilable::Bool=true)
     if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
         !(isprecompilable && toplevel_load::Bool)
         throw(PrecompilableError(isprecompilable))
+    end
+end
+
+function require_modname(name::AbstractString)
+    # This function can be deleted when the deprecation for `require`
+    # is deleted.
+    # While we could also strip off the absolute path, the user may be
+    # deliberately directing to a different file than what got
+    # cached. So this takes a conservative approach.
+    if endswith(name, ".jl")
+        tmp = name[1:end-3]
+        for prefix in LOAD_CACHE_PATH
+            path = joinpath(prefix, tmp*".ji")
+            if isfile(path)
+                return tmp
+            end
+        end
+    end
+    name
+end
+
+doc"""
+    reload(name::AbstractString)
+
+Force reloading of a package, even if it has been loaded before. This is intended for use
+during package development as code is modified.
+"""
+function reload(name::AbstractString)
+    if isfile(name) || contains(name,path_separator)
+        # for reload("path/file.jl") just ask for include instead
+        error("use `include` instead of `reload` to load source files")
+    else
+        # reload("Package") is ok
+        require(symbol(require_modname(name)))
     end
 end
 
@@ -271,7 +304,7 @@ function include_from_node1(_path::AbstractString)
             result = Core.include(path)
             nprocs()>1 && sleep(0.005)
         else
-            result = include_string(remotecall_fetch(1, readall, path), path)
+            result = include_string(remotecall_fetch(readall, 1, path), path)
         end
     finally
         if prev === nothing
@@ -301,33 +334,39 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
         end
         """
     io, pobj = open(detach(`$(julia_cmd())
-            --output-ji $output --output-incremental=yes
-            --startup-file=no --history-file=no
-            --eval $code_object`), "w", STDOUT)
-    serialize(io, quote
-        empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $LOAD_PATH)
-        empty!(Base.LOAD_CACHE_PATH)
-        append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
-        empty!(Base.DL_LOAD_PATH)
-        append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
-    end)
-    source = source_path(nothing)
-    if source !== nothing
+                           --output-ji $output --output-incremental=yes
+                           --startup-file=no --history-file=no
+                           --eval $code_object`), "w", STDOUT)
+    try
         serialize(io, quote
-            task_local_storage()[:SOURCE_PATH] = $(source)
-        end)
+                  empty!(Base.LOAD_PATH)
+                  append!(Base.LOAD_PATH, $LOAD_PATH)
+                  empty!(Base.LOAD_CACHE_PATH)
+                  append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+                  empty!(Base.DL_LOAD_PATH)
+                  append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+                  end)
+        source = source_path(nothing)
+        if source !== nothing
+            serialize(io, quote
+                      task_local_storage()[:SOURCE_PATH] = $(source)
+                      end)
+        end
+        serialize(io, :(Base._track_dependencies[1] = true))
+        serialize(io, :(Base.include($(abspath(input)))))
+        if source !== nothing
+            serialize(io, quote
+                      delete!(task_local_storage(), :SOURCE_PATH)
+                      end)
+        end
+        close(io)
+        wait(pobj)
+        return pobj
+    catch
+        kill(pobj)
+        close(io)
+        rethrow()
     end
-    serialize(io, :(Base._track_dependencies[1] = true))
-    serialize(io, :(Base.include($(abspath(input)))))
-    if source !== nothing
-        serialize(io, quote
-            delete!(task_local_storage(), :SOURCE_PATH)
-        end)
-    end
-    close(io)
-    wait(pobj)
-    return pobj
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))

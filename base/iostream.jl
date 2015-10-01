@@ -170,15 +170,10 @@ function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream
     ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
 end
 
-function read!{T}(s::IOStream, a::Array{T})
-    if isbits(T)
-        nb = length(a)*sizeof(T)
-        if ccall(:ios_readall, UInt,
-                 (Ptr{Void}, Ptr{Void}, UInt), s.ios, a, nb) < nb
-            throw(EOFError())
-        end
-    else
-        invoke(read!, Tuple{IO, Array}, s, a)
+function read!(s::IOStream, a::Vector{UInt8})
+    if ccall(:ios_readall, UInt,
+             (Ptr{Void}, Ptr{Void}, UInt), s.ios, a, sizeof(a)) < sizeof(a)
+        throw(EOFError())
     end
     a
 end
@@ -189,9 +184,9 @@ function write(s::IOStream, c::Char)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    Int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
+    Int(ccall(:ios_pututf8, Int32, (Ptr{Void}, UInt32), s.ios, c))
 end
-read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
+read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString

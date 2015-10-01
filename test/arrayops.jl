@@ -136,7 +136,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
+rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # construction
@@ -761,6 +761,23 @@ let
     @test issorted(as[1,:])
     @test issorted(as[2,:])
     @test issorted(as[3,:])
+
+    local b = rand(21,21,2)
+
+    bs = sort(b, 1)
+    for i in 1:21
+        @test issorted(bs[:,i,1])
+        @test issorted(bs[:,i,2])
+    end
+
+    bs = sort(b, 2)
+    for i in 1:21
+        @test issorted(bs[i,:,1])
+        @test issorted(bs[i,:,2])
+    end
+
+    bs = sort(b, 3)
+    @test all(bs[:,:,1] .<= bs[:,:,2])
 end
 
 # fill
@@ -898,8 +915,8 @@ for N = 1:Nmax
     @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
     @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
     @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
-    # Indexing with (UnitRange, UnitRange, Float64)
-    args = ntuple(d->d<N ? UnitRange{Int} : Float64, N)
+    # Indexing with (UnitRange, UnitRange, Int)
+    args = ntuple(d->d<N ? UnitRange{Int} : Int, N)
     N > 1 && @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N-1}]
     N > 1 && @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == [BitArray{N-1}]
     N > 1 && @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
@@ -1239,3 +1256,94 @@ module RetTypeDecl
     @test @inferred(m.*[m,m]) == [m2,m2]
     @test @inferred([m,m].*m) == [m2,m2]
 end
+
+# range, range ops
+A = 1:5
+B = 1.5:5.5
+@test A + B == 2.5:2.0:10.5
+
+#slice dim error
+A = zeros(5,5)
+@test_throws ArgumentError slicedim(A,0,1)
+
+###
+### LinearSlow workout
+###
+immutable LinSlowMatrix{T} <: DenseArray{T,2}
+    data::Matrix{T}
+end
+
+# This is the default, but just to be sure
+Base.linearindexing{A<:LinSlowMatrix}(::Type{A}) = Base.LinearSlow()
+
+Base.size(A::LinSlowMatrix) = size(A.data)
+
+Base.getindex(A::LinSlowMatrix, i::Integer) = error("Not defined")
+Base.getindex(A::LinSlowMatrix, i::Integer, j::Integer) = A.data[i,j]
+
+Base.setindex!(A::LinSlowMatrix, v, i::Integer) = error("Not defined")
+Base.setindex!(A::LinSlowMatrix, v, i::Integer, j::Integer) = A.data[i,j] = v
+
+A = rand(3,5)
+B = LinSlowMatrix(A)
+
+@test A == B
+@test B == A
+@test isequal(A, B)
+@test isequal(B, A)
+
+for (a,b) in zip(A, B)
+    @test a == b
+end
+
+C = copy(B)
+@test A == C
+@test B == C
+
+@test vec(A) == vec(B)
+@test minimum(A) == minimum(B)
+@test maximum(A) == maximum(B)
+
+a, ai = findmin(A)
+b, bi = findmin(B)
+@test a == b
+@test ai == bi
+
+a, ai = findmax(A)
+b, bi = findmax(B)
+@test a == b
+@test ai == bi
+
+fill!(B, 2)
+@test all(x->x==2, B)
+
+i,j = findn(B)
+iall = (1:size(A,1)).*ones(Int,size(A,2))'
+jall = ones(Int,size(A,1)).*(1:size(A,2))'
+@test vec(i) == vec(iall)
+@test vec(j) == vec(jall)
+
+copy!(B, A)
+
+@test cat(1, A, B) == cat(1, A, A)
+@test cat(2, A, B) == cat(2, A, A)
+
+@test cumsum(A, 1) == cumsum(B, 1)
+@test cumsum(A, 2) == cumsum(B, 2)
+
+@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1)
+@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2)
+
+@test flipdim(A, 1) == flipdim(B, 1)
+@test flipdim(A, 2) == flipdim(B, 2)
+
+@test A + 1 == B + 1
+@test 2*A == 2*B
+@test A/3 == B/3
+
+# issue #13250
+x13250 = zeros(3)
+x13250[UInt(1):UInt(2)] = 1.0
+@test x13250[1] == 1.0
+@test x13250[2] == 1.0
+@test x13250[3] == 0.0

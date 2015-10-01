@@ -12,18 +12,28 @@
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
+
+"""
+    sparse(I,J,V,[m,n,combine])
+
+Create a sparse matrix `S` of dimensions `m x n` such that `S[I[k], J[k]] = V[k]`.
+The `combine` function is used to combine duplicates. If `m` and `n` are not
+specified, they are set to `maximum(I)` and `maximum(J)` respectively. If the
+`combine` function is not supplied, duplicates are added by default. All elements
+of `I` must satisfy `1 <= I[k] <= m`, and all elements of `J` must satisfy `1 <= J[k] <= n`.
+"""
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer,
                                 combine::Union{Function,Base.Func})
 
-    if length(I) == 0;
-        return spzeros(eltype(V),nrow,ncol)
-    end
     N = length(I)
     if N != length(J) || N != length(V)
         throw(ArgumentError("triplet I,J,V vectors must be the same length"))
+    end
+    if N == 0
+        return spzeros(eltype(V), Ti, nrow, ncol)
     end
 
     # Work array
@@ -35,8 +45,11 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:N
+        iind = I[k]
+        iind > 0 || throw(ArgumentError("all I index values must be > 0"))
+        iind <= nrow || throw(ArgumentError("all I index values must be ≤ the number of rows"))
         if V[k] != 0
-            Rnz[I[k]+1] += 1
+            Rnz[iind+1] += 1
             nz += 1
         end
     end
@@ -52,9 +65,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     @inbounds for k=1:N
         iind = I[k]
         jind = J[k]
-        iind > 0 || throw(ArgumentError("all I index values must be > 0"))
         jind > 0 || throw(ArgumentError("all J index values must be > 0"))
-        iind <= nrow || throw(ArgumentError("all I index values must be ≤ the number of rows"))
         jind <= ncol || throw(ArgumentError("all J index values must be ≤ the number of columns"))
         p = Wj[iind]
         Vk = V[k]
@@ -86,7 +97,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                     Ri[pdest] = j
                     Rx[pdest] = Rx[p]
                 end
-                pdest += 1
+                pdest += one(Ti)
             end
         end
 
@@ -194,6 +205,13 @@ end
 # A root node is indicated by 0. This tree may actually be a forest in that
 # there may be more than one root, indicating complete separability.
 # A trivial example is speye(n, n) in which every node is a root.
+
+"""
+    etree(A[, post])
+
+Compute the elimination tree of a symmetric sparse matrix `A` from `triu(A)`
+and, optionally, its post-ordering permutation.
+"""
 function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     m,n = size(A)
     Ap = A.colptr
@@ -263,11 +281,23 @@ end
 
 # based on cs_permute p. 21, "Direct Methods for Sparse Linear Systems"
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    if length(pinv) != m || length(q) !=  n
-        error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
+    m, n = size(A)
+    Ap = A.colptr
+    Ai = A.rowval
+    Ax = A.nzval
+    lpinv = length(pinv)
+    if m != lpinv
+        throw(DimensionMismatch(
+            "the number of rows of sparse matrix A must equal the length of pinv, $m != $lpinv"))
     end
-    if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
+    lq = length(q)
+    if n != lq
+        throw(DimensionMismatch(
+            "the number of columns of sparse matrix A must equal the length of q, $n != $lq"))
+    end
+    if !isperm(pinv) || !isperm(q)
+        throw(ArgumentError("both pinv and q must be permutations"))
+    end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     nz = one(Ti)
     for k in 1:n
@@ -280,25 +310,37 @@ function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vect
         end
     end
     Cp[n + 1] = nz
-    (C.').'                    # double transpose to order the columns
+    (C.').' # double transpose to order the columns
 end
 
 # based on cs_symperm p. 21, "Direct Methods for Sparse Linear Systems"
 # form A[p,p] for a symmetric A stored in the upper triangle
 function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    isperm(pinv) || error("perm must be a permutation")
-    m == n == length(pinv) || error("dimension mismatch")
+    m, n = size(A)
+    if m != n
+        throw(DimensionMismatch("sparse matrix A must be square"))
+    end
+    Ap = A.colptr
+    Ai = A.rowval
+    Ax = A.nzval
+    if !isperm(pinv)
+        throw(ArgumentError("pinv must be a permutation"))
+    end
+    lpinv = length(pinv)
+    if n != lpinv
+        throw(DimensionMismatch(
+            "dimensions of sparse matrix A must equal the length of pinv, $((m,n)) != $lpinv"))
+    end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     w = zeros(Ti,n)
-    for j in 1:n                   # count entries in each column of C
+    for j in 1:n  # count entries in each column of C
         j2 = pinv[j]
         for p in Ap[j]:(Ap[j+1]-1)
             (i = Ai[p]) > j || (w[max(pinv[i],j2)] += one(Ti))
         end
     end
     Cp[:] = cumsum(vcat(one(Ti),w))
-    copy!(w,Cp[1:n])          # needed to be consistent with cs_cumsum
+    copy!(w,Cp[1:n]) # needed to be consistent with cs_cumsum
     for j in 1:n
         j2 = pinv[j]
         for p = Ap[j]:(Ap[j+1]-1)
@@ -310,7 +352,7 @@ function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
             Cx[q] = Ax[p]
         end
     end
-    (C.').'                    # double transpose to order the columns
+    (C.').' # double transpose to order the columns
 end
 
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.

@@ -248,9 +248,7 @@ end
 
 ## SOCKETS ##
 
-abstract Socket <: AsyncStream
-
-type TCPSocket <: Socket
+type TCPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     line_buffered::Bool
@@ -294,7 +292,7 @@ function TCPSocket()
     this
 end
 
-type TCPServer <: UVServer
+type TCPServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     ccb::Callback
@@ -325,13 +323,8 @@ function TCPServer()
     this
 end
 
-isreadable(io::TCPSocket) = true
-iswritable(io::TCPSocket) = true
-
-show(io::IO,sock::TCPSocket) = print(io,"TCPSocket(",uv_status_string(sock),", ",
-    nb_available(sock.buffer)," bytes waiting)")
-
-show(io::IO,sock::TCPServer) = print(io,"TCPServer(",uv_status_string(sock),")")
+isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0
+iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
@@ -362,7 +355,7 @@ _bind(sock::TCPServer, host::IPv6, port::UInt16) = ccall(:jl_tcp_bind6, Int32, (
 
 # UDP
 
-type UDPSocket <: Socket
+type UDPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     recvnotify::Condition
@@ -691,7 +684,7 @@ end
 
 ##
 
-listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_listen(sock;backlog=backlog)); sock)
+listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_listen(sock;backlog=backlog)); sock)
 
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TCPServer()
@@ -703,7 +696,7 @@ listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0))
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host,port);backlog=backlog)
 
 listen(cb::Callback,args...; backlog::Integer=BACKLOG_DEFAULT) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
-listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=cb;listen(sock;backlog=backlog))
+listen(cb::Callback,sock::Union{TCPSocket,UDPSocket}; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=cb;listen(sock;backlog=backlog))
 
 ##
 

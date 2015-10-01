@@ -228,11 +228,14 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     }
     int skipC = 0;
     char *name;
-    size_t line;
     char *filename;
+    size_t line;
+    char *inlinedat_file;
+    size_t inlinedat_line;
     int fromC;
-    jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    jl_getFunctionInfo(&name, &filename, &line, &inlinedat_file, &inlinedat_line, pointer, &fromC, skipC, 1);
     free(filename);
+    free(inlinedat_file);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
@@ -310,7 +313,11 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 #endif
+#ifdef LLVM38
+    MOFI->InitMCObjectFileInfo(TheTriple, Reloc::Default, CodeModel::Default, Ctx);
+#else
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
 #ifdef LLVM35

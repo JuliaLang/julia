@@ -38,12 +38,13 @@ include(joinpath(dir, "queens.jl"))
 # cluster manager example through a new Julia session.
 @unix_only begin
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
-    cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
+    cmd = `$(Base.julia_cmd()) $script`
 
     (strm, proc) = open(cmd)
+    errors = readall(strm)
     wait(proc)
     if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-        println(readall(strm))
+        println(errors);
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end
@@ -54,7 +55,10 @@ include(dc_path)
 w_set=filter!(x->x != myid(), workers())
 pid = length(w_set) > 0 ? w_set[1] : myid()
 
-remotecall_fetch(pid, f->(include(f); nothing), dc_path)
+remotecall_fetch(pid, dc_path) do f
+    include(f)
+    nothing
+end
 dc=RemoteRef(()->DictChannel(), pid)
 @test typeof(dc) == RemoteRef{DictChannel}
 

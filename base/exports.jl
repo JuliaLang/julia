@@ -7,6 +7,8 @@ export
     Meta,
     Operators,
     Pkg,
+    Git,
+    LibGit2,
     Profile,
     Dates,
     Sys,
@@ -778,6 +780,7 @@ export
     isempty,
     issubset,
     keys,
+    keytype,
     length,
     map!,
     map,
@@ -802,6 +805,7 @@ export
     union,
     unique,
     values,
+    valtype,
     ∈,
     ∉,
     ∋,
@@ -1082,6 +1086,7 @@ export
     symbol,
 
 # help and reflection
+    apropos,
     current_module,
     edit,
     code_typed,
@@ -1111,6 +1116,7 @@ export
     include,
     include_string,
     include_dependency,
+    reload,
 
 # RTS internals
     finalizer,

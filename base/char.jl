@@ -7,8 +7,8 @@ convert{T<:Number}(::Type{T}, x::Char) = convert(T, UInt32(x))
 
 rem{T<:Number}(x::Char, ::Type{T}) = rem(UInt32(x), T)
 
-typemax(::Type{Char}) = Char(typemax(UInt32))
-typemin(::Type{Char}) = Char(typemin(UInt32))
+typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
+typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
 
 size(c::Char) = ()
 size(c::Char,d) = convert(Int, d) < 1 ? throw(BoundsError()) : 1
@@ -19,7 +19,6 @@ endof(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
 getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
-getindex(c::Char, I::Real...) = getindex(c, to_indexes(I...)...)
 first(c::Char) = c
 last(c::Char) = c
 eltype(::Type{Char}) = Char
@@ -39,15 +38,44 @@ isless(x::Char, y::Integer) = isless(UInt32(x), y)
 isless(x::Integer, y::Char) = isless(x, UInt32(y))
 
 -(x::Char, y::Char) = Int(x) - Int(y)
--(x::Char, y::Integer) = reinterpret(Char, Int32(x) - Int32(y))
-+(x::Char, y::Integer) = reinterpret(Char, Int32(x) + Int32(y))
+-(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
++(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
 
 bswap(x::Char) = Char(bswap(UInt32(x)))
 
 print(io::IO, c::Char) = (write(io, c); nothing)
+
+const hex_chars = UInt8['0':'9';'a':'z']
+
 function show(io::IO, c::Char)
-    print(io, '\'')
-    print_escaped(io, utf32(c), "'")
-    print(io, '\'')
+    if c <= '\\'
+        b = c == '\0' ? 0x30 :
+            c == '\a' ? 0x61 :
+            c == '\b' ? 0x62 :
+            c == '\t' ? 0x74 :
+            c == '\n' ? 0x6e :
+            c == '\v' ? 0x76 :
+            c == '\f' ? 0x66 :
+            c == '\r' ? 0x72 :
+            c == '\e' ? 0x65 :
+            c == '\'' ? 0x27 :
+            c == '\\' ? 0x5c : 0xff
+        if b != 0xff
+            write(io, 0x27, 0x5c, b, 0x27)
+            return
+        end
+    end
+    if isprint(c)
+        write(io, 0x27, c, 0x27)
+    else
+        u = UInt32(c)
+        write(io, 0x27, 0x5c, c <= '\x7f' ? 0x78 : c <= '\uffff' ? 0x75 : 0x55)
+        d = max(2, 8 - (leading_zeros(u) >> 2))
+        while 0 < d
+            write(io, hex_chars[((u >> ((d -= 1) << 2)) & 0xf) + 1])
+        end
+        write(io, 0x27)
+    end
+    return
 end

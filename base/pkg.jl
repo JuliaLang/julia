@@ -2,15 +2,19 @@
 
 module Pkg
 
-export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
        update, resolve, register, tag, publish, generate, test,
-       build, free, pin
+       build, free, pin, PkgError
 
-const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
+const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-for file in split("git dir github types reqs cache read query resolve write generate entry")
+type PkgError <: Exception
+    msg::AbstractString
+end
+
+for file in split("dir github types reqs cache read query resolve write generate entry git")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd

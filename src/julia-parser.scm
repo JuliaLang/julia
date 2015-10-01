@@ -4,7 +4,7 @@
 ;; the way the lexer works, every prefix of an operator must also
 ;; be an operator.
 (define prec-assignment
-  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= ÷= .÷= %= .%= |\|=| &= $= <<= >>= >>>= ~ |.+=| |.-=|))
+  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= ÷= .÷= %= .%= |\|=| &= $= => <<= >>= >>>= ~ |.+=| |.-=|))
 (define prec-conditional '(?))
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
@@ -12,7 +12,7 @@
 (define prec-comparison
   '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ |.>| |.<| |.>=| |.≥| |.<=| |.≤| |.==| |.!=| |.≠| |.=| |.!| |<:| |>:| ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≔ ≕ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣))
 ;; infix "in" goes here
-(define prec-pipe        '(|\|>| |<\|| =>))
+(define prec-pipe        '(|\|>| |<\||))
 (define prec-colon       '(: |..|))
 (define prec-plus        '(+ - ⊕ ⊖ ⊞ ⊟ |.+| |.-| |++| |\|| ∪ ∨ $ ⊔ ± ∓ ∔ ∸ ≂ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))
 (define prec-bitshift    '(<< >> >>> |.<<| |.>>| |.>>>|))
@@ -590,9 +590,6 @@
       (memv tok '(#\) #\] #\} else elseif catch finally =))))
 
 (define (line-number-node s)
-  `(line ,(input-port-line (ts:port s))))
-
-(define (line-number-filename-node s)
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
 ;; insert line/file for short-form function defs, otherwise leave alone
@@ -910,7 +907,7 @@
         ((->)   (take-token s)
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
-         (let ((lno (line-number-filename-node s)))
+         (let ((lno (line-number-node s)))
            `(-> ,ex (block ,lno ,(parse-eq* s)))))
         (else
          ex)))))
@@ -1088,7 +1085,7 @@
   (case word
     ((begin quote)
      (let ((loc  (begin (skip-ws-and-comments (ts:port s))
-                        (line-number-filename-node s)))
+                        (line-number-node s)))
            (blk  (parse-block s)))
        (expect-end s)
        (let ((blk  (if (and (length> blk 1)
@@ -1176,7 +1173,7 @@
 		  (loc   (begin (if (not (eq? (peek-token s) 'end))
 				    ;; if ends on same line, don't skip the following newline
 				    (skip-ws-and-comments (ts:port s)))
-				(line-number-filename-node s)))
+                 (line-number-node s)))
 		  (body  (parse-block s)))
 	     (expect-end s)
 	     (add-filename-to-block! body loc)
@@ -1188,7 +1185,7 @@
        (if (memq (peek-token s) reserved-words)
 	   (error (string "invalid type name \"" (take-token s) "\"")))
        (let ((sig (parse-subtype-spec s))
-	     (loc (line-number-filename-node s)))
+             (loc (line-number-node s)))
          (begin0 (list 'type (if (eq? word 'type) #t #f)
                        sig (add-filename-to-block! (parse-block s) loc))
                  (expect-end s)))))
@@ -1226,7 +1223,7 @@
                        '(block)
                        #f
                        finalb)
-                 (let* ((var (parse-eq* s))
+                 (let* ((var (if nl (parse-eq s) (parse-eq* s)))
                         (var? (and (not nl) (or (symbol? var) (and (length= var 2) (eq? (car var) '$)))))
                         (catch-block (if (eq? (require-token s) 'finally)
                                          '(block)
@@ -1269,7 +1266,7 @@
            `(const ,assgn))))
     ((module baremodule)
      (let* ((name (parse-unary-prefix s))
-	    (loc  (line-number-filename-node s))
+            (loc  (line-number-node s))
             (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
        (expect-end s)
        (list 'module (eq? word 'module) name
@@ -1326,7 +1323,7 @@
    (let* ((doargs (if (eqv? (peek-token s) #\newline)
                       '()
                       (parse-comma-separated s parse-range)))
-          (loc (line-number-filename-node s)))
+          (loc (line-number-node s)))
      `(-> (tuple ,@doargs)
           ,(begin0 (add-filename-to-block! (parse-block s) loc)
                    (expect-end- s 'do)))))))

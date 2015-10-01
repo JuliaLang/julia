@@ -17,7 +17,6 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
-
 @test signed(3) == 3
 @test signed(UInt(3)) == 3
 @test isa(signed(UInt(3)), Int)
@@ -35,7 +34,7 @@ end
 @test bswap(Int64(2)^(7*8)) == 1
 @test bswap(Int128(1)) == Int128(2)^(15*8)
 @test bswap(Int128(2)^(15*8)) == Int128(1)
-
+@test bswap(UInt128(2)^(15*8)) == UInt128(1)
 
 @test count_zeros(10) == WORD_SIZE - 2
 @test count_zeros(UInt8(10)) == 6
@@ -66,44 +65,26 @@ end
 @test_throws ArgumentError big"1.0.3"
 @test_throws ArgumentError big"pi"
 
-for T in (Int8, Int16, Int32, Int64, Int128)
-    @test promote(Int8(3), T(3)) === (T(3), T(3))
+@test round(UInt8, 123) == 123
+@test mod(123, UInt8) == 0x7b
+
+bitstype 8 MyBitsType <: Integer
+@test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+
+UItypes = (UInt8, UInt16, UInt32, UInt64, UInt128)
+SItypes = (Int8, Int16, Int32, Int64, Int128)
+
+for T in UItypes, S in UItypes
+    @test promote(S(3), T(3)) === (sizeof(T) < sizeof(S) ? (S(3), S(3)) : (T(3), T(3)))
 end
 
-for T in (Int16, Int32, Int64, Int128)
-    @test promote(Int16(3), T(3)) === (T(3), T(3))
+for T in SItypes, S in SItypes
+    @test promote(S(3), T(3)) === (sizeof(T) < sizeof(S) ? (S(3), S(3)) : (T(3), T(3)))
 end
 
-for T in (Int32, Int64, Int128)
-    @test promote(Int32(3), T(3)) === (T(3), T(3))
-end
-
-for T in (Int64, Int128)
-    @test promote(Int64(3), T(3)) === (T(3), T(3))
-end
-
-@test promote(Int128(3), Int128(3)) === (Int128(3), Int128(3))
-
-
-for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
-    @test promote(UInt8(3), T(3)) === (T(3), T(3))
-end
-
-for T in (UInt16, UInt32, UInt64, UInt128)
-    @test promote(UInt16(3), T(3)) === (T(3), T(3))
-end
-
-for T in (UInt32, UInt64, UInt128)
-    @test promote(UInt32(3), T(3)) === (T(3), T(3))
-end
-
-for T in (UInt64, UInt128)
-    @test promote(UInt64(3), T(3)) === (T(3), T(3))
-end
-
-for T in (UInt8, UInt16, UInt32)
-    @test promote(T(3), Int64(3)) === (Int64(3), Int64(3))
-    @test promote(T(3), Int128(3)) === (Int128(3), Int128(3))
+for T in SItypes, S in UItypes
+    R = sizeof(S) < sizeof(Int) ? Int : S
+    @test promote(R(3), T(3)) === (sizeof(R) < sizeof(T) ? (T(3), T(3)) : (R(3), R(3)))
 end
 
 # Test limiting conversions
@@ -124,16 +105,23 @@ for T in (UInt8, UInt16, UInt32, UInt64)
     @test_throws InexactError convert(T, -1)
 end
 
-@test widen(Int16(3)) == Int(3)
-@test widen(Int32(3)) == Int64(3)
-@test widen(UInt8(3)) == UInt(3)
-@test widen(UInt16(3)) == UInt(3)
-@test widen(UInt32(3)) == UInt64(3)
+for i in 1:length(UItypes)-1
+    T = UItypes[i]
+    S = UItypes[i+1]
+    R = sizeof(S) < sizeof(UInt) ? S : UInt
+    @test widen(T(3)) == R(3)
+end
+
+for i in 1:length(SItypes)-1
+    T = SItypes[i]
+    S = SItypes[i+1]
+    R = sizeof(S) < sizeof(Int) ? S : Int
+    @test widen(T(3)) == R(3)
+end
 
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
-
 
 # checked operations
 
@@ -141,6 +129,8 @@ import Base: checked_add, checked_sub, checked_mul
 @test checked_sub(UInt(4), UInt(3)) === UInt(1)
 @test_throws OverflowError checked_sub(UInt(5), UInt(6))
 @test checked_mul(UInt(4), UInt(3)) === UInt(12)
+
+@test checked_sub(Int128(-1),Int128(-2)) === Int128(1)
 
 if WORD_SIZE == 32
     @test_throws OverflowError checked_mul(UInt(2)^30, UInt(2)^2)
@@ -163,15 +153,3 @@ end
 #@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
 @test checked_mul(UInt128(2)^127, UInt128(2)) === UInt128(0)
 # broken
-
-
-
-
-
-
-
-
-
-
-
-

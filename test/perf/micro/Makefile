@@ -1,8 +1,11 @@
-JULIAHOME = $(abspath ../../..)
+JULIAHOME := $(abspath ../../..)
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/Versions.make
 
 NODEJSBIN = nodejs
+
+#Use python2 for Python 2.x
+PYTHON = python3
 
 ifeq ($(OS), WINNT)
 MATHEMATICABIN = MathKernel
@@ -14,30 +17,29 @@ endif
 
 #Which BLAS library am I using?
 ifeq ($(USE_SYSTEM_BLAS), 0)
-BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/
+BLASDIR=$(JULIAHOME)/deps/build/openblas/
 LIBBLAS=$(BLASDIR)libopenblas.a
 endif
 
 FFLAGS=-fexternal-blas
+#gfortran cannot multiply matrices using 64-bit external BLAS.
 ifeq ($(findstring gfortran, $(FC)), gfortran)
 ifeq ($(USE_BLAS64), 1)
-#gfortran cannot multiply matrices using 64-bit external BLAS.
-#External BLAS usage is turned OFF.
 FFLAGS=
 endif
 FFLAGS+= -static-libgfortran
 endif
 
 #Which libm library am I using?
-LIBMDIR = $(JULIAHOME)/deps/openlibm/
+LIBMDIR = $(JULIAHOME)/deps/build/openlibm/
 ifeq ($(USE_SYSTEM_LIBM), 0)
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
-DSFMTDIR = $(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
-RMATHDIR = $(JULIAHOME)/deps/Rmath-julia-$(RMATH_JULIA_VER)
+DSFMTDIR = $(JULIAHOME)/deps/build/dsfmt-$(DSFMT_VER)
+RMATHDIR = $(JULIAHOME)/deps/build/Rmath-julia-$(RMATH_JULIA_VER)
 
 default: benchmarks.html
 
@@ -77,17 +79,21 @@ benchmarks/c%.csv: bin/perf%
 benchmarks/fortran%.csv: bin/fperf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
+benchmarks/go.csv: export GOPATH=$(abspath gopath)
 benchmarks/go.csv: perf.go
+	CGO_LDFLAGS="$(LIBBLAS) $(LIBM)" go get github.com/gonum/blas/cgo
+	go get github.com/gonum/matrix/mat64
+	go get github.com/gonum/stat
 	for t in 1 2 3 4 5; do go run $<; done >$@
 
 benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
-	for t in 1 2 3 4 5; do python $<; done >$@
+	for t in 1 2 3 4 5; do $(PYTHON) $<; done >$@
 
 benchmarks/matlab.csv: perf.m
-	for t in 1 2 3 4 5; do matlab -nosplash -nodesktop -nojvm -r 'perf;exit' 2>/dev/null | grep '^matlab,'; done >$@
+	for t in 1 2 3 4 5; do matlab -nojvm -singleCompThread -r 'perf; perf; exit' | grep ^matlab | tail -8; done >$@
 
 benchmarks/octave.csv: perf.m
 	for t in 1 2 3 4 5; do octave -q --eval perf 2>/dev/null; done >$@
@@ -131,6 +137,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	@$(call PRINT_PERL, $^ >$@)
 
 clean:
-	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core perf.log
+	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core perf.log gopath/*
 
 .PHONY: all perf clean

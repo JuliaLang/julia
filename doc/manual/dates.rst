@@ -63,6 +63,7 @@ Support for text-form month parsing is also supported through the ``u`` and ``U`
 One note on parsing performance: using the ``Date(date_string,format_string)`` function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a :class:`Dates.DateFormat`, and pass it instead of a raw format string.
 
 ::
+
   julia> df = Dates.DateFormat("y-m-d");
 
   julia> dt = Date("2015-01-01",df)

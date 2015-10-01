@@ -15,6 +15,7 @@ function temp_pkg_dir(fn::Function)
   end
 end
 
+
 # Test basic operations: adding or removing a package, status, free
 #Also test for the existence of REQUIRE and META_Branch
 temp_pkg_dir() do
@@ -41,7 +42,7 @@ temp_pkg_dir() do
   Pkg.rm("Example")
   @test isempty(Pkg.installed())
   @test !isempty(Pkg.available("Example"))
-  @test_throws ErrorException Pkg.available("FakePackageDoesn'tExist")
+  @test Pkg.available("IDoNotExist") === nothing
   Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
   @test [keys(Pkg.installed())...] == ["Example"]
   Pkg.status("Example", iob)
@@ -162,4 +163,11 @@ end"""
           @test covlines[i] == covline
       end
   end
+end
+
+# issue #13373
+temp_pkg_dir() do
+    Pkg.generate("Foo", "MIT")
+    Pkg.tag("Foo")
+    Pkg.tag("Foo")
 end

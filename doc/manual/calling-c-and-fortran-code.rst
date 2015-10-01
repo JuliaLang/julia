@@ -157,7 +157,7 @@ function pointer arguments. For example, to match c-prototypes of the form::
 
     typedef returntype (*functiontype)(argumenttype,...)
 
-The function `cfunction` generates the c-compatible function pointer for
+The function ``cfunction`` generates the c-compatible function pointer for
 a call to a Julia library function.
 Arguments to ``cfunction`` are as follows:
 
@@ -261,7 +261,7 @@ Syntax / Keyword                Example                         Description
                                                                 a type-tag, is managed by the Julia GC, and
                                                                 is defined by object-identity.
                                                                 The type parameters of a leaf type must be fully defined
-                                                                (no `TypeVars` are allowed)
+                                                                (no ``TypeVars`` are allowed)
                                                                 in order for the instance to be constructed.
 
 ``abstract``                    ``Any``,                        "Super Type" :: A super-type (not a leaf-type)
@@ -281,7 +281,7 @@ Syntax / Keyword                Example                         Description
                                                                 constant. It is defined by-value. And may be stored
                                                                 with a type-tag.
 
-                                ``Complex128`` (`isbits`)       "Is-Bits" :: A ``bitstype``, or an ``immutable`` type
+                                ``Complex128`` (``isbits``)     "Is-Bits" :: A ``bitstype``, or an ``immutable`` type
                                                                 where all fields are other ``isbits`` types. It is
                                                                 defined by-value, and is stored without a type-tag.
 
@@ -323,14 +323,14 @@ There are several special types to be aware of, as no other type can be defined 
     ``pointer(A)``.
 
     If an array of eltype ``Ptr{T}`` is passed as a ``Ptr{Ptr{T}}`` argument, the Julia base library
-    `cconvert_gcroot` function will attempt to first make a null-terminated copy of the array with
+    ``cconvert_gcroot`` function will attempt to first make a null-terminated copy of the array with
     each element replaced by its ``cconvert`` version. This allows, for example, passing an ``argv``
     pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
 
 
 On all systems we currently support, basic C/C++ value types may be
 translated to Julia types as follows. Every C type also has a corresponding
-Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an int in C is not the same as an Int in Julia).
+Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an ``int`` in C is not the same as an ``Int`` in Julia).
 
 **System Independent:**
 
@@ -399,7 +399,7 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``va_arg``                        |                 |                      | Not supported                     |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
-| ``...``                           |                 |                      | ```T...``` (where ``T``           |
+| ``...``                           |                 |                      | ``T...`` (where ``T``             |
 | (variadic function specification) |                 |                      | is one of the above types,        |
 |                                   |                 |                      | variadic functions of different   |
 |                                   |                 |                      | argument types are not supported) |
@@ -523,7 +523,7 @@ Memory Ownership:
 Memory allocation and deallocation of such objects must be
 handled by calls to the appropriate cleanup routines in the libraries
 being used, just like in any C program. Do not try to free an object
-received from a C library with `c_free` in Julia, as this may result
+received from a C library with ``Libc.free`` in Julia, as this may result
 in the ``free`` function being called via the wrong `libc` library and
 cause Julia to crash. The reverse (passing an object allocated in Julia
 to be freed by an external library) is equally invalid.
@@ -541,8 +541,8 @@ but you want to turn it into a pointer to a struct in another struct definition.
 See issue #2818 for some work that needs to be done to simplify this so that Julia
 types can be used to recursively mirror c-style structs,
 without requiring as much manual management of the ``Ptr`` conversions.
-After #2818 is implemented, it will be true that an `Vector{T}` will be equivalent to
-an `Ptr{Ptr{T}}`. That is currently not true, and the conversion must be explicitly.
+After #2818 is implemented, it will be true that an ``Vector{T}`` will be equivalent to
+an ``Ptr{Ptr{T}}``. That is currently not true, and the conversion must be explicitly.
 
 Mapping C Functions to Julia
 ----------------------------
@@ -554,10 +554,10 @@ For translating a ``c`` argument list to ``Julia``:
 
 * ``T``, where ``T`` is one of the primitive types:
   ``char``, ``int``, ``long``, ``short``, ``float``, ``double``, ``complex``, ``enum``
-  or any of their `typedef` equivalents
+  or any of their ``typedef`` equivalents
 
   + ``T``, where ``T`` is an equivalent Julia Bits Type (per the table above)
-  + if ``T`` is an ``enum``, the argument type should be equivalent to `Cint` or `Cuint`
+  + if ``T`` is an ``enum``, the argument type should be equivalent to ``Cint`` or ``Cuint``
   + argument value will be copied (passed by-value)
 
 * ``struct T`` (including typedef to a struct)
@@ -612,7 +612,7 @@ For translating a ``c`` return type to ``Julia``:
 
 * ``T``, where ``T`` is one of the primitive types:
   ``char``, ``int``, ``long``, ``short``, ``float``, ``double``, ``complex``, ``enum``
-  or any of their `typedef` equivalents
+  or any of their ``typedef`` equivalents
 
   + ``T``, where ``T`` is an equivalent Julia Bits Type (per the table above)
   + if ``T`` is an ``enum``, the argument type should be equivalent to ``Cint`` or ``Cuint``
@@ -641,7 +641,7 @@ For translating a ``c`` return type to ``Julia``:
 
 * ``T*``
 
-  + If the memory is already owned by Julia, or is an `isbits` type, and is known to be non-null:
+  + If the memory is already owned by Julia, or is an ``isbits`` type, and is known to be non-null:
 
     + ``Ref{T}``, where ``T`` is the Julia type corresponding to ``T``
     + a return type of ``Ref{Any}`` is invalid, it should either be ``Any``
@@ -678,7 +678,7 @@ they act like zero-dimensional arrays.
 Special Reference Syntax for ccall (deprecated):
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    The ``&`` syntax is deprecated, use the ``Ref{T}`` argument type instead
+The ``&`` syntax is deprecated, use the ``Ref{T}`` argument type instead.
 
 A prefix ``&`` is used on an argument to ccall to indicate that a pointer
 to a scalar argument should be passed instead of the scalar value itself

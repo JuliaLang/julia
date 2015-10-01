@@ -44,14 +44,17 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         else
             # The shared array is created on a remote machine....
             shmmem_create_pid = pids[1]
-            remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end)
+            remotecall_fetch(pids[1]) do
+                shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+                nothing
+            end
         end
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
         refs = Array(RemoteRef, length(pids))
         for (i, p) in enumerate(pids)
-            refs[i] = remotecall(p, func_mapshmem)
+            refs[i] = remotecall(func_mapshmem, p)
         end
 
         # Wait till all the workers have mapped the segment
@@ -64,7 +67,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             if onlocalhost
                 rc = shm_unlink(shm_seg_name)
             else
-                rc = remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+                rc = remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
             end
             systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
         end
@@ -85,14 +88,14 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         if isa(init, Function)
             @sync begin
                 for p in pids
-                    @async remotecall_wait(p, init, S)
+                    @async remotecall_wait(init, p, S)
                 end
             end
         end
 
     finally
         if shm_seg_name != ""
-            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+            remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end
     S
@@ -108,7 +111,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     pids, onlocalhost = shared_pids(pids)
 
     # If not supplied, determine the appropriate mode
-    have_file = onlocalhost ? isfile(filename) : remotecall_fetch(pids[1], isfile, filename)
+    have_file = onlocalhost ? isfile(filename) : remotecall_fetch(isfile, pids[1], filename)
     if mode == nothing
         mode = have_file ? "r+" : "w+"
     end
@@ -127,14 +130,20 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     local s
     if onlocalhost
         s = func_mmap(mode)
-        refs[1] = remotecall(pids[1], () -> func_mmap(workermode))
+        refs[1] = remotecall(pids[1]) do
+            func_mmap(workermode)
+        end
     else
-        refs[1] = remotecall_wait(pids[1], () -> func_mmap(mode))
+        refs[1] = remotecall_wait(pids[1]) do
+            func_mmap(mode)
+        end
     end
 
     # Populate the rest of the workers
     for i = 2:length(pids)
-        refs[i] = remotecall(pids[i], () -> func_mmap(workermode))
+        refs[i] = remotecall(pids[i]) do
+            func_mmap(workermode)
+        end
     end
 
     # Wait till all the workers have mapped the segment
@@ -157,7 +166,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     if isa(init, Function)
         @sync begin
             for p in pids
-                @async remotecall_wait(p, init, S)
+                @async remotecall_wait(init, p, S)
             end
         end
     end
@@ -175,7 +184,9 @@ function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
     refs = Array(RemoteRef, length(a.pids))
     for (i, p) in enumerate(a.pids)
-        refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
+        refs[i] = remotecall(p, a.refs[i], dims) do r,d
+            reshape(fetch(r),d)
+        end
     end
 
     A = SharedArray{T,N}(dims, a.pids, refs, a.segname)
@@ -280,15 +291,15 @@ end
 convert(::Type{Array}, S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
-getindex(S::SharedArray, I::Real) = getindex(S.s, I)
+getindex(S::SharedArray, i::Real) = getindex(S.s, i)
 
-setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
+setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
     f = S->fill!(S.loc_subarr_1d, vT)
     @sync for p in procs(S)
-        @async remotecall_wait(p, f, S)
+        @async remotecall_wait(f, p, S)
     end
     return S
 end
@@ -296,7 +307,7 @@ end
 function rand!{T}(S::SharedArray{T})
     f = S->map!(x->rand(T), S.loc_subarr_1d)
     @sync for p in procs(S)
-        @async remotecall_wait(p, f, S)
+        @async remotecall_wait(f, p, S)
     end
     return S
 end
@@ -304,7 +315,7 @@ end
 function randn!(S::SharedArray)
     f = S->map!(x->randn(), S.loc_subarr_1d)
     @sync for p in procs(S)
-        @async remotecall_wait(p, f, S)
+        @async remotecall_wait(f, p, S)
     end
     return S
 end
@@ -334,10 +345,10 @@ function shmem_randn(dims; kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
-similar(S::SharedArray, T, dims::Dims) = SharedArray(T, dims; pids=procs(S))
-similar(S::SharedArray, T) = similar(S, T, size(S))
-similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims)
-similar(S::SharedArray) = similar(S, eltype(S), size(S))
+similar(S::SharedArray, T, dims::Dims) = similar(S.s, T, dims)
+similar(S::SharedArray, T) = similar(S.s, T, size(S))
+similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
+similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
 map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
 

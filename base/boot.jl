@@ -87,6 +87,7 @@
 #end
 
 #immutable LineNumberNode
+#    file::Symbol
 #    line::Int
 #end
 
@@ -210,17 +211,6 @@ else
 end
 
 abstract AbstractString
-abstract DirectIndexString <: AbstractString
-
-immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
-end
-
-immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
-end
-
-typealias ByteString Union{ASCIIString,UTF8String}
 
 abstract Exception
 immutable BoundsError        <: Exception
@@ -256,6 +246,18 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
+abstract DirectIndexString <: AbstractString
+
+immutable ASCIIString <: DirectIndexString
+    data::Array{UInt8,1}
+end
+
+immutable UTF8String <: AbstractString
+    data::Array{UInt8,1}
+end
+
+typealias ByteString Union{ASCIIString,UTF8String}
+
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 # constructors for built-in types
@@ -281,16 +283,18 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
 
+Void() = nothing
+
 Expr(args::ANY...) = _expr(args...)
 
 _new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
-_new(:LineNumberNode, :Int)
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:TopNode, :Symbol)
 _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
+eval(:(Core.call(::Type{LineNumberNode}, f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
 eval(:(Core.call(::Type{GlobalRef}, m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
