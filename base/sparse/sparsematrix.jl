@@ -1759,6 +1759,48 @@ function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abstra
     end
 end
 
+function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
+    szA = size(A)
+    nA = szA[1]*szA[2]
+    colptrA = A.colptr
+    rowvalA = A.rowval
+    nzvalA = A.nzval
+
+    n = length(I)
+    outm = size(I,1)
+    outn = size(I,2)
+    szB = (outm, outn)
+    colptrB = zeros(Int, outn+1)
+    rowvalB = Array(Int, n)
+    nzvalB = Array(Tv, n)
+
+    colB = 1
+    rowB = 1
+    colptrB[colB] = 1
+    idxB = 1
+
+    for i in 1:n
+        ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError())
+        row,col = ind2sub(szA, I[i])
+        for r in colptrA[col]:(colptrA[col+1]-1)
+            @inbounds if rowvalA[r] == row
+                rowB,colB = ind2sub(szB, i)
+                colptrB[colB+1] += 1
+                rowvalB[idxB] = rowB
+                nzvalB[idxB] = nzvalA[r]
+                idxB += 1
+                break
+            end
+        end
+    end
+    colptrB = cumsum(colptrB)
+    if n > (idxB-1)
+        deleteat!(nzvalB, idxB:n)
+        deleteat!(rowvalB, idxB:n)
+    end
+    SparseMatrixCSC(outm, outn, colptrB, rowvalB, nzvalB)
+end
+
 # logical getindex
 getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
 getindex{Tv,Ti<:Integer,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{T}) = error("Cannot index with Range{Bool}")
@@ -1809,49 +1851,6 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
     end
     SparseMatrixCSC(n, 1, colptrB, rowvalB, nzvalB)
 end
-
-function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
-    szA = size(A)
-    nA = szA[1]*szA[2]
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
-
-    n = length(I)
-    outm = size(I,1)
-    outn = size(I,2)
-    szB = (outm, outn)
-    colptrB = zeros(Int, outn+1)
-    rowvalB = Array(Int, n)
-    nzvalB = Array(Tv, n)
-
-    colB = 1
-    rowB = 1
-    colptrB[colB] = 1
-    idxB = 1
-
-    for i in 1:n
-        ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError())
-        row,col = ind2sub(szA, I[i])
-        for r in colptrA[col]:(colptrA[col+1]-1)
-            @inbounds if rowvalA[r] == row
-                rowB,colB = ind2sub(szB, i)
-                colptrB[colB+1] += 1
-                rowvalB[idxB] = rowB
-                nzvalB[idxB] = nzvalA[r]
-                idxB += 1
-                break
-            end
-        end
-    end
-    colptrB = cumsum(colptrB)
-    if n > (idxB-1)
-        deleteat!(nzvalB, idxB:n)
-        deleteat!(rowvalB, idxB:n)
-    end
-    SparseMatrixCSC(outm, outn, colptrB, rowvalB, nzvalB)
-end
-
 
 ## setindex!
 function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
