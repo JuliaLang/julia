@@ -53,9 +53,10 @@ unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_o
 setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
 
 for (typ, lt) in atomicintsmap
+    rt = VersionNumber(Base.libllvm_version) >= v"3.6" ? "$lt, $lt*" : "$lt*"
     @eval getindex(x::Atomic{$typ}) =
         llvmcall($"""
-                %rv = load atomic volatile $lt, $lt* %0 monotonic, align $WORD_SIZE
+                %rv = load atomic volatile $rt %0 monotonic, align $WORD_SIZE
                 ret $lt %rv
             """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
