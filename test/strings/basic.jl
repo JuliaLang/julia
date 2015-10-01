@@ -12,6 +12,19 @@
 @test !endswith("abcd", "dc")
 @test !endswith("cd", "abcd")
 
+for a = ("","abc","∀β"), b = ("","abc","∀β")
+    ab = a*b
+    @test ab/b == a
+    @test a\ab == b
+end
+
+@test_throws ArgumentError ""/"x"
+@test_throws ArgumentError "abc"/"x"
+@test_throws ArgumentError "abc"/"abcd"
+@test_throws ArgumentError "x"\""
+@test_throws ArgumentError "x"\"abc"
+@test_throws ArgumentError "abcd"\"abc"
+
 @test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
 
 # string iteration, and issue #1454

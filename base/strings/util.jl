@@ -34,7 +34,34 @@ startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
-# TODO: fast endswith
+function \(a::AbstractString, b::AbstractString)
+    i = start(a)
+    j = start(b)
+    while !done(a,i) && !done(b,i)
+        c, i = next(a,i)
+        d, j = next(b,j)
+        c == d || @goto non_prefix
+    end
+    done(a,i) && return b[j:end]
+    @label non_prefix
+    throw(ArgumentError("string division: $(repr(b)) does not start with $(repr(a))"))
+end
+
+function /(a::AbstractString, b::AbstractString)
+    i = endof(a)
+    j = endof(b)
+    a1 = start(a)
+    b1 = start(b)
+    while a1 <= i && b1 <= j
+        c = a[i]
+        d = b[j]
+        c == d || break
+        i = prevind(a,i)
+        j = prevind(b,j)
+    end
+    j < b1 && return a[a1:i]
+    throw(ArgumentError("string division: $(repr(a)) does not end with $(repr(b))"))
+end
 
 chop(s::AbstractString) = s[1:end-1]
 
