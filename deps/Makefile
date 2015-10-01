@@ -1013,10 +1013,10 @@ install-objconv: $(OBJCONV_TARGET)
 # LAPACK is built into OpenBLAS by default
 OPENBLAS_GIT_URL = git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
-$(eval $(call git-external,openblas,OPENBLAS,Makefile,libopenblas.$(SHLIB_EXT)))
+$(eval $(call git-external,openblas,OPENBLAS,Makefile,$(LIBBLASNAME).$(SHLIB_EXT)))
 
-OPENBLAS_OBJ_SOURCE = $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT)
-OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
+OPENBLAS_OBJ_SOURCE = $(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT)
+OPENBLAS_OBJ_TARGET = $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT)
 OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
@@ -1052,7 +1052,7 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)"
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="$(LIBBLASNAME)"
 ifeq ($(OS), Darwin)
 OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
 $(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
@@ -1093,9 +1093,9 @@ $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
 	cp -f $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
 ifeq ($(OS), Linux)
 	cd $(build_shlibdir) && \
-	ln -sf libopenblas.$(SHLIB_EXT) libopenblas.$(SHLIB_EXT).0
+	ln -sf $(LIBBLASNAME).$(SHLIB_EXT) $(LIBBLASNAME).$(SHLIB_EXT).0
 endif
-	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)$(LIBBLASNAME).$(SHLIB_EXT) $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT)
 
 clean-openblas:
 	-$(MAKE) -C $(OPENBLAS_SRC_DIR) clean
