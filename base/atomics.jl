@@ -43,11 +43,11 @@ end
 
 Atomic() = Atomic{Int}()
 
-atomicintsmap = Dict(Int8   => "i8",   Uint8   => "i8",
-                     Int16  => "i16",  Uint16  => "i16",
-                     Int32  => "i32",  Uint32  => "i32",
-                     Int64  => "i64",  Uint64  => "i64",
-                     Int128 => "i128", Uint128 => "i128")
+atomicintsmap = Dict(Int8   => "i8",   UInt8   => "i8",
+                     Int16  => "i16",  UInt16  => "i16",
+                     Int32  => "i32",  UInt32  => "i32",
+                     Int64  => "i64",  UInt64  => "i64",
+                     Int128 => "i128", UInt128 => "i128")
 
 unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_objref(x))
 setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
