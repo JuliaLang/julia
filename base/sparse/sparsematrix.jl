@@ -1497,7 +1497,9 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     nI   = length(I)
     nzA  = nnz(A)
     avgM = div(nzA,n)
-    # heuristics based on experiments
+    # Heuristics based on experiments discussed in:
+    # https://github.com/JuliaLang/julia/issues/12860
+    # https://github.com/JuliaLang/julia/pull/12934
     alg = ((m > nzA) && (m > nI)) ? 0 :
           ((nI - avgM) > 2^8) ? 1 :
           ((avgM - nI) > 2^10) ? 0 : 2
