@@ -3,8 +3,8 @@
 #ifndef JULIA_INTERNAL_H
 #define JULIA_INTERNAL_H
 
-#include "options.h"
-#include "uv.h"
+#include <options.h>
+#include <uv.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -120,6 +120,9 @@ extern jl_array_t *jl_module_init_order;
 #ifdef JL_USE_INTEL_JITEVENTS
 extern char jl_using_intel_jitevents;
 #endif
+#ifdef JL_USE_OPROFILE_JITEVENTS
+extern char jl_using_oprofile_jitevents;
+#endif
 extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);
@@ -186,8 +189,9 @@ DLLEXPORT void jl_raise_debugger(void);
 DLLEXPORT void attach_exception_port(void);
 #endif
 // Set *name and *filename to either NULL or malloc'd string
-void jl_getFunctionInfo(char **name, size_t *line, char **filename,
-                        uintptr_t pointer, int *fromC, int skipC);
+void jl_getFunctionInfo(char **name, char **filename, size_t *line,
+                        char **inlinedat_file, size_t *inlinedat_line,
+                        uintptr_t pointer, int *fromC, int skipC, int skipInline);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)

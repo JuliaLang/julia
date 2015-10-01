@@ -281,3 +281,24 @@ try
 finally
     redirect_stdout(oldout)
 end
+
+# issue #12960
+type T12960 end
+let
+    A = speye(3)
+    B = similar(A, T12960)
+    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    B[1,2] = T12960()
+    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+end
+
+# issue #13127
+function f13127()
+    buf = IOBuffer()
+    f() = 1
+    show(buf, f)
+    takebuf_string(buf)
+end
+@test f13127() == "f"

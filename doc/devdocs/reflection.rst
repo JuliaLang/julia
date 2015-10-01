@@ -59,7 +59,7 @@ has four (concrete) subtypes:
 
     julia> subtypes(AbstractFloat)
     4-element Array{Any,1}:
-     Base.MPFR.BigFloat
+     BigFloat
      Float16
      Float32
      Float64
@@ -92,7 +92,7 @@ the macro will be evaluated and the result will be passed instead!). For example
 .. doctest::
 
    julia> macroexpand( :(@edit println("")) )
-   :(Base.edit(println,Base.typesof("")))
+   :(Base.edit(println,(Base.typesof)("")))
 
 The functions :func:`Base.Meta.show_sexpr` and :func:`dump` are used to display S-expr style views
 and depth-nested detail views for any expression.

@@ -13,7 +13,6 @@ export
     StreamREPL
 
 import Base:
-    AsyncStream,
     Display,
     display,
     writemime,
@@ -58,10 +57,10 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
+                eval(Main, :(ans = $(getindex)($(Any[ans]), 1)))
                 backend.in_eval = true
-                eval(Main, :(ans = $(Any[ans])[1]))
-                backend.in_eval = false
                 value = eval(Main, ast)
+                backend.in_eval = false
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
             end
@@ -160,10 +159,11 @@ immutable REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL)
+function run_repl(repl::AbstractREPL, consumer = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
+    consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
     backend
 end
@@ -734,6 +734,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
 
+
     ################################# Stage II #############################
 
     # Setup history
@@ -884,7 +885,7 @@ end
 
 outstream(s::StreamREPL) = s.stream
 
-StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
@@ -892,7 +893,7 @@ input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
 
-function run_repl(stream::AsyncStream)
+function run_repl(stream::IO)
     repl =
     @async begin
         repl_channel = Channel(1)

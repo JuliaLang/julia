@@ -137,13 +137,10 @@ Macro reference
 ~~~~~~~~~~~~~~~
 
 .. function:: @nloops N itersym rangeexpr bodyexpr
+              @nloops N itersym rangeexpr preexpr bodyexpr
+              @nloops N itersym rangeexpr preexpr postexpr bodyexpr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @nloops N itersym rangeexpr bodyexpr
-       @nloops N itersym rangeexpr preexpr bodyexpr
-       @nloops N itersym rangeexpr preexpr postexpr bodyexpr
 
    Generate ``N`` nested loops, using ``itersym`` as the prefix for the iteration variables. ``rangeexpr`` may be an anonymous-function expression, or a simple symbol ``var`` in which case the range is ``1:size(var,d)`` for dimension ``d``\ .
 
@@ -172,46 +169,31 @@ Macro reference
 .. function:: @nref N A indexexpr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @nref N A indexexpr
 
    Generate expressions like ``A[i_1,i_2,...]``\ . ``indexexpr`` can either be an iteration-symbol prefix, or an anonymous-function expression.
 
 .. function:: @nexprs N expr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @nexprs N expr
 
    Generate ``N`` expressions. ``expr`` should be an anonymous-function expression.
 
 .. function:: @ntuple N expr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @ntuple N expr
 
    Generates an ``N``\ -tuple. ``@ntuple 2 i`` would generate ``(i_1, i_2)``\ , and ``@ntuple 2 k->k+1`` would generate ``(2,3)``\ .
 
 .. function:: @nall N expr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @nall N expr
 
    ``@nall 3 d->(i_d > 1)`` would generate the expression ``(i_1 > 1 && i_2 > 1 && i_3 > 1)``\ . This can be convenient for bounds-checking.
 
 .. function:: @nif N conditionexpr expr
+              @nif N conditionexpr expr elseexpr
 
    .. Docstring generated from Julia source
-   .. code-block:: julia
-
-       @nif N conditionexpr expr
-       @nif N conditionexpr expr elseexpr
 
    Generates a sequence of ``if ... elseif ... else ... end`` statements. For example:
 
@@ -224,10 +206,10 @@ Macro reference
    .. code-block:: julia
 
        if i_1 > size(A, 1)
+           error("Dimension ", 1, " too big")
+       elseif i_2 > size(A, 2)
+           error("Dimension ", 2, " too big")
+       else
+           println("All OK")
+       end
 
-	    error("Dimension ", 1, " too big")
-        elseif i_2 > size(A, 2)
-	    error("Dimension ", 2, " too big")
-        else
-	    println("All OK")
-	end

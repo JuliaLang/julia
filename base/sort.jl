@@ -469,7 +469,34 @@ end
 
 ## sorting multi-dimensional arrays ##
 
-sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, [dim])
+function sort(A::AbstractArray, dim::Integer;
+              alg::Algorithm=DEFAULT_UNSTABLE,
+              lt=isless,
+              by=identity,
+              rev::Bool=false,
+              order::Ordering=Forward,
+              initialized::Bool=false)
+    order = ord(lt,by,rev,order)
+    if dim != 1
+        pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
+        Ap = permutedims(A, pdims)    # note Ap is an Array, no matter what A is
+        n = size(Ap, 1)
+        Av = vec(Ap)
+        sort_chunks!(Av, n, alg, order)
+        ipermutedims(Ap, pdims)
+    else
+        Av = A[:]
+        sort_chunks!(Av, size(A,1), alg, order)
+        reshape(Av, size(A))
+    end
+end
+
+@noinline function sort_chunks!(Av, n, alg, order)
+     for s = 1:n:length(Av)
+        sort!(Av, s, s+n-1, alg, order)
+    end
+    Av
+end
 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)

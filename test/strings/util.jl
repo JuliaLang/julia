@@ -16,7 +16,8 @@
 @test strip("  ") == ""
 @test strip("   ") == ""
 @test strip("\t  hi   \n") == "hi"
-@test strip("foobarfoo", ['f', 'o']) == "bar"
+@test strip("foobarfoo", ['f','o']) == "bar"
+@test strip("foobarfoo", ('f','o')) == "bar"
 
 for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
     fs = f(s)
@@ -203,6 +204,9 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
 @test replace("foo", "oo", uppercase) == "fOO"
+
+# Issue 13332
+@test replace("abc", 'b', 2.1) == "a2.1c"
 
 # chomp/chop
 @test chomp("foo\n") == "foo"

@@ -6,7 +6,7 @@ export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, ca
     errno, strerror, flush_cstdio, systemsleep, time
 @windows_only export GetLastError, FormatMessage
 
-include("errno.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
 
@@ -167,25 +167,36 @@ strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
 strerror() = strerror(errno())
 
 @windows_only begin
-GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
-function FormatMessage(e=GetLastError())
-    const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
-    const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
-    const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
-    const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-    lpMsgBuf = Array(Ptr{UInt16})
-    lpMsgBuf[1] = 0
-    len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
-    p = lpMsgBuf[1]
-    len == 0 && return utf8("")
-    len = len + 1
-    buf = Array(UInt16, len)
-    unsafe_copy!(pointer(buf), p, len)
-    ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-    return utf8(UTF16String(buf))
-end
+    @doc """
+        GetLastError()
+
+    Call the Win32 `GetLastError` function [only available on Windows].
+    """ ->
+    GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
+
+    @doc """
+        FormatMessage(n=GetLastError())
+
+    Convert a Win32 system call error code to a descriptive string [only available on Windows].
+    """ ->
+    function FormatMessage(e=GetLastError())
+        const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
+        const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
+        const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
+        const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
+        lpMsgBuf = Array(Ptr{UInt16})
+        lpMsgBuf[1] = 0
+        len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
+                    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                    C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
+        p = lpMsgBuf[1]
+        len == 0 && return utf8("")
+        len = len + 1
+        buf = Array(UInt16, len)
+        unsafe_copy!(pointer(buf), p, len)
+        ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
+        return utf8(UTF16String(buf))
+    end
 end
 
 ## Memory related ##
@@ -194,5 +205,7 @@ free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
 malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+free(p::Cstring) = free(convert(Ptr{UInt8}, p))
+free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 end # module

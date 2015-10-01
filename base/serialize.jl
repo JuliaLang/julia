@@ -224,7 +224,7 @@ function serialize(s::SerializationState, n::BigFloat)
 end
 
 function serialize(s::SerializationState, ex::Expr)
-    serialize_cycle(s, e) && return
+    serialize_cycle(s, ex) && return
     l = length(ex.args)
     if l <= 255
         writetag(s.io, EXPR_TAG)
@@ -265,8 +265,6 @@ function serialize(s::SerializationState, m::Module)
 end
 
 function serialize(s::SerializationState, f::Function)
-    serialize_cycle(s, f) && return
-    writetag(s.io, FUNCTION_TAG)
     name = false
     if isgeneric(f)
         name = f.env.name
@@ -275,6 +273,7 @@ function serialize(s::SerializationState, f::Function)
     end
     if isa(name,Symbol)
         if isdefined(Base,name) && is(f,getfield(Base,name))
+            writetag(s.io, FUNCTION_TAG)
             write(s.io, UInt8(0))
             serialize(s, name)
             return
@@ -288,18 +287,23 @@ function serialize(s::SerializationState, f::Function)
         if mod !== ()
             if isdefined(mod,name) && is(f,getfield(mod,name))
                 # toplevel named func
+                writetag(s.io, FUNCTION_TAG)
                 write(s.io, UInt8(2))
                 serialize(s, mod)
                 serialize(s, name)
                 return
             end
         end
+        serialize_cycle(s, f) && return
+        writetag(s.io, FUNCTION_TAG)
         write(s.io, UInt8(3))
         serialize(s, f.env)
     else
+        serialize_cycle(s, f) && return
+        writetag(s.io, FUNCTION_TAG)
+        write(s.io, UInt8(1))
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
-        write(s.io, UInt8(1))
         serialize(s, linfo)
         serialize(s, f.env)
     end
@@ -507,24 +511,31 @@ function deserialize(s::SerializationState, ::Type{Function})
     if b==0
         name = deserialize(s)::Symbol
         if !isdefined(Base,name)
-            return (args...)->error("function $name not defined on process $(myid())")
+            f = (args...)->error("function $name not defined on process $(myid())")
+        else
+            f = getfield(Base,name)::Function
         end
-        return getfield(Base,name)::Function
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
         if !isdefined(mod,name)
-            return (args...)->error("function $name not defined on process $(myid())")
+            f = (args...)->error("function $name not defined on process $(myid())")
+        else
+            f = getfield(mod,name)::Function
         end
-        return getfield(mod,name)::Function
     elseif b==3
-        env = deserialize(s)
-        return ccall(:jl_new_gf_internal, Any, (Any,), env)::Function
+        f = ccall(:jl_new_gf_internal, Any, (Any,), nothing)::Function
+        deserialize_cycle(s, f)
+        f.env = deserialize(s)
+    else
+        f = ccall(:jl_new_closure, Any, (Ptr{Void}, Ptr{Void}, Any),
+                  cglobal(:jl_trampoline), C_NULL, nothing)::Function
+        deserialize_cycle(s, f)
+        f.code = li = deserialize(s)
+        f.fptr = ccall(:jl_linfo_fptr, Ptr{Void}, (Any,), li)
+        f.env = deserialize(s)
     end
-    linfo = deserialize(s)
-    f = ccall(:jl_new_closure, Any, (Ptr{Void}, Ptr{Void}, Any), C_NULL, C_NULL, linfo)::Function
-    deserialize_cycle(s, f)
-    f.env = deserialize(s)
+
     return f
 end
 

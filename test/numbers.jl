@@ -471,6 +471,8 @@ end
 @test signbit(1//0) == 0
 @test signbit(-1//0) == 1
 
+@test copysign(big(1.0),big(-2.0)) == big(-1.0)
+
 @test isnan(1)     == false
 @test isnan(1.0)   == false
 @test isnan(-1.0)  == false
@@ -2469,11 +2471,13 @@ end
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed
 
-#map(f::Callable, x::Number) = f(x)
+#map(f::Callable, x::Number, ys::Number...) = f(x)
 @test map(sin, 3) == sin(3)
 @test map(cos, 3) == cos(3)
 @test map(tan, 3) == tan(3)
 @test map(log, 3) == log(3)
+@test map(copysign, 1.0, -2.0) == -1.0
+@test map(muladd, 2, 3, 4) == 10
 
 @test_throws InexactError convert(UInt8, big(300))
 
@@ -2516,8 +2520,6 @@ for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
     @test typeof(big([d])) == Vector{Complex{B}}
     @test big([d]) == [d]
 end
-
-@test 0x2^9 === 0x2^big(9) === 0x0
 
 # issue #12536
 @test Rational{Int16}(1,2) === Rational(Int16(1),Int16(2))

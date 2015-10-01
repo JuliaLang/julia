@@ -143,7 +143,7 @@ same operating system and environment.
 
 :func:`Pkg.add` does the following within the package root directory:
 
-1. Adds the name of the package to ``INSTALLED``.
+1. Adds the name of the package to ``REQUIRE``.
 2. Downloads the package to ``.cache``, then copies the package to the package root directory.
 3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRE`` file.
 4. Runs :func:`Pkg.build`
@@ -626,50 +626,51 @@ Here are some guidelines to follow in naming your package:
 1. Avoid jargon. In particular, avoid acronyms unless there is minimal
    possibility of confusion.
 
-  * It's ok to say ``USA`` if you're talking about the USA.
+   * It's ok to say ``USA`` if you're talking about the USA.
 
-  * It's not ok to say ``PMA``, even if you're talking about positive mental
-    attitude.
+   * It's not ok to say ``PMA``, even if you're talking about positive mental
+     attitude.
 
 2. Avoid using ``Julia`` in your package name.
 
-  * It is usually clear from context and to your users that the package is a
-    Julia package.
-  * Having Julia in the name can imply that the package is connected to, or
-    endorsed by, contributors to the Julia language itself.
+   * It is usually clear from context and to your users that the package is a
+     Julia package.
+
+   * Having Julia in the name can imply that the package is connected to, or
+     endorsed by, contributors to the Julia language itself.
 
 3. Packages that provide most of their functionality in association with a new
    type should have pluralized names.
 
-  * ``DataFrames`` provides the ``DataFrame`` type.
+   * ``DataFrames`` provides the ``DataFrame`` type.
 
-  * ``BloomFilters`` provides the ``BloomFilter`` type.
+   * ``BloomFilters`` provides the ``BloomFilter`` type.
 
-  * In contrast, ``JuliaParser`` provides no new type, but instead new
-    functionality in the ``JuliaParser.parse()`` function.
+   * In contrast, ``JuliaParser`` provides no new type, but instead new
+     functionality in the ``JuliaParser.parse()`` function.
 
 4. Err on the side of clarity, even if clarity seems long-winded to you.
 
-  * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
-    even though the latter are shorter.
+   * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
+     even though the latter are shorter.
 
 5. A less systematic name may suit a package that implements one of several
    possible approaches to its domain.
 
-  * Julia does not have a single comprehensive plotting package. Instead,
-    ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
-    unique approach based on a particular design philosophy.
+   * Julia does not have a single comprehensive plotting package. Instead,
+     ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
+     unique approach based on a particular design philosophy.
 
-  * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
-    many well-established sorting algorithms.
+   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
+     many well-established sorting algorithms.
 
 6. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
 
-  * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
-    a web search.
+   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
+     a web search.
 
-  * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
+   * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
 
 Generating the package
 ~~~~~~~~~~~~~~~~~~~~~~

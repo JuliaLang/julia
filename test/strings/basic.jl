@@ -176,6 +176,11 @@ gstr = GenericString("12");
 @test getindex(gstr,Bool(1):Bool(1))=="1"
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
+@test done(eachindex("foobar"),7)
+@test eltype(Base.EachStringIndex) == Int
+@test map(uppercase, "foó") == "FOÓ"
+@test chr2ind("fóobar",3) == 4
+
 @test symbol(gstr)==symbol("12")
 
 @test_throws ErrorException sizeof(gstr)
@@ -243,17 +248,27 @@ let s = "ba\0d"
     @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
 end
 
+cstrdup(s) = @windows? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+let p = cstrdup("hello")
+    @test bytestring(p) == "hello" == pointer_to_string(cstrdup(p), true)
+    Libc.free(p)
+end
+let p = @windows? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
+    @test wstring(p) == "tést"
+    Libc.free(p)
+end
+
 # issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
 a = UInt32[48,0]
 b = UTF32String(a)
-@test b=="0"
+@test b == "0"
 a[1] = 65
-@test b=="A"
+@test b == "A"
 c = Char['0','\0']
 d = UTF32String(c)
-@test d=="0"
+@test d == "0"
 c[1] = 'A'
-@test d=="A"
+@test d == "A"
 
 # iteration
 @test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
@@ -445,6 +460,12 @@ end
 @test ucfirst("abc") == "Abc"
 @test lcfirst("ABC") == "aBC"
 @test lcfirst("aBC") == "aBC"
+@test ucfirst(utf32("")) == ""
+@test lcfirst(utf32("")) == ""
+@test ucfirst(utf32("a")) == "A"
+@test lcfirst(utf32("A")) == "a"
+@test lcfirst(utf32("a")) == "a"
+@test ucfirst(utf32("A")) == "A"
 
 # issue # 11464: uppercase/lowercase of UTF16String becomes a UTF8String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
@@ -459,7 +480,7 @@ str = "abcdef\uff\uffff\u10ffffABCDEF"
 
 foomap(ch) = (ch > 65)
 foobar(ch) = Char(0xd800)
-foobaz(ch) = Char(0x200000)
+foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test_throws UnicodeError map(foomap, utf16(str))
 @test_throws UnicodeError map(foobar, utf16(str))
 @test_throws UnicodeError map(foobaz, utf16(str))

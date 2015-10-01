@@ -117,8 +117,16 @@ A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
 
-factorize(A::HermOrSym) = bkfact(A.data, symbol(A.uplo), issym(A))
+bkfact(A::HermOrSym) = bkfact(A.data, symbol(A.uplo), issym(A))
+factorize(A::HermOrSym) = bkfact(A)
+
+# Is just RealHermSymComplexHerm, but type alias seems to be broken
+det{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) = real(det(bkfact(A)))
+det{T<:Real}(A::Symmetric{T}) = det(bkfact(A))
+det(A::Symmetric) = det(bkfact(A))
+
 \{T,S<:StridedMatrix}(A::HermOrSym{T,S}, B::StridedVecOrMat) = \(bkfact(A.data, symbol(A.uplo), issym(A)), B)
+
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Hermitian{T,S}) = Hermitian{T,S}(inv(bkfact(A.data, symbol(A.uplo))), A.uplo)
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Symmetric{T,S}) = Symmetric{T,S}(inv(bkfact(A.data, symbol(A.uplo), true)), A.uplo)
 
@@ -176,12 +184,12 @@ end
 
 #Matrix-valued functions
 function expm(A::Symmetric)
-    F = eigfact(full(A))
+    F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
 end
 function expm{T}(A::Hermitian{T})
     n = chksquare(A)
-    F = eigfact(full(A))
+    F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp(F.values))) * F.vectors'
     if T <: Real
         return real(Hermitian(retmat))
@@ -198,7 +206,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
     @eval begin
 
         function ($funm)(A::Symmetric)
-            F = eigfact(full(A))
+            F = eigfact(A)
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
             else

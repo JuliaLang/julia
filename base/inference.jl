@@ -225,7 +225,8 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
         if d > MAX_TYPE_DEPTH
             R = t.name.primary
         else
-            Q = map(x->limit_type_depth(x, d+1, false, vars), P)
+            stillcov = cov && (t.name === Tuple.name)
+            Q = map(x->limit_type_depth(x, d+1, stillcov, vars), P)
             if !cov && any(p->contains_is(vars,p), Q)
                 R = t.name.primary
                 inexact = true
@@ -578,6 +579,9 @@ const limit_tuple_depth_ = function (t,d::Int)
         # may have to recur into other stuff in the future too.
         return Union{map(x->limit_tuple_depth_(x,d+1), t.types)...}
     end
+    if isa(t,TypeVar)
+        return limit_tuple_depth_(t.ub, d)
+    end
     if !(isa(t,DataType) && t.name === Tuple.name)
         return t
     end
@@ -779,6 +783,8 @@ function precise_container_types(args, types, vtypes, sv)
             if any(isvarargtype, result[i])
                 return nothing
             end
+        elseif ti === Union{}
+            return nothing
         elseif ti<:Tuple && (i==n || !isvatuple(ti))
             result[i] = ti.parameters
         elseif ti<:AbstractArray && i==n
@@ -1985,8 +1991,7 @@ function is_pure_builtin(f)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.jl_alloca)
+             f === Intrinsics.llvmcall)     # this one is never effect-free
             return true
         end
     end
@@ -2810,7 +2815,7 @@ function inlining_pass(e::Expr, sv, ast)
                     newargs[i-3] = aarg.args[2:end]
                 elseif isa(aarg, Tuple)
                     newargs[i-3] = Any[ QuoteNode(x) for x in aarg ]
-                elseif (t<:Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
+                elseif (t<:Tuple) && t !== Union{} && !isvatuple(t) && effect_free(aarg,sv,true)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
                     tp = t.parameters
                     newargs[i-3] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]

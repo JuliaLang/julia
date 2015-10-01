@@ -54,6 +54,17 @@ b = IOBuffer()
 write(b, u)
 @test takebuf_string(b) == "\u2200\u2222"
 
+@test_throws ArgumentError SubString(str, 4, 5)
+@test_throws BoundsError next(u, 0)
+@test_throws BoundsError next(u, 7)
+@test_throws BoundsError getindex(u, 0)
+@test_throws BoundsError getindex(u, 7)
+@test_throws BoundsError getindex(u, 0:1)
+@test_throws BoundsError getindex(u, 7:7)
+@test reverseind(u, 1) == 4
+@test typeof(Base.cconvert(Ptr{Int8},u)) == SubString{UTF8String}
+@test Base.cconvert(Ptr{Int8},u) == u
+
 str = "føøbar"
 u = SubString(str, 4, 3)
 @test length(u)==0
@@ -144,6 +155,11 @@ end
 
 ## Reverse strings ##
 
+rs = RevString("foobar")
+@test length(rs) == 6
+@test sizeof(rs) == 6
+@test isascii(rs)
+
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
 @test parse(Float64,RevString("64")) === 46.0
@@ -175,6 +191,13 @@ end
 
 # issue #7764
 let
+    rs = RepString("foo", 2)
+    @test length(rs) == 6
+    @test sizeof(rs) == 6
+    @test isascii(rs)
+    @test convert(RepString, "foobar") == "foobar"
+    @test typeof(convert(RepString, "foobar")) == RepString
+
     srep = RepString("Σβ",2)
     s="Σβ"
     ss=SubString(s,1,endof(s))

@@ -58,8 +58,8 @@ function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
     if filelen < offset + len
-        write(io, Base.zeros(UInt8,(offset + len) - filelen))
-        flush(io)
+        failure = ccall(:ftruncate, Cint, (Cint, Coff_t), fd(io), offset+len)
+        Base.systemerror(:ftruncate, failure != 0)
     end
     seek(io, pos)
     return

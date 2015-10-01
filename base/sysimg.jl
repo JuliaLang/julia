@@ -31,9 +31,6 @@ include("essentials.jl")
 include("docs/bootstrap.jl")
 include("base.jl")
 include("reflection.jl")
-include("build_h.jl")
-include("version_git.jl")
-include("c.jl")
 include("options.jl")
 
 # core operations & types
@@ -81,7 +78,10 @@ include("dict.jl")
 include("set.jl")
 include("iterator.jl")
 
-# For OS specific stuff in I/O
+# For OS specific stuff
+include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
+include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
+include("c.jl")
 include("osutils.jl")
 
 # strings & printing
@@ -234,13 +234,6 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
-
 # misc useful functions & macros
 include("util.jl")
 
@@ -280,6 +273,9 @@ importall .QuadGK
 include("fastmath.jl")
 importall .FastMath
 
+# libgit2 support
+include("libgit2.jl")
+
 # package manager
 include("pkg.jl")
 const Git = Pkg.Git
@@ -291,6 +287,13 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# Documentation
+
+include("markdown/Markdown.jl")
+include("docs/Docs.jl")
+using .Docs
+using .Markdown
 
 # deprecated functions
 include("deprecated.jl")

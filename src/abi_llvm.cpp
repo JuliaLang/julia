@@ -47,7 +47,7 @@ bool use_sret(AbiState *state,jl_value_t *ty)
     return false;
 }
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
 {
     return;
 }

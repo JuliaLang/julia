@@ -183,19 +183,9 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
 end
 
 function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
-    # note: checking bit pattern
-    xT = convert(T,x)
-    if isbits(T) && nfields(T)==0 &&
-        ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
-         (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
-         (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
-         (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
-              a, 0, length(a)*sizeof(T))
-    else
-        for i in eachindex(a)
-            @inbounds a[i] = xT
-        end
+    xT = convert(T, x)
+    for i in eachindex(a)
+        @inbounds a[i] = xT
     end
     return a
 end
@@ -241,6 +231,11 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
+"""
+    collect(element_type, collection)
+
+Return an array of type `Array{element_type,1}` of all items in a collection.
+"""
 function collect{T}(::Type{T}, itr)
     if applicable(length, itr)
         # when length() isn't defined this branch might pollute the
@@ -259,6 +254,11 @@ function collect{T}(::Type{T}, itr)
     return a
 end
 
+"""
+    collect(collection)
+
+Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
+"""
 collect(itr) = collect(eltype(itr), itr)
 
 ## Iteration ##
@@ -300,10 +300,10 @@ function getindex{T<:Real}(A::Array, I::Range{T})
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x), to_index(i1))
-setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_indexes(I...)...)
+setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)
 
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_indexes(I...)...)
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x)::T, to_index(i1), to_indexes(I...)...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -817,32 +817,36 @@ function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    i = start(a)
+    mi = i
+    m, i = next(a, i)
+    while !done(a, i)
+        iold = i
+        ai, i = next(a, i)
         if ai > m || m!=m
             m = ai
-            mi = i
+            mi = iold
         end
     end
-    return (m, mi)
+    return (m, iterstate(mi))
 end
 
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    i = start(a)
+    mi = i
+    m, i = next(a, i)
+    while !done(a, i)
+        iold = i
+        ai, i = next(a, i)
         if ai < m || m!=m
             m = ai
-            mi = i
+            mi = iold
         end
     end
-    return (m, mi)
+    return (m, iterstate(mi))
 end
 
 indmax(a) = findmax(a)[2]

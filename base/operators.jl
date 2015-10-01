@@ -59,14 +59,14 @@ min(x,y) = ifelse(y < x, y, x)
 minmax(x,y) = y < x ? (y, x) : (x, y)
 
 scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmax(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmax(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmax(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmax(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmin(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
-scalarmin(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmin(x               , y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))
+scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is not well-defined for arrays"))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -88,8 +88,14 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
+immutable ElementwiseMaxFun end
+call(::ElementwiseMaxFun, x, y) = max(x,y)
+
+immutable ElementwiseMinFun end
+call(::ElementwiseMinFun, x, y) = min(x, y)
+
 for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
-               (:$,:$), (:min,:(MinFun())), (:max,:(MaxFun())), (:kron,:kron))
+               (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
@@ -246,7 +252,7 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I::Int...)
+function setindex_shape_check(X::AbstractArray, I...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
@@ -283,16 +289,16 @@ end
 setindex_shape_check(X::AbstractArray) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
 
-setindex_shape_check(X::AbstractArray, i::Int) =
+setindex_shape_check(X::AbstractArray, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int, j::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i, j) =
     (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
+function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -301,7 +307,7 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
         throw_setindex_mismatch(X, (i,j))
     end
 end
-setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
+setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to a supported index type (Array, Colon, or Int)
 to_index(i::Int) = i

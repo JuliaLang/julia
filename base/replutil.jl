@@ -38,6 +38,14 @@ writemime(io::IO, ::MIME"text/plain", t::Associative) =
 writemime(io::IO, ::MIME"text/plain", t::Union{KeyIterator, ValueIterator}) =
     showkv(io, t, limit=true)
 
+function writemime(io::IO, ::MIME"text/plain", t::Task)
+    show(io, t)
+    if t.state == :failed
+        println(io)
+        showerror(io, CapturedException(t.result, t.backtrace))
+    end
+end
+
 
 # showing exception objects as descriptive error messages
 
@@ -104,9 +112,9 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
-        if length(code) == 5 && !code[4]  # code[4] == fromC
+        if length(code) == 7 && !code[6]  # code[6] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1]) (complex(x)).")
+                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code[1] == :^ && (code[2] == symbol("promotion.jl") || code[2] == symbol("math.jl"))
@@ -339,9 +347,20 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
 end
 
-function show_trace_entry(io, fname, file, line, n)
+function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n)
     print(io, "\n")
-    print(io, " in ", fname, " at ", file)
+    # if we have inlining information, we print the `file`:`line` first,
+    # then show the inlining info, because the inlining location
+    # corresponds to `fname`.
+    if (inlinedat_file != symbol(""))
+        # align the location text
+        print(io, " [inlined code] from ")
+    else
+        print(io, " in ", fname, " at ")
+    end
+
+    print(io, file)
+
     if line >= 1
         try
             print(io, ":", line)
@@ -349,8 +368,14 @@ function show_trace_entry(io, fname, file, line, n)
             print(io, '?') #for when dec is not yet defined
         end
     end
+
     if n > 1
         print(io, " (repeats ", n, " times)")
+    end
+
+    if (inlinedat_file != symbol(""))
+        print(io, "\n in ", fname, " at ")
+        print(io, inlinedat_file, ":", inlinedat_line)
     end
 end
 
@@ -360,45 +385,56 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     # in case its name changes in the future
     show_backtrace(io,
                     try
-                        symbol(string(eval_user_input))
+                        eval_user_input.env.name
                     catch
                         :(:) #for when client.jl is not yet defined
                     end, t, set)
 end
 
 function show_backtrace(io::IO, top_function::Symbol, t, set)
-    process_entry(lastname, lastfile, lastline, n) = show_trace_entry(io, lastname, lastfile, lastline, n)
+    process_entry(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n) =
+        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
     process_backtrace(process_entry, top_function, t, set)
 end
 
+function show_backtrace(io::IO, top_function::Symbol, t::Vector{Any}, set)
+    for entry in t
+        show_trace_entry(io, entry...)
+    end
+end
+
 # process the backtrace, up to (but not including) top_function
-function process_backtrace(process_func::Function, top_function::Symbol, t, set)
+function process_backtrace(process_func::Function, top_function::Symbol, t, set; skipC = true)
     n = 1
-    lastfile = ""; lastline = -11; lastname = symbol("#")
+    lastfile = ""; lastline = -11; lastname = symbol("#");
+    last_inlinedat_file = ""; last_inlinedat_line = -1
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, true)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, skipC)
         if lkup === nothing
             continue
         end
-        fname, file, line, fromC = lkup
-        if fromC; continue; end
+        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
+
+        if fromC && skipC; continue; end
         if i == 1 && fname == :error; continue; end
         if fname == top_function; break; end
         count += 1
         if !in(count, set); continue; end
+
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
-                process_func(lastname, lastfile, lastline, n)
+                process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
             end
             n = 1
-            lastfile = file; lastline = line; lastname = fname
+            lastfile = file; lastline = line; lastname = fname;
+            last_inlinedat_file = inlinedat_file; last_inlinedat_line = inlinedat_line;
         else
             n += 1
         end
     end
     if n > 1 || lastline != -11
-        process_func(lastname, lastfile, lastline, n)
+        process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
     end
 end

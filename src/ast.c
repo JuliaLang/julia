@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 static uint8_t flisp_system_image[] = {
-#include "julia_flisp.boot.inc"
+#include <julia_flisp.boot.inc>
 };
 
 static fltype_t *jvtype=NULL;
@@ -326,30 +326,52 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 
             e = cdr_(e);
             if (!eo) {
-                if (sym == line_sym && n==1) {
-                    return jl_new_struct(jl_linenumbernode_type,
-                                         scm_to_julia_(car_(e),0));
+                if (sym == line_sym && n==2) {
+                    // NOTE: n==3 case exists: '(line, linenum, filename, funcname) passes
+                    //       the original name through to keyword-arg specializations.
+                    //       See 'line handling in julia-syntax.scm:keywords-method-def-expr
+                    jl_value_t *filename = NULL, *linenum = NULL;
+                    JL_GC_PUSH2(&filename, &linenum);
+                    filename = scm_to_julia_(car_(cdr_(e)),0);
+                    linenum  = scm_to_julia_(car_(e),0);
+                    jl_value_t *temp = jl_new_struct(jl_linenumbernode_type,
+                                                     filename, linenum);
+                    JL_GC_POP();
+                    return temp;
                 }
+                jl_value_t *scmv = NULL, *temp = NULL;
+                JL_GC_PUSH1(&scmv);
                 if (sym == label_sym) {
-                    return jl_new_struct(jl_labelnode_type,
-                                         scm_to_julia_(car_(e),0));
+                    scmv = scm_to_julia_(car_(e),0);
+                    temp = jl_new_struct(jl_labelnode_type, scmv);
+                    JL_GC_POP();
+                    return temp;
                 }
                 if (sym == goto_sym) {
-                    return jl_new_struct(jl_gotonode_type,
-                                         scm_to_julia_(car_(e),0));
+                    scmv = scm_to_julia_(car_(e),0);
+                    temp = jl_new_struct(jl_gotonode_type, scmv);
+                    JL_GC_POP();
+                    return temp;
                 }
                 if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e))))) {
-                    return jl_new_struct(jl_quotenode_type,
-                                         scm_to_julia_(car_(e),0));
+                    scmv = scm_to_julia_(car_(e),0);
+                    temp = jl_new_struct(jl_quotenode_type, scmv);
+                    JL_GC_POP();
+                    return temp;
                 }
                 if (sym == top_sym) {
-                    return jl_new_struct(jl_topnode_type,
-                                         scm_to_julia_(car_(e),0));
+                    scmv = scm_to_julia_(car_(e),0);
+                    temp = jl_new_struct(jl_topnode_type, scmv);
+                    JL_GC_POP();
+                    return temp;
                 }
                 if (sym == newvar_sym) {
-                    return jl_new_struct(jl_newvarnode_type,
-                                         scm_to_julia_(car_(e),0));
+                    scmv = scm_to_julia_(car_(e),0);
+                    temp = jl_new_struct(jl_newvarnode_type, scmv);
+                    JL_GC_POP();
+                    return temp;
                 }
+                JL_GC_POP();
             }
             else if (sym == inert_sym && !iscons(car_(e))) {
                 sym = quote_sym;
@@ -459,8 +481,19 @@ static value_t julia_to_scm_(jl_value_t *v)
         fl_free_gc_handles(1);
         return scmv;
     }
-    if (jl_typeis(v, jl_linenumbernode_type))
-        return julia_to_list2((jl_value_t*)line_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_linenumbernode_type)) {
+        // GC Note: jl_fieldref(v, 1) allocates but neither jl_fieldref(v, 0)
+        //          or julia_to_list2 should allocate here
+        value_t args = julia_to_list2(jl_fieldref(v,1), jl_fieldref(v,0));
+        fl_gc_handle(&args);
+        value_t hd = julia_to_scm_((jl_value_t*)line_sym);
+        value_t scmv = fl_cons(hd, args);
+        fl_free_gc_handles(1);
+        return scmv;
+    }
+    // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
+    //          but we don't need a GC root here because julia_to_list2
+    //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2((jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_gotonode_type))

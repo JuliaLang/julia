@@ -114,13 +114,6 @@ immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
 end
 QRPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QRPackedQ{T,typeof(factors)}(factors, τ)
 
-immutable QRPackedWYQ{S,M<:AbstractMatrix} <: AbstractMatrix{S}
-    factors::M
-    T::Matrix{S}
-    QRPackedWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)
-end
-QRPackedWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRPackedWYQ{S,typeof(factors)}(factors, T)
-
 immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
@@ -230,7 +223,7 @@ end
 
 ### AQ
 A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
-A_mul_B!(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
+A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
 function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
@@ -393,7 +386,7 @@ function A_ldiv_B!(A::QRPivoted, b::StridedVector)
 end
 function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
     A_ldiv_B!(QR(A.factors, A.τ), B)
-    B[1:size(A.factors, 2),:] = sub(B, 1:size(A.factors, 2), :)[invperm(A.jpvt)]
+    B[1:size(A.factors, 2),:] = sub(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
     B
 end
 function \{TA,Tb}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, b::StridedVector{Tb})

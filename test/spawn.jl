@@ -248,6 +248,52 @@ let bad = "bad\0name"
     @test_throws ArgumentError run(setenv(`echo hello`, "good"=>bad))
 end
 
+# issue #12829
+let out = Pipe(), echo = `$exename -f -e 'print(STDOUT, " 1\t", readall(STDIN))'`, ready = Condition()
+    @test_throws ArgumentError write(out, "not open error")
+    @async begin # spawn writer task
+        open(echo, "w", out) do in1
+            open(echo, "w", out) do in2
+                notify(ready)
+                write(in1, 'h')
+                write(in2, UInt8['w'])
+                println(in1, "ello")
+                write(in2, "orld\n")
+            end
+        end
+        show(out, out)
+        notify(ready)
+        @test isreadable(out)
+        @test iswritable(out)
+        close(out.in)
+        @test_throws ArgumentError write(out, "now closed error")
+        @test isreadable(out)
+        @test !iswritable(out)
+        @test isopen(out)
+    end
+    wait(ready) # wait for writer task to be ready before using `out`
+    @test nb_available(out) == 0
+    @test endswith(readuntil(out, '1'), '1')
+    @test read(out, UInt8) == '\t'
+    c = UInt8[0]
+    @test c == read!(out, c)
+    Base.wait_readnb(out, 1)
+    @test nb_available(out) > 0
+    ln1 = readline(out)
+    ln2 = readline(out)
+    desc = readall(out)
+    @test !isreadable(out)
+    @test !iswritable(out)
+    @test !isopen(out)
+    @test nb_available(out) == 0
+    @test c == ['w']
+    @test lstrip(ln2) == "1\thello\n"
+    @test ln1 == "orld\n"
+    @test isempty(readbytes(out))
+    @test eof(out)
+    @test desc == "Pipe(open => active, 0 bytes waiting)"
+end
+
 # issue #8529
 let fname = tempname()
     open(fname, "w") do f
@@ -261,3 +307,27 @@ let fname = tempname()
     @test success(pipeline(`cat $fname`, `$exename -e $code`))
     rm(fname)
 end
+
+# Ensure that quoting works
+@test Base.shell_split("foo bar baz") == ["foo", "bar", "baz"]
+@test Base.shell_split("foo\\ bar baz") == ["foo bar", "baz"]
+@test Base.shell_split("'foo bar' baz") == ["foo bar", "baz"]
+@test Base.shell_split("\"foo bar\" baz") == ["foo bar", "baz"]
+
+# "Over quoted"
+@test Base.shell_split("'foo\\ bar' baz") == ["foo\\ bar", "baz"]
+@test Base.shell_split("\"foo\\ bar\" baz") == ["foo\\ bar", "baz"]
+
+# Ensure that shell_split handles quoted spaces
+let cmd = ["/Volumes/External HD/program", "-a"]
+    @test Base.shell_split("/Volumes/External\\ HD/program -a") == cmd
+    @test Base.shell_split("'/Volumes/External HD/program' -a") == cmd
+    @test Base.shell_split("\"/Volumes/External HD/program\" -a") == cmd
+end
+
+# Backticks should automatically quote where necessary
+let cmd = ["foo bar", "baz"]
+    @test string(`$cmd`) == "`'foo bar' baz`"
+end
+
+@test Base.shell_split("\"\\\\\"") == ["\\"]

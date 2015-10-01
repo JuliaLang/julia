@@ -2,16 +2,8 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
-scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
-scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
-
-function scale{R<:Real,S<:Complex}(X::AbstractArray{R}, s::S)
-    Y = Array(promote_type(R,S), size(X))
-    copy!(Y, X)
-    scale!(Y, s)
-end
-
-scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
+scale(X::AbstractArray, s::Number) = X*s
+scale(s::Number, X::AbstractArray) = s*X
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
@@ -107,52 +99,61 @@ function generic_vecnorm1(x)
     return convert(T, sum)
 end
 
+# faster computation of norm(x)^2, avoiding overflow for integers
+norm_sqr(x) = norm(x)^2
+norm_sqr(x::Number) = abs2(x)
+norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     (maxabs == 0 || isinf(maxabs)) && return maxabs
     s = start(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
-    scale::promote_type(Float64, T) = 1/maxabs
-    y = norm(v)*scale
-    sum::promote_type(Float64, T) = y*y
-    while !done(x, s)
-        (v, s) = next(x, s)
-        y = norm(v)*scale
-        sum += y*y
+    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+        sum::promote_type(Float64, T) = norm_sqr(v)
+        while !done(x, s)
+            (v, s) = next(x, s)
+            sum += norm_sqr(v)
+        end
+        return convert(T, sqrt(sum))
+    else
+        sum = abs2(norm(v)/maxabs)
+        while !done(x, s)
+            (v, s) = next(x, s)
+            sum += (norm(v)/maxabs)^2
+        end
+        return convert(T, maxabs*sqrt(sum))
     end
-    return convert(T, maxabs * sqrt(sum))
 end
 
 # Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
 # (Not technically a "norm" for p < 1.)
 function generic_vecnormp(x, p)
-    if p > 1 || p < -1 # need to rescale to avoid overflow
+    s = start(x)
+    (v, s) = next(x, s)
+    if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
-        s = start(x)
-        (v, s) = next(x, s)
         T = typeof(maxabs)
-        spp::promote_type(Float64, T) = p
-        scale::promote_type(Float64, T) = 1/maxabs
-        ssum::promote_type(Float64, T) = (norm(v)*scale)^spp
+    else
+        T = typeof(float(norm(v)))
+    end
+    spp::promote_type(Float64, T) = p
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+        sum::promote_type(Float64, T) = norm(v)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            ssum += (norm(v)*scale)^spp
+            sum += norm(v)^spp
         end
-        return convert(T, maxabs * ssum^inv(spp))
-    else # -1 ≤ p ≤ 1, no need for rescaling
-        s = start(x)
-        (v, s) = next(x, s)
-        av = float(norm(v))
-        T = typeof(av)
-        pp::promote_type(Float64, T) = p
-        sum::promote_type(Float64, T) = av^pp
+        return convert(T, sum^inv(spp))
+    else # rescaling
+        sum = (norm(v)/maxabs)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += norm(v)^pp
+            sum += (norm(v)/maxabs)^spp
         end
-        return convert(T, sum^inv(pp))
+        return convert(T, maxabs*sum^inv(spp))
     end
 end
 
@@ -179,7 +180,7 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
@@ -233,8 +234,7 @@ function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     end
 end
 
-norm(x::Number, p::Real=2) =
-    p == 0 ? convert(typeof(real(x)), ifelse(x != 0, 1, 0)) : abs(x)
+@inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 function vecdot(x::AbstractVector, y::AbstractVector)
     lx = length(x)

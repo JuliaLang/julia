@@ -17,6 +17,9 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+// ::ANY has no effect if the number of overlapping methods is greater than this
+#define MAX_UNSPECIALIZED_CONFLICTS 10
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -231,6 +234,9 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt, jl
                                 ml->sig, ml->va)) {
             return ml->func;
         }
+        // see corresponding code in jl_method_table_assoc_exact
+        if (ml->func == jl_bottom_func && jl_subtype((jl_value_t*)types, (jl_value_t*)ml->sig, 0))
+            return jl_bottom_func;
         ml = ml->next;
     }
     return jl_bottom_func;
@@ -280,6 +286,11 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t
             if (cache_match(args, n, ml->sig, ml->va, lensig)) {
                 return ml->func;
             }
+            // if we hit a guard entry (ml->func == jl_bottom_func), do a more
+            // expensive subtype check, since guard entries added for ANY might be
+            // abstract. this fixed issue #12967.
+            if (ml->func == jl_bottom_func && jl_tuple_subtype(args, n, ml->sig, 1))
+                return jl_bottom_func;
         }
         ml = ml->next;
     }
@@ -509,17 +520,19 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                          (jl_value_t*)temp2) !=
                     (jl_value_t*)jl_bottom_type) {
                     nintr++;
-                    break;
+                    if (nintr > MAX_UNSPECIALIZED_CONFLICTS) break;
                 }
                 curr = curr->next;
             }
-            if (nintr) {
+            if (nintr > MAX_UNSPECIALIZED_CONFLICTS) {
                 // TODO: even if different specializations of this slot need
                 // separate cache entries, have them share code.
                 jl_svecset(newparams, i, jl_tparam(type, i));
             }
             else {
                 set_to_any = 1;
+                if (nintr > 0)
+                    need_guard_entries = 1;
             }
         }
         if (set_to_any || isstaged) {
@@ -908,7 +921,8 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
     jl_function_t *func = NULL;
-    JL_GC_PUSH3(&ex, &oldast, &func);
+    jl_value_t *linenum = NULL;
+    JL_GC_PUSH4(&ex, &oldast, &func, &linenum);
     if (jl_is_expr(m->func->linfo->ast))
         oldast = (jl_expr_t*)m->func->linfo->ast;
     else
@@ -936,10 +950,12 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
     func = with_appended_env(m->func, env);
     jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
     jl_cellset(ex->args, 1, body);
-    jl_expr_t *linenode = jl_exprn(line_sym, 2);
+    linenum = jl_box_long(m->func->linfo->line);
+    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type,
+                                         m->func->linfo->file,
+                                         linenum
+                                         );
     jl_cellset(body->args, 0, linenode);
-    jl_cellset(linenode->args, 0, jl_box_long(m->func->linfo->line));
-    jl_cellset(linenode->args, 1, m->func->linfo->file);
     jl_cellset(body->args, 1, jl_apply(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
     if (m->tvars != jl_emptysvec) {
         // mark this function as having the same static parameters as the generator
@@ -1923,7 +1939,13 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 size_t l = jl_array_len(t);
                 for(i=0; i < l; i++) {
                     jl_value_t *prior_ti = jl_svecref(jl_cellref(t,i),0);
-                    if (jl_is_leaf_type(prior_ti) && jl_subtype(ti, prior_ti, 0)) {
+                    // in issue #13007 we incorrectly set skip=1 here, due to
+                    // Type{_<:T} ∩ (UnionAll S Type{T{S}}) = Type{T{S}}
+                    // Instead we should have computed the intersection as (UnionAll S Type{T{S}}),
+                    // which is a bigger type that would not have been a subtype of the prior
+                    // match (prior_ti). We simulate that for now by checking jl_has_typevars.
+                    if (jl_is_leaf_type(prior_ti) && !jl_has_typevars(ti) && !jl_has_typevars(prior_ti) &&
+                        jl_subtype(ti, prior_ti, 0)) {
                         skip = 1;
                         break;
                     }

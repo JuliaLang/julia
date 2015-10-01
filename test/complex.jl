@@ -2,6 +2,48 @@
 
 @test reim(2 + 3im) == (2, 3)
 
+# Basic arithmetic
+for T in (Float16, Float32, Float64, BigFloat)
+    t = true
+    f = false
+
+    # Add and subtract
+    @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
+    @test isequal(T(+0.0) - im, Complex(T(+0.0), T(-1.0)))
+    @test isequal(T(-0.0) - im, Complex(T(-0.0), T(-1.0)))
+    @test isequal(T(+1.0) + im, Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(-1.0) + im, Complex(T(-1.0), T(+1.0)))
+    @test isequal(T(+1.0) - im, Complex(T(+1.0), T(-1.0)))
+    @test isequal(T(-1.0) - im, Complex(T(-1.0), T(-1.0)))
+    @test isequal(im + T(+0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(-0.0), Complex(T(-0.0), T(+1.0)))
+    @test isequal(im - T(+0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im - T(-0.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(+1.0), Complex(T(+1.0), T(+1.0)))
+    @test isequal(im + T(-1.0), Complex(T(-1.0), T(+1.0)))
+    @test isequal(im - T(+1.0), Complex(T(-1.0), T(+1.0)))
+    @test isequal(im - T(-1.0), Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(f) + im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(t) + im, Complex(T(+1.0), T(+1.0)))
+    @test isequal(T(f) - im, Complex(T(+0.0), T(-1.0)))
+    @test isequal(T(t) - im, Complex(T(+1.0), T(-1.0)))
+    @test isequal(im + T(f), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im + T(t), Complex(T(+1.0), T(+1.0)))
+    @test isequal(im - T(f), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im - T(t), Complex(T(-1.0), T(+1.0)))
+
+    # Multiply
+    @test isequal(T(+0.0) * im, Complex(T(+0.0), T(+0.0)))
+    @test isequal(T(-0.0) * im, Complex(T(-0.0), T(-0.0)))
+    @test isequal(T(+1.0) * im, Complex(T(+0.0), T(+1.0)))
+    @test isequal(T(-1.0) * im, Complex(T(-0.0), T(-1.0)))
+    @test isequal(im * T(+0.0), Complex(T(+0.0), T(+0.0)))
+    @test isequal(im * T(-0.0), Complex(T(-0.0), T(-0.0)))
+    @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
+    @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
+end
+
 # Test math functions. We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independent and independently
 # tested implementation.
@@ -28,8 +70,10 @@ for T in (Float32, Float64)
     @test_approx_eq exp(x) exp(big(x))
     @test_approx_eq exp10(x) exp10(big(x))
     @test_approx_eq exp2(x) exp2(big(x))
+    @test_approx_eq_eps expm1(x) expm1(big(x)) eps(T)
     @test_approx_eq log(x) log(big(x))
     @test_approx_eq log10(x) log10(big(x))
+    @test_approx_eq log1p(x) log1p(big(x))
     @test_approx_eq log2(x) log2(big(x))
     @test_approx_eq sin(x) sin(big(x))
     @test_approx_eq sinh(x) sinh(big(x))
@@ -48,8 +92,10 @@ for T in (Float32, Float64)
     @test_approx_eq exp(log(x)) x
     @test_approx_eq exp10(log10(x)) x
     @test_approx_eq exp2(log2(x)) x
+    @test_approx_eq expm1(log1p(x)) x
     @test_approx_eq log(exp(x)) x
     @test_approx_eq log10(exp10(x)) x
+    @test_approx_eq log1p(expm1(x)) x
     @test_approx_eq log2(exp2(x)) x
     @test_approx_eq sin(asin(x)) x
     @test_approx_eq sinh(asinh(x)) x
@@ -267,6 +313,9 @@ end
 
 @test_approx_eq complex(0.0,1.0)^complex(2.0,0) complex(-1.0, 0.0)
 @test_approx_eq complex(1.0,2.0)^complex(3.0,0) complex(-11.0, -2.0)
+
+@test isequal(complex(0.0,0.0)^false, complex(1.0,0.0))
+@test isequal(complex(0.0,0.0)^0, complex(1.0,0.0))
 
 # sinh: has properties
 #  sinh(conj(z)) = conj(sinh(z))
@@ -746,6 +795,8 @@ end
 @test_throws DomainError complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
+@test complex(1.0,[1.0,1.0]) == [complex(1.0,1.0), complex(1.0,1.0)]
+@test complex([1.0,1.0],1.0) == [complex(1.0,1.0), complex(1.0,1.0)]
 # robust division of Float64
 # hard complex divisions from Fig 6 of arxiv.1210.4539
 z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)

@@ -90,7 +90,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
         if lkup === ()
             continue
         end
-        fname, file, line, fromC = lkup
+        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
         if fname == funcsym
             break
         end
@@ -99,6 +99,16 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
         return bt[i]
     end
     return C_NULL
+end
+
+deprecate(s::Symbol) = deprecate(current_module(), s)
+deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+
+macro deprecate_binding(old, new)
+    Expr(:toplevel,
+         Expr(:export, esc(old)),
+         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
 # 0.4 deprecations
@@ -111,19 +121,17 @@ end
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export UdpSocket
 const TcpSocket = TCPSocket
-const UdpSocket = UDPSocket
+deprecate(:TcpSocket)
 const IpAddr = IPAddr
+deprecate(:IpAddr)
+@deprecate_binding UdpSocket UDPSocket
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
-export Nothing
-const Nothing = Void
-
-export None
-const None = Union{}
+@deprecate_binding Nothing Void
+@deprecate_binding None Union{}
 
 export apply
 @noinline function apply(f, args...)
@@ -150,16 +158,15 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-export String
-const String = AbstractString
+@deprecate_binding String AbstractString
 
-export Uint, Uint8, Uint16, Uint32, Uint64, Uint128
-const Uint = UInt
-const Uint8 = UInt8
-const Uint16 = UInt16
-const Uint32 = UInt32
-const Uint64 = UInt64
-const Uint128 = UInt128
+# 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
+@deprecate_binding Uint    UInt
+@deprecate_binding Uint8   UInt8
+@deprecate_binding Uint16  UInt16
+@deprecate_binding Uint32  UInt32
+@deprecate_binding Uint64  UInt64
+@deprecate_binding Uint128 UInt128
 
 @deprecate zero{T}(::Type{Ptr{T}}) Ptr{T}(0)
 @deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
@@ -178,8 +185,7 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
-export Base64Pipe
-const Base64Pipe = Base64EncodePipe
+@deprecate_binding Base64Pipe Base64EncodePipe
 @deprecate base64 base64encode
 
 @deprecate prevind(a::Any, i::Integer)   i-1
@@ -208,8 +214,7 @@ const Base64Pipe = Base64EncodePipe
 @deprecate error(ex::Exception) throw(ex)
 @deprecate error{E<:Exception}(::Type{E}) throw(E())
 
-export MemoryError
-const MemoryError = OutOfMemoryError
+@deprecate_binding MemoryError OutOfMemoryError
 
 @deprecate map!(f::Callable, dest::StridedArray, A::StridedArray, B::Number) broadcast!(f, dest, A, B)
 @deprecate map!(f::Callable, dest::StridedArray, A::Number, B::StridedArray) broadcast!(f, dest, A, B)
@@ -250,13 +255,35 @@ const MemoryError = OutOfMemoryError
 @deprecate float64(s::AbstractString)   parse(Float64,s)
 @deprecate float32(s::AbstractString)   parse(Float32,s)
 
-for (f,t) in ((:integer, Integer), (:signed, Signed),
-              (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
-              (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
-              (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64),
-              (:uint128, UInt128))
+for (f,t) in ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned))
     @eval begin
         @deprecate $f(x::AbstractArray) round($t, x)
+    end
+end
+
+for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
+              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
+              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
+    ex1 = sprint(io->show_unquoted(io,:([parse($t,s) for s in a])))
+    ex2 = sprint(io->show_unquoted(io,:(round($t, a))))
+    name = Expr(:quote,f)
+    @eval begin
+        function ($f)(x::AbstractArray)
+            if all(y->isa(y,AbstractString), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex1, " instead."), $name)
+                return [parse($t,s) for s in x]
+            elseif all(y->isa(y,Number), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex2, " instead."), $name)
+                return round($t, x)
+            end
+            y = similar(x,$t)
+            i = 1
+            for e in x
+                y[i] = ($f)(e)
+                i += 1
+            end
+            y
+        end
     end
 end
 
@@ -342,13 +369,6 @@ end
 @deprecate integer(x::Ptr)   convert(UInt, x)
 @deprecate unsigned(x::Ptr)  convert(UInt, x)
 
-for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
-              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
-              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
-    @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
-    end
-end
 for (f,t) in ((:float32, Float32), (:float64, Float64))
     @eval begin
         @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
@@ -438,6 +458,10 @@ end
     depwarn("to_index(I::Tuple) is deprecated, use to_indexes(I...) instead.", :to_index)
     to_indexes(I...)
 end
+
+@deprecate getindex(c::Char, I::Real...) getindex(c, map(Int, I)...)
+@deprecate getindex(s::AbstractString, x::Real) getindex(s, Int(x))
+@deprecate checkbounds(s::AbstractString, i::Real) checkbounds(s, Int(i))
 
 @noinline function float_isvalid{T<:Union{Float32,Float64}}(s::AbstractString, out::Array{T,1})
     tf = tryparse(T, s)
@@ -538,17 +562,15 @@ function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
 
-const UnionType = Union
-export UnionType
+@deprecate_binding UnionType Union
 
-const MathConst = Irrational
+@deprecate_binding MathConst Irrational
 
 macro math_const(sym, val, def)
     depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
     :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
 end
-
-export MathConst, @math_const
+export @math_const
 
 # 11280, mmap
 
@@ -655,9 +677,38 @@ end
     return a
 end
 
-@noinline function require(mod::AbstractString)
+## require ##
+
+function maybe_require_file(name::AbstractString)
+    isabspath(name) && return name
+    isfile(name) && return abspath(name)
+    if !endswith(name,".jl")
+        fname = string(name,".jl")
+        isfile(fname) && return abspath(fname)
+    end
+    return name
+end
+
+include("require.jl")
+@noinline function require(f::AbstractString)
     depwarn("`require` is deprecated, use `using` or `import` instead", :require)
-    require(symbol(require_filename(mod)))
+    if endswith(f,".jl") || contains(f,path_separator)
+        # specifying file path
+        OldRequire.require(f)
+    else
+        # require("Foo") --- ambiguous. might be file or package
+        filename = maybe_require_file(f)
+        if filename == f
+            mod = symbol(require_modname(f))
+            M = current_module()
+            if isdefined(M,mod) && isa(eval(M,mod),Module)
+                return
+            end
+            require(mod)
+        else
+            OldRequire.require(f)
+        end
+    end
 end
 @noinline function require(f::AbstractString, fs::AbstractString...)
     require(f)
@@ -666,25 +717,6 @@ end
     end
 end
 export require
-@noinline function require_filename(name::AbstractString)
-    # This function can be deleted when the deprecation for `require`
-    # is deleted.
-    # While we could also strip off the absolute path, the user may be
-    # deliberately directing to a different file than what got
-    # cached. So this takes a conservative approach.
-    if endswith(name, ".jl")
-        tmp = name[1:end-3]
-        for prefix in LOAD_CACHE_PATH
-            path = joinpath(prefix, tmp*".ji")
-            if isfile(path)
-                return tmp
-            end
-        end
-    end
-    name
-end
-const reload = require
-export reload
 
 ## ropes for efficient concatenation, etc. ##
 
@@ -775,8 +807,7 @@ end
 
 @deprecate iseltype(x,T)  eltype(x) <: T
 
-const FloatingPoint = AbstractFloat
-export FloatingPoint
+@deprecate_binding FloatingPoint AbstractFloat
 
 # 11447
 
@@ -795,3 +826,19 @@ export FloatingPoint
 end
 
 @deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
+
+@deprecate Union(args...) Union{args...}
+
+# 0.5 deprecations
+
+# 12839
+const AsyncStream = IO
+deprecate(:AsyncStream)
+
+for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
+    @eval begin
+        @deprecate ($f)(w::LocalProcess, f::Function, args...)    ($f)(f, w::LocalProcess, args...)
+        @deprecate ($f)(w::Worker, f::Function, args...)          ($f)(f, w::Worker, args...)
+        @deprecate ($f)(id::Integer, f::Function, args...)        ($f)(f, id::Integer, args...)
+    end
+end

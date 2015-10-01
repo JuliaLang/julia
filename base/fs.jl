@@ -47,7 +47,7 @@ export File,
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
             _sizeof_uv_fs, uv_error
 
-include("file_constants.jl")
+include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 abstract AbstractFile <: IO
 
@@ -231,19 +231,14 @@ function read(f::File, ::Type{UInt8})
     return ret%UInt8
 end
 
-function read!{T}(f::File, a::Array{T}, nel=length(a))
+function read!(f::File, a::Vector{UInt8}, nel=length(a))
     if nel < 0 || nel > length(a)
         throw(BoundsError())
     end
-    if isbits(T)
-        nb = nel*sizeof(T)
-        ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
-                    f.handle, a, nb)
-        uv_error("read",ret)
-    else
-        invoke(read, Tuple{IO, Array}, s, a)
-    end
-    a
+    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+                f.handle, a, nel)
+    uv_error("read",ret)
+    return a
 end
 
 nb_available(f::File) = filesize(f) - position(f)

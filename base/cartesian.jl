@@ -235,7 +235,9 @@ function poplinenum(ex::Expr)
     if ex.head == :block
         if length(ex.args) == 1
             return ex.args[1]
-        elseif length(ex.args) == 2 && ex.args[1].head == :line
+        elseif length(ex.args) == 2 && isa(ex.args[1], LineNumberNode)
+            return ex.args[2]
+        elseif (length(ex.args) == 2 && isa(ex.args[1], Expr) && ex.args[1].head == :line)
             return ex.args[2]
         end
     end

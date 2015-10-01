@@ -31,6 +31,8 @@ names(m::Module, all::Bool, imported::Bool) = sort!(ccall(:jl_module_names, Arra
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
 
+isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s)!=0
+
 function isbindingresolved(m::Module, var::Symbol)
     ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 end
@@ -210,7 +212,7 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     end
 
     if (native)
-        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
+        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},Cint), llvmf, 0)::ByteString
     else
         str = ccall(:jl_dump_function_ir, Any,
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)::ByteString

@@ -291,12 +291,12 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: UnicodeError: invalid character index
-     in next at ./unicode/utf8.jl:69
+     in next at ./unicode/utf8.jl:65
      in getindex at strings/basic.jl:37
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
-     in next at ./unicode/utf8.jl:69
+     in next at ./unicode/utf8.jl:65
      in getindex at strings/basic.jl:37
 
     julia> s[4]
@@ -438,6 +438,49 @@ backslash:
 
     julia> print("I have \$100 in my account.\n")
     I have $100 in my account.
+
+Triple-Quoted Strings Literals
+------------------------------
+
+When strings are created using triple-quotes (``"""..."""``) they have some
+special behavior that can be useful for creating longer blocks of text. First,
+if the opening ``"""`` is followed by a newline, the newline is stripped from
+the resulting string.
+
+::
+
+    """hello"""
+
+is equivalent to
+
+::
+
+    """
+    hello"""
+
+but
+
+::
+
+    """
+
+    hello"""
+
+will contain a literal newline at the beginning. Trailing whitespace is left
+unaltered. They can contain ``"`` symbols without escaping. Triple-quoted strings
+are also dedented to the level of the least-indented line. This is useful for
+defining strings within code that is indented. For example:
+
+.. doctest::
+
+    julia> str = """
+               Hello,
+               world.
+             """
+    "  Hello,\n  world.\n"
+
+In this case the final (empty) line before the closing ``"""`` sets the
+indentation level.
 
 Common Operations
 -----------------
@@ -718,6 +761,7 @@ For example::
 
 Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
 as in::
+
     julia> replace("a", r".", "\g<0>1")
     julia> a1
 

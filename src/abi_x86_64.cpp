@@ -133,7 +133,8 @@ void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
     else if (jl_datatype_size(ty) <= 16) {
         size_t i;
         for (i = 0; i < jl_datatype_nfields(ty); ++i) {
-            classifyType(accum, jl_field_type(ty,i), offset + jl_field_offset(ty,i));
+            classifyType(accum, jl_field_type((jl_datatype_t*)ty,i),
+                         offset + jl_field_offset((jl_datatype_t*)ty,i));
         }
     }
     else {
@@ -157,11 +158,11 @@ bool use_sret(AbiState *state,jl_value_t *ty)
     return sret;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 {
     Classification cl = classify(ty);
     if (cl.isMemory) {
-        *byRefAttr = *byRef = true;
+        *byRef = true;
         return;
     }
 
@@ -177,12 +178,11 @@ void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bo
     if (wanted.int_regs <= state->int_regs && wanted.sse_regs <= state->sse_regs) {
         state->int_regs -= wanted.int_regs;
         state->sse_regs -= wanted.sse_regs;
-        *inReg = true;
     }
     else if (jl_is_structtype(ty)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
-        *byRefAttr = *byRef = true;
+        *byRef = true;
     }
 }
 

@@ -313,6 +313,7 @@ for m1 = 0 : v1
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(append!(b1, b2)), append!(i1, i2))
+        @test isequal(bitunpack(append!(b1, i2)), append!(i1, b2))
     end
 end
 
@@ -323,6 +324,7 @@ for m1 = 0 : v1
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
+        @test isequal(bitunpack(prepend!(b1, i2)), prepend!(i1, b2))
     end
 end
 
@@ -566,6 +568,8 @@ b2 = trues(n1, n2)
 @check_bit_operation mod(b1, b2) BitMatrix
 @check_bit_operation div(b1,bitunpack(b2)) BitMatrix
 @check_bit_operation mod(b1,bitunpack(b2)) BitMatrix
+@check_bit_operation div(bitunpack(b1),b2) BitMatrix
+@check_bit_operation mod(bitunpack(b1),b2) BitMatrix
 
 while true
     global b1
@@ -1124,6 +1128,7 @@ for m = 1 : v1 - 1
     @check_bit_operation vcat(b1[1:m], b1[m+1:end]) BitVector
 end
 @test_throws DimensionMismatch hcat(b1,trues(n1+1))
+@test_throws DimensionMismatch hcat(hcat(b1, b2),trues(n1+1))
 
 b1 = bitrand(n1, n2)
 b2 = bitrand(n1)
@@ -1131,6 +1136,7 @@ b3 = bitrand(n1, n2)
 b4 = bitrand(1, n2)
 @check_bit_operation hcat(b1, b2, b3) BitMatrix
 @check_bit_operation vcat(b1, b4, b3) BitMatrix
+@test_throws DimensionMismatch vcat(b1, b4, trues(n1,n2+1))
 
 b1 = bitrand(s1, s2, s3, s4)
 b2 = bitrand(s1, s3, s3, s4)

@@ -44,7 +44,6 @@ debug && println("symmetric generalized eigenproblem")
     asym_sg = asym[1:n1, 1:n1]
     a_sg = a[:,n1+1:n2]
     f = eigfact(asym_sg, a_sg'a_sg)
-    eig(asym_sg, a_sg'a_sg) # same result, but checks that method works
     @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
     @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
     @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
@@ -53,14 +52,21 @@ debug && println("symmetric generalized eigenproblem")
     @test eigvecs(f) === f[:vectors]
     @test_throws KeyError f[:Z]
 
+    d,v = eig(asym_sg, a_sg'a_sg)
+    @test d == f[:values]
+    @test v == f[:vectors]
+
 debug && println("Non-symmetric generalized eigenproblem")
     a1_nsg = a[1:n1, 1:n1]
     a2_nsg = a[n1+1:n2, n1+1:n2]
     f = eigfact(a1_nsg, a2_nsg)
-    eig(a1_nsg, a2_nsg) # same result, but checks that method works
     @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
     @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
     @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
     @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
     @test_throws KeyError f[:Z]
+
+    d,v = eig(a1_nsg, a2_nsg)
+    @test d == f[:values]
+    @test v == f[:vectors]
 end

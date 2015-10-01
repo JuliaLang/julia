@@ -6,8 +6,6 @@ typealias Callable Union{Function,DataType}
 
 const Bottom = Union{}
 
-call(::Type{Union}, args...) = Union{args...}
-
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
 macro _inline_meta()
@@ -40,7 +38,7 @@ call(T::Type{UTF8String}, d::Array{UInt8,1}) = Core.call(T, d)
 call(T::Type{TypeVar}, args...) = Core.call(T, args...)
 call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
 call(T::Type{Expr}, args::ANY...) = _expr(args...)
-call(T::Type{LineNumberNode}, n::Int) = Core.call(T, n)
+call(T::Type{LineNumberNode}, f::Symbol, n::Int) = Core.call(T, f, n)
 call(T::Type{LabelNode}, n::Int) = Core.call(T, n)
 call(T::Type{GotoNode}, n::Int) = Core.call(T, n)
 call(T::Type{QuoteNode}, x::ANY) = Core.call(T, x)
@@ -51,9 +49,9 @@ call(T::Type{Task}, f::Function) = Core.call(T, f)
 call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 call(T::Type{WeakRef}) = Core.call(T)
 call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
+call(T::Type{Void}) = Core.call(Void)
 
-# The specialization for 1 arg is important
-# when running with --inline=no, see #11158
+# The specialization for 1 arg is important when running with --inline=no, see #11158
 call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 

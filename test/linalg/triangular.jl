@@ -120,21 +120,61 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         # real
         @test full(real(A1)) == real(full(A1))
+        @test full(imag(A1)) == imag(full(A1))
+        @test full(abs(A1)) == abs(full(A1))
 
         # Unary operations
         @test full(-A1) == -full(A1)
 
-        # Binary operations
+        # copy
         B = similar(A1)
         copy!(B,A1)
         @test B == A1
         B = similar(A1.')
         copy!(B, A1.')
         @test B == A1.'
+
+        # scale
+        if (t1 == UpperTriangular || t1 == LowerTriangular)
+            unitt = istriu(A1) ? UnitUpperTriangular : UnitLowerTriangular
+            if elty1 == Int
+                cr = 2
+            else
+                cr = 0.5
+            end
+            ci = cr * im
+            if elty1 <: Real
+                A1tmp = copy(A1)
+                scale!(A1tmp,cr)
+                @test A1tmp == cr*A1
+                A1tmp = copy(A1)
+                scale!(cr,A1tmp)
+                @test A1tmp == cr*A1
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                scale!(A1tmp,A2tmp,cr)
+                @test A1tmp == cr * A2tmp
+            else
+                A1tmp = copy(A1)
+                scale!(A1tmp,ci)
+                @test A1tmp == ci*A1
+                A1tmp = copy(A1)
+                scale!(ci,A1tmp)
+                @test A1tmp == ci*A1
+                A1tmp = copy(A1)
+                A2tmp = unitt(A1)
+                scale!(A1tmp,A2tmp,ci)
+                @test A1tmp == ci * A2tmp
+            end
+        end
+
         @test scale(A1,0.5) == 0.5*A1
+        @test scale(0.5,A1) == 0.5*A1
         @test scale(A1,0.5im) == 0.5im*A1
-        @test scale(A1.',0.5) == 0.5*A1.'
-        @test scale(A1.',0.5im) == 0.5im*A1.'
+        @test scale(0.5im,A1) == 0.5im*A1
+
+
+        # Binary operations
         @test A1*0.5 == full(A1)*0.5
         @test 0.5*A1 == 0.5*full(A1)
         @test A1/0.5 == full(A1)/0.5

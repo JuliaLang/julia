@@ -1,3 +1,32 @@
+Julia v0.5.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+Language changes
+----------------
+
+Command-line option changes
+---------------------------
+
+Compiler/Runtime improvements
+-----------------------------
+
+Library improvements
+--------------------
+
+  *  The package system (`Pkg`) is now based on the libgit2 library, rather than running the `git` program, increasing performance (especially on Windows) ([#11196]).
+
+  * The `Base.Test` module now has a `@testset` feature to bundle
+    tests together and delay throwing an error until the end ([#13062]).
+
+  * The function `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
+    the function argument as the first argument to allow for do-block syntax ([#13338]).
+
+Deprecated or removed
+---------------------
+
 Julia v0.4.0 Release Notes
 ==========================
 
@@ -187,8 +216,14 @@ Command line option changes
   * The `--depwarn={yes|no|error}` option enables/disables syntax and method deprecation warnings,
     or turns them into errors ([#9294]).
 
-Compiler improvements
----------------------
+  * Some command line options are slated for deprecation / removal
+    - `-f, --no-startup` Don't load ~/.juliarc (deprecated, use --startup-file=no)
+    - `-F` Load ~/.juliarc (deprecated, use --startup-file=yes)`
+    - `-P, --post-boot <expr>`  Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)
+    - `--no-history-file`  Don't load history file (deprecated, use --history-file=no)
+
+Compiler/Runtime improvements
+-----------------------------
 
   * Functions may be annotated with metadata (`:meta` expressions) to be used by the compiler ([#8297]).
 
@@ -197,6 +232,8 @@ Compiler improvements
   * Loads from heap-allocated immutables are hoisted out of loops in more cases ([#8867]).
 
   * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
+
+  * New generational garbage collector which greatly reduces GC overhead for many commmon workloads ([#5227]).
 
 Library improvements
 --------------------
@@ -263,12 +300,14 @@ Library improvements
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
       results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
-    * `is_valid_char(c)` now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
+    * `is_valid_char(c)`, (now `isvalid(Char,c)` ([#11241])), now correctly handles Unicode "non-characters", which are valid Unicode codepoints ([#11171]).
 
     * Backreferences in replacement strings in calls to `replace` with a `Regex` pattern are now supported ([#11849]).
       Use the `s` string prefix to indicate a replacement string contains a backreference. For example, `replace("ab", r"(.)(.)", s"\2\1")` yields "ba".
 
     * Capture groups in regular expressions can now be named using PCRE syntax, `(?P<group_name>...)`. Capture group matches can be accessed by name by indexing a `Match` object with the name of the group ([#11566]).
+
+    * `countlines()` now counts all lines, not just non-empty ([#11947]).
 
   * Array and AbstractArray improvements
 
@@ -1382,6 +1421,7 @@ Too numerous to mention.
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
+[#5227]: https://github.com/JuliaLang/julia/issues/5227
 [#5255]: https://github.com/JuliaLang/julia/issues/5255
 [#5263]: https://github.com/JuliaLang/julia/issues/5263
 [#5275]: https://github.com/JuliaLang/julia/issues/5275
@@ -1593,14 +1633,19 @@ Too numerous to mention.
 [#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
+[#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
+[#11279]: https://github.com/JuliaLang/julia/issues/11279
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
 [#11379]: https://github.com/JuliaLang/julia/issues/11379
 [#11432]: https://github.com/JuliaLang/julia/issues/11432
+[#11566]: https://github.com/JuliaLang/julia/issues/11566
 [#11686]: https://github.com/JuliaLang/julia/issues/11686
 [#11741]: https://github.com/JuliaLang/julia/issues/11741
+[#11849]: https://github.com/JuliaLang/julia/issues/11849
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11947]: https://github.com/JuliaLang/julia/issues/11947
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12025]: https://github.com/JuliaLang/julia/issues/12025
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
@@ -1615,4 +1660,7 @@ Too numerous to mention.
 [#12472]: https://github.com/JuliaLang/julia/issues/12472
 [#12491]: https://github.com/JuliaLang/julia/issues/12491
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
+[#12727]: https://github.com/JuliaLang/julia/issues/12727
 [#12739]: https://github.com/JuliaLang/julia/issues/12739
+[#13062]: https://github.com/JuliaLang/julia/issues/13062
+[#13338]: https://github.com/JuliaLang/julia/issues/13338

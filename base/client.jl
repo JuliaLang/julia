@@ -76,11 +76,6 @@ function repl_cmd(cmd, out)
     nothing
 end
 
-function repl_hook(input::AbstractString)
-    Expr(:call, :(Base.repl_cmd),
-         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
-end
-
 display_error(er) = display_error(er, [])
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
@@ -212,110 +207,77 @@ function init_bind_addr()
     LPROC.bind_port = UInt16(bind_port)
 end
 
-# NOTE: This set of required arguments need to be kept in sync with the required arguments defined in ui/repl.c
-let reqarg = Set(UTF8String["--home",          "-H",
-                            "--eval",          "-e",
-                            "--print",         "-E",
-                            "--post-boot",     "-P",
-                            "--load",          "-L",
-                            "--sysimage",      "-J",
-                            "--cpu-target",    "-C",
-                            "--procs",         "-p",
-                            "--machinefile",
-                            "--color",
-                            "--history-file",
-                            "--startup-file",
-                            "--compile",
-                            "--check-bounds",
-                            "--depwarn",
-                            "--inline",
-                            "--output-o",
-                            "--output-ji",
-                            "--output-bc",
-                            "--bind-to",
-                            "--precompiled"])
-    global process_options
-    function process_options(opts::JLOptions, args::Vector{UTF8String})
-        if !isempty(args)
-            arg = first(args)
-            if !isempty(arg) && arg[1] == '-' && in(arg, reqarg)
-                println(STDERR, "julia: option `$arg` is missing an argument")
-                exit(1)
-            end
-            idxs = find(x -> x == "--", args)
-            if length(idxs) > 1
-                println(STDERR, "julia: redundant option terminator `--`")
-                exit(1)
-            end
-            deleteat!(ARGS, idxs)
+function process_options(opts::JLOptions, args::Vector{UTF8String})
+    if !isempty(args)
+        arg = first(args)
+        idxs = find(x -> x == "--", args)
+        if length(idxs) > 1
+            println(STDERR, "julia: redundant option terminator `--`")
+            exit(1)
         end
-        repl                  = true
-        startup               = (opts.startupfile != 2)
-        history_file          = (opts.historyfile != 0)
-        quiet                 = (opts.quiet != 0)
-        color_set             = (opts.color != 0)
-        global have_color     = (opts.color == 1)
-        global is_interactive = (opts.isinteractive != 0)
-        while true
-            # load ~/.juliarc file
-            startup && load_juliarc()
+        deleteat!(ARGS, idxs)
+    end
+    repl                  = true
+    startup               = (opts.startupfile != 2)
+    history_file          = (opts.historyfile != 0)
+    quiet                 = (opts.quiet != 0)
+    color_set             = (opts.color != 0)
+    global have_color     = (opts.color == 1)
+    global is_interactive = (opts.isinteractive != 0)
+    while true
+        # load ~/.juliarc file
+        startup && load_juliarc()
 
-            # startup worker
-            if opts.worker != 0
-                start_worker() # does not return
+        # startup worker
+        if opts.worker != 0
+            start_worker() # does not return
+        end
+        # add processors
+        if opts.nprocs > 0
+            addprocs(opts.nprocs)
+        end
+        # load processes from machine file
+        if opts.machinefile != C_NULL
+            addprocs(load_machine_file(bytestring(opts.machinefile)))
+        end
+        # load file immediately on all processors
+        if opts.load != C_NULL
+            @sync for p in procs()
+                @async remotecall_fetch(include, p, bytestring(opts.load))
             end
-            # add processors
-            if opts.nprocs > 0
-                addprocs(opts.nprocs)
-            end
-            # load processes from machine file
-            if opts.machinefile != C_NULL
-                addprocs(load_machine_file(bytestring(opts.machinefile)))
-            end
-            # load file immediately on all processors
-            if opts.load != C_NULL
-                @sync for p in procs()
-                    @async remotecall_fetch(p, include, bytestring(opts.load))
-                end
-            end
-            # eval expression
-            if opts.eval != C_NULL
-                repl = false
-                eval(Main, parse_input_line(bytestring(opts.eval)))
-                break
-            end
-            # eval expression and show result
-            if opts.print != C_NULL
-                repl = false
-                show(eval(Main, parse_input_line(bytestring(opts.print))))
-                println()
-                break
-            end
-            # eval expression but don't disable interactive mode
-            if opts.postboot != C_NULL
-                eval(Main, parse_input_line(bytestring(opts.postboot)))
-            end
-            # load file
-            if !isempty(args)
-                if !isempty(args[1]) && args[1][1] != '-'
-                    # program
-                    repl = false
-                    # remove filename from ARGS
-                    shift!(ARGS)
-                    if !is_interactive
-                        ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
-                    end
-                    include(args[1])
-                else
-                    println(STDERR, "julia: unknown option `$(args[1])`")
-                    exit(1)
-                end
-            end
+        end
+        # eval expression
+        if opts.eval != C_NULL
+            repl = false
+            eval(Main, parse_input_line(bytestring(opts.eval)))
             break
         end
-        repl |= is_interactive
-        return (quiet,repl,startup,color_set,history_file)
+        # eval expression and show result
+        if opts.print != C_NULL
+            repl = false
+            show(eval(Main, parse_input_line(bytestring(opts.print))))
+            println()
+            break
+        end
+        # eval expression but don't disable interactive mode
+        if opts.postboot != C_NULL
+            eval(Main, parse_input_line(bytestring(opts.postboot)))
+        end
+        # load file
+        if !isempty(args) && !isempty(args[1])
+            # program
+            repl = false
+            # remove filename from ARGS
+            shift!(ARGS)
+            if !is_interactive
+                ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+            end
+            include(args[1])
+        end
+        break
     end
+    repl |= is_interactive
+    return (quiet,repl,startup,color_set,history_file)
 end
 
 const roottask = current_task()
@@ -406,6 +368,8 @@ function _atreplinit(repl)
 end
 
 function _start()
+    empty!(ARGS)
+    append!(ARGS, Core.ARGS)
     opts = JLOptions()
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
@@ -450,7 +414,7 @@ function _start()
                 end
             else
                 _atreplinit(active_repl)
-                active_repl_backend = REPL.run_repl(active_repl)
+                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
             end
         end
     catch err

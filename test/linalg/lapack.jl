@@ -2,6 +2,8 @@
 
 using Base.Test
 
+import Base.LinAlg.BlasInt
+
 let # syevr
     srand(123)
     Ainit = randn(5,5)
@@ -34,7 +36,7 @@ let # Test gglse
     end
 end
 
-let # bdsqr & throw for bdsdc
+let # gebrd, bdsqr & throw for bdsdc
     n = 10
     for elty in (Float32, Float64)
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
@@ -49,6 +51,13 @@ let # bdsqr & throw for bdsdc
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])
 
         @test_throws ArgumentError LAPACK.bdsdc!('U','Z',d,e)
+
+        A = rand(elty,n,n)
+        B = copy(A)
+        B, d, e, tauq, taup = LAPACK.gebrd!(B)
+        U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
+        s, _ = LAPACK.bdsqr!('U',d,e[1:n-1],Vt, U, C)
+        @test s ≈ svdvals(A)
     end
 end
 
@@ -232,34 +241,60 @@ end
 #orglq and friends errors
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
-    tau = zeros(elty,10)
-    A,tau = LAPACK.gelqf!(A,tau)
+    A,tau = LAPACK.gelqf!(A)
     @test_throws DimensionMismatch LAPACK.orglq!(A,tau,11)
     @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,zeros(elty,11),rand(elty,10,10))
     @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,zeros(elty,11),rand(elty,10,10))
 
+    B = copy(A)
+    C = LAPACK.orglq!(B,tau)
+    @test LAPACK.ormlq!('R','N',A,tau,eye(elty,10)) ≈ C
+
     A = rand(elty,10,10)
-    tau = zeros(elty,10)
-    A,tau = LAPACK.geqrf!(A,tau)
+    A,tau = LAPACK.geqrf!(A)
     @test_throws DimensionMismatch LAPACK.orgqr!(A,tau,11)
+    B = copy(A)
+    @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,eye(elty,10))
     @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
     @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
     @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,zeros(elty,11),rand(elty,10,10))
 
+    A = rand(elty,10,10)
+    A,tau = LAPACK.geqlf!(A)
+    @test_throws DimensionMismatch LAPACK.orgql!(A,tau,11)
+    B = copy(A)
+    @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,eye(elty,10))
+    @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,tau,rand(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,tau,rand(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,zeros(elty,11),rand(elty,10,10))
+    @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,zeros(elty,11),rand(elty,10,10))
+
+    A = rand(elty,10,10)
+    A,tau = LAPACK.gerqf!(A)
+    @test_throws DimensionMismatch LAPACK.orgrq!(A,tau,11)
+    B = copy(A)
+    @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,eye(elty,10))
+    @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,tau,rand(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,tau,rand(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
+    @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,zeros(elty,11),rand(elty,10,10))
+
     C = rand(elty,10,10)
     V = rand(elty,10,10)
     T = zeros(elty,10,11)
     @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+    @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
+
     C = rand(elty,10,10)
     V = rand(elty,11,10)
     T = zeros(elty,10,10)
     @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
-    T = zeros(elty,10,10)
-    V = rand(elty,11,10)
     @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+
+    # test size(T) = (nb,k) ensures 1 <= nb <= k
     T = zeros(elty,10,10)
     V = rand(elty,5,10)
     @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
@@ -279,6 +314,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B,ipiv = LAPACK.sytrf!('U',B)
     @test_approx_eq triu(inv(A)) triu(LAPACK.sytri!('U',B,ipiv))
     @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
+    @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
 end
 
 # hetrs
@@ -297,14 +333,27 @@ for elty in (Float32, Float64)
     @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
     @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
     @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
+    @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(d),zeros(BlasInt,10),zeros(BlasInt,10))
+    @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
 end
 
-#trtri
+#trtri & trtrs
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
     A = triu(A)
     B = copy(A)
     @test_approx_eq inv(A) LAPACK.trtri!('U','N',B)
+    @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,zeros(elty,11,10))
+end
+
+#tgsen, tzrzf, & trsyl
+for elty in (Float32, Float64, Complex64, Complex128)
+    Z = zeros(elty,10,10)
+    @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,zeros(elty,11,11),Z,Z)
+    @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,zeros(elty,11,11),Z)
+    @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,Z,zeros(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.trsyl!('N','N',Z,Z,zeros(elty,11,11))
+    @test_throws DimensionMismatch LAPACK.tzrzf!(zeros(elty,10,5))
 end
 
 #sysv
@@ -383,6 +432,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq A\B C
     @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
     @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
+
+    @test LAPACK.potrs!('U',zeros(elty,0,0),ones(elty,0)) == ones(elty,0)
 end
 
 #gesvx
@@ -425,6 +476,34 @@ end
 # laic1
 for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws DimensionMismatch LAPACK.laic1!(1,rand(elty,10),real(rand(elty)),rand(elty,11),rand(elty))
+end
+
+#trexc
+for elty in (Float32, Float64, Complex64, Complex128)
+    for c in ('V', 'N')
+        A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+        T,Q,d = schur(A)
+        Base.LinAlg.LAPACK.trsen!('N',c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)
+        @test d[1] ≈ T[2,2]
+        @test d[2] ≈ T[1,1]
+        if (c == 'V')
+            @test  Q * T * Q' ≈ A
+        end
+    end
+end
+
+#trexc and trsen
+for elty in (Float32, Float64, Complex64, Complex128)
+    for c in ('V', 'N')
+        A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+        T,Q,d = schur(A)
+        Base.LinAlg.LAPACK.trexc!(c,LinAlg.BlasInt(1),LinAlg.BlasInt(2),T,Q)
+        @test d[1] ≈ T[2,2]
+        @test d[2] ≈ T[1,1]
+        if (c == 'V')
+            @test  Q * T * Q' ≈ A
+        end
+    end
 end
 
 # Test our own linear algebra functionaly against LAPACK

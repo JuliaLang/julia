@@ -7,7 +7,11 @@
 extern "C" {
 #endif
 
-#include "options.h"
+//** Configuration options that affect the Julia ABI **//
+// if this is not defined, only individual dimension sizes are
+// stored and not total length, to save space.
+#define STORE_ARRAY_LEN
+//** End Configuration options **//
 
 #include "libsupport.h"
 #include <stdint.h>
@@ -318,13 +322,22 @@ typedef struct {
 } jl_uniontype_t;
 
 typedef struct {
+    uint8_t offset;   // offset relative to data start, excluding type tag
+    uint8_t size:7;
+    uint8_t isptr:1;
+} jl_fielddesc8_t;
+
+typedef struct {
     uint16_t offset;   // offset relative to data start, excluding type tag
     uint16_t size:15;
     uint16_t isptr:1;
-} jl_fielddesc_t;
+} jl_fielddesc16_t;
 
-#define JL_FIELD_MAX_OFFSET ((1ul << 16) - 1ul)
-#define JL_FIELD_MAX_SIZE ((1ul << 15) - 1ul)
+typedef struct {
+    uint32_t offset;   // offset relative to data start, excluding type tag
+    uint32_t size:31;
+    uint32_t isptr:1;
+} jl_fielddesc32_t;
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
@@ -340,12 +353,13 @@ typedef struct _jl_datatype_t {
     int32_t ninitialized;
     // hidden fields:
     uint32_t nfields;
-    uint32_t alignment : 31;  // strictest alignment over all fields
+    uint32_t alignment : 29;  // strictest alignment over all fields
     uint32_t haspadding : 1;  // has internal undefined bytes
+    uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
-    jl_fielddesc_t fields[];
+    size_t fields[];
 } jl_datatype_t;
 
 typedef struct {
@@ -370,6 +384,7 @@ typedef struct {
     unsigned constp:1;
     unsigned exportp:1;
     unsigned imported:1;
+    unsigned deprecated:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -733,13 +748,15 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
-#define jl_symbolnode_sym(s) ((jl_sym_t*)jl_fieldref(s,0))
-#define jl_symbolnode_type(s) (jl_fieldref(s,1))
-#define jl_linenode_line(x) (((ptrint_t*)x)[0])
+// Not using jl_fieldref to avoid allocations
+#define jl_symbolnode_sym(s) (*(jl_sym_t**)s)
+#define jl_symbolnode_type(s) (((jl_value_t**)s)[1])
+#define jl_linenode_file(x) (*(jl_sym_t**)x)
+#define jl_linenode_line(x) (((ptrint_t*)x)[1])
 #define jl_labelnode_label(x) (((ptrint_t*)x)[0])
 #define jl_gotonode_label(x) (((ptrint_t*)x)[0])
-#define jl_globalref_mod(s) ((jl_module_t*)jl_fieldref(s,0))
-#define jl_globalref_name(s) ((jl_sym_t*)jl_fieldref(s,1))
+#define jl_globalref_mod(s) (*(jl_module_t**)s)
+#define jl_globalref_name(s) (((jl_sym_t**)s)[1])
 
 #define jl_nparams(t)  jl_svec_len(((jl_datatype_t*)(t))->parameters)
 #define jl_tparam0(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 0)
@@ -758,13 +775,56 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_data_ptr(v)  (((jl_value_t*)v)->fieldptr)
 
 // struct type info
-#define jl_field_offset(st,i)  (((jl_datatype_t*)st)->fields[i].offset)
-#define jl_field_size(st,i)    (((jl_datatype_t*)st)->fields[i].size)
-#define jl_field_isptr(st,i)   (((jl_datatype_t*)st)->fields[i].isptr)
 #define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->nfields)
+
+#define DEFINE_FIELD_ACCESSORS(f)                                       \
+    static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)       \
+    {                                                                   \
+        if (st->fielddesc_type == 0) {                                  \
+            return ((jl_fielddesc8_t*)st->fields)[i].f;                 \
+        }                                                               \
+        else if (st->fielddesc_type == 1) {                             \
+            return ((jl_fielddesc16_t*)st->fields)[i].f;                \
+        }                                                               \
+        else {                                                          \
+            return ((jl_fielddesc32_t*)st->fields)[i].f;                \
+        }                                                               \
+    }                                                                   \
+    static inline void jl_field_set##f(jl_datatype_t *st, int i,        \
+                                       uint32_t val)                    \
+    {                                                                   \
+        if (st->fielddesc_type == 0) {                                  \
+            ((jl_fielddesc8_t*)st->fields)[i].f = val;                  \
+        }                                                               \
+        else if (st->fielddesc_type == 1) {                             \
+            ((jl_fielddesc16_t*)st->fields)[i].f = val;                 \
+        }                                                               \
+        else {                                                          \
+            ((jl_fielddesc32_t*)st->fields)[i].f = val;                 \
+        }                                                               \
+    }
+
+DEFINE_FIELD_ACCESSORS(offset)
+DEFINE_FIELD_ACCESSORS(size)
+DEFINE_FIELD_ACCESSORS(isptr)
+
+static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
+{
+    if (fielddesc_type == 0) {
+        return sizeof(jl_fielddesc8_t);
+    }
+    else if (fielddesc_type == 1) {
+        return sizeof(jl_fielddesc16_t);
+    }
+    else {
+        return sizeof(jl_fielddesc32_t);
+    }
+}
+
+#undef DEFINE_FIELD_ACCESSORS
 
 // basic predicates -----------------------------------------------------------
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
@@ -928,7 +988,6 @@ int jl_is_type(jl_value_t *v);
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 DLLEXPORT int jl_has_typevars(jl_value_t *v);
 DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
-int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_type_union(jl_svec_t *types);
 jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n);
@@ -938,6 +997,7 @@ DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
+DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
@@ -950,7 +1010,8 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
-DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
+DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
+                                                       int8_t fielddesc_type);
 DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                          jl_svec_t *parameters,
                                          jl_svec_t *fnames, jl_svec_t *ftypes,
@@ -1647,7 +1708,7 @@ DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_USE_PRECOMPILED_NO 0
 
 // Version information
-#include "julia_version.h"
+#include <julia_version.h>
 
 DLLEXPORT extern int jl_ver_major(void);
 DLLEXPORT extern int jl_ver_minor(void);

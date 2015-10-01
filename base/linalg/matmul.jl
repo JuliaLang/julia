@@ -211,8 +211,6 @@ function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
         for i = 1:(n-1), j = (i+1):n
             A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
         end
-    else
-        throw(ArgumentError("second argument must be 'U' or 'L'"))
     end
     A
 end

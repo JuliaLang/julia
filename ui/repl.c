@@ -117,7 +117,7 @@ void parse_opts(int *argcp, char ***argvp)
            opt_use_precompiled,
            opt_incremental
     };
-    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
+    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O";
     static struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -160,27 +160,40 @@ void parse_opts(int *argcp, char ***argvp)
         { 0, 0, 0, 0 }
     };
     // getopt handles argument parsing up to -- delineator
-    int lastind = optind;
     int argc = *argcp;
+    char **argv = *argvp;
     if (argc > 0) {
         for (int i=0; i < argc; i++) {
-            if (!strcmp((*argvp)[i], "--")) {
+            if (!strcmp(argv[i], "--")) {
                 argc = i;
                 break;
             }
         }
     }
-    int c;
     char *endptr;
-    opterr = 0;
-    int skip = 0;
-    while ((c = getopt_long(argc,*argvp,shortopts,longopts,0)) != -1) {
+    opterr = 0; // suppress getopt warning messages
+    while (1) {
+        int lastind = optind;
+        int c = getopt_long(argc, argv, shortopts, longopts, 0);
+        if (c == -1) break;
         switch (c) {
         case 0:
             break;
         case '?':
-        if (optind != lastind) skip++;
-            lastind = optind;
+        case ':':
+            if (optopt) {
+                for (struct option *o = longopts; o->val; o++) {
+                    if (optopt == o->val) {
+                        if (strchr(shortopts, o->val))
+                            jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
+                        else
+                            jl_errorf("option `--%s` is missing an argument", o->name);
+                    }
+                }
+                jl_errorf("unknown option `-%c`", optopt);
+            } else {
+                jl_errorf("unknown option `%s`", argv[lastind]);
+            }
             break;
         case 'v': // version
             jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
@@ -391,7 +404,6 @@ void parse_opts(int *argcp, char ***argvp)
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
-    optind -= skip;
     *argvp += optind;
     *argcp -= optind;
 }
@@ -456,11 +468,11 @@ static void print_profile(void)
 
 static int true_main(int argc, char *argv[])
 {
-    if (jl_base_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
+    if (jl_core_module != NULL) {
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
         if (args == NULL) {
             args = jl_alloc_cell_1d(0);
-            jl_set_const(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
         }
         assert(jl_array_len(args) == 0);
         jl_array_grow_end(args, argc);

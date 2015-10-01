@@ -2,8 +2,8 @@
 
 module Dir
 
-import ..Pkg: DEFAULT_META, META_BRANCH
-import ..Git
+import ..Pkg: DEFAULT_META, META_BRANCH, PkgError
+import ...LibGit2, ...LibGit2.with
 
 const DIR_NAME = ".julia"
 
@@ -26,21 +26,26 @@ function cd(f::Function, args...; kws...)
     metadata_dir = joinpath(dir, "METADATA")
     if !isdir(metadata_dir)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
-            error("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it.")
+            throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
-    Base.cd(()->f(args...; kws...), dir)
+    try
+        Base.cd(()->f(args...; kws...), dir)
+    catch err
+        if isa(err, PkgError)
+            print_with_color(:red, "ERROR: $(err.msg)")
+        else
+            throw(err)
+        end
+    end
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
-    if Git.version() < v"1.7.3"
-        warn("Pkg only works with git versions greater than v1.7.3")
-    end
     dir = path()
     info("Initializing package repository $dir")
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        Git.set_remote_url(meta, dir=metadata_dir)
+        LibGit2.set_remote_url(metadata_dir, meta)
         return
     end
     local temp_dir
@@ -49,8 +54,9 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         temp_dir = mktempdir(dir)
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b $branch $meta METADATA`)
-            Git.set_remote_url(meta, dir="METADATA")
+            with(LibGit2.clone(meta, "METADATA", branch = branch)) do metadata_repo
+                LibGit2.set_remote_url(metadata_repo, meta)
+            end
             touch("REQUIRE")
             touch("META_BRANCH")
             open("META_BRANCH", "w") do io

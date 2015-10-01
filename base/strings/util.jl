@@ -12,7 +12,7 @@ function startswith(a::AbstractString, b::AbstractString)
     end
     done(b,i)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && str[start(str)] in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
 
 function endswith(a::AbstractString, b::AbstractString)
     i = endof(a)
@@ -28,7 +28,7 @@ function endswith(a::AbstractString, b::AbstractString)
     end
     j < b1
 end
-endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
+endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
 startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
@@ -173,9 +173,9 @@ function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, k
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
 
-_replace(io, repl, str, r, pattern) = write(io, repl)
+_replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
-    write(io, repl(SubString(str, first(r), last(r))))
+    print(io, repl(SubString(str, first(r), last(r))))
 
 function replace(str::ByteString, pattern, repl, limit::Integer)
     n = 1

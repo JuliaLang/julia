@@ -19,6 +19,10 @@ g = Float16(1.)
 @test convert(Bool,Float16(0.0)) == false
 @test convert(Bool,Float16(1.0)) == true
 @test_throws InexactError convert(Bool,Float16(0.1))
+
+@test convert(Int128,Float16(-2.0)) == Int128(-2)
+@test convert(UInt128,Float16(2.0)) == UInt128(2)
+
 x = Float32(rand())
 y = Float32(rand())
 z = Float32(rand())

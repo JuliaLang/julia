@@ -34,11 +34,13 @@ let res = assert(true)
     @test res === nothing
 end
 let
-    ex = @test_throws AssertionError begin
+    try
         assert(false)
         error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test isempty(ex.msg)
     end
-    @test isempty(ex.msg)
 end
 
 # test @assert macro
@@ -48,44 +50,54 @@ end
 @test_throws AssertionError (@assert false "this is a test" "another test")
 @test_throws AssertionError (@assert false :a)
 let
-    ex = @test_throws AssertionError begin
+    try
         @assert 1 == 2
         error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test contains(ex.msg, "1 == 2")
     end
-    @test contains(ex.msg, "1 == 2")
 end
 # test @assert message
 let
-    ex = @test_throws AssertionError begin
+    try
         @assert 1 == 2 "this is a test"
         error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "this is a test"
     end
-    @test ex.msg == "this is a test"
 end
 # @assert only uses the first message string
 let
-    ex = @test_throws AssertionError begin
+    try
         @assert 1 == 2 "this is a test" "this is another test"
         error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "this is a test"
     end
-    @test ex.msg == "this is a test"
 end
 # @assert calls string() on second argument
 let
-    ex = @test_throws AssertionError begin
+    try
         @assert 1 == 2 :random_object
         error("unexpected")
+    catch ex
+        @test isa(ex, AssertionError)
+        @test !contains(ex.msg,  "1 == 2")
+        @test contains(ex.msg, "random_object")
     end
-    @test !contains(ex.msg,  "1 == 2")
-    @test contains(ex.msg, "random_object")
 end
 # if the second argument is an expression, c
 let deepthought(x, y) = 42
-    ex = @test_throws AssertionError begin
+    try
         @assert 1 == 2 string("the answer to the ultimate question: ",
                               deepthought(6, 9))
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "the answer to the ultimate question: 42"
     end
-    @test ex.msg == "the answer to the ultimate question: 42"
 end
 
 let # test the process title functions, issue #9957
@@ -160,16 +172,23 @@ v11801, t11801 = @timed sin(1)
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core, true) > summarysize(Core.Inference, true) > summarysize(Core, false) == summarysize(Core.Inference, false) == Core.sizeof(Core)
-@test summarysize(Base, true) > 10_000*summarysize(Base, false) > 10_000*sizeof(Int)
-@test 0 == summarysize(Int, true) == summarysize(Int, false) == summarysize(DataType, true) == summarysize(Ptr, true) == summarysize(Any, true)
+@test summarysize(Core) > summarysize(Core.Inference) > Core.sizeof(Core)
+@test summarysize(Base) > 10_000*sizeof(Int)
+module _test_whos_
+export x
+x = 1.0
+end
 @test sprint(whos, Main, r"^$") == ""
-let v = sprint(whos, Main)
-    @test contains(v, " KB     Module : Base")
-    @test contains(v, " KB     Module : Core")
-    @test contains(v, "  0 bytes  DataType : NoMethodHasThisType")
-    @test contains(v, "\u2026\n")
-    @test match(r".\u2026$"m, v) !== nothing
-    @test match(r"\u2026."m, v) === nothing
-    @test !contains(v, "Core.Inference")
+let v = sprint(whos, _test_whos_)
+    @test contains(v, "x      8 bytes  Float64 : 1.0")
+end
+
+# issue #13021
+let ex = try
+    Main.x13021 = 0
+    nothing
+catch ex
+    ex
+end
+    @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end

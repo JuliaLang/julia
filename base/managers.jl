@@ -357,7 +357,7 @@ function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port
 end
 
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    remote_do(pid, exit) # For TCP based transports this will result in a close of the socket
+    remote_do(exit, pid) # For TCP based transports this will result in a close of the socket
                        # at our end, which will result in a cleanup of the worker.
     nothing
 end

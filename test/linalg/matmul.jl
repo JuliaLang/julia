@@ -66,12 +66,32 @@ C = Array(Int, size(A, 1), size(B, 2))
 @test At_mul_B!(C, A, B) == A'*B
 @test A_mul_Bt!(C, A, B) == A*B'
 @test At_mul_Bt!(C, A, B) == A'*B'
+@test Base.LinAlg.Ac_mul_Bt!(C, A, B) == A'*B.'
+
+#test DimensionMismatch for generic_matmatmul
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,A,ones(Int,4,4))
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
+
+#and for generic_matvecmul
+A = rand(5,5)
+B = rand(5)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(zeros(6),'N',A,B)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
+
 v = [1,2,3]
 C = Array(Int, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
 vf = map(Float64,v)
 C = Array(Float64, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
+
+# fallbacks & such for BlasFloats
+A = rand(Float64,6,6)
+B = rand(Float64,6,6)
+C = zeros(Float64,6,6)
+@test Base.LinAlg.At_mul_Bt!(C,A,B) == A.'*B.'
+@test Base.LinAlg.A_mul_Bc!(C,A,B) == A*B.'
+@test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
 
 # matrix algebra with subarrays of floats (stride != 1)
 A = reshape(map(Float64,1:20),5,4)
@@ -102,21 +122,29 @@ Asub = sub(Ai, 1:2:2*cutoff, 1:3)
 Aref = Ai[1:2:2*cutoff, 1:3]
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 
+@test_throws DimensionMismatch Base.LinAlg.syrk_wrapper!(zeros(5,5),'N',ones(6,5))
+@test_throws DimensionMismatch Base.LinAlg.herk_wrapper!(zeros(5,5),'N',ones(6,5))
+
 # matmul for types w/o sizeof (issue #1282)
 A = Array(Complex{Int},10,10)
 A[:] = complex(1,1)
 A2 = A^2
 @test A2[1,1] == 20im
 
+@test_throws DimensionMismatch scale!(zeros(5,5),ones(5),rand(5,6))
+
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
-@test_throws DimensionMismatch dot([1.0,2.0,3.0], 1:2, [3.5,4.5,5.5], 1:3)
-@test_throws BoundsError dot([1.0,2.0,3.0], 1:4, [3.5,4.5,5.5], 1:4)
-@test_throws BoundsError dot([1.0,2.0,3.0], 1:3, [3.5,4.5,5.5], 2:4)
-@test_throws DimensionMismatch dot(Complex128[1.0,2.0,3.0], 1:2, Complex128[3.5,4.5,5.5], 1:3)
-@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:4, Complex128[3.5,4.5,5.5], 1:4)
-@test_throws BoundsError dot(Complex128[1.0,2.0,3.0], 1:3, Complex128[3.5,4.5,5.5], 2:4)
+for elty in (Float32,Float64,Complex64,Complex128)
+    x = convert(Vector{elty},[1.0,2.0,3.0])
+    y = convert(Vector{elty},[3.5,4.5,5.5])
+    @test_throws DimensionMismatch dot(x, 1:2, y, 1:3)
+    @test_throws BoundsError dot(x, 1:4, y, 1:4)
+    @test_throws BoundsError dot(x, 1:3, y, 2:4)
+    @test dot(x,1:2,y,1:2) == convert(elty,12.5)
+    @test x.'*y == convert(Vector{elty},[29.0])
+end
 
 vecdot_(x,y) = invoke(vecdot, (Any,Any), x,y) # generic vecdot
 let A = [1+2im 3+4im; 5+6im 7+8im], B = [2+7im 4+1im; 3+8im 6+5im]
@@ -143,3 +171,18 @@ b = Array(Vector{Float64}, 2)
 b[1] = ones(3)
 b[2] = ones(2)
 @test A*b == Vector{Float64}[[2,2,1], [2,2]]
+
+@test_throws ArgumentError Base.LinAlg.copytri!(ones(10,10),'Z')
+for elty in [Float32,Float64,Complex128,Complex64]
+    @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,10),'N',rand(elty,10,10),ones(elty,11))
+    @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,11),'N',rand(elty,10,10),ones(elty,10))
+    @test Base.LinAlg.gemv!(ones(elty,0),'N',rand(elty,0,0),rand(elty,0)) == ones(elty,0)
+    @test Base.LinAlg.gemv!(ones(elty,10), 'N',ones(elty,10,0),ones(elty,0)) == zeros(elty,10)
+
+    @test Base.LinAlg.gemm_wrapper('N','N',eye(elty,10,10),eye(elty,10,10)) == eye(elty,10,10)
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,10,11),eye(elty,10,10))
+    @test_throws DimensionMismatch Base.LinAlg.gemm_wrapper!(eye(elty,10,10),'N','N',eye(elty,0,0),eye(elty,0,0))
+
+    A = rand(elty,3,3)
+    @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
+end

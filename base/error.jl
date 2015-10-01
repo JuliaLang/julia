@@ -38,7 +38,7 @@ systemerror(p, b::Bool) = b ? throw(Main.Base.SystemError(string(p))) : nothing
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
-    if !isempty(msgs) && isa(msg, Expr)
+    if !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         msg = :(Main.Base.string($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string)

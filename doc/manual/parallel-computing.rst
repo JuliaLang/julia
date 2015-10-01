@@ -195,11 +195,11 @@ considered to be all processes other than process 1.
 
 The base Julia installation has in-built support for two types of clusters:
 
-    - A local cluster specified with the ``-p`` option as shown above.
+- A local cluster specified with the ``-p`` option as shown above.
 
-    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless
-      ``ssh`` login to start julia worker processes (from the same path as the current host)
-      on the specified machines.
+- A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless
+  ``ssh`` login to start julia worker processes (from the same path as the current host)
+  on the specified machines.
 
 Functions :func:`addprocs`, :func:`rmprocs`, :func:`workers`, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
@@ -450,7 +450,7 @@ Channels provide for a fast means of inter-task communication. A
 ``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
 holding objects of type ``T``. Multiple readers can read off the channel
 via ``fetch`` and ``take!``. Multiple writers can add to the channel via
-``put!``. ``isready`` tests for the prescence of any object in
+``put!``. ``isready`` tests for the presence of any object in
 the channel, while ``wait`` waits for an object to become available.
 ``close`` closes a Channel. On a closed channel, ``put!`` will fail,
 while ``take!`` and ``fetch`` successfully return any existing values
@@ -490,8 +490,8 @@ Shared Arrays
 -------------
 
 Shared Arrays use system shared memory to map the same array across
-many processes.  While there are some similarities to a :class:`DArray`,
-the behavior of a :class:`SharedArray` is quite different. In a :class:`DArray`,
+many processes.  While there are some similarities to a `DArray`_,
+the behavior of a :class:`SharedArray` is quite different. In a `DArray`_,
 each process has local access to just a chunk of the data, and no two
 processes share the same chunk; in contrast, in a :class:`SharedArray` each
 "participating" process has access to the entire array.  A
@@ -687,9 +687,10 @@ A julia cluster has the following characteristics:
 - All processes can directly communicate with each other.
 
 Connections between workers (using the in-built TCP/IP transport) is established in the following manner:
+
 - :func:`addprocs` is called on the master process with a :obj:`ClusterManager` object
 - :func:`addprocs` calls the appropriate :func:`launch` method which spawns
-required number of worker processes on appropriate machines
+  required number of worker processes on appropriate machines
 - Each worker starts listening on a free port and writes out its host, port information to :const:`STDOUT`
 - The cluster manager captures the stdout's of each worker and makes it available to the master process
 - The master process parses this information and sets up TCP/IP connections to each worker
@@ -725,7 +726,6 @@ Thus, a minimal cluster manager would need to:
         ...
     end
 
-
 As an example let us see how the :class:`LocalManager`, the manager responsible for
 starting workers on the same host, is implemented::
 
@@ -743,10 +743,10 @@ starting workers on the same host, is implemented::
 
 The :func:`launch` method takes the following arguments:
 
-    - ``manager::ClusterManager`` - the cluster manager :func:`addprocs` is called with
-    - ``params::Dict`` - all the keyword arguments passed to :func:`addprocs`
-    - ``launched::Array`` - the array to append one or more ``WorkerConfig`` objects to
-    - ``c::Condition`` - the condition variable to be notified as and when workers are launched
+- ``manager::ClusterManager`` - the cluster manager :func:`addprocs` is called with
+- ``params::Dict`` - all the keyword arguments passed to :func:`addprocs`
+- ``launched::Array`` - the array to append one or more ``WorkerConfig`` objects to
+- ``c::Condition`` - the condition variable to be notified as and when workers are launched
 
 The :func:`launch` method is called asynchronously in a separate task. The termination of this task
 signals that all requested workers have been launched. Hence the :func:`launch` function MUST exit as soon
@@ -765,31 +765,31 @@ before using any of the parallel constructs
 For every worker launched, the :func:`launch` method must add a :class:`WorkerConfig`
 object (with appropriate fields initialized) to ``launched`` ::
 
- type WorkerConfig
-     # Common fields relevant to all cluster managers
-     io::Nullable{IO}
-     host::Nullable{AbstractString}
-     port::Nullable{Integer}
+    type WorkerConfig
+        # Common fields relevant to all cluster managers
+        io::Nullable{IO}
+        host::Nullable{AbstractString}
+        port::Nullable{Integer}
 
-     # Used when launching additional workers at a host
-     count::Nullable{Union{Int, Symbol}}
-     exename::Nullable{AbstractString}
-     exeflags::Nullable{Cmd}
+        # Used when launching additional workers at a host
+        count::Nullable{Union{Int, Symbol}}
+        exename::Nullable{AbstractString}
+        exeflags::Nullable{Cmd}
 
-     # External cluster managers can use this to store information at a per-worker level
-     # Can be a dict if multiple fields need to be stored.
-     userdata::Nullable{Any}
+        # External cluster managers can use this to store information at a per-worker level
+        # Can be a dict if multiple fields need to be stored.
+        userdata::Nullable{Any}
 
-     # SSHManager / SSH tunnel connections to workers
-     tunnel::Nullable{Bool}
-     bind_addr::Nullable{AbstractString}
-     sshflags::Nullable{Cmd}
-     max_parallel::Nullable{Integer}
+        # SSHManager / SSH tunnel connections to workers
+        tunnel::Nullable{Bool}
+        bind_addr::Nullable{AbstractString}
+        sshflags::Nullable{Cmd}
+        max_parallel::Nullable{Integer}
 
-     connect_at::Nullable{Any}
+        connect_at::Nullable{Any}
 
-     .....
- end
+        .....
+    end
 
 Most of the fields in :class:`WorkerConfig` are used by the inbuilt managers.
 Custom cluster managers would typically specify only ``io`` or ``host`` / ``port``:
@@ -817,12 +817,12 @@ required to connect to the workers from the master process.
 ``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
 times during the worker's lifetime with appropriate ``op`` values:
 
-      - with ``:register``/``:deregister`` when a worker is added / removed
-        from the Julia worker pool.
-      - with ``:interrupt`` when ``interrupt(workers)`` is called. The
-        :class:`ClusterManager` should signal the appropriate worker with an
-        interrupt signal.
-      - with ``:finalize`` for cleanup purposes.
+- with ``:register``/``:deregister`` when a worker is added / removed
+  from the Julia worker pool.
+- with ``:interrupt`` when ``interrupt(workers)`` is called. The
+  :class:`ClusterManager` should signal the appropriate worker with an
+  interrupt signal.
+- with ``:finalize`` for cleanup purposes.
 
 
 Cluster Managers with custom transports
@@ -832,12 +832,12 @@ Replacing the default TCP/IP all-to-all socket connections with a custom transpo
 Each julia process has as many communication tasks as the workers it is connected to. For example, consider a julia cluster of
 32 processes in a all-to-all mesh network:
 
-    - Each julia process thus has 31 communication tasks
-    - Each task handles all incoming messages from a single remote worker in a message processing loop
-    - The message processing loop waits on an ``AsyncStream`` object - for example, a TCP socket in the default implementation, reads an entire
-      message, processes it and waits for the next one
-    - Sending messages to a process is done directly from any julia task - not just communication tasks - again, via the appropriate
-      ``AsyncStream`` object
+- Each julia process thus has 31 communication tasks
+- Each task handles all incoming messages from a single remote worker in a message processing loop
+- The message processing loop waits on an ``AsyncStream`` object - for example, a TCP socket in the default implementation, reads an entire
+  message, processes it and waits for the next one
+- Sending messages to a process is done directly from any julia task - not just communication tasks - again, via the appropriate
+  ``AsyncStream`` object
 
 Replacing the default transport involves the new implementation to setup connections to remote workers, and to provide appropriate
 ``AsyncStream`` objects that the message processing loops can wait on. The manager specific callbacks to be implemented are::
@@ -858,15 +858,15 @@ Note: The julia processes are still all *logically* connected to each other - an
 awareness of 0MQ being used as the transport layer.
 
 When using custom transports:
-    - julia workers must NOT be started with ``--worker``. Starting with ``--worker`` will result in the newly launched
-      workers defaulting to the TCP/IP socket transport implementation
-    - For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
-      This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
-    - ``init_worker(manager::FooManager)`` MUST be called as part of worker process initializaton
-    - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
-      this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
-      the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
 
+- julia workers must NOT be started with ``--worker``. Starting with ``--worker`` will result in the newly launched
+  workers defaulting to the TCP/IP socket transport implementation
+- For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
+  This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
+- ``init_worker(manager::FooManager)`` MUST be called as part of worker process initializaton
+- Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
+  this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
+  the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
 
 ``kill(manager, pid, config)`` is called to remove a worker from the cluster.
 On the master process, the corresponding ``AsyncStream`` objects must be closed by the implementation to ensure proper cleanup. The default
@@ -878,16 +878,16 @@ implementation simply executes an ``exit()`` call on the specified remote worker
 Specifying network topology (Experimental)
 -------------------------------------------
 
-Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers must
-be connected to each other:
-    - ``:all_to_all`` : is the default, where all workers are connected to each other.
+Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers must be connected to each other:
 
-    - ``:master_slave`` : only the driver process, i.e. pid 1 has connections to the workers.
+- ``:all_to_all`` : is the default, where all workers are connected to each other.
 
-    - ``:custom`` : the ``launch`` method of the cluster manager specifes the connection topology.
-      Fields ``ident`` and ``connect_idents`` in ``WorkerConfig`` are used to specify the  same.
-      ``connect_idents`` is a list of ``ClusterManager`` provided identifiers to workers that worker
-      with identified by ``ident`` must connect to.
+- ``:master_slave`` : only the driver process, i.e. pid 1 has connections to the workers.
+
+- ``:custom`` : the ``launch`` method of the cluster manager specifes the connection topology.
+  Fields ``ident`` and ``connect_idents`` in ``WorkerConfig`` are used to specify the  same.
+  ``connect_idents`` is a list of ``ClusterManager`` provided identifiers to workers that worker
+  with identified by ``ident`` must connect to.
 
 Currently sending a message between unconnected workers results in an error. This behaviour, as also the
 functionality and interface should be considered experimental in nature and may change in future releases.
@@ -895,3 +895,5 @@ functionality and interface should be considered experimental in nature and may 
 .. rubric:: Footnotes
 
 .. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.
+
+.. _DArray: https://github.com/JuliaParallel/DistributedArrays.jl
