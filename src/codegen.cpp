@@ -5963,7 +5963,7 @@ extern "C" void jl_init_codegen(void)
         .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()}))
 #endif
         .setTargetOptions(options)
-        .setRelocationModel(Reloc::PIC_)
+        .setRelocationModel(Reloc::Default)
         .setCodeModel(CodeModel::JITDefault)
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
