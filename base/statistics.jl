@@ -607,8 +607,8 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if hi == lo
         step = 1
     else
-        bw = (hi - lo) / n
-        e = 10^max(0,floor(Int,log10(bw)))
+        bw = (Float64(hi) - Float64(lo)) / n
+        e = 10.0^max(0,floor(log10(bw)))
         r = bw / e
         if r <= 1
             step = e
