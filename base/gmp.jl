@@ -8,7 +8,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed
+             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc
 
 if Clong == Int32
     typealias ClongMax Union{Int8, Int16, Int32}
@@ -120,11 +120,21 @@ end
 
 convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 
-function convert(::Type{BigInt}, x::Float64)
-    !isinteger(x) && throw(InexactError())
+
+function unsafe_trunc(::Type{BigInt}, x::CdoubleMax)
     z = BigInt()
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
     return z
+end
+
+function convert(::Type{BigInt}, x::CdoubleMax)
+    isinteger(x) || throw(InexactError())
+    unsafe_trunc(BigInt,x)
+end
+
+function trunc(::Type{BigInt}, x::CdoubleMax)
+    isfinite(x) || throw(InexactError())
+    unsafe_trunc(BigInt,x)
 end
 
 convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
