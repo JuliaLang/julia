@@ -121,18 +121,18 @@ end
 convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 
 
-function unsafe_trunc(::Type{BigInt}, x::CdoubleMax)
+function unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64})
     z = BigInt()
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
     return z
 end
 
-function convert(::Type{BigInt}, x::CdoubleMax)
+function convert(::Type{BigInt}, x::Union{Float32,Float64})
     isinteger(x) || throw(InexactError())
     unsafe_trunc(BigInt,x)
 end
 
-function trunc(::Type{BigInt}, x::CdoubleMax)
+function trunc(::Type{BigInt}, x::Union{Float32,Float64})
     isfinite(x) || throw(InexactError())
     unsafe_trunc(BigInt,x)
 end
