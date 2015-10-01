@@ -23,8 +23,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-include("uv_constants.jl")
-
 export SpinLock, Mutex, init_lock!, destroy_lock!, lock!, trylock!, unlock!
 
 abstract Lock
@@ -121,8 +119,7 @@ end
 # TODO: how defensive to get, and how to turn it off?
 # TODO: how to catch an abort?
 
-# TODO: this size is tested correct for pthreads on Linux and Darwin only
-const UV_MUTEX_SIZE = 48
+const UV_MUTEX_SIZE = ccall(:jl_sizeof_uv_mutex, Cint, ())
 
 type Mutex <: Lock
     ownertid::Int16
@@ -155,7 +152,7 @@ end
 
 function unlock!(m::Mutex)
     if m.ownertid != threadid()
-        return UV_EPERM
+        return Base.UV_EPERM
     end
     m.ownertid = 0
     ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m.handle)
