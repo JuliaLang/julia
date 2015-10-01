@@ -166,7 +166,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         else:
             self.nl = '\n'
         self.states = [[]]
-        self.stateindent = [0]
+        self.stateindent = ['']
         self.list_counter = []
         self.sectionlevel = 0
         self.lineblocklevel = 0
@@ -177,11 +177,13 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def new_state(self, indent=STDINDENT):
         self.states.append([])
+        if isinstance(indent, int):
+            indent = unicode(' ' * indent)
         self.stateindent.append(indent)
 
     def end_state(self, wrap=True, end=[''], first=None):
         content = self.states.pop()
-        maxindent = sum(self.stateindent)
+        maxindent = sum(map(len,self.stateindent))
         indent = self.stateindent.pop()
         result = []
         toformat = []
@@ -200,6 +202,8 @@ class MarkdownTranslator(nodes.NodeVisitor):
             if itemindent == -1:
                 toformat.append(item)
             else:
+                if isinstance(itemindent, int):
+                    itemindent = unicode(' ' * itemindent)
                 do_format()
                 result.append((indent + itemindent, item))
                 toformat = []
@@ -211,7 +215,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
                 toformat = [first + ' '.join(item)]
                 do_format()  # re-create `result` from `toformat`
                 _dummy, new_item = result[0]
-                result.insert(0, (itemindent - indent, [new_item[0]]))
+                result.insert(0, (itemindent[len(indent):], [new_item[0]]))
                 result[1] = (itemindent, new_item[1:])
                 result.extend(result_rest)
         self.states[-1].extend(result)
@@ -224,7 +228,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_document(self, node):
         self.end_state()
-        self.body = self.nl.join(line and (' '*indent + line)
+        self.body = self.nl.join((indent + line).rstrip()
                                  for indent, lines in self.states[0]
                                  for line in lines)
         # XXX header/footer?
