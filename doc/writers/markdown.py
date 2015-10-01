@@ -245,12 +245,12 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.end_state()
 
     def visit_rubric(self, node):
-        self.new_state(0)
-        self.add_text('-[ ')
+        self.visit_section(node)
+        self.visit_title(node)
 
     def depart_rubric(self, node):
-        self.add_text(' ]-')
-        self.end_state()
+        self.depart_title(node)
+        self.depart_section(node)
 
     def visit_compound(self, node):
         pass
@@ -560,7 +560,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.end_state()
 
     def _visit_admonition(self, node):
-        self.new_state(2)
+        self.new_state(0)
 
     def _make_depart_admonition(name):
         def depart_admonition(self, node):
@@ -706,12 +706,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_inline(self, node):
         if 'xref' in node['classes'] or 'term' in node['classes']:
             self.add_text('*')
-
-    def visit_problematic(self, node):
-        self.add_text('>>')
-
-    def depart_problematic(self, node):
-        self.add_text('<<')
 
     def visit_comment(self, node):
         raise nodes.SkipNode
