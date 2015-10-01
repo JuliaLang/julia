@@ -444,12 +444,8 @@ function snapshot(repo::GitRepo)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
         with(GitIndex, repo) do idx
-            content = readdir(path(repo))
-            if length(content) > 1
-                files = [utf8(bytestring(c))::UTF8String for c in content]
-                push!(files, utf8("."))
-
-                add!(idx, files...)
+            if length(readdir(path(repo))) > 1
+                add!(idx, utf8("."))
                 write!(idx)
             end
             write_tree!(idx)
