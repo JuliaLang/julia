@@ -197,7 +197,7 @@ function clone(url::AbstractString, pkg::AbstractString)
             LibGit2.set_remote_url(repo, url)
         end
     catch
-        Base.rm(pkg, recursive=true)
+        isdir(pkg) && Base.rm(pkg, recursive=true)
         rethrow()
     end
     info("Computing changes...")
