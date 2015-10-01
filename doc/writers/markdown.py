@@ -243,7 +243,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.sectionlevel -= 1
 
     def visit_sidebar(self, node):
-        self.new_state(0)
+        self.new_state('| ')
 
     def depart_sidebar(self, node):
         self.end_state()
@@ -265,6 +265,8 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def visit_title(self, node):
         self.new_state(0)
         self.add_text('#'*self.sectionlevel + ' ')
+        if isinstance(node.parent, nodes.sidebar):
+            self.add_text('Sidebar: ')
 
     def depart_title(self, node):
         self.end_state()
