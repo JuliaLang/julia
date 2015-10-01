@@ -86,6 +86,19 @@ void ti_initthread(int16_t tid)
     jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
 }
 
+// all threads call this function to run user code
+static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
+{
+    JL_TRY {
+        jl_apply(f, jl_svec_data(args), jl_svec_len(args));
+    }
+    JL_CATCH {
+        return jl_exception_in_transit;
+    }
+    return jl_nothing;
+}
+
+
 #ifdef JULIA_ENABLE_THREADING
 
 // lock for code generation
@@ -140,18 +153,6 @@ void ti_threadsetaffinity(uint64_t thread_id, int proc_num)
     CPU_SET(proc_num, &cset);
     pthread_setaffinity_np(thread_id, sizeof(cpu_set_t), &cset);
 #endif
-}
-
-// all threads call this function to run user code
-static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
-{
-    JL_TRY {
-        jl_apply(f, jl_svec_data(args), jl_svec_len(args));
-    }
-    JL_CATCH {
-        return jl_exception_in_transit;
-    }
-    return jl_nothing;
 }
 
 // thread function: used by all except the main thread
@@ -347,7 +348,9 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
     jl_function_t *fun = NULL;
     if ((jl_value_t*)args == jl_emptytuple)
         args = jl_emptysvec;
-    assert(jl_is_svec(args));
+    JL_TYPECHK(jl_threading_run, function, (jl_value_t*)f);
+    JL_TYPECHK(jl_threading_run, svec, (jl_value_t*)args);
+
     JL_GC_PUSH2(&argtypes, &fun);
     if (jl_svec_len(args) == 0)
         argtypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
@@ -453,6 +456,15 @@ void jl_threading_profile()
 #endif //!PROFILE_JL_THREADING
 
 #else // !JULIA_ENABLE_THREADING
+
+DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
+{
+    if ((jl_value_t*)args == jl_emptytuple)
+        args = jl_emptysvec;
+    JL_TYPECHK(jl_threading_run, function, (jl_value_t*)f);
+    JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
+    return ti_run_fun(f, args);
+}
 
 void jl_init_threading(void)
 {
