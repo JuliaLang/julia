@@ -110,3 +110,28 @@ end
 
 # Test @test_approx_eq_eps
 # TODO
+
+# Test with_handler
+successflag = false
+failureflag = false
+errorflag = false
+test_handler(r::Test.Pass) = !successflag
+test_handler(r::Test.Fail) = !failureflag
+test_handler(r::Test.Error) = !errorflag
+
+Test.with_handler(test_handler) do
+    @test true
+    @test successflag
+    @test !failureflag
+    @test !errorflag
+    successflag = false
+    @test false
+    @test !successflag
+    @test failureflag
+    @test !errorflag
+    failureflag = false
+    @test error("throw error")
+    @test !successflag
+    @test !failureflag
+    @test errorflag
+end
