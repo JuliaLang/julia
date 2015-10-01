@@ -95,7 +95,7 @@ function Base.count(f::Function, walker::GitRevWalker;
     s = start(walker)
 
     repo = repository(walker)
-    while !done(walker, s) && val
+    while !done(walker, s)
         val = f(s[1], repo)
         _, s = next(walker, s)
         c += (val == true)
