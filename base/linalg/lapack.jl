@@ -1742,7 +1742,7 @@ for (geevx, ggev, elty) in
                 work = Array($elty, lwork)
             end
             @lapackerror
-            A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
+            A, complex(wr, wi), VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
         end
     #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
 #      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
@@ -1804,7 +1804,7 @@ for (geevx, ggev, elty) in
                 end
             end
             @lapackerror
-            alphar, alphai, beta, vl, vr
+            complex(alphar, alphai), beta, vl, vr
         end
     end
 end

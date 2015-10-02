@@ -29,12 +29,12 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
     n = size(A, 2)
     n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issym(A) && return eigfact!(Symmetric(A))
-    A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
-    all(WI .== 0.) && return Eigen(WR, VR)
+    A, W, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    all(imag(W) .== 0.0) && return Eigen(real(W), VR)
     evec = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
-        if WI[j] == 0.0
+        if imag(W[j]) == 0.0
             evec[:,j] = VR[:,j]
         else
             evec[:,j]   = VR[:,j] + im*VR[:,j+1]
@@ -43,7 +43,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
         end
         j += 1
     end
-    return Eigen(complex(WR, WI), evec)
+    return Eigen(W, evec)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
@@ -80,8 +80,8 @@ Same as `eigvals`, but saves space by overwriting the input `A` (and `B`), inste
 """
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issym(A) && return eigvals!(Symmetric(A))
-    _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return all(valsim .== 0) ? valsre : complex(valsre, valsim)
+    _, vals, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
+    return all(imag(vals) .== 0) ? real(vals) : vals
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
@@ -120,13 +120,13 @@ det(A::Eigen) = prod(A.values)
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issym(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
-    alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
-    all(alphai .== 0) && return GeneralizedEigen(alphar ./ beta, vr)
+    alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    all(imag(alpha) .== 0) && return GeneralizedEigen(real(alpha) ./ beta, vr)
 
     vecs = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
-        if alphai[j] == 0.0
+        if imag(alpha[j]) == 0.0
             vecs[:,j] = vr[:,j]
         else
             vecs[:,j  ] = vr[:,j] + im*vr[:,j+1]
@@ -135,7 +135,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
         end
         j += 1
     end
-    return GeneralizedEigen(complex(alphar, alphai)./beta, vecs)
+    return GeneralizedEigen(alpha./beta, vecs)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -155,8 +155,8 @@ end
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issym(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
-    alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return (all(alphai .== 0) ? alphar : complex(alphar, alphai))./beta
+    alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    return (all(imag(alpha) .== 0) ? real(alpha) : alpha)./beta
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))
