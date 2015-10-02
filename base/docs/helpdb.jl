@@ -6603,7 +6603,7 @@ Compute the cosecant of `x`, where `x` is in radians
 csc
 
 doc"""
-    hash(x[, h])
+    hash(x[, h::UInt])
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The optional second argument `h` is a hash code to be mixed with the result.
 
