@@ -308,9 +308,9 @@ pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package".tmp))
+    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
-    isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package".tmp))
+    isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
     haskey(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
     pin(pkg, avail[ver].sha1)
 end
