@@ -275,7 +275,7 @@ function record(ts::FallbackTestSet, t::Union{Fail,Error})
     t
 end
 # We don't need to do anything as we don't record anything
-finish(ts::FallbackTestSet) = nothing
+finish(ts::FallbackTestSet) = ts
 
 #-----------------------------------------------------------------------
 
@@ -367,6 +367,9 @@ function finish(ts::DefaultTestSet)
     if total != total_pass
         throw(TestSetException(total_pass,total_fail,total_error))
     end
+
+    # return the testset so it is returned from the @testset macro
+    ts
 end
 
 # Recursive function that finds the column that the result counts
@@ -516,36 +519,39 @@ string accepts interpolation from the loop indices. If no description
 is provided, one is constructed based on the variables.
 """
 macro testloop(args...)
+    length(args) > 0 || error("no arguments to @testloop")
+    testloop = args[end]
+    isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
+    # pull out the loop variables. We might need them for generating the
+    # description and we'll definitely need them for generating the
+    # comprehension expression at the end
+    loopvars = Expr[]
+    if testloop.args[1].head == :(=)
+        push!(loopvars, testloop.args[1])
+    elseif testloop.args[1].head == :block
+        for loopvar in testloop.args[1].args
+            push!(loopvars, loopvar)
+        end
+    else
+        error("Unexpected argument to @testloop")
+    end
+
     # Parse arguments to do determine if any options passed in
     if length(args) == 2
         # Looks like description format
-        desc, testloop = args
+        desc = args[1]
         isa(desc,AbstractString) || (isa(desc,Expr) && desc.head == :string) || error("Unexpected argument to @testloop")
-        isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
-
     elseif length(args) == 1
-        # No description provided
-        testloop = args[1]
-        isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
-        loopvars = testloop.args[1]
-        if loopvars.head == :(=)
-            # 1 variable
-            v = loopvars.args[1]
-            desc = Expr(:string,"$v = ",v)
-        else
-            # multiple variables
-            v = loopvars.args[1].args[1]
-            desc = Expr(:string,"$v = ",v) # first variable
-            for l = loopvars.args[2:end]
-                v = l.args[1]
-                push!(desc.args,", $v = ")
-                push!(desc.args,v)
-            end
+        # No description provided. Generate from the loop variable names
+        v = loopvars[1].args[1]
+        desc = Expr(:string,"$v = ",v) # first variable
+        for l = loopvars[2:end]
+            v = l.args[1]
+            push!(desc.args,", $v = ")
+            push!(desc.args,v)
         end
-    elseif length(args) >= 3
-        error("Too many arguments to @testloop")
     else
-        error("Too few arguments to @testloop")
+        error("Too many arguments to @testloop")
     end
 
     # Uses a similar block as for `@testset`, except that it is
@@ -565,7 +571,7 @@ macro testloop(args...)
         pop_testset()
         finish($ts)
     end
-    Expr(:for,esc(testloop.args[1]),blk)
+    Expr(:comprehension, blk, [esc(v) for v in loopvars]...)
 end
 
 #-----------------------------------------------------------------------
