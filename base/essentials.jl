@@ -111,7 +111,7 @@ cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_c
 unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
-reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
+reinterpret{T}(::Type{T}, x) = box(T, x)
 
 sizeof(x) = Core.sizeof(x)
 
