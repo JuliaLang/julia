@@ -998,6 +998,14 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     static_rt = true;
                 }
             }
+            if (jl_exception_in_transit && jl_typeis(jl_exception_in_transit,
+                                                     jl_undefvarerror_type)) {
+                std::string msg = "ccall return type undefined: " +
+                                  std::string(((jl_sym_t*)args[2])->name );
+                emit_error(msg.c_str(), ctx);
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
             if (rt == NULL) {
                 emit_error("error interpreting ccall return type", ctx);
                 JL_GC_POP();
