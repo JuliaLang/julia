@@ -83,7 +83,7 @@ try
         end
         # should add 3 errors and 3 passing tests
         @testloop for i in 1:6
-            i % 2 == 0 || error("error outside of test")
+            iseven(i) || error("error outside of test")
             @test true # only gets run if the above passed
         end
     end
@@ -92,7 +92,6 @@ end
     redirect_stdout(OLD_STDOUT)
     error("No exception was thrown!")
 catch ex
-    redirect_stdout(OLD_STDOUT)
 
     @test isa(ex, Test.TestSetException)
     @test ex.pass  == 24
@@ -110,3 +109,19 @@ end
 
 # Test @test_approx_eq_eps
 # TODO
+
+ts = @testset "@testset should return the testset" begin
+    @test true
+end
+@test typeof(ts) == Base.Test.DefaultTestSet
+@test typeof(ts.results[1]) == Base.Test.Pass
+
+tss = @testloop "@testloop should return an array of testsets: $i" for i in 1:3
+    @test true
+end
+@test length(tss) == 3
+@test typeof(tss[1]) == Base.Test.DefaultTestSet
+@test typeof(tss[1].results[1]) == Base.Test.Pass
+
+
+redirect_stdout(OLD_STDOUT)
