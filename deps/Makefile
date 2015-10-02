@@ -1090,7 +1090,7 @@ $(OPENBLAS_OBJ_SOURCE): $(OPENBLAS_SRC_DIR)/config.status
 	@$(MAKE) -C $(OPENBLAS_SRC_DIR) $(OPENBLAS_BUILD_OPTS) || (echo $(WARNCOLOR)"*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"$(ENDCOLOR) && false)
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
-	cp -f $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
+	cp -f $(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT) $(build_shlibdir)
 ifeq ($(OS), Linux)
 	cd $(build_shlibdir) && \
 	ln -sf $(LIBBLASNAME).$(SHLIB_EXT) $(LIBBLASNAME).$(SHLIB_EXT).0
