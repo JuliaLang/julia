@@ -163,7 +163,7 @@ for T in (UTF8String, UTF16String, UTF32String)
         # Lead followed by non-continuation character > 0xbf
         @test_throws UnicodeError convert(T, strval(T, UInt8[byt,0x80,0x80,0xc0]))
     end
-    catch exp ;
+    catch exp
         println("Error checking $T: $byt")
         throw(exp)
     end
