@@ -123,5 +123,67 @@ end
 @test typeof(tss[1]) == Base.Test.DefaultTestSet
 @test typeof(tss[1].results[1]) == Base.Test.Pass
 
-
+# now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
+
+immutable CustomTestSet <: Base.Test.AbstractTestSet
+    description::AbstractString
+    foo::Int
+    results::Vector
+    CustomTestSet(desc; foo=1) = new(desc, foo, [])
+end
+
+Base.Test.record(ts::CustomTestSet, child::Base.Test.AbstractTestSet) = push!(ts.results, child)
+Base.Test.record(ts::CustomTestSet, res::Base.Test.Result) = push!(ts.results, res)
+Base.Test.finish(ts::CustomTestSet) = ts
+
+ts = @testset CustomTestSet "Testing custom testsets" begin
+    # this testset should inherit the parent testset type
+    @testset "custom testset inner 1" begin
+        @test true
+        @test false
+        @test error("this error will be reported as an error")
+        @test_throws ErrorException nothing
+        @test_throws ErrorException error("this error is a success")
+    end
+    # this testset has its own testset type
+    @testset CustomTestSet foo=4 "custom testset inner 2" begin
+        # this testset should inherit the type and arguments
+        @testset "custom testset inner 2 inner" begin
+            @test true
+        end
+    end
+end
+
+@test typeof(ts) == CustomTestSet
+@test ts.foo == 1
+@test ts.description == "Testing custom testsets"
+@test typeof(ts.results[1]) == CustomTestSet
+@test ts.results[1].description == "custom testset inner 1"
+@test ts.results[1].foo == 1
+@test typeof(ts.results[1].results[1]) == Base.Test.Pass
+@test typeof(ts.results[1].results[2]) == Base.Test.Fail
+@test typeof(ts.results[1].results[3]) == Base.Test.Error
+@test typeof(ts.results[1].results[4]) == Base.Test.Fail
+@test typeof(ts.results[1].results[5]) == Base.Test.Pass
+
+@test typeof(ts.results[2]) == CustomTestSet
+@test ts.results[2].description == "custom testset inner 1"
+@test ts.results[2].foo == 4
+@test typeof(ts.results[2].results[1]) == CustomTestSet
+@test ts.results[2].results[1].foo == 4
+@test typeof(ts.results[2].results[1].results[1]) == Base.Test.Pass
+
+# # test custom testset types on testloops
+# tss = @testloop CustomTestSet "custom testloop $i" for i in 1:6
+#     @test iseven(i)
+# end
+#
+# for i in 1:6
+#     @test typeof(tss[i]) == CustomTestSet
+#     if iseven(i)
+#         @test typeof(tss[i].results[1]) == Base.Test.Pass
+#     else
+#         @test typeof(tss[i].results[1]) == Base.Test.Fail
+#     end
+# end
