@@ -60,13 +60,14 @@ function delete_token()
     info("Could not authenticate with existing token. Deleting token and trying again.")
 end
 
+readtoken(tokfile=Dir.path(".github","token")) = isfile(tokfile) ? strip(readchomp(tokfile)) : ""
+
 function token(user::AbstractString=user())
     tokfile = Dir.path(".github","token")
-    if isfile(tokfile)
-        tok = strip(readchomp(tokfile))
-        !isempty(tok) && return tok
-    end
-    params = merge(AUTH_DATA, ["fingerprint" => randstring(40)])
+    tok = readtoken(tokfile)
+    !isempty(tok) && return tok
+
+    params = merge(AUTH_DATA, Dict("fingerprint" => randstring(40)))
     status, header, content = curl("https://api.github.com/authorizations",params,`-u $user`)
     tfa = false
 
@@ -132,6 +133,12 @@ end
 function normalize_url(url::AbstractString)
     m = match(LibGit2.GITHUB_REGEX,url)
     m === nothing ? url : "https://github.com/$(m.captures[1]).git"
+end
+
+function credentials()
+    username = try user() catch "" end
+    password = readtoken()
+    return Nullable(LibGit2.UserPasswordCredentials(username, password))
 end
 
 end # module

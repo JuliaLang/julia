@@ -81,6 +81,7 @@ function add!{T<:AbstractString}(repo::GitRepo, files::T...;
         add!(idx, files..., flags = flags)
         write!(idx)
     end
+    return
 end
 
 function update!{T<:AbstractString}(repo::GitRepo, files::T...)
@@ -88,6 +89,7 @@ function update!{T<:AbstractString}(repo::GitRepo, files::T...)
         update!(idx, files...)
         write!(idx)
     end
+    return
 end
 
 function remove!{T<:AbstractString}(repo::GitRepo, files::T...)
@@ -95,12 +97,14 @@ function remove!{T<:AbstractString}(repo::GitRepo, files::T...)
         remove!(idx, files...)
         write!(idx)
     end
+    return
 end
 
 function read!(repo::GitRepo, force::Bool = false)
     with(GitIndex, repo) do idx
         read!(idx, force)
     end
+    return
 end
 
 function Base.count(idx::GitIndex)

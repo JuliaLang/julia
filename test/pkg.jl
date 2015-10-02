@@ -232,7 +232,7 @@ end
 
 # issue #13374
 temp_pkg_dir() do
-    Pkg.generate("Foo", "MIT")
+    Pkg.generate("Foo", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
     Pkg.tag("Foo")
     Pkg.tag("Foo")
 end

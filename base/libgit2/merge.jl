@@ -20,7 +20,7 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
     ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Oid}),
-                   ann_ref_ref, repo.ptr, fh.name, fh.url, fh.oid)
+                   ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
     return GitAnnotated(ann_ref_ref[])
 end
 
@@ -74,8 +74,9 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
 end
 
 """ Merge changes into current head """
-function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, merge_opts::MergeOptions,
-                checkout_opts = CheckoutOptions(checkout_strategy = Consts.CHECKOUT_SAFE))
+function merge!(repo::GitRepo, anns::Vector{GitAnnotated},
+                merge_opts::MergeOptions = MergeOptions();
+                checkout_opts::CheckoutOptions = CheckoutOptions())
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
@@ -89,7 +90,9 @@ end
 """Internal implementation of merge.
 Returns `true` if merge was successful, otherwise `false`
 """
-function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, options::MergeOptions)
+function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool,
+                merge_opts::MergeOptions = MergeOptions();
+                checkout_opts::CheckoutOptions = CheckoutOptions())
     ma, mp = merge_analysis(repo, anns)
     if isset(ma, Cint(Consts.MERGE_ANALYSIS_UP_TO_DATE))
         return true # no merge - everything is up to date
@@ -118,7 +121,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
                 ffmerge!(repo, anns[1])
             end
         elseif isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns, options)
+            merge!(repo, anns, merge_opts, checkout_opts=checkout_opts)
         end
     elseif ffPref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
@@ -134,7 +137,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
         end
     elseif ffPref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns, options)
+            merge!(repo, anns, merge_opts, checkout_opts=checkout_opts)
         end
     end
 

@@ -651,7 +651,7 @@ function tag(pkg::AbstractString, ver::Union{Symbol,VersionNumber}, force::Bool=
                 existing = VersionNumber[keys(Read.available(pkg))...]
                 ancestors = filter(v->LibGit2.is_ancestor_of(avail[v].sha1, commit, repo), existing)
             else
-                tags = filter(t->startswith(t,"v"), Pkg.LibGit2.tag_list(repo))
+                tags = filter(t->startswith(t,"v"), LibGit2.tag_list(repo))
                 filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
                 existing = VersionNumber[tags...]
                 filter!(tags) do tag
