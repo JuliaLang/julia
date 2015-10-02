@@ -20,8 +20,6 @@ temp_pkg_dir() do
     @test isempty(Pkg.installed())
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
-    Pkg.rm("Example")
-    @test isempty(Pkg.installed())
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
@@ -52,6 +50,25 @@ temp_pkg_dir() do
     catch err
         @test err.msg == "NonexistentPackage is not a git repo"
     end
+
+    # trying to pin a git repo under Pkg.dir that is not an installed package errors
+    try
+        Pkg.pin("METADATA", v"1.0.0")
+        error("unexpected")
+    catch err
+        @test err.msg == "METADATA cannot be pinned – not an installed package"
+    end
+
+    # trying to pin an installed, registered package to an unregistered version errors
+    try
+        Pkg.pin("Example", v"2147483647.0.0")
+        error("unexpected")
+    catch err
+        @test err.msg == "Example – 2147483647.0.0 is not a registered version"
+    end
+
+    Pkg.rm("Example")
+    @test isempty(Pkg.installed())
 end
 
 # testing a package with test dependencies causes them to be installed for the duration of the test
@@ -75,6 +92,14 @@ temp_pkg_dir() do
     Pkg.test("PackageWithTestDependencies")
 
     @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
+
+    # trying to pin an unregistered package errors
+    try
+        Pkg.pin("PackageWithTestDependencies", v"1.0.0")
+        error("unexpected")
+    catch err
+        @test err.msg == "PackageWithTestDependencies cannot be pinned – not a registered package"
+    end
 end
 
 # testing a package with no runtests.jl errors
