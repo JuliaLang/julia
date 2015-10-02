@@ -1594,6 +1594,12 @@ end
 h5142(true)
 @test_throws TypeError h5142(1)
 h5142(2)
+f5142() = h5142(1)
+try
+    # try running this code in a different context that triggers the codegen
+    # assertion `assert(isboxed || v.typ == typ)`.
+    f5142()
+end
 
 bitstype 8 Int5142b
 function h5142b(a::Int)

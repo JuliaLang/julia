@@ -2239,7 +2239,8 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             if (!jl_is_tuple_type(tp0) && jl_is_leaf_type(tp0)) {
                 *ret = emit_expr(args[1], ctx);
                 emit_typecheck(*ret, tp0, "typeassert", ctx);
-                *ret = remark_julia_type(*ret, expr_type(expr, ctx));
+                if (ret->isboxed)
+                    *ret = remark_julia_type(*ret, expr_type(expr, ctx));
                 JL_GC_POP();
                 return true;
             }
