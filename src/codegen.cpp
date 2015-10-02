@@ -2266,11 +2266,13 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             FunctionType *ft = FunctionType::get(T_void, two_pvalue_llvmt, false); // TODO: move this to the codegen init section
             Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
             int ldepth = ctx->gc.argDepth;
-            *ret = emit_boxed_rooted(args[1], ctx);
+            *ret = emit_expr(args[1], ctx);
+            Value *V = boxed(*ret, ctx);
+            make_gcroot(V, ctx);
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(typeassert), {ret->V, boxed(emit_expr(args[2], ctx),ctx)});
+            builder.CreateCall(prepare_call(typeassert), {V, boxed(emit_expr(args[2], ctx),ctx)});
 #else
-            builder.CreateCall2(prepare_call(typeassert), ret->V, boxed(emit_expr(args[2], ctx),ctx));
+            builder.CreateCall2(prepare_call(typeassert), V, boxed(emit_expr(args[2], ctx),ctx));
 #endif
             ctx->gc.argDepth = ldepth;
             JL_GC_POP();
