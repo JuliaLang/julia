@@ -94,6 +94,7 @@ let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
                               deepthought(6, 9))
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test ex.msg == "the answer to the ultimate question: 42"
