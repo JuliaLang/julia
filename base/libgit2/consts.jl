@@ -263,4 +263,12 @@ module Consts
                         CREDTYPE_SSH_INTERACTIVE    = Cuint(1 << 4),
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
+
+    @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT = 0,
+                      CONFIG_LEVEL_SYSTEM  = 1, # System-wide configuration file; /etc/gitconfig on Linux systems
+                      CONFIG_LEVEL_XDG     = 2, # XDG compatible configuration file; typically ~/.config/git/config
+                      CONFIG_LEVEL_GLOBAL  = 3, # User-specific configuration file (also called Global configuration file); typically ~/.gitconfig
+                      CONFIG_LEVEL_LOCAL   = 4, # Repository specific configuration file; $WORK_DIR/.git/config on non-bare repos
+                      CONFIG_LEVEL_APP     = 5, # Application specific configuration file; freely defined by applications
+                      CONFIG_HIGHEST_LEVEL =-1) # Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
 end
