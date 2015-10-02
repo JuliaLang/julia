@@ -166,6 +166,10 @@ that can be manipulated efficiently.
 
 See also the discussion under :ref:`man-parametric-types`.
 
+
+
+
+
 Type declarations
 -----------------
 
@@ -176,25 +180,311 @@ arguments, local variables, and expressions.
 However, there are a few specific instances where declarations are
 helpful.
 
-Declare specific types for fields of composite types
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _man-abstract-fields:
+Avoid fields with abstract type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Given a user-defined type like the following::
+Types can be declared without specifying the types of their fields:
 
-    type Foo
-        field
+.. doctest::
+
+    julia> type MyAmbiguousType
+               a
+           end
+
+This allows ``a`` to be of any type. This can often be useful, but it
+does have a downside: for objects of type ``MyAmbiguousType``, the
+compiler will not be able to generate high-performance code.  The
+reason is that the compiler uses the types of objects, not their
+values, to determine how to build code. Unfortunately, very little can
+be inferred about an object of type ``MyAmbiguousType``:
+
+.. doctest::
+
+    julia> b = MyAmbiguousType("Hello")
+    MyAmbiguousType("Hello")
+
+    julia> c = MyAmbiguousType(17)
+    MyAmbiguousType(17)
+
+    julia> typeof(b)
+    MyAmbiguousType
+
+    julia> typeof(c)
+    MyAmbiguousType
+
+``b`` and ``c`` have the same type, yet their underlying
+representation of data in memory is very different. Even if you stored
+just numeric values in field ``a``, the fact that the memory
+representation of a ``UInt8`` differs from a ``Float64`` also means
+that the CPU needs to handle them using two different kinds of
+instructions.  Since the required information is not available in the
+type, such decisions have to be made at run-time. This slows
+performance.
+
+You can do better by declaring the type of ``a``. Here, we are focused
+on the case where ``a`` might be any one of several types, in which
+case the natural solution is to use parameters. For example:
+
+.. doctest::
+
+    julia> type MyType{T<:AbstractFloat}
+             a::T
+           end
+
+This is a better choice than
+
+.. doctest::
+
+    julia> type MyStillAmbiguousType
+             a::AbstractFloat
+           end
+
+because the first version specifies the type of ``a`` from the type of
+the wrapper object.  For example:
+
+.. doctest::
+
+    julia> m = MyType(3.2)
+    MyType{Float64}(3.2)
+
+    julia> t = MyStillAmbiguousType(3.2)
+    MyStillAmbiguousType(3.2)
+
+    julia> typeof(m)
+    MyType{Float64}
+
+    julia> typeof(t)
+    MyStillAmbiguousType
+
+The type of field ``a`` can be readily determined from the type of
+``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
+to change the type of field ``a``:
+
+.. doctest::
+
+    julia> typeof(t.a)
+    Float64
+
+    julia> t.a = 4.5f0
+    4.5f0
+
+    julia> typeof(t.a)
+    Float32
+
+In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
+change:
+
+.. doctest::
+
+    julia> m.a = 4.5f0
+    4.5
+
+    julia> typeof(m.a)
+    Float64
+
+The fact that the type of ``m.a`` is known from ``m``'s type---coupled
+with the fact that its type cannot change mid-function---allows the
+compiler to generate highly-optimized code for objects like ``m`` but
+not for objects like ``t``.
+
+Of course, all of this is true only if we construct ``m`` with a
+concrete type.  We can break this by explicitly constructing it with
+an abstract type:
+
+.. doctest::
+
+    julia> m = MyType{AbstractFloat}(3.2)
+    MyType{AbstractFloat}(3.2)
+
+    julia> typeof(m.a)
+    Float64
+
+    julia> m.a = 4.5f0
+    4.5f0
+
+    julia> typeof(m.a)
+    Float32
+
+For all practical purposes, such objects behave identically to those
+of ``MyStillAmbiguousType``.
+
+It's quite instructive to compare the sheer amount code generated for
+a simple function
+::
+
+    func(m::MyType) = m.a+1
+
+using
+::
+
+    code_llvm(func,(MyType{Float64},))
+    code_llvm(func,(MyType{AbstractFloat},))
+    code_llvm(func,(MyType,))
+
+For reasons of length the results are not shown here, but you may wish
+to try this yourself. Because the type is fully-specified in the first
+case, the compiler doesn't need to generate any code to resolve the
+type at run-time.  This results in shorter and faster code.
+
+
+.. _man-abstract-container-type:
+
+Avoid fields with abstract containers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same best practices also work for container types:
+
+.. doctest::
+
+    julia> type MySimpleContainer{A<:AbstractVector}
+             a::A
+           end
+
+    julia> type MyAmbiguousContainer{T}
+             a::AbstractVector{T}
+           end
+
+For example:
+
+.. doctest::
+
+    julia> c = MySimpleContainer(1:3);
+
+    julia> typeof(c)
+    MySimpleContainer{UnitRange{Int64}}
+
+    julia> c = MySimpleContainer([1:3;]);
+
+    julia> typeof(c)
+    MySimpleContainer{Array{Int64,1}}
+
+    julia> b = MyAmbiguousContainer(1:3);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+    julia> b = MyAmbiguousContainer([1:3;]);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+For ``MySimpleContainer``, the object is fully-specified by its type
+and parameters, so the compiler can generate optimized functions. In
+most instances, this will probably suffice.
+
+While the compiler can now do its job perfectly well, there are cases
+where *you* might wish that your code could do different things
+depending on the *element type* of ``a``.  Usually the best way to
+achieve this is to wrap your specific operation (here, ``foo``) in a
+separate function::
+
+    function sumfoo(c::MySimpleContainer)
+        s = 0
+    for x in c.a
+        s += foo(x)
+    end
+    s
     end
 
-the compiler will not generally know the type of ``foo.field``, since it
-might be modified at any time to refer to a value of a different type.
-It will help to declare the most specific type possible, such as
-``field::Float64`` or ``field::Array{Int64,1}``.
+    foo(x::Integer) = x
+    foo(x::AbstractFloat) = round(x)
+
+This keeps things simple, while allowing the compiler to generate
+optimized code in all cases.
+
+However, there are cases where you may need to declare different
+versions of the outer function for different element types of
+``a``. You could do it like this::
+
+    function myfun{T<:AbstractFloat}(c::MySimpleContainer{Vector{T}})
+        ...
+    end
+    function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
+        ...
+    end
+
+This works fine for ``Vector{T}``, but we'd also have to write
+explicit versions for ``UnitRange{T}`` or other abstract types. To
+prevent such tedium, you can use two parameters in the declaration of
+``MyContainer``::
+
+    type MyContainer{T, A<:AbstractVector}
+        a::A
+    end
+    MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
+
+    julia> b = MyContainer(1.3:5);
+
+    julia> typeof(b)
+    MyContainer{Float64,UnitRange{Float64}}
+
+Note the somewhat surprising fact that ``T`` doesn't appear in the
+declaration of field ``a``, a point that we'll return to in a moment.
+With this approach, one can write functions such as::
+
+    function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
+        return c.a[1]+1
+    end
+    # Note: because we can only define MyContainer for
+    # A<:AbstractArray, and any unspecified parameters are arbitrary,
+    # the previous could have been written more succinctly as
+    #     function myfunc{T<:Integer}(c::MyContainer{T})
+
+    function myfunc{T<:AbstractFloat}(c::MyContainer{T})
+        return c.a[1]+2
+    end
+
+    function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
+        return c.a[1]+3
+    end
+
+    julia> myfunc(MyContainer(1:3))
+    2
+
+    julia> myfunc(MyContainer(1.0:3))
+    3.0
+
+    julia> myfunc(MyContainer([1:3]))
+    4
+
+As you can see, with this approach it's possible to specialize on both
+the element type ``T`` and the array type ``A``.
+
+However, there's one remaining hole: we haven't enforced that ``A``
+has element type ``T``, so it's perfectly possible to construct an
+object like this::
+
+  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
+
+  julia> typeof(b)
+  MyContainer{Int64,UnitRange{Float64}}
+
+To prevent this, we can add an inner constructor::
+
+    type MyBetterContainer{T<:Real, A<:AbstractVector}
+        a::A
+
+        MyBetterContainer(v::AbstractVector{T}) = new(v)
+    end
+    MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
+
+
+    julia> b = MyBetterContainer(1.3:5);
+
+    julia> typeof(b)
+    MyBetterContainer{Float64,UnitRange{Float64}}
+
+    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(UnitRange{Float64},)
+
+The inner constructor requires that the element type of ``A`` be ``T``.
 
 Annotate values taken from untyped locations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It is often convenient to work with data structures that may contain
-values of any type, such as the original ``Foo`` type above, or cell
+values of any type, such as cell
 arrays (arrays of type ``Array{Any}``). But, if you're using one of
 these structures and happen to know the type of an element, it helps to
 share this knowledge with the compiler::
