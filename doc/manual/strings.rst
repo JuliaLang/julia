@@ -743,7 +743,7 @@ use destructuring syntax to bind them to local variables::
 Captures can also be accessed by indexing the :obj:`RegexMatch` object
 with the number or name of the capture group::
 
-    julia> m=match(r"(?P<hour>\d+):(?P<minute>\d+)","12:45")
+    julia> m=match(r"(?<hour>\d+):(?<minute>\d+)","12:45")
     RegexMatch("12:45", hour="12", minute="45")
     julia> m[:minute]
     "45"
@@ -756,7 +756,7 @@ subsitution string with ``s``. Capture group 0 refers to the entire match object
 Named capture groups can be referenced in the substitution with ``g<groupname>``.
 For example::
 
-    julia> replace("first second", r"(\w+) (?P<agroup>\w+)", s"\g<agroup> \1")
+    julia> replace("first second", r"(\w+) (?<agroup>\w+)", s"\g<agroup> \1")
     julia> "second first"
 
 Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
