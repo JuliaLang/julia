@@ -804,6 +804,17 @@ static Function *to_function(jl_lambda_info_t *li)
     }
 #endif
     FPM->run(*f);
+        if (
+#ifdef LLVM35
+        verifyFunction(*f,&out)
+#else
+        verifyFunction(*f,PrintMessageAction)
+#endif
+        ) {
+        f->dump();
+        abort();
+    }
+
     //n_compile++;
     // print out the function's LLVM code
     //jl_static_show(JL_STDERR, (jl_value_t*)li);

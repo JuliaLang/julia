@@ -2727,7 +2727,6 @@ static void parse_all_stackmaps(void)
         parse_stackmap((char*)stackmap);
     }
 
-    
     unw_context_t ctx;
     unw_cursor_t cur;
     uint64_t rip, rsp, rbp;
@@ -2750,6 +2749,8 @@ static void parse_all_stackmaps(void)
                 StkLoc *loc = (StkLoc*)(rec+1) + i;
                 if (loc->type == 4) {
                     // constant, do nothing
+                    // statepoint lowering emits metadata as constants
+                    // we may want to use it one day
                 } else if (loc->type == 2) {
                     uint64_t base;
                     // I think libunwind already uses dwarf register numbers but well
