@@ -68,9 +68,9 @@ First, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.3` series of releases. You can get this version by changing to the Julia directory and running
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.4` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout release-0.3
+    git checkout release-0.4
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
