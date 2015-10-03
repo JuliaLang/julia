@@ -4414,6 +4414,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         }
     }
     ctx.lineno = lno;
+    int toplineno = lno;
 
     DIBuilder dbuilder(*m);
     ctx.dbuilder = &dbuilder;
@@ -4994,23 +4995,24 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 MDNode *funcscope = (MDNode*)dbuilder.createLexicalBlockFile(SP, topfile);
                 MDNode *scope;
                 if ((dfil == topfile || dfil == NULL) &&
-                    lno >= ctx.lineno) // if we are in the top-level file
-                                       // and the current lineno is less than
-                                       // the last, must be same-file inline
-                                       // TODO: improve this heuristic...
+                    lno >= toplineno)
                     {
-                    // set location to the current top-level line
+                    // for sequentially-defined code,
+                    // set location to line in top file.
+                    // TODO: improve handling of nested inlines
                     loc = DebugLoc::get(lno, 1, SP, NULL);
                 } else {
-                    // otherwise, we are compiling code from another file,
-                    // so create a location for the top-level line, and
-                    // set the DebugLoc "inlinedAt" parameter.
+                    // otherwise, we are compiling inlined code,
+                    // so set the DebugLoc "inlinedAt" parameter
+                    // to the current line, then use source loc.
 #ifdef LLVM37
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,dfil);
-                    MDNode *inlineLocMd = DebugLoc::get(ctx.lineno, 1, funcscope, NULL).getAsMDNode();
+                    MDNode *inlineLocMd = DebugLoc::get(toplineno, 1, funcscope, NULL).
+                                                    getAsMDNode();
 #else
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
-                    MDNode *inlineLocMd = DebugLoc::get(ctx.lineno, 1, funcscope, NULL).getAsMDNode(jl_LLVMContext);
+                    MDNode *inlineLocMd = DebugLoc::get(toplineno, 1, funcscope, NULL).
+                                                    getAsMDNode(jl_LLVMContext);
 #endif
                     loc = DebugLoc::get(lno, 1, scope, inlineLocMd);
                 }
@@ -5018,7 +5020,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
             if (do_coverage)
                 coverageVisitLine(filename, lno);
-            ctx.lineno = lno;
+            ctx.lineno = lno; // NOO TOUCHIE; NO TOUCH! See #922
         }
         if (jl_is_labelnode(stmt)) {
             if (prevlabel) continue;
