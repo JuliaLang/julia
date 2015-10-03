@@ -7,8 +7,8 @@ export UmfpackLU
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
-importall Base.SparseMatrix
-import Base.SparseMatrix: increment, increment!, decrement, decrement!, nnz
+importall ..SparseArrays
+import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
