@@ -3401,3 +3401,18 @@ b8932 = Vec3_8932(2,2,2)
 f13261() = (x = (error("oops"),); +(x...))
 g13261() = f13261()
 @test_throws ErrorException g13261()
+
+# issue 13432
+@noinline function f13432(x)
+    offset = x ? Base.Bottom : 1
+    return is(offset, Base.Bottom)
+end
+@test f13432(true) == true
+@test f13432(false) == false
+@noinline function f13432b(x)
+    a = x ? 1 : 1.0
+    b = x ? 1 : 1.0f0
+    return is(a, b)
+end
+@test f13432b(true) == true
+@test f13432b(false) == false
