@@ -39,6 +39,7 @@ eval(Expr(:function, Expr(:call, :test_inline_2),
 
 try
     eval(:(test_inline_1()))
+    error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_1, catch_backtrace())
     if is(lkup, nothing)
@@ -51,6 +52,7 @@ catch err
 end
 try
     eval(:(test_inline_2()))
+    error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_2, catch_backtrace())
     if is(lkup, nothing)

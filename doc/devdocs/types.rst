@@ -577,20 +577,20 @@ constraints that we just saw in ``typeintersect``.
 ``jltypes.c`` contains three closely related collections of functions
 for testing how types ``a`` and ``b`` are ordered:
 
-  - The ``subtype`` functions implement ``a <: b``. Among other uses, they
-    serve in matching function arguments against method signatures in
-    the function cache.
+- The ``subtype`` functions implement ``a <: b``. Among other uses, they
+  serve in matching function arguments against method signatures in
+  the function cache.
 
-  - The ``type_morespecific`` functions are used for imposing a partial
-    order on functions in method tables (from most-to-least
-    specific). Note that ``jl_type_morespecific(a,b,0)`` really means "is ``a``
-    at least as specific as ``b``?" and not "is ``a`` strictly more specific
-    than ``b``?"
+- The ``type_morespecific`` functions are used for imposing a partial
+  order on functions in method tables (from most-to-least
+  specific). Note that ``jl_type_morespecific(a,b,0)`` really means "is ``a``
+  at least as specific as ``b``?" and not "is ``a`` strictly more specific
+  than ``b``?"
 
-  - The ``type_match`` functions are similar to ``type_morespecific``, but
-    additionally accept (and employ) an environment to constrain
-    typevars. The related ``type_match_morespecific`` functions call
-    ``type_match`` with an argument ``morespecific=1``
+- The ``type_match`` functions are similar to ``type_morespecific``, but
+  additionally accept (and employ) an environment to constrain
+  typevars. The related ``type_match_morespecific`` functions call
+  ``type_match`` with an argument ``morespecific=1``
 
 All three of these take an argument, ``invariant``, which is set to 1 when
 comparing type parameters and otherwise is 0.

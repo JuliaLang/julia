@@ -134,8 +134,8 @@ type Worker
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
 
-    r_stream::AsyncStream
-    w_stream::AsyncStream
+    r_stream::IO
+    w_stream::IO
     manager::ClusterManager
     config::WorkerConfig
 
@@ -836,9 +836,9 @@ function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket)
         message_handler_loop(r_stream, w_stream)
 end
 
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = @schedule message_handler_loop(r_stream, w_stream)
+process_messages(r_stream::IO, w_stream::IO) = @schedule message_handler_loop(r_stream, w_stream)
 
-function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream)
+function message_handler_loop(r_stream::IO, w_stream::IO)
     global PGRP
     global cluster_manager
 

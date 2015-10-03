@@ -14,12 +14,12 @@ The following keyword arguments are supported:
  * ``nev``: Number of eigenvalues
  * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
 
-    Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+   Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
  * ``which``: type of eigenvalues to compute. See the note below.
 
    ========= ======================================================================================================================
    ``which`` type of eigenvalues
-   --------- ----------------------------------------------------------------------------------------------------------------------
+   ========= ======================================================================================================================
    ``:LM``   eigenvalues of largest magnitude (default)
    ``:SM``   eigenvalues of smallest magnitude
    ``:LR``   eigenvalues of largest real part
@@ -41,7 +41,7 @@ The following keyword arguments are supported:
 
    =============== ================================== ==================================
    ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
-   --------------- ---------------------------------- ----------------------------------
+   =============== ================================== ==================================
    ``nothing``     ordinary (forward)                 :math:`A`
    real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
    =============== ================================== ==================================
@@ -61,12 +61,12 @@ The following keyword arguments are supported:
  * ``nev``: Number of eigenvalues
  * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
 
-    Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+   Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
  * ``which``: type of eigenvalues to compute. See the note below.
 
    ========= ======================================================================================================================
    ``which`` type of eigenvalues
-   --------- ----------------------------------------------------------------------------------------------------------------------
+   ========= ======================================================================================================================
    ``:LM``   eigenvalues of largest magnitude (default)
    ``:SM``   eigenvalues of smallest magnitude
    ``:LR``   eigenvalues of largest real part
@@ -88,7 +88,7 @@ The following keyword arguments are supported:
 
    =============== ================================== ==================================
    ``sigma``       iteration mode                     ``which`` refers to the problem
-   --------------- ---------------------------------- ----------------------------------
+   =============== ================================== ==================================
    ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
    real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
    =============== ================================== ==================================

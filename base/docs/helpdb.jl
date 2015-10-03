@@ -913,13 +913,6 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 doc"""
-    countnz(A)
-
-Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
-"""
-countnz
-
-doc"""
     isnan(f) -> Bool
 
 Test whether a floating point number is not a number (NaN)
@@ -1631,25 +1624,6 @@ Compute the inverse cosine of `x`, where the output is in radians
 acos
 
 doc"""
-    nzrange(A, col)
-
-Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for convenient iterating over a sparse matrix :
-
-    A = sparse(I,J,V)
-    rows = rowvals(A)
-    vals = nonzeros(A)
-    m, n = size(A)
-    for i = 1:n
-       for j in nzrange(A, i)
-          row = rows[j]
-          val = vals[j]
-          # perform sparse wizardry...
-       end
-    end
-"""
-nzrange
-
-doc"""
     ispath(path) -> Bool
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
@@ -1729,13 +1703,6 @@ doc"""
 Scaled Bessel function of the third kind of order `nu`, $H^{(1)}_\nu(x) e^{-x i}$.
 """
 hankelh1x
-
-doc"""
-    blkdiag(A...)
-
-Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
-"""
-blkdiag
 
 doc"""
     replace(string, pat, r[, n])
@@ -2136,13 +2103,6 @@ doc"""
 Transform the given dimensions of array `A` using function `f`. `f` is called on each slice of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]` for all `i` and `j`.
 """
 mapslices
-
-doc"""
-    spdiagm(B, d[, m, n])
-
-Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and `d` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size of the resulting sparse matrix.
-"""
-spdiagm
 
 doc"""
     svdvals(A)
@@ -2639,13 +2599,6 @@ From an array view `A`, returns the corresponding indexes in the parent
 parentindexes
 
 doc"""
-    spones(S)
-
-Create a sparse matrix with the same structure as that of `S`, but with every nonzero element having the value `1.0`.
-"""
-spones
-
-doc"""
     display(x)
     display(d::Display, x)
     display(mime, x)
@@ -2943,13 +2896,6 @@ doc"""
 Get a hexadecimal string of the binary representation of a floating point number
 """
 num2hex
-
-doc"""
-    speye(type,m[,n])
-
-Create a sparse identity matrix of specified type of size `m x m`. In case `n` is supplied, create a sparse identity matrix of size `m x n`.
-"""
-speye
 
 doc"""
     count_ones(x::Integer) -> Integer
@@ -3288,20 +3234,6 @@ doc"""
 For matrices or vectors $A$ and $B$, calculates $A / Bᴴ$
 """
 A_rdiv_Bc
-
-doc"""
-    sparse(I,J,V,[m,n,combine])
-
-Create a sparse matrix `S` of dimensions `m x n` such that `S[I[k], J[k]] = V[k]`. The `combine` function is used to combine duplicates. If `m` and `n` are not specified, they are set to `maximum(I)` and `maximum(J)` respectively. If the `combine` function is not supplied, duplicates are added by default. All elements of `I` must satisfy `1 <= I[k] <= m`, and all elements of `J` must satisfy `1 <= J[k] <= n`.
-"""
-sparse(I, J, V, m=?, n=?, combine=?)
-
-doc"""
-    sparse(A)
-
-Convert an AbstractMatrix `A` into a sparse matrix.
-"""
-sparse(A)
 
 doc"""
 ```rst
@@ -4116,39 +4048,39 @@ doc"""
 
 Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-   ======================= ========================= ========================================
-   Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
-   ----------------------- ------------------------- ----------------------------------------
-   :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
-   :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
-   :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
-   ======================= ========================= ========================================
+======================= ========================= ========================================
+Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
+======================= ========================= ========================================
+:func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
+:func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
+:func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
+======================= ========================= ========================================
 
 The individual components of the factorization ``F`` can be accessed by indexing:
 
-   =========== ======================================= ====== ======================== =============
-   Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-   ----------- --------------------------------------- ------ ------------------------ -------------
-   ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
-   ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
-   ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
-   ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
-   ``F[:q]``   left permutation ``Vector``                                                      ✓
-   ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
-   ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
-   =========== ======================================= ====== ======================== =============
+=========== ======================================= ====== ======================== =============
+Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+=========== ======================================= ====== ======================== =============
+``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
+``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
+``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
+``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
+``F[:q]``   left permutation ``Vector``                                                      ✓
+``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
+``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
+=========== ======================================= ====== ======================== =============
 
-   ================== ====== ======================== =============
-   Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-   ------------------ ------ ------------------------ -------------
-        ``/``            ✓
-        ``\``            ✓                       ✓             ✓
-        ``cond``         ✓                                     ✓
-        ``det``          ✓                       ✓             ✓
-        ``logdet``       ✓                       ✓
-        ``logabsdet``    ✓                       ✓
-        ``size``         ✓                       ✓
-   ================== ====== ======================== =============
+================== ====== ======================== =============
+Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+================== ====== ======================== =============
+     ``/``            ✓
+     ``\``            ✓                       ✓             ✓
+     ``cond``         ✓                                     ✓
+     ``det``          ✓                       ✓             ✓
+     ``logdet``       ✓                       ✓
+     ``logabsdet``    ✓                       ✓
+     ``size``         ✓                       ✓
+================== ====== ======================== =============
 ```
 """
 lufact
@@ -4831,13 +4763,6 @@ For a given iterable object and iteration state, return the current item and the
 next
 
 doc"""
-    nnz(A)
-
-Returns the number of stored (filled) elements in a sparse matrix.
-"""
-nnz
-
-doc"""
     unshift!(collection, items...) -> collection
 
 Insert one or more `items` at the beginning of `collection`.
@@ -4870,13 +4795,6 @@ Construct a real symmetric tridiagonal matrix from the diagonal and upper diagon
 ```
 """
 SymTridiagonal
-
-doc"""
-    spzeros(m,n)
-
-Create a sparse matrix of size `m x n`. This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
-"""
-spzeros
 
 doc"""
     colon(start, [step], stop)
@@ -5695,12 +5613,12 @@ doc"""
 Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
 with appropriate ``op`` values:
 
-    - with ``:register``/``:deregister`` when a worker is added / removed
-      from the Julia worker pool.
-    - with ``:interrupt`` when ``interrupt(workers)`` is called. The
-      :class:`ClusterManager` should signal the appropriate worker with an
-      interrupt signal.
-    - with ``:finalize`` for cleanup purposes.
+- with ``:register``/``:deregister`` when a worker is added / removed
+  from the Julia worker pool.
+- with ``:interrupt`` when ``interrupt(workers)`` is called. The
+  :class:`ClusterManager` should signal the appropriate worker with an
+  interrupt signal.
+- with ``:finalize`` for cleanup purposes.
 ```
 """
 manage
@@ -5761,13 +5679,6 @@ julia> trailing_zeros(2)
 ```
 """
 trailing_zeros
-
-doc"""
-    etree(A[, post])
-
-Compute the elimination tree of a symmetric sparse matrix `A` from `triu(A)` and, optionally, its post-ordering permutation.
-"""
-etree
 
 doc"""
     isalnum(c::Union{Char,AbstractString}) -> Bool
@@ -5929,27 +5840,6 @@ doc"""
 Remainder after division, returning in the range (0,m\]
 """
 rem1
-
-doc"""
-    sparsevec(I, V, [m, combine])
-
-Create a sparse matrix `S` of size `m x 1` such that `S[I[k]] = V[k]`. Duplicates are combined using the `combine` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
-"""
-sparsevec(I, V)
-
-doc"""
-    sparsevec(D::Dict, [m])
-
-Create a sparse matrix of size `m x 1` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
-"""
-sparsevec(D::Dict)
-
-doc"""
-    sparsevec(A)
-
-Convert a dense vector `A` into a sparse matrix of size `m x 1`. In julia, sparse vectors are really just sparse matrices with one column.
-"""
-sparsevec(A)
 
 doc"""
     isalpha(c::Union{Char,AbstractString}) -> Bool
@@ -6391,7 +6281,7 @@ minimum(A,dims)
 doc"""
     var(v[, region])
 
-Compute the sample variance of a vector or array `v`, optionally along dimensions in `region`. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of `v` is an IID drawn from that generative distribution. This computation is equivalent to calculating `sum((v - mean(v)).^2) / (length(v) - 1)`. Note: Julia does not ignore `NaN` values in the computation. For applications requiring the handling of missing data, the `DataArray` package is recommended.
+Compute the sample variance of a vector or array `v`, optionally along dimensions in `region`. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of `v` is an IID drawn from that generative distribution. This computation is equivalent to calculating `sumabs2(v - mean(v)) / (length(v) - 1)`. Note: Julia does not ignore `NaN` values in the computation. For applications requiring the handling of missing data, the `DataArray` package is recommended.
 """
 var
 
@@ -6750,7 +6640,7 @@ Compute the cosecant of `x`, where `x` is in radians
 csc
 
 doc"""
-    hash(x[, h])
+    hash(x[, h::UInt])
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The optional second argument `h` is a hash code to be mixed with the result.
 
@@ -7130,13 +7020,6 @@ doc"""
 Get the file name part of a path.
 """
 basename
-
-doc"""
-    issparse(S)
-
-Returns `true` if `S` is sparse, and `false` otherwise.
-"""
-issparse
 
 doc"""
     ArgumentError(msg)
@@ -8905,13 +8788,6 @@ Compute the inverse hyperbolic secant of `x`
 asech
 
 doc"""
-    sprandn(m,n,p)
-
-Create a random `m` by `n` sparse matrix with the specified (independent) probability `p` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
-"""
-sprandn
-
-doc"""
 ```rst
 ..  ismarked(s)
 
@@ -9171,9 +9047,9 @@ Compute the Pearson covariance between the vector(s) in `v1` and `v2`. Here, `v1
 
 This function accepts three keyword arguments:
 
--   `vardim`: the dimension of variables. When `vardim = 1`, variables are considered in columns while observations in rows; when `vardim = 2`, variables are in rows while observations in columns. By default, it is set to `1`.
--   `corrected`: whether to apply Bessel's correction (divide by `n-1` instead of `n`). By default, it is set to `true`.
--   `mean`: allow users to supply mean values that are known. By default, it is set to `nothing`, which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use `mean=0` to indicate that the input data are centered, and hence there's no need to subtract the mean.
+- `vardim`: the dimension of variables. When `vardim = 1`, variables are considered in columns while observations in rows; when `vardim = 2`, variables are in rows while observations in columns. By default, it is set to `1`.
+- `corrected`: whether to apply Bessel's correction (divide by `n-1` instead of `n`). By default, it is set to `true`.
+- `mean`: allow users to supply mean values that are known. By default, it is set to `nothing`, which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use `mean=0` to indicate that the input data are centered, and hence there's no need to subtract the mean.
 
 The size of the result depends on the size of `v1` and `v2`. When both `v1` and `v2` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size `(n1, n2)`, where `n1` and `n2` are the numbers of slices in `v1` and `v2`, which depend on the setting of `vardim`.
 
@@ -9762,21 +9638,19 @@ Computes `x*y+z` without rounding the intermediate result `x*y`. On some systems
 fma
 
 doc"""
-```rst
-..  eigvals(A,[irange,][vl,][vu])
 
-Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
-:class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
-only a subset of the eigenvalues by specifying either a :class:`UnitRange`
-``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
-``vu`` for the lower and upper boundaries of the eigenvalues.
+    eigvals(A,[irange,][vl,][vu]) -> values
 
-For general non-symmetric matrices it is possible to specify how the matrix
-is balanced before the eigenvector calculation. The option ``permute=true``
-permutes the matrix to become closer to upper triangular, and ``scale=true``
-scales the matrix by its diagonal elements to make rows and columns more
-equal in norm. The default is ``true`` for both options.
-```
+Returns the eigenvalues of `A`. If `A` is `Symmetric`, `Hermitian` or `SymTridiagonal`,
+it is possible to calculate only a subset of the eigenvalues by specifying either a
+`UnitRange` `irange` covering indices of the sorted eigenvalues, or a pair `vl` and `vu`
+for the lower and upper boundaries of the eigenvalues.
+
+For general non-symmetric matrices it is possible to specify how the matrix is balanced
+before the eigenvector calculation. The option `permute=true` permutes the matrix to
+become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
+elements to make rows and columns moreequal in norm. The default is `true` for both
+options.
 """
 eigvals
 
@@ -10017,26 +9891,26 @@ doc"""
 
 Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
-   ================ ================= ============== =====================================
-   Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-   ---------------- ----------------- -------------- -------------------------------------
-   ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-   ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-   ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-   ================ ================= ============== =====================================
+================ ================= ============== =====================================
+Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
+================ ================= ============== =====================================
+``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
+``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
+``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
+================ ================= ============== =====================================
 
 ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
 
 The individual components of the factorization ``F`` can be accessed by indexing:
 
-   =========== ============================================= ================== ===================== ==================
-   Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-   ----------- --------------------------------------------- ------------------ --------------------- ------------------
-   ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-   ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-   ``F[:p]``   pivot ``Vector``                                                                        ✓
-   ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-   =========== ============================================= ================== ===================== ==================
+=========== ============================================= ================== ===================== ==================
+Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
+=========== ============================================= ================== ===================== ==================
+``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
+``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
+``F[:p]``   pivot ``Vector``                                                                        ✓
+``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
+=========== ============================================= ================== ===================== ==================
 
 The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
 
@@ -10048,17 +9922,17 @@ Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both `
 
    The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
 
-      .. math::
+   .. math::
 
-         Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+      Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
 
    where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
 
    The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
 
-      .. math::
+   .. math::
 
-         Q = I + Y T Y^T
+      Q = I + Y T Y^T
 
    where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
 
@@ -10132,13 +10006,6 @@ doc"""
 Rounds (in the sense of `round`) `x` so that there are `digits` significant digits, under a base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and `signif(357.913, 4, 2)` is `352.0`.
 """
 signif
-
-doc"""
-    sprandbool(m,n,p)
-
-Create a random `m` by `n` sparse boolean matrix with the specified (independent) probability `p` of any entry being `true`.
-"""
-sprandbool
 
 doc"""
     nextpow2(n)
@@ -10458,15 +10325,6 @@ Hurwitz zeta function $\zeta(s, z)$.  (This is equivalent to
 the Riemann zeta function $\zeta(s)$ for the case of `z=1`.)
 """
 zeta(s,z)
-
-doc"""
-```rst
-..  sprand([rng,] m,n,p [,rfn])
-
-Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
-```
-"""
-sprand
 
 doc"""
     A_mul_Bt(A, B)
@@ -10931,13 +10789,6 @@ doc"""
 Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 """
 exit
-
-doc"""
-    nonzeros(A)
-
-Return a vector of the structural nonzero values in sparse matrix `A`. This includes zeros that are explicitly stored in the sparse matrix. The returned vector points directly to the internal nonzero storage of `A`, and any modifications to the returned vector will mutate `A` as well. See `rowvals(A)` and `nzrange(A, col)`.
-"""
-nonzeros
 
 doc"""
     istext(m::MIME)
@@ -11417,7 +11268,7 @@ the ``format`` string. The following codes can be used for constructing format s
 
 =============== ========= ===============================================================
 Code            Matches    Comment
---------------- --------- ---------------------------------------------------------------
+=============== ========= ===============================================================
 ``y``           1996, 96  Returns year of 1996, 0096
 ``m``           1, 01     Matches 1 or 2-digit months
 ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword

@@ -482,6 +482,8 @@ static value_t julia_to_scm_(jl_value_t *v)
         return scmv;
     }
     if (jl_typeis(v, jl_linenumbernode_type)) {
+        // GC Note: jl_fieldref(v, 1) allocates but neither jl_fieldref(v, 0)
+        //          or julia_to_list2 should allocate here
         value_t args = julia_to_list2(jl_fieldref(v,1), jl_fieldref(v,0));
         fl_gc_handle(&args);
         value_t hd = julia_to_scm_((jl_value_t*)line_sym);
@@ -489,6 +491,9 @@ static value_t julia_to_scm_(jl_value_t *v)
         fl_free_gc_handles(1);
         return scmv;
     }
+    // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
+    //          but we don't need a GC root here because julia_to_list2
+    //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2((jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_gotonode_type))

@@ -173,9 +173,9 @@ function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, k
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
 
-_replace(io, repl, str, r, pattern) = write(io, repl)
+_replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
-    write(io, repl(SubString(str, first(r), last(r))))
+    print(io, repl(SubString(str, first(r), last(r))))
 
 function replace(str::ByteString, pattern, repl, limit::Integer)
     n = 1

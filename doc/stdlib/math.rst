@@ -1587,7 +1587,7 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
+   Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sumabs2(v - mean(v)) / (length(v) - 1)``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
 
 .. function:: varm(v, m)
 
@@ -1699,9 +1699,9 @@ Statistics
 
    This function accepts three keyword arguments:
 
-     *   ``vardim``\ : the dimension of variables. When ``vardim = 1``\ , variables are considered in columns while observations in rows; when ``vardim = 2``\ , variables are in rows while observations in columns. By default, it is set to ``1``\ .
-     *   ``corrected``\ : whether to apply Bessel's correction (divide by ``n-1`` instead of ``n``\ ). By default, it is set to ``true``\ .
-     *   ``mean``\ : allow users to supply mean values that are known. By default, it is set to ``nothing``\ , which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use ``mean=0`` to indicate that the input data are centered, and hence there's no need to subtract the mean.
+   * ``vardim``\ : the dimension of variables. When ``vardim = 1``\ , variables are considered in columns while observations in rows; when ``vardim = 2``\ , variables are in rows while observations in columns. By default, it is set to ``1``\ .
+   * ``corrected``\ : whether to apply Bessel's correction (divide by ``n-1`` instead of ``n``\ ). By default, it is set to ``true``\ .
+   * ``mean``\ : allow users to supply mean values that are known. By default, it is set to ``nothing``\ , which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use ``mean=0`` to indicate that the input data are centered, and hence there's no need to subtract the mean.
 
    The size of the result depends on the size of ``v1`` and ``v2``\ . When both ``v1`` and ``v2`` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size ``(n1, n2)``\ , where ``n1`` and ``n2`` are the numbers of slices in ``v1`` and ``v2``\ , which depend on the setting of ``vardim``\ .
 

@@ -828,3 +828,7 @@ end
 @deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
 
 @deprecate Union(args...) Union{args...}
+
+# 12839
+const AsyncStream = IO
+deprecate(:AsyncStream)

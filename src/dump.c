@@ -1027,8 +1027,8 @@ void jl_serialize_dependency_list(ios_t *s)
         unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
     jl_array_t *udeps = deps && unique_func ? (jl_array_t *) jl_apply((jl_function_t*)unique_func, (jl_value_t**)&deps, 1) : NULL;
 
+    JL_GC_PUSH1(&udeps);
     if (udeps) {
-        JL_GC_PUSH1(&udeps);
         size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
             jl_value_t *dep = jl_fieldref(jl_cellref(udeps, i), 0);
@@ -1051,8 +1051,8 @@ void jl_serialize_dependency_list(ios_t *s)
             write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
         }
         write_int32(s, 0); // terminator, for ease of reading
-        JL_GC_POP();
     }
+    JL_GC_POP();
 }
 
 // --- deserialize ---

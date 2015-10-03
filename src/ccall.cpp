@@ -922,7 +922,6 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 
             t = julia_struct_to_llvm(tti);
             if (t == NULL || t == T_void) {
-                JL_GC_POP();
                 std::stringstream msg;
                 msg << "ccall: the type of argument ";
                 msg << i+1;

@@ -3373,3 +3373,8 @@ b8932 = Vec3_8932(2,2,2)
 f13261() = (x = (error("oops"),); +(x...))
 g13261() = f13261()
 @test_throws ErrorException g13261()
+
+#13433, read!(::IO, a::Vector{UInt8}) should return a
+type IO13433 <: IO end
+Base.read(::IO13433, ::Type{UInt8}) = 0x01
+@test read!(IO13433(), Array(UInt8, 4)) == [0x01, 0x01, 0x01, 0x01]

@@ -86,7 +86,7 @@ immutable FileRedirect
     end
 end
 
-immutable DevNullStream <: AsyncStream end
+immutable DevNullStream <: IO end
 const DevNull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
@@ -96,17 +96,24 @@ write{T<:DevNullStream}(::T, args...) = 0
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 copy(::DevNullStream) = DevNull
+wait_connected(::DevNullStream) = nothing
+wait_readnb(::DevNullStream) = wait()
+wait_readbyte(::DevNullStream) = wait()
+wait_close(::DevNullStream) = wait()
+eof(::DevNullStream) = true
 
 uvhandle(::DevNullStream) = C_NULL
+uvtype(::DevNullStream) = UV_STREAM
+
 uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
-uvtype(::DevNullStream) = UV_STREAM
 
 # Not actually a pointer, but that's how we pass it through the C API so it's fine
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union{AsyncStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD}
+typealias Redirectable Union{IO, FileRedirect, RawFD}
+typealias StdIOSet NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
 
 immutable CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -197,30 +204,30 @@ pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(c
 
 pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
-typealias RawOrBoxedHandle Union{UVHandle,AsyncStream,Redirectable,IOStream}
-typealias StdIOSet NTuple{3,RawOrBoxedHandle}
-
 type Process <: AbstractPipe
     cmd::Cmd
     handle::Ptr{Void}
-    in::AsyncStream
-    out::AsyncStream
-    err::AsyncStream
+    in::IO
+    out::IO
+    err::IO
     exitcode::Int64
     termsignal::Int32
     exitcb::Callback
     exitnotify::Condition
     closecb::Callback
     closenotify::Condition
-    function Process(cmd::Cmd, handle::Ptr{Void}, in::RawOrBoxedHandle, out::RawOrBoxedHandle, err::RawOrBoxedHandle)
-        if !isa(in, AsyncStream) || in === DevNull
-            in=DevNull
+    function Process(cmd::Cmd, handle::Ptr{Void},
+                     in::Union{Redirectable, Ptr{Void}},
+                     out::Union{Redirectable, Ptr{Void}},
+                     err::Union{Redirectable, Ptr{Void}})
+        if !isa(in, IO)
+            in = DevNull
         end
-        if !isa(out, AsyncStream) || out === DevNull
-            out=DevNull
+        if !isa(out, IO)
+            out = DevNull
         end
-        if !isa(err, AsyncStream) || err === DevNull
-            err=DevNull
+        if !isa(err, IO)
+            err = DevNull
         end
         this = new(cmd, handle, in, out, err,
                    typemin(fieldtype(Process, :exitcode)),
@@ -431,7 +438,7 @@ end
 # |       |        \ The function to be called once the uv handle is closed
 # |       \ The function to be called once the process exits
 # \ A set of up to 256 stdio instructions, where each entry can be either:
-#   | - An AsyncStream to be passed to the child
+#   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
 #   | - An FS.File object to redirect the output to
 #   \ - An ASCIIString specifying a filename to be opened
@@ -464,7 +471,7 @@ end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
 # return a Process object to read-to/write-from the pipeline
-function open(cmds::AbstractCmd, mode::AbstractString="r", other::AsyncStream=DevNull)
+function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=DevNull)
     if mode == "r"
         in = other
         out = io = Pipe()
@@ -502,18 +509,18 @@ function readandwrite(cmds::AbstractCmd)
     (out, in, processes)
 end
 
-function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
+function readbytes(cmd::AbstractCmd, stdin::Redirectable=DevNull)
     out, procs = open(cmd, "r", stdin)
     bytes = readbytes(out)
     !success(procs) && pipeline_error(procs)
     return bytes
 end
 
-function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
+function readall(cmd::AbstractCmd, stdin::Redirectable=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
-function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::AsyncStream=DevNull)
+function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=DevNull)
     open(cmd, "w", stdout) do io
         write(io, stdin)
     end

@@ -684,8 +684,8 @@ subtypes of each other:
 
 This last point is very important:
 
-    **Even though** ``Float64 <: Real`` **we DO NOT have**
-    ``Point{Float64} <: Point{Real}``\ **.**
+- **Even though** ``Float64 <: Real`` **we DO NOT have**
+  ``Point{Float64} <: Point{Real}``\ **.**
 
 In other words, in the parlance of type theory, Julia's type parameters
 are *invariant*, rather than being covariant (or even contravariant).

@@ -220,6 +220,19 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     return cs, sn, r
 end
 
+doc"""
+
+    givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
+
+Computes the tuple `(G, r) = givens(f, g, i1, i2)` where `G` is a Givens rotation and `r`
+is a scalar such that `G*x=y` with `x[i1]=f`, `x[i2]=g`, `y[i1]=r`, and `y[i2]=0`. The
+cosine and sine of the rotation angle can be extracted from the `Givens` type with `G.c`
+and `G.s` respectively. The arguments `f` and `g` can be either `Float32`, `Float64`,
+`Complex{Float32}`, or `Complex{Float64}`. The `Givens` type supports left multiplication
+`G*A` and conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
+and can therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)`
+for `G*A` or `i2<=size(A,1)` for `A*G'`.
+"""
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
     if i1 >= i2
         throw(ArgumentError("second index must be larger than the first"))
@@ -227,7 +240,19 @@ function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
     c, s, r = givensAlgorithm(f, g)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
+"""
 
+    givens{T}(::AbstractArray{T}, ::Integer, ::Integer, ::Integer) -> {Givens, T}
+
+Computes the tuple `(G, r) = givens(A, i1, i2, col)` where `G` is Givens rotation and `r`
+is a scalar such that `G*A[:,col]=y` with `y[i1]=r`, and `y[i2]=0`. The cosine and sine of
+the rotation angle can be extracted from the `Givens` type with `G.c` and `G.s`
+respectively. The element type of `A` can be either `Float32`, `Float64`,
+`Complex{Float32}`, or `Complex{Float64}`. The `Givens` type supports left multiplication
+`G*A` and conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
+and can therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)`
+for `G*A` or `i2<=size(A,1)` for `A*G'`.
+"""
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
     if i1 >= i2
         throw(ArgumentError("second index must be larger than the first"))

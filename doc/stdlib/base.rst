@@ -306,7 +306,7 @@ All Objects
 
    Get a unique integer id for ``x``\ . ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``\ .
 
-.. function:: hash(x[, h])
+.. function:: hash(x[, h::UInt])
 
    .. Docstring generated from Julia source
 
@@ -872,9 +872,9 @@ System
 
    **Examples**:
 
-     * ``run(pipeline(`ls`, `grep xyz`))``
-     * ``run(pipeline(`ls`, "out.txt"))``
-     * ``run(pipeline("out.txt", `grep xyz`))``
+   * ``run(pipeline(`ls`, `grep xyz`))``
+   * ``run(pipeline(`ls`, "out.txt"))``
+   * ``run(pipeline("out.txt", `grep xyz`))``
 
 .. function:: pipeline(command; stdin, stdout, stderr, append=false)
 
@@ -884,8 +884,8 @@ System
 
    **Examples**:
 
-     * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-     * ``run(pipeline(`update`, stdout="log.txt", append=true))``
+   * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+   * ``run(pipeline(`update`, stdout="log.txt", append=true))``
 
 .. function:: gethostname() -> AbstractString
 

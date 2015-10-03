@@ -594,17 +594,86 @@ code which indicates success (`info = 0`), a singular value in `U`
 """
 getrf!(A::StridedMatrix, tau::Vector)
 
+"""
+    gelqf!(A) -> (A, tau)
+
+Compute the `LQ` factorization of `A`, `A = LQ`.
+
+Returns `A`, modified in-place, and `tau`, which contains scalars
+which parameterize the elementary reflectors of the factorization.
+"""
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
+"""
+    geqlf!(A) -> (A, tau)
+
+Compute the `QL` factorization of `A`, `A = QL`.
+
+Returns `A`, modified in-place, and `tau`, which contains scalars
+which parameterize the elementary reflectors of the factorization.
+"""
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
+"""
+    geqrt!(A, nb) -> (A, T)
+
+Compute the blocked `QR` factorization of `A`, `A = QR`. `nb` sets the block size
+and it must be between 1 and `n`, the second dimension of `A`.
+
+Returns `A`, modified in-place, and `T`, which contains upper
+triangular block reflectors which parameterize the elementary reflectors of
+the factorization.
+"""
 geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
+"""
+    geqrt3!(A) -> (A, T)
+
+Recursively computes the blocked `QR` factorization of `A`, `A = QR`.
+
+Returns `A`, modified in-place, and `T`, which contains upper triangular block
+reflectors which parameterize the elementary reflectors of the factorization.
+"""
 geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
+"""
+    geqrf!(A) -> (A, tau)
+
+Compute the `QR` factorization of `A`, `A = QR`.
+
+Returns `A`, modified in-place, and `tau`, which contains scalars
+which parameterize the elementary reflectors of the factorization.
+"""
 geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
+"""
+    gerqf!(A) -> (A, tau)
+
+Compute the `RQ` factorization of `A`, `A = RQ`.
+
+Returns `A`, modified in-place, and `tau`, which contains scalars
+which parameterize the elementary reflectors of the factorization.
+"""
 gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,similar(A,T,min(m,n))))
 
+"""
+    geqp3!(A, jpvt) -> (A, jpvt, tau)
+
+Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
+`P` is a pivoting matrix, represented by `jpvt`. `jpvt` must have length
+greater than or equal to `n` if `A` is an `(m x n)` matrix.
+
+Returns `A` and `jpvt`, modified in-place, and `tau`, which stores the elementary
+reflectors.
+"""
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::Vector{BlasInt})
     m,n = size(A)
     geqp3!(A,jpvt,similar(A,T,min(m,n)))
 end
+
+"""
+    geqp3!(A) -> (A, jpvt, tau)
+
+Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
+
+Returns `A`, modified in-place, `jpvt`, which represents the pivoting matrix `P`,
+and `tau`, which stores the elementary reflectors.
+"""
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
     m,n=size(A)
     geqp3!(A,zeros(BlasInt,n),similar(A,T,min(m,n)))

@@ -160,6 +160,11 @@ function doc(b::Binding)
 
                 `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
                 """), functionsummary(v))
+            elseif isa(v,DataType)
+                d = catdoc(Markdown.parse("""
+                No documentation found.
+
+                """), typesummary(v))
             else
                 T = typeof(v)
                 d = catdoc(Markdown.parse("""
@@ -234,37 +239,6 @@ function doc!(f::Function, sig::ANY, data, source)
     fd.source[sig] = source
 end
 
-doc(f::Function) = doc(f, Tuple)
-
-function doc(f::Function, sig::Type)
-    isgeneric(f) && isempty(methods(f,sig)) && return nothing
-    results, funcdocs = [], []
-    for mod in modules
-        if (haskey(meta(mod), f) && isa(meta(mod)[f], FuncDoc))
-            fd = meta(mod)[f]
-            push!(funcdocs, fd)
-            for msig in fd.order
-                # try to find specific matching method signatures
-                if sig <: msig
-                    push!(results, (msig, fd.meta[msig]))
-                end
-            end
-        end
-    end
-    # if all method signatures are Union{} ( ⊥ ), concat all docstrings
-    if isempty(results)
-        for fd in funcdocs
-            append!(results, [fd.meta[msig] for msig in reverse(fd.order)])
-        end
-    else
-        sort!(results, lt = (a, b) -> type_morespecific(first(a), first(b)))
-        results = [last(r) for r in results]
-    end
-    catdoc(results...)
-end
-doc(f::Function,args::Any...) = doc(f, Tuple{args...})
-
-
 """
 `catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
 """
@@ -317,35 +291,42 @@ function doc!(T::DataType, sig::ANY, data, source)
     td.meta[sig] = data
 end
 
-function doc(T::DataType)
-    docs = []
-    for mod in modules
-        if haskey(meta(mod), T)
-            Td = meta(mod)[T]
-            if isa(Td, TypeDoc)
-                if length(docs) == 0 && Td.main !== nothing
-                    push!(docs, Td.main)
+function doc(obj::Base.Callable, sig::Type = Union)
+    isgeneric(obj) && sig !== Union && isempty(methods(obj, sig)) && return nothing
+    results, groups = [], []
+    for m in modules
+        if haskey(meta(m), obj)
+            docs = meta(m)[obj]
+            if isa(docs, FuncDoc) || isa(docs, TypeDoc)
+                push!(groups, docs)
+                for msig in docs.order
+                    if sig <: msig
+                        push!(results, (msig, docs.meta[msig]))
+                    end
                 end
-                for m in Td.order
-                    push!(docs, Td.meta[m])
+                if isempty(results) && docs.main !== nothing
+                    push!(results, (Union{}, docs.main))
                 end
-            elseif length(docs) == 0
-                return Td
+            else
+                push!(results, (Union{}, docs))
             end
         end
     end
-    if isempty(docs)
-        catdoc(Markdown.parse("""
-        No documentation found.
-
-        """), typesummary(T))
-    else
-        catdoc(docs...)
+    # If all method signatures are Union{} ( ⊥ ), concat all docstrings.
+    if isempty(results)
+        for group in groups
+            append!(results, [group.meta[s] for s in reverse(group.order)])
+        end
+     else
+        sort!(results, lt = (a, b) -> type_morespecific(first(a), first(b)))
+        results = map(last, results)
     end
+    catdoc(results...)
 end
+doc(f::Base.Callable, args::Any...) = doc(f, Tuple{args...})
 
 function typesummary(T::DataType)
-    parts = [
+    parts = UTF8String[
     """
     **Summary:**
     ```julia
@@ -496,9 +477,49 @@ end
 
 multidoc(meta, objs) = quote $([:(@doc $(esc(meta)) $(esc(obj))) for obj in objs]...) end
 
+doc"""
+    @__doc__(ex)
+
+Low-level macro used to mark expressions returned by a macro that should be documented. If
+more than one expression is marked then the same docstring is applied to each expression.
+
+    macro example(f)
+        quote
+            $(f)() = 0
+            @__doc__ $(f)(x) = 1
+            $(f)(x, y) = 2
+        end |> esc
+    end
+
+`@__doc__` has no effect when a macro that uses it is not documented.
+"""
+:(Base.@__doc__)
+
+function __doc__!(meta, def::Expr)
+    if isexpr(def, :block) && length(def.args) == 2 && def.args[1] == symbol("#doc#")
+        # Convert `Expr(:block, :#doc#, ...)` created by `@__doc__` to an `@doc`.
+        def.head = :macrocall
+        def.args = [symbol("@doc"), meta, def.args[end]]
+        true
+    else
+        found = false
+        for each in def.args
+            found |= __doc__!(meta, each)
+        end
+        found
+    end
+end
+__doc__!(meta, def) = false
+
 fexpr(ex) = isexpr(ex, :function, :stagedfunction, :(=)) && isexpr(ex.args[1], :call)
 
 function docm(meta, def, define = true)
+
+    err = (
+        "invalid doc expression:", def, isexpr(def, :macrocall) ?
+        "'$(def.args[1])' is not documentable. See 'help?> Base.@__doc__' for details." : ""
+    )
+
     def′ = unblock(def)
 
     isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
@@ -522,7 +543,8 @@ function docm(meta, def, define = true)
                  :global)      ?  vardoc(meta, def, namify(def′)) :
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
-    isa(def′, Expr)            ? error("invalid doc expression $def′") :
+    __doc__!(meta, def′)       ? esc(def′) :
+    isa(def′, Expr)            ? error(strip(join(err, "\n\n"))) :
     objdoc(meta, def′)
 end
 

@@ -71,39 +71,39 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-      ======================= ========================= ========================================
-      Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
-      ----------------------- ------------------------- ----------------------------------------
-      :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
-      :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
-      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
-      ======================= ========================= ========================================
+   ======================= ========================= ========================================
+   Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
+   ======================= ========================= ========================================
+   :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
+   :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}`` ``F[:L]*F[:U] == A[F[:p], :]``
+   :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
+   ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ======================================= ====== ======================== =============
-      Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ----------- --------------------------------------- ------ ------------------------ -------------
-      ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
-      ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
-      ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
-      ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
-      ``F[:q]``   left permutation ``Vector``                                                      ✓
-      ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
-      ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
-      =========== ======================================= ====== ======================== =============
+   =========== ======================================= ====== ======================== =============
+   Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+   =========== ======================================= ====== ======================== =============
+   ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓            ✓                        ✓
+   ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓            ✓                        ✓
+   ``F[:p]``   (right) permutation ``Vector``             ✓            ✓                        ✓
+   ``F[:P]``   (right) permutation ``Matrix``             ✓            ✓
+   ``F[:q]``   left permutation ``Vector``                                                      ✓
+   ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
+   ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
+   =========== ======================================= ====== ======================== =============
 
-      ================== ====== ======================== =============
-      Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ------------------ ------ ------------------------ -------------
-           ``/``            ✓
-           ``\``            ✓                       ✓             ✓
-           ``cond``         ✓                                     ✓
-           ``det``          ✓                       ✓             ✓
-           ``logdet``       ✓                       ✓
-           ``logabsdet``    ✓                       ✓
-           ``size``         ✓                       ✓
-      ================== ====== ======================== =============
+   ================== ====== ======================== =============
+   Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+   ================== ====== ======================== =============
+        ``/``            ✓
+        ``\``            ✓                       ✓             ✓
+        ``cond``         ✓                                     ✓
+        ``det``          ✓                       ✓             ✓
+        ``logdet``       ✓                       ✓
+        ``logabsdet``    ✓                       ✓
+        ``size``         ✓                       ✓
+   ================== ====== ======================== =============
 
 .. function:: lufact!(A) -> LU
 
@@ -155,6 +155,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
+.. function:: ldltfact!(::SymTridiagonal) -> LDLt
+
+   .. Docstring generated from Julia source
+
+   Same as ``ldltfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    .. Docstring generated from Julia source
@@ -167,26 +173,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
-      ================ ================= ============== =====================================
-      Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
-      ---------------- ----------------- -------------- -------------------------------------
-      ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-      ================ ================= ============== =====================================
+   ================ ================= ============== =====================================
+   Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
+   ================ ================= ============== =====================================
+   ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
+   ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
+   ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
+   ================ ================= ============== =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ============================================= ================== ===================== ==================
-      Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
-      ----------- --------------------------------------------- ------------------ --------------------- ------------------
-      ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
-      ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
-      ``F[:p]``   pivot ``Vector``                                                                        ✓
-      ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
-      =========== ============================================= ================== ===================== ==================
+   =========== ============================================= ================== ===================== ==================
+   Component   Description                                   ``QR``             ``QRCompactWY``       ``QRPivoted``
+   =========== ============================================= ================== ===================== ==================
+   ``F[:Q]``   ``Q`` (orthogonal/unitary) part of ``QR``      ✓ (``QRPackedQ``)  ✓ (``QRCompactWYQ``)  ✓ (``QRPackedQ``)
+   ``F[:R]``   ``R`` (upper right triangular) part of ``QR``  ✓                  ✓                     ✓
+   ``F[:p]``   pivot ``Vector``                                                                        ✓
+   ``F[:P]``   (pivot) permutation ``Matrix``                                                          ✓
+   =========== ============================================= ================== ===================== ==================
 
    The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
 
@@ -198,17 +204,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
       The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
 
-         .. math::
+      .. math::
 
-            Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+         Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
 
       where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
 
       The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
 
-         .. math::
+      .. math::
 
-            Q = I + Y T Y^T
+         Q = I + Y T Y^T
 
       where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``.)
 
@@ -289,21 +295,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    factorization to a tuple; where possible, using :func:`eigfact` is
    recommended.
 
-.. function:: eigvals(A,[irange,][vl,][vu])
+.. function:: eigvals(A,[irange,][vl,][vu]) -> values
 
    .. Docstring generated from Julia source
 
-   Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
-   :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
-   only a subset of the eigenvalues by specifying either a :class:`UnitRange`
-   ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
-   ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``\ . If ``A`` is ``Symmetric``\ , ``Hermitian`` or ``SymTridiagonal``\ , it is possible to calculate only a subset of the eigenvalues by specifying either a ``UnitRange`` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
 
-   For general non-symmetric matrices it is possible to specify how the matrix
-   is balanced before the eigenvector calculation. The option ``permute=true``
-   permutes the matrix to become closer to upper triangular, and ``scale=true``
-   scales the matrix by its diagonal elements to make rows and columns more
-   equal in norm. The default is ``true`` for both options.
+   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns moreequal in norm. The default is ``true`` for both options.
+
+.. function:: eigvals!(A,[irange,][vl,][vu]) -> values
+
+   .. Docstring generated from Julia source
+
+   Same as ``eigvals``\ , but saves space by overwriting the input ``A`` (and ``B``\ ), instead of creating a copy.
 
 .. function:: eigmax(A)
 
@@ -507,6 +511,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
+
+.. function:: givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
+
+   .. Docstring generated from Julia source
+
+   Computes the tuple ``(G, r) = givens(f, g, i1, i2)`` where ``G`` is a Givens rotation and ``r`` is a scalar such that ``G*x=y`` with ``x[i1]=f``\ , ``x[i2]=g``\ , ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The arguments ``f`` and ``g`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
+
+.. function:: givens{T}(::AbstractArray{T}, ::Integer, ::Integer, ::Integer) -> {Givens, T}
+
+   .. Docstring generated from Julia source
+
+   Computes the tuple ``(G, r) = givens(A, i1, i2, col)`` where ``G`` is Givens rotation and ``r`` is a scalar such that ``G*A[:,col]=y`` with ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The element type of ``A`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
 
 .. function:: triu(M)
 
@@ -913,12 +929,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
 
-       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+      Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
-      --------- ----------------------------------------------------------------------------------------------------------------------
+      ========= ======================================================================================================================
       ``:LM``   eigenvalues of largest magnitude (default)
       ``:SM``   eigenvalues of smallest magnitude
       ``:LR``   eigenvalues of largest real part
@@ -940,7 +956,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
       =============== ================================== ==================================
       ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
-      --------------- ---------------------------------- ----------------------------------
+      =============== ================================== ==================================
       ``nothing``     ordinary (forward)                 :math:`A`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
       =============== ================================== ==================================
@@ -956,12 +972,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
 
-       Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+      Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
-      --------- ----------------------------------------------------------------------------------------------------------------------
+      ========= ======================================================================================================================
       ``:LM``   eigenvalues of largest magnitude (default)
       ``:SM``   eigenvalues of smallest magnitude
       ``:LR``   eigenvalues of largest real part
@@ -983,7 +999,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
       =============== ================================== ==================================
       ``sigma``       iteration mode                     ``which`` refers to the problem
-      --------------- ---------------------------------- ----------------------------------
+      =============== ================================== ==================================
       ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
       =============== ================================== ==================================
@@ -1305,6 +1321,10 @@ arrays have names ending in ``'!'``.
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
 
+Note that the LAPACK API provided by Julia can and will change in the future. Since
+this API is not user-facing, there is no commitment to support/deprecate this specific
+set of functions in future releases.
+
 .. currentmodule:: Base.LinAlg.LAPACK
 
 .. function:: gbtrf!(kl, ku, m, AB) -> (AB, ipiv)
@@ -1345,6 +1365,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: gelqf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``LQ`` factorization of ``A``\ , ``A = LQ``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqlf!(A, tau)
 
    .. Docstring generated from Julia source
@@ -1352,6 +1380,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Compute the ``QL`` factorization of ``A``\ , ``A = QL``\ . ``tau`` contains scalars which parameterize the elementary reflectors of the factorization. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
 
    Returns ``A`` and ``tau`` modified in-place.
+
+.. function:: geqlf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QL`` factorization of ``A``\ , ``A = QL``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
 
 .. function:: geqrf!(A, tau)
 
@@ -1361,6 +1397,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: geqrf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``QR`` factorization of ``A``\ , ``A = QR``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqp3!(A, jpvt, tau)
 
    .. Docstring generated from Julia source
@@ -1368,6 +1412,22 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3. ``P`` is a pivoting matrix, represented by ``jpvt``\ . ``tau`` stores the elementary reflectors. ``jpvt`` must have length length greater than or equal to ``n`` if ``A`` is an ``(m x n)`` matrix. ``tau`` must have length greater than or equal to the smallest dimension of ``A``\ .
 
    ``A``\ , ``jpvt``\ , and ``tau`` are modified in-place.
+
+.. function:: geqp3!(A, jpvt) -> (A, jpvt, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3. ``P`` is a pivoting matrix, represented by ``jpvt``\ . ``jpvt`` must have length greater than or equal to ``n`` if ``A`` is an ``(m x n)`` matrix.
+
+   Returns ``A`` and ``jpvt``\ , modified in-place, and ``tau``\ , which stores the elementary reflectors.
+
+.. function:: geqp3!(A) -> (A, jpvt, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the pivoted ``QR`` factorization of ``A``\ , ``AP = QR`` using BLAS level 3.
+
+   Returns ``A``\ , modified in-place, ``jpvt``\ , which represents the pivoting matrix ``P``\ , and ``tau``\ , which stores the elementary reflectors.
 
 .. function:: gerqf!(A, tau)
 
@@ -1377,6 +1437,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``tau`` modified in-place.
 
+.. function:: gerqf!(A) -> (A, tau)
+
+   .. Docstring generated from Julia source
+
+   Compute the ``RQ`` factorization of ``A``\ , ``A = RQ``\ .
+
+   Returns ``A``\ , modified in-place, and ``tau``\ , which contains scalars which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqrt!(A, T)
 
    .. Docstring generated from Julia source
@@ -1385,6 +1453,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns ``A`` and ``T`` modified in-place.
 
+.. function:: geqrt!(A, nb) -> (A, T)
+
+   .. Docstring generated from Julia source
+
+   Compute the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``nb`` sets the block size and it must be between 1 and ``n``\ , the second dimension of ``A``\ .
+
+   Returns ``A``\ , modified in-place, and ``T``\ , which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.
+
 .. function:: geqrt3!(A, T)
 
    .. Docstring generated from Julia source
@@ -1392,6 +1468,14 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Recursively computes the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ . ``T`` contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.  The first dimension of ``T`` sets the block size and it must be between 1 and ``n``\ . The second dimension of ``T`` must equal the smallest dimension of ``A``\ .
 
    Returns ``A`` and ``T`` modified in-place.
+
+.. function:: geqrt3!(A) -> (A, T)
+
+   .. Docstring generated from Julia source
+
+   Recursively computes the blocked ``QR`` factorization of ``A``\ , ``A = QR``\ .
+
+   Returns ``A``\ , modified in-place, and ``T``\ , which contains upper triangular block reflectors which parameterize the elementary reflectors of the factorization.
 
 .. function:: getrf!(A) -> (A, ipiv, info)
 
