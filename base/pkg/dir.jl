@@ -28,15 +28,7 @@ function cd(f::Function, args...; kws...)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
             throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
-    try
-        Base.cd(()->f(args...; kws...), dir)
-    catch err
-        if isa(err, PkgError)
-            print_with_color(:red, "ERROR: $(err.msg)")
-        else
-            throw(err)
-        end
-    end
+    Base.cd(()->f(args...; kws...), dir)
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
