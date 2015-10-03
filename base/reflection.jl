@@ -182,6 +182,7 @@ function methods(f::Function)
     f.env
 end
 
+methods(x::Symbol) = error("Symbol (:$x) is not a function or type")
 methods(x::ANY) = methods(call, Tuple{isa(x,Type) ? Type{x} : typeof(x), Vararg{Any}})
 
 function length(mt::MethodTable)
