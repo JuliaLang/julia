@@ -129,6 +129,7 @@ function read!(s::IO, a::Vector{UInt8})
     for i in 1:length(a)
         a[i] = read(s, UInt8)
     end
+    return a
 end
 
 function read!{T}(s::IO, a::Array{T})
