@@ -87,5 +87,6 @@ Julia bundles the following external programs and libraries on some platforms:
 - [GIT](http://git-scm.com/about/free-and-open-source)
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
+- [OPENSSL](https://github.com/openssl/openssl/blob/master/LICENSE)
 
 On some platforms, distributions of Julia contain SSL certificate authority certificates, released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).
