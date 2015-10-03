@@ -467,7 +467,7 @@ function tuple_tfunc(argtype::ANY)
     argtype
 end
 
-function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
+function builtin_tfunction(f::ANY, args::ANY, argtype::ANY, vtypes::ObjectIdDict, sv::StaticVarInfo)
     isva = isvatuple(argtype)
     argtypes = argtype.parameters
     if is(f,tuple)
@@ -520,6 +520,12 @@ function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
     elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return Bottom
+    end
+    if isdefined(f, :code)
+        try # in case the user tfunc fails
+            return tf[3](argtypes, args, vtypes, sv)
+        end
+        return Any
     end
     if is(f,typeassert) || is(f,getfield) || is(f,apply_type) || is(f,fieldtype)
         # TODO: case of apply(), where we do not have the args
@@ -896,7 +902,7 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
             return Any
         end
     end
-    rt = builtin_tfunction(f, fargs, Tuple{argtypes...})
+    rt = builtin_tfunction(f, fargs, Tuple{argtypes...}, vtypes, sv)
     #print("=> ", rt, "\n")
     return rt
 end
