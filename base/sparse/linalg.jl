@@ -160,7 +160,7 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = Base.SparseMatrix.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
+    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
     return C
 end
 
@@ -752,7 +752,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
-# Copy colptr and rowval from one SparseMatrix to another
+# Copy colptr and rowval from one sparse matrix to another
 function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
     if C.colptr !== A.colptr
         resize!(C.colptr, length(A.colptr))

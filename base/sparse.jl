@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module SparseMatrix
+module SparseArrays
 
 using Base: Func, AddFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
@@ -17,12 +17,14 @@ import Base: @get!, abs, abs2, broadcast, ceil, complex, cond, conj, convert, co
 import Base.Broadcast: eltype_plus, broadcast_shape
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, SparseMatrixCSC,
-       blkdiag, dense, droptol!, dropzeros!, etree, issparse, nnz, nonzeros, nzrange,
+       SparseVector,
+       blkdiag, dense, droptol!, dropzeros!, etree, issparse, nonzeros, nzrange,
        rowvals, sparse, sparsevec, spdiagm, speye, spones, sprand, sprandbool, sprandn,
-       spzeros, symperm
+       spzeros, symperm, nnz
 
 include("sparse/abstractsparse.jl")
 include("sparse/sparsematrix.jl")
+include("sparse/sparsevector.jl")
 include("sparse/csparse.jl")
 
 include("sparse/linalg.jl")
@@ -32,4 +34,4 @@ if Base.USE_GPL_LIBS
     include("sparse/spqr.jl")
 end
 
-end # module SparseMatrix
+end

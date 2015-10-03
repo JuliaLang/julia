@@ -1,20 +1,13 @@
-## sparsevec.jl
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ### Data
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
-_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
-spv_x2 = view(_x2)
 
 @test isa(spv_x1, SparseVector{Float64,Int})
-@test isa(spv_x2, SparseVectorView{Float64,Int})
 
 x1_full = zeros(length(spv_x1))
-x1_full[nonzeroinds(spv_x1)] = nonzeros(spv_x1)
-
-x2_full = zeros(length(spv_x2))
-x2_full[nonzeroinds(spv_x2)] = nonzeros(spv_x2)
-
+x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
 
 ### Basic Properties
 
@@ -29,88 +22,80 @@ let x = spv_x1
 
     @test countnz(x) == 3
     @test nnz(x) == 3
-    @test nonzeroinds(x) == [2, 5, 6]
+    @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
-end
-
-let x = spv_x2
-    @test eltype(x) == Float64
-    @test ndims(x) == 1
-    @test length(x) == 8
-    @test size(x) == (8,)
-    @test size(x,1) == 8
-    @test size(x,2) == 1
-    @test !isempty(x)
-
-    @test countnz(x) == 4
-    @test nnz(x) == 4
-    @test nonzeroinds(x) == [1, 2, 6, 7]
-    @test nonzeros(x) == [3.25, 4.0, -5.5, -6.0]
 end
 
 # full
 
-for (x, xf) in [(spv_x1, x1_full), (spv_x2, x2_full)]
+for (x, xf) in [(spv_x1, x1_full)]
     @test isa(full(x), Vector{Float64})
     @test full(x) == xf
 end
 
 ### Show
 
-@test string(spv_x1) == "Sparse vector, length = 8, with 3 Float64 entries:\n" *
-"  [2]  =  1.25\n" *
-"  [5]  =  -0.75\n" *
-"  [6]  =  3.5\n"
-
+@test contains(string(spv_x1), "1.25")
+@test contains(string(spv_x1), "-0.75")
+@test contains(string(spv_x1), "3.5")
 
 ### Other Constructors
 
+### Comparison helper to ensure exact equality with internal structure
+function exact_equal(x::AbstractSparseVector, y::AbstractSparseVector)
+    eltype(x) == eltype(y) &&
+    eltype(SparseArrays.nonzeroinds(x)) == eltype(SparseArrays.nonzeroinds(y)) &&
+    length(x) == length(y) &&
+    SparseArrays.nonzeroinds(x) == SparseArrays.nonzeroinds(y) &&
+    nonzeros(x) == nonzeros(y)
+end
+
 # construct empty sparse vector
 
-@test exact_equal(sparsevector(Float64, 8), SparseVector(8, Int[], Float64[]))
+@test exact_equal(spzeros(Float64, 8), SparseVector(8, Int[], Float64[]))
 
 # from list of indices and values
 
 @test exact_equal(
-    sparsevector(Int[], Float64[], 8),
+    sparsevec(Int[], Float64[], 8),
     SparseVector(8, Int[], Float64[]))
 
 @test exact_equal(
-    sparsevector(Int[], Float64[]),
+    sparsevec(Int[], Float64[]),
     SparseVector(0, Int[], Float64[]))
 
 @test exact_equal(
-    sparsevector([3, 3], [5.0, -5.0], 8),
-    sparsevector(Float64, 8))
+    sparsevec([3, 3], [5.0, -5.0], 8),
+    spzeros(Float64, 8))
 
 @test exact_equal(
-    sparsevector([2, 3, 6], [12.0, 18.0, 25.0]),
+    sparsevec([2, 3, 6], [12.0, 18.0, 25.0]),
     SparseVector(6, [2, 3, 6], [12.0, 18.0, 25.0]))
 
 let x0 = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
     @test exact_equal(
-        sparsevector([2, 3, 6], [12.0, 18.0, 25.0], 8), x0)
+        sparsevec([2, 3, 6], [12.0, 18.0, 25.0], 8), x0)
 
     @test exact_equal(
-        sparsevector([3, 6, 2], [18.0, 25.0, 12.0], 8), x0)
+        sparsevec([3, 6, 2], [18.0, 25.0, 12.0], 8), x0)
 
     @test exact_equal(
-        sparsevector([2, 3, 4, 4, 6], [12.0, 18.0, 5.0, -5.0, 25.0], 8),
+        sparsevec([2, 3, 4, 4, 6], [12.0, 18.0, 5.0, -5.0, 25.0], 8),
         x0)
 
     @test exact_equal(
-        sparsevector([1, 1, 1, 2, 3, 3, 6], [2.0, 3.0, -5.0, 12.0, 10.0, 8.0, 25.0], 8),
+        sparsevec([1, 1, 1, 2, 3, 3, 6], [2.0, 3.0, -5.0, 12.0, 10.0, 8.0, 25.0], 8),
         x0)
 
     @test exact_equal(
-        sparsevector([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8), x0)
+        sparsevec([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8), x0)
 end
 
 # from dictionary
 
 function my_intmap(x)
     a = Dict{Int,eltype(x)}()
-    for i in nonzeroinds(x)
+    for i in SparseArrays.nonzeroinds(x)
         a[i] = x[i]
     end
     return a
@@ -118,57 +103,63 @@ end
 
 let x = spv_x1
     a = my_intmap(x)
-    xc = sparsevector(a, 8)
+    xc = sparsevec(a, 8)
     @test exact_equal(x, xc)
 
-    xc = sparsevector(a)
+    xc = sparsevec(a)
     @test exact_equal(xc, SparseVector(6, [2, 5, 6], [1.25, -0.75, 3.5]))
+end
+
+# spones - copies structure, but replaces nzvals with ones
+let x = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
+    y = spones(x)
+    @test (x .!= 0) == (y .!= 0)
+    @test y == SparseVector(8, [2, 3, 6], [1.0, 1.0, 1.0])
 end
 
 # sprand & sprandn
 
-let xr = sprand(1000, 0.3)
+let xr = sprand(1000, 0.9)
     @test isa(xr, SparseVector{Float64,Int})
     @test length(xr) == 1000
     @test all(nonzeros(xr) .>= 0.0)
 end
 
-let xr = sprand(1000, 0.3, Float32)
+let xr = sprand(1000, 0.9, Float32)
     @test isa(xr, SparseVector{Float32,Int})
     @test length(xr) == 1000
     @test all(nonzeros(xr) .>= 0.0)
 end
 
-let xr = sprandn(1000, 0.3)
+let xr = sprandn(1000, 0.9)
     @test isa(xr, SparseVector{Float64,Int})
     @test length(xr) == 1000
-    @test any(nonzeros(xr) .> 0.0) && any(nonzeros(xr) .< 0.0)
+    if !isempty(nonzeros(xr))
+        @test any(nonzeros(xr) .> 0.0) && any(nonzeros(xr) .< 0.0)
+    end
 end
 
+let xr = sprandbool(1000, 0.9)
+    @test isa(xr, SparseVector{Bool,Int})
+    @test length(xr) == 1000
+    @test all(nonzeros(xr))
+end
+
+let r1 = MersenneTwister(), r2 = MersenneTwister()
+    @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
+    @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
+    @test sprandbool(r1, 100, .9) == sprandbool(r2, 100, .9)
+end
 
 ### Element access
 
 # getindex
 
 # single integer index
-for (x, xf) in [(spv_x1, x1_full), (spv_x2, x2_full)]
+for (x, xf) in [(spv_x1, x1_full)]
     for i = 1:length(x)
         @test x[i] == xf[i]
     end
-end
-
-# range index
-let x = spv_x2
-    # range that contains no non-zeros
-    @test exact_equal(x[3:2], sparsevector(Float64, 0))
-    @test exact_equal(x[3:3], sparsevector(Float64, 1))
-    @test exact_equal(x[3:5], sparsevector(Float64, 3))
-
-    # range with non-zeros
-    @test exact_equal(x[1:length(x)], x)
-    @test exact_equal(x[1:5], SparseVector(5, [1,2], [3.25, 4.0]))
-    @test exact_equal(x[2:6], SparseVector(5, [1,5], [4.0, -5.5]))
-    @test exact_equal(x[2:8], SparseVector(7, [1,5,6], [4.0, -5.5, -6.0]))
 end
 
 # generic array index
@@ -183,7 +174,7 @@ end
 
 # setindex
 
-let xc = sparsevector(Float64, 8)
+let xc = spzeros(Float64, 8)
     xc[3] = 2.0
     @test exact_equal(xc, SparseVector(8, [3], [2.0]))
 end
@@ -304,7 +295,7 @@ let m = 80, n = 100
 end
 
 
-## sparsemat.jl
+## sparsemat: combinations with sparse matrix
 
 let S = sprand(4, 8, 0.5)
     Sf = full(S)
@@ -312,39 +303,34 @@ let S = sprand(4, 8, 0.5)
 
     # get a single column
     for j = 1:size(S,2)
-        col = getcol(S, j)
+        col = S[:, j]
         @test isa(col, SparseVector{Float64,Int})
         @test length(col) == size(S,1)
         @test full(col) == Sf[:,j]
     end
 
-    # column views
-    for j = 1:size(S,2)
-        col = view(S, :, j)
-        @test isa(col, SparseVectorView{Float64,Int})
-        @test length(col) == size(S,1)
-        @test full(col) == Sf[:,j]
+    # Get a reshaped vector
+    v = S[:]
+    @test isa(v, SparseVector{Float64,Int})
+    @test length(v) == length(S)
+    @test full(v) == Sf[:]
+
+    # Get a linear subset
+    for i=0:length(S)
+        v = S[1:i]
+        @test isa(v, SparseVector{Float64,Int})
+        @test length(v) == i
+        @test full(v) == Sf[1:i]
     end
-
-    # column-range views
-
-    # non-empty range
-    V = unsafe_colrange(S, 2:6)
-    @test isa(V, SparseMatrixCSC{Float64,Int})
-    @test size(V) == (4, 5)
-    @test full(V) == Sf[:, 2:6]
-    @test !isempty(V)
-
-    # empty range
-    V0 = unsafe_colrange(S, 2:1)
-    @test isa(V0, SparseMatrixCSC{Float64,Int})
-    @test size(V0) == (4, 0)
-    @test isempty(V0)
-
+    for i=1:length(S)+1
+        v = S[i:end]
+        @test isa(v, SparseVector{Float64,Int})
+        @test length(v) == length(S) - i + 1
+        @test full(v) == Sf[i:end]
+    end
 end
 
-
-## math.jl
+## math
 
 ### Data
 
@@ -355,13 +341,11 @@ rnd_x1 = sprand(50, 0.7) * 4.0
 rnd_x1f = full(rnd_x1)
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
-_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
-spv_x2 = view(_x2)
-
+spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
 
 ### Arithmetic operations
 
-let x = spv_x1, x2 = spv_x2
+let x = spv_x1, x2 = x2 = spv_x2
     # negate
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
@@ -418,7 +402,7 @@ let x = spv_x1, x2 = spv_x2
     # real & imag
 
     @test is(real(x), x)
-    @test exact_equal(imag(x), sparsevector(Float64, length(x)))
+    @test exact_equal(imag(x), spzeros(Float64, length(x)))
 
     xcp = complex(x, x2)
     @test exact_equal(real(xcp), x)
@@ -507,7 +491,7 @@ let x = SparseVector(3, [1, 2, 3], [-4.5, 2.5, 3.5])
     @test minabs(x) == 2.5
 end
 
-let x = sparsevector(Float64, 8)
+let x = spzeros(Float64, 8)
     @test maximum(x) == 0.0
     @test minimum(x) == 0.0
     @test maxabs(x) == 0.0
@@ -515,7 +499,7 @@ let x = sparsevector(Float64, 8)
 end
 
 
-### linalg.jl
+### linalg
 
 ### BLAS Level-1
 
@@ -526,7 +510,7 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     # axpy!
     for c in [1.0, -1.0, 2.0, -2.0]
         y = full(x)
-        @test is(axpy!(c, x2, y), y)
+        @test is(Base.axpy!(c, x2, y), y)
         @test y == full(x2 * c + x)
     end
 
@@ -606,7 +590,7 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
         @test is(A_mul_B!(α, A, x, β, y), y)
         @test_approx_eq y rr
     end
-    y = densemv(A, x)
+    y = SparseArrays.densemv(A, x)
     @test isa(y, Vector{Float64})
     @test_approx_eq y Af * xf
 end
@@ -620,7 +604,7 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
         @test is(At_mul_B!(α, A, x, β, y), y)
         @test_approx_eq y rr
     end
-    y = densemv(A, x; trans='T')
+    y = SparseArrays.densemv(A, x; trans='T')
     @test isa(y, Vector{Float64})
     @test_approx_eq y At_mul_B(Af, xf)
 end
@@ -631,9 +615,9 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     Af = full(A)
     xf = full(x)
     x2f = full(x2)
-    @test_approx_eq densemv(A, x; trans='N') Af * xf
-    @test_approx_eq densemv(A, x2; trans='T') Af.' * x2f
-    @test_approx_eq densemv(A, x2; trans='C') Af'x2f
+    @test_approx_eq SparseArrays.densemv(A, x; trans='N') Af * xf
+    @test_approx_eq SparseArrays.densemv(A, x2; trans='T') Af.' * x2f
+    @test_approx_eq SparseArrays.densemv(A, x2; trans='C') Af'x2f
 end
 
 ## sparse A * sparse x -> sparse y
@@ -672,4 +656,30 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     y = Ac_mul_B(A, x2)
     @test isa(y, SparseVector{Complex128,Int})
     @test_approx_eq full(y) Af'x2f
+end
+
+# It's tempting to share data between a SparseVector and a SparseArrays,
+# but if that's done, then modifications to one or the other will cause
+# an inconsistent state:
+sv = sparse(1:10)
+sm = convert(SparseMatrixCSC, sv)
+sv[1] = 0
+@test full(sm)[2:end] == collect(2:10)
+
+# Ensure that sparsevec with all-zero values returns an array of zeros
+@test sparsevec([1,2,3],[0,0,0]) == [0,0,0]
+
+# Compare stored zero semantics between SparseVector and SparseMatrixCSC
+let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10,[1,3,5,6,7],[0,1,2,0,3])
+    @test nnz(S) == nnz(x) == 5
+    for I = (:, 1:10, collect(1:10))
+        @test S[I,1] == S[I] == x[I] == x
+        @test nnz(S[I,1]) == nnz(S[I]) == nnz(x[I]) == nnz(x)
+    end
+    for I = (2:9, 1:2, 9:10, [3,6,1], [10,9,8], [])
+        @test S[I,1] == S[I] == x[I]
+        @test nnz(S[I,1]) == nnz(S[I]) == nnz(x[I])
+    end
+    @test S[[1 3 5; 2 4 6]] == x[[1 3 5; 2 4 6]]
+    @test nnz(S[[1 3 5; 2 4 6]]) == nnz(x[[1 3 5; 2 4 6]])
 end

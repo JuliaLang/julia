@@ -248,10 +248,6 @@ importall .Broadcast
 # statistics
 include("statistics.jl")
 
-# sparse matrices and sparse linear algebra
-include("sparse.jl")
-importall .SparseMatrix
-
 # irrational mathematical constants
 include("irrationals.jl")
 
@@ -287,6 +283,33 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# sparse matrices, vectors, and sparse linear algebra
+include("sparse.jl")
+importall .SparseArrays
+# SparseArrays module re-exports
+export
+    SparseArrays,
+    AbstractSparseArray,
+    AbstractSparseMatrix,
+    AbstractSparseVector,
+    SparseMatrixCSC,
+    SparseVector,
+    etree,
+    issparse,
+    sparse,
+    sparsevec,
+    spdiagm,
+    speye,
+    spones,
+    sprand,
+    sprandbool,
+    sprandn,
+    spzeros,
+    symperm,
+    rowvals,
+    nzrange,
+    nnz
 
 # Documentation
 
