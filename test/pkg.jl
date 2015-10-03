@@ -220,10 +220,3 @@ end"""
         end
     end
 end
-
-# issue #13374
-temp_pkg_dir() do
-    Pkg.generate("Foo", "MIT")
-    Pkg.tag("Foo")
-    Pkg.tag("Foo")
-end
