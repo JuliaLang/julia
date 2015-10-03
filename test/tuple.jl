@@ -145,12 +145,14 @@ foo(x, y, z) = x + y + z
 @test any((true,true,false)) === true
 @test any((true,true,true)) === true
 
-@test @inferred(ntuple(Base.Abs2Fun(), Val{0})) == ()
-@test @inferred(ntuple(Base.Abs2Fun(), Val{2})) == (1, 4)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{3})) == (1, 4, 9)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{4})) == (1, 4, 9, 16)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{5})) == (1, 4, 9, 16, 25)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
+ntuple_val{T}(x, ::Type{Val{T}}) = ntuple(x, T)
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{0})) == ()
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{2})) == (1, 4)
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{3})) == (1, 4, 9)
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{4})) == (1, 4, 9, 16)
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{5})) == (1, 4, 9, 16, 25)
+@test @inferred(ntuple_val(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
 
 # issue #12854
-@test_throws TypeError ntuple(identity, Val{1:2})
+@test_throws TypeError ntuple(identity, Val{1})
+@test_throws TypeError ntuple_val(identity, Val{1:2})

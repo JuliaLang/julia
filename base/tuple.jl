@@ -29,28 +29,42 @@ eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
 
-ntuple(f::Function, n::Integer) =
+const ntuple = function(f, n::Integer)
     n<=0 ? () :
     n==1 ? (f(1),) :
     n==2 ? (f(1),f(2),) :
     n==3 ? (f(1),f(2),f(3),) :
-    n==4 ? (f(1),f(2),f(3),f(4),) :
-    n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-    tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
+    tuple([f(i) for i = 1:Int(n)]...)
+end
 
-ntuple(f, ::Type{Val{0}}) = ()
-ntuple(f, ::Type{Val{1}}) = (f(1),)
-ntuple(f, ::Type{Val{2}}) = (f(1),f(2))
-ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
-ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
-ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
-@generated function ntuple{N}(f, ::Type{Val{N}})
-    if !isa(N,Int)
-        :(throw(TypeError(:ntuple, "", Int, $(QuoteNode(N)))))
-    else
-        M = N-5
-        :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
+const _ntuple_tfunc_gensym = gensym()
+const _ntuple_tfunc = function(argtypes, argexprs, vtypes, sv)
+    n = false
+    if isa(argexprs[2], Integer)
+        try
+            n = Int(argexprs[2])
+        end
     end
+
+    Core.Inference.setindex!(vtypes,
+        Core.Inference.call(Core.Inference.VarState, Int, false),
+        _ntuple_tfunc_gensym)
+    F = Core.Inference.abstract_eval_call(
+        Expr(:call, argexprs[1], _ntuple_tfunc_gensym),
+        vtypes, sv)
+    Core.Inference.delete!(vtypes,
+        _ntuple_tfunc_gensym)
+
+    if isa(n, Int)
+        return NTuple{n, F}
+    elseif F === Any
+        return Tuple
+    else
+        return Tuple{Vararg{F}}
+    end
+end
+if isdefined(Core, :Inference) && isdefined(Core.Inference, :add_tfunc)
+    Core.Inference.add_tfunc(ntuple, 2, 2, _ntuple_tfunc)
 end
 
 # 0 argument function

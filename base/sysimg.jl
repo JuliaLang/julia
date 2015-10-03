@@ -35,9 +35,9 @@ include("options.jl")
 
 # core operations & types
 include("promotion.jl")
+include("expr.jl")
 include("tuple.jl")
 include("range.jl")
-include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
