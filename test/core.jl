@@ -2180,6 +2180,21 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
 
+call_lambda1() = (()->x)(1)
+call_lambda2() = ((x)->x)()
+call_lambda3() = ((x)->x)(1,2)
+call_lambda4() = ((x,y...)->x)()
+@test (try call_lambda1(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
+@test (try call_lambda2(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
+@test (try call_lambda3(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
+@test (try call_lambda4(); false; catch e; (e::ErrorException).msg; end) == "too few arguments"
+call_lambda5() = ((x...)->x)()
+call_lambda6() = ((x...)->x)(1)
+call_lambda7() = ((x...)->x)(1,2)
+@test call_lambda5() == ()
+@test call_lambda6() == (1,)
+@test call_lambda7() == (1,2)
+
 # jl_new_bits testing
 let x = [1,2,3]
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
