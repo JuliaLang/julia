@@ -1972,9 +1972,13 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
         Value *bp = global_binding_pointer((jl_module_t*)expr, name, &bnd, false, ctx);
         // TODO: refactor. this partially duplicates code in emit_var
         if (bnd && bnd->value != NULL) {
-            if (bnd->constp && jl_isbits(jl_typeof(bnd->value)))
-                return emit_unboxed(bnd->value, ctx);
-            return mark_julia_type(builder.CreateLoad(bp), true, bnd->constp ? jl_typeof(bnd->value) : (jl_value_t*)jl_any_type);
+            if (bnd->constp) {
+                if (jl_isbits(jl_typeof(bnd->value)))
+                    return emit_unboxed(bnd->value, ctx);
+                else
+                    return mark_julia_const(bnd->value);
+            }
+            return mark_julia_type(builder.CreateLoad(bp), true, (jl_value_t*)jl_any_type);
         }
         // todo: use type info to avoid undef check
         return emit_checked_var(bp, name, ctx);
@@ -2110,13 +2114,10 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
         }
     }
 
-    bool sub1 = jl_subtype(rt1, rt2, 0);
-    bool sub2 = jl_subtype(rt2, rt1, 0);
-    bool isteq = sub1 && sub2;
-    if (!sub1 && !sub2) // types are disjoint (exhaustive test)
+    if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
 
-    bool isbits = isleaf && isteq && jl_isbits(rt1);
+    bool isbits = isleaf && jl_isbits(rt1) && jl_types_equal(rt1, rt2);
     if (isbits) { // whether this type is unique'd by value
         return emit_bits_compare(arg1, arg2, ctx);
     }
