@@ -1490,8 +1490,8 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
         for i=laty+1:la
             s[1][args[i]] = VarState(lastatype,false)
         end
-    else
-        @assert la == 0
+    elseif la != 0
+        return ((), Bottom, false) # wrong number of arguments
     end
 
     # types of closed vars
@@ -1804,7 +1804,9 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo, undef
         argtypes = Tuple{[abstract_eval(a, vtypes, sv) for a in fargs]...}
         # recur inside inner functions once we have all types
         tr,ty = typeinf(called, argtypes, called.sparams, called, false, true)
-        called.ast = tr
+        if tr !== ()
+            called.ast = tr
+        end
     end
     return e
 end
