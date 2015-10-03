@@ -2118,90 +2118,97 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_ast::Expr)
-    if !(isa(f,Function) || isa(f,IntrinsicFunction))
-        return NF
-    end
-    atypes = atype.parameters
-    argexprs = e.args[2:end]
-
-    if is(f, typeassert) && length(atypes)==2
-        # typeassert(x::S, T) => x, when S<:T
-        if isType(atypes[2]) && isleaftype(atypes[2]) &&
-            atypes[1] <: atypes[2].parameters[1]
-            return (e.args[2],())
+    local linfo,
+        metharg::Type,
+        methsp::SimpleVector,
+        atypes = atype.parameters,
+        argexprs = e.args[2:end],
+        incompletematch = false,
+        isgf = false
+    if isa(f, LambdaStaticData)
+        linfo = f
+        metharg = Tuple
+        methsp = svec()
+    else
+        if !(isa(f,Function) || isa(f,IntrinsicFunction))
+            return NF
         end
-    end
-    if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType) && !atypes[2].mutable && atypes[2].pointerfree
-        # remove redundant unbox
-        return (e.args[3],())
-    end
-    topmod = _topmod()
-    if istopfunction(topmod, f, :isbits) && length(atypes)==1 && isType(atypes[1]) &&
-        effect_free(argexprs[1],sv,true) && isleaftype(atypes[1].parameters[1])
-        return (isbits(atypes[1].parameters[1]),())
-    end
-    # special-case inliners for known pure functions that compute types
-    if isType(e.typ)
-        if (is(f,apply_type) || is(f,fieldtype) ||
-            istopfunction(topmod, f, :typejoin) ||
-            istopfunction(topmod, f, :promote_type)) &&
-                isleaftype(e.typ.parameters[1])
-            return (e.typ.parameters[1],())
+
+        if is(f, typeassert) && length(atypes)==2
+            # typeassert(x::S, T) => x, when S<:T
+            if isType(atypes[2]) && isleaftype(atypes[2]) &&
+                atypes[1] <: atypes[2].parameters[1]
+                return (e.args[2],())
+            end
         end
-    end
-    if isa(f,IntrinsicFunction)
-        return NF
-    end
+        if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType) && !atypes[2].mutable && atypes[2].pointerfree
+            # remove redundant unbox
+            return (e.args[3],())
+        end
+        topmod = _topmod()
+        if istopfunction(topmod, f, :isbits) && length(atypes)==1 && isType(atypes[1]) &&
+            effect_free(argexprs[1],sv,true) && isleaftype(atypes[1].parameters[1])
+            return (isbits(atypes[1].parameters[1]),())
+        end
+        # special-case inliners for known pure functions that compute types
+        if isType(e.typ)
+            if (is(f,apply_type) || is(f,fieldtype) ||
+                istopfunction(topmod, f, :typejoin) ||
+                istopfunction(topmod, f, :promote_type)) &&
+                    isleaftype(e.typ.parameters[1])
+                return (e.typ.parameters[1],())
+            end
+        end
+        if isa(f,IntrinsicFunction)
+            return NF
+        end
 
-    meth = _methods(f, atype, 1)
-    if meth === false || length(meth) != 1
-        return NF
-    end
-    meth = meth[1]::SimpleVector
+        local methfunc::Function
+        if isgeneric(f)
+            isgf = true
+            meth = _methods(f, atype, 1)
+            if meth === false || length(meth) != 1
+                return NF
+            end
+            meth = meth[1]::SimpleVector
+            linfo = try
+                func_for_method(meth[3],atype,meth[2])
+            catch
+                NF
+            end
+            if linfo === NF
+                return NF
+            end
+            metharg = meth[1]
+            methsp = meth[2]
+            methfunc = meth[3].func
+            methsig = meth[3].sig
+            if !(atype <: metharg)
+                incompletematch = true
+                if !inline_incompletematch_allowed || !isdefined(Main,:Base)
+                    # provide global disable if this optimization is not desirable
+                    # need Main.Base defined for MethodError
+                    return NF
+                end
+            end
+        else
+            if !isdefined(f, :code)
+                return NF
+            end
+            linfo = f.code
+            metharg = Tuple
+            methsp = svec()
+            methfunc = f
+        end
 
-    local linfo
-    linfo = try
-        func_for_method(meth[3],atype,meth[2])
-    catch
-        NF
-    end
-    if linfo === NF
-        return NF
+        if length(methfunc.env) > 0
+            # can't inline something with an env
+            return NF
+        end
     end
     linfo = linfo::LambdaStaticData
 
-    ## This code tries to limit the argument list length only when it is
-    ## growing due to recursion.
-    ## It might be helpful for some things, but turns out not to be
-    ## necessary to get max performance from recursive varargs functions.
-    # if length(atypes) > MAX_TUPLETYPE_LEN
-    #     # check call stack to see if this argument list is growing
-    #     st = inference_stack
-    #     while !isa(st, EmptyCallStack)
-    #         if st.ast === linfo.def.ast && length(atypes) > length(st.types)
-    #             atypes = limit_tuple_type(atypes)
-    #             meth = _methods(f, atypes, 1)
-    #             if meth === false || length(meth) != 1
-    #                 return NF
-    #             end
-    #             meth = meth[1]::Tuple
-    #             linfo2 = meth[3].func.code
-    #             if linfo2 !== linfo
-    #                 return NF
-    #             end
-    #             linfo = linfo2
-    #             break
-    #         end
-    #         st = st.prev
-    #     end
-    # end
-
-    if !isa(linfo,LambdaStaticData) || length(meth[3].func.env) > 0
-        return NF
-    end
-
-    sp = meth[2]::SimpleVector
-    sp = svec(sp..., linfo.sparams...)
+    sp = svec(methsp..., linfo.sparams...)
     spvals = Any[ sp[i] for i in 2:2:length(sp) ]
     for i=1:length(spvals)
         si = spvals[i]
@@ -2213,21 +2220,10 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         end
     end
 
-    metharg = meth[1]::Type
     methargs = metharg.parameters
     nm = length(methargs)
-    if !(atype <: metharg)
-        incompletematch = true
-        if !inline_incompletematch_allowed || !isdefined(Main,:Base)
-            # provide global disable if this optimization is not desirable
-            # need Main.Base defined for MethodError
-            return NF
-        end
-    else
-        incompletematch = false
-    end
 
-    (ast, ty) = typeinf(linfo, metharg, meth[2], linfo, true, true)
+    (ast, ty) = typeinf(linfo, metharg, methsp, linfo, true, true)
     if is(ast,())
         return NF
     end
@@ -2255,8 +2251,8 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
         cost ÷= 4
     end
-    inline_op = (f===(+) || f===(*) || f===min || f===max) && (3 <= length(argexprs) <= 9) &&
-        meth[3].sig == Tuple{Any,Any,Any,Vararg{Any}}
+    inline_op = isgeneric(f) && (f===(+) || f===(*) || f===min || f===max) && (3 <= length(argexprs) <= 9) &&
+        methsig == Tuple{Any,Any,Any,Vararg{Any}}
     if !inline_op && !inline_worthy(body, cost)
         if incompletematch
             # inline a typeassert-based call-site, rather than a
@@ -2264,9 +2260,9 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             # all the fiddly details
             numarg = length(argexprs)
             newnames = unique_names(ast,numarg)
-            sp = ()
+            methsp = sp
+            sp = svec()
             spvals = []
-            meth = svec(metharg, sp)
             locals = []
             newcall = Expr(:call, e.args[1])
             newcall.typ = ty
@@ -2297,7 +2293,10 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     na = length(args)
 
     isva = false
-    if na>0 && is_rest_arg(ast.args[1][na])
+    if na > 0 && is_rest_arg(ast.args[1][na])
+        if length(argexprs) < na - 1
+            return (Expr(:call, TopNode(:error), "too few arguments"), [])
+        end
         vaname = args[na]
         len_argexprs = length(argexprs)
         valen = len_argexprs-na+1
@@ -2334,12 +2333,15 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             isva = true
         end
     elseif na != length(argexprs)
-        # we have a method match only because an earlier
-        # inference step shortened our call args list, even
-        # though we have too many arguments to actually
-        # call this function
-        @assert isvarargtype(atypes[na])
-        return NF
+        if isgf
+            # we have a method match only because an earlier
+            # inference step shortened our call args list, even
+            # though we have too many arguments to actually
+            # call this function
+            @assert isvarargtype(atypes[na])
+            return NF
+        end
+        return (Expr(:call, TopNode(:error), "wrong number of arguments"), [])
     end
 
     @assert na == length(argexprs)
@@ -2558,7 +2560,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     lastexpr = pop!(body.args)
     if isa(lastexpr,LabelNode)
         push!(body.args, lastexpr)
-        push!(body.args, Expr(:call,:error,"fatal error in type inference"))
+        push!(body.args, Expr(:call, TopNode(:error), "fatal error in type inference"))
         lastexpr = nothing
     else
         @assert isa(lastexpr,Expr) "inference.jl:1774"
@@ -2745,18 +2747,25 @@ function inlining_pass(e::Expr, sv, ast)
             end
         end
     end
-    f1 = f = isconstantfunc(arg1, sv)
-    if !is(f,false)
-        f = _ieval(f)
-    end
-    if (!isa(f,Function) && !isa(f,IntrinsicFunction) &&
-        (f1 !== false || typeintersect(exprtype(arg1,sv), Function) === Bottom))
-        modu = (inference_stack::CallStack).mod
-        if !_iisdefined(:call)
-            return (e,stmts)
+
+    if isa(e.args[1], LambdaStaticData)
+        f = e.args[1]
+    else
+        f1 = f = isconstantfunc(arg1, sv)
+        if !is(f,false)
+            f = _ieval(f)
         end
-        f = _ieval(:call)
-        e.args = Any[is_global(sv,:call) ? (:call) : GlobalRef(modu, :call), e.args...]
+        if (!isa(f,Function) && !isa(f,IntrinsicFunction) &&
+            (f1 !== false || typeintersect(exprtype(arg1,sv), Function) === Bottom))
+            modu = (inference_stack::CallStack).mod
+            if !_iisdefined(:call)
+                return (e,stmts)
+            end
+            f = _ieval(:call)
+            e.args = Any[is_global(sv,:call) ? (:call) : GlobalRef(modu, :call), e.args...]
+        elseif f1 === false
+            return (e, stmts)
+        end
     end
 
     if isdefined(Main, :Base) &&
