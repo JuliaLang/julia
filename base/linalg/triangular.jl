@@ -979,41 +979,25 @@ for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!)
     @eval begin
         function ($f){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::UnitUpperTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UnitUpperTriangular{TA,S},UnitLowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
-    @eval begin
-        function ($f){TA,TB,S}(A::UnitLowerTriangular{TA,S}, B::StridedVecOrMat{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::UpperTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UpperTriangular{TA,S},LowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
-    @eval begin
-        function ($f){TA,TB,S}(A::LowerTriangular{TA,S}, B::StridedVecOrMat{TB})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
@@ -1022,41 +1006,25 @@ for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!)
     @eval begin
         function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UnitUpperTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
-    @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UnitLowerTriangular{TB,S})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UpperTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
-    @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::LowerTriangular{TB,S})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end
