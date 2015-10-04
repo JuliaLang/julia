@@ -3973,7 +3973,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
         else {
             Value *arg;
-            Type *at = theFptr->getFunctionType()->getParamType(FParamIndex++);
+            FParamIndex++;
             if (isboxed) {
                 arg = boxed(inputarg, &ctx);
                 make_gcroot(arg, &ctx);
@@ -3982,6 +3982,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 arg = emit_unbox(t, inputarg, jargty);
                 assert(!isa<UndefValue>(arg));
                 if (t->isAggregateType()) {
+#ifndef NDEBUG
+                    Type *at = theFptr->getFunctionType()->getParamType(FParamIndex-1);
+#endif
                     assert(at->isPointerTy() && at->getContainedType(0) == t);
                     // aggregate types are passed by pointer
                     Value *loc = emit_static_alloca(t, &ctx);
