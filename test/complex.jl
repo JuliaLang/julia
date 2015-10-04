@@ -2,6 +2,13 @@
 
 @test reim(2 + 3im) == (2, 3)
 
+for T in (Int64, Float64)
+    @test real(T) == T
+    @test real(Complex{T}) == T
+    @test complex(T) == Complex{T}
+    @test complex(Complex{T}) == Complex{T}
+end
+
 # Basic arithmetic
 for T in (Float16, Float32, Float64, BigFloat)
     t = true
