@@ -56,12 +56,16 @@ if [ "$ARCH" = x86_64 ]; then
   exc=seh
   echo "override MARCH = x86-64" >> Make.user
   echo 'USE_BLAS64 = 1' >> Make.user
+  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
+  echo 'LIBBLASNAME = libopenblas64_' >> Make.user
 else
   bits=32
   archsuffix=86
   exc=sjlj
   echo "override MARCH = i686" >> Make.user
   echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
+  echo 'LIBBLASNAME = libopenblas' >> Make.user
 fi
 
 # Set XC_HOST if in Cygwin or Linux
@@ -184,8 +188,6 @@ for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
-echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
-echo 'LIBBLASNAME = libopenblas' >> Make.user
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
 echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 echo 'JULIA_SYSIMG_BUILD_FLAGS=--output-ji ../usr/lib/julia/sys.ji' >> Make.user
