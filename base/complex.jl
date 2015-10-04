@@ -37,6 +37,9 @@ reim(z) = (real(z), imag(z))
 real{T<:Real}(::Type{T}) = T
 real{T<:Real}(::Type{Complex{T}}) = T
 
+complex{T<:Real}(::Type{T}) = Complex{T}
+complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
+
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
 isimag(z::Number) = real(z) == 0
