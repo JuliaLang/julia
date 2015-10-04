@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 extern int jl_lineno;
+extern const char *jl_filename;
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym);
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
@@ -159,6 +160,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         }
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
+            jl_filename = jl_linenode_file(e)->name;
         }
         if (jl_is_newvarnode(e)) {
             jl_value_t *var = jl_fieldref(e,0);
