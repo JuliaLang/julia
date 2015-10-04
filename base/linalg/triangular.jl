@@ -986,7 +986,7 @@ end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::AbstractTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UnitUpperTriangular{TA,S},UnitLowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
             ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
@@ -995,7 +995,7 @@ end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::AbstractTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UpperTriangular{TA,S},LowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
             ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
@@ -1013,7 +1013,7 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
             ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
@@ -1022,7 +1022,7 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
             ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
