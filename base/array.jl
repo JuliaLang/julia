@@ -313,7 +313,10 @@ end
 setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
 setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)
 
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x)::T, to_index(i1), to_indexes(I...)...)
+# Type inference is confused by `@inbounds return ...` and introduces a
+# !ispointerfree local variable and a GC frame
+unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) =
+    (@inbounds arrayset(A, convert(T,x)::T, to_index(i1), to_indexes(I...)...); A)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
