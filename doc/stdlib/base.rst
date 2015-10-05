@@ -306,7 +306,7 @@ All Objects
 
    Get a unique integer id for ``x``\ . ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``\ .
 
-.. function:: hash(x[, h])
+.. function:: hash(x[, h::UInt])
 
    .. Docstring generated from Julia source
 

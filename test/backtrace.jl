@@ -34,11 +34,13 @@ eval(Expr(:function, Expr(:call, :test_inline_1),
 # different-file inline
 eval(Expr(:function, Expr(:call, :test_inline_2),
                      Expr(:block, LineNumberNode(symbol("backtrace.jl"), 99),
+                     LineNumberNode(symbol("foobar.jl"), 666),
                      LineNumberNode(symbol("/foo/bar/baz.jl"), 111),
                      Expr(:call, :throw, "foo"))))
 
 try
     eval(:(test_inline_1()))
+    error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_1, catch_backtrace())
     if is(lkup, nothing)
@@ -51,6 +53,7 @@ catch err
 end
 try
     eval(:(test_inline_2()))
+    error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_2, catch_backtrace())
     if is(lkup, nothing)
@@ -72,6 +75,7 @@ loc = functionloc(f12977)
 @test endswith(loc[1], "backtrace.jl")
 @test loc[2] == linenum
 
+# issue #922: SimplifyCFG pass merges throws
 code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p, skipC)
 
 @noinline function test_throw_commoning(x)

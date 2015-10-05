@@ -98,15 +98,15 @@ julia-sysimg-release : julia-inference julia-ui-release
 julia-sysimg-debug : julia-inference julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
-JULIA_ENABLE_DOCBUILD ?= 1
-julia-genstdlib : julia-sysimg-$(JULIA_BUILD_MODE)
-ifeq ($(JULIA_ENABLE_DOCBUILD), 1)
-	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl)
-endif
-
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-genstdlib
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
 debug release : % : julia-%
+
+julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
+	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl)
+
+docs: julia-genstdlib
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -448,6 +448,10 @@ ifneq ($(OS), WINNT)
 endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(private_libdir)
+	# We need to bundle ca certs on linux now that we're using libgit2 with ssl
+ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
+	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/
+endif
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.

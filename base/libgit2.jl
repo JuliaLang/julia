@@ -484,6 +484,11 @@ function transact(f::Function, repo::GitRepo)
     end
 end
 
+function set_ssl_cert_locations(cert_file)
+    GIT_OPT_SET_SSL_CERT_LOCATIONS = 12
+    ccall((:git_libgit2_opts, :libgit2), Cint, (Cint, Cstring, Ptr{Void}),
+                        GIT_OPT_SET_SSL_CERT_LOCATIONS, cert_file, C_NULL)
+end
 
 function __init__()
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
@@ -491,6 +496,13 @@ function __init__()
     atexit() do
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
+
+    # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
+    cert_file = abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
+    if isfile(cert_file)
+        set_ssl_cert_locations(cert_file)
+    end
 end
+
 
 end # module

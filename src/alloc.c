@@ -159,7 +159,7 @@ jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
     return jl_new_bits_internal(bt, data, &len);
 }
 
-// run time version of pointerref intrinsic
+// run time version of pointerref intrinsic (warning: i is not rooted)
 DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 {
     JL_TYPECHK(pointerref, pointer, p);
@@ -192,7 +192,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     }
 }
 
-// run time version of pointerset intrinsic
+// run time version of pointerset intrinsic (warning: x is not gc-rooted)
 DLLEXPORT void jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
 {
     JL_TYPECHK(pointerset, pointer, p);
