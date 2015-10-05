@@ -2647,10 +2647,13 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
         else if (jl_is_leaf_type(aty)) {
             jl_cgval_t arg1 = emit_expr(args[1], ctx);
             Value *sz;
-            if (aty == (jl_value_t*)jl_datatype_type)
-                sz = emit_datatype_nfields(arg1);
-            else
+            if (aty == (jl_value_t*)jl_datatype_type) {
+                assert(arg1.isboxed);
+                sz = emit_datatype_nfields(arg1.V);
+            }
+            else {
                 sz = ConstantInt::get(T_size, jl_datatype_nfields(aty));
+            }
             *ret = mark_julia_type(sz, false, jl_long_type);
             JL_GC_POP();
             return true;
@@ -2664,8 +2667,9 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             rt2 = expr_type(args[2], ctx); // index argument type
             if (rt2 == (jl_value_t*)jl_long_type) {
                 jl_cgval_t ty = emit_expr(args[1], ctx);
-                Value *types_svec = emit_datatype_types(ty);
-                Value *types_len = emit_datatype_nfields(ty);
+                assert(ty.isboxed);
+                Value *types_svec = emit_datatype_types(ty.V);
+                Value *types_len = emit_datatype_nfields(ty.V);
                 Value *idx = emit_unbox(T_size, emit_unboxed(args[2], ctx), (jl_value_t*)jl_long_type);
                 emit_bounds_check(ty, (jl_value_t*)jl_datatype_type, idx, types_len, ctx);
                 Value *fieldtyp = builder.CreateLoad(builder.CreateGEP(builder.CreateBitCast(types_svec, T_ppjlvalue), idx));

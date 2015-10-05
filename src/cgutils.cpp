@@ -871,24 +871,22 @@ static Value *emit_typeof(const jl_cgval_t &p)
     return literal_pointer_val(aty);
 }
 
-static Value *emit_datatype_types(const jl_cgval_t &dt)
+static Value *emit_datatype_types(Value *dt)
 {
-    assert(dt.isboxed);
     return builder.
         CreateLoad(builder.
                    CreateBitCast(builder.
-                                 CreateGEP(builder.CreateBitCast(dt.V, T_pint8),
+                                 CreateGEP(builder.CreateBitCast(dt, T_pint8),
                                            ConstantInt::get(T_size, offsetof(jl_datatype_t, types))),
                                  T_ppjlvalue));
 }
 
-static Value *emit_datatype_nfields(const jl_cgval_t &dt)
+static Value *emit_datatype_nfields(Value *dt)
 {
-    assert(dt.isboxed);
     Value *nf = builder.
         CreateLoad(builder.
                    CreateBitCast(builder.
-                                 CreateGEP(builder.CreateBitCast(dt.V, T_pint8),
+                                 CreateGEP(builder.CreateBitCast(dt, T_pint8),
                                            ConstantInt::get(T_size, offsetof(jl_datatype_t, nfields))),
                                  T_pint32));
 #ifdef _P64
@@ -896,6 +894,45 @@ static Value *emit_datatype_nfields(const jl_cgval_t &dt)
 #endif
     return nf;
 }
+
+static Value *emit_datatype_size(Value *dt)
+{
+    Value *size = builder.
+        CreateLoad(builder.
+                   CreateBitCast(builder.
+                                 CreateGEP(builder.CreateBitCast(dt, T_pint8),
+                                           ConstantInt::get(T_size, offsetof(jl_datatype_t, size))),
+                                 T_pint32));
+    return size;
+}
+
+static Value *emit_datatype_mutabl(Value *dt)
+{
+    Value *mutabl = builder.
+        CreateLoad(builder.CreateGEP(builder.CreateBitCast(dt, T_pint8),
+                                     ConstantInt::get(T_size, offsetof(jl_datatype_t, mutabl))));
+    return builder.CreateTrunc(mutabl, T_int1);
+}
+
+static Value *emit_datatype_abstract(Value *dt)
+{
+    Value *abstract = builder.
+        CreateLoad(builder.CreateGEP(builder.CreateBitCast(dt, T_pint8),
+                                     ConstantInt::get(T_size, offsetof(jl_datatype_t, abstract))));
+    return builder.CreateTrunc(abstract, T_int1);
+}
+
+static Value *emit_datatype_isbitstype(Value *dt)
+{
+    Value *immut = builder.CreateXor(emit_datatype_mutabl(dt), ConstantInt::get(T_int1, -1));
+    Value *nofields = builder.CreateICmpEQ(emit_datatype_nfields(dt), ConstantInt::get(T_size, 0));
+    Value *isbitstype = builder.CreateAnd(immut, builder.CreateAnd(nofields,
+            builder.CreateXor(builder.CreateAnd(emit_datatype_abstract(dt),
+                    builder.CreateICmpSGT(emit_datatype_size(dt), ConstantInt::get(T_int32, 0))),
+                ConstantInt::get(T_int1, -1))));
+    return isbitstype;
+}
+
 
 // --- generating various error checks ---
 
