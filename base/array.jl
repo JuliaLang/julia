@@ -349,6 +349,9 @@ function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
     return A
 end
 
+setindex!{T}(A::Array{T}, x::Number, c::Colon) = unsafe_setindex!(A, x, c)
+unsafe_setindex!{T}(A::Array{T}, x::Number, ::Colon) = fill!(A, x)
+
 # efficiently grow an array
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
