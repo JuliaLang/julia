@@ -258,6 +258,7 @@ Building Julia requires that the following software be installed:
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
+- **[openssl]**                 — needed for HTTPS support in `libgit2` on Linux, install via `apt-get install libssl-dev` or `yum install openssl-devel`.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -317,6 +318,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
 [Rmath-julia]:  https://github.com/JuliaLang/Rmath-julia
+[openssl]:      https://www.openssl.org
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries
