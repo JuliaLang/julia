@@ -8,8 +8,8 @@ scale(s::Number, X::AbstractArray) = s*X
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 function generic_scale!(X::AbstractArray, s::Number)
-    for i = 1:length(X)
-        @inbounds X[i] *= s
+    for I in eachindex(X)
+        @inbounds X[I] *= s
     end
     X
 end
@@ -18,8 +18,14 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
-    for i = 1:length(X)
-        @inbounds C[i] = X[i]*s
+    if size(C) == size(X)
+        for I in eachindex(C, X)
+            @inbounds C[I] = X[I]*s
+        end
+    else
+        for (IC, IX) in zip(eachindex(C), eachindex(X))
+            @inbounds C[IC] = X[IX]*s
+        end
     end
     C
 end
