@@ -581,7 +581,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
-            if (alsz > sz)
+            if (sz & (al - 1))
                 st->haspadding = 1;
             sz = alsz;
             if (al > alignm)
