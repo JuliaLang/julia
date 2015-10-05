@@ -676,6 +676,8 @@ end
 if VERSION < v"0.4.0-dev+436"
     export UDPSocket
     const UDPSocket = UdpSocket
+    export TCPSocket
+    const TCPSocket = Base.TcpSocket
 end
 
 if VERSION < v"0.4.0-dev+2340"
