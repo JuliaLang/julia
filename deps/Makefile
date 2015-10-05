@@ -1908,7 +1908,7 @@ $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure: $(SRCDIR)/srccache/patche
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure
-	mkdir $(dir $@)
+	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$< $(CONFIGURE_COMMON)
 	touch -c $@
