@@ -36,8 +36,8 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-slice(A::AbstractArray, I::ViewIndex...) = _slice(A, to_indexes(I...))
-slice(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _slice(A, to_indexes(I...))
+slice(A::AbstractArray, I::ViewIndex...) = _slice(A, to_nonscalar_indexes(I...))
+slice(A::AbstractArray, I::Tuple{Vararg{ViewIndex}}) = _slice(A, to_nonscalar_indexes(I...))
 function _slice(A, I)
     checkbounds(A, I...)
     slice_unsafe(A, I)
@@ -60,7 +60,7 @@ end
 # For S4, J[1] corresponds to I[2], because of the slice along
 # dimension 1 in S2
 
-slice_unsafe(A::AbstractArray, J) = _slice_unsafe(A, to_indexes(J...))
+slice_unsafe(A::AbstractArray, J) = _slice_unsafe(A, to_nonscalar_indexes(J...))
 @generated function _slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
@@ -91,7 +91,7 @@ function _sub(A, I)
     sub_unsafe(A, I)
 end
 
-sub_unsafe(A::AbstractArray, J) = _sub_unsafe(A, to_indexes(J...))
+sub_unsafe(A::AbstractArray, J) = _sub_unsafe(A, to_nonscalar_indexes(J...))
 @generated function _sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
@@ -345,8 +345,10 @@ end
     length(I.parameters) == LD ? (:(LinearFast())) : (:(LinearSlow()))
 end
 
-getindex(::Colon, i) = to_index(i)
-unsafe_getindex(v::Colon, i) = to_index(i)
+getindex(::Colon, i::Real) = to_index(i)
+unsafe_getindex(v::Colon, i::Real) = to_index(i)
+getindex(::Colon, i) = to_nonscalar_index(i)
+unsafe_getindex(v::Colon, i) = to_nonscalar_index(i)
 
 step(::Colon) = 1
 first(::Colon) = 1

@@ -309,14 +309,9 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
 end
 setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
-# convert to a supported index type (Array, Colon, or Int)
+# convert to a supported scalar index type (Int)
 to_index(i::Int) = i
 to_index(i::Integer) = convert(Int,i)::Int
-to_index(c::Colon) = c
-to_index(I::AbstractArray{Bool}) = find(I)
-to_index(A::AbstractArray) = A
-to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
-to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
 
 to_indexes() = ()
