@@ -476,47 +476,36 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 macro testset(args...)
-    length(args) > 0 || error("Too few arguments to @testset")
+    length(args) > 0 || error("No arguments to @testset")
 
-    options = Dict{Symbol, Any}()
-    desc = "test set"
     tests = args[end]
     # if we're at the top level we'll default to DefaultTestSet. Otherwise
     # default to the type of the parent testset
-    testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
 
-    for arg in args[1:end-1]
-        # a standalone symbol is assumed to be the test set we should use
-        if isa(arg, Symbol)
-            testsettype = arg
-        # a string is the description
-        elseif isa(arg, String)
-            desc = arg
-        # an assignment is an option
-        elseif isa(arg, Expr) && arg.head == :(=)
-            options[arg.args[1]] = eval(arg.args[2])
-        else
-            error("Unexpected argument $arg to @testset")
-        end
+    desc, testsettype, options = parse_testset_args(args[1:end-1])
+    if desc == nothing
+        desc = "test set"
+    end
+    if testsettype == nothing
+        testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a change to take
     # action (such as reporting the results)
-    ts = gensym()
     quote
-        $ts = $(esc(testsettype))($desc; $options...)
-        push_testset($ts)
+        ts = $(testsettype)($desc; $options...)
+        push_testset(ts)
         try
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
         end
         pop_testset()
-        finish($ts)
+        finish(ts)
     end
 end
 
@@ -531,6 +520,7 @@ is provided, one is constructed based on the variables.
 """
 macro testloop(args...)
     length(args) > 0 || error("no arguments to @testloop")
+
     testloop = args[end]
     isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
     # pull out the loop variables. We might need them for generating the
@@ -547,12 +537,9 @@ macro testloop(args...)
         error("Unexpected argument to @testloop")
     end
 
-    # Parse arguments to do determine if any options passed in
-    if length(args) == 2
-        # Looks like description format
-        desc = args[1]
-        isa(desc,AbstractString) || (isa(desc,Expr) && desc.head == :string) || error("Unexpected argument to @testloop")
-    elseif length(args) == 1
+    desc, testsettype, options = parse_testset_args(args[1:end-1])
+
+    if desc == nothing
         # No description provided. Generate from the loop variable names
         v = loopvars[1].args[1]
         desc = Expr(:string,"$v = ",v) # first variable
@@ -561,28 +548,59 @@ macro testloop(args...)
             push!(desc.args,", $v = ")
             push!(desc.args,v)
         end
-    else
-        error("Too many arguments to @testloop")
+    end
+
+    if testsettype == nothing
+        testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
     # Uses a similar block as for `@testset`, except that it is
     # wrapped in the outer loop provided by the user
-    ts = gensym()
     tests = testloop.args[2]
     blk = quote
-        $ts = DefaultTestSet($(esc(desc)))
-        push_testset($ts)
+        ts = $(testsettype)($desc; $options...)
+        push_testset(ts)
         try
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record($ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
         end
         pop_testset()
-        finish($ts)
+        finish(ts)
     end
     Expr(:comprehension, blk, [esc(v) for v in loopvars]...)
+end
+
+"""
+Parse the arguments to the `@testset` or `@testloop` macro to pull out
+the description, Testset Type, and options. Generally this should be called
+with all the macro arguments except the last one, which is the test expression
+itself.
+"""
+function parse_testset_args(args)
+    desc = nothing
+    testsettype = nothing
+    options = :(Dict{Symbol, Any}())
+    for arg in args[1:end]
+        # a standalone symbol is assumed to be the test set we should use
+        if isa(arg, Symbol)
+            testsettype = esc(arg)
+        # a string is the description
+        elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head == :string)
+            desc = esc(arg)
+        # an assignment is an option
+        elseif isa(arg, Expr) && arg.head == :(=)
+            # we're building up a Dict literal here
+            key = Expr(:quote, arg.args[1])
+            push!(options.args, Expr(:(=>), key, arg.args[2]))
+        else
+            error("Unexpected argument $arg to @testset")
+        end
+    end
+
+    (desc, testsettype, options)
 end
 
 #-----------------------------------------------------------------------
@@ -596,7 +614,7 @@ to create it. If no test set is active, use the fallback default test set.
 """
 function get_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return length(testsets) == 0 ? (fallback_testset, Dict()) : testsets[end]
+    return length(testsets) == 0 ? (fallback_testset) : testsets[end]
 end
 
 """
@@ -605,9 +623,9 @@ end
 Adds the test set to the task_local_storage, as well as the options used to
 create it.
 """
-function push_testset(ts::AbstractTestSet, options::Dict = Dict())
+function push_testset(ts::AbstractTestSet)
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    push!(testsets, (ts, options))
+    push!(testsets, ts)
     setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
 end
 
@@ -619,7 +637,7 @@ used to create it. If there are no active test sets, returns the default test se
 """
 function pop_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    ret = length(testsets) == 0 ? (fallback_testset, Dict()) : pop!(testsets)
+    ret = length(testsets) == 0 ? fallback_testset : pop!(testsets)
     setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
     return ret
 end

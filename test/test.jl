@@ -126,16 +126,26 @@ end
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
 
+# import the methods needed for defining our own testset type
+import Base.Test: record, finish, get_testset_depth, get_testset
+import Base.Test: AbstractTestSet, Result, Pass, Fail, Error
 immutable CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
+    # constructor takes a description string and options keyword arguments
     CustomTestSet(desc; foo=1) = new(desc, foo, [])
 end
 
-Base.Test.record(ts::CustomTestSet, child::Base.Test.AbstractTestSet) = push!(ts.results, child)
-Base.Test.record(ts::CustomTestSet, res::Base.Test.Result) = push!(ts.results, res)
-Base.Test.finish(ts::CustomTestSet) = ts
+record(ts::CustomTestSet, child::AbstractTestSet) = push!(ts.results, child)
+record(ts::CustomTestSet, res::Result) = push!(ts.results, res)
+function finish(ts::CustomTestSet)
+    # just record if we're not the top-level parent
+    if get_testset_depth() > 0
+        record(get_testset(), ts)
+    end
+    ts
+end
 
 ts = @testset CustomTestSet "Testing custom testsets" begin
     # this testset should inherit the parent testset type
@@ -148,8 +158,15 @@ ts = @testset CustomTestSet "Testing custom testsets" begin
     end
     # this testset has its own testset type
     @testset CustomTestSet foo=4 "custom testset inner 2" begin
-        # this testset should inherit the type and arguments
-        @testset "custom testset inner 2 inner" begin
+        # this testset should inherit the type, but not the argument. If a particular
+        # testset type wants inheritance behavior they should implement it themselves
+        # using get_testset() in the constructor
+        @testset "custom testset inner 2 inner 1" begin
+            @test true
+        end
+        # make sure the RHS can use computed values, also tests options without
+        # specifying the testset type
+        @testset foo=(1+2) "custom testset inner 2 inner 2" begin
             @test true
         end
     end
@@ -161,29 +178,41 @@ end
 @test typeof(ts.results[1]) == CustomTestSet
 @test ts.results[1].description == "custom testset inner 1"
 @test ts.results[1].foo == 1
-@test typeof(ts.results[1].results[1]) == Base.Test.Pass
-@test typeof(ts.results[1].results[2]) == Base.Test.Fail
-@test typeof(ts.results[1].results[3]) == Base.Test.Error
-@test typeof(ts.results[1].results[4]) == Base.Test.Fail
-@test typeof(ts.results[1].results[5]) == Base.Test.Pass
+@test typeof(ts.results[1].results[1]) == Pass
+@test typeof(ts.results[1].results[2]) == Fail
+@test typeof(ts.results[1].results[3]) == Error
+@test typeof(ts.results[1].results[4]) == Fail
+@test typeof(ts.results[1].results[5]) == Pass
 
 @test typeof(ts.results[2]) == CustomTestSet
-@test ts.results[2].description == "custom testset inner 1"
+@test ts.results[2].description == "custom testset inner 2"
 @test ts.results[2].foo == 4
 @test typeof(ts.results[2].results[1]) == CustomTestSet
-@test ts.results[2].results[1].foo == 4
-@test typeof(ts.results[2].results[1].results[1]) == Base.Test.Pass
+@test ts.results[2].results[1].foo == 1
+@test typeof(ts.results[2].results[1].results[1]) == Pass
+@test typeof(ts.results[2].results[2]) == CustomTestSet
+@test ts.results[2].results[2].foo == 3
 
-# # test custom testset types on testloops
-# tss = @testloop CustomTestSet "custom testloop $i" for i in 1:6
-#     @test iseven(i)
-# end
-#
-# for i in 1:6
-#     @test typeof(tss[i]) == CustomTestSet
-#     if iseven(i)
-#         @test typeof(tss[i].results[1]) == Base.Test.Pass
-#     else
-#         @test typeof(tss[i].results[1]) == Base.Test.Fail
-#     end
-# end
+# test custom testset types on testloops
+tss = @testloop CustomTestSet foo=3 "custom testloop $i" for i in 1:6
+    @testloop "inner testloop $i-$j" for j in 1:3
+        @test iseven(i + j)
+    end
+    # make sure a testset within a testloop works
+    @testset "inner testset $i" begin
+        @test iseven(i)
+    end
+end
+
+
+for i in 1:6
+    @test typeof(tss[i]) == CustomTestSet
+    @test tss[i].foo == 3
+    for j in 1:3
+        @test typeof(tss[i].results[j]) == CustomTestSet
+        @test tss[i].results[j].foo == 1
+        @test typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
+    end
+    @test typeof(tss[i].results[4]) == CustomTestSet
+    @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
+end
