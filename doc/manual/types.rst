@@ -711,6 +711,21 @@ pointers to individually allocated :obj:`Real` objects — which may well be
 complex objects, which are declared to be implementations of the
 :obj:`Real` abstract type.
 
+Since ``Point{Float64}`` is not a subtype of ``Point{Real}``, the following method can't be applied to arguments of type ``Point{Float64}``::
+
+    function norm(p::Point{Real})
+       sqrt(p.x^2 + p.y^2)
+    end
+
+The correct way to define a method that accepts all arguments of type ``Point{T}`` where ``T`` is a subtype of ``Real`` is::
+
+    function norm{T<:Real}(p::Point{T})
+       sqrt(p.x^2 + p.y^2)
+    end
+
+More examples will be discussed later in :ref:`man-methods`.
+
+
 How does one construct a ``Point`` object? It is possible to define
 custom constructors for composite types, which will be discussed in
 detail in :ref:`man-constructors`, but in the absence of any
