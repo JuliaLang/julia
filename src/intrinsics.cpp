@@ -52,6 +52,7 @@ namespace JL_I {
 
 using namespace JL_I;
 Function *runtime_func[num_intrinsics];
+void* runtime_fp[num_intrinsics];
 unsigned intrinsic_nargs[num_intrinsics];
 
 #include "ccall.cpp"
@@ -409,6 +410,94 @@ int get_bitstype_nbits(jl_value_t *bt)
 
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually "box" the value however)
 static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    // Examine the first argument //
+    jl_value_t *bt = static_eval(targ, ctx, true, true);
+    if (bt && !jl_is_leaf_type(bt)) {
+        jl_add_linfo_root(ctx->linfo, bt);
+    }
+
+    if (!bt || !jl_is_bitstype(bt)) {
+        // it's easier to throw a good error from C than llvm
+        if (bt) targ = bt;
+        int last_depth = ctx->gc.argDepth;
+        Value *arg1 = emit_boxed_rooted(targ, ctx).V;
+        Value *arg2 = emit_boxed_rooted(x, ctx).V;
+        Value *func = prepare_call(runtime_func[box]);
+#ifdef LLVM37
+        Value *r = builder.CreateCall(func, {arg1, arg2});
+#else
+        Value *r = builder.CreateCall2(func, arg1, arg2);
+#endif
+        ctx->gc.argDepth = last_depth;
+        jl_value_t *et = expr_type(targ, ctx);
+        return mark_julia_type(r, true, jl_is_type_type(et) ? jl_tparam0(et) : (jl_value_t*)jl_any_type);
+    }
+
+    Type *llvmt = staticeval_bitstype(bt);
+    int nb = jl_datatype_size(bt);
+
+    // Examine the second argument //
+    jl_cgval_t v = emit_unboxed(x, ctx);
+    bool isboxed;
+    Type *vxt = julia_type_to_llvm(v.typ, &isboxed);
+
+    if (!jl_is_datatype(v.typ)
+        || !jl_is_bitstype(v.typ)
+        || jl_datatype_size(v.typ) != nb) {
+        Value *typ = emit_typeof(v);
+        if (!jl_is_bitstype(v.typ)) {
+            if (isboxed) {
+                Value *isbits = emit_datatype_isbitstype(typ);
+                error_unless(isbits, "reinterpret: expected bitstype value for second argument", ctx);
+            }
+            else {
+                emit_error("reinterpet: expected bitstype value for second argument", ctx);
+                return jl_cgval_t();
+            }
+        }
+        if (jl_datatype_size(v.typ) != nb) {
+            if (isboxed) {
+                Value *size = emit_datatype_size(typ);
+                error_unless(builder.CreateICmpEQ(size, ConstantInt::get(T_int32, nb)),
+                            "reinterpet: argument size does not match size of target type", ctx);
+            }
+            else {
+                emit_error("reinterpet: argument size does not match size of target type", ctx);
+                return jl_cgval_t();
+            }
+        }
+    }
+
+    Value *vx = v.V;
+    if (v.ispointer) {
+        vx = v.V;
+        if (isboxed) // try to load as original Type, to preserve llvm optimizations
+            vxt = llvmt; // but if the v.typ is not well known, use T
+        if (vx->getType()->getPointerElementType() != vxt)
+            vx = builder.CreatePointerCast(vx, vxt->getPointerTo());
+        vx = builder.CreateLoad(vx);
+    }
+
+    vxt = vx->getType();
+    if (vxt != llvmt) {
+        if (llvmt == T_int1)
+            vx = builder.CreateTrunc(vx, llvmt);
+        else if (vxt == T_int1 && llvmt == T_int8)
+            vx = builder.CreateZExt(vx, llvmt);
+        else if (vxt->isPointerTy() && !llvmt->isPointerTy())
+            vx = builder.CreatePtrToInt(vx, llvmt);
+        else if (!vxt->isPointerTy() && llvmt->isPointerTy())
+            vx = builder.CreateIntToPtr(vx, llvmt);
+        else
+            vx = builder.CreateBitCast(vx, llvmt);
+    }
+
+    return mark_julia_type(vx, false, bt);
+}
+
+// put a bits type tag on some value
+static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     // Examine the first argument //
     jl_value_t *bt = staticeval_bitstype(targ, NULL, ctx);
@@ -857,18 +946,30 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
             Value *x = emit_boxed_rooted(args[1], ctx).V;
+#ifdef LLVM37
+            r = builder.CreateCall(func, {x});
+#else
             r = builder.CreateCall(func, x);
+#endif
         }
         else if (nargs == 2) {
             Value *x = emit_boxed_rooted(args[1], ctx).V;
             Value *y = emit_boxed_rooted(args[2], ctx).V;
+#ifdef LLVM37
+            r = builder.CreateCall(func, {x, y});
+#else
             r = builder.CreateCall2(func, x, y);
+#endif
         }
         else if (nargs == 3) {
             Value *x = emit_boxed_rooted(args[1], ctx).V;
             Value *y = emit_boxed_rooted(args[2], ctx).V;
             Value *z = emit_boxed_rooted(args[3], ctx).V;
+#ifdef LLVM37
+            r = builder.CreateCall(func, {x, y, z});
+#else
             r = builder.CreateCall3(func, x, y, z);
+#endif
         }
         else {
             assert(0);
@@ -883,7 +984,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case box:
         return generic_box(args[1], args[2], ctx);
     case unbox:
-        return generic_box(args[1], args[2], ctx);
+        return generic_unbox(args[1], args[2], ctx); // TODO: replace with generic_box
     case trunc_int:
         return generic_trunc(args[1], args[2], ctx, false, false);
     case checked_trunc_sint:
@@ -1453,6 +1554,36 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     return NULL;
 }
 
+typedef jl_value_t *(*intrinsic_call_1_arg)(jl_value_t*);
+typedef jl_value_t *(*intrinsic_call_2_arg)(jl_value_t*, jl_value_t*);
+typedef jl_value_t *(*intrinsic_call_3_arg)(jl_value_t*, jl_value_t*, jl_value_t*);
+#define jl_is_intrinsic(v)       jl_typeis(v,jl_intrinsic_type)
+
+JL_CALLABLE(jl_f_intrinsic_call)
+{
+    JL_NARGSV(intrinsic_call, 1);
+    JL_TYPECHK(intrinsic_call, intrinsic, args[0]);
+    intrinsic f = (intrinsic)*(uint32_t*)jl_data_ptr(args[0]);
+    if (f == fptoui && nargs == 1)
+        f = fptoui_auto;
+    if (f == fptosi && nargs == 1)
+        f = fptosi_auto;
+    unsigned fargs = intrinsic_nargs[f];
+    JL_NARGS(intrinsic_call, 1 + fargs, 1 + fargs);
+    switch (fargs) {
+        case 1:
+            return ((intrinsic_call_1_arg)runtime_fp[f])(args[1]);
+        case 2:
+            return ((intrinsic_call_2_arg)runtime_fp[f])(args[1], args[2]);
+        case 3:
+            return ((intrinsic_call_3_arg)runtime_fp[f])(args[1], args[2], args[3]);
+        default:
+            assert(0 && "unexpected number of arguments to an intrinsic function");
+    }
+    abort();
+}
+
+
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
                               void *addr, Module *m)
 {
@@ -1540,6 +1671,9 @@ extern "C" void jl_init_intrinsic_functions(void)
     //ADD_I(fptosi_auto); ADD_I(fptoui_auto); // these intrinsics are "hidden" in fpto*i
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(llvmcall);
+
+    jl_set_const(inm, jl_symbol("intrinsic_call"),
+            (jl_value_t*)jl_new_closure(jl_f_intrinsic_call, (jl_value_t*)jl_symbol("intrinsic_call"), NULL));
 }
 #undef ADD_I
 
@@ -1550,12 +1684,14 @@ static void add_intrinsic_to_codegen(Module *m, const std::string &name, intrins
     runtime_func[f] = func;
     add_named_global(func, pfunc);
     intrinsic_nargs[f] = nargs;
+    runtime_fp[f] = pfunc;
 }
 
 static void add_intrinsic_to_codegen(intrinsic alias, intrinsic base)
 {
     runtime_func[alias] = runtime_func[base];
     intrinsic_nargs[alias] = intrinsic_nargs[base];
+    runtime_fp[alias] = runtime_fp[base];
 }
 
 #define ADD_I(name, nargs) add_intrinsic_to_codegen(m, "jl_" #name, name, nargs, args##nargs, (void*)&jl_##name)
@@ -1613,6 +1749,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     ADD_I(check_top_bit, 1);
     ADD_I(nan_dom_err, 2);
     ADD_I(fptosi_auto, 1); ADD_I(fptoui_auto, 1);
+
 }
 
 #undef ADD_I

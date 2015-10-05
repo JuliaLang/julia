@@ -2353,6 +2353,12 @@ end
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)
 
+# issue #12832
+@test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
+@test_throws ErrorException reinterpret(Float64, Complex64(1))
+@test_throws ErrorException reinterpret(Complex64, Float64(1))
+@test_throws ErrorException reinterpret(Int32, false)
+
 # issue #41
 ndigf(n) = Float64(log(Float32(n)))
 @test Float64(log(Float32(256))) == ndigf(256) == 5.545177459716797
