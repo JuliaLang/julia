@@ -523,6 +523,7 @@ end
 f141(::Type{OutOfMemoryError}) = true
 f141(::Type{Base64EncodePipe}) = true
 f141(::Type{UDPSocket}) = true
+f141(::Type{TCPSocket}) = true
 
 @test f141(OutOfMemoryError)
 @test f141(Base64EncodePipe)
