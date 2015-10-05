@@ -1579,10 +1579,6 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host, unsign
 
 DLLEXPORT int jl_sizeof_ios_t(void);
 
-#ifdef _OS_WINDOWS_
-DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
-#endif
-
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT void *jl_takebuf_raw(ios_t *s);

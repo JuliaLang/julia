@@ -1623,6 +1623,7 @@ void jl_compile_all(void)
     htable_t h;
     htable_new(&h, 0);
     _compile_all(jl_main_module, &h);
+    htable_free(&h);
 }
 
 DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tupletype_t *types)

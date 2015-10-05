@@ -307,6 +307,11 @@ end
 @test histrange([1, 600], 4) == 0.0:200.0:600.0
 @test histrange([1, -1000], 4) == -1500.0:500.0:500.0
 
+# issue #13326
+l,h = extrema(histrange([typemin(Int),typemax(Int)], 10))
+@test l <= typemin(Int)
+@test h >= typemax(Int)
+
 @test_throws ArgumentError histrange([1, 10], 0)
 @test_throws ArgumentError histrange([1, 10], -1)
 @test_throws ArgumentError histrange(Float64[],-1)

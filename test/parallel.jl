@@ -383,6 +383,7 @@ try
             @async error(i)
         end
     end
+    error("unexpected")
 catch ex
     @test typeof(ex) == CompositeException
     @test length(ex) == 5
@@ -394,6 +395,7 @@ end
 
 try
     remotecall_fetch(()->throw(ErrorException("foobar")), id_other)
+    error("unexpected")
 catch ex
     @test typeof(ex) == RemoteException
     @test typeof(ex.captured) == CapturedException
