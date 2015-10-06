@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## Test case from Issue #445
 ##
 ## Added threaded implementation (2015-04-06)
