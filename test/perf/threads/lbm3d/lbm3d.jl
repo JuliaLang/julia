@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # 3D Lattice Boltzmann (BGK) model of a fluid.
 # (http://exolete.com/lbm/)
 # D3Q19 model. At each timestep, particle densities propagate
