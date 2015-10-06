@@ -468,12 +468,19 @@ end
 #-----------------------------------------------------------------------
 
 """
-    @testset "description" begin ... end
-    @testset begin ... end
+    @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
 
 Starts a new test set. The test results will be recorded, and if there
-are any `Fail`s or `Error`s, an exception will be thrown only at the end,
-along with a summary of the test results.
+are any `Fail`s or `Error`s, an exception will be thrown at the end of the
+top-level (non-nested) test set, along with a summary of the test results.
+
+Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
+also be used for any nested `@testset` or `@testloop` invocations. The given
+options are only applied to the test set where they are given. The default test
+set type does not take any options.
+
+By default the `@testset` macro will return the testset object itself, though
+this behavior can be customized in other testset types.
 """
 macro testset(args...)
     length(args) > 0 || error("No arguments to @testset")
@@ -511,12 +518,20 @@ end
 
 
 """
-    @testloop "description \$v" for v in (...) ... end
-    @testloop for x in (...), y in (...) ... end
+    @testloop [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
+    @testloop [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
 
-Starts a new test set for each iteration of the loop. The description
-string accepts interpolation from the loop indices. If no description
-is provided, one is constructed based on the variables.
+Starts a new test set for each iteration of the loop. The description string
+accepts interpolation from the loop indices. If no description is provided, one
+is constructed based on the variables.
+
+Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
+also be used for any nested `@testset` or `@testloop` invocations. The given
+options are only applied to the test sets where they are given. The default test
+set type does not take any options.
+
+By default the `@testset` macro will return a list of the testset objects used
+in each iteration, though this behavior can be customized in other testset types.
 """
 macro testloop(args...)
     length(args) > 0 || error("no arguments to @testloop")
@@ -632,7 +647,7 @@ end
     pop_testset()
 
 Pops the last test set added to the task_local_storage. If there are no
-active test sets, returns the default test set.
+active test sets, returns the fallback default test set.
 """
 function pop_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
