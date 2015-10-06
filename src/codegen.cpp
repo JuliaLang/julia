@@ -658,17 +658,6 @@ extern "C" {
     int globalUnique = 0;
 }
 
-extern "C" DLLEXPORT
-jl_value_t *jl_get_cpu_name(void)
-{
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR < 5
-    std::string HostCPUName = llvm::sys::getHostCPUName();
-#else
-    StringRef HostCPUName = llvm::sys::getHostCPUName();
-#endif
-    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
-}
-
 static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
 
 #include "cgutils.cpp"
@@ -5206,15 +5195,6 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             }
         }
     }
-}
-
-extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
-{
-    jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
-    jl_set_typeof(box, jl_box_any_type);
-    // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
-    box->fieldptr[0] = v;
-    return box;
 }
 
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && SYSTEM_LLVM
