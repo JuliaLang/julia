@@ -842,3 +842,13 @@ for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
         @deprecate ($f)(id::Integer, f::Function, args...)        ($f)(f, id::Integer, args...)
     end
 end
+
+@deprecate cov(x::AbstractVector; corrected=true, mean=nothing) covm(x, mean, corrected)
+@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=nothing) covm(X, mean, vardim, corrected)
+@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=nothing) covm(x, mean[1], y, mean[2], corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=nothing) covm(X, mean[1], Y, mean[2], vardim, corrected)
+
+@deprecate cor(x::AbstractVector; mean=nothing) corm(x, mean)
+@deprecate cor(X::AbstractMatrix; vardim=1, mean=nothing) corm(X, mean, vardim)
+@deprecate cor(x::AbstractVector, y::AbstractVector; mean=nothing) corm(x, mean[1], y, mean[2])
+@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=nothing) corm(X, mean[1], Y, mean[2], vardim)

@@ -261,66 +261,67 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (length(x) - Int(corrected))
-
-covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
+covzm(x::AbstractVector, corrected::Bool=true) = unscaled_covzm(x) / (length(x) - Int(corrected))
+covzm(x::AbstractMatrix, vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
-
-covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
+covzm(x::AbstractVector, y::AbstractVector, corrected::Bool=true) =
     unscaled_covzm(x, y) / (length(x) - Int(corrected))
-
-covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) =
+covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
 
 # covm (with provided mean)
 
-covm(x::AbstractVector, xmean; corrected::Bool=true) =
-    covzm(x .- xmean; corrected=corrected)
-
-covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) =
-    covzm(x .- xmean; vardim=vardim, corrected=corrected)
-
-covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
-    covzm(x .- xmean, y .- ymean; corrected=corrected)
-
-covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) =
-    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
+covm(x::AbstractVector, xmean, corrected::Bool=true) =
+    covzm(x .- xmean, corrected)
+covm(x::AbstractMatrix, xmean, vardim::Int=1, corrected::Bool=true) =
+    covzm(x .- xmean, vardim, corrected)
+covm(x::AbstractVector, xmean, y::AbstractVector, ymean, corrected::Bool=true) =
+    covzm(x .- xmean, y .- ymean, corrected)
+covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1, corrected::Bool=true) =
+    covzm(x .- xmean, y .- ymean, vardim, corrected)
 
 # cov (API)
+doc"""
+    cov(x[, corrected=true])
 
-function cov(x::AbstractVector; corrected::Bool=true, mean=nothing)
-    mean == 0 ? covzm(x; corrected=corrected) :
-    mean === nothing ? covm(x, Base.mean(x); corrected=corrected) :
-    isa(mean, Number) ? covm(x, mean; corrected=corrected) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+Compute the variance of the vector `x`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+"""
+cov(x::AbstractVector, corrected::Bool) = covm(x, Base.mean(x), corrected)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cov{T<:AbstractVector}(x::T) = covm(x, Base.mean(x), true)
 
-function cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, mean=nothing)
-    mean == 0 ? covzm(x; vardim=vardim, corrected=corrected) :
-    mean === nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
-    isa(mean, AbstractArray) ? covm(x, mean; vardim=vardim, corrected=corrected) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+doc"""
+    cov(X[, vardim=1, corrected=true])
 
-function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
-    mean == 0 ? covzm(x, y; corrected=corrected) :
-    mean === nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
-    isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+Compute the covariance matrix of the matrix `X` along the dimension `vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim)`.
+"""
+cov(X::AbstractMatrix, vardim::Int, corrected::Bool=true) =
+    covm(X, _vmean(X, vardim), vardim, corrected)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cov{T<:AbstractMatrix}(X::T) = cov(X, 1, true)
 
-function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, mean=nothing)
-    if mean == 0
-        covzm(x, y; vardim=vardim, corrected=corrected)
-    elseif mean === nothing
-        covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
-    elseif isa(mean, (Any,Any))
-        covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
-    else
-        throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-    end
-end
+doc"""
+    cov(x, y[, corrected=true])
 
+Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x) = length(y)`.
+"""
+cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
+    covm(x, Base.mean(x), y, Base.mean(y), corrected)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cov{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) =
+    covm(x, Base.mean(x), y, Base.mean(y), true)
+
+doc"""
+    cov(X, Y[, vardim=1, corrected=true])
+
+Compute the covariance between the vectors or matrices `X` and `Y` along the dimension `vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim) = size(Y, vardim)`.
+
+"""
+cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool=true) =
+    covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), vardim, corrected)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cov{T<:AbstractVecOrMat,S<:AbstractVecOrMat}(X::T, Y::S) =
+    covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), 1, true)
 
 ##### correlation #####
 
@@ -340,7 +341,6 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
     end
     return C
 end
-
 function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     nx, ny = size(C)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
@@ -351,7 +351,6 @@ function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     end
     return C
 end
-
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     nx, ny = size(C)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
@@ -362,7 +361,6 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     end
     return C
 end
-
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     nx, ny = size(C)
     (length(xsd) == nx && length(ysd) == ny) ||
@@ -378,10 +376,10 @@ end
 # corzm (non-exported, with centered data)
 
 corzm{T}(x::AbstractVector{T}) = one(real(T))
-
-corzm(x::AbstractMatrix; vardim::Int=1) =
-    (c = unscaled_covzm(x, vardim); cov2cor!(c, sqrt!(diag(c))))
-
+function corzm(x::AbstractMatrix, vardim::Int=1)
+    c = unscaled_covzm(x, vardim)
+    return cov2cor!(c, sqrt!(diag(c)))
+end
 function corzm(x::AbstractVector, y::AbstractVector)
     n = length(x)
     length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
@@ -401,57 +399,58 @@ function corzm(x::AbstractVector, y::AbstractVector)
     end
     return xy / (sqrt(xx) * sqrt(yy))
 end
-
-corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) =
+corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
-
-corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) =
+corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
-
-corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) =
+corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
 
 # corm
 
 corm{T}(x::AbstractVector{T}, xmean) = one(real(T))
-
-corm(x::AbstractMatrix, xmean; vardim::Int=1) = corzm(x .- xmean; vardim=vardim)
-
+corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
 corm(x::AbstractVector, xmean, y::AbstractVector, ymean) = corzm(x .- xmean, y .- ymean)
-
-corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
-    corzm(x .- xmean, y .- ymean; vardim=vardim)
+corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
+    corzm(x .- xmean, y .- ymean, vardim)
 
 # cor
+doc"""
+    cor(x)
 
-cor{T}(x::AbstractVector{T}; mean=nothing) = one(real(T))
+Return the number one.
+"""
+cor{T<:AbstractVector}(x::T) = one(real(eltype(x)))
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
-function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
-    mean == 0 ? corzm(x; vardim=vardim) :
-    mean === nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
-    isa(mean, AbstractArray) ? corm(x, mean; vardim=vardim) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+doc"""
+    cor(X[, vardim=1])
 
-function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
-    mean == 0 ? corzm(x, y) :
-    mean === nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
-    isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+Compute the Pearson correlation matrix of the matrix `X` along the dimension `vardim`.
+"""
+cor(X::AbstractMatrix, vardim::Int) = corm(X, _vmean(X, vardim), vardim)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cor{T<:AbstractMatrix}(X::T) = corm(X, _vmean(X, vardim), 1)
 
-function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
-    if mean == 0
-        corzm(x, y; vardim=vardim)
-    elseif mean === nothing
-        corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
-    elseif isa(mean, (Any,Any))
-        corm(x, mean[1], y, mean[2]; vardim=vardim)
-    else
-        throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-    end
-end
+doc"""
+    cor(x, y)
 
+Compute the Pearson correlation between the vectors `x` and `y`.
+"""
+cor{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) = corm(x, Base.mean(x), y, Base.mean(y))
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+
+doc"""
+    cor(X, Y[, vardim=1])
+
+Compute the Pearson correlation between the vectors or matrices `X` and `Y` along the dimension `vardim`.
+
+"""
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int) =
+    corm(x, _vmean(x, vardim), y, _vmean(y, vardim), vardim)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat) =
+    corm(x, _vmean(x, vardim), y, _vmean(y, vardim), 1)
 
 ##### median & quantiles #####
 
