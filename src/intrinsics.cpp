@@ -45,7 +45,7 @@ namespace JL_I {
         // c interface
         ccall, cglobal, llvmcall
     };
-};
+}
 
 using namespace JL_I;
 
