@@ -281,6 +281,8 @@ function serialize(s::SerializationState, f::Function)
         mod = ()
         if isa(f.env,Symbol)
             mod = Core
+        elseif isdefined(f.env, :module) && isa(f.env.module, Module)
+            mod = f.env.module
         elseif !is(f.env.defs, ())
             mod = f.env.defs.func.code.module
         end
