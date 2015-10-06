@@ -1,61 +1,39 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 namespace JL_I {
-    enum intrinsic {
-        // wrap and unwrap
-        box=0, unbox,
-        // arithmetic
-        neg_int, add_int, sub_int, mul_int,
-        sdiv_int, udiv_int, srem_int, urem_int, smod_int,
-        neg_float, add_float, sub_float, mul_float, div_float, rem_float,
-        fma_float, muladd_float,
-        // fast arithmetic
-        neg_float_fast, add_float_fast, sub_float_fast,
-        mul_float_fast, div_float_fast, rem_float_fast,
-        // same-type comparisons
-        eq_int,  ne_int,
-        slt_int, ult_int,
-        sle_int, ule_int,
-        eq_float, ne_float,
-        lt_float, le_float,
-        eq_float_fast, ne_float_fast,
-        lt_float_fast, le_float_fast,
-        fpiseq, fpislt,
-        // bitwise operators
-        and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
-        bswap_int, ctpop_int, ctlz_int, cttz_int,
-        // conversion
-        sext_int, zext_int, trunc_int,
-        fptoui, fptosi, uitofp, sitofp,
-        fptrunc, fpext,
-        // checked conversion
-        checked_fptosi, checked_fptoui,
-        checked_trunc_sint, checked_trunc_uint, check_top_bit,
-        // checked arithmetic
-        checked_sadd, checked_uadd, checked_ssub, checked_usub,
-        checked_smul, checked_umul,
-        nan_dom_err,
-        // functions
-        abs_float, copysign_float, flipsign_int, select_value,
-        ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
-        sqrt_llvm, powi_llvm,
-        sqrt_llvm_fast,
-        // pointer access
-        pointerref, pointerset,
-        // c interface
-        ccall, cglobal, llvmcall,
-        // terminator
-        fptoui_auto, fptosi_auto,
-        num_intrinsics
-    };
+#include "intrinsics.h"
 }
 
-using namespace JL_I;
-Function *runtime_func[num_intrinsics];
-void* runtime_fp[num_intrinsics];
-unsigned intrinsic_nargs[num_intrinsics];
-
 #include "ccall.cpp"
+
+using namespace JL_I;
+static Function *runtime_func[num_intrinsics];
+static void jl_init_intrinsic_functions_codegen(Module *m)
+{
+    std::vector<Type *> args1(0); \
+    args1.push_back(T_pjlvalue); \
+    std::vector<Type *> args2(0); \
+    args2.push_back(T_pjlvalue); \
+    args2.push_back(T_pjlvalue); \
+    std::vector<Type *> args3(0); \
+    args3.push_back(T_pjlvalue); \
+    args3.push_back(T_pjlvalue); \
+    args3.push_back(T_pjlvalue);
+
+#define ADD_I(name, nargs) do { \
+        Function *func = Function::Create(FunctionType::get(T_pjlvalue, args##nargs, false), \
+                                          Function::ExternalLinkage, "jl_"#name, m); \
+        runtime_func[name] = func; \
+        add_named_global(func, (void*)&jl_##name); \
+    } while (0);
+#define ADD_HIDDEN ADD_I
+#define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
+    ADD_HIDDEN(reinterpret, 2);
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
+}
 
 /*
   low-level intrinsics design: TODO: fix description below
@@ -423,7 +401,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         int last_depth = ctx->gc.argDepth;
         Value *arg1 = emit_boxed_rooted(targ, ctx).V;
         Value *arg2 = emit_boxed_rooted(x, ctx).V;
-        Value *func = prepare_call(runtime_func[box]);
+        Value *func = prepare_call(runtime_func[reinterpret]);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
 #else
@@ -932,7 +910,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         f = fptosi_auto;
     unsigned expected_nargs = intrinsic_nargs[f];
     if (expected_nargs && expected_nargs != nargs) {
-        jl_errorf("intrinsic #%d: wrong number of arguments", f);
+        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
     }
 
     switch (f) {
@@ -1554,35 +1532,12 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     return NULL;
 }
 
-typedef jl_value_t *(*intrinsic_call_1_arg)(jl_value_t*);
-typedef jl_value_t *(*intrinsic_call_2_arg)(jl_value_t*, jl_value_t*);
-typedef jl_value_t *(*intrinsic_call_3_arg)(jl_value_t*, jl_value_t*, jl_value_t*);
-#define jl_is_intrinsic(v)       jl_typeis(v,jl_intrinsic_type)
+#define BOX_F(ct,jl_ct)                                                    \
+    box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),     \
+                                   "jl_box_"#ct, (void*)&jl_box_##ct, m);
 
-JL_CALLABLE(jl_f_intrinsic_call)
-{
-    JL_NARGSV(intrinsic_call, 1);
-    JL_TYPECHK(intrinsic_call, intrinsic, args[0]);
-    intrinsic f = (intrinsic)*(uint32_t*)jl_data_ptr(args[0]);
-    if (f == fptoui && nargs == 1)
-        f = fptoui_auto;
-    if (f == fptosi && nargs == 1)
-        f = fptosi_auto;
-    unsigned fargs = intrinsic_nargs[f];
-    JL_NARGS(intrinsic_call, 1 + fargs, 1 + fargs);
-    switch (fargs) {
-        case 1:
-            return ((intrinsic_call_1_arg)runtime_fp[f])(args[1]);
-        case 2:
-            return ((intrinsic_call_2_arg)runtime_fp[f])(args[1], args[2]);
-        case 3:
-            return ((intrinsic_call_3_arg)runtime_fp[f])(args[1], args[2], args[3]);
-        default:
-            assert(0 && "unexpected number of arguments to an intrinsic function");
-    }
-    abort();
-}
-
+#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
                               void *addr, Module *m)
@@ -1607,150 +1562,3 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
     args2.push_back(arg2);
     return FunctionType::get(ret, args2, false);
 }
-
-#define BOX_F(ct,jl_ct)                                                    \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),     \
-                                   "jl_box_"#ct, (void*)&jl_box_##ct, m);
-
-#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
-#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
-
-static void add_intrinsic(jl_module_t *m, const std::string &name, intrinsic f)
-{
-    jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
-    jl_sym_t *sym = jl_symbol(const_cast<char*>(name.c_str()));
-    jl_set_const(m, sym, i);
-    jl_module_export(m, sym);
-}
-
-#define ADD_I(name) add_intrinsic(inm, #name, name)
-
-extern "C" void jl_init_intrinsic_functions(void)
-{
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
-    inm->parent = jl_core_module;
-    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
-
-    ADD_I(box); ADD_I(unbox);
-    ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
-    ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
-    ADD_I(smod_int);
-    ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
-    ADD_I(div_float); ADD_I(rem_float); ADD_I(fma_float); ADD_I(muladd_float);
-    ADD_I(neg_float_fast); ADD_I(add_float_fast); ADD_I(sub_float_fast);
-    ADD_I(mul_float_fast); ADD_I(div_float_fast); ADD_I(rem_float_fast);
-    ADD_I(eq_int); ADD_I(ne_int);
-    ADD_I(slt_int); ADD_I(ult_int);
-    ADD_I(sle_int); ADD_I(ule_int);
-    ADD_I(eq_float); ADD_I(ne_float);
-    ADD_I(lt_float); ADD_I(le_float);
-    ADD_I(eq_float_fast); ADD_I(ne_float_fast);
-    ADD_I(lt_float_fast); ADD_I(le_float_fast);
-    ADD_I(fpiseq); ADD_I(fpislt);
-    ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
-    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
-    ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
-    ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
-    ADD_I(fptoui); ADD_I(fptosi);
-    ADD_I(uitofp); ADD_I(sitofp);
-    ADD_I(fptrunc); ADD_I(fpext);
-    ADD_I(abs_float); ADD_I(copysign_float);
-    ADD_I(flipsign_int); ADD_I(select_value);
-    ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
-    ADD_I(sqrt_llvm); ADD_I(powi_llvm);
-    ADD_I(sqrt_llvm_fast);
-    ADD_I(pointerref); ADD_I(pointerset);
-    ADD_I(checked_sadd); ADD_I(checked_uadd);
-    ADD_I(checked_ssub); ADD_I(checked_usub);
-    ADD_I(checked_smul); ADD_I(checked_umul);
-    ADD_I(checked_fptosi); ADD_I(checked_fptoui);
-    ADD_I(checked_trunc_sint);
-    ADD_I(checked_trunc_uint);
-    ADD_I(check_top_bit);
-    ADD_I(nan_dom_err);
-    //ADD_I(fptosi_auto); ADD_I(fptoui_auto); // these intrinsics are "hidden" in fpto*i
-    ADD_I(ccall); ADD_I(cglobal);
-    ADD_I(llvmcall);
-
-    jl_set_const(inm, jl_symbol("intrinsic_call"),
-            (jl_value_t*)jl_new_closure(jl_f_intrinsic_call, (jl_value_t*)jl_symbol("intrinsic_call"), NULL));
-}
-#undef ADD_I
-
-static void add_intrinsic_to_codegen(Module *m, const std::string &name, intrinsic f,
-        unsigned nargs, std::vector<Type *> args, void *pfunc) {
-    Function *func = Function::Create(FunctionType::get(T_pjlvalue, args, false),
-                                      Function::ExternalLinkage, name, m);
-    runtime_func[f] = func;
-    add_named_global(func, pfunc);
-    intrinsic_nargs[f] = nargs;
-    runtime_fp[f] = pfunc;
-}
-
-static void add_intrinsic_to_codegen(intrinsic alias, intrinsic base)
-{
-    runtime_func[alias] = runtime_func[base];
-    intrinsic_nargs[alias] = intrinsic_nargs[base];
-    runtime_fp[alias] = runtime_fp[base];
-}
-
-#define ADD_I(name, nargs) add_intrinsic_to_codegen(m, "jl_" #name, name, nargs, args##nargs, (void*)&jl_##name)
-#define ALIAS(alias, base) add_intrinsic_to_codegen(alias, base)
-
-static void jl_init_intrinsic_functions_codegen(Module *m)
-{
-    std::vector<Type *> args1(0);
-    args1.push_back(T_pjlvalue);
-    std::vector<Type *> args2(0);
-    args2.push_back(T_pjlvalue);
-    args2.push_back(T_pjlvalue);
-    std::vector<Type *> args3(0);
-    args3.push_back(T_pjlvalue);
-    args3.push_back(T_pjlvalue);
-    args3.push_back(T_pjlvalue);
-
-    add_intrinsic_to_codegen(m, "jl_reinterpret", box,
-        2, args2, (void*)&jl_reinterpret);
-    ALIAS(unbox, box);
-    ADD_I(neg_int, 1); ADD_I(add_int, 2); ADD_I(sub_int, 2); ADD_I(mul_int, 2);
-    ADD_I(sdiv_int, 2); ADD_I(udiv_int, 2); ADD_I(srem_int, 2); ADD_I(urem_int, 2);
-    ADD_I(smod_int, 2);
-    ADD_I(neg_float, 1); ADD_I(add_float, 2); ADD_I(sub_float, 2); ADD_I(mul_float, 2);
-    ADD_I(div_float, 2); ADD_I(rem_float, 2); ADD_I(fma_float, 3); ADD_I(muladd_float, 3);
-    ALIAS(neg_float_fast, neg_float); ALIAS(add_float_fast, add_float); ALIAS(sub_float_fast, sub_float);
-    ALIAS(mul_float_fast, mul_float); ALIAS(div_float_fast, div_float); ALIAS(rem_float_fast, rem_float);
-    ADD_I(eq_int, 2); ADD_I(ne_int, 2);
-    ADD_I(slt_int, 2); ADD_I(ult_int, 2);
-    ADD_I(sle_int, 2); ADD_I(ule_int, 2);
-    ADD_I(eq_float, 2); ADD_I(ne_float, 2);
-    ADD_I(lt_float, 2); ADD_I(le_float, 2);
-    ALIAS(eq_float_fast, eq_float); ALIAS(ne_float_fast, ne_float);
-    ALIAS(lt_float_fast, lt_float); ALIAS(le_float_fast, le_float);
-    ADD_I(fpiseq, 2); ADD_I(fpislt, 2);
-    ADD_I(and_int, 2); ADD_I(or_int, 2); ADD_I(xor_int, 2); ADD_I(not_int, 1);
-    ADD_I(shl_int, 2); ADD_I(lshr_int, 2); ADD_I(ashr_int, 2); ADD_I(bswap_int, 1);
-    ADD_I(ctpop_int, 1); ADD_I(ctlz_int, 1); ADD_I(cttz_int, 1);
-    ADD_I(sext_int, 2); ADD_I(zext_int, 2); ADD_I(trunc_int, 2);
-    ADD_I(fptoui, 2); ADD_I(fptosi, 2);
-    ADD_I(uitofp, 2); ADD_I(sitofp, 2);
-    ADD_I(fptrunc, 2); ADD_I(fpext, 2);
-    ADD_I(abs_float, 1); ADD_I(copysign_float, 2);
-    ADD_I(flipsign_int, 2); ADD_I(select_value, 3);
-    ADD_I(ceil_llvm, 1); ADD_I(floor_llvm, 1); ADD_I(trunc_llvm, 1); ADD_I(rint_llvm, 1);
-    ADD_I(sqrt_llvm, 1); ADD_I(powi_llvm, 2);
-    ALIAS(sqrt_llvm_fast, sqrt_llvm);
-    ADD_I(pointerref, 2); ADD_I(pointerset, 3);
-    ADD_I(checked_sadd, 2); ADD_I(checked_uadd, 2);
-    ADD_I(checked_ssub, 2); ADD_I(checked_usub, 2);
-    ADD_I(checked_smul, 2); ADD_I(checked_umul, 2);
-    ADD_I(checked_fptosi, 2); ADD_I(checked_fptoui, 2);
-    ADD_I(checked_trunc_sint, 2);
-    ADD_I(checked_trunc_uint, 2);
-    ADD_I(check_top_bit, 1);
-    ADD_I(nan_dom_err, 2);
-    ADD_I(fptosi_auto, 1); ADD_I(fptoui_auto, 1);
-
-}
-
-#undef ADD_I
-#undef ALIAS

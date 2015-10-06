@@ -116,6 +116,7 @@ jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
+DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v);
 extern jl_array_t *jl_module_init_order;
 
 #ifdef JL_USE_INTEL_JITEVENTS
@@ -144,10 +145,6 @@ void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
-
-#ifdef _OS_LINUX_
-DLLEXPORT void jl_read_sonames(void);
-#endif
 
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
@@ -214,6 +211,10 @@ extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
 
+uv_lib_t *jl_get_library(char *f_lib);
+DLLEXPORT void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd);
+
+
 // libuv wrappers:
 DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 
@@ -226,6 +227,7 @@ extern DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
 // Runtime intrinsics //
+const char* jl_intrinsic_name(int f);
 
 DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
 DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i);

@@ -540,14 +540,12 @@ DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
                                    uint_t *int64align, uint_t *float32align, uint_t *float64align)
 {
-    LLVMTargetDataRef tgtdata = LLVMCreateTargetData("");
-    *int8align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt8Type());
-    *int16align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt16Type());
-    *int32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt32Type());
-    *int64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt64Type());
-    *float32align = LLVMPreferredAlignmentOfType(tgtdata, LLVMFloatType());
-    *float64align = LLVMPreferredAlignmentOfType(tgtdata, LLVMDoubleType());
-    LLVMDisposeTargetData(tgtdata);
+    *int8align = __alignof(uint8_t);
+    *int16align = __alignof(uint16_t);
+    *int32align = __alignof(uint32_t);
+    *int64align = __alignof(uint64_t);
+    *float32align = __alignof(float);
+    *float64align = __alignof(double);
 }
 
 DLLEXPORT jl_value_t *jl_is_char_signed()
