@@ -411,6 +411,9 @@ f12593_2() = 1
 # test that macro documentation works
 @test (Docs.@repl @assert) !== nothing
 
+# Issue #13467.
+@test (Docs.@repl @r_str) !== nothing
+
 # Simple tests for apropos:
 @test contains(sprint(apropos, "pearson"), "cov")
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")

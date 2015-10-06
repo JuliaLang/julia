@@ -16,7 +16,7 @@ end
 splitexpr(s::Symbol) = :(current_module()), quot(s)
 splitexpr(other)     = error("Invalid @var syntax `$other`.")
 
-isvar(x) = isexpr(x, :macrocall, :.)
+isvar(x) = isexpr(x, [:macrocall, :.])
 isvar(::Symbol) = true
 
 macro var(x)
