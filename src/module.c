@@ -479,6 +479,9 @@ DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
     return b && b->deprecated;
 }
 
+extern const char *jl_filename;
+extern int jl_lineno;
+
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
     if (b->deprecated && jl_options.depwarn) {
@@ -503,6 +506,10 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
             jl_printf(JL_STDERR, " instead");
         }
         jl_printf(JL_STDERR, ".\n");
+
+        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
+            jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
+
         if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) {
             if (b->owner)
                 jl_errorf("deprecated binding: %s.%s", b->owner->name->name, b->name->name);
