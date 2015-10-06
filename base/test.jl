@@ -479,13 +479,13 @@ macro testset(args...)
     length(args) > 0 || error("No arguments to @testset")
 
     tests = args[end]
-    # if we're at the top level we'll default to DefaultTestSet. Otherwise
-    # default to the type of the parent testset
 
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc == nothing
         desc = "test set"
     end
+    # if we're at the top level we'll default to DefaultTestSet. Otherwise
+    # default to the type of the parent testset
     if testsettype == nothing
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
@@ -542,11 +542,11 @@ macro testloop(args...)
     if desc == nothing
         # No description provided. Generate from the loop variable names
         v = loopvars[1].args[1]
-        desc = Expr(:string,"$v = ",v) # first variable
+        desc = Expr(:string,"$v = ", esc(v)) # first variable
         for l = loopvars[2:end]
             v = l.args[1]
             push!(desc.args,", $v = ")
-            push!(desc.args,v)
+            push!(desc.args, esc(v))
         end
     end
 
@@ -609,19 +609,18 @@ end
 """
     get_testset()
 
-Retrieve the active test set from the task's local storage and the options used
-to create it. If no test set is active, use the fallback default test set.
+Retrieve the active test set from the task's local storage. If no
+test set is active, use the fallback default test set.
 """
 function get_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return length(testsets) == 0 ? (fallback_testset) : testsets[end]
+    return length(testsets) == 0 ? fallback_testset : testsets[end]
 end
 
 """
-    push_testset(ts::AbstractTestSet[, options::Dict])
+    push_testset(ts::AbstractTestSet)
 
-Adds the test set to the task_local_storage, as well as the options used to
-create it.
+Adds the test set to the task_local_storage.
 """
 function push_testset(ts::AbstractTestSet)
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -632,8 +631,8 @@ end
 """
     pop_testset()
 
-Pops the last test set added to the task_local_storage along with the options
-used to create it. If there are no active test sets, returns the default test set.
+Pops the last test set added to the task_local_storage. If there are no
+active test sets, returns the default test set.
 """
 function pop_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
