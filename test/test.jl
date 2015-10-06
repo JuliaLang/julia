@@ -127,8 +127,9 @@ end
 redirect_stdout(OLD_STDOUT)
 
 # import the methods needed for defining our own testset type
-import Base.Test: record, finish, get_testset_depth, get_testset
-import Base.Test: AbstractTestSet, Result, Pass, Fail, Error
+import Base.Test: record, finish
+using Base.Test: get_testset_depth, get_testset
+using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
 immutable CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
