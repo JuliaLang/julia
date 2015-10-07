@@ -242,10 +242,17 @@ module Consts
                                 SUBMODULE_IGNORE_DIRTY        = 3,  # only dirty if HEAD moved
                                 SUBMODULE_IGNORE_ALL          = 4)  # never dirty
 
-    @enum(GIT_REPOSITORY_OPEN, REPOSITORY_OPEN_DEFAULT   = 0,    # default value
-                               REPOSITORY_OPEN_NO_SEARCH = 1<<0, # only open the repository if it can be immediately found
-                               REPOSITORY_OPEN_CROSS_FS  = 1<<1, # open will not continue searching across FS boundaries
-                               REPOSITORY_OPEN_BARE      = 1<<2) # open repository as a bare repo
+    """
+Option flags for `GitRepo`.
+
+* REPOSITORY_OPEN_NO_SEARCH - Only open the repository if it can be immediately found in the `path`.  Do not walk up from the `path` looking at parent directories.
+* REPOSITORY_OPEN_CROSS_FS - Unless this flag is set, open will not continue searching across filesystem boundaries. (E.g. Searching in a user's home directory "/home/user/source/" will not return "/.git/" as the found repo if "/" is a different filesystem than "/home".)
+* REPOSITORY_OPEN_BARE - Open repository as a bare repo regardless of core.bare config, and defer loading config file for faster setup.
+    """
+    @enum(GIT_REPOSITORY_OPEN, REPOSITORY_OPEN_DEFAULT   = 0,
+                               REPOSITORY_OPEN_NO_SEARCH = 1<<0,
+                               REPOSITORY_OPEN_CROSS_FS  = 1<<1,
+                               REPOSITORY_OPEN_BARE      = 1<<2)
 
     @enum(GIT_BRANCH, BRANCH_LOCAL = 1, BRANCH_REMOTE = 2)
 
@@ -264,11 +271,24 @@ module Consts
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
 
+    """
+Priority level of a config file.
+
+These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
+
+* CONFIG_LEVEL_DEFAULT - Open the global, XDG and system configuration files if any available.
+* CONFIG_LEVEL_SYSTEM - System-wide configuration file; /etc/gitconfig on Linux systems
+* CONFIG_LEVEL_XDG - XDG compatible configuration file; typically ~/.config/git/config
+* CONFIG_LEVEL_GLOBAL - User-specific configuration file (also called Global configuration file); typically ~/.gitconfig
+* CONFIG_LEVEL_LOCAL - Repository specific configuration file; \$WORK_DIR/.git/config on non-bare repos
+* CONFIG_LEVEL_APP - Application specific configuration file; freely defined by applications
+* CONFIG_HIGHEST_LEVEL - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
+    """
     @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT = 0,
-                      CONFIG_LEVEL_SYSTEM  = 1, # System-wide configuration file; /etc/gitconfig on Linux systems
-                      CONFIG_LEVEL_XDG     = 2, # XDG compatible configuration file; typically ~/.config/git/config
-                      CONFIG_LEVEL_GLOBAL  = 3, # User-specific configuration file (also called Global configuration file); typically ~/.gitconfig
-                      CONFIG_LEVEL_LOCAL   = 4, # Repository specific configuration file; $WORK_DIR/.git/config on non-bare repos
-                      CONFIG_LEVEL_APP     = 5, # Application specific configuration file; freely defined by applications
-                      CONFIG_HIGHEST_LEVEL =-1) # Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
+                      CONFIG_LEVEL_SYSTEM  = 1,
+                      CONFIG_LEVEL_XDG     = 2,
+                      CONFIG_LEVEL_GLOBAL  = 3,
+                      CONFIG_LEVEL_LOCAL   = 4,
+                      CONFIG_LEVEL_APP     = 5,
+                      CONFIG_HIGHEST_LEVEL =-1)
 end

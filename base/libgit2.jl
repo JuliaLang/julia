@@ -301,7 +301,7 @@ function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::Abstract
     # setup clone options
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
-                bare = Int32(isbare),
+                bare = Cint(isbare),
                 checkout_branch = isempty(branch) ? Cstring_NULL :
                                   convert(Cstring, pointer(branch)),
                 fetch_opts=fetch_opts,
