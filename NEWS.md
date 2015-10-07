@@ -16,12 +16,14 @@ Compiler/Runtime improvements
 Library improvements
 --------------------
 
-  *  The package system (`Pkg`) is now based on the libgit2 library, rather than running the `git` program, increasing performance (especially on Windows) ([#11196]).
+  * The package system (`Pkg`) is now based on the `libgit2` library, rather
+    than running the `git` program, increasing performance (especially on
+    Windows) ([#11196]).
 
   * The `Base.Test` module now has a `@testset` feature to bundle
     tests together and delay throwing an error until the end ([#13062]).
 
-  * The function `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
+  * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
     function argument as the first argument to allow for do-block syntax ([#13338]).
 
 Deprecated or removed
@@ -83,7 +85,7 @@ New language features
   * Support for inter-task communication using `Channels` ([#12264]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#channels for details.
 
-  * RemoteRefs now point to remote channels. The remote channels can be of length greater than 1.
+  * `RemoteRef`s now point to remote channels. The remote channels can be of length greater than 1.
     Default continues to be of length 1 ([#12385]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
 
@@ -419,7 +421,7 @@ Library improvements
 
   * Other improvements
 
-    * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
+    * You can now tab-complete emoji via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
     * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 
@@ -433,9 +435,9 @@ Library improvements
 
     * Added `recvfrom` to get source address of UDP packets ([#9418]).
 
-    * ClusterManager performance improvements ([#9309]) and support for changing transports([#9434]).
+    * `ClusterManager` performance improvements ([#9309]) and support for changing transports([#9434]).
 
-    * Added Base.get_process_title / Base.set_process_title ([#9957]).
+    * Added `Base.get_process_title` / `Base.set_process_title` ([#9957]).
 
     * `readavailable` now returns a byte vector instead of a string.
 
@@ -479,7 +481,7 @@ Deprecated or removed
      end
     ```
 
-  * indexing with Reals that are not subtypes of Integers (Rationals, AbstractFloat, etc.) has been deprecated ([#10458]).
+  * indexing with `Real`s that are not subtypes of `Integer` (`Rational`, `AbstractFloat`, etc.) has been deprecated ([#10458]).
 
   * `push!(A)` has been deprecated, use `append!` instead of splatting arguments to `push!` ([#10400]).
 
@@ -492,7 +494,7 @@ Deprecated or removed
   * The `Graphics` module has been removed from `Base` and is now a
     standalone package ([#10150], [#9862]).
 
-  * The `Woodbury` special matrix type has been removed from LinAlg ([#10024]).
+  * The `Woodbury` special matrix type has been removed from `LinAlg` ([#10024]).
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
