@@ -1,4 +1,5 @@
 %% Simulate two correlated assets
+%% Original code from Mike Croucher (http://www.walkingrandomly.com/?p=3604)
 %% Manually hoisted some computations outside the loop; see ../../kernel/
 %% for the original version
 
