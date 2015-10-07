@@ -1,4 +1,5 @@
 %ORIGINAL_CORR - The original, unoptimised code that simulates two correlated assets
+%Mike Croucher (http://www.walkingrandomly.com/?p=3604)
 
 %% Correlated asset information
 CurrentPrice = [78 102];       %Initial Prices of the two stocks

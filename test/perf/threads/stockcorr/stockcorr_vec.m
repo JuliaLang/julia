@@ -1,5 +1,5 @@
 %% Simulate two correlated assets
-%% Vectorized version (from http://www.walkingrandomly.com/?p=3604)
+%% Original code from Mike Croucher (http://www.walkingrandomly.com/?p=3604)
 
 %% Correlated asset information
 CurrentPrice = [78 102];       %Initial Prices of the two stocks
