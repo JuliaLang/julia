@@ -1376,70 +1376,39 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...; err_retry=0, err_stop=true, pids = workers())
-
-    results = Dict{Int,Any}()
-
-    busy_workers = fill(false, length(pids))
-    busy_workers_ntfy = Condition()
-
-    retryqueue = []
+function pmap(f, lsts...; pids = workers())
 
     tasks = enumerate(zip(lsts...))
     state = start(tasks)
     abort_tasks() = state = nothing
 
     function next_task()
-
-        if state != nothing && !done(tasks, state)
-            ((idx, args), state) = next(tasks, state)
-            return (idx, args, 0)
-        elseif !isempty(retryqueue)
-            return shift!(retryqueue)
+        if state == nothing || done(tasks, state)
+            return nothing
         end
-
-        # Handles the condition where we have finished processing the requested
-        # lsts as well as any retryqueue entries, but there are still some jobs
-        # active that may result in an error and have to be retried.
-        while any(busy_workers)
-            wait(busy_workers_ntfy)
-            if !isempty(retryqueue)
-                return shift!(retryqueue)
-            end
-        end
-
-        return nothing
+        (task, state) = next(tasks, state)
+        return task
     end
 
+    results = Dict{Int,Any}()
+
     @sync begin
-        for (pididx, wpid) in enumerate(pids)
+        for wpid in pids
             @async begin
                 while (task = next_task()) != nothing
-
-                    (idx, args, retry_count) = task
-                    busy_workers[pididx] = true
-
+                    (i, args) = task
                     try
-                        results[idx] = remotecall_fetch(wpid, f, args...)
+                        results[i] = remotecall_fetch(wpid, f, args...)
                     catch ex
-                        if retry_count < err_retry
-                            push!(retryqueue, (idx, args, retry_count + 1))
-                        elseif err_stop
-                            abort_tasks()
-                            rethrow(ex)
-                        else
-                            results[idx] = ex
-                        end
-                    finally
-                        busy_workers[pididx] = false
-                        notify(busy_workers_ntfy; all=true)
+                        abort_tasks()
+                        rethrow(ex)
                     end
                 end
             end
         end
     end
 
-    [results[x] for x in 1:length(results)]
+    [results[i] for i in 1:length(results)]
 end
 
 # Statically split range [1,N] into equal sized chunks for np processors
