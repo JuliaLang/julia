@@ -22,7 +22,7 @@ Library improvements
     tests together and delay throwing an error until the end ([#13062]).
 
   * The function `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
-    the function argument as the first argument to allow for do-block syntax ([#13338]).
+    function argument as the first argument to allow for do-block syntax ([#13338]).
 
 Deprecated or removed
 ---------------------
