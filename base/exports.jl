@@ -1414,4 +1414,27 @@ export
     @assert,
     @enum,
     @label,
-    @goto
+    @goto,
+
+# SparseArrays module re-exports
+    SparseArrays,
+    AbstractSparseArray,
+    AbstractSparseMatrix,
+    AbstractSparseVector,
+    SparseMatrixCSC,
+    SparseVector,
+    etree,
+    issparse,
+    sparse,
+    sparsevec,
+    spdiagm,
+    speye,
+    spones,
+    sprand,
+    sprandbool,
+    sprandn,
+    spzeros,
+    symperm,
+    rowvals,
+    nzrange,
+    nnz

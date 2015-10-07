@@ -287,29 +287,6 @@ import .Dates: Date, DateTime, now
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse.jl")
 importall .SparseArrays
-# SparseArrays module re-exports
-export
-    SparseArrays,
-    AbstractSparseArray,
-    AbstractSparseMatrix,
-    AbstractSparseVector,
-    SparseMatrixCSC,
-    SparseVector,
-    etree,
-    issparse,
-    sparse,
-    sparsevec,
-    spdiagm,
-    speye,
-    spones,
-    sprand,
-    sprandbool,
-    sprandn,
-    spzeros,
-    symperm,
-    rowvals,
-    nzrange,
-    nnz
 
 # Documentation
 
