@@ -242,11 +242,11 @@ module Consts
                                 SUBMODULE_IGNORE_DIRTY        = 3,  # only dirty if HEAD moved
                                 SUBMODULE_IGNORE_ALL          = 4)  # never dirty
 
-    """
+    doc"""
 Option flags for `GitRepo`.
 
 * REPOSITORY_OPEN_NO_SEARCH - Only open the repository if it can be immediately found in the `path`.  Do not walk up from the `path` looking at parent directories.
-* REPOSITORY_OPEN_CROSS_FS - Unless this flag is set, open will not continue searching across filesystem boundaries. (E.g. Searching in a user's home directory "/home/user/source/" will not return "/.git/" as the found repo if "/" is a different filesystem than "/home".)
+* REPOSITORY_OPEN_CROSS_FS - Unless this flag is set, open will not continue searching across filesystem boundaries. (E.g. Searching in a user's home directory `/home/user/source/` will not return `/.git/` as the found repo if `/` is a different filesystem than `/home`.)
 * REPOSITORY_OPEN_BARE - Open repository as a bare repo regardless of core.bare config, and defer loading config file for faster setup.
     """
     @enum(GIT_REPOSITORY_OPEN, REPOSITORY_OPEN_DEFAULT   = 0,
@@ -271,7 +271,7 @@ Option flags for `GitRepo`.
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
 
-    """
+    doc"""
 Priority level of a config file.
 
 These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
