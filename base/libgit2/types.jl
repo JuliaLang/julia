@@ -52,6 +52,10 @@ end
 
 "Abstract payload type for callback functions"
 abstract AbstractPayload
+user(p::AbstractPayload) = throw(AssertionError("Function 'user' is not implemented for type $(typeof(p))"))
+password(p::AbstractPayload) = throw(AssertionError("Function 'password' is not implemented for type $(typeof(p))"))
+isused(p::AbstractPayload) = throw(AssertionError("Function 'isused' is not implemented for type $(typeof(p))"))
+setused!(p::AbstractPayload,v::Bool) = throw(AssertionError("Function 'setused!' is not implemented for type $(typeof(p))"))
 
 immutable CheckoutOptions
     version::Cuint
@@ -530,3 +534,7 @@ type UserPasswordCredentials <: AbstractPayload
     used::Bool
     UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,false)
 end
+user(p::UserPasswordCredentials) = p.user
+password(p::UserPasswordCredentials) = p.pass
+isused(p::UserPasswordCredentials) = p.used
+setused!(p::UserPasswordCredentials, val::Bool) = (p.used = val)

@@ -37,30 +37,28 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     url = bytestring(url_ptr)
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        username = password = ""
+        username = userpass = ""
         if payload_ptr != C_NULL
             payload = unsafe_pointer_to_objref(payload_ptr)
             if isa(payload, AbstractPayload)
-                username = isdefined(payload, :user) ? getfield(payload, :user) : ""
-                password = isdefined(payload, :pass) ? getfield(payload, :pass) : ""
-                if isdefined(payload, :used)
-                    getfield(payload, :used) && return Cint(-1)
-                    setfield!(payload, :used, true)
-                end
+                isused(payload) && return Cint(-1)
+                username = user(payload)
+                userpass = password(payload)
+                setused!(payload, true)
             end
         end
         if isempty(username)
             username = prompt("Username for '$url'")
         end
-        if isempty(password)
-            password = prompt("Password for '$username@$url'", password=true)
+        if isempty(userpass)
+            userpass = prompt("Password for '$username@$url'", password=true)
         end
 
-        length(username) == 0 && length(password) == 0 && return Cint(-1)
+        length(username) == 0 && length(userpass) == 0 && return Cint(-1)
 
         err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring, Cstring),
-                     cred, username, password)
+                     cred, username, userpass)
         err == 0 && return Cint(0)
     elseif isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY)) && err > 0
         # use ssh-agent
