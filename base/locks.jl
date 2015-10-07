@@ -2,12 +2,12 @@
 
 export SpinLock, Mutex, init_lock!, destroy_lock!, lock!, trylock!, unlock!
 
-abstract Lock
+abstract AbstractLock
 
 # Test-and-test-and-set spin locks are quickest up to about 30ish
 # contending threads. If you have more contention than that, perhaps
 # a lock is the wrong way to synchronize.
-type TatasLock <: Lock
+type TatasLock <: AbstractLock
     handle::Atomic{Int}
     TatasLock() = new(Atomic{Int}(0))
 end
@@ -40,7 +40,7 @@ end
 
 
 # Recursive test-and-test-and-set lock. Slower.
-type RecursiveTatasLock <: Lock
+type RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
     handle::Atomic{Int}
     RecursiveTatasLock() = new(0, Atomic{Int}(0))
@@ -98,7 +98,7 @@ end
 
 const UV_MUTEX_SIZE = ccall(:jl_sizeof_uv_mutex, Cint, ())
 
-type Mutex <: Lock
+type Mutex <: AbstractLock
     ownertid::Int16
     handle::Array{Int8}
     Mutex() = (m = new(zero(Int16), zeros(Int8, UV_MUTEX_SIZE));
