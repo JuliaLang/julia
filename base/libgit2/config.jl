@@ -1,34 +1,54 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function GitConfig(path::AbstractString)
+function GitConfig(path::AbstractString,
+                   level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
+                   force::Bool=false)
+    # create new config object
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_config_open_ondisk, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring), cfg_ptr_ptr, path)
-    err !=0 && return nothing
-    return GitConfig(cfg_ptr_ptr[])
+    @check ccall((:git_config_new, :libgit2), Cint, (Ptr{Ptr{Void}},), cfg_ptr_ptr)
+    cfg = GitConfig(cfg_ptr_ptr[])
+    try
+        addfile(cfg, path, level, force)
+    catch ex
+        finalize(cfg)
+        throw(ex)
+    end
+    return cfg
 end
 
 function GitConfig(r::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_repository_config, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
-    err !=0 && return nothing
+    @check ccall((:git_repository_config, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
     return GitConfig(cfg_ptr_ptr[])
 end
 
-function GitConfig(isglobal::Bool = true)
+function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
-    if isglobal
+    if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-        @check ccall((:git_config_open_global, :libgit2), Cint,
-                     (Ptr{Ptr{Void}}, Ptr{Void}), glb_cfg_ptr_ptr, cfg.ptr)
-        finalize(cfg)
-        cfg = GitConfig(glb_cfg_ptr_ptr[])
+        tmpcfg = cfg
+        try
+            @check ccall((:git_config_open_level, :libgit2), Cint,
+                         (Ptr{Ptr{Void}}, Ptr{Void}, Cint),
+                          glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
+            cfg = GitConfig(glb_cfg_ptr_ptr[])
+        finally
+            finalize(tmpcfg)
+        end
     end
     return cfg
+end
+
+function addfile(cfg::GitConfig, path::AbstractString,
+                 level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
+                 force::Bool=false)
+    @check ccall((:git_config_add_file_ondisk, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Cstring, Cint, Cint),
+                   cfg.ptr, path, Cint(level), Cint(force))
 end
 
 function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
@@ -57,7 +77,7 @@ end
 function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     val_ptr = Ref(Cintmax_t(0))
     @check ccall((:git_config_get_int64, :libgit2), Cint,
-          (Ptr{Cint}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
+          (Ptr{Cintmax_t}, Ptr{Void}, Cstring), val_ptr, c.ptr, name)
     return val_ptr[]
 end
 

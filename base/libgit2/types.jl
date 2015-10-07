@@ -50,6 +50,13 @@ function Base.finalize(buf::Buffer)
     return buf_ptr[]
 end
 
+"Abstract payload type for callback functions"
+abstract AbstractPayload
+user(p::AbstractPayload) = throw(AssertionError("Function 'user' is not implemented for type $(typeof(p))"))
+password(p::AbstractPayload) = throw(AssertionError("Function 'password' is not implemented for type $(typeof(p))"))
+isused(p::AbstractPayload) = throw(AssertionError("Function 'isused' is not implemented for type $(typeof(p))"))
+setused!(p::AbstractPayload,v::Bool) = throw(AssertionError("Function 'setused!' is not implemented for type $(typeof(p))"))
+
 immutable CheckoutOptions
     version::Cuint
 
@@ -160,6 +167,15 @@ RemoteCallbacks(; sideband_progress::Ptr{Void} = C_NULL,
                   push_negotiation,
                   transport,
                   payload)
+
+function RemoteCallbacks{P<:AbstractPayload}(credentials::Ptr{Void}, payload::Nullable{P})
+    if isnull(payload)
+        RemoteCallbacks(credentials=credentials_cb())
+    else
+        payload_ptr = pointer_from_objref(Base.get(payload))
+        RemoteCallbacks(credentials=credentials_cb(), payload=payload_ptr)
+    end
+end
 
 immutable FetchOptions
     version::Cuint
@@ -511,3 +527,14 @@ function getobjecttype(obj_type::Cint)
         throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))
     end
 end
+
+type UserPasswordCredentials <: AbstractPayload
+    user::AbstractString
+    pass::AbstractString
+    used::Bool
+    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,false)
+end
+user(p::UserPasswordCredentials) = p.user
+password(p::UserPasswordCredentials) = p.pass
+isused(p::UserPasswordCredentials) = p.used
+setused!(p::UserPasswordCredentials, val::Bool) = (p.used = val)

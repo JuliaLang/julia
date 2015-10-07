@@ -66,7 +66,7 @@ script:
     - cd .. && mv julia julia2
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
-    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
+    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
     - cd - && mv julia2 julia
     - sudo dmesg
     - echo "Ready for packaging..."
