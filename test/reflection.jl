@@ -193,3 +193,13 @@ end
 
 # issue #13264
 @test isa((@which vcat(1...)), Method)
+
+# issue #13464
+let t13464 = "hey there sailor"
+    try
+        @which t13464[1,1] = (1.0,true)
+        error("unexpected")
+    catch err13464
+        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    end
+end
