@@ -425,13 +425,13 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in :math:`Y`\ , overwriting the existing value of :math:`Y`\ .
+   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ . Note that ``Y`` must not be aliased with either ``A`` or ``B``\ .
 
    .. doctest::
 
-       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
+       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
-       julia> B
+       julia> Y
        2x2 Array{Float64,2}:
         3.0  3.0
         7.0  7.0
