@@ -38,6 +38,28 @@ function url(rmt::GitRemote)
     return  bytestring(url_ptr)
 end
 
+function fetch_refspecs(rmt::GitRemote)
+    sa_ref = Ref{StrArrayStruct}()
+    try
+        @check ccall((:git_remote_get_fetch_refspecs, :libgit2), Cint,
+                      (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
+        convert(Vector{AbstractString}, sa_ref[])
+    finally
+        finalize(sa_ref[])
+    end
+end
+
+function push_refspecs(rmt::GitRemote)
+    sa_ref = Ref{StrArrayStruct}()
+    try
+        @check ccall((:git_remote_get_push_refspecs, :libgit2), Cint,
+                      (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
+        convert(Vector{AbstractString}, sa_ref[])
+    finally
+        finalize(sa_ref[])
+    end
+end
+
 function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
