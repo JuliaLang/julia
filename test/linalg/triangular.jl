@@ -134,6 +134,11 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         copy!(B, A1.')
         @test B == A1.'
 
+        #expm/logm
+        if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
+            @test expm(full(logm(A1))) ≈ full(A1)
+        end
+
         # scale
         if (t1 == UpperTriangular || t1 == LowerTriangular)
             unitt = istriu(A1) ? UnitUpperTriangular : UnitLowerTriangular
@@ -282,6 +287,10 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
             @test_approx_eq B'A1' B'full(A1)'
 
+            if eltyB == elty1
+                @test_approx_eq A_mul_B!(zeros(B),A1,B) A1*B
+                @test_approx_eq A_mul_Bc!(zeros(B),A1,B) A1*B'
+            end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
@@ -305,6 +314,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
             # Error bounds
             elty1 != BigFloat && errorbounds(A1, A1\B, B)
+
         end
     end
 end

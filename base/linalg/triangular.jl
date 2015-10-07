@@ -362,7 +362,7 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -1022,7 +1022,7 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UpperTriangular{TB,S},LowerTriangular{TB,S}})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
             ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
