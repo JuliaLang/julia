@@ -239,6 +239,26 @@ end
 abstract AbstractTestSet
 
 """
+    record(ts::AbstractTestSet, res::Result)
+
+Record a result to a testset. This function is called by the `@testset`
+infrastructure each time a contained `@test` macro completes, and is given the
+test result (which could be an `Error`). This will also be called with an `Error`
+if an exception is thrown inside the test block but outside of a `@test` context.
+"""
+function record end
+
+"""
+    finish(ts::AbstractTestSet)
+
+Do any final processing necessary for the given testset. This is called by the
+`@testset` infrastructure after a test block executes. One common use for this
+function is to record the testset to the parent's results list, using
+`get_testset`.
+"""
+function finish end
+
+"""
     TestSetException
 
 Thrown when a test set finishes and not all tests passed.
@@ -248,6 +268,7 @@ type TestSetException <: Exception
     fail::Int
     error::Int
 end
+
 function Base.show(io::IO, ex::TestSetException)
     print(io, "Some tests did not pass: ")
     print(io, ex.pass,  " passed, ")
@@ -470,8 +491,9 @@ end
 """
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
 
-Starts a new test set. The test results will be recorded, and if there
-are any `Fail`s or `Error`s, an exception will be thrown at the end of the
+Starts a new test set. If no custom testset type is given it defaults to creating
+a `DefaultTestSet`. `DefaultTestSet` records all the results and, and if there
+are any `Fail`s or `Error`s, throws an exception at the end of the
 top-level (non-nested) test set, along with a summary of the test results.
 
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
@@ -530,8 +552,9 @@ also be used for any nested `@testset` or `@testloop` invocations. The given
 options are only applied to the test sets where they are given. The default test
 set type does not take any options.
 
-By default the `@testset` macro will return a list of the testset objects used
-in each iteration, though this behavior can be customized in other testset types.
+The `@testloop` macro collects and returns a list of the return values of the
+`finish` method, which by default will return a list of the testset objects used
+in each iteration.
 """
 macro testloop(args...)
     length(args) > 0 || error("no arguments to @testloop")
