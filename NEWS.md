@@ -45,6 +45,9 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated in favor
+    of versions that require the matrix to in factored form ([#13496]).
+
 Julia v0.4.0 Release Notes
 ==========================
 
