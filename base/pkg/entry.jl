@@ -2,7 +2,7 @@
 
 module Entry
 
-import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version, julia_cmd
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
 import ...LibGit2
 importall ...LibGit2
@@ -726,6 +726,7 @@ function warnbanner(msg...; label="[ WARNING ]", prefix="")
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    errfile = tempname()
     for pkg in pkgs
         pkg == "julia" && continue
         pkg in seen && continue
@@ -735,13 +736,32 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         isfile(path) || continue
         info("Building $pkg")
         cd(dirname(path)) do
-            try evalfile(path)
-            catch err
+            code = """
+               try
+                   include("$(escape_string(path))")
+               catch e
+                   open("$(escape_string(errfile))", "w") do f
+                       serialize(f, e)
+                   end
+                   exit(1)
+               end
+            """
+            isfile(errfile) && Base.rm(errfile)
+            try
+                run(`$(julia_cmd()) --startup-file=no --history-file=no
+                     --color=$(Base.have_color ? "yes" : "no") --eval $code`)
+            catch e
+                err = try
+                    open(deserialize, errfile, "r")
+                catch
+                    e
+                end
                 warnbanner(err, label="[ ERROR: $pkg ]")
                 errs[pkg] = err
             end
         end
     end
+    isfile(errfile) && Base.rm(errfile)
 end
 
 function build(pkgs::Vector)
