@@ -458,6 +458,9 @@ const apply_type_tfunc = function (A, args...)
 end
 add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
+## external tfunc additions ##
+add_tfunc(ntuple, 2, 2, _ntuple_tfunc)
+
 function tuple_tfunc(argtype::ANY)
     if isa(argtype,DataType) && argtype.name === Tuple.name
         p = map(x->(isType(x) && !isa(x.parameters[1],TypeVar) ? typeof(x.parameters[1]) : x),

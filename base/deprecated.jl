@@ -403,8 +403,6 @@ end
 
 @deprecate with_env(f::Function, key::AbstractString, val) withenv(f, key=>val)
 
-@deprecate ntuple(n::Integer, f::Function) ntuple(f, n)
-
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)

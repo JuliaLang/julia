@@ -29,9 +29,9 @@ include("options.jl")
 typealias Cint Int32
 typealias Csize_t UInt
 include("promotion.jl")
+include("expr.jl")
 include("tuple.jl")
 include("range.jl")
-include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
