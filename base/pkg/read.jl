@@ -130,8 +130,8 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
                 Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
                 continue
             end
-            base == sha1 && push!(ancestors,ver)
-            base == head && push!(descendants,ver)
+            string(base) == sha1 && push!(ancestors,ver)
+            string(base) == head && push!(descendants,ver)
         end
     finally
         cache_has_head && LibGit2.finalize(crepo)
@@ -180,17 +180,13 @@ function installed(avail::Dict=available())
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         prepo = LibGit2.GitRepo(pkg)
         try
-            try
-                ver = installed_version(pkg, prepo, ap)
-                fixed = isfixed(pkg, prepo, ap)
-                pkgs[pkg] = (ver, fixed)
-            catch e
-                pkgs[pkg] = (typemin(VersionNumber), true)
-            finally
-                LibGit2.finalize(prepo)
-            end
+            ver = installed_version(pkg, prepo, ap)
+            fixed = isfixed(pkg, prepo, ap)
+            pkgs[pkg] = (ver, fixed)
         catch
             pkgs[pkg] = (typemin(VersionNumber), true)
+        finally
+            finalize(prepo)
         end
     end
     return pkgs
