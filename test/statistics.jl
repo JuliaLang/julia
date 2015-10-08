@@ -178,35 +178,41 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = zm ? cov(x1; mean=0, corrected=cr) :
-             cov(x1; corrected=cr)
+    c = zm ? Base.covm(x1, 0, cr) :
+             cov(x1, cr)
     @test isa(c, Float64)
     @test_approx_eq c Cxx[1,1]
+    @inferred cov(x1, cr)
 
-    C = zm ? cov(X; vardim=vd, mean=0, corrected=cr) :
-             cov(X; vardim=vd, corrected=cr)
+    C = zm ? Base.covm(X, 0, vd, cr) :
+             cov(X, vd, cr)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
+    @inferred cov(X, vd, cr)
 
-    c = zm ? cov(x1, y1; mean=0, corrected=cr) :
-             cov(x1, y1; corrected=cr)
+    c = zm ? Base.covm(x1, 0, y1, 0, cr) :
+             cov(x1, y1, cr)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
+    @inferred cov(x1, y1, cr)
 
-    C = zm ? cov(x1, Y; vardim=vd, mean=0, corrected=cr) :
-             cov(x1, Y; vardim=vd, corrected=cr)
+    C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
+             cov(x1, Y, vd, cr)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
+    @inferred cov(x1, Y, vd, cr)
 
-    C = zm ? cov(X, y1; vardim=vd, mean=0, corrected=cr) :
-             cov(X, y1; vardim=vd, corrected=cr)
+    C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
+             cov(X, y1, vd, cr)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
+    @inferred cov(X, y1, vd, cr)
 
-    C = zm ? cov(X, Y; vardim=vd, mean=0, corrected=cr) :
-             cov(X, Y; vardim=vd, corrected=cr)
+    C = zm ? Base.covm(X, 0, Y, 0, vd, cr) :
+             cov(X, Y, vd, cr)
     @test size(C) == (k, k)
     @test_approx_eq C Cxy
+    @inferred cov(X, Y, vd, cr)
 end
 
 # test correlation
@@ -245,29 +251,35 @@ for vd in [1, 2], zm in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = zm ? cor(x1; mean=0) : cor(x1)
+    c = zm ? Base.corm(x1, 0) : cor(x1)
     @test isa(c, Float64)
     @test_approx_eq c Cxx[1,1]
+    @inferred cor(x1)
 
-    C = zm ? cor(X; vardim=vd, mean=0) : cor(X; vardim=vd)
+    C = zm ? Base.corm(X, 0, vd) : cor(X, vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
+    @inferred cor(X, vd)
 
-    c = zm ? cor(x1, y1; mean=0) : cor(x1, y1)
+    c = zm ? Base.corm(x1, 0, y1, 0) : cor(x1, y1)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
+    @inferred cor(x1, y1)
 
-    C = zm ? cor(x1, Y; vardim=vd, mean=0) : cor(x1, Y; vardim=vd)
+    C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, vd)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
+    @inferred cor(x1, Y, vd)
 
-    C = zm ? cor(X, y1; vardim=vd, mean=0) : cor(X, y1; vardim=vd)
+    C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, vd)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
+    @inferred cor(X, y1, vd)
 
-    C = zm ? cor(X, Y; vardim=vd, mean=0) : cor(X, Y; vardim=vd)
+    C = zm ? Base.corm(X, 0, Y, 0, vd) : cor(X, Y, vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxy
+    @inferred cor(X, Y, vd)
 end
 
 

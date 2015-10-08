@@ -26,6 +26,8 @@ Library improvements
   * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
     function argument as the first argument to allow for do-block syntax ([#13338]).
 
+  * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
+
 Deprecated or removed
 ---------------------
 
