@@ -1141,15 +1141,6 @@ Get the precision of a floating point number, as defined by the effective number
 precision
 
 doc"""
-    cor(v1[, v2][, vardim=1, mean=nothing])
-
-Compute the Pearson correlation between the vector(s) in `v1` and `v2`.
-
-Users can use the keyword argument `vardim` to specify the variable dimension, and `mean` to supply pre-computed mean values.
-"""
-cor
-
-doc"""
     partitions(n)
 
 Generate all integer arrays that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n))`.
@@ -9002,23 +8993,6 @@ doc"""
 The process was stopped by a terminal interrupt (CTRL+C).
 """
 InterruptException
-
-doc"""
-    cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
-
-Compute the Pearson covariance between the vector(s) in `v1` and `v2`. Here, `v1` and `v2` can be either vectors or matrices.
-
-This function accepts three keyword arguments:
-
-- `vardim`: the dimension of variables. When `vardim = 1`, variables are considered in columns while observations in rows; when `vardim = 2`, variables are in rows while observations in columns. By default, it is set to `1`.
-- `corrected`: whether to apply Bessel's correction (divide by `n-1` instead of `n`). By default, it is set to `true`.
-- `mean`: allow users to supply mean values that are known. By default, it is set to `nothing`, which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use `mean=0` to indicate that the input data are centered, and hence there's no need to subtract the mean.
-
-The size of the result depends on the size of `v1` and `v2`. When both `v1` and `v2` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size `(n1, n2)`, where `n1` and `n2` are the numbers of slices in `v1` and `v2`, which depend on the setting of `vardim`.
-
-Note: `v2` can be omitted, which indicates `v2 = v1`.
-"""
-cov
 
 doc"""
     den(x)
