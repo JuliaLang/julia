@@ -125,12 +125,16 @@ test set will then throw a ``TestSetException``.
 
    By default the ``@testset`` macro will return the testset object itself, though this behavior can be customized in other testset types.
 
-.. function:: @testloop [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-              @testloop [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
+.. function:: @testloop [CustomTestSet] [option=val  ...] ["description $v"] for v in (...) ... end
+              @testloop [CustomTestSet] [option=val  ...] ["description $v, $w"] for v in (...), w in (...) ... end
 
    .. Docstring generated from Julia source
 
    Starts a new test set for each iteration of the loop. The description string accepts interpolation from the loop indices. If no description is provided, one is constructed based on the variables.
+
+   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` or ``@testloop`` invocations. The given options are only applied to the test sets where they are given. The default test set type does not take any options.
+
+   The ``@testloop`` macro collects and returns a list of the return values of the ``finish`` method, which by default will return a list of the testset objects used in each iteration.
 
 We can put our tests for the ``foo(x)`` function in a test set::
 
