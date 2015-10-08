@@ -3,7 +3,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
+import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 import ...LibGit2
 importall ...LibGit2
 import ...Pkg.PkgError
