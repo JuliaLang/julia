@@ -237,7 +237,7 @@ a system compiler, and some downloaders.
 On Ubuntu (on other linux systems, the dependency names are likely to be similar):
 
     apt-add-repository ppa:ubuntu-wine/ppa
-    apt-get upate
+    apt-get update
     apt-get install wine1.7 subversion cvs gcc wget p7zip-full
 
 On Mac: Install XCode, XCode command line tools, X11 (now [XQuartz](http://xquartz.macosforge.org/)),
@@ -252,7 +252,7 @@ So first we need to get a cross-compile version of gcc.
 Most binary packages appear to not include gfortran, so we will need to compile it from source.
 This is typically quite a bit of work, so we will use [this script](http://sourceforge.net/projects/mingw-w64-dgn/) o make it easy.
 
-1. `svn checkout svn checkout svn://svn.code.sf.net/p/mingw-w64-dgn/code/trunk mingw-w64-dgn-code`
+1. `svn checkout svn://svn.code.sf.net/p/mingw-w64-dgn/code/trunk mingw-w64-dgn`
 2. `cd mingw-w64-dgn`
 3. edit `rebuild_cross.sh` and make the following two changes:
   a. uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
@@ -260,7 +260,7 @@ This is typically quite a bit of work, so we will use [this script](http://sourc
 5. `bash update_source.sh`
 4. `bash rebuild_cross.sh`
 5. `mv cross ~/cross-w64`
-6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!, you can put this line in your .profile to make it easy
+6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps! You can put this line in your .profile to make it easy.
 
 Then we can essentially just repeat these steps for the 32-bit compiler, reusing some of the work:
 
@@ -270,7 +270,7 @@ Then we can essentially just repeat these steps for the 32-bit compiler, reusing
 10. `rm -r cross build`
 11. `bash rebuild_cross.sh 32r`
 12. `mv cross ~/cross-w32`
-13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!, you can put this line in your .profile to make it easy
+13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps! You can put this line in your .profile to make it easy.
 
 Note: for systems that support rpm-based package managers, the necessary dependencies can be downloaded from the OpenSUSE build service (see the Vagrant script above).
 
@@ -284,7 +284,7 @@ Then run the build:
 1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
 3. `make`
-4. `make win-extras` (Necessary before running `make binary-dist`p)
+4. `make win-extras` (Necessary before running `make binary-dist`)
 5. `make binary-dist`
 6. move the julia-*.exe installer to the target machine
 
