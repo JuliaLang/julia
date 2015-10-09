@@ -8,13 +8,15 @@
 
    .. Docstring generated from Julia source
 
-   Call ``malloc`` from the C standard library.
+   Call ``malloc`` from the C standard library. Note, memory allocated this way, using the S Standard Library, will result in a memory leak (not handled by Julia's garbage collection), when memory is handled in this manual way. This use, is for Julia's internal standard library use (or those who know what they are doing). See also the embedding section of the manual before proceding, if your intention is really to call C functions that allocate memory.
 
 .. function:: calloc(num::Integer, size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
 
    Call ``calloc`` from the C standard library.
+
+   See warning in the documentation for ``free`` regarding only using this on memory originally obtained from ``malloc``\ .
 
 .. function:: realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
