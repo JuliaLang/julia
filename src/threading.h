@@ -69,6 +69,9 @@ void ti_threadfun(void *arg);
 void ti_initthread(int16_t tid);
 jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* THREADING_H */
 

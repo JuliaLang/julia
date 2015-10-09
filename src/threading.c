@@ -18,8 +18,10 @@ TODO:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _MSC_VER
 #include <unistd.h>
 #include <sched.h>
+#endif
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -447,7 +449,7 @@ void jl_init_threading(void)
     jl_all_task_states = &_jl_all_task_states;
     jl_max_threads = 1;
     jl_n_threads = 1;
-    jl_all_pgcstacks = malloc(jl_n_threads * sizeof(void*));
+    jl_all_pgcstacks = (jl_gcframe_t ***) malloc(jl_n_threads * sizeof(void*));
     ti_initthread(0);
 }
 

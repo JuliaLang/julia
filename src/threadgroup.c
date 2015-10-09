@@ -212,3 +212,6 @@ int ti_threadgroup_destroy(ti_threadgroup_t *tg)
     return 0;
 }
 
+#ifdef __cplusplus
+}
+#endif
