@@ -18,7 +18,7 @@ endif
 #Which BLAS library am I using?
 ifeq ($(USE_SYSTEM_BLAS), 0)
 BLASDIR=$(JULIAHOME)/deps/openblas/
-LIBBLAS=$(BLASDIR)libopenblas64_.a
+LIBBLAS=$(BLASDIR)$(LIBBLASNAME).a
 endif
 
 FFLAGS=-fexternal-blas
@@ -53,11 +53,11 @@ perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(RMATHDIR)/src/randmtzig.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread
+	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread
 
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories
-	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
