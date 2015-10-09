@@ -203,6 +203,7 @@ typedef struct _jl_lambda_info_t {
     jl_sym_t *file;
     int32_t line;
     int8_t inferred;
+    int8_t pure;
 
     // hidden fields:
     // flag telling if inference is running on this function
