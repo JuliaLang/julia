@@ -1,6 +1,6 @@
-override LLVM_GIT_URL_LLVM=git@github.com:JuliaLang/llvm.git
-override LLVM_GIT_URL_LLDB=git@github.com:JuliaLang/lldb.git
-override LLVM_GIT_URL_CLANG=git@github.com:JuliaLang/clang.git
+override LLVM_GIT_URL_LLVM=https://github.com/JuliaLang/llvm.git
+override LLVM_GIT_URL_LLDB=https://github.com/JuliaLang/lldb.git
+override LLVM_GIT_URL_CLANG=https://github.com/JuliaLang/clang.git
 override LLVM_VER=svn
 override LLVM_GIT_VER=kf/gallium
 override LLVM_GIT_VER_LLDB=kf/gallium
