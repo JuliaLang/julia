@@ -28,6 +28,8 @@ Library improvements
 
   * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
 
+  * New method for generic QR with column pivoting ([#13480]).
+
 Deprecated or removed
 ---------------------
 
