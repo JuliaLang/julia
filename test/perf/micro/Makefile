@@ -18,7 +18,7 @@ endif
 #Which BLAS library am I using?
 ifeq ($(USE_SYSTEM_BLAS), 0)
 BLASDIR=$(JULIAHOME)/deps/build/openblas/
-LIBBLAS=$(BLASDIR)libopenblas.a
+LIBBLAS=$(BLASDIR)libopenblas64_.a
 endif
 
 FFLAGS=-fexternal-blas
