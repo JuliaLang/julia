@@ -361,6 +361,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     li->specFunctionID = 0;
     li->specTypes = NULL;
     li->inferred = 0;
+    li->pure = 0;
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
