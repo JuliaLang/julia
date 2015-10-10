@@ -33,9 +33,6 @@ Function createDesktopLink
   ${EndIf}
 FunctionEnd
 
-# Icon settings
-!define MUI_ICON "contrib\windows\julia.ico"
-
 # Variable definitions used in installer pages
 InstallDir "$LOCALAPPDATA\Julia-${Version}"
 !define JuliaStartMenuFolder "Julia ${Version}"
