@@ -3573,6 +3573,7 @@ void jl_init_types(void)
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");
+    pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
     arrow_sym = jl_symbol("->");
     dots_sym = jl_symbol("...");

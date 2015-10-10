@@ -155,6 +155,7 @@ void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 
 jl_value_t* skip_meta(jl_array_t *body);
+int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
 #ifdef _OS_WINDOWS_
