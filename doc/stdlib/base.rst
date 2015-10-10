@@ -893,11 +893,12 @@ System
 
    Get the local machine's host name.
 
-.. function:: getipaddr() -> AbstractString
+.. function:: getipaddr() -> IPAddr
 
    .. Docstring generated from Julia source
 
-   Get the IP address of the local machine, as a string of the form "x.x.x.x".
+   Get the IP address of the local machine.
+
 
 .. function:: getpid() -> Int32
 
