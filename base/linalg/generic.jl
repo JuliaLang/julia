@@ -242,17 +242,23 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
-function vecdot(x::AbstractVector, y::AbstractVector)
+function vecdot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("vector x has length $lx, but vector y has length $(length(y))"))
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    s = dot(x[1], y[1])
-    @inbounds for i = 2:lx
-        s += dot(x[i], y[i])
+    s = zero(dot(x[1], y[1]))
+    if size(x) == size(y)
+        for I in eachindex(x, y)
+            @inbounds s += dot(x[I], y[I])
+        end
+    else
+        for (Ix, Iy) in zip(eachindex(x), eachindex(y))
+            @inbounds  s += dot(x[Ix], y[Iy])
+        end
     end
     s
 end
