@@ -451,10 +451,11 @@ const apply_type_tfunc = function (A, args...)
         appl = headtype
         uncertain = true
     end
+    !uncertain && return Type{appl}
     if type_too_complex(appl,0)
         return Type{TypeVar(:_,headtype)}
     end
-    uncertain && !isa(appl,TypeVar) ? Type{TypeVar(:_,appl)} : Type{appl}
+    !isa(appl,TypeVar) ? Type{TypeVar(:_,appl)} : Type{appl}
 end
 add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
