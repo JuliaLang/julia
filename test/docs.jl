@@ -411,6 +411,13 @@ f12593_2() = 1
 # test that macro documentation works
 @test (Docs.@repl @assert) !== nothing
 
+@test (Docs.@repl 0) !== nothing
+
+let t = @doc(DocsTest.t(::Int, ::Int))
+    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+end
+
 # Issue #13467.
 @test (Docs.@repl @r_str) !== nothing
 
