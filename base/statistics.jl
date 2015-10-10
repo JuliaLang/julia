@@ -319,9 +319,10 @@ Compute the covariance between the vectors or matrices `X` and `Y` along the dim
 """
 cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool=true) =
     covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), vardim, corrected)
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cov{T<:AbstractVecOrMat,S<:AbstractVecOrMat}(X::T, Y::S) =
-    covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), 1, true)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these methods can be merged
+cov(x::AbstractVector, Y::AbstractMatrix) = cov(x, Y, 1, true)
+cov(X::AbstractMatrix, y::AbstractVector) = cov(X, y, 1, true)
+cov(X::AbstractMatrix, Y::AbstractMatrix) = cov(X, Y, 1, true)
 
 ##### correlation #####
 
@@ -430,7 +431,7 @@ Compute the Pearson correlation matrix of the matrix `X` along the dimension `va
 """
 cor(X::AbstractMatrix, vardim::Int) = corm(X, _vmean(X, vardim), vardim)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cor{T<:AbstractMatrix}(X::T) = corm(X, _vmean(X, vardim), 1)
+cor{T<:AbstractMatrix}(X::T) = cor(X, 1)
 
 doc"""
     cor(x, y)
@@ -448,9 +449,10 @@ Compute the Pearson correlation between the vectors or matrices `X` and `Y` alon
 """
 cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int) =
     corm(x, _vmean(x, vardim), y, _vmean(y, vardim), vardim)
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cor(x::AbstractVecOrMat, y::AbstractVecOrMat) =
-    corm(x, _vmean(x, vardim), y, _vmean(y, vardim), 1)
+# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these methods can be merged
+cor(x::AbstractVector, Y::AbstractMatrix) = cor(x, Y, 1)
+cor(X::AbstractMatrix, y::AbstractVector) = cor(X, y, 1)
+cor(X::AbstractMatrix, Y::AbstractMatrix) = cor(X, Y, 1)
 
 ##### median & quantiles #####
 

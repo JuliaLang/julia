@@ -184,30 +184,39 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     @test_approx_eq c Cxx[1,1]
     @inferred cov(x1, cr)
 
+    @test cov(X) == Base.covm(X, mean(X, 1))
     C = zm ? Base.covm(X, 0, vd, cr) :
              cov(X, vd, cr)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
     @inferred cov(X, vd, cr)
 
+    @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
     c = zm ? Base.covm(x1, 0, y1, 0, cr) :
              cov(x1, y1, cr)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
     @inferred cov(x1, y1, cr)
 
+    if vd == 1
+        @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, 1))
+    end
     C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
              cov(x1, Y, vd, cr)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
     @inferred cov(x1, Y, vd, cr)
 
+    if vd == 1
+        @test cov(X, y1) == Base.covm(X, mean(X, 1), y1, mean(y1))
+    end
     C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
              cov(X, y1, vd, cr)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
     @inferred cov(X, y1, vd, cr)
 
+    @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
     C = zm ? Base.covm(X, 0, Y, 0, vd, cr) :
              cov(X, Y, vd, cr)
     @test size(C) == (k, k)
@@ -256,26 +265,35 @@ for vd in [1, 2], zm in [true, false]
     @test_approx_eq c Cxx[1,1]
     @inferred cor(x1)
 
+    @test cor(X) == Base.corm(X, mean(X, 1))
     C = zm ? Base.corm(X, 0, vd) : cor(X, vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
     @inferred cor(X, vd)
 
+    @test cor(x1, y1) == Base.corm(x1, mean(x1), y1, mean(y1))
     c = zm ? Base.corm(x1, 0, y1, 0) : cor(x1, y1)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
     @inferred cor(x1, y1)
 
+    if vd == 1
+        @test cor(x1, Y) == Base.corm(x1, mean(x1), Y, mean(Y, 1))
+    end
     C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, vd)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
     @inferred cor(x1, Y, vd)
 
+    if vd == 1
+        @test cor(X, y1) == Base.corm(X, mean(X, 1), y1, mean(y1))
+    end
     C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, vd)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
     @inferred cor(X, y1, vd)
 
+    @test cor(X, Y) == Base.corm(X, mean(X, 1), Y, mean(Y, 1))
     C = zm ? Base.corm(X, 0, Y, 0, vd) : cor(X, Y, vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxy

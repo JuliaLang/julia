@@ -843,12 +843,12 @@ for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
     end
 end
 
-@deprecate cov(x::AbstractVector; corrected=true, mean=nothing) covm(x, mean, corrected)
-@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=nothing) covm(X, mean, vardim, corrected)
-@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=nothing) covm(x, mean[1], y, mean[2], corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=nothing) covm(X, mean[1], Y, mean[2], vardim, corrected)
+@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) covm(x, mean, corrected)
+@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) covm(X, mean, vardim, corrected)
+@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) covm(x, mean[1], y, mean[2], corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) covm(X, mean[1], Y, mean[2], vardim, corrected)
 
-@deprecate cor(x::AbstractVector; mean=nothing) corm(x, mean)
-@deprecate cor(X::AbstractMatrix; vardim=1, mean=nothing) corm(X, mean, vardim)
-@deprecate cor(x::AbstractVector, y::AbstractVector; mean=nothing) corm(x, mean[1], y, mean[2])
-@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=nothing) corm(X, mean[1], Y, mean[2], vardim)
+@deprecate cor(x::AbstractVector; mean=Base.mean(x)) corm(x, mean)
+@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) corm(X, mean, vardim)
+@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) corm(x, mean[1], y, mean[2])
+@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) corm(X, mean[1], Y, mean[2], vardim)
