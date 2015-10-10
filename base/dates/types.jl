@@ -80,7 +80,7 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 function DateTime(y::Int64,m::Int64=1,d::Int64=1,
                   h::Int64=0,mi::Int64=0,s::Int64=0,ms::Int64=0)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$daysinmonth(y,m))"))
+    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y,m)))"))
     -1 < h < 24 || throw(ArgumentError("Hour: $h out of range (1:23)"))
     -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (1:59)"))
     -1 < s < 60 || throw(ArgumentError("Second: $s out of range (1:59)"))
@@ -90,7 +90,7 @@ function DateTime(y::Int64,m::Int64=1,d::Int64=1,
 end
 function Date(y::Int64,m::Int64=1,d::Int64=1)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$daysinmonth(y,m))"))
+    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y,m)))"))
     return Date(UTD(totaldays(y,m,d)))
 end
 
