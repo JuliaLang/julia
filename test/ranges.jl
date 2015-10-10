@@ -546,7 +546,8 @@ end
 
 # writemime should display the range or linspace nicely
 replstr(x) = sprint((io,x) -> writemime(io,MIME("text/plain"),x), x)
-@test replstr(1:4) == "4-element UnitRange{Int64}:\n 1,2,3,4"
+@test replstr(1:4) == "4-element UnitRange{Int64}:\n 1,2,3,4" ||
+      replstr(1:4) == "4-element UnitRange{Int32}:\n 1,2,3,4"
 @test replstr(linspace(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
 @test replstr(0:100.) == "101-element FloatRange{Float64}:\n 0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,…,94.0,95.0,96.0,97.0,98.0,99.0,100.0"
 
