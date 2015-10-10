@@ -244,6 +244,52 @@ function show(io::IO, r::LinSpace)
     print(io, ')')
 end
 
+# print_range() prints out a nice looking range in terms of its elements
+# as if it were collect(range), dependent on the size of the
+# terminal, and taking into account whether compact numbers should be shown.
+# It figures out the width in characters of each element, and if they
+# end up too wide, it shows the first and last elements separated by a
+# horizontal elipsis.
+# Optional parameters include sz for the (rows,cols) of the screen,
+# pre and post characters for each printed row, a separator string sep between
+# printed elements, string for the horizontal ellipsis.
+# typical output will look like this (for a narrow screen):
+#  1.0,2.0,3.0,…,4.0,5.0,6.0
+# This function is borrowed from print_matrix in show.jl
+# It is usually called by writemime (from replutil.jl)
+function print_range(io::IO, r::Union{Range,LinSpace},
+                     sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
+                     pre::AbstractString = " ",
+                     sep::AbstractString = ",",
+                     post::AbstractString = "",
+                     hdots::AbstractString = ",\u2026,") # horiz ellipsis
+    rows, cols = sz
+    cols -= length(pre) + length(post)
+    postsp = ""
+    sepsize = length(sep)
+    m = 1 # treat the range as a one-row matrix
+    n = length(r)
+    rowmatrix = r' # pretend the range is a one-row matrix for output
+    A = alignment(rowmatrix,1:m,1:n,cols,cols,sepsize) # how much space range takes
+    if n <= length(A) # cols fit screen, so print out all elements
+        print(io, pre) # put in pre chars
+        print_matrix_row(io,rowmatrix,A,1,1:n,sep) # the entire range
+        print(io, post) # add the post characters
+    else # cols don't fit so put horiz ellipsis in the middle
+        # how many chars left after dividing width of screen in half
+        # and accounting for the horiz ellipsis
+        c = div(cols-length(hdots)+1,2)+1 # chars remaining for each side of r
+        colsR = reverse(alignment(rowmatrix,1:m,n:-1:1,c,c,sepsize)) # which cols of r to put on the right
+        c = cols - sum(map(sum,colsR)) - (length(colsR)-1)*sepsize - length(hdots)
+        colsL = alignment(rowmatrix,1:m,1:n,c,c,sepsize) # which cols of r to put on the left
+        print(io, pre)   # put in pre chars
+        print_matrix_row(io, rowmatrix,colsL,1,1:length(colsL),sep) # left part of range
+        print(io, hdots) # horizontal ellipsis
+        print_matrix_row(io, rowmatrix,colsR,1,n-length(colsR)+1:n,sep) # right part of range
+        print(io, post)  # post chars
+    end
+end
+
 logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations

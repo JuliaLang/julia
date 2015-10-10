@@ -13,15 +13,24 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+# writemime for ranges, e.g.
+#  3-element UnitRange{Int64,Int}
+#   1,2,3
+# or for more elements than fit on screen:
+#   1.0,2.0,3.0,…,6.0,7.0,8.0
+function writemime(io::IO, ::MIME"text/plain", r::Union{Range, LinSpace})
+    print(io, summary(r))
+    if !isempty(r)
+        println(io, ":")
+        with_output_limit(()->print_range(io, r))
+    end
+end
+
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
-    if isa(v, Range)
-        show(io, v)
-    else
-        print(io, summary(v))
-        if !isempty(v)
-            println(io, ":")
-            with_output_limit(()->print_matrix(io, v))
-        end
+    print(io, summary(v))
+    if !isempty(v)
+        println(io, ":")
+        with_output_limit(()->print_matrix(io, v))
     end
 end
 
