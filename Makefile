@@ -427,9 +427,9 @@ dist:
 	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
 
 ifeq ($(ARCH),x86_64)
-GITCONFIG := $(DESTDIR)$(prefix)/Git/mingw64/etc/gitconfig
+GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw64/etc/gitconfig
 else
-GITCONFIG := $(DESTDIR)$(prefix)/Git/mingw32/etc/gitconfig
+GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw32/etc/gitconfig
 endif
 
 binary-dist: distclean
@@ -448,7 +448,7 @@ ifneq ($(DESTDIR),)
 	$(error DESTDIR must not be set for make binary-dist)
 endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
-	cp $(JULIAHOME)/LICENSE.md $(prefix)
+	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
 ifneq ($(OS), WINNT)
 	-$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
@@ -468,18 +468,18 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
-	    mkdir $(DESTDIR)$(prefix)/Git && \
-	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && \
+	    mkdir $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git && \
+	    7z x PortableGit.7z -o"$(BUILDROOT)/julia-$(JULIA_COMMIT)/Git" && \
 	    echo "[core] eol = lf" >> "$(GITCONFIG)" && \
 	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(GITCONFIG)" )
-	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
-	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
 
 	# build nsis package
-	$(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi)
+	cd $(BUILDROOT) && $(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) -DMUI_ICON="$(call cygpath_w,$(JULIAHOME)/contrib/windows/julia.ico)" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi)
 
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
@@ -488,7 +488,7 @@ ifeq ($(OS), WINNT)
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
 endif
-	rm -fr $(prefix)
+	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 # this target does not accept BUILDROOT
 light-source-dist.tmp: $(JULIAHOME)/doc/_build/html
