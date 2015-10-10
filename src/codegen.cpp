@@ -4478,7 +4478,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
     ctx.dbuilder = &dbuilder;
 #ifdef LLVM37
     DIFile *topfile = NULL;
-    DISubprogram *SP;
+    DISubprogram *SP = NULL;
+    DICompileUnit *CU = NULL;
 #else
     DIFile topfile;
     DISubprogram SP;
