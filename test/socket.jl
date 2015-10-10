@@ -185,3 +185,56 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     send(b, ip"::1", port, "Hello World")
     wait(tsk)
 end
+
+begin
+    default_port = UInt16(11011)
+    default_addr = IPv4("127.0.0.1")
+
+    sock = Base.TCPServer()
+    bind(sock,Base.InetAddr(default_addr,default_port))
+    listen(sock)
+
+    new_addr, new_port = getsockname(sock)
+
+    @test default_addr == new_addr
+    @test default_port == new_port
+    close(sock)
+end
+
+begin
+    default_port = UInt16(21011)
+    default_addr = IPv6("::1")
+
+    sock = Base.TCPServer()
+    addr = Base.InetAddr(default_addr,default_port)
+    bind(sock,addr)
+    listen(sock)
+
+    new_addr, new_port = getsockname(sock)
+
+    @test default_addr == new_addr
+    @test default_port == new_port
+    close(sock)
+end
+
+begin
+    default_port = UInt16(11011)
+    default_addr = getipaddr()
+
+    sock = Base.TCPServer()
+    bind(sock,Base.InetAddr(default_addr,default_port))
+    listen(sock)
+
+    @async begin
+        sleep(1)
+        ssock = connect(default_addr, default_port)
+    end
+
+    csock = accept(sock)
+    new_addr, new_port = getsockname(csock)
+
+    @test default_addr == new_addr
+    @test new_port > 0
+    close(csock)
+    close(sock)
+end
