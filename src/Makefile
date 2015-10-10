@@ -135,12 +135,12 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	mv $@.$(JULIA_BUILD_MODE).tmp $@
 
 ifneq ($(USEMSVC), 1)
-CXXLD := $(CXX) -shared
+CXXLD = $(CXX) -shared
 ifeq ($(OS),WINNT)
 CXXLD += -Wl,--out-implib,$(build_libdir)/$(notdir $@).a
 endif
 else
-CXXLD := $(LD) -dll -export:jl_setjmp -export:jl_longjmp
+CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
