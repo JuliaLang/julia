@@ -805,8 +805,7 @@ Network I/O
 
 .. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
 
-   Get the IP address and the port of the TCP server socket, to which it is bound,
-   or the peer connected to the TCP server socket.
+   Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
 .. function:: parseip(addr)
 
