@@ -72,6 +72,8 @@ function put!(c::Channel, v)
     v
 end
 
+push!(c::Channel, v) = put!(c, v)
+
 function fetch(c::Channel)
     wait(c)
     c.data[c.take_pos]
@@ -85,6 +87,8 @@ function take!(c::Channel)
     notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
     v
 end
+
+shift!(c::Channel) = take!(c)
 
 isready(c::Channel) = (c.take_pos == c.put_pos ? false : true)
 
