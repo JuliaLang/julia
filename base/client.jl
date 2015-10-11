@@ -85,6 +85,19 @@ function display_error(er, bt)
     end
 end
 
+
+hook_types = [:PreExecute, :PostExecute, :AtExit, :AtInit]
+@eval @enum REPLHook $(hook_types...)
+const hooks = Dict{REPLHook, Any}()
+for hook_type in hook_types
+    @eval hooks[$hook_type] = []
+end
+
+function add_repl_hook(kind::REPLHook, f)
+    unshift!(hooks[kind], f)
+    nothing
+end
+
 function eval_user_input(ast::ANY, show_value)
     errcount, lasterr, bt = 0, (), nothing
     while true
@@ -97,7 +110,13 @@ function eval_user_input(ast::ANY, show_value)
                 errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
+                for f in hooks[PreExecute]
+                    f(ast)
+                end
                 value = eval(Main,ast)
+                for f in hooks[PostExecute]
+                    f(ast, value)
+                end
                 eval(Main, :(ans = $(Expr(:quote, value))))
                 if !is(value,nothing) && show_value
                     if have_color
@@ -352,12 +371,10 @@ end
 import .Terminals
 import .REPL
 
-const repl_hooks = []
-
-atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
+atreplinit(f::Function) = add_repl_hook(AtInit, f)
 
 function _atreplinit(repl)
-    for f in repl_hooks
+    for f in hooks[AtInit]
         try
             f(repl)
         catch err
@@ -426,12 +443,11 @@ function _start()
     end
 end
 
-const atexit_hooks = []
 
-atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
+atexit(f::Function) = add_repl_hook(AtExit, f)
 
 function _atexit()
-    for f in atexit_hooks
+    for f in hooks[AtExit]
         try
             f()
         catch err

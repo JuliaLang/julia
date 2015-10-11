@@ -1126,6 +1126,7 @@ export
     precompile,
 
 # misc
+    add_repl_hook,
     atexit,
     atreplinit,
     clipboard,
