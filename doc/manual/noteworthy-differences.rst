@@ -22,9 +22,7 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   Whereas in MATLAB ``a(4) = 3.2`` can create the array ``a = [0 0 0 3.2]``
   and ``a(5) = 7`` can grow it into ``a = [0 0 0 3.2 7]``, the corresponding
   Julia statement ``a[5] = 7`` throws an error if the length of ``a`` is less
-  than 5 or if this statement is the first use of the identifier ``a``.
-  Julia has :func:`push!` and :func:`append!`, which grow :obj:`Vector`\ s
-  much more efficiently than MATLAB's ``a(end+1) = val``.
+  than 5 or if this statement is the first use of the identifier ``a``. Julia has :func:`push!` and :func:`append!`, which `geometrically expand <https://en.wikipedia.org/wiki/Dynamic_array#Geometric_expansion_and_amortized_cost />`_ :obj:`Vector`\ s much more efficiently than MATLAB's ``a(end+1) = val``.
 - The imaginary unit ``sqrt(-1)`` is represented in Julia as :obj:`im`, not
   ``i`` or ``j`` as in MATLAB.
 - In Julia, literal numbers without a decimal point (such as ``42``) create
