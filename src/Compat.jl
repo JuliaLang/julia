@@ -793,6 +793,20 @@ if VERSION < v"0.4.0-dev+1653"
     end
 end
 
+if VERSION < v"0.5.0-dev+679"
+    import Base: cov, cor
+
+    cov(x::AbstractVector, corrected::Bool) = cov(x, corrected=corrected)
+    cov(X::AbstractMatrix, vardim::Integer) = cov(X, vardim=vardim)
+    cov(X::AbstractMatrix, vardim::Integer, corrected::Bool) = cov(X, vardim=vardim, corrected=corrected)
+    cov(x::AbstractVector, y::AbstractVector, corrected::Bool) = cov(x, y, corrected=corrected)
+    cov(X::AbstractMatrix, Y::AbstractMatrix, vardim::Integer) = cov(X, Y, vardim=vardim)
+    cov(X::AbstractMatrix, Y::AbstractMatrix, vardim::Integer, corrected::Bool) = cov(X, Y, vardim=vardim, corrected=corrected)
+
+    cor(X::AbstractMatrix, vardim::Integer) = cor(X, vardim=vardim)
+    cor(X::AbstractMatrix, Y::AbstractMatrix, vardim::Integer) = cor(X, Y, vardim=vardim)
+end
+
 if VERSION < v"0.5.0-dev+2228"
     const readstring = readall
     export readstring

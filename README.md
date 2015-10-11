@@ -168,7 +168,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat provides an unexported `Compat.Filesystem` method that is aliased to
   `Base.FS` on Julia 0.3 and 0.4 and `Base.Filesystem` on Julia 0.5.
 
-* `mktemp` and `mktempdir` now have variants which take a function as their first argument for automated cleanup. [#9017](https://github.com/JuliaLang/julia/pull/9017) 
+* `mktemp` and `mktempdir` now have variants which take a function as their first argument for automated cleanup. [#9017](https://github.com/JuliaLang/julia/pull/9017)
+
+* `cov` and `cor` don't allow keyword arguments anymore. Loading Compat defines compatibility methods for the new API. [#13465](https://github.com/JuliaLang/julia/pull/13465)
 
 ## New types
 
