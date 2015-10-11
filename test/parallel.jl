@@ -179,6 +179,20 @@ end
 
 ### Utility functions
 
+# construct PR #13514
+S = SharedArray{Int}((1,2,3))
+@test size(S) == (1,2,3)
+@test typeof(S) <: SharedArray{Int}
+S = SharedArray{Int}(2)
+@test size(S) == (2,)
+@test typeof(S) <: SharedArray{Int}
+S = SharedArray{Int}(1,2)
+@test size(S) == (1,2)
+@test typeof(S) <: SharedArray{Int}
+S = SharedArray{Int}(1,2,3)
+@test size(S) == (1,2,3)
+@test typeof(S) <: SharedArray{Int}
+
 # reshape
 
 d = Base.shmem_fill(1.0, (10,10,10))
