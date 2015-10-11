@@ -1925,6 +1925,7 @@ end
 function occurs_more(e::ANY, pred, n)
     if isa(e,Expr)
         e = e::Expr
+        e.head === :line && return 0
         c = 0
         for a = e.args
             c += occurs_more(a, pred, n)
@@ -2612,10 +2613,17 @@ function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost;
         return false
     end
     symlim = 1000 + 5_000_000 ÷ cost
-    if length(body.args) < (symlim + 500) ÷ 1000
+    nargs = 0
+    for arg in body.args
+        if (!isa(arg, LineNumberNode) &&
+            !(isa(arg, Expr) && (arg::Expr).head === :line))
+            nargs += 1
+        end
+    end
+    if nargs < (symlim + 500) ÷ 1000
         symlim *= 16
         symlim ÷= 1000
-        if occurs_more(body, e->true, symlim) < symlim
+        if occurs_more(body, e->(!isa(e, LineNumberNode)), symlim) < symlim
             return true
         end
     end
@@ -2653,7 +2661,7 @@ end
 const corenumtype = Union{Int32,Int64,Float32,Float64}
 
 function inlining_pass(e::Expr, sv, ast)
-    if e.head == :method
+    if e.head === :method
         # avoid running the inlining pass on function definitions
         return (e,())
     end
