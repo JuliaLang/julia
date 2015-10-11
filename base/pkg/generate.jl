@@ -164,8 +164,13 @@ function tests(pkg::AbstractString; force::Bool=false)
         using $pkg
         using Base.Test
 
-        # write your own tests here
-        @test 1 == 1
+        function still_using_default_tests()
+            testtext = readall(Base.source_path())
+            testtext = testtext[max(1, findfirst(testtext, '\\n')):end]
+            hash(testtext) & 67108863 == 61878686
+        end
+
+        @test !still_using_default_tests()
         """)
     end
 end
