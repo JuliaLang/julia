@@ -524,7 +524,7 @@ void lookup_pointer(DIContext *context, char **name, size_t *line,
 
 done:
     // If this is a jlcall wrapper, set fromC to match JIT behavior
-    if (*name == NULL || memcmp(*name, "jlcall_",7) == 0) {
+    if (*name == NULL || ((strlen(*name) > 7) && (memcmp(*name, "jlcall_",7) == 0))) {
         *fromC = true;
     }
 }
