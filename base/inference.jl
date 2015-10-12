@@ -820,9 +820,6 @@ function isconstantargs(args, argtypes::Vector{Any}, sv::StaticVarInfo)
     for i = 1:length(args)
         arg = args[i]
         t = argtypes[i]
-        if !effect_free(arg, sv, false) # TODO: handle !effect_free args
-            return false
-        end
         if !isType(t) || has_typevars(t.parameters[1])
             if isconstantref(arg, sv) === false
                 return false
@@ -860,10 +857,10 @@ function pure_eval_call(f, fargs, argtypes, sv, e)
         return false
     end
 
-    fargs = _ieval_args(fargs, argtypes, sv)
+    args = _ieval_args(fargs, argtypes, sv)
     tm = _topmod()
     if isgeneric(f)
-        atype = Tuple{Any[type_typeof(a) for a in fargs]...}
+        atype = Tuple{Any[type_typeof(a) for a in args]...}
         meth = _methods(f, atype, 1)
         if meth === false || length(meth) != 1
             return false
@@ -889,13 +886,25 @@ function pure_eval_call(f, fargs, argtypes, sv, e)
 
     local v
     try
-        v = f(fargs...)
+        v = f(args...)
     catch
         return false
     end
-    if isa(e, Expr)
-        e.head = :inert # eval_annotate will turn this into a QuoteNode
-        e.args = Any[v]
+    if isa(e, Expr) # replace Expr with a constant
+        stmts = Any[] # check if any arguments aren't effect_free and need to be kept around
+        for i = 1:length(fargs)
+            arg = fargs[i]
+            if !effect_free(arg, sv, false)
+                push!(stmts, arg)
+            end
+        end
+        if isempty(stmts)
+            e.head = :inert # eval_annotate will turn this into a QuoteNode
+            e.args = Any[v]
+        else
+            e.head = :call # should get cleaned up by tuple elimination
+            e.args = Any[top_getfield, Expr(:call, top_tuple, stmts..., v), length(stmts) + 1]
+        end
     end
     return type_typeof(v)
 end
