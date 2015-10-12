@@ -8,7 +8,7 @@
 
    .. Docstring generated from Julia source
 
-   Call ``malloc`` from the C standard library. Note, this is not the standard way to allocate memory in Julia (there is no need to allocate or deallocate manually). This indirect way of "manual memory allocation", using the C Standard Library, will result in a memory leak if the memory is not freed later explicitly, e.g. it will not be handled by Julia's garbage collection mechanism. This use, is for Julia's internal standard library use or those who really know what they are doing and require more control. See also the embedding section of the manual before proceding, if your intention is really to call C functions that allocate memory.
+   Call ``malloc`` from the C standard library. Note, the standard way is not using this function (or calloc or in general C Standard Library memory management functions) directly as Julia allocates memory indirectly (and deallocates using garbage collection). Indirect "manual memory allocation", using the C Standard Library, will result in a memory leak, if the memory is not freed later explicitly, e.g. the memory will not be handled by Julia's garbage collection mechanism.
 
 .. function:: calloc(num::Integer, size::Integer) -> Ptr{Void}
 
