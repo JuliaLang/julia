@@ -1,8 +1,20 @@
 # Notes for Julia Contributors
 
-Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev) is a good place to post them, but you should check out the [online Julia docs](http://docs.Julialang.org/en/latest/) first. If you have changes you'd like to contribute, you'll need a [free GitHub account](https://github.com/signup/free). (If you're reading this on GitHub, you probably already have one.) You'll also want a working copy of Julia, built from source (you can still contribute with a binary install, but it's harder and not really recommended). In list form, here's what to do to become a contributor:
+Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](http://julialang.org/community/standards/) in all interactions.
 
-* Join the [dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
+## Learning Julia
+
+[The learning page](http://julialang.org/learning/) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](http://docs.Julialang.org/en/latest/) covers the language and core library features, and is [searchable](http://docs.Julialang.org/en/latest/search/). (note: Javascript required).
+
+## Before filing an issue
+
+- Reporting a potential bug? Please read the "[How to file a bug report](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#how-to-file-a-bug-report)" section to make sure that all necessary information is included.
+
+- Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
+
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Please email the [julia-users](https://groups.google.com/forum/#!forum/julia-users) mailing list to discuss library ideas. Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+
+## Contributor Checklist
 
 * Create a [GitHub account](https://github.com/signup/free).
 
@@ -10,13 +22,15 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
 
-* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep your repository up-to-date and rebase your work in progress frequently.
+* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
-* Respect our [community standards](http://julialang.org/community/standards/).
+* Review discussions on the [dev mailing list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
 
-* Relax and have fun.
+* For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
+
+* Relax and have fun!
 
 ## How to file a bug report
 
@@ -34,11 +48,11 @@ A useful bug report filed as a GitHub issue provides information about how to re
 3. When filing a bug report, provide where possible:
   - The full error message, including the backtrace.
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
-  - The version of Julia you are using as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
+  - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
 
-4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. You can format code statements by surrounding it in single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown/) for more formatting tricks.
+4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown/) for more formatting tricks.
 
-## Submitting your contributions
+## Submitting contributions
 
 ### Contributing a Julia package
 
@@ -161,10 +175,6 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
      `git rebase --whitespace=fix HEAD~1`.
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
-
-## Getting help
-
-While getting familiar with Julia, remember to check out [the docs](http://docs.Julialang.org/en/latest/), keeping in mind that they are [searchable](http://docs.Julialang.org/en/latest/search/). (If you use a script blocker then you'll have to unblock that page.) The [source code](https://github.com/JuliaLang/julia) is an excellent source of examples (and it's mostly pretty approachable). If you're still stumped, post something on [the dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev), but you may want to search the archives first to see if there's already been a discussion about what you're stuck on.
 
 ## Resources
 
