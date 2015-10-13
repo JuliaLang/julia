@@ -126,13 +126,14 @@ repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
 
 repl(str::AbstractString) = :(apropos($str))
 
-repl(other) = nothing
+repl(other) = :(@doc $(esc(other)))
 
 function _repl(x)
     docs = :(@doc $(esc(x)))
-    try
-        # Handles function call syntax where each argument is a symbol.
-        isexpr(x, :call) && (docs = Base.gen_call_with_extracted_types(doc, x))
+    if isexpr(x, :call)
+        # Handles function call syntax where each argument is an atom (symbol, number, etc.)
+        t = Base.gen_call_with_extracted_types(doc, x)
+        (isexpr(t, :call, 3) && t.args[1] == doc) && (docs = t)
     end
     if isfield(x)
         quote
