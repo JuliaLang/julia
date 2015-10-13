@@ -495,7 +495,10 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         }
         else {
             if (!jl_is_leaf_type(v.typ) && !jl_is_bitstype(v.typ)) {
-                return jl_cgval_t(); // TODO: XXX
+                // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
+                // since codegen has no idea what size it might have
+                jl_error("codegen: failed during evaluation of a call to unbox");
+                return jl_cgval_t();
             }
             nb = jl_datatype_size(v.typ);
             llvmt = staticeval_bitstype(v.typ);
@@ -515,7 +518,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
 
     if (!jl_is_bitstype(bt)) {
         // TODO: to accept arbitrary types, replace this function with a call to llvm_type_rewrite
-        emit_error("reinterpret: expected bits type as first argument", ctx);
+        emit_error("unbox: expected bits type as first argument", ctx);
         return jl_cgval_t();
     }
 
@@ -536,7 +539,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
     else {
         vx = v.V;
         if (!jl_is_bitstype(v.typ)) {
-            emit_error("reinterpret: expected bits type value for second argument", ctx);
+            emit_error("unbox: expected bits type value for second argument", ctx);
             return jl_cgval_t();
         }
     }
@@ -554,7 +557,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits() &&
             !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
             !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
-            emit_error("box: argument is of incorrect size", ctx);
+            emit_error("unbox: argument is of incorrect size", ctx);
             return jl_cgval_t();
         }
         if (vxt->isPointerTy() && !llvmt->isPointerTy())
