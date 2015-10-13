@@ -100,7 +100,7 @@ jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *copyast_sym;
-jl_sym_t *fastmath_sym;
+jl_sym_t *fastmath_sym; jl_sym_t *pure_sym;
 jl_sym_t *simdloop_sym; jl_sym_t *meta_sym;
 jl_sym_t *arrow_sym;  jl_sym_t *inert_sym;
 jl_sym_t *vararg_sym;
@@ -339,8 +339,12 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     li->ast = ast;
     li->file = null_sym;
     li->line = 0;
+    li->pure = 0;
     if (ast != NULL && jl_is_expr(ast)) {
-        jl_value_t *body1 = skip_meta(jl_lam_body((jl_expr_t*)ast)->args);
+        jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
+        if (has_meta(body, pure_sym))
+            li->pure = 1;
+        jl_value_t *body1 = skip_meta(body);
         if (jl_is_linenode(body1)) {
             li->file = jl_linenode_file(body1);
             li->line = jl_linenode_line(body1);

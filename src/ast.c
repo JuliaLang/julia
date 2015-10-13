@@ -1008,6 +1008,22 @@ jl_value_t *skip_meta(jl_array_t *body)
     return body1;
 }
 
+int has_meta(jl_array_t *body, jl_sym_t *sym)
+{
+    size_t i, l = jl_array_len(body);
+    for (i = 0; i < l; i++) {
+        jl_expr_t *stmt = (jl_expr_t*)jl_cellref(body, i);
+        if (jl_is_expr((jl_value_t*)stmt) && stmt->head == meta_sym) {
+            size_t i, l = jl_array_len(stmt->args);
+            for (i = 0; i < l; i++)
+                if (jl_cellref(stmt->args, i) == (jl_value_t*)sym)
+                    return 1;
+        }
+    }
+    return 0;
+}
+
+
 int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
 {
     size_t i, l=jl_array_len(a);
