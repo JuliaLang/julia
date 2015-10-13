@@ -32,7 +32,7 @@ function choosetests(choices = [])
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
         "base64", "serialize", "functors", "misc",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "intset", "floatfuncs", "compile"
+        "intset", "floatfuncs", "compile", "parallel"
     ]
 
     if Base.USE_GPL_LIBS
@@ -42,9 +42,6 @@ function choosetests(choices = [])
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
-
-    # parallel tests depend on other workers - do them last
-    push!(testnames, "parallel")
 
     tests = []
     skip_tests = []
