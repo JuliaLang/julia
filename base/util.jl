@@ -329,7 +329,7 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 ## warnings and messages ##
 
 function info(io::IO, msg...; prefix="INFO: ")
-    println_with_color(:blue, io, prefix, chomp(string(msg...)))
+    println_with_color(info_color(), io, prefix, chomp(string(msg...)))
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
@@ -351,7 +351,7 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    print_with_color(:red, io, prefix, str)
+    print_with_color(warn_color(), io, prefix, str)
     if bt !== nothing
         show_backtrace(io, bt)
     end
