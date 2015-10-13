@@ -2,6 +2,7 @@
 
 #include <map>
 #include <string>
+#include <cstdio>
 #include "julia.h"
 #include "julia_internal.h"
 

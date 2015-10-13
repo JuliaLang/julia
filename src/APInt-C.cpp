@@ -1,10 +1,14 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include "llvm-version.h"
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/MathExtras.h>
 
-#define DLLEXPORT
-extern "C" DLLEXPORT void jl_error(const char *str);
+extern "C" {
+#include "APInt-C.h"
+DLLEXPORT void jl_error(const char *str);
+}
 
 using namespace llvm;
 
