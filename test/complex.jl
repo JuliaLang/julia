@@ -908,3 +908,9 @@ end
 
 # issue #10926
 @test typeof(π - 1im) == Complex{Float64}
+
+# issue #11839: type stability for Complex{Int64}
+let x = 1+im
+    @inferred sin(x)
+    @inferred cos(x)
+end
