@@ -155,6 +155,9 @@ function readme(pkg::AbstractString, user::AbstractString=""; force::Bool=false)
         isempty(user) && return
         url = "https://travis-ci.org/$user/$pkg.jl"
         println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
+        cov_url1 = "https://coveralls.io/repos/$user/$pkg.jl/badge.svg?branch=master&service=github"
+        cov_url2 = "https://coveralls.io/github/$user/$pkg.jl?branch=master"
+        println(io, "\n[![Coverage Status]($cov_url1)]($cov_url2)")
     end
 end
 
