@@ -4,14 +4,17 @@ module SparseMatrix
 
 using Base: Func, AddFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
-using Base.LinAlg: AbstractTriangular
+using Base.LinAlg: AbstractTriangular, PosDefException
 
-importall Base
-importall ..Base.Operators
-importall Base.LinAlg
-import Base.promote_eltype
-import Base.@get!
-import Base.Broadcast.eltype_plus, Base.Broadcast.broadcast_shape
+import Base: +, -, *, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
+import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B!, A_ldiv_B!
+import Base: @get!, abs, abs2, broadcast, ceil, complex, cond, conj, convert, copy,
+    ctranspose, diagm, exp, expm1, factorize, find, findmax, findmin, findnz, float,
+    full, getindex, hcat, hvcat, imag, indmax, ishermitian, kron, length, log, log1p,
+    max, min, norm, one, promote_eltype, real, reinterpret, reshape, rot180, rotl90,
+    rotr90, round, scale, scale!, setindex!, similar, size, transpose, tril, triu, vcat,
+    vec
+import Base.Broadcast: eltype_plus, broadcast_shape
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, SparseMatrixCSC,
        blkdiag, dense, droptol!, dropzeros!, etree, issparse, nnz, nonzeros, nzrange,
