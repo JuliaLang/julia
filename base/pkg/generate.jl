@@ -208,6 +208,9 @@ function travis(pkg::AbstractString; force::Bool=false)
         #script:
         #  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         #  - julia -e 'Pkg.clone(pwd()); Pkg.build("$pkg"); Pkg.test("$pkg"; coverage=true)'
+        # uncomment the following lines to push coverage statistics to Coveralls.io
+        #after_success:
+        #  - julia -e 'cd(Pkg.dir("$pkg")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
         """)
     end
 end
