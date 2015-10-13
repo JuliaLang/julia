@@ -122,10 +122,9 @@ const golden = φ
 for T in (Irrational, Rational, Integer, Number)
     ^(::Irrational{:e}, x::T) = exp(x)
 end
-for T in (Range, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
+for T in (Range, BitArray, StridedArray, AbstractArray)
     .^(::Irrational{:e}, x::T) = exp(x)
 end
-^(::Irrational{:e}, x::AbstractMatrix) = expm(x)
 
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 log(::Irrational{:e}, x) = log(x)

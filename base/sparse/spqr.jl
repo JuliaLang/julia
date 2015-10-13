@@ -38,12 +38,12 @@ const RTX_EQUALS_B   = Int32(2) # solve R'*X=B     or X = R'\B
 const RTX_EQUALS_ETB = Int32(3) # solve R'*X=E'*B  or X = R'\(E'*B)
 
 
-using Base.SparseMatrix: SparseMatrixCSC
-using Base.SparseMatrix.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, VTypes, common
+using ..SparseArrays: SparseMatrixCSC
+using ..SparseArrays.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, VTypes, common
 
 import Base: size
 import Base.LinAlg: qrfact
-import Base.SparseMatrix.CHOLMOD: convert, free!
+import ..SparseArrays.CHOLMOD: convert, free!
 
 
 

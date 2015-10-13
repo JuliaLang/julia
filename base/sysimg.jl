@@ -248,10 +248,6 @@ importall .Broadcast
 # statistics
 include("statistics.jl")
 
-# sparse matrices and sparse linear algebra
-include("sparse.jl")
-importall .SparseMatrix
-
 # irrational mathematical constants
 include("irrationals.jl")
 
@@ -287,6 +283,10 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# sparse matrices, vectors, and sparse linear algebra
+include("sparse.jl")
+importall .SparseArrays
 
 # Documentation
 
