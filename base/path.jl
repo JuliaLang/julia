@@ -116,11 +116,11 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
             UInt32, (Cwstring, UInt32, Ptr{UInt16}, Ptr{Void}),
             path, length(buf), buf, C_NULL)
         systemerror(:realpath, p == 0)
-        if (p > length(buf))
+        if p > length(buf)
             resize!(buf, p)
             continue
         end
-        return utf8(UTF16String(buf))
+        return encode_to_utf8(UInt16, buf, p)
     end
 end
 
@@ -133,11 +133,11 @@ end
             path, buf, length(buf))
         systemerror(:longpath, p == 0)
         # Buffer wasn't big enough, in which case `p` is the necessary buffer size
-        if (p > length(buf))
+        if p > length(buf)
             resize!(buf, p)
             continue
         end
-        return utf8(UTF16String(buf))
+        return encode_to_utf8(UInt16, buf, p)
     end
 end
 
