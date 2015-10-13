@@ -342,6 +342,20 @@ is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
 unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
 
+function is_intrinsic_expr(x::ANY)
+    isa(x, IntrinsicFunction) && return true
+    if isa(x, GlobalRef)
+        x = x::GlobalRef
+        return (x.mod == Base && isdefined(Base, x.name) &&
+                isa(getfield(Base, x.name), IntrinsicFunction))
+    elseif isa(x, TopNode)
+        x = x::TopNode
+        return (isdefined(Base, x.name) &&
+                isa(getfield(Base, x.name), IntrinsicFunction))
+    end
+    return false
+end
+
 ## AST printing helpers ##
 
 const indent_width = 4
@@ -519,7 +533,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         head !== :row && print(io, cl)
 
     # function call
-    elseif head == :call && nargs >= 1
+    elseif head === :call && nargs >= 1
         func = args[1]
         fname = isa(func,GlobalRef) ? func.name : func
         func_prec = operator_precedence(fname)
@@ -528,7 +542,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
+        if (in(ex.args[1], (GlobalRef(Base, :box), TopNode(:box), :throw)) ||
+            ismodulecall(ex) ||
+            (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
             show_type = task_local_storage(:TYPEEMPHASIZE, false)
         end
 
