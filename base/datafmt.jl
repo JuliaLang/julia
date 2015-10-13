@@ -4,7 +4,6 @@
 
 module DataFmt
 
-importall Base
 import Base: _default_delims, tryparse_internal
 
 export countlines, readdlm, readcsv, writedlm, writecsv
