@@ -67,18 +67,16 @@ macro eval(x)
 end
 
 macro inline(ex)
-    esc(_inline(ex))
+    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
-
-_inline(ex::Expr) = pushmeta!(ex, :inline)
-_inline(arg) = arg
 
 macro noinline(ex)
-    esc(_noinline(ex))
+    esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
 
-_noinline(ex::Expr) = pushmeta!(ex, :noinline)
-_noinline(arg) = arg
+macro pure(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
+end
 
 ## some macro utilities ##
 

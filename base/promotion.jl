@@ -2,10 +2,11 @@
 
 ## type join (closest common ancestor, or least upper bound) ##
 
-typejoin() = Bottom
-typejoin(t::ANY) = t
-typejoin(t::ANY, ts...) = typejoin(t, typejoin(ts...))
+typejoin() = (@_pure_meta; Bottom)
+typejoin(t::ANY) = (@_pure_meta; t)
+typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(a::ANY, b::ANY)
+    @_pure_meta
     if isa(a,TypeConstructor); a = a.body; end
     if isa(b,TypeConstructor); b = b.body; end
     if a <: b
@@ -102,37 +103,39 @@ end
 
 ## promotion mechanism ##
 
-promote_type()  = Bottom
-promote_type(T) = T
-promote_type(T, S, U, V...) = promote_type(T, promote_type(S, U, V...))
+promote_type()  = (@_pure_meta; Bottom)
+promote_type(T) = (@_pure_meta; T)
+promote_type(T, S, U, V...) = (@_pure_meta; promote_type(T, promote_type(S, U, V...)))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type{T}(::Type{T}, ::Type{T}) = T
-promote_type{T}(::Type{T}, ::Type{Bottom}) = T
-promote_type{T}(::Type{Bottom}, ::Type{T}) = T
+promote_type(::Type{Bottom}, ::Type{Bottom}) = (@_pure_meta; Bottom)
+promote_type{T}(::Type{T}, ::Type{T}) = (@_pure_meta; T)
+promote_type{T}(::Type{T}, ::Type{Bottom}) = (@_pure_meta; T)
+promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
 
 # Try promote_rule in both orders. Typically only one is defined,
 # and there is a fallback returning Bottom below, so the common case is
 #   promote_type(T, S) =>
 #   promote_result(T, S, result, Bottom) =>
 #   typejoin(result, Bottom) => result
-promote_type{T,S}(::Type{T}, ::Type{S}) =
+function promote_type{T,S}(::Type{T}, ::Type{S})
+    @_pure_meta
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+end
 
-promote_rule(T, S) = Bottom
+promote_rule(T, S) = (@_pure_meta; Bottom)
 
-promote_result(t,s,T,S) = promote_type(T,S)
+promote_result(t,s,T,S) = (@_pure_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = typejoin(T, S)
+promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = (@_pure_meta; typejoin(T, S))
 
 promote() = ()
 promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
-promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = promote_type(typeof(x), promote_typeof(xs...))
+promote_typeof(x) = (@_pure_meta; typeof(x))
+promote_typeof(x, xs...) = (@_pure_meta; promote_type(typeof(x), promote_typeof(xs...)))
 function promote(x, y, z)
     (convert(promote_typeof(x,y,z), x),
      convert(promote_typeof(x,y,z), y),
@@ -152,15 +155,17 @@ end
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) =
+function promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom})
+    @_pure_meta
     promote_to_super(T, S, typejoin(T,S))
+end
 
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_super{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = T
-promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = T
-promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = S
+promote_to_super{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = (@_pure_meta; T)
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_pure_meta; T)
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
 promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
@@ -203,7 +208,7 @@ checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
 # as needed. For example, if you need to provide a custom result type
 # for the multiplication of two types,
 #   promote_op{R<:MyType,S<:MyType}(::MulFun, ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
-promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = promote_type(R, S)
+promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = (@_pure_meta; promote_type(R, S))
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

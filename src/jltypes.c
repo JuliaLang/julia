@@ -3420,7 +3420,7 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaStaticData"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(14, jl_symbol("ast"), jl_symbol("sparams"),
+                        jl_svec(15, jl_symbol("ast"), jl_symbol("sparams"),
                                 jl_symbol("tfunc"), jl_symbol("name"),
                                 jl_symbol("roots"),
                                 /* jl_symbol("specTypes"),
@@ -3430,15 +3430,16 @@ void jl_init_types(void)
                                 jl_symbol("module"), jl_symbol("def"),
                                 jl_symbol("capt"),
                                 jl_symbol("file"), jl_symbol("line"),
-                                jl_symbol("inferred")),
-                        jl_svec(14, jl_any_type, jl_simplevector_type,
+                                jl_symbol("inferred"),
+                                jl_symbol("pure")),
+                        jl_svec(15, jl_any_type, jl_simplevector_type,
                                 jl_any_type, jl_sym_type,
                                 jl_any_type, jl_any_type,
                                 jl_any_type, jl_array_any_type,
                                 jl_module_type, jl_any_type,
                                 jl_any_type,
                                 jl_sym_type, jl_int32_type,
-                                jl_bool_type),
+                                jl_bool_type, jl_bool_type),
                         0, 1, 4);
 
     jl_box_type =
@@ -3572,6 +3573,7 @@ void jl_init_types(void)
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");
+    pure_sym = jl_symbol("pure");
     meta_sym = jl_symbol("meta");
     arrow_sym = jl_symbol("->");
     dots_sym = jl_symbol("...");
