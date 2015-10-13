@@ -6,14 +6,14 @@ do33 = ones(3)
 
 # based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
 
-using Base.SparseMatrix.UMFPACK.increment!
+using Base.SparseArrays.UMFPACK.increment!
 
 A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 
 for Tv in (Float64, Complex128)
-    for Ti in Base.SparseMatrix.UMFPACK.UMFITypes.types
+    for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
         @test nnz(lua) == 18
@@ -40,7 +40,7 @@ for Tv in (Float64, Complex128)
 end
 
 Ac0 = complex(A0,A0)
-for Ti in Base.SparseMatrix.UMFPACK.UMFITypes.types
+for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
     lua = lufact(Ac)
     L,U,p,q,Rs = lua[:(:)]

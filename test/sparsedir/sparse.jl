@@ -190,8 +190,8 @@ for i = 1:5
     a = sprand(10, 5, 0.7)
     b = sprand(5, 15, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.SparseArrays.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
     @test full(kron(full(a),b)) == kron(full(a), full(b))
     @test full(kron(a,full(b))) == kron(full(a), full(b))
@@ -381,18 +381,18 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
 
     # range indexing
     @test full(ss116[i,:]) == aa116[i,:]
-    @test full(ss116[:,j]) == aa116[:,j]'' # sparse matrices/vectors always have ndims==2:
+    @test full(ss116[:,j]) == aa116[:,j]
     @test full(ss116[i,1:2:end]) == aa116[i,1:2:end]
-    @test full(ss116[1:2:end,j]) == aa116[1:2:end,j]''
+    @test full(ss116[1:2:end,j]) == aa116[1:2:end,j]
     @test full(ss116[i,end:-2:1]) == aa116[i,end:-2:1]
-    @test full(ss116[end:-2:1,j]) == aa116[end:-2:1,j]''
+    @test full(ss116[end:-2:1,j]) == aa116[end:-2:1,j]
     # float-range indexing is not supported
 
     # sorted vector indexing
     @test full(ss116[i,[3:2:end-3;]]) == aa116[i,[3:2:end-3;]]
-    @test full(ss116[[3:2:end-3;],j]) == aa116[[3:2:end-3;],j]''
+    @test full(ss116[[3:2:end-3;],j]) == aa116[[3:2:end-3;],j]
     @test full(ss116[i,[end-3:-2:1;]]) == aa116[i,[end-3:-2:1;]]
-    @test full(ss116[[end-3:-2:1;],j]) == aa116[[end-3:-2:1;],j]''
+    @test full(ss116[[end-3:-2:1;],j]) == aa116[[end-3:-2:1;],j]
 
     # unsorted vector indexing with repetition
     p = [4, 1, 2, 3, 2, 6]
@@ -403,7 +403,7 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     # bool indexing
     li = bitrand(size(aa116,1))
     lj = bitrand(size(aa116,2))
-    @test full(ss116[li,j]) == aa116[li,j]''
+    @test full(ss116[li,j]) == aa116[li,j]
     @test full(ss116[li,:]) == aa116[li,:]
     @test full(ss116[i,lj]) == aa116[i,lj]
     @test full(ss116[:,lj]) == aa116[:,lj]
@@ -412,7 +412,7 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     # empty indices
     for empty in (1:0, Int[])
         @test full(ss116[empty,:]) == aa116[empty,:]
-        @test full(ss116[:,empty]) == aa116[:,empty]''
+        @test full(ss116[:,empty]) == aa116[:,empty]
         @test full(ss116[empty,lj]) == aa116[empty,lj]
         @test full(ss116[li,empty]) == aa116[li,empty]
         @test full(ss116[empty,empty]) == aa116[empty,empty]
@@ -445,7 +445,7 @@ S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[end] = 3
     @test S1290[end] == (S1290[1] + S1290[2,2])
     @test 6 == sum(diag(S1290))
-    @test (full(S1290)[[3,1],1])'' == full(S1290[[3,1],1])
+    @test full(S1290)[[3,1],1] == full(S1290[[3,1],1])
 # end
 
 
@@ -457,7 +457,7 @@ let a = spzeros(Int, 10, 10)
     @test a[1,:] == sparse(ones(Int,1,10))
     a[:,2] = 2
     @test countnz(a) == 19
-    @test a[:,2] == 2*sparse(ones(Int,10,1))
+    @test a[:,2] == 2*sparse(ones(Int,10))
 
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;]')
@@ -500,9 +500,9 @@ let ASZ = 1000, TSZ = 800
 end
 
 let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
-    @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
+    @test A[I] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[I] = [1:10;]
-    @test A[I] == A[X] == reshape(1:10, 10, 1)
+    @test A[I] == A[X] == collect(1:10)
 end
 
 let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprandbool(50, 30, 0.2)
@@ -540,7 +540,7 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
 end
 
 #Issue 7507
-@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
+@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10)
 
 #Issue 7650
 let S = spzeros(3, 3)
@@ -552,9 +552,10 @@ let X = eye(5), M = rand(5,4), C = spzeros(3,3)
     VX = vec(X); VSX = vec(SX)
     VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
     VC = vec(C)
-    @test reshape(VX, (25,1)) == VSX
-    @test reshape(VM, (20,1)) == VSM1 == VSM2
-    @test size(VC) == (9,1)
+    @test VX == VSX
+    @test VM == VSM1
+    @test VM == VSM2
+    @test size(VC) == (9,)
     @test nnz(VC) == 0
     @test nnz(VSX) == 5
 end
@@ -641,9 +642,9 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
         ((minj < 1) || (maxj > n)) && BoundsError()
     end
 
-    (alg == 0) ? Base.SparseMatrix.getindex_I_sorted_bsearch_A(A, I, J) :
-    (alg == 1) ? Base.SparseMatrix.getindex_I_sorted_bsearch_I(A, I, J) :
-    Base.SparseMatrix.getindex_I_sorted_linear(A, I, J)
+    (alg == 0) ? Base.SparseArrays.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? Base.SparseArrays.getindex_I_sorted_bsearch_I(A, I, J) :
+    Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
 end
 
 let M=2^14, N=2^4
@@ -761,7 +762,7 @@ end
 
 # issue #9917
 @test sparse([]') == reshape(sparse([]), 1, 0)
-@test full(sparse([])) == zeros(0, 1)
+@test full(sparse([])) == zeros(0)
 @test_throws BoundsError sparse([])[1]
 @test_throws BoundsError sparse([])[1] = 1
 x = speye(100)
@@ -1071,7 +1072,7 @@ Ai = ceil(Int,Ar*100)
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
 # test sparse matrix cond
-A = sparse([1.0])
+A = sparse(reshape([1.0],1,1))
 Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
@@ -1092,12 +1093,12 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
 Ar = sprandn(20,20,.5)
 Ari = ceil(Int64,100*Ar)
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
-@test_throws DimensionMismatch Base.SparseMatrix.normestinv(sprand(3,5,.9))
+@test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
+@test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
+@test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
+@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+@test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
@@ -1106,7 +1107,7 @@ Ari = ceil(Int64,100*Ar)
 A = sprand(10,10,0.2)
 p = randperm(10)
 q = randperm(10)
-@test Base.SparseMatrix.csc_permute(A, invperm(p), q) == full(A)[p, q]
+@test Base.SparseArrays.csc_permute(A, invperm(p), q) == full(A)[p, q]
 
 # issue #13008
 @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
