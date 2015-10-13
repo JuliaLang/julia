@@ -18,7 +18,7 @@ end
 #   1,2,3
 # or for more elements than fit on screen:
 #   1.0,2.0,3.0,…,6.0,7.0,8.0
-function writemime(io::IO, ::MIME"text/plain", r::Union{Range, LinSpace})
+function writemime(io::IO, ::MIME"text/plain", r::Range)
     print(io, summary(r))
     if !isempty(r)
         println(io, ":")
