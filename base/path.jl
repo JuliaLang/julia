@@ -110,18 +110,17 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 @windows_only realpath(path::AbstractString) = realpath(utf16(path))
 @windows_only function realpath(path::UTF16String)
-    p = UInt32((sizeof(path)>>2) + 1)
+    buf = Array(UInt16, length(path.data))
     while true
-        buflength = p
-        buf = zeros(UInt16,buflength)
         p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
             UInt32, (Cwstring, UInt32, Ptr{UInt16}, Ptr{Void}),
-            path, buflength, buf, C_NULL)
+            path, length(buf), buf, C_NULL)
         systemerror(:realpath, p == 0)
-        if (p < buflength)
-            resize!(buf, p+1)
-            return utf8(UTF16String(buf))
+        if (p > length(buf))
+            resize!(buf, p)
+            continue
         end
+        return utf8(UTF16String(buf))
     end
 end
 
