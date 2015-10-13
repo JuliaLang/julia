@@ -3802,12 +3802,12 @@ julia> [a b c; d e f]
 2x3 Array{Int64,2}:
  1  2  3
  4  5  6
- 
+
 julia> hvcat((3,3), a,b,c,d,e,f)
 2x3 Array{Int64,2}:
  1  2  3
  4  5  6
- 
+
 julia> [a b;c d; e f]
 3x2 Array{Int64,2}:
  1  2
