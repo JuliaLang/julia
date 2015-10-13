@@ -448,6 +448,7 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 @test base64encode("hello world") == "aGVsbG8gd29ybGQ="
 
 @test nothing === __precompile__(false) # tests should never be precompiled
+@test nothing === __precompile__()
 @test nothing === include_dependency("foo")
 
 @test real(Int) == real(Complex{Int}) == Int
