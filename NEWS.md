@@ -7,6 +7,8 @@ New language features
 Language changes
 ----------------
 
+  * `using` and `import` are now case-sensitive even on case-insensitive filesystems (common on Mac and Windows) ([#13542]).
+
 Command-line option changes
 ---------------------------
 
@@ -1679,3 +1681,4 @@ Too numerous to mention.
 [#13387]: https://github.com/JuliaLang/julia/issues/13387
 [#13465]: https://github.com/JuliaLang/julia/issues/13465
 [#13480]: https://github.com/JuliaLang/julia/issues/13480
+[#13542]: https://github.com/JuliaLang/julia/issues/13542
