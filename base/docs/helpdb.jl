@@ -3792,7 +3792,34 @@ utf8(s)
 doc"""
     hvcat(rows::Tuple{Vararg{Int}}, values...)
 
-Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row. For example, `[a b;c d e]` calls `hvcat((2,3),a,b,c,d,e)`.
+Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.
+
+```jldoctest
+julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
+(1,2,3,4,5,6)
+
+julia> [a b c; d e f]
+2x3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> hvcat((3,3), a,b,c,d,e,f)
+2x3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> [a b;c d; e f]
+3x2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+
+julia> hvcat((2,2,2), a,b,c,d,e,f)
+3x2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+```
 
 If the first argument is a single integer `n`, then all block rows are assumed to have `n` block columns.
 """
