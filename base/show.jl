@@ -303,7 +303,7 @@ const expr_infix_wide = Set{Symbol}([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(
 const expr_infix = Set{Symbol}([:(:), :(->), symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
-const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
+const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'), :new =>('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","]"),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'))
 
@@ -426,7 +426,11 @@ end
 # show a normal (non-operator) function call, e.g. f(x,y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) &&
+    if head === :new
+        print(io, "new{")
+        show_unquoted(io, func, indent)
+        print(io, '}')
+    elseif isa(func, Symbol) || (isa(func, Expr) &&
             (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
