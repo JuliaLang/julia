@@ -59,15 +59,23 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         for i = 1:size(A1, 1)
             for j = 1:size(A1, 2)
                 if uplo1 == :U
-                    if i > j || (i == j && t1 == UnitUpperTriangular)
-                        @test_throws BoundsError A1c[i,j] = 0
+                    if i > j
+                        A1c[i,j] = 0
+                        @test_throws ArgumentError A1c[i,j] = 1
+                    elseif i == j && t1 == UnitUpperTriangular
+                        A1c[i,j] = 1
+                        @test_throws ArgumentError A1c[i,j] = 0
                     else
                         A1c[i,j] = 0
                         @test A1c[i,j] == 0
                     end
                 else
-                    if i < j || (i == j && t1 == UnitLowerTriangular)
-                        @test_throws BoundsError A1c[i,j] = 0
+                    if i < j
+                        A1c[i,j] = 0
+                        @test_throws ArgumentError A1c[i,j] = 1
+                    elseif i == j && t1 == UnitLowerTriangular
+                        A1c[i,j] = 1
+                        @test_throws ArgumentError A1c[i,j] = 0
                     else
                         A1c[i,j] = 0
                         @test A1c[i,j] == 0
