@@ -112,6 +112,12 @@ temp_pkg_dir() do
         @test err.msg == "Example – 2147483647.0.0 is not a registered version"
     end
 
+    # PR #13572, handling of versions with untagged detached heads
+    LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+        LibGit2.checkout!(repo, "72f09c7d0099793378c645929a9961155faae6d2")
+    end
+    @test Pkg.installed()["Example"] > v"0.0.0"
+
     Pkg.rm("Example")
     @test isempty(Pkg.installed())
 end
