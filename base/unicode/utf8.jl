@@ -312,6 +312,11 @@ function convert(::Type{UTF8String}, a::Vector{UInt8}, invalids_as::AbstractStri
 end
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
+function convert{T<:Union{UInt16, UInt32}}(::Type{UTF8String}, a::Vector{T}, len=length(a)-1)
+    encode_to_utf8(T, a, len)
+end
+
+
 """
 Converts an already validated vector of `UInt16` or `UInt32` to a `UTF8String`
 

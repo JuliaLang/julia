@@ -37,7 +37,7 @@ macro accessEnv(var,errorcase)
                     $(esc(errorcase))
                 end
             end
-            utf8(UTF16String(_jl_win_getenv(var,len)))
+            UTF8String(_jl_win_getenv(var,len))
         end
     end
 end
