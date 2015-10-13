@@ -77,8 +77,8 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     else
         false
     end
+    res = true
     try
-        res = true
         for (ver,info) in avail
             if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
                 if LibGit2.is_ancestor_of(head, info.sha1, crepo)
