@@ -178,7 +178,7 @@ function tempdir()
         error("GetTempPath failed: $(Libc.FormatMessage())")
     end
     resize!(temppath,lentemppath+1)
-    return utf8(UTF16String(temppath))
+    return UTF8String(temppath)
 end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 function tempname(temppath::AbstractString,uunique::UInt32)

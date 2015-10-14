@@ -195,7 +195,7 @@ strerror() = strerror(errno())
         buf = Array(UInt16, len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-        return utf8(UTF16String(buf))
+        return UTF8String(buf)
     end
 end
 

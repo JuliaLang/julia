@@ -120,7 +120,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
         systemerror(:realpath, p == 0)
         if (p < buflength)
             resize!(buf, p+1)
-            return utf8(UTF16String(buf))
+            return UTF8String(buf)
         end
     end
 end
@@ -138,7 +138,7 @@ end
             resize!(buf, p)
             continue
         end
-        return utf8(UTF16String(buf))
+        return UTF8String(buf)
     end
 end
 
