@@ -165,20 +165,6 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 end
 
 ## solvers
-function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
-    if eltype(b)<:Complex; A = complex(A); end
-
-    if istril(A)
-        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
-        # the case where there are zeros on the diagonal and error out.
-        # It also does not work in the complex case. VBS.
-        #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
-        return fwdTriSolve!(A, b)
-    end
-    if istriu(A); return bwdTriSolve!(A, b); end
-    return A_ldiv_B!(lufact(A),b)
-end
-
 function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     n = length(B)
