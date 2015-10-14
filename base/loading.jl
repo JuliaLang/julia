@@ -430,7 +430,8 @@ function stale_cachefile(modpath, cachefile)
             return true # cache file was compiled from a different path
         end
         for (f,ftime) in files
-            if mtime(f) != ftime
+            # Issue #13606: compensate for Docker images rounding mtimes
+            if mtime(f) ∉ (ftime, floor(ftime))
                 return true
             end
         end
