@@ -47,6 +47,9 @@ Library improvements
 
   * Linear algebra:
 
+    * All dimensions indexed by scalars are now dropped, whereas previously only
+      trailing scalar dimensions would be omitted from the result.
+
     * New `normalize` and `normalize!` convenience functions for normalizing
       vectors ([#13681]).
 
