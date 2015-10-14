@@ -233,3 +233,7 @@ end
 let data = "1 2 3"
     readdlm(IOBuffer(data), ' ', BigInt) == BigInt[1 2 3]
 end
+
+# test writemime
+@test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+
