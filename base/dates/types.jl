@@ -109,22 +109,22 @@ function DateTime(periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
     for p in periods
-        typeof(p) <: Year && (y = p)
-        typeof(p) <: Month && (m = p)
-        typeof(p) <: Day && (d = p)
-        typeof(p) <: Hour && (h = p)
-        typeof(p) <: Minute && (mi = p)
-        typeof(p) <: Second && (s = p)
-        typeof(p) <: Millisecond && (ms = p)
+        isa(p, Year) && (y = p::Year)
+        isa(p, Month) && (m = p::Month)
+        isa(p, Day) && (d = p::Day)
+        isa(p, Hour) && (h = p::Hour)
+        isa(p, Minute) && (mi = p::Minute)
+        isa(p, Second) && (s = p::Second)
+        isa(p, Millisecond) && (ms = p::Millisecond)
     end
     return DateTime(y,m,d,h,mi,s,ms)
 end
 function Date(periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     for p in periods
-        typeof(p) <: Year && (y = p)
-        typeof(p) <: Month && (m = p)
-        typeof(p) <: Day && (d = p)
+        isa(p, Year) && (y = p::Year)
+        isa(p, Month) && (m = p::Month)
+        isa(p, Day) && (d = p::Day)
     end
     return Date(y,m,d)
 end
