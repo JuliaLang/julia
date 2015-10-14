@@ -783,24 +783,24 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 jl_printf(JL_STDERR,"code missing for %s", method->linfo->name->name);
                 jl_static_show_func_sig(JL_STDERR, (jl_value_t*)type);
                 jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
-                exit(1);
+                //exit(1);
             }
-            jl_function_t *unspec = method->linfo->unspecialized;
-            if (method->env == (jl_value_t*)jl_emptysvec)
-                newmeth = unspec;
-            else
-                newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo);
+            else {
+                jl_function_t *unspec = method->linfo->unspecialized;
+                if (method->env == (jl_value_t*)jl_emptysvec)
+                    newmeth = unspec;
+                else
+                    newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo);
 
-            if (sparams != jl_emptysvec)
-                newmeth = with_appended_env(newmeth, sparams);
+                if (sparams != jl_emptysvec)
+                    newmeth = with_appended_env(newmeth, sparams);
 
-            (void)jl_method_cache_insert(mt, type, newmeth);
-            JL_GC_POP();
-            return newmeth;
+                (void)jl_method_cache_insert(mt, type, newmeth);
+                JL_GC_POP();
+                return newmeth;
+            }
         }
-        else {
-            newmeth = jl_instantiate_method(method, sparams);
-        }
+        newmeth = jl_instantiate_method(method, sparams);
     }
     /*
       if "method" itself can ever be compiled, for example for use as
