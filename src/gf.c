@@ -1541,7 +1541,8 @@ static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, j
     jl_trampoline_compile_function(func, 1, sig);
 }
 
-static int tupletype_any_bottom(jl_value_t *sig) {
+static int tupletype_any_bottom(jl_value_t *sig)
+{
     jl_svec_t *types = ((jl_tupletype_t*)sig)->types;
     size_t i, l = jl_svec_len(types);
     for (i = 0; i < l; i++) {
@@ -1551,7 +1552,7 @@ static int tupletype_any_bottom(jl_value_t *sig) {
     return 0;
 }
 
-void jl_compile_all_defs(jl_function_t *gf)
+static int jl_compile_all_defs(jl_function_t *gf)
 {
     assert(jl_is_gf(gf));
     jl_methtable_t *mt = jl_gf_mtable(gf);
@@ -1560,7 +1561,7 @@ void jl_compile_all_defs(jl_function_t *gf)
     jl_methlist_t *m = mt->defs;
     jl_function_t *func = NULL;
     JL_GC_PUSH1(&func);
-    while (m != (void*)jl_nothing) {
+    while ((jl_value_t*)m != jl_nothing) {
         if (jl_is_leaf_type((jl_value_t*)m->sig)) {
             // usually can create a specialized version of the function,
             // if the signature is already a leaftype
@@ -1617,11 +1618,65 @@ void jl_compile_all_defs(jl_function_t *gf)
         precompile_unspecialized(func, m->sig, m->tvars);
         m = m->next;
     }
+
     JL_GC_POP();
+    return 1;
 }
 
-static void _compile_all(jl_module_t *m, htable_t *h)
+static int jl_compile_cache(jl_methlist_t *m)
 {
+    int changes = 0;
+    // make sure everything in the cache has a fptr assigned
+    while ((jl_value_t*)m != jl_nothing) {
+        jl_function_t *func = m->func;
+        if (func != jl_bottom_func && func->fptr == &jl_trampoline) {
+            jl_trampoline_compile_function(func, 1, m->sig);
+            changes = 1;
+        }
+        m = m->next;
+        continue;
+    }
+    return changes;
+}
+
+static int jl_trampoline_compile_cache(jl_array_t **pa)
+{
+    int changes = 0;
+    jl_array_t *a = *pa;
+    if ((jl_value_t*)a == jl_nothing)
+        return 0;
+    size_t i, l = jl_array_len(a);
+    for (i = 0; i < l; i++) {
+        jl_methlist_t *m = (jl_methlist_t*)jl_cellref(a, i);
+        if (m) {
+            changes = jl_compile_cache(m) || changes;
+            if (*pa != a) {
+                // cache changed, restart
+                a = *pa;
+                i = 0;
+                l = jl_array_len(a);
+            }
+        }
+    }
+    return changes;
+}
+
+static int jl_compile_all_cache(jl_function_t *gf)
+{
+    assert(jl_is_gf(gf));
+    int changes = 0;
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+    if (mt->kwsorter != NULL)
+        changes = jl_compile_all_cache(mt->kwsorter) || changes;
+    changes = jl_compile_cache(mt->cache) || changes;
+    changes = jl_trampoline_compile_cache(&mt->cache_arg1) || changes;
+    changes = jl_trampoline_compile_cache(&mt->cache_targ) || changes;
+    return changes;
+}
+
+static int _compile_all(jl_module_t *m, htable_t *h, int do_cache_only)
+{
+    int changes = 0;
     size_t i;
     size_t sz = m->bindings.size;
     void **table = (void**) malloc(sz * sizeof(void*));
@@ -1633,11 +1688,13 @@ static void _compile_all(jl_module_t *m, htable_t *h)
             if (b->value != NULL) {
                 jl_value_t *v = b->value;
                 if (jl_is_gf(v)) {
-                    jl_compile_all_defs((jl_function_t*)v);
+                    if (!do_cache_only)
+                        changes = jl_compile_all_defs((jl_function_t*)v) || changes;
+                    changes = jl_compile_all_cache((jl_function_t*)v) || changes;
                 }
                 else if (jl_is_module(v)) {
                     if (!ptrhash_has(h, v)) {
-                        _compile_all((jl_module_t*)v, h);
+                        changes = _compile_all((jl_module_t*)v, h, do_cache_only) || changes;
                     }
                 }
             }
@@ -1656,17 +1713,25 @@ static void _compile_all(jl_module_t *m, htable_t *h)
                     li->unspecialized = func;
                     jl_gc_wb(li, func);
                 }
-                precompile_unspecialized(func, li->specTypes ? li->specTypes : jl_anytuple_type, jl_emptysvec);
+                if (func->fptr == &jl_trampoline) {
+                    precompile_unspecialized(func, li->specTypes ? li->specTypes : jl_anytuple_type, jl_emptysvec);
+                    changes = 1;
+                }
             }
         }
     }
+    return changes;
 }
 
 void jl_compile_all(void)
 {
     htable_t h;
     htable_new(&h, 0);
-    _compile_all(jl_main_module, &h);
+    int changes = 0;
+    do {
+        changes = _compile_all(jl_main_module, &h, changes);
+        htable_reset(&h, h.size);
+    } while (changes);
     htable_free(&h);
 }
 
