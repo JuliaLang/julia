@@ -1071,7 +1071,7 @@ string pre prior to the matrix (e.g. opening bracket), which will cause
 a corresponding same-size indent on following rows,
 string post on the end of the last row of the matrix.
 Also options to use different ellipsis characters hdots,
-vdots, ddots. The ellipsis are repeated every hmod or vmod element.
+vdots, ddots. These are repeated every hmod or vmod elements.
 """
 function print_matrix(io::IO, X::AbstractVecOrMat,
                       sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
@@ -1136,7 +1136,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                     println(io, i == m ? post : postsp)
                 end
             end
-        else # neither rows nor cols fit, so use all 3 kinds of ellipsis
+        else # neither rows nor cols fit, so use all 3 kinds of dots
             c = div(screenwidth-length(hdots)+1,2)+1
             Ralign = reverse(alignment(X,rowsA,reverse(colsA),c,c,sepsize))
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
