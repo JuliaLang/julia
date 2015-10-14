@@ -1001,10 +1001,6 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
         }
     }
     jl_compile(f);
-    // this assertion is probably not correct; the fptr could have been assigned
-    // by a recursive invocation from inference above.
-    //assert(f->fptr == &jl_trampoline);
-    jl_generate_fptr(f);
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
         jl_gc_wb(f->linfo, f->linfo->ast);
@@ -1016,6 +1012,7 @@ JL_CALLABLE(jl_trampoline)
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
     jl_trampoline_compile_function(f, 0, f->linfo->specTypes ? f->linfo->specTypes : jl_anytuple_type);
+    jl_generate_fptr(f);
     return jl_apply(f, args, nargs);
 }
 
