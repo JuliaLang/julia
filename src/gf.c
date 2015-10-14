@@ -1674,29 +1674,21 @@ static int jl_compile_all_cache(jl_function_t *gf)
     return changes;
 }
 
-static int _compile_all(jl_module_t *m, htable_t *h, int do_cache_only)
+static int _compile_all(jl_value_t *v, htable_t *h, int do_cache_only);
+
+static int _compile_all_module(jl_module_t *m, htable_t *h, int do_cache_only)
 {
     int changes = 0;
     size_t i;
     size_t sz = m->bindings.size;
     void **table = (void**) malloc(sz * sizeof(void*));
     memcpy(table, m->bindings.table, sz*sizeof(void*));
-    ptrhash_put(h, m, m);
     for(i=1; i < sz; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value != NULL) {
-                jl_value_t *v = b->value;
-                if (jl_is_gf(v)) {
-                    if (!do_cache_only)
-                        changes = jl_compile_all_defs((jl_function_t*)v) || changes;
-                    changes = jl_compile_all_cache((jl_function_t*)v) || changes;
-                }
-                else if (jl_is_module(v)) {
-                    if (!ptrhash_has(h, v)) {
-                        changes = _compile_all((jl_module_t*)v, h, do_cache_only) || changes;
-                    }
-                }
+            jl_value_t *v = b->value;
+            if (v != NULL) {
+                changes = _compile_all(v, h, do_cache_only) || changes;
             }
         }
     }
@@ -1723,13 +1715,44 @@ static int _compile_all(jl_module_t *m, htable_t *h, int do_cache_only)
     return changes;
 }
 
+static int _compile_all(jl_value_t *v, htable_t *h, int do_cache_only)
+{
+    int changes = 0;
+    if (!ptrhash_has(h, v)) {
+        ptrhash_put(h, v, v);
+        if (jl_is_gf(v)) {
+            if (!do_cache_only)
+                changes = jl_compile_all_defs((jl_function_t*)v) || changes;
+            changes = jl_compile_all_cache((jl_function_t*)v) || changes;
+        }
+        else if (jl_is_module(v)) {
+            changes = _compile_all_module((jl_module_t*)v, h, do_cache_only) || changes;
+        }
+        else {
+            jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+            size_t i, nf = jl_datatype_nfields(dt);
+            for (i = 0; i < nf; i++) {
+                if (jl_field_isptr(dt, i)) {
+                    jl_value_t **slot = (jl_value_t**)
+                        ((char*)v + jl_field_offset(dt, i));
+                    jl_value_t *fld = *slot;
+                    if (fld) {
+                        changes = _compile_all(fld, h, do_cache_only) || changes;
+                    }
+                }
+            }
+        }
+    }
+    return changes;
+}
+
 void jl_compile_all(void)
 {
     htable_t h;
     htable_new(&h, 0);
     int changes = 0;
     do {
-        changes = _compile_all(jl_main_module, &h, changes);
+        changes = _compile_all((jl_value_t*)jl_main_module, &h, changes);
         htable_reset(&h, h.size);
     } while (changes);
     htable_free(&h);
