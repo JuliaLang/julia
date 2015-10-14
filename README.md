@@ -93,7 +93,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Timer(timeout::Real, repeat::Real=0.0)` and `Timer(cb::Function, timeout::Real, repeat::Real=0.0)` allow julia 0.4-style Timers to be constructed and used.
 
-* `__precompile(iscompiled::Bool)__` and `include_dependency(path::AbstractString)` allow
+* `__precompile__(iscompiled::Bool)` and `include_dependency(path::AbstractString)` allow
   Julia 0.4 precompilation information to be provided (with no effect in earlier versions).
   (However, to enable precompiling in 0.4, it is better to explicitly put `VERSION >= v"0.4.0-dev+6521" && __precompile__()` before your `module` statement, so that Julia knows to precompile before anything in your module is evaluated.)
 

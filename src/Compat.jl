@@ -633,7 +633,7 @@ if VERSION < v"0.4.0-dev+5697"
 end
 
 if VERSION < v"0.4.0-dev+6521"
-    __precompile__(::Bool) = nothing
+    __precompile__(isprecompilable::Bool = true) = nothing
     export __precompile__
 end
 
