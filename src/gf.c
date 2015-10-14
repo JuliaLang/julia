@@ -1615,7 +1615,9 @@ static int jl_compile_all_defs(jl_function_t *gf)
             m->func->linfo->unspecialized = func;
             jl_gc_wb(m->func->linfo, func);
         }
-        precompile_unspecialized(func, m->sig, m->tvars);
+        if (func->fptr == &jl_trampoline) {
+            precompile_unspecialized(func, m->sig, m->tvars);
+        }
         m = m->next;
     }
 
@@ -1696,20 +1698,8 @@ static int _compile_all_module(jl_module_t *m, htable_t *h, int do_cache_only)
 
     if (m->constant_table != NULL) {
         for(i=0; i < jl_array_len(m->constant_table); i++) {
-            jl_value_t *el = jl_cellref(m->constant_table,i);
-            if (jl_is_lambda_info(el)) {
-                jl_lambda_info_t *li = (jl_lambda_info_t*)el;
-                jl_function_t *func = li->unspecialized;
-                if (func == NULL) {
-                    func = jl_new_closure(li->fptr, (jl_value_t*)jl_emptysvec, li);
-                    li->unspecialized = func;
-                    jl_gc_wb(li, func);
-                }
-                if (func->fptr == &jl_trampoline) {
-                    precompile_unspecialized(func, li->specTypes ? li->specTypes : jl_anytuple_type, jl_emptysvec);
-                    changes = 1;
-                }
-            }
+            jl_value_t *v = jl_cellref(m->constant_table, i);
+            changes = _compile_all(v, h, do_cache_only) || changes;
         }
     }
     return changes;
@@ -1728,17 +1718,28 @@ static int _compile_all(jl_value_t *v, htable_t *h, int do_cache_only)
         else if (jl_is_module(v)) {
             changes = _compile_all_module((jl_module_t*)v, h, do_cache_only) || changes;
         }
-        else {
-            jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
-            size_t i, nf = jl_datatype_nfields(dt);
-            for (i = 0; i < nf; i++) {
-                if (jl_field_isptr(dt, i)) {
-                    jl_value_t **slot = (jl_value_t**)
-                        ((char*)v + jl_field_offset(dt, i));
-                    jl_value_t *fld = *slot;
-                    if (fld) {
-                        changes = _compile_all(fld, h, do_cache_only) || changes;
-                    }
+        else if (jl_is_lambda_info(v)) {
+            jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+            jl_function_t *func = li->unspecialized;
+            if (func == NULL) {
+                func = jl_new_closure(li->fptr, (jl_value_t*)jl_emptysvec, li);
+                li->unspecialized = func;
+                jl_gc_wb(li, func);
+            }
+            if (func->fptr == &jl_trampoline) {
+                precompile_unspecialized(func, li->specTypes ? li->specTypes : jl_anytuple_type, jl_emptysvec);
+                changes = 1;
+            }
+        }
+        jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+        size_t i, nf = jl_datatype_nfields(dt);
+        for (i = 0; i < nf; i++) {
+            if (jl_field_isptr(dt, i)) {
+                jl_value_t **slot = (jl_value_t**)
+                    ((char*)v + jl_field_offset(dt, i));
+                jl_value_t *fld = *slot;
+                if (fld) {
+                    changes = _compile_all(fld, h, do_cache_only) || changes;
                 }
             }
         }
