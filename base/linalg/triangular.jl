@@ -23,11 +23,11 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         convert{T,S}(::Type{Matrix}, A::$t{T,S}) = convert(Matrix{T}, A)
 
         function similar{T,S,Tnew}(A::$t{T,S}, ::Type{Tnew}, dims::Dims)
-            if dims[1] != dims[2]
-                throw(ArgumentError("Triangular matrix must be square"))
-            end
             if length(dims) != 2
                 throw(ArgumentError("Triangular matrix must have two dimensions"))
+            end
+            if dims[1] != dims[2]
+                throw(ArgumentError("Triangular matrix must be square"))
             end
             B = similar(A.data, Tnew, dims)
             return $t(B)
@@ -119,33 +119,41 @@ getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
-    if i >= j
-        throw(BoundsError(A,(i,j)))
+    if i > j
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
-    if i <= j
-        throw(BoundsError(A,(i,j)))
+    if i < j
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set diagonal index ($i, $j) of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
