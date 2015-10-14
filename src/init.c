@@ -604,7 +604,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_enable(1);
 
-    if (jl_options.image_file) {
+    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental)) {
         jl_array_t *temp = jl_module_init_order;
         JL_GC_PUSH1(&temp);
         jl_module_init_order = NULL;
