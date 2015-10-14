@@ -1062,79 +1062,98 @@ function print_matrix_vdots(io::IO,
     end
 end
 
+"""
+`print_matrix(io, X)` composes an entire matrix, taking into account the screen size.
+If X is too big, it will be nine-sliced with vertical, horizontal, or diagonal
+ellipsis inserted as appropriate.
+Optional parameters are screen size tuple sz such as (24,80),
+string pre prior to the matrix (e.g. opening bracket), which will cause
+a corresponding same-size indent on following rows,
+string post on the end of the last row of the matrix.
+Also options to use different ellipsis characters hdots,
+vdots, ddots. These are repeated every hmod or vmod elements.
+"""
 function print_matrix(io::IO, X::AbstractVecOrMat,
                       sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
-                      pre::AbstractString = " ",
-                      sep::AbstractString = "  ",
-                      post::AbstractString = "",
+                      pre::AbstractString = " ",  # pre-matrix string
+                      sep::AbstractString = "  ", # separator between elements
+                      post::AbstractString = "",  # post-matrix string
                       hdots::AbstractString = "  \u2026  ",
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    rows, cols = sz
-    cols -= length(pre) + length(post)
-    presp = repeat(" ", length(pre))
+    screenheight, screenwidth = sz
+    screenwidth -= length(pre) + length(post)
+    presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
-    ss = length(sep)
+    sepsize = length(sep)
     m, n = size(X,1), size(X,2)
-    if m <= rows # rows fit
-        A = alignment(X,1:m,1:n,cols,cols,ss)
-        if n <= length(A) # rows and cols fit
-            for i = 1:m
+    # To figure out alignments, only need to look at as many rows as could
+    # fit down screen. If screen has at least as many rows as A, look at A.
+    # If not, then we only need to look at the first and last chunks of A,
+    # each half a screen height in size.
+    halfheight = div(screenheight,2)
+    rowsA = m <= screenheight ? (1:m) : [1:halfheight; m-div(screenheight-1,2)+1:m]
+    # Similarly for columns, only necessary to get alignments for as many
+    # columns as could conceivably fit across the screen
+    maxpossiblecols = div(screenwidth, 1+sepsize)
+    colsA = n <= maxpossiblecols ? (1:n) : [1:maxpossiblecols; (n-maxpossiblecols+1):n]
+    A = alignment(X,rowsA,colsA,screenwidth,screenwidth,sepsize)
+    # Nine-slicing is accomplished using print_matrix_row repeatedly
+    if m <= screenheight # rows fit vertically on screen
+        if n <= length(A) # rows and cols fit so just print whole matrix in one piece
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,A,i,1:n,sep)
+                print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == m ? post : postsp)
                 if i != m; println(io, ); end
             end
-        else # rows fit, cols don't
-            c = div(cols-length(hdots)+1,2)+1
-            R = reverse(alignment(X,1:m,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
-            L = alignment(X,1:m,1:n,c,c,ss)
-            for i = 1:m
+        else # rows fit down screen but cols don't, so need horizontal ellipsis
+            c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
+            Ralign = reverse(alignment(X,rowsA,reverse(colsA),c,c,sepsize)) # alignments for right
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            Lalign = alignment(X,rowsA,colsA,c,c,sepsize) # alignments for left of ellipsis
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,L,i,1:length(L),sep)
+                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
                 print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
+                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == m ? post : postsp)
                 if i != m; println(io, ); end
             end
         end
-    else # rows don't fit
-        t = div(rows,2)
-        I = [1:t; m-div(rows-1,2)+1:m]
-        A = alignment(X,I,1:n,cols,cols,ss)
-        if n <= length(A) # rows don't fit, cols do
-            for i in I
+    else # rows don't fit so will need vertical ellipsis
+        if n <= length(A) # rows don't fit, cols do, so only vertical ellipsis
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,A,i,1:n,sep)
+                print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == m ? post : postsp)
-                if i != I[end]; println(io, ); end
-                if i == t
+                if i != rowsA[end]; println(io, ); end
+                if i == halfheight
                     print(io, i == 1 ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
                     println(io, i == m ? post : postsp)
                 end
             end
-        else # neither rows nor cols fit
-            c = div(cols-length(hdots)+1,2)+1
-            R = reverse(alignment(X,I,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
-            L = alignment(X,I,1:n,c,c,ss)
-            r = mod((length(R)-n+1),vmod)
-            for i in I
+        else # neither rows nor cols fit, so use all 3 kinds of dots
+            c = div(screenwidth-length(hdots)+1,2)+1
+            Ralign = reverse(alignment(X,rowsA,reverse(colsA),c,c,sepsize))
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            Lalign = alignment(X,rowsA,colsA,c,c,sepsize)
+            r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,L,i,1:length(L),sep)
+                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
                 print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
+                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == m ? post : postsp)
-                if i != I[end]; println(io, ); end
-                if i == t
+                if i != rowsA[end]; println(io, ); end
+                if i == halfheight
                     print(io, i == 1 ? pre : presp)
-                    print_matrix_vdots(io, vdots,L,sep,vmod,1)
+                    print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
-                    print_matrix_vdots(io, vdots,R,sep,vmod,r)
+                    print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
                     println(io, i == m ? post : postsp)
                 end
             end
