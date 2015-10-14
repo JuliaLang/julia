@@ -1541,6 +1541,16 @@ static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, j
     jl_trampoline_compile_function(func, 1, sig);
 }
 
+static int tupletype_any_bottom(jl_value_t *sig) {
+    jl_svec_t *types = ((jl_tupletype_t*)sig)->types;
+    size_t i, l = jl_svec_len(types);
+    for (i = 0; i < l; i++) {
+        if (jl_svecref(types, i) == jl_bottom_type)
+            return 1;
+    }
+    return 0;
+}
+
 void jl_compile_all_defs(jl_function_t *gf)
 {
     assert(jl_is_gf(gf));
@@ -1552,9 +1562,48 @@ void jl_compile_all_defs(jl_function_t *gf)
     JL_GC_PUSH1(&func);
     while (m != (void*)jl_nothing) {
         if (jl_is_leaf_type((jl_value_t*)m->sig)) {
+            // usually can create a specialized version of the function,
+            // if the signature is already a leaftype
             if (jl_get_specialization(gf, m->sig)) {
                 m = m->next;
                 continue;
+            }
+        }
+        if (jl_is_typevar(m->tvars)) {
+            // f{T<:Union{...}}(...) is a common pattern
+            // and expanding the Union may give a leaf function
+            jl_tvar_t *tv = (jl_tvar_t*)m->tvars;
+            if (jl_is_uniontype(tv->ub)) {
+                int complete = 1;
+                jl_uniontype_t *ub = (jl_uniontype_t*)tv->ub;
+                size_t i, l = jl_svec_len(ub->types);
+                for (i = 0; i < l + 1; i++) { // add Union{} to the end of the list, since T<:Union{} is always a valid option
+                    jl_value_t *ty = (i == l ? jl_bottom_type : jl_svecref(ub->types, i));
+                    if (i == l || jl_is_leaf_type(ty)) {
+                        jl_value_t *env[2] = {(jl_value_t*)tv, ty};
+                        jl_value_t *sig;
+                        JL_TRY {
+                            sig = (jl_value_t*)
+                                jl_instantiate_type_with((jl_value_t*)m->sig, env, 1);
+                        }
+                        JL_CATCH {
+                            continue; // sigh, we found an invalid type signature. should we warn the user?
+                        }
+                        if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
+                            continue; // signature wouldn't be callable / is invalid -- skip it
+                        }
+                        if (jl_is_leaf_type(sig)) {
+                            if (jl_get_specialization(gf, (jl_tupletype_t*)sig)) {
+                                continue;
+                            }
+                        }
+                    }
+                    complete = 0;
+                }
+                if (complete) {
+                    m = m->next;
+                    continue;
+                }
             }
         }
         func = m->func->linfo->unspecialized;
