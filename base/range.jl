@@ -244,27 +244,26 @@ function show(io::IO, r::LinSpace)
     print(io, ')')
 end
 
-"""
-`print_range(io, r)` prints out a nice looking range r in terms of its elements
-as if it were `collect(r)`, dependent on the size of the
-terminal, and taking into account whether compact numbers should be shown.
-It figures out the width in characters of each element, and if they
-end up too wide, it shows the first and last elements separated by a
-horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
-
-`print_range(io, r, sz, pre, sep, post, hdots)` uses optional
-parameters `sz` for the (rows,cols) of the screen,
-`pre` and `post` characters for each printed row, `sep` separator string between
-printed elements, `hdots` string for the horizontal ellipsis.
-"""
+# `print_range(io, r)` prints out a nice looking range r in terms of its elements
+# as if it were `collect(r)`, dependent on the size of the
+# terminal, and taking into account whether compact numbers should be shown.
+# It figures out the width in characters of each element, and if they
+# end up too wide, it shows the first and last elements separated by a
+# horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+#
+# `print_range(io, r, sz, pre, sep, post, hdots)` uses optional
+# parameters `sz` for the (rows,cols) of the screen,
+# `pre` and `post` characters for each printed row, `sep` separator string between
+# printed elements, `hdots` string for the horizontal ellipsis.
+# See docstring below.
 function print_range(io::IO, r::Range,
                      sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
                      pre::AbstractString = " ",
                      sep::AbstractString = ",",
                      post::AbstractString = "",
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
-# This function borrows from print_matrix() in show.jl
-# and should be called by writemime (replutil.jl) and by display()
+    # This function borrows from print_matrix() in show.jl
+    # and should be called by writemime (replutil.jl) and by display()
     screenheight, screenwidth = sz
     screenwidth -= length(pre) + length(post)
     postsp = ""
@@ -296,6 +295,23 @@ function print_range(io::IO, r::Range,
         print(io, post)  # post chars
     end
 end
+
+# For some reason, compilation is successful when the docstring is put here
+# instead of above the function definition.
+"""
+`print_range(io, r)` prints out a nice looking range r in terms of its elements
+as if it were `collect(r)`, dependent on the size of the
+terminal, and taking into account whether compact numbers should be shown.
+It figures out the width in characters of each element, and if they
+end up too wide, it shows the first and last elements separated by a
+horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+
+`print_range(io, r, sz, pre, sep, post, hdots)` uses optional
+parameters `sz` for the (rows,cols) of the screen,
+`pre` and `post` characters for each printed row, `sep` separator string between
+printed elements, `hdots` string for the horizontal ellipsis.
+"""
+print_range
 
 logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
