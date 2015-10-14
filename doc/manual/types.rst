@@ -1302,7 +1302,7 @@ are safe. At present, the interface consists of four possible interactions:
 - Access the value of a :obj:`Nullable` object with a guarantee that a
   :exc:`NullException` will be thrown if the object's value is missing.
 - Access the value of a :obj:`Nullable` object with a guarantee that a default
-  value of type ``T`` will be returned if the object's value is missing.
+  value of type ``T`` will be returned if the object's value is not missing.
 
 Constructing :obj:`Nullable` objects
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
