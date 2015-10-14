@@ -311,12 +311,17 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
         throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
 
+    if C === A || B === C
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
+    end
+
     if mA == 0 || nA == 0 || nB == 0
         if size(C) != (mA, nB)
             throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return fill!(C,0)
     end
+
     if mA == 2 && nA == 2 && nB == 2
         return matmul2x2!(C,tA,tB,A,B)
     end
