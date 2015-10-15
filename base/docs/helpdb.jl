@@ -4256,9 +4256,9 @@ Return a list of immediate subtypes of DataType `T`. Note that all currently loa
 subtypes
 
 doc"""
-    digits(n, [base], [pad])
+    digits([T], n, [base], [pad])
 
-Returns an array of the digits of `n` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+Returns an array with element type `T` (default `Int`) of the digits of `n` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 """
 digits
 
