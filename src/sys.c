@@ -24,6 +24,13 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#ifndef _OS_WINDOWS_
+// for getrusage
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
+
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
