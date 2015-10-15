@@ -988,6 +988,7 @@ export
     drop,
     cycle,
     repeated,
+    chain,
 
 # object identity and equality
     copy,

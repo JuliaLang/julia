@@ -108,6 +108,11 @@ type.
 
    An iterator that generates the value ``x`` forever. If ``n`` is specified, generates ``x`` that many times (equivalent to ``take(repeated(x), n)``\ ).
 
+.. function:: chain(iters...)
+
+    For a set of iterable objects, returns an iterable object that iterates
+    through each of the input iterables objects in sequence.
+
 Fully implemented by:
 
 - :obj:`Range`

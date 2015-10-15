@@ -211,3 +211,50 @@ next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
 repeated(x, n::Int) = take(repeated(x), n)
+
+# Concatenate the output of n iterators
+
+immutable Chain
+    xss::Vector{Any}
+    function Chain(xss...)
+        new(Any[xss...])
+    end
+end
+
+function eltype(it::Chain)
+    try
+        typejoin([eltype(xs) for xs in it.xss]...)
+    catch
+        Any
+    end
+end
+
+chain(xss...) = Chain(xss...)
+
+function start(it::Chain)
+    i = 1
+    xs_state = nothing
+    while i <= length(it.xss)
+        xs_state = start(it.xss[i])
+        if !done(it.xss[i], xs_state)
+            break
+        end
+        i += 1
+    end
+    return i, xs_state
+end
+
+function next(it::Chain, state)
+    i, xs_state = state
+    v, xs_state = next(it.xss[i], xs_state)
+    while done(it.xss[i], xs_state)
+        i += 1
+        if i > length(it.xss)
+            break
+        end
+        xs_state = start(it.xss[i])
+    end
+    return v, (i, xs_state)
+end
+
+done(it::Chain, state) = state[1] > length(it.xss)
