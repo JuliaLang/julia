@@ -21,7 +21,12 @@ cd(dirname(@__FILE__)) do
     @everywhere include("testdefs.jl")
 
     results=[]
-    max_worker_rss = parse(Int, get(ENV, "JULIA_TEST_MAXRSS_MB", "500"))
+    if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+        max_worker_rss = parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
+    else
+        max_worker_rss = typemax(Csize_t)
+    end
+    println(max_worker_rss)
     @sync begin
         for p in workers()
             @async begin
@@ -35,14 +40,14 @@ cd(dirname(@__FILE__)) do
                     end
                     push!(results, (test, resp))
 
-                    if (isa(resp, Integer) && (resp > max_worker_rss * 2^20)) || isa(resp, Exception)
+                    if (isa(resp, Integer) && (resp > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
                             rmprocs(p, waitfor=0.5)
                             p = addprocs(1; exeflags=`--check-bounds=yes --depwarn=error`)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
-                            # single process testing, bail if mem limit reached, or on an exception.
-                            isa(resp, Exception) ? rethrow(resp) : error("Halting tests. memory limit reached : $(resp) > $(max_worker_rss * 2^20)")
+                            # single process testing, bail if mem limit reached, or, on an exception.
+                            isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
                 end
