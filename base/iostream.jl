@@ -167,7 +167,11 @@ function read(s::IOStream, ::Type{UInt8})
 end
 
 function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream, ::Type{T})
-    ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
+    data = readbytes(s, sizeof(T), all=true)
+    if length(data) < sizeof(T)
+        throw(EOFError())
+    end
+    first(reinterpret(T, data))
 end
 
 function read!(s::IOStream, a::Vector{UInt8})
