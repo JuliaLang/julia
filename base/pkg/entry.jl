@@ -574,7 +574,10 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vector{AbstractString}; coverage::Bool=false)
+function test!(pkg::AbstractString,
+               errs::Vector{AbstractString},
+               nopkgs::Vector{AbstractString},
+               notests::Vector{AbstractString}; coverage::Bool=false)
     reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
         tests_require = Reqs.parse(reqs_path)
@@ -584,7 +587,11 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
-    if isfile(test_path)
+    if !isdir(pkg)
+        push!(nopkgs, pkg)
+    elseif !isfile(test_path)
+        push!(notests, pkg)
+    else
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
@@ -598,22 +605,30 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
                 push!(errs,pkg)
             end
         end
-    else
-        push!(notests,pkg)
     end
     isfile(reqs_path) && resolve()
 end
 
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
     errs = AbstractString[]
+    nopkgs = AbstractString[]
     notests = AbstractString[]
     for pkg in pkgs
-        test!(pkg,errs,notests; coverage=coverage)
+        test!(pkg,errs,nopkgs,notests; coverage=coverage)
     end
-    if !isempty(errs) || !isempty(notests)
+    if !all(isempty, (errs, nopkgs, notests))
         messages = AbstractString[]
-        isempty(errs) || push!(messages, "$(join(errs,", "," and ")) had test errors")
-        isempty(notests) || push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
+        if !isempty(errs)
+            push!(messages, "$(join(errs,", "," and ")) had test errors")
+        end
+        if !isempty(nopkgs)
+            msg = length(nopkgs) > 1 ? " are not installed packages" :
+                                       " is not an installed package"
+            push!(messages, string(join(nopkgs,", ", " and "), msg))
+        end
+        if !isempty(notests)
+            push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
+        end
         throw(PkgError(join(messages, "and")))
     end
 end
