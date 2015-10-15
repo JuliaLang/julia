@@ -347,6 +347,18 @@ Iterable Collections
 
    For an array input, returns the value and index of the minimum over the given dimensions.
 
+.. function:: findmax!(rval, rind, A, [init=true]) -> (maxval, index)
+
+   .. Docstring generated from Julia source
+
+   Find the maximum of ``A`` and the corresponding linear index along singleton dimensions of ``rval`` and ``rind``\ , and store the results in ``rval`` and ``rind``\ .
+
+.. function:: findmin!(rval, rind, A, [init=true]) -> (minval, index)
+
+   .. Docstring generated from Julia source
+
+   Find the minimum of ``A`` and the corresponding linear index along singleton dimensions of ``rval`` and ``rind``\ , and store the results in ``rval`` and ``rind``\ .
+
 .. function:: maxabs(itr)
 
    .. Docstring generated from Julia source
