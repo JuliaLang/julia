@@ -213,10 +213,9 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             Oid(commit)
         end
         iszero(commit_id) && return
-
         cmt =  get(GitCommit, repo, commit_id)
         try
-            branch_ref = create_branch(repo, cmt, branch_name, force=force)
+            branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             finalize(cmt)
         end
@@ -372,7 +371,10 @@ function merge!(repo::GitRepo;
             if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
                 fheads = fetchheads(repo)
                 filter!(fh->fh.ismerge, fheads)
-                length(fheads) == 0 && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no fetch reference for this branch."))
+                if length(fheads) == 0
+                    throw(Error.GitError(Error.Merge,Error.ERROR,
+                                   "There is no fetch reference for this branch."))
+                end
                 map(fh->GitAnnotated(repo,fh), fheads)
             else # merge commitish
                 [GitAnnotated(repo, committish)]
@@ -383,7 +385,10 @@ function merge!(repo::GitRepo;
                     [GitAnnotated(repo, brn_ref)]
                 end
             else # try to get tracking remote branch for the head
-                !isattached(repo) && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no tracking information for the current branch."))
+                if !isattached(repo)
+                    throw(Error.GitError(Error.Merge, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
+                end
                 with(upstream(head_ref)) do tr_brn_ref
                     [GitAnnotated(repo, tr_brn_ref)]
                 end
@@ -391,11 +396,11 @@ function merge!(repo::GitRepo;
         end
 
         try
-            merge!(repo, upst_anns, fastforward, merge_opts, checkout_opts=checkout_opts)
+            merge!(repo, upst_anns, fastforward,
+                   merge_opts=merge_opts,
+                   checkout_opts=checkout_opts)
         finally
-            for ann in upst_anns
-                finalize(ann)
-            end
+            map(finalize, upst_anns)
         end
     end
 end
