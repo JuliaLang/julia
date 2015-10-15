@@ -1942,6 +1942,7 @@ DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
+    assert(jl_is_array(ast));
     JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
