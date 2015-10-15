@@ -4256,9 +4256,9 @@ Return a list of immediate subtypes of DataType `T`. Note that all currently loa
 subtypes
 
 doc"""
-    digits(n, [base], [pad])
+    digits([T], n, [base], [pad])
 
-Returns an array of the digits of `n` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+Returns an array with element type `T` (default `Int`) of the digits of `n` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 """
 digits
 
@@ -6394,6 +6394,10 @@ doc"""
     unique(itr[, dim])
 
 Returns an array containing only the unique elements of the iterable `itr`, in the order that the first of each set of equivalent elements originally appears. If `dim` is specified, returns unique regions of the array `itr` along `dim`.
+
+    unique(f, itr)
+
+Returns an array containing one value from `itr` for each unique value produced by `f` applied to elements of `itr`.
 """
 unique
 
