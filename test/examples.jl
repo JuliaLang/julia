@@ -52,14 +52,13 @@ end
 dc_path = joinpath(dir, "dictchannel.jl")
 include(dc_path)
 
-w_set=filter!(x->x != myid(), workers())
-pid = length(w_set) > 0 ? w_set[1] : myid()
-
-remotecall_fetch(pid, dc_path) do f
+# Run the remote on pid 1, since runtests may terminate workers
+# at any time depending on memory usage
+remotecall_fetch(1, dc_path) do f
     include(f)
     nothing
 end
-dc=RemoteRef(()->DictChannel(), pid)
+dc=RemoteRef(()->DictChannel(), 1)
 @test typeof(dc) == RemoteRef{DictChannel}
 
 @test isready(dc) == false
