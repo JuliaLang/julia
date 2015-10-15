@@ -26,7 +26,6 @@ cd(dirname(@__FILE__)) do
     else
         max_worker_rss = typemax(Csize_t)
     end
-    println(max_worker_rss)
     @sync begin
         for p in workers()
             @async begin
