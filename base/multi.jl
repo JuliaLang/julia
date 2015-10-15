@@ -599,6 +599,7 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
+channel_type{T}(rr::RemoteRef{T}) = T
 function serialize(s::SerializationState, rr::RemoteRef)
     i = worker_id_from_socket(s.io)
     #println("$(myid()) serializing $rr to $i")
@@ -609,14 +610,14 @@ function serialize(s::SerializationState, rr::RemoteRef)
     invoke(serialize, Tuple{SerializationState, Any}, s, rr)
 end
 
-function deserialize(s::SerializationState, t::Type{RemoteRef})
+function deserialize{T<:RemoteRef}(s::SerializationState, t::Type{T})
     rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    RemoteRef{channel_type(rr)}(where, rr.whence, rr.id)
 end
 
 # data stored by the owner of a RemoteRef
