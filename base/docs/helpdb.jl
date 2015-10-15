@@ -6394,6 +6394,10 @@ doc"""
     unique(itr[, dim])
 
 Returns an array containing only the unique elements of the iterable `itr`, in the order that the first of each set of equivalent elements originally appears. If `dim` is specified, returns unique regions of the array `itr` along `dim`.
+
+    unique(f, itr)
+
+Returns an array containing one value from `itr` for each unique value produced by `f` applied to elements of `itr`.
 """
 unique
 

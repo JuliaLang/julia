@@ -104,11 +104,24 @@ const ⊆ = issubset
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
 function unique(C)
-    out = Array(eltype(C),0)
+    out = Vector{eltype(C)}()
     seen = Set{eltype(C)}()
     for x in C
         if !in(x, seen)
             push!(seen, x)
+            push!(out, x)
+        end
+    end
+    out
+end
+
+function unique(f::Callable, C)
+    out = Vector{eltype(C)}()
+    seen = Set()
+    for x in C
+        y = f(x)
+        if !in(y, seen)
+            push!(seen, y)
             push!(out, x)
         end
     end
