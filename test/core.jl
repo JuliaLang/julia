@@ -745,6 +745,30 @@ let a = []
     @test length(a) == 1
 end
 
+# issue #1784
+let a = []
+    try
+        return 5
+        3
+    finally
+        push!(a, 1)
+    end
+    @test x == 5
+    @test a[1] == 1
+end
+
+# issue #12806
+let x = 0
+    for i=1:10
+        try
+            break
+        finally
+            x = 11
+        end
+    end
+    @test x == 11
+end
+
 # chained and multiple assignment behavior (issue #2913)
 let
     local x, a, b, c, d, e

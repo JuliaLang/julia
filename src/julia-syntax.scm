@@ -1071,6 +1071,18 @@
                  (break ,bb)))
         (else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
+(define (replace-break e bb breakval)
+  (cond ((atom? e) e)
+        ((or (eq? (car e) 'lambda)
+             (eq? (car e) 'function)
+         (eq? (car e) 'stagedfunction)
+             (eq? (car e) '->)) e)
+        ((and breakval (atom? (car e)) (eq? (car e) 'break))
+         `(block (= ,breakval #t)
+                 (break ,bb)))
+        ((quoted? e) e)
+        (else (map (lambda (x) (replace-break x bb breakval)) e))))
+
 (define (expand-binding-forms e)
   (cond
    ((atom? e) e)
@@ -1218,7 +1230,8 @@
              (if (has-unmatched-symbolic-goto? tryb)
                  (error "goto from a try/finally block is not permitted"))
              (let ((hasret (or (contains return? tryb)
-                               (contains return? catchb))))
+                               (contains return? catchb)))
+                   (hasbreak (or (contains unlabeled-break? tryb))))
                (let ((err (gensy))
                      (ret (and hasret
                                (or (not (block-returns? tryb))
@@ -1226,15 +1239,17 @@
                                         (not (block-returns? catchb))))
                                (gensy)))
                      (retval (if hasret (gensy) #f))
+                     (breakval (if hasbreak (gensy) #f))
                      (bb  (gensy))
 		     (finally-exception (gensy))
                      (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
-                 (let ((tryb   (replace-return tryb bb ret retval))
-                       (catchb (replace-return catchb bb ret retval)))
+                 (let ((tryb   (replace-break (replace-return tryb bb ret retval) bb breakval))
+                       (catchb (replace-break (replace-return catchb bb ret retval) bb breakval)))
                    (expand-binding-forms
                     `(scope-block
                       (block
                        ,@(if hasret `((local ,retval)) '())
+                       ,@(if hasbreak `((local ,breakval)) '())
                        (local ,val)
 		       (local ,finally-exception)
                        (= ,err false)
@@ -1247,8 +1262,8 @@
                                      tryb))
                              #f
                              (= ,err true)))
-		       (= ,finally-exception (the_exception))
-                       ,finalb
+                       (= ,finally-exception (the_exception))
+                       ,(if hasbreak `(block ,finalb (if ,breakval (break))) finalb)
                        (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
                        ,(if hasret
                             (if ret
@@ -1463,6 +1478,7 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
+(define (unlabeled-break? e) (and (pair? e) (eq? (car e) 'break) (null? (cdr e))))
 
 (define (const-check-symbol s)
   (if (not (symbol? s))
