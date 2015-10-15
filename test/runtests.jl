@@ -20,7 +20,45 @@ cd(dirname(@__FILE__)) do
 
     @everywhere include("testdefs.jl")
 
-    reduce(propagate_errors, nothing, pmap(runtests, tests; err_retry=false, err_stop=true))
+    results=[]
+    max_worker_rss = parse(Int, get(ENV, "JULIA_TEST_MAXRSS_MB", "500"))
+    @sync begin
+        for p in workers()
+            @async begin
+                while length(tests) > 0
+                    test = shift!(tests)
+                    local resp
+                    try
+                        resp = remotecall_fetch(t -> runtests(t), p, test)
+                    catch e
+                        resp = e
+                    end
+                    push!(results, (test, resp))
+
+                    if (isa(resp, Integer) && (resp > max_worker_rss * 2^20)) || isa(resp, Exception)
+                        if n > 1
+                            rmprocs(p, waitfor=0.5)
+                            p = addprocs(1; exeflags=`--check-bounds=yes --depwarn=error`)[1]
+                            remotecall_fetch(()->include("testdefs.jl"), p)
+                        else
+                            # single process testing, bail if mem limit reached, or on an exception.
+                            isa(resp, Exception) ? rethrow(resp) : error("Halting tests. memory limit reached : $(resp) > $(max_worker_rss * 2^20)")
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    errors = filter(x->isa(x[2], Exception), results)
+    if length(errors) > 0
+        for err in errors
+            println("Exception running test $(err[1]) :")
+            showerror(STDERR, err[2])
+            println()
+        end
+        error("Some tests exited with errors.")
+    end
 
     if compile_test
         n > 1 && print("\tFrom worker 1:\t")
