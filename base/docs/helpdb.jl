@@ -9108,7 +9108,7 @@ doc"""
     intersect(s1,s2...)
     ∩(s1,s2)
 
-Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
+Construct the intersection of two or more sets. Maintains order, type, and multiplicity of the first argument for arrays and ranges.
 """
 intersect
 

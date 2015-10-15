@@ -954,8 +954,9 @@ function intersect(v1, vs...)
 end
 
 function union(vs...)
-    ret = Array(promote_eltype(vs...),0)
-    seen = Set()
+    T = promote_eltype(vs...)
+    ret = Array(T,0)
+    seen = Set{T}()
     for v in vs
         for v_elem in v
             if !in(v_elem, seen)
@@ -966,12 +967,13 @@ function union(vs...)
     end
     ret
 end
+
 # setdiff only accepts two args
 function setdiff(a, b)
-    args_type = promote_type(eltype(a), eltype(b))
+    T = eltype(a)
     bset = Set(b)
-    ret = Array(args_type,0)
-    seen = Set{eltype(a)}()
+    ret = Array(T,0)
+    seen = Set{T}()
     for a_elem in a
         if !in(a_elem, seen) && !in(a_elem, bset)
             push!(ret, a_elem)

@@ -635,6 +635,7 @@ B = cat(3, 1, 2, 3)
 @test isequal(intersect([1,2,3], Float64[]), Float64[])
 @test isequal(intersect(Int64[], [1,2,3]), Int64[])
 @test isequal(intersect(Int64[]), Int64[])
+@test eltype(intersect([1,2,3],[1.0,2.0])) == Int
 @test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
 @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
 @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
