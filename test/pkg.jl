@@ -120,4 +120,21 @@ temp_pkg_dir() do
 
     Pkg.rm("Example")
     @test isempty(Pkg.installed())
+
+    # issue #13583
+    begin
+        try
+            Pkg.test("IDoNotExist")
+        catch ex
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "IDoNotExist is not an installed package"
+        end
+
+        try
+            Pkg.test("IDoNotExist1", "IDoNotExist2")
+        catch ex
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "IDoNotExist1 and IDoNotExist2 are not installed packages"
+        end
+    end
 end
