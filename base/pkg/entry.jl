@@ -174,13 +174,13 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
-        catch
-            print(io, "broken-repo (unregistered)")
+        catch err
+            print_with_color(:red, io, " broken-repo (unregistered)")
         finally
             finalize(prepo)
         end
     else
-        print(io, "non-repo (unregistered)")
+        print_with_color(:yellow, io, "non-repo (unregistered)")
     end
     println(io)
 end
@@ -196,9 +196,9 @@ function clone(url::AbstractString, pkg::AbstractString)
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
             LibGit2.set_remote_url(repo, url)
         end
-    catch
+    catch err
         isdir(pkg) && Base.rm(pkg, recursive=true)
-        rethrow()
+        rethrow(err)
     end
     info("Computing changes...")
     if !edit(Reqs.add, pkg)
@@ -471,7 +471,7 @@ function resolve(
             end
             push!(changed,(pkg,(ver1,ver2)))
         end
-    catch
+    catch err
         for (pkg,(ver1,ver2)) in reverse!(changed)
             if ver1 === nothing
                 info("Rolling back install of $pkg")
@@ -484,7 +484,7 @@ function resolve(
                 @recover Write.update(pkg, Read.sha1(pkg,ver1))
             end
         end
-        rethrow()
+        rethrow(err)
     end
     # re/build all updated/installed packages
     build(map(x->x[1], filter(x -> x[2][2] !== nothing, changes)))
@@ -553,10 +553,10 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
                 errs[pkg] = err
             end
         end
-    catch
+    catch err
         kill(pobj)
         close(io)
-        rethrow()
+        rethrow(err)
     finally
         isfile(errfile) && Base.rm(errfile)
     end
