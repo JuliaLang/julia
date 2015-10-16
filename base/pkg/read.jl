@@ -183,7 +183,8 @@ function installed(avail::Dict=available())
             ver = installed_version(pkg, prepo, ap)
             fixed = isfixed(pkg, prepo, ap)
             pkgs[pkg] = (ver, fixed)
-        catch
+        catch e
+            warn("Unable to determine package $pkg version. Error: $e")
             pkgs[pkg] = (typemin(VersionNumber), true)
         finally
             finalize(prepo)
