@@ -954,7 +954,8 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
                                          linenum
                                          );
     jl_cellset(body->args, 0, linenode);
-    jl_cellset(body->args, 1, jl_apply(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
+    jl_cellset(body->args, 1, // XXX: calling jl_apply here is a fairly crappy thing to do to the system
+            jl_apply(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
     if (m->tvars != jl_emptysvec) {
         // mark this function as having the same static parameters as the generator
         size_t nsp = jl_is_typevar(m->tvars) ? 1 : jl_svec_len(m->tvars);
@@ -1650,7 +1651,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(meth->func->linfo, unspec);
         }
         precompile_unspecialized(unspec, meth->sig, meth->tvars);
-        meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now
+        //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now -- but isn't because staged functions corrupt the function lookup
         meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
     }
     jl_printf(JL_STDERR, "\n");
