@@ -308,7 +308,9 @@ function require(mod::Symbol)
 
         name = string(mod)
         path = find_in_node_path(name, nothing, 1)
-        path === nothing && throw(ArgumentError("$name not found in path"))
+        if path === nothing
+            throw(ArgumentError("$name not found in path.\nRun Pkg.add(\"$name\") to install the $name package"))
+        end
         try
             if last && myid() == 1 && nprocs() > 1
                 # include on node 1 first to check for PrecompilableErrors
