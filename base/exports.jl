@@ -521,6 +521,8 @@ export
     findin,
     findmax,
     findmin,
+    findmin!,
+    findmax!,
     findn,
     findnext,
     findprev,
