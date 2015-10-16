@@ -32,14 +32,13 @@ end
 
 @testset "OID" begin
     z = LibGit2.Oid()
-    r = rand(LibGit2.Oid)
     @test LibGit2.iszero(z)
     @test z == zero(LibGit2.Oid)
-    rs = string(r)
-    rr = LibGit2.raw(r)
-    @test r == LibGit2.Oid(rr)
-    @test r == LibGit2.Oid(rs)
-    @test r == LibGit2.Oid(pointer(rr))
+    rs = string(z)
+    rr = LibGit2.raw(z)
+    @test z == LibGit2.Oid(rr)
+    @test z == LibGit2.Oid(rs)
+    @test z == LibGit2.Oid(pointer(rr))
     for i in 11:length(rr); rr[i] = 0; end
     @test LibGit2.Oid(rr) == LibGit2.Oid(rs[1:20])
 end
