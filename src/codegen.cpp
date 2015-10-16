@@ -2071,10 +2071,10 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
             Type *atp = at->getPointerTo();
             Value *varg1 = arg1.V;
             if (varg1->getType() != atp)
-                builder.CreatePointerCast(varg1, atp);
+                varg1 = builder.CreatePointerCast(varg1, atp);
             Value *varg2 = arg2.V;
             if (varg2->getType() != atp)
-                builder.CreatePointerCast(varg2, atp);
+                varg2 = builder.CreatePointerCast(varg2, atp);
             jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             size_t l = jl_svec_len(types);
