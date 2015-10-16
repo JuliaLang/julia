@@ -566,7 +566,7 @@ else
     end
 end
 
-rand{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
 
 
 # Randomly draw a sample from an AbstractArray r
