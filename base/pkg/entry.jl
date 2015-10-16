@@ -293,16 +293,27 @@ end
 
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    rslv = !isempty(head) # no need to resolve, branch will be from HEAD
+    should_resolve = true
     with(GitRepo, pkg) do repo
-        if isempty(head) # get HEAD oid
-            head = head_oid(repo)
+        id = if isempty(head) # get HEAD commit
+            LibGit2.head_oid(repo)
+        else
+            # no need to resolve, branch will be from HEAD
+            should_resolve = false
+            LibGit2.revparseid(repo, head)
         end
-        branch = "pinned.$(head[1:8]).tmp"
+        commit = LibGit2.get(LibGit2.GitCommit, repo, id)
+        branch = "pinned.$(string(id)[1:8]).tmp"
         info("Creating $pkg branch $branch")
-        LibGit2.create_branch(repo, branch, head)
+        try
+            ref = LibGit2.create_branch(repo, branch, commit)
+            finalize(ref)
+        finally
+            finalize(commit)
+        end
     end
-    rslv ? resolve() : nothing
+    should_resolve && resolve()
+    nothing
 end
 pin(pkg::AbstractString) = pin(pkg, "")
 

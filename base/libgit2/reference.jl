@@ -9,7 +9,7 @@ function GitReference(repo::GitRepo, refname::AbstractString)
 end
 
 function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
-                          force::Bool=false, msg::AbstractString="")
+                      force::Bool=false, msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
@@ -89,7 +89,9 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     return T(obj_ptr_ptr[])
 end
 
-function create_branch(repo::GitRepo, commit_obj::GitCommit, bname::AbstractString;
+function create_branch(repo::GitRepo,
+                       bname::AbstractString,
+                       commit_obj::GitCommit;
                        force::Bool=false)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_branch_create, :libgit2), Cint,
@@ -109,7 +111,9 @@ function head!(repo::GitRepo, ref::GitReference)
     return ref
 end
 
-function lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false)
+function lookup_branch(repo::GitRepo,
+                       branch_name::AbstractString,
+                       remote::Bool=false)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     branch_type = remote ? Consts.BRANCH_REMOTE : Consts.BRANCH_LOCAL
     err = ccall((:git_branch_lookup, :libgit2), Cint,
