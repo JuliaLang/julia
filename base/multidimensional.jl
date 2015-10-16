@@ -187,14 +187,14 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
     checkbounds(A, I...)
     _unsafe_getindex(l, A, I...)
 end
-@generated function _unsafe_getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
     N = length(I)
     quote
         # This is specifically *not* inlined.
         @nexprs $N d->(I_d = to_index(I[d]))
         dest = similar(A, @ncall $N index_shape A I)
         @ncall $N checksize dest I
-        @ncall $N _unsafe_getindex! dest l A I
+        @ncall $N _unsafe_getindex! dest A I
     end
 end
 
@@ -221,7 +221,7 @@ end
 
 # Indexing with an array of indices is inherently linear in the source, but
 # might be able to be optimized with fast dividing integers
-@inline function _unsafe_getindex!(dest::AbstractArray, ::LinearIndexing, src::AbstractArray, I::AbstractArray)
+@inline function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray)
     D = eachindex(dest)
     Ds = start(D)
     for idx in I
@@ -231,26 +231,8 @@ end
     dest
 end
 
-# Fast source - compute the linear index
-@generated function _unsafe_getindex!(dest::AbstractArray, ::LinearFast, src::AbstractArray, I::Union{Real, AbstractVector, Colon}...)
-    N = length(I)
-    quote
-        $(Expr(:meta, :inline))
-        stride_1 = 1
-        @nexprs $N d->(stride_{d+1} = stride_d*size(src, d))
-        $(symbol(:offset_, N)) = 1
-        D = eachindex(dest)
-        Ds = start(D)
-        @nloops $N i dest d->(offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
-            d, Ds = next(D, Ds)
-            unsafe_setindex!(dest, unsafe_getindex(src, offset_0), d)
-        end
-        dest
-    end
-end
-# Slow source - index with the indices provided.
-# TODO: this may not be the full dimensionality; that case could be optimized
-@generated function _unsafe_getindex!(dest::AbstractArray, ::LinearSlow, src::AbstractArray, I::Union{Real, AbstractVector, Colon}...)
+# Always index with the exactly indices provided.
+@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Union{Real, AbstractVector, Colon}...)
     N = length(I)
     quote
         $(Expr(:meta, :inline))
@@ -292,8 +274,8 @@ _iterable(v) = repeated(v)
     checkbounds(A, J...)
     _unsafe_setindex!(l, A, x, J...)
 end
-@inline function _unsafe_setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
-    _unsafe_batchsetindex!(l, A, _iterable(x), to_indexes(J...)...)
+@inline function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
+    _unsafe_batchsetindex!(A, _iterable(x), to_indexes(J...)...)
 end
 
 # 1-d logical indexing: override the above to avoid calling find (in to_index)
@@ -315,25 +297,7 @@ function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractArr
     A
 end
 
-# Use iteration over X so we don't need to worry about its storage
-@generated function _unsafe_batchsetindex!(::LinearFast, A::AbstractArray, X, I::Union{Real,AbstractArray,Colon}...)
-    N = length(I)
-    quote
-        @nexprs $N d->(I_d = I[d])
-        idxlens = @ncall $N index_lengths A I
-        @ncall $N setindex_shape_check X (d->idxlens[d])
-        Xs = start(X)
-        stride_1 = 1
-        @nexprs $N d->(stride_{d+1} = stride_d*size(A,d))
-        $(symbol(:offset_, N)) = 1
-        @nloops $N i d->(1:idxlens[d]) d->(offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-            v, Xs = next(X, Xs)
-            unsafe_setindex!(A, v, offset_0)
-        end
-        A
-    end
-end
-@generated function _unsafe_batchsetindex!(::LinearSlow, A::AbstractArray, X, I::Union{Real,AbstractArray,Colon}...)
+@generated function _unsafe_batchsetindex!(A::AbstractArray, X, I::Union{Real,AbstractArray,Colon}...)
     N = length(I)
     quote
         @nexprs $N d->(I_d = I[d])
