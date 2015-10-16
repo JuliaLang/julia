@@ -301,9 +301,13 @@ static void NORETURN throw_eof_error(void)
 DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 {
     assert(n <= 8);
-    size_t ret = ios_readprep(s, n);
-    if (ret < n)
-        throw_eof_error();
+    size_t space, ret;
+    do {
+        space = s->size - s->bpos;
+        ret = ios_readprep(s, n);
+        if (space == ret && ret < n)
+            throw_eof_error();
+    } while(ret < n);
     uint64_t x = 0;
     uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
     if (n == 8) {
