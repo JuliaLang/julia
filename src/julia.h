@@ -1247,7 +1247,7 @@ DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 #endif
 
 // compiler
-void jl_compile(jl_function_t *f);
+void jl_compile_linfo(jl_lambda_info_t *li);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn);
