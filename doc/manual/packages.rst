@@ -800,7 +800,7 @@ on GitHub, push your changes to your fork, and open a pull request::
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/applications>`_ and try again.
+    <https://github.com/settings/tokens>`_ and try again.
 
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
