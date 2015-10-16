@@ -1597,12 +1597,11 @@ static void _compile_all_deq(jl_array_t *found)
             // usually can create a specialized version of the function,
             // if the signature is already a leaftype
             jl_function_t *spec = jl_get_specialization(func, meth->sig);
-            if (spec) {
+            if (spec && !jl_has_typevars((jl_value_t*)meth->sig)) {
                 // replace unspecialized func with specialized version
+                // if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
                 meth->func = spec;
                 jl_gc_wb(meth, spec);
-                //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now
-                //meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
                 continue;
             }
         }
