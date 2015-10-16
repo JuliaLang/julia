@@ -141,3 +141,12 @@ let x = Vector{Int}[[1,2], [3,4]]
     @test norm(x, 1) ≈ sqrt(5) + 5
     @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
 end
+
+# test that LinAlg.axpy! works for element type without commutative multiplication
+let
+    α = ones(Int, 2, 2)
+    x = fill([1 0; 1 1], 3)
+    y = fill(zeros(Int, 2, 2), 3)
+    @test LinAlg.axpy!(α, x, deepcopy(y)) == x .* Matrix{Int}[α]
+    @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
+end
