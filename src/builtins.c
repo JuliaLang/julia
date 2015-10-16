@@ -987,35 +987,35 @@ static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
     return 0;
 }
 
-void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig)
+void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer, jl_tupletype_t *sig)
 {
+    assert(linfo);
     assert(sig);
-    assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
     // NOTE: if this call to inference is removed, type_annotate in inference.jl
     // needs to be updated to infer inner functions.
-    if (f->linfo->inferred == 0) {
+    if (linfo->inferred == 0) {
         if (!jl_in_inference) {
-            if (!jl_is_expr(f->linfo->ast)) {
-                f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
-                jl_gc_wb(f->linfo, f->linfo->ast);
+            if (!jl_is_expr(linfo->ast)) {
+                linfo->ast = jl_uncompress_ast(linfo, linfo->ast);
+                jl_gc_wb(linfo, linfo->ast);
             }
-            assert(jl_is_expr(f->linfo->ast));
+            assert(jl_is_expr(linfo->ast));
             if (always_infer ||
-                jl_eval_with_compiler_p((jl_expr_t*)f->linfo->ast, jl_lam_body((jl_expr_t*)f->linfo->ast), 1, f->linfo->module) ||
+                jl_eval_with_compiler_p((jl_expr_t*)linfo->ast, jl_lam_body((jl_expr_t*)linfo->ast), 1, linfo->module) ||
                 // if this function doesn't need to be compiled, but contains inner
                 // functions that do and that capture variables, we need to run
                 // inference on the whole thing to propagate types into the inner
                 // functions. caused issue #12794
-                jl_eval_inner_with_compiler(jl_lam_body((jl_expr_t*)f->linfo->ast), f->linfo->module)) {
-                jl_type_infer(f->linfo, sig, f->linfo);
+                jl_eval_inner_with_compiler(jl_lam_body((jl_expr_t*)linfo->ast), linfo->module)) {
+                jl_type_infer(linfo, sig, linfo);
             }
         }
     }
-    jl_compile(f);
-    if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
-        f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
-        jl_gc_wb(f->linfo, f->linfo->ast);
+    jl_compile_linfo(linfo);
+    if (jl_boot_file_loaded && jl_is_expr(linfo->ast)) {
+        linfo->ast = jl_compress_ast(linfo, linfo->ast);
+        jl_gc_wb(linfo, linfo->ast);
     }
 }
 
@@ -1023,7 +1023,7 @@ JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
-    jl_trampoline_compile_function(f, 0, f->linfo->specTypes ? f->linfo->specTypes : jl_anytuple_type);
+    jl_trampoline_compile_linfo(f->linfo, 0, f->linfo->specTypes ? f->linfo->specTypes : jl_anytuple_type);
     jl_generate_fptr(f);
     return jl_apply(f, args, nargs);
 }

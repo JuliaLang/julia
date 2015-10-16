@@ -952,9 +952,8 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     f->fptr = li->fptr;
 }
 
-extern "C" void jl_compile(jl_function_t *f)
+extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 {
-    jl_lambda_info_t *li = f->linfo;
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
@@ -1138,7 +1137,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
         }
     }
     if (sf->linfo->functionObject == NULL && sf->linfo->specFunctionObject == NULL) {
-        jl_compile(sf);
+        jl_compile_linfo(sf->linfo);
     }
     if (!getwrapper && sf->linfo->specFunctionObject != NULL)
         return (Function*)sf->linfo->specFunctionObject;
@@ -3818,7 +3817,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (fargt.size() + sret != fargt_sig.size())
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
-    jl_compile(ff);
+    jl_compile_linfo(lam);
     if (!lam->functionObject) {
         jl_errorf("error compiling %s while creating cfunction", lam->name->name);
     }

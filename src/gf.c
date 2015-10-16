@@ -1479,7 +1479,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
     if (sf->linfo->functionObject == NULL) {
         if (sf->fptr != &jl_trampoline)
             goto not_found;
-        jl_compile(sf);
+        jl_compile_linfo(sf->linfo);
     }
     JL_GC_POP();
     return sf;
@@ -1488,7 +1488,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
     return NULL;
 }
 
-void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);
+void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer, jl_tupletype_t *sig);
 
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
@@ -1534,21 +1534,18 @@ static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
     }
 }
 
-static void precompile_unspecialized(jl_function_t *func, jl_tupletype_t *sig, jl_svec_t *tvars)
+static void precompile_linfo(jl_lambda_info_t *linfo, jl_tupletype_t *sig, jl_svec_t *tvars)
 {
     assert(sig);
-    func->linfo->specTypes = sig;
-    jl_gc_wb(func->linfo, sig);
+    linfo->specTypes = sig;
+    jl_gc_wb(linfo, sig);
     if (tvars != jl_emptysvec) {
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
         // it constructs closures for new "specializations".
-        all_p2c((jl_value_t*)func->linfo, tvars);
+        all_p2c((jl_value_t*)linfo, tvars);
     }
-    //func->fptr = (jl_fptr_t)jl_apply_unspecialized; // we might enter type-inference for this function
-    //assert(func->linfo->unspecialized);
-    jl_trampoline_compile_function(func, 1, sig);
-    //func->fptr = func->linfo->fptr;
+    jl_trampoline_compile_linfo(linfo, 1, sig);
 }
 
 static int tupletype_any_bottom(jl_value_t *sig)
@@ -1580,17 +1577,19 @@ static void _compile_all_deq(jl_array_t *found)
     jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)(found_l / 2));
     for (found_i = 0; found_i < found_l; found_i += 2) {
         dbg_print_progress(JL_STDERR, found_i + 2, found_l);
-        jl_function_t *func = (jl_function_t*)jl_cellref(found, found_i);
-        jl_methlist_t *meth = (jl_methlist_t*)jl_cellref(found, found_i + 1);
+        jl_value_t *thunk = jl_cellref(found, found_i);
 
-        if (!meth) {
-            // anonymous function
-            jl_lambda_info_t *li = func->linfo;
-            precompile_unspecialized(func, li->specTypes, jl_emptysvec);
+        if (jl_is_lambda_info(thunk)) {
+            // anonymous or specialized function
+            jl_lambda_info_t *li = (jl_lambda_info_t*)thunk;
+            assert(!jl_cellref(found, found_i + 1));
+            precompile_linfo(li, li->specTypes, jl_emptysvec);
             assert(li->functionID > 0);
             continue;
         }
 
+        jl_function_t *func = (jl_function_t*)thunk;
+        jl_methlist_t *meth = (jl_methlist_t*)jl_cellref(found, found_i + 1);
         assert(!func->linfo);
 
         if (jl_is_leaf_type((jl_value_t*)meth->sig)) {
@@ -1639,7 +1638,7 @@ static void _compile_all_deq(jl_array_t *found)
                     complete = 0;
                 }
                 if (complete) {
-                    meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now
+                    //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now
                     meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
                     continue;
                 }
@@ -1655,7 +1654,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(meth->func->linfo, unspec);
             if (!unspec->linfo->specTypes) unspec->linfo->specTypes = meth->sig; // no gc_wb needed
         }
-        precompile_unspecialized(unspec, meth->sig, meth->tvars);
+        precompile_linfo(unspec->linfo, meth->sig, meth->tvars);
         //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now -- but isn't because staged functions corrupt the function lookup
         meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
     }
@@ -1672,31 +1671,13 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
         if (jl_is_gf(v)) {
             jl_function_t *gf = (jl_function_t*)v;
             _compile_all_enq(gf->env, h, found, gf);
-            // fast return and skip linfo, it is supposed to be null
+            // fast return and skip linfo, it is supposed to be null here
             return;
         }
         else if (jl_is_function(v)) {
             jl_function_t *f = (jl_function_t*)v;
-            jl_array_t *specs = f->linfo ? f->linfo->specializations : NULL;
             _compile_all_enq(f->env, h, found, 0);
             _compile_all_enq((jl_value_t*)f->linfo, h, found, in_gf);
-            if (specs) {
-                size_t i, l = jl_array_len(specs);
-                ptrhash_put(h, specs, specs);
-                for (i = 0; i < l; i++) {
-                    jl_lambda_info_t *li = (jl_lambda_info_t*)jl_cellref(specs, i);
-                    if (li->fptr == jl_trampoline && !li->functionID) {
-                        jl_cell_1d_push(found, (jl_value_t*)jl_reinstantiate_method(f, li));
-                        jl_cell_1d_push(found, (jl_value_t*)NULL);
-                    }
-                    assert(li->specTypes);
-                    _compile_all_enq((jl_value_t*)li, h, found, 0);
-                }
-            }
-            if (f->linfo && f->linfo->specTypes && f->fptr == jl_trampoline && !f->linfo->functionID) {
-                jl_cell_1d_push(found, (jl_value_t*)f);
-                jl_cell_1d_push(found, (jl_value_t*)NULL);
-            }
             return;
         }
         else if (jl_is_mtable(v)) {
@@ -1729,11 +1710,9 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
         }
         else if (jl_is_lambda_info(v)) {
             jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-            if (in_gf || li->specTypes) {
-                // hopefully this lambda will be compiled from the right place: that place is not here.
-                // XXX: can end up here from Module->constant_table[x]->LambdaStaticData->specialized[x]->LambdaStaticData
-            }
-            else {
+            // if in_gf and !specTypes, the lambda will be compiled from the method table
+            if (!in_gf && !li->specTypes) {
+                // anonymous function: compile via unspecialized
                 jl_function_t *func = li->unspecialized;
                 if (func == NULL) {
                     func = jl_new_closure(li->fptr, (jl_value_t*)jl_emptysvec, li);
@@ -1741,6 +1720,11 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
                     jl_gc_wb(li, func);
                     if (!func->linfo->specTypes) func->linfo->specTypes = jl_anytuple_type; // no gc_wb needed
                 }
+                li = func->linfo;
+            }
+            if (li->specTypes && li->fptr == jl_trampoline && !li->functionID) {
+                jl_cell_1d_push(found, (jl_value_t*)li);
+                jl_cell_1d_push(found, (jl_value_t*)NULL);
             }
         }
         else if (jl_is_array(v)) {
