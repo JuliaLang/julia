@@ -920,7 +920,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal: return emit_cglobal(args, nargs, ctx);
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
-#if 0
+#if 0 // this section enables runtime-intrinsics (e.g. for testing), and disables their llvm counterparts
     default:
         int ldepth = ctx->gc.argDepth;
         Value *r;

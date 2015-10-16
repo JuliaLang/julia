@@ -86,7 +86,7 @@ static inline unsigned int next_power_of_two(unsigned int val) {
 
 static inline char signbitbyte(void *a, unsigned bytes) {
     // sign bit of an signed number of n bytes, as a byte
-    return signbit(((signed char*)a)[bytes-1]) ? ~0 : 0;
+    return (((signed char*)a)[bytes - 1] < 0) ? ~0 : 0;
 }
 
 static inline char usignbitbyte(void *a, unsigned bytes) {
@@ -111,7 +111,9 @@ static inline unsigned select_by_size(unsigned sz)
     typedef intrinsic##_t select_##intrinsic##_t[6]; \
     static inline intrinsic##_t select_##intrinsic(unsigned sz, select_##intrinsic##_t list) \
     { \
-        return list[select_by_size(sz)] ?: list[0]; \
+        intrinsic##_t thunk = list[select_by_size(sz)]; \
+        if (!thunk) thunk = list[0]; \
+        return thunk; \
     }
 
 #define fp_select(a, func) \
@@ -289,7 +291,7 @@ static inline jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
         memcpy(pa2, pa, isize);
-        memset(pa2 + isize, getsign(pa, isize), osize2 - isize);
+        memset((char*)pa2 + isize, getsign(pa, isize), osize2 - isize);
         pa = pa2;
     }
     jl_value_t *newv = lambda1(ty, pa, osize, osize2, list);
@@ -837,8 +839,9 @@ DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 
 // checked arithmetic
 #define check_sadd(a,b) \
-        /* this test is a reduction of (b > 0) ? (a + b >= typemin(a)) : (a + b < typemin(a)) ==> overflow */ \
-        (b > 0) == (a >= (((typeof(a))1) << (8 * sizeof(a) - 1)) - b)
+        /* this test is a reduction of (b > 0) ? (a + b >= typemin(a)) : (a + b < typemin(a)) ==> overflow \
+         * where (a - a) == (typeof(a))0 */ \
+        (b > 0) == (a >= ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd, add, checked_sadd,  )
 #define check_uadd(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \
