@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <cstdio>
+#include <llvm/Support/Host.h>
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -128,7 +129,6 @@ void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
 }
 
 // miscellany
-#include <llvm/Support/Host.h>
 extern "C" DLLEXPORT
 jl_value_t *jl_get_cpu_name(void)
 {
