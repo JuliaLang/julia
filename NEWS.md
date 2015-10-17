@@ -30,6 +30,14 @@ Library improvements
   * The `Base.Test` module now has a `@testset` feature to bundle
     tests together and delay throwing an error until the end ([#13062]).
 
+    * The new features are mirrored in the
+      [BaseTestNext](https://github.com/IainNZ/BaseTestNext.jl)
+      package for users who would like to use the new functionality on Julia v0.4.
+
+    * The [BaseTestDeprecated](https://github.com/IainNZ/BaseTestDeprecated.jl)
+      package provides the old-style `handler` functionality, for compatibility
+      with code that needs to support both Julia v0.4 and v0.5.
+
   * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
     function argument as the first argument to allow for do-block syntax ([#13338]).
 
