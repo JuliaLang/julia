@@ -266,6 +266,7 @@ EXE :=
 endif
 
 JULIAGC := MARKSWEEP
+JULIACODEGEN := LLVM
 USE_COPY_STACKS := 1
 
 # flag for disabling assertions

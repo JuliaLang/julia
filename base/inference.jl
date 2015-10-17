@@ -995,6 +995,9 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
         end
     end
     rt = builtin_tfunction(f, fargs, Tuple{argtypes...}, vtypes, sv)
+    if isa(rt, TypeVar)
+        rt = rt.ub
+    end
     #print("=> ", rt, "\n")
     return rt
 end
@@ -1421,14 +1424,14 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
                     break
                 end
                 if isa(code,Type)
-                    curtype = code
+                    curtype = code::Type
                     # sometimes just a return type is stored here. if a full AST
                     # is not needed, we can return it.
                     if !needtree
                         return (nothing, code)
                     end
                 else
-                    curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
+                    curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)::Type
                     return (code, curtype)
                 end
             end
@@ -1441,7 +1444,7 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
 
     (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
     if fulltree === ()
-        return (fulltree,result)
+        return (fulltree, result::Type)
     end
 
     if !redo
@@ -1470,7 +1473,7 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
         def.tfunc[tfunc_idx+1] = rec
     end
 
-    return (fulltree, result)
+    return (fulltree, result::Type)
 end
 
 typeinf_uncached(linfo, atypes::ANY, sparams::ANY; optimize=true) =
@@ -1584,14 +1587,21 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
             lastatype = lastatype.parameters[1]
             laty -= 1
         end
+        if isa(lastatype, TypeVar)
+            lastatype = lastatype.ub
+        end
         if laty > la
             laty = la
         end
         for i=1:laty
-            s[1][args[i]] = VarState(atypes.parameters[i],false)
+            atyp = atypes.parameters[i]
+            if isa(atyp, TypeVar)
+                atyp = atyp.ub
+            end
+            s[1][args[i]] = VarState(atyp, false)
         end
         for i=laty+1:la
-            s[1][args[i]] = VarState(lastatype,false)
+            s[1][args[i]] = VarState(lastatype, false)
         end
     elseif la != 0
         return ((), Bottom, false) # wrong number of arguments
