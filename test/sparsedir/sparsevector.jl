@@ -336,6 +336,57 @@ let S = sprand(4, 8, 0.5)
     end
 end
 
+let r = [1,10], S = sparse(r, r, r)
+    Sf = full(S)
+    @assert isa(Sf, Matrix{Int})
+
+    inds = [1,1,1,1,1,1]
+    v = S[inds]
+    @test isa(v, SparseVector{Int,Int})
+    @test length(v) == length(inds)
+    @test full(v) == Sf[inds]
+
+    inds = [2,2,2,2,2,2]
+    v = S[inds]
+    @test isa(v, SparseVector{Int,Int})
+    @test length(v) == length(inds)
+    @test full(v) == Sf[inds]
+
+    # get a single column
+    for j = 1:size(S,2)
+        col = S[:, j]
+        @test isa(col, SparseVector{Int,Int})
+        @test length(col) == size(S,1)
+        @test full(col) == Sf[:,j]
+    end
+
+    # Get a reshaped vector
+    v = S[:]
+    @test isa(v, SparseVector{Int,Int})
+    @test length(v) == length(S)
+    @test full(v) == Sf[:]
+
+    # Get a linear subset
+    for i=0:length(S)
+        v = S[1:i]
+        @test isa(v, SparseVector{Int,Int})
+        @test length(v) == i
+        @test full(v) == Sf[1:i]
+    end
+    for i=1:length(S)+1
+        v = S[i:end]
+        @test isa(v, SparseVector{Int,Int})
+        @test length(v) == length(S) - i + 1
+        @test full(v) == Sf[i:end]
+    end
+    for i=0:div(length(S),2)
+        v = S[1+i:end-i]
+        @test isa(v, SparseVector{Int,Int})
+        @test length(v) == length(S) - 2i
+        @test full(v) == Sf[1+i:end-i]
+    end
+end
+
 ## math
 
 ### Data
