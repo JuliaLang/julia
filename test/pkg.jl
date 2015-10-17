@@ -10,7 +10,6 @@ function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
         Pkg.init()
         @test isdir(Pkg.dir())
         Pkg.resolve()
-
         fn()
     finally
         remove_tmp_dir && rm(tmpdir, recursive=true)
@@ -144,8 +143,14 @@ temp_pkg_dir() do
         Pkg.installed()["Example"] == v"0.4.0"
     end
 
+    # add a directory that is not a git repository
+    begin
+        mkdir(joinpath(Pkg.dir(), "NOTGIT"))
+        Pkg.installed()["NOTGIT"] == typemin(VersionNumber)
+    end
+
     begin
         Pkg.rm("Example")
-        @test isempty(Pkg.installed())
+        @test !in("Example", keys(Pkg.installed()))
     end
 end
