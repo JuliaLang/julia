@@ -5,7 +5,7 @@
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
+convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = box(T, unbox(Ptr{Void},x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,convert(UInt, x))
 
 # integer to pointer
@@ -14,7 +14,7 @@ convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(Int,Int(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
+convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr{Void},p))
 
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
