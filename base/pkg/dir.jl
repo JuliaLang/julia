@@ -61,10 +61,10 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.mv(joinpath(temp_dir,"REQUIRE"), joinpath(dir,"REQUIRE"))
         Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
         rm(temp_dir)
-    catch e
+    catch err
         ispath(metadata_dir) && rm(metadata_dir, recursive=true)
         ispath(temp_dir) && rm(temp_dir, recursive=true)
-        rethrow(e)
+        rethrow(err)
     end
 end
 
@@ -73,7 +73,7 @@ function getmetabranch()
         open(joinpath(path(),"META_BRANCH")) do io
           chomp(readuntil(io, "/n"))
         end
-    catch
+    catch err
         META_BRANCH
     end
 end
