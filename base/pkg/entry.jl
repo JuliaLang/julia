@@ -331,8 +331,12 @@ function update(branch::AbstractString)
     with(GitRepo, "METADATA") do repo
         with(LibGit2.head(repo)) do h
             if LibGit2.branch(h) != branch
-                LibGit2.isdirty(repo) && throw(PkgError("METADATA is dirty and not on $branch, bailing"))
-                LibGit2.isattached(repo) || throw(PkgError("METADATA is detached not on $branch, bailing"))
+                if LibGit2.isdirty(repo)
+                    throw(PkgError("METADATA is dirty and not on $branch, bailing"))
+                end
+                if !LibGit2.isattached(repo)
+                    throw(PkgError("METADATA is detached not on $branch, bailing"))
+                end
                 LibGit2.fetch(repo)
                 LibGit2.checkout_head(repo)
                 LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
@@ -340,11 +344,14 @@ function update(branch::AbstractString)
             end
         end
         LibGit2.fetch(repo)
-        LibGit2.merge!(repo, fastforward=true) || LibGit2.rebase!(repo, "origin/$branch")
+        ff_succeeded = LibGit2.merge!(repo, fastforward=true)
+        if !ff_succeeded
+            LibGit2.rebase!(repo, "origin/$branch")
+        end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    for pkg in filter!(Read.isinstalled,collect(keys(avail)))
+    for pkg in filter(Read.isinstalled, collect(keys(avail)))
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
@@ -352,19 +359,34 @@ function update(branch::AbstractString)
         end
     end
     instd = Read.installed(avail)
-    free = Read.free(instd)
+    free  = Read.free(instd)
     for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a) in avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         with(GitRepo, pkg) do repo
-            if LibGit2.isattached(repo) && !LibGit2.isdirty(repo)
-                info("Updating $pkg...")
-                @recover begin
-                    LibGit2.fetch(repo)
-                    LibGit2.merge!(repo, fastforward=true)
+            if LibGit2.isattached(repo)
+                if LibGit2.isdirty(repo)
+                    warn("Package $pkg: skipping update (dirty)...")
+                else
+                    prev_sha = string(LibGit2.head_oid(repo))
+                    success = true
+                    try
+                        LibGit2.fetch(repo)
+                        LibGit2.merge!(repo, fastforward=true)
+                    catch err
+                        show(err)
+                        print('\n')
+                        success = false
+                    end
+                    if success
+                        post_sha = string(LibGit2.head_oid(repo))
+                        branch = LibGit2.branch(repo)
+                        info("Updating $pkg $branch...",
+                              prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
+                    end
                 end
             end
         end
