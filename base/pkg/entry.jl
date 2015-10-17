@@ -113,11 +113,10 @@ function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
-        repo = GitRepo(pkg)
-        try
-            res = Read.installed_version(pkg, repo, avail)
-        finally
-            finalize(repo)
+        if ispath(joinpath(pkg,".git"))
+            LibGit2.with(GitRepo, pkg) do repo
+                res = Read.installed_version(pkg, repo, avail)
+            end
         end
         return res
     end

@@ -43,6 +43,7 @@ temp_pkg_dir() do
     Pkg.rm("Example")
     @test isempty(Pkg.installed())
     @test !isempty(Pkg.available("Example"))
+    @test !in("Example", keys(Pkg.installed()))
     Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
     @test [keys(Pkg.installed())...] == ["Example"]
     Pkg.status("Example", iob)
@@ -146,11 +147,7 @@ temp_pkg_dir() do
     # add a directory that is not a git repository
     begin
         mkdir(joinpath(Pkg.dir(), "NOTGIT"))
+        Pkg.installed("NOTGIT") == typemin(VersionNumber)
         Pkg.installed()["NOTGIT"] == typemin(VersionNumber)
-    end
-
-    begin
-        Pkg.rm("Example")
-        @test !in("Example", keys(Pkg.installed()))
     end
 end
