@@ -376,10 +376,11 @@ getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) = _logical_index(A,
 function _logical_index{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
     checkbounds(A, I)
     n = sum(I)
+    nnzB = min(n, nnz(A))
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    rowvalB = Array(Int, n)
-    nzvalB = Array(Tv, n)
+    rowvalB = Array(Int, nnzB)
+    nzvalB = Array(Tv, nnzB)
     c = 1
     rowB = 1
 
@@ -403,16 +404,52 @@ function _logical_index{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
         end
         (rowB > n) && break
     end
-    n = length(nzvalB)
-    if n > (c-1)
-        deleteat!(nzvalB, c:n)
-        deleteat!(rowvalB, c:n)
+    if nnzB > (c-1)
+        deleteat!(nzvalB, c:nnzB)
+        deleteat!(rowvalB, c:nnzB)
     end
     SparseVector(n, rowvalB, nzvalB)
 end
 
-# TODO: huge optimizations are available for I::Range and ::Colon
+# TODO: further optimizations are available for ::Colon and other types of Range
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
+
+function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::UnitRange)
+    checkbounds(A, I)
+    szA = size(A)
+    nA = szA[1]*szA[2]
+    colptrA = A.colptr
+    rowvalA = A.rowval
+    nzvalA = A.nzval
+
+    n = length(I)
+    nnzB = min(n, nnz(A))
+    rowvalB = Array(Int, nnzB)
+    nzvalB = Array(Tv, nnzB)
+
+    rowstart,colstart = ind2sub(szA, first(I))
+    rowend,colend = ind2sub(szA, last(I))
+
+    idxB = 1
+    @inbounds for col in colstart:colend
+        minrow = (col == colstart ? rowstart : 1)
+        maxrow = (col == colend ? rowend : szA[1])
+        for r in colptrA[col]:(colptrA[col+1]-1)
+            rowA = rowvalA[r]
+            if minrow <= rowA <= maxrow
+                rowvalB[idxB] = sub2ind(szA, rowA, col) - first(I) + 1
+                nzvalB[idxB] = nzvalA[r]
+                idxB += 1
+            end
+        end
+    end
+    if nnzB > (idxB-1)
+        deleteat!(nzvalB, idxB:nnzB)
+        deleteat!(rowvalB, idxB:nnzB)
+    end
+    SparseVector(n, rowvalB, nzvalB)
+end
+
 function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -421,12 +458,11 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
     nzvalA = A.nzval
 
     n = length(I)
-    rowvalB = Array(Int, n)
-    nzvalB = Array(Tv, n)
+    nnzB = min(n, nnz(A))
+    rowvalB = Array(Int, nnzB)
+    nzvalB = Array(Tv, nnzB)
 
-    rowB = 1
     idxB = 1
-
     for i in 1:n
         ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError(A, I))
         row,col = ind2sub(szA, I[i])
@@ -439,9 +475,9 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
             end
         end
     end
-    if n > (idxB-1)
-        deleteat!(nzvalB, idxB:n)
-        deleteat!(rowvalB, idxB:n)
+    if nnzB > (idxB-1)
+        deleteat!(nzvalB, idxB:nnzB)
+        deleteat!(rowvalB, idxB:nnzB)
     end
     SparseVector(n, rowvalB, nzvalB)
 end

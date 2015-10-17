@@ -328,6 +328,12 @@ let S = sprand(4, 8, 0.5)
         @test length(v) == length(S) - i + 1
         @test full(v) == Sf[i:end]
     end
+    for i=0:div(length(S),2)
+        v = S[1+i:end-i]
+        @test isa(v, SparseVector{Float64,Int})
+        @test length(v) == length(S) - 2i
+        @test full(v) == Sf[1+i:end-i]
+    end
 end
 
 ## math
