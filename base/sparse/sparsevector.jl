@@ -468,9 +468,14 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
         row,col = ind2sub(szA, I[i])
         for r in colptrA[col]:(colptrA[col+1]-1)
             @inbounds if rowvalA[r] == row
-                rowvalB[idxB] = i
-                nzvalB[idxB] = nzvalA[r]
-                idxB += 1
+                if idxB <= nnzB
+                    rowvalB[idxB] = i
+                    nzvalB[idxB] = nzvalA[r]
+                    idxB += 1
+                else # this can happen if there are repeated indices in I
+                    push!(rowvalB, i)
+                    push!(nzvalB, nzvalA[r])
+                end
                 break
             end
         end
