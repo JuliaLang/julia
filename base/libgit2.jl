@@ -70,7 +70,8 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """ git diff-index HEAD [-- <path>]"""
-isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
+isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
+    isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """ git diff-index <treeish> [-- <path>]"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
@@ -186,8 +187,6 @@ function branch(repo::GitRepo)
     head_ref = head(repo)
     try
         branch(head_ref)
-    catch
-        ""
     finally
         finalize(head_ref)
     end
