@@ -757,16 +757,50 @@ let a = []
     @test a[1] == 1
 end
 
-# issue #12806
-let x = 0
-    for i=1:10
+function test1784()
+    let catchb = false, catchc = false, catchr = false
+    for i in 1:3
         try
-            break
+            throw("try err")
+        catch e
+            i == 1 && break
+            i == 2 && continue
+            i == 3 && return
+        finally
+            i == 1 && (catchb = true; continue)
+            i == 2 && (catchc = true; continue)
+            i == 3 && (catchr = true; return (catchb, catchc, catchr))
+      end
+      end
+    end
+end
+@test test1784() == (true,true,true)
+
+# issue #12806
+let x = 0, y = 0, z = 0
+    for i=1:2
+        try
+            i==1 && continue
         finally
             x = 11
         end
+    
+        try
+            i==2 && throw()
+        catch
+            break
+        finally
+            y = 12
+        end
+    end
+    for i=1:2
+        try i==1 && break
+        finally z = 13
+        end
     end
     @test x == 11
+    @test y == 12
+    @test z == 13
 end
 
 # chained and multiple assignment behavior (issue #2913)

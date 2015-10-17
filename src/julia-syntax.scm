@@ -1071,17 +1071,33 @@
                  (break ,bb)))
         (else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
-(define (replace-break e bb breakval)
+(define (replace-loop-exits e bb breakval)
   (cond ((atom? e) e)
         ((or (eq? (car e) 'lambda)
              (eq? (car e) 'function)
-         (eq? (car e) 'stagedfunction)
-             (eq? (car e) '->)) e)
-        ((and breakval (atom? (car e)) (eq? (car e) 'break))
-         `(block (= ,breakval #t)
+             (eq? (car e) 'stagedfunction)
+             (eq? (car e) '->)
+             (eq? (car e) 'for)
+             (eq? (car e) 'while)
+             (eq? (car e) 'do)) e)
+        ((and breakval (atom? (cdr e)) (eq? (car e) 'break))
+         `(block (= ,breakval #t) ; break to the finally block and set exit
                  (break ,bb)))
+        ((and breakval (atom? (cdr e)) (eq? (car e) 'continue))
+         `(break ,bb)) ; break to the finally block but don't exit
         ((quoted? e) e)
-        (else (map (lambda (x) (replace-break x bb breakval)) e))))
+        (else (map (lambda (x) (replace-loop-exits x bb breakval)) e))))
+
+(define (has-loop-exit? e)
+  (cond ((or (atom? e)
+             (eq? (car e) 'for)
+             (eq? (car e) 'while)
+             (eq? (car e) 'do)
+             (eq? (car e) 'try)) #f)
+        ((and (eq? (car e) 'break) (atom? (cdr e))) #t)
+        ((and (eq? (car e) 'continue) (atom? (cdr e))) #t)
+        (else (any (lambda (y) (eq? #t y))
+                   (map (lambda (x) (and (pair? x) (has-loop-exit? x))) e)))))
 
 (define (expand-binding-forms e)
   (cond
@@ -1231,7 +1247,8 @@
                  (error "goto from a try/finally block is not permitted"))
              (let ((hasret (or (contains return? tryb)
                                (contains return? catchb)))
-                   (hasbreak (or (contains unlabeled-break? tryb))))
+                   (hasbreak (or (has-loop-exit? tryb)
+                                 (has-loop-exit? catchb))))
                (let ((err (gensy))
                      (ret (and hasret
                                (or (not (block-returns? tryb))
@@ -1243,13 +1260,13 @@
                      (bb  (gensy))
 		     (finally-exception (gensy))
                      (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
-                 (let ((tryb   (replace-break (replace-return tryb bb ret retval) bb breakval))
-                       (catchb (replace-break (replace-return catchb bb ret retval) bb breakval)))
+                 (let ((tryb   (replace-loop-exits (replace-return tryb bb ret retval) bb breakval))
+                       (catchb (replace-loop-exits (replace-return catchb bb ret retval) bb breakval)))
                    (expand-binding-forms
                     `(scope-block
                       (block
                        ,@(if hasret `((local ,retval)) '())
-                       ,@(if hasbreak `((local ,breakval)) '())
+                       ,@(if hasbreak `((local ,breakval) (= ,breakval false)) '())
                        (local ,val)
 		       (local ,finally-exception)
                        (= ,err false)
@@ -1478,7 +1495,6 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
-(define (unlabeled-break? e) (and (pair? e) (eq? (car e) 'break) (null? (cdr e))))
 
 (define (const-check-symbol s)
   (if (not (symbol? s))
