@@ -922,3 +922,25 @@ test_12992()
 test2_12992()
 test2_12992()
 test2_12992()
+
+# issue 13559
+
+function test_13559()
+    fn = tempname()
+    run(`mkfifo $fn`)
+    # use subprocess to write 127 bytes to FIFO
+    writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
+    open(`$(Base.julia_cmd()) -e $writer_cmds`)
+    #quickly read FIFO, draining it and blocking but not failing with EOFError yet
+    r = open(fn, "r")
+    # 15 proper reads
+    for i=1:15
+        @test read(r, Int64) == -6148914691236517206
+    end
+    # last read should throw EOFError when FIFO closes, since there are only 7 bytes available.
+    @test_throws EOFError read(r, Int64)
+    close(r)
+    rm(fn)
+end
+
+@unix_only test_13559()
