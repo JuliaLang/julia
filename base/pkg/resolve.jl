@@ -50,7 +50,8 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString} = Set{ByteString}())
+function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                      pkgs::Set{ByteString} = Set{ByteString}())
 
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
