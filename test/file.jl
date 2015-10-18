@@ -942,5 +942,51 @@ function test_13559()
     close(r)
     rm(fn)
 end
-
 @unix_only test_13559()
+
+function test_read_nbyte()
+    fn = tempname()
+    # Write one byte. One byte read should work once
+    # but 2-byte read should throw EOFError.
+    f = open(fn, "w+") do f
+        write(f, 0x55)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt8) == 0x55
+        @test_throws EOFError read(f, UInt8)
+        seek(f, 0)
+        @test_throws EOFError read(f, UInt16)
+    end
+    # Write 2 more bytes. Now 2-byte read should work once
+    # but 4-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x4444)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt16) == 0x4455
+        @test_throws EOFError read(f, UInt16)
+        seek(f,0)
+        @test_throws EOFError read(f, UInt32)
+    end
+    # Write 4 more bytes. Now 4-byte read should work once
+    # but 8-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x33333333)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt32) == 0x33444455
+        @test_throws EOFError read(f, UInt32)
+        seek(f,0)
+        @test_throws EOFError read(f, UInt64)
+    end
+    # Writing one more byte should allow an 8-byte
+    # read to proceed.
+    open(fn, "a+") do f
+        write(f, 0x22)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt64) == 0x2233333333444455
+    end
+    rm(fn)
+end
+test_read_nbyte()
