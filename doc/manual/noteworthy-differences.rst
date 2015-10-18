@@ -252,6 +252,11 @@ Noteworthy differences from Python
   major (C-ordered) by default. To get optimal performance when looping over
   arrays, the order of the loops should be reversed in Julia relative to NumPy
   (see relevant section of :ref:`man-performance-tips`).
+- Julia's updating operators (e.g. ``+=``, ``-=``, ...) are *not in-place*
+  whereas NumPy's are. This means ``A = ones(4); B = A; B += 3`` doesn't change
+  values in ``A``, it rather rebinds the name ``B`` to the result of the right-
+  hand side ``B = B + 3``, which is a new array. Use ``B[:] += 3``, explicit loops,
+  or ``InplaceOps.jl``.
 - Julia evaluates default values of function arguments every time the method is
   invoked, unlike in Python where the default values are evaluated only once
   when the function is defined. For example, the function ``f(x=rand()) = x``
@@ -269,7 +274,9 @@ Noteworthy differences from C/C++
   See the Julia documentation for the syntax for array construction (it has changed between versions).
 - In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
 - Julia arrays are assigned by reference. After ``A=B``, changing elements of
-  ``B`` will modify ``A`` as well.
+  ``B`` will modify ``A`` as well. Updating operators like ``+=`` do not operate
+  in-place, they are equivalent to ``A = A + B`` which rebinds the left-hand
+  side to the result of the right-hand side expression.
 - Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row
   major ordered by default. To get optimal performance when looping over
   arrays, the order of the loops should be reversed in Julia relative to C/C++
@@ -300,7 +307,7 @@ Noteworthy differences from C/C++
   characters without quoting it like ``"\""``
   String literals can have values of other variables or expressions interpolated into them,
   indicated by ``$variablename`` or ``$(expression)``, which evaluates the variable name or the expression in the context of the function.
-- ``//`` indicates a ``Rational`` number, and not a single-line comment (which is # in Julia)
+- ``//`` indicates a ``Rational`` number, and not a single-line comment (which is ``#`` in Julia)
 - ``#=`` indicates the start of a multiline comment, and ``=#`` ends it.
 - Functions in Julia return values from their last expression(s) or the ``return``
   keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
