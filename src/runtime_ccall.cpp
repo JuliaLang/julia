@@ -6,6 +6,7 @@
 #include <llvm/Support/Host.h>
 #include "julia.h"
 #include "julia_internal.h"
+using namespace llvm;
 
 // --- library symbol lookup ---
 
