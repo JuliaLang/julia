@@ -913,7 +913,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         f = fptosi_auto;
     unsigned expected_nargs = intrinsic_nargs[f];
     if (expected_nargs && expected_nargs != nargs) {
-        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
+        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, JL_I::jl_intrinsic_name((int)f));
     }
 
     switch (f) {
