@@ -529,6 +529,7 @@ f141(::Type{TCPSocket}) = true
 @test f141(OutOfMemoryError)
 @test f141(Base64EncodePipe)
 @test f141(UDPSocket)
+@test f141(TCPSocket)
 
 # Union syntax
 if VERSION < v"0.4.0-dev+5379"
@@ -541,3 +542,6 @@ end
 @test remotecall_fetch(() -> true, 1)
 @test fetch(remotecall_wait(() -> true, 1))
 Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed but should print some output if it fails
+
+# JuliaLang/julia#13440
+@test isa(SparseArrays, Module)
