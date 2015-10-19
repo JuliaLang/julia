@@ -88,6 +88,4 @@ end
 
 Base.zero(::Type{Oid}) = Oid()
 
-Base.rand(::Type{Oid}) = Oid(ntuple(x->rand(UInt8), OID_RAWSZ))
-
 Base.isequal(id1::Oid, id2::Oid) = id1.val == id2.val

@@ -39,6 +39,11 @@ static char *extensions[] = { ".so", "" };
 extern char *julia_home;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
+#ifdef __has_feature
+#   if __has_feature(address_sanitizer)
+#      define SANITIZE_ADDRESS
+#   endif
+#endif
 
 DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned flags)
 {
@@ -58,7 +63,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
 #ifdef RTLD_NOLOAD
                          | JL_RTLD(flags, NOLOAD)
 #endif
-#ifdef RTLD_DEEPBIND
+#if defined(RTLD_DEEPBIND) && !defined(SANITIZE_ADDRESS)
                          | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST

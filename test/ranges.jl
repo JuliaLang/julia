@@ -544,6 +544,17 @@ for x in r
 end
 @test i == 7
 
+# stringmime/writemime should display the range or linspace nicely
+# to test print_range in range.jl
+replstr(x) = stringmime("text/plain", x)
+@test replstr(1:4) == "4-element UnitRange{$Int}:\n 1,2,3,4"
+@test replstr(linspace(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+@test replstr(0:100.) == "101-element FloatRange{Float64}:\n 0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,…,94.0,95.0,96.0,97.0,98.0,99.0,100.0"
+# next is to test a very large range, which should be fast because print_range
+# only examines spacing of the left and right edges of the range, sufficient
+# to cover the designated screen size.
+@test replstr(0:10^9) == "1000000001-element UnitRange{$Int}:\n 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,…,999999998,999999999,1000000000"
+
 # Issue 11049 and related
 @test promote(linspace(0f0, 1f0, 3), linspace(0., 5., 2)) ===
     (linspace(0., 1., 3), linspace(0., 5., 2))

@@ -228,3 +228,12 @@ end
 
 # fix #13179 parsing unicode lines with default delmiters
 @test isequaldlm(readdlm(IOBuffer("# Should ignore this π\n1\tα\n2\tβ\n")), Any[1 "α"; 2 "β"], Any)
+
+# BigInt parser
+let data = "1 2 3"
+    readdlm(IOBuffer(data), ' ', BigInt) == BigInt[1 2 3]
+end
+
+# test writemime
+@test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+

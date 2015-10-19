@@ -411,8 +411,18 @@ f12593_2() = 1
 # test that macro documentation works
 @test (Docs.@repl @assert) !== nothing
 
+@test (Docs.@repl 0) !== nothing
+
+let t = @doc(DocsTest.t(::Int, ::Int))
+    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+end
+
+# Issue #13467.
+@test (Docs.@repl @r_str) !== nothing
+
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cov")
+@test contains(sprint(apropos, "pearson"), "cor")
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
 @test contains(sprint(apropos, "print"), "Profile.print")
 

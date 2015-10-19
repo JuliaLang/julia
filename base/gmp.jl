@@ -85,7 +85,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     _n = Nullable{BigInt}()
 
     # don't make a copy in the common case where we are parsing a whole bytestring
-    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,i,endpos))
+    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0

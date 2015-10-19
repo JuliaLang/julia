@@ -160,25 +160,11 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = Base.SparseMatrix.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
+    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
     return C
 end
 
 ## solvers
-function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
-    if eltype(b)<:Complex; A = complex(A); end
-
-    if istril(A)
-        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
-        # the case where there are zeros on the diagonal and error out.
-        # It also does not work in the complex case. VBS.
-        #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
-        return fwdTriSolve!(A, b)
-    end
-    if istriu(A); return bwdTriSolve!(A, b); end
-    return A_ldiv_B!(lufact(A),b)
-end
-
 function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     n = length(B)
@@ -752,7 +738,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
-# Copy colptr and rowval from one SparseMatrix to another
+# Copy colptr and rowval from one sparse matrix to another
 function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
     if C.colptr !== A.colptr
         resize!(C.colptr, length(A.colptr))

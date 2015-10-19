@@ -71,16 +71,16 @@ isconst(m::Module, s::Symbol) =
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # type predicates
-isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
-isstructtype(t::DataType) = nfields(t) != 0 || (t.size==0 && !t.abstract)
-isstructtype(x) = false
-isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
-isbits(t::Type) = false
-isbits(x) = isbits(typeof(x))
-isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
+isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
+isstructtype(x) = (@_pure_meta; false)
+isbits(t::DataType) = (@_pure_meta; !t.mutable & t.pointerfree & isleaftype(t))
+isbits(t::Type) = (@_pure_meta; false)
+isbits(x) = (@_pure_meta; isbits(typeof(x)))
+isleaftype(t::ANY) = (@_pure_meta; ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0)
 
-typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-typeseq(a::ANY,b::ANY) = a<:b && b<:a
+typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
 
 function fieldoffsets(x::DataType)
     offsets = Array(Int, nfields(x))
@@ -88,8 +88,8 @@ function fieldoffsets(x::DataType)
     offsets
 end
 
-type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
-field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
+type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment,Csize_t,(Any,),x))
+field_offset(x::DataType,idx) = (@_pure_meta; ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx))
 
 # return all instances, for types that can be enumerated
 function instances end
@@ -114,11 +114,12 @@ subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
 # function reflection
-isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
+isgeneric(f::ANY) = (@_pure_meta; (isa(f,Function) && isa(f.env,MethodTable)))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
 function to_tuple_type(t::ANY)
+    @_pure_meta
     if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
         t = Tuple{t...}
     end
@@ -132,7 +133,7 @@ function to_tuple_type(t::ANY)
     t
 end
 
-tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
+tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
 code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
 function methods(f::Function,t::ANY)

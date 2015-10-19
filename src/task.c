@@ -846,11 +846,6 @@ DLLEXPORT void jl_rethrow_other(jl_value_t *e)
     throw_internal(e);
 }
 
-DLLEXPORT void jl_throw_with_superfluous_argument(jl_value_t *e, int line)
-{
-    jl_throw(e);
-}
-
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;

@@ -551,6 +551,13 @@ function sin(z::Complex)
     if !isfinite(zr) && zi == 0 return Complex(oftype(zr, NaN), zi) end
     if !isfinite(zr) && isfinite(zi) return Complex(oftype(zr, NaN), oftype(zi, NaN)) end
     if !isfinite(zr) && !isfinite(zi) return Complex(zr, oftype(zi, NaN)) end
+    _sin(z)
+end
+
+sin{T<:Integer}(z::Complex{T}) = _sin(z)
+
+function _sin(z::Complex)
+    zr, zi = reim(z)
     Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
 end
 
@@ -567,6 +574,13 @@ function cos(z::Complex)
         return Complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
     end
     if isnan(zr) && zi==0 return Complex(zr, abs(zi)) end
+    _cos(z)
+end
+
+cos{T<:Integer}(z::Complex{T}) = _cos(z)
+
+function _cos(z::Complex)
+    zr, zi = reim(z)
     Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
 end
 

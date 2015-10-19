@@ -21,8 +21,8 @@ setexpand!(f) = global _expand_ = f
 
 function __bootexpand(str, obj)
     global docs = List((ccall(:jl_get_current_module, Any, ()), str, obj), docs)
-    (isa(obj, Expr) && obj.head == :call) && return nothing
-    (isa(obj, Expr) && obj.head == :module) && return esc(Expr(:toplevel, obj))
+    (isa(obj, Expr) && obj.head === :call) && return nothing
+    (isa(obj, Expr) && obj.head === :module) && return esc(Expr(:toplevel, obj))
     esc(obj)
 end
 
@@ -45,6 +45,11 @@ that were stored in `DocBootstrap.docs` are migrated to their correct modules us
 """
 DocBootstrap
 
+"""
+    loaddocs()
+
+Move all docstrings from `DocBootstrap.docs` to their module's `__META__` dict.
+"""
 function loaddocs()
     node = docs
     while node ≠ nothing

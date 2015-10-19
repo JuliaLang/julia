@@ -272,6 +272,7 @@ typedef struct _jl_lambda_info_t {
     jl_sym_t *file;
     int32_t line;
     int8_t inferred;
+    int8_t pure;
 
     // hidden fields:
     // flag telling if inference is running on this function
@@ -561,7 +562,7 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
-extern jl_sym_t *fastmath_sym;
+extern jl_sym_t *fastmath_sym; extern jl_sym_t *pure_sym;
 extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
 extern jl_sym_t *arrow_sym; extern jl_sym_t *inert_sym;
 
@@ -1219,8 +1220,6 @@ DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max);
 DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
-DLLEXPORT void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
-                                     jl_value_t *ty, jl_value_t *got, int line);
 DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var);
 DLLEXPORT void NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t);
 DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs);
@@ -1486,7 +1485,6 @@ extern DLLEXPORT JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
-DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
 DLLEXPORT void NORETURN jl_rethrow(void);
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 

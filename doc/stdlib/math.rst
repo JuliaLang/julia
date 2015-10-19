@@ -425,13 +425,13 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in :math:`Y`\ , overwriting the existing value of :math:`Y`\ .
+   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ . Note that ``Y`` must not be aliased with either ``A`` or ``B``\ .
 
    .. doctest::
 
-       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
+       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
-       julia> B
+       julia> Y
        2x2 Array{Float64,2}:
         3.0  3.0
         7.0  7.0
@@ -1691,29 +1691,53 @@ Statistics
 
    Like ``quantile``\ , but overwrites the input vector.
 
-.. function:: cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
+.. function:: cov(x[, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the Pearson covariance between the vector(s) in ``v1`` and ``v2``\ . Here, ``v1`` and ``v2`` can be either vectors or matrices.
+   Compute the variance of the vector ``x``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ .
 
-   This function accepts three keyword arguments:
-
-   * ``vardim``\ : the dimension of variables. When ``vardim = 1``\ , variables are considered in columns while observations in rows; when ``vardim = 2``\ , variables are in rows while observations in columns. By default, it is set to ``1``\ .
-   * ``corrected``\ : whether to apply Bessel's correction (divide by ``n-1`` instead of ``n``\ ). By default, it is set to ``true``\ .
-   * ``mean``\ : allow users to supply mean values that are known. By default, it is set to ``nothing``\ , which indicates that the mean(s) are unknown, and the function will compute the mean. Users can use ``mean=0`` to indicate that the input data are centered, and hence there's no need to subtract the mean.
-
-   The size of the result depends on the size of ``v1`` and ``v2``\ . When both ``v1`` and ``v2`` are vectors, it returns the covariance between them as a scalar. When either one is a matrix, it returns a covariance matrix of size ``(n1, n2)``\ , where ``n1`` and ``n2`` are the numbers of slices in ``v1`` and ``v2``\ , which depend on the setting of ``vardim``\ .
-
-   Note: ``v2`` can be omitted, which indicates ``v2 = v1``\ .
-
-.. function:: cor(v1[, v2][, vardim=1, mean=nothing])
+.. function:: cov(X[, vardim=1, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the Pearson correlation between the vector(s) in ``v1`` and ``v2``\ .
+   Compute the covariance matrix of the matrix ``X`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim)``\ .
 
-   Users can use the keyword argument ``vardim`` to specify the variable dimension, and ``mean`` to supply pre-computed mean values.
+.. function:: cov(x, y[, corrected=true])
+
+   .. Docstring generated from Julia source
+
+   Compute the covariance between the vectors ``x`` and ``y``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x) = length(y)``\ .
+
+.. function:: cov(X, Y[, vardim=1, corrected=true])
+
+   .. Docstring generated from Julia source
+
+   Compute the covariance between the vectors or matrices ``X`` and ``Y`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim) = size(Y, vardim)``\ .
+
+.. function:: cor(x)
+
+   .. Docstring generated from Julia source
+
+   Return the number one.
+
+.. function:: cor(X[, vardim=1])
+
+   .. Docstring generated from Julia source
+
+   Compute the Pearson correlation matrix of the matrix ``X`` along the dimension ``vardim``\ .
+
+.. function:: cor(x, y)
+
+   .. Docstring generated from Julia source
+
+   Compute the Pearson correlation between the vectors ``x`` and ``y``\ .
+
+.. function:: cor(X, Y[, vardim=1])
+
+   .. Docstring generated from Julia source
+
+   Compute the Pearson correlation between the vectors or matrices ``X`` and ``Y`` along the dimension ``vardim``\ .
 
 Signal Processing
 -----------------

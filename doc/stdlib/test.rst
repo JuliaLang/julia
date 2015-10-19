@@ -115,20 +115,26 @@ and at the end of the test set a summary will be printed. If any of
 the tests failed, or could not be evaluated due to an error, the
 test set will then throw a ``TestSetException``.
 
-
-.. function:: @testset "description" begin ... end
-              @testset begin ... end
+.. function:: @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
 
    .. Docstring generated from Julia source
 
-   Starts a new test set. The test results will be recorded, and if there are any ``Fail``\ s or ``Error``\ s, an exception will be thrown only at the end, along with a summary of the test results.
+   Starts a new test set. If no custom testset type is given it defaults to creating a ``DefaultTestSet``\ . ``DefaultTestSet`` records all the results and, and if there are any ``Fail``\ s or ``Error``\ s, throws an exception at the end of the top-level (non-nested) test set, along with a summary of the test results.
 
-.. function:: @testloop "description $v" for v in (...) ... end
-              @testloop for x in (...), y in (...) ... end
+   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` or ``@testloop`` invocations. The given options are only applied to the test set where they are given. The default test set type does not take any options.
+
+   By default the ``@testset`` macro will return the testset object itself, though this behavior can be customized in other testset types.
+
+.. function:: @testloop [CustomTestSet] [option=val  ...] ["description $v"] for v in (...) ... end
+              @testloop [CustomTestSet] [option=val  ...] ["description $v, $w"] for v in (...), w in (...) ... end
 
    .. Docstring generated from Julia source
 
    Starts a new test set for each iteration of the loop. The description string accepts interpolation from the loop indices. If no description is provided, one is constructed based on the variables.
+
+   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` or ``@testloop`` invocations. The given options are only applied to the test sets where they are given. The default test set type does not take any options.
+
+   The ``@testloop`` macro collects and returns a list of the return values of the ``finish`` method, which by default will return a list of the testset objects used in each iteration.
 
 We can put our tests for the ``foo(x)`` function in a test set::
 
@@ -244,3 +250,77 @@ writing new tests.
 
    Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
 
+Creating Custom ``AbstractTestSet`` Types
+-----------------------------------------
+
+Packages can create their own ``AbstractTestSet`` subtypes by implementing the
+``record`` and ``finish`` methods. The subtype should have a one-argument
+constructor taking a description string, with any options passed in as keyword
+arguments.
+
+.. function:: record(ts::AbstractTestSet, res::Result)
+
+   .. Docstring generated from Julia source
+
+   Record a result to a testset. This function is called by the ``@testset`` infrastructure each time a contained ``@test`` macro completes, and is given the test result (which could be an ``Error``\ ). This will also be called with an ``Error`` if an exception is thrown inside the test block but outside of a ``@test`` context.
+
+.. function:: finish(ts::AbstractTestSet)
+
+   .. Docstring generated from Julia source
+
+   Do any final processing necessary for the given testset. This is called by the ``@testset`` infrastructure after a test block executes. One common use for this function is to record the testset to the parent's results list, using ``get_testset``\ .
+
+``Base.Test`` takes responsibility for maintaining a stack of nested testsets as
+they are executed, but any result accumulation is the responsibility of the
+``AbstractTestSet`` subtype. You can access this stack with the ``get_testset`` and
+``get_testset_depth`` methods. Note that these functions are not exported.
+
+.. function:: get_testset()
+
+   .. Docstring generated from Julia source
+
+   Retrieve the active test set from the task's local storage. If no test set is active, use the fallback default test set.
+
+.. function:: get_testset_depth()
+
+   .. Docstring generated from Julia source
+
+   Returns the number of active test sets, not including the defaut test set
+
+``Base.Test`` also makes sure that nested ``@testset`` invocations use the same
+``AbstractTestSet`` subtype as their parent unless it is set explicitly. It does
+not propagate any properties of the testset option inheritance behavior can be
+implemented by packages using the stack infrastructure that ``Base.Test``
+provides.
+
+Defining a basic ``AbstractTestSet`` subtype might look like::
+
+    import Base.Test: record, finish
+    using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
+    using Base.Test: get_testset_depth, get_testset
+    immutable CustomTestSet <: Base.Test.AbstractTestSet
+        description::AbstractString
+        foo::Int
+        results::Vector
+        # constructor takes a description string and options keyword arguments
+        CustomTestSet(desc; foo=1) = new(desc, foo, [])
+    end
+
+    record(ts::CustomTestSet, child::AbstractTestSet) = push!(ts.results, child)
+    record(ts::CustomTestSet, res::Result) = push!(ts.results, res)
+    function finish(ts::CustomTestSet)
+        # just record if we're not the top-level parent
+        if get_testset_depth() > 0
+            record(get_testset(), ts)
+        end
+        ts
+    end
+
+And using that testset looks like::
+
+    @testset CustomTestSet foo=4 "custom testset inner 2" begin
+        # this testset should inherit the type, but not the argument.
+        @testset "custom testset inner" begin
+            @test true
+        end
+    end

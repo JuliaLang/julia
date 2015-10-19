@@ -11,16 +11,6 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS := \
-	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
-	llvm-simdloop simplevector threadgroup threading
-ifeq ($(JULIAGC),MARKSWEEP)
-SRCS += gc
-endif
-
-HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
-
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
 #  for gcc/clang, suggested content is:
 #  #include_next <options.h>
@@ -28,17 +18,39 @@ HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR
 FLAGS := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
-	-I$(shell $(LLVM_CONFIG_HOST) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
 	-I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif
 
+
+SRCS := \
+	jltypes gf ast builtins module interpreter \
+	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
+	simplevector APInt-C runtime_intrinsics runtime_ccall \
+	threadgroup threading
+
+ifeq ($(JULIAGC),MARKSWEEP)
+SRCS += gc
+endif
+
+ifeq ($(JULIACODEGEN),LLVM)
+SRCS += codegen disasm debuginfo llvm-simdloop
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
+LLVM_LIBS := all
+else
+SRCS += anticodegen
+LLVM_LIBS := support
+endif
+
+HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
-ifeq ($(USE_LLVM_SHLIB),1)
+ifneq ($(USE_LLVM_SHLIB),1)
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+else
 ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
@@ -102,7 +114,8 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp intrinsics.h cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-debug.c
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
@@ -135,12 +148,12 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	mv $@.$(JULIA_BUILD_MODE).tmp $@
 
 ifneq ($(USEMSVC), 1)
-CXXLD := $(CXX) -shared
+CXXLD = $(CXX) -shared
 ifeq ($(OS),WINNT)
 CXXLD += -Wl,--out-implib,$(build_libdir)/$(notdir $@).a
 endif
 else
-CXXLD := $(LD) -dll -export:jl_setjmp -export:jl_longjmp
+CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)

@@ -46,18 +46,19 @@ test_code_reflections(test_bin_reflection, code_native)
 module WarnType
 using Base.Test
 
-iob = IOBuffer()
+function warntype_hastag(f, types, tag)
+    iob = IOBuffer()
+    code_warntype(iob, f, types)
+    str = takebuf_string(iob)
+    !isempty(search(str, tag))
+end
 
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
 tag = Base.have_color ? Base.text_colors[:red] : "UNION"
-code_warntype(iob, pos_unstable, Tuple{Float64,})
-str = takebuf_string(iob)
-@test !isempty(search(str, tag))
-code_warntype(iob, pos_stable, Tuple{Float64,})
-str = takebuf_string(iob)
-@test isempty(search(str, tag))
+@test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
+@test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
 type Stable{T,N}
     A::Array{T,N}
@@ -69,15 +70,9 @@ Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
 tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
-code_warntype(iob, getindex, Tuple{Unstable{Float64},Int})
-str = takebuf_string(iob)
-@test !isempty(search(str, tag))
-code_warntype(iob, getindex, Tuple{Stable{Float64,2},Int})
-str = takebuf_string(iob)
-@test isempty(search(str, tag))
-code_warntype(iob, getindex, Tuple{Stable{Float64},Int})
-str = takebuf_string(iob)
-@test !isempty(search(str, tag))
+@test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
+@test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
+@test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 function funfun(x)
     function internal(y)
@@ -88,15 +83,20 @@ function funfun(x)
 end
 
 tag = Base.have_color ? string("2y",Base.text_colors[:red],"::Any") : "2y::ANY"
-code_warntype(iob, funfun, Tuple{Float64})
-str = takebuf_string(iob)
-@test !isempty(search(str, tag))
+@test warntype_hastag(funfun, Tuple{Float64}, tag)
 
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.text_colors[:red] : "ANY"
+iob = IOBuffer()
 show(iob, expand(:(x->x^2)))
 str = takebuf_string(iob)
 @test isempty(search(str, tag))
+
+# issue #13568
+@test !warntype_hastag(+, Tuple{Int,Int}, tag)
+@test !warntype_hastag(-, Tuple{Int,Int}, tag)
+@test !warntype_hastag(*, Tuple{Int,Int}, tag)
+@test !warntype_hastag(/, Tuple{Int,Int}, tag)
 
 end
 
@@ -193,3 +193,13 @@ end
 
 # issue #13264
 @test isa((@which vcat(1...)), Method)
+
+# issue #13464
+let t13464 = "hey there sailor"
+    try
+        @which t13464[1,1] = (1.0,true)
+        error("unexpected")
+    catch err13464
+        @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    end
+end

@@ -78,6 +78,7 @@ static jl_fptr_t id_to_fptrs[] = {
   jl_f_instantiate_type, jl_f_kwcall, jl_trampoline,
   jl_f_methodexists, jl_f_applicable, jl_f_invoke,
   jl_apply_generic, jl_unprotect_stack, jl_f_sizeof, jl_f_new_expr,
+  jl_f_intrinsic_call,
   NULL };
 
 // pointers to non-AST-ish objects in a compressed tree
@@ -822,6 +823,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
         write_int8(s, li->inferred);
+        write_int8(s, li->pure);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
         jl_serialize_value(s, (jl_value_t*)li->module);
@@ -1366,6 +1368,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->specializations);
         if (li->specializations) jl_gc_wb(li, li->specializations);
         li->inferred = read_int8(s);
+        li->pure = read_int8(s);
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->file);
         li->line = read_int32(s);
@@ -1941,6 +1944,7 @@ DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
+    assert(jl_is_array(ast));
     JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;

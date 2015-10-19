@@ -2,6 +2,84 @@
 
 # Base.require is the implementation for the `import` statement
 
+# Cross-platform case-sensitive path canonicalization
+
+if OS_NAME ∈ (:Linux, :FreeBSD)
+    # Case-sensitive filesystems, don't have to do anything
+    isfile_casesensitive(path) = isfile(path)
+elseif OS_NAME == :Windows
+    # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
+    function isfile_casesensitive(path)
+        isfile(path) || return false  # Fail fast
+        longpath(path) == path
+    end
+elseif OS_NAME == :Darwin
+    # HFS+ filesystem is case-preserving. The getattrlist API returns
+    # a case-preserved filename. In the rare event that HFS+ is operating
+    # in case-sensitive mode, this will still work but will be redundant.
+
+    # Constants from <sys/attr.h>
+    const ATRATTR_BIT_MAP_COUNT = 5
+    const ATTR_CMN_NAME = 1
+    const BITMAPCOUNT = 1
+    const COMMONATTR = 5
+    const FSOPT_NOFOLLOW = 1  # Don't follow symbolic links
+
+    const attr_list = zeros(UInt8, 24)
+    attr_list[BITMAPCOUNT] = ATRATTR_BIT_MAP_COUNT
+    attr_list[COMMONATTR] = ATTR_CMN_NAME
+
+    # This essentially corresponds to the following C code:
+    # attrlist attr_list;
+    # memset(&attr_list, 0, sizeof(attr_list));
+    # attr_list.bitmapcount = ATTR_BIT_MAP_COUNT;
+    # attr_list.commonattr = ATTR_CMN_NAME;
+    # struct Buffer {
+    #    u_int32_t total_length;
+    #    u_int32_t filename_offset;
+    #    u_int32_t filename_length;
+    #    char filename[max_filename_length];
+    # };
+    # Buffer buf;
+    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    function isfile_casesensitive(path)
+        isfile(path) || return false
+        path_basename = bytestring(basename(path))
+        local casepreserved_basename
+        const header_size = 12
+        buf = Array(UInt8, length(path_basename) + header_size + 1)
+        while true
+            ret = ccall(:getattrlist, Cint,
+                        (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
+                        path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
+            systemerror(:getattrlist, ret ≠ 0)
+            filename_length = unsafe_load(
+              convert(Ptr{UInt32}, pointer(buf) + 8))
+            if (filename_length + header_size) > length(buf)
+                resize!(buf, filename_length + header_size)
+                continue
+            end
+            casepreserved_basename =
+              sub(buf, (header_size+1):(header_size+filename_length-1))
+            break
+        end
+        # Hack to compensate for inability to create a string from a subarray with no allocations.
+        path_basename.data == casepreserved_basename && return true
+
+        # If there is no match, it's possible that the file does exist but HFS+
+        # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
+        isascii(path_basename) && return false
+        normalize_string(path_basename, :NFD).data == casepreserved_basename
+    end
+else
+    # Generic fallback that performs a slow directory listing.
+    function isfile_casesensitive(path)
+        isfile(path) || return false
+        dir, filename = splitdir(path)
+        any(readdir(dir) .== filename)
+    end
+end
+
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
 function find_in_path(name::AbstractString, wd = pwd())
@@ -13,15 +91,15 @@ function find_in_path(name::AbstractString, wd = pwd())
         name = string(base,".jl")
     end
     if wd !== nothing
-        isfile(joinpath(wd,name)) && return joinpath(wd,name)
+        isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
     for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
-        isfile(path) && return abspath(path)
+        isfile_casesensitive(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
-        isfile(path) && return abspath(path)
+        isfile_casesensitive(path) && return abspath(path)
         path = joinpath(prefix, name, "src", name)
-        isfile(path) && return abspath(path)
+        isfile_casesensitive(path) && return abspath(path)
     end
     return nothing
 end
@@ -47,7 +125,7 @@ function find_all_in_cache_path(mod::Symbol)
     paths = AbstractString[]
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
-        if isfile(path)
+        if isfile_casesensitive(path)
             push!(paths, path)
         end
     end
@@ -230,7 +308,9 @@ function require(mod::Symbol)
 
         name = string(mod)
         path = find_in_node_path(name, nothing, 1)
-        path === nothing && throw(ArgumentError("$name not found in path"))
+        if path === nothing
+            throw(ArgumentError("$name not found in path.\nRun Pkg.add(\"$name\") to install the $name package"))
+        end
         try
             if last && myid() == 1 && nprocs() > 1
                 # include on node 1 first to check for PrecompilableErrors
@@ -336,6 +416,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
     io, pobj = open(detach(`$(julia_cmd())
                            --output-ji $output --output-incremental=yes
                            --startup-file=no --history-file=no
+                           --color=$(have_color ? "yes" : "no")
                            --eval $code_object`), "w", STDOUT)
     try
         serialize(io, quote
@@ -429,7 +510,8 @@ function stale_cachefile(modpath, cachefile)
             return true # cache file was compiled from a different path
         end
         for (f,ftime) in files
-            if mtime(f) != ftime
+            # Issue #13606: compensate for Docker images rounding mtimes
+            if mtime(f) ∉ (ftime, floor(ftime))
                 return true
             end
         end

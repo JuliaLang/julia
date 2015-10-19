@@ -43,9 +43,11 @@ end
 
 function head_oid(repo::GitRepo)
     head_ref = head(repo)
-    oid = Oid(head_ref)
-    finalize(head_ref)
-    return oid
+    try
+        return Oid(head_ref)
+    finally
+        finalize(head_ref)
+    end
 end
 
 function headname(repo::GitRepo)

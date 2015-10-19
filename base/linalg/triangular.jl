@@ -23,11 +23,11 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         convert{T,S}(::Type{Matrix}, A::$t{T,S}) = convert(Matrix{T}, A)
 
         function similar{T,S,Tnew}(A::$t{T,S}, ::Type{Tnew}, dims::Dims)
-            if dims[1] != dims[2]
-                throw(ArgumentError("Triangular matrix must be square"))
-            end
             if length(dims) != 2
                 throw(ArgumentError("Triangular matrix must have two dimensions"))
+            end
+            if dims[1] != dims[2]
+                throw(ArgumentError("Triangular matrix must be square"))
             end
             B = similar(A.data, Tnew, dims)
             return $t(B)
@@ -119,33 +119,41 @@ getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
-    if i >= j
-        throw(BoundsError(A,(i,j)))
+    if i > j
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
-    if i <= j
-        throw(BoundsError(A,(i,j)))
+    if i < j
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set diagonal index ($i, $j) of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
@@ -362,7 +370,7 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -1022,7 +1030,7 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UpperTriangular{TB,S},LowerTriangular{TB,S}})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
             ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end

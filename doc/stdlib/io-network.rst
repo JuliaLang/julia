@@ -773,7 +773,7 @@ Memory-mapped I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TcpSocket
+.. function:: connect([host],port) -> TCPSocket
 
    .. Docstring generated from Julia source
 
@@ -785,7 +785,7 @@ Network I/O
 
    Connect to the Named Pipe / Domain Socket at ``path``
 
-.. function:: listen([addr,]port) -> TcpServer
+.. function:: listen([addr,]port) -> TCPServer
 
    .. Docstring generated from Julia source
 
@@ -802,6 +802,10 @@ Network I/O
    .. Docstring generated from Julia source
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
+
+.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
+
+   Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
 .. function:: parseip(addr)
 
@@ -833,11 +837,11 @@ Network I/O
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (UInt16,TcpServer)
+.. function:: listenany(port_hint) -> (UInt16,TCPServer)
 
    .. Docstring generated from Julia source
 
-   Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+   Create a TCPServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 
 .. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 

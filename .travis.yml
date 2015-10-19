@@ -37,6 +37,7 @@ before_install:
           sudo apt-get install binutils:i386 -y;
           sudo apt-get install gcc:i386 g++:i386 make:i386 cpp:i386 g++-4.6:i386 gcc-4.6:i386 libssl-dev:i386 patchelf:i386 gfortran:i386 llvm-3.3-dev:i386 libsuitesparse-dev:i386 libopenblas-dev:i386 libopenblas-base:i386 libblas-dev:i386 liblapack-dev:i386 liblapack3:i386 libarpack2-dev:i386 libarpack2:i386 libfftw3-dev:i386 libgmp-dev:i386 libpcre3-dev:i386 libunwind7-dev:i386 libopenlibm-dev:i386 libmpfr-dev:i386 -y;
         else
+          export JULIA_TEST_MAXRSS_MB="500";
           sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev libmpfr-dev -y;
         fi;
       elif [ `uname` = "Darwin" ]; then
@@ -67,7 +68,7 @@ script:
     - cd .. && mv julia julia2
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
-    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
+    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
     - cd - && mv julia2 julia
     - sudo dmesg
     - echo "Ready for packaging..."
