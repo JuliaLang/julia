@@ -808,7 +808,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
         // TODO: avoid if above condition is true and decls have already
         // been evaluated.
         JL_GC_PUSH1(&li);
-        li = jl_add_static_parameters(li, sp);
+        li = jl_add_static_parameters(li, sp, li->specTypes);
         // inner lambda does not need the "def" link. it leads to excess object
         // retention, for example pointing to the original uncompressed AST
         // of a top-level thunk that gets type inferred.
