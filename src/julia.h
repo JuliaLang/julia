@@ -192,7 +192,7 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
-    jl_tupletype_t *specTypes;  // argument types this is specialized for
+    jl_tupletype_t *specTypes;  // argument types this will be compiled for
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
     // array of all lambda infos with code generated from this one
