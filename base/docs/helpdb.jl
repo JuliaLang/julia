@@ -5735,13 +5735,6 @@ as ``v0``. In general, this cannot be used with empty collections
 foldr(op, itr)
 
 doc"""
-    chol(A, [LU]) -> F
-
-Compute the Cholesky factorization of a symmetric positive definite matrix `A` and return the matrix `F`. If `LU` is `Val{:U}` (Upper), `F` is of type `UpperTriangular` and `A = F'*F`. If `LU` is `Val{:L}` (Lower), `F` is of type `LowerTriangular` and `A = F*F'`. `LU` defaults to `Val{:U}`.
-"""
-chol
-
-doc"""
     ParseError(msg)
 
 The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
