@@ -4192,8 +4192,13 @@ static Function *emit_function(jl_lambda_info_t *lam)
     size_t captvinfoslen = jl_array_dim0(captvinfos);
     size_t nreq = largslen;
     int va = 0;
+
     if (!lam->specTypes)
-        lam->specTypes = jl_anytuple_type;
+        jl_error("function not valid for compiling"); // this could happen if the user tries to compile a generic-function
+                                                      // without specializing (or unspecializing) it first
+                                                      // compiling this would cause all specializations to inherit
+                                                      // this code and could create an broken compile / function cache
+                                                      // if the method has static parameters
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;

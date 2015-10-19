@@ -1488,7 +1488,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
     return NULL;
 }
 
-void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer, jl_tupletype_t *sig);
+void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer);
 
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
@@ -1545,7 +1545,7 @@ static void precompile_linfo(jl_lambda_info_t *linfo, jl_tupletype_t *sig, jl_sv
         // it constructs closures for new "specializations".
         all_p2c((jl_value_t*)linfo, tvars);
     }
-    jl_trampoline_compile_linfo(linfo, 1, sig);
+    jl_trampoline_compile_linfo(linfo, 1);
 }
 
 static int tupletype_any_bottom(jl_value_t *sig)

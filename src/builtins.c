@@ -987,10 +987,10 @@ static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
     return 0;
 }
 
-void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer, jl_tupletype_t *sig)
+void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer)
 {
     assert(linfo);
-    assert(sig);
+    assert(linfo->specTypes);
     // to run inference on all thunks. slows down loading files.
     // NOTE: if this call to inference is removed, type_annotate in inference.jl
     // needs to be updated to infer inner functions.
@@ -1008,7 +1008,7 @@ void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer, jl_t
                 // inference on the whole thing to propagate types into the inner
                 // functions. caused issue #12794
                 jl_eval_inner_with_compiler(jl_lam_body((jl_expr_t*)linfo->ast), linfo->module)) {
-                jl_type_infer(linfo, sig, linfo);
+                jl_type_infer(linfo, linfo->specTypes, linfo);
             }
         }
     }
@@ -1023,7 +1023,8 @@ JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
-    jl_trampoline_compile_linfo(f->linfo, 0, f->linfo->specTypes ? f->linfo->specTypes : jl_anytuple_type);
+    if (!f->linfo->specTypes) f->linfo->specTypes = jl_anytuple_type; // no gc_wb needed
+    jl_trampoline_compile_linfo(f->linfo, 0);
     jl_generate_fptr(f);
     return jl_apply(f, args, nargs);
 }
