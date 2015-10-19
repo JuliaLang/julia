@@ -453,12 +453,14 @@ endif
 ifeq ($(SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS := -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+SANITIZE_LDFLAGS := $(SANITIZE_OPTS)
 else
 SANITIZE_OPTS := -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_OPTS)
+LDFLAGS += $(SANITIZE_LDFLAGS)
 DEPS_CFLAGS += $(SANITIZE_OPTS)
 DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
