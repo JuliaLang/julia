@@ -419,10 +419,18 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
+
+# On OSX libuv read/write greater than rw_chunk_sz results in an EINVAL
+const rw_chunk_sz = typemax(Int32)
+
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    return (pointer(buffer.data, ptr), length(buffer.data) - ptr + 1)
+    buflen = length(buffer.data) - ptr + 1
+    @osx_only begin
+        buflen = (buflen > rw_chunk_sz ? rw_chunk_sz : buflen)
+    end
+    return (pointer(buffer.data, ptr), buflen)
 end
 
 function uv_alloc_buf(handle::Ptr{Void}, size::Csize_t, buf::Ptr{Void})
@@ -896,7 +904,7 @@ function read!(s::LibuvStream, a::Array{UInt8, 1})
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
-                start_reading(x) # resume reading iff there are currently other read clients of the stream
+                start_reading(x) # resume reading if there are currently other read clients of the stream
             end
         end
     end
@@ -926,12 +934,25 @@ end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(length(p)))
 function uv_write(s::LibuvStream, p::Ptr, n::UInt)
+    cnt::Int = 0
+    if OS_NAME === :Darwin && n > rw_chunk_sz
+        nchunks = div(n, rw_chunk_sz)
+        for i in 1:nchunks
+           cnt = cnt + uv_write2(s, p+cnt, UInt(rw_chunk_sz))
+        end
+        cnt = cnt + uv_write2(s, p+cnt, UInt(rem(n, rw_chunk_sz)))
+    else
+        cnt = uv_write2(s, p, n)
+    end
+    return cnt
+end
+function uv_write2(s::LibuvStream, p::Ptr, n::UInt)
     check_open(s)
     uvw = Libc.malloc(_sizeof_uv_write)
     uv_req_set_data(uvw,C_NULL)
     err = ccall(:jl_uv_write,
                 Int32,
-                (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
+                (Ptr{Void}, Ptr{Void}, Csize_t, Ptr{Void}, Ptr{Void}),
                 s, p, n, uvw,
                 uv_jl_writecb_task::Ptr{Void})
     if err < 0
