@@ -173,7 +173,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
             wait(proc)
             close(out.in)
             @test success(proc)
-            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated.\n  likely near none:5"
+            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
         end
 
         @unix_only let out  = Pipe(),
