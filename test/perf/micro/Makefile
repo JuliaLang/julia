@@ -140,3 +140,5 @@ clean:
 	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core perf.log gopath
 
 .PHONY: all perf clean
+
+.PRECIOUS: bin/perf0 bin/perf1 bin/perf2 bin/perf3

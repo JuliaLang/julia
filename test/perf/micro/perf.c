@@ -59,7 +59,7 @@ double *matmul_aat(int n, double *b) {
 int mandel(double complex z) {
     int maxiter = 80;
     double complex c = z;
-    for (int n=0; n<maxiter; ++n) {
+    for (int n = 0; n < maxiter; ++n) {
         if (cabs(z) > 2.0) {
             return n;
         }
@@ -68,19 +68,14 @@ int mandel(double complex z) {
     return maxiter;
 }
 
-int mandelperf() {
-    /* The initialization on the next two lines is deliberately written to
-     * prevent gcc from optimizing away the entire loop.
-     * (First observed in gcc 4.9.2) */ 	
-    static volatile int mandel_sum_init = 0;
-    int mandel_sum = mandel_sum_init;
-    for (int re=-20; re<=5; re+=1) {
-        for (int im=-10; im<=10; im+=1) {
-            int m = mandel(re/10.0+I*im/10.0);
-            mandel_sum += m;
+int *mandelperf() {
+    int *M = (int*) malloc(21*26*sizeof(int));
+    for (int i = 0; i < 21; i++) {
+        for (int j = 0; j < 26; j++) {
+            M[26*i + j] = mandel((j-20)/10.0 + ((i-10)/10.0)*I);
         }
     }
-    return mandel_sum;
+    return M;
 }
 
 void quicksort(double *a, int lo, int hi) {
@@ -293,20 +288,38 @@ int main() {
     // print_perf("AtA", tmin);
 
     // mandel
-    int mandel_sum;
-    int mandel_sum2 = 0;
+    /* The initialization on the next line is deliberately volatile to
+     * prevent gcc from optimizing away the entire loop.
+     * (First observed in gcc 4.9.2)
+     */
+    static volatile int mandel_sum_init = 0;
+    int mandel_sum2 = mandel_sum_init;
     tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        int *M;
         t = clock_now();
         for (int j = 0; j < 100; j++) {
-                mandel_sum = mandelperf();
+            M = mandelperf();
+            if (j == 0) {
+                int mandel_sum = 0;
+                // for (int ii = 0; ii < 21; ii++) {
+                //     for (int jj = 0; jj < 26; jj++) {
+                //         printf("%4d", M[26*ii + jj]);
+                //     }
+                //     printf("\n");
+                // }
+                for (int k = 0; k < 21*26; k++) {
+                    mandel_sum += M[k];
+                }
+                assert(mandel_sum == 14791);
                 mandel_sum2 += mandel_sum;
+            }
+            free(M);
         }
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    assert(mandel_sum == 14791);
-    assert(mandel_sum2 == mandel_sum * 100 * NITER);
+    assert(mandel_sum2 == 14791 * NITER);
     print_perf("mandel", tmin / 100);
 
     // sort
