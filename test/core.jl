@@ -704,7 +704,7 @@ let didthrow =
         false
     catch ex
         @test isa(ex, LoadError)
-        @test isa(ex.error.error, InitError)
+        @test isa(ex.error, InitError)
         true
     end
     @test didthrow
