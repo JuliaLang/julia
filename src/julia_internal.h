@@ -212,6 +212,14 @@ extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
 
+struct jl_uv_file_s {
+    void *data;
+    uv_loop_t *loop;
+    uv_handle_type type;
+    uv_file file;
+};
+typedef struct jl_uv_file_s jl_uv_file_t;
+
 uv_lib_t *jl_get_library(char *f_lib);
 DLLEXPORT void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd);
 
