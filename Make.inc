@@ -598,7 +598,7 @@ JCFLAGS += -fsigned-char
 
 LLVM_ASSERTIONS=1
 #LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-LLVM_VER:=3.6.1
+LLVM_VER:=3.7.0
 
 override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
@@ -650,7 +650,6 @@ endif # LLVM_CONFIG undefined
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS+=-DSYSTEM_LLVM
-LLVM_VER := $(shell $(LLVM_CONFIG) --version)
 endif # SYSTEM_LLVM
 
 ifeq ($(BUILD_OS),$(OS))
