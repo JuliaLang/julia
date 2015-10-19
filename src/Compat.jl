@@ -701,4 +701,9 @@ if VERSION < v"0.5.0-dev+431"
     end
 end
 
+if VERSION < v"0.5.0-dev+763"
+    export SparseArrays
+    const SparseArrays = Base.SparseMatrix
+end
+
 end # module
