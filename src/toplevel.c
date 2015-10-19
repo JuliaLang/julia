@@ -555,12 +555,11 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
-    int top_lineno = -1;
     const char *last_filename = jl_filename;
     jl_lineno = 0;
     jl_filename = fname;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *nest_exc=NULL, *result=jl_nothing;
-    JL_GC_PUSH5(&fn, &ln, &form, &result, &nest_exc);
+    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
+    JL_GC_PUSH4(&fn, &ln, &form, &result);
     JL_TRY {
         // handle syntax error
         while (1) {
@@ -575,38 +574,22 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
                     jl_interpret_toplevel_expr(form);
                 }
             }
-            top_lineno = jl_lineno; // jl_parse_next sets lineno.
             result = jl_toplevel_eval_flex(form, 1);
         }
     }
     JL_CATCH {
         jl_stop_parsing();
-
-        if (jl_loaderror_type == NULL) {
-            // reset line and filename before throwing
-            jl_lineno = last_lineno;
-            jl_filename = last_filename;
-            jl_rethrow();
-        }
-
-        fn = jl_pchar_to_string(jl_filename, strlen(jl_filename));
+        fn = jl_pchar_to_string(fname, len);
         ln = jl_box_long(jl_lineno);
-        nest_exc = jl_new_struct(jl_loaderror_type, fn, ln,
-                                 jl_exception_in_transit);
-
-        if ((strcmp(jl_filename, fname) == 0) &&
-                              jl_lineno == top_lineno) {
-            jl_lineno = last_lineno;
-            jl_filename = last_filename;
-            jl_rethrow_other(nest_exc);
-        }
-
         jl_lineno = last_lineno;
         jl_filename = last_filename;
-        fn = jl_pchar_to_string(fname, len);
-        ln = jl_box_long(top_lineno);
-        jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                       nest_exc));
+        if (jl_loaderror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                           jl_exception_in_transit));
+        }
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
