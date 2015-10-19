@@ -14,15 +14,17 @@ function tag_delete(repo::GitRepo, tag::AbstractString)
                   (Ptr{Void}, Cstring, ), repo.ptr, tag)
 end
 
-function tag_create(repo::GitRepo, tag::AbstractString, commit::AbstractString;
+function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractString,Oid};
                     msg::AbstractString = "",
-                    force::Bool = false)
+                    force::Bool = false,
+                    sig::Signature = Signature(repo))
     oid_ptr = Ref(Oid())
     with(get(GitCommit, repo, commit)) do commit_obj
-        with(default_signature(repo)) do sig
+        commit_obj === nothing && return oid_ptr[] # return empty oid
+        with(convert(GitSignature, sig)) do git_sig
             @check ccall((:git_tag_create, :libgit2), Cint,
                  (Ptr{Oid}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
-                  oid_ptr, repo.ptr, tag, commit_obj.ptr, sig.ptr, msg, Cint(force))
+                  oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
         end
     end
     return oid_ptr[]

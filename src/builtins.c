@@ -103,12 +103,6 @@ void NORETURN jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
-void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
-                                    jl_value_t *ty, jl_value_t *got, int line)
-{
-    jl_type_error_rt(fname, context, ty, got);
-}
-
 void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
@@ -1404,12 +1398,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             n += jl_printf(out, "%s", jl_gf_name(v)->name);
         }
         else {
-            n += jl_printf(out, "#<function>");
+            n += jl_printf(out, "#<function ");
+            n += jl_static_show_x(out, (jl_value_t*)((jl_function_t*)v)->linfo, depth);
+            n += jl_printf(out, ">");
         }
     }
     else if (vt == jl_intrinsic_type) {
-        n += jl_printf(out, "#<intrinsic function %d>",
-                       *(uint32_t*)jl_data_ptr(v));
+        int f = *(uint32_t*)jl_data_ptr(v);
+        n += jl_printf(out, "#<intrinsic #%d %s>", f, jl_intrinsic_name(f));
     }
     else if (vt == jl_int64_type) {
         n += jl_printf(out, "%" PRId64, *(int64_t*)v);

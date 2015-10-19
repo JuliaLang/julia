@@ -266,6 +266,7 @@ EXE :=
 endif
 
 JULIAGC := MARKSWEEP
+JULIACODEGEN := LLVM
 USE_COPY_STACKS := 1
 
 # flag for disabling assertions
@@ -586,14 +587,9 @@ ISX86:=1
 else ifeq ($(ARCH),x86_64)
 BINARY:=64
 ISX86:=1
-else ifneq (,$(findstring arm,$(ARCH)))
-ISX86:=0
-else ifneq (,$(findstring powerpc,$(ARCH)))
-ISX86:=0
-else ifneq (,$(findstring ppc,$(ARCH)))
-ISX86:=0
 else
-$(error "unknown word-size for arch: $(ARCH)")
+# For all other architectures (ARM, PPC, AArch64, etc.)
+ISX86:=0
 endif
 
 # If we are running on ARM, set certain options automatically

@@ -146,4 +146,6 @@ function set_process_title(title::AbstractString)
     uv_error("set_process_title", err)
 end
 
+maxrss() = ccall(:jl_maxrss, Csize_t, ())
+
 end # module Sys

@@ -14,6 +14,9 @@ end
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
+macro _pure_meta()
+    Expr(:meta, :pure)
+end
 
 
 # constructors for Core types in boot.jl
@@ -74,7 +77,8 @@ macro generated(f)
 end
 
 
-@generated function tuple_type_head{T<:Tuple}(::Type{T})
+function tuple_type_head{T<:Tuple}(::Type{T})
+    @_pure_meta
     T.parameters[1]
 end
 
@@ -82,7 +86,8 @@ isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
 
-@generated function tuple_type_tail{T<:Tuple}(::Type{T})
+function tuple_type_tail{T<:Tuple}(::Type{T})
+    @_pure_meta
     if isvatuple(T) && length(T.parameters) == 1
         return T
     end

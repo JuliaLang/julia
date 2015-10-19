@@ -24,8 +24,7 @@ immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QRPivoted{T}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) = QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false})
-    pivot==Val{true} && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
+function qrfactUnblocked!{T}(A::AbstractMatrix{T})
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -36,12 +35,66 @@ function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Va
     end
     QR(A, τ)
 end
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{false}} = Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}) = qrfact!(copy(A), pivot)
-copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
-copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
-qrfact{T}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}) = qrfact!(copy_oftype(A, typeof(one(T)/norm(one(T)))), pivot)
+
+# Find index for columns with largest two norm
+function indmaxcolumn(A::StridedMatrix)
+    mm = norm(slice(A, :, 1))
+    ii = 1
+    for i = 2:size(A, 2)
+        mi = norm(slice(A, :, i))
+        if abs(mi) > mm
+            mm = mi
+            ii = i
+        end
+    end
+    return ii
+end
+
+function qrfactPivotedUnblocked!(A::StridedMatrix)
+    m, n = size(A)
+    piv = collect(UnitRange{BlasInt}(1,n))
+    τ = Array(eltype(A), min(m,n))
+    for j = 1:min(m,n)
+
+        # Find column with maximum norm in trailing submatrix
+        jm = indmaxcolumn(slice(A, j:m, j:n)) + j - 1
+
+        if jm != j
+            # Flip elements in pivoting vector
+            tmpp = piv[jm]
+            piv[jm] = piv[j]
+            piv[j] = tmpp
+
+            # Update matrix with
+            for i = 1:m
+                tmp = A[i,jm]
+                A[i,jm] = A[i,j]
+                A[i,j] = tmp
+            end
+        end
+
+        # Compute reflector of columns j
+        x = slice(A, j:m, j)
+        τj = LinAlg.reflector!(x)
+        τ[j] = τj
+
+        # Update trailing submatrix with reflector
+        LinAlg.reflectorApply!(x, τj, sub(A, j:m, j+1:n))
+    end
+    return LinAlg.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
+end
+
+# LAPACK version
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = qrfact!(copy(A), args...)
+
+# Generic fallbacks
+qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
+qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
+qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
+qrfact{T}(A::StridedMatrix{T}, args...) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))), args...)
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =
@@ -336,7 +389,7 @@ function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    Ac_mul_B!(A[:Q], sub(B, 1:m, 1:nB))
+    Ac_mul_B!(A[:Q], sub(B, 1:m, :))
     R = A[:R]
     @inbounds begin
         if n > m # minimum norm solution
@@ -389,6 +442,7 @@ function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
     B[1:size(A.factors, 2),:] = sub(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
     B
 end
+
 function \{TA,Tb}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, b::StridedVector{Tb})
     S = promote_type(TA,Tb)
     m,n = size(A)

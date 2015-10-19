@@ -100,7 +100,7 @@ jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *copyast_sym;
-jl_sym_t *fastmath_sym;
+jl_sym_t *fastmath_sym; jl_sym_t *pure_sym;
 jl_sym_t *simdloop_sym; jl_sym_t *meta_sym;
 jl_sym_t *arrow_sym;  jl_sym_t *inert_sym;
 jl_sym_t *vararg_sym;
@@ -159,25 +159,6 @@ jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
     return jl_new_bits_internal(bt, data, &len);
 }
 
-// run time version of pointerref intrinsic (warning: i is not rooted)
-DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
-{
-    JL_TYPECHK(pointerref, pointer, p);
-    JL_TYPECHK(pointerref, long, i);
-    jl_value_t *ety = jl_tparam0(jl_typeof(p));
-    if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
-        return *pp;
-    }
-    else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerref: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->alignment);
-        char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
-        return jl_new_bits(ety, pp);
-    }
-}
-
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
     size_t nb = jl_datatype_size(jl_typeof(bits));
@@ -189,27 +170,6 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     case  8: *(int64_t*)dest   = *(int64_t*)jl_data_ptr(bits);   break;
     case 16: *(bits128_t*)dest = *(bits128_t*)jl_data_ptr(bits); break;
     default: memcpy(dest, jl_data_ptr(bits), nb);
-    }
-}
-
-// run time version of pointerset intrinsic (warning: x is not gc-rooted)
-DLLEXPORT void jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
-{
-    JL_TYPECHK(pointerset, pointer, p);
-    JL_TYPECHK(pointerset, long, i);
-    jl_value_t *ety = jl_tparam0(jl_typeof(p));
-    if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
-        *pp = x;
-    }
-    else {
-        if (!jl_is_datatype(ety))
-            jl_error("pointerset: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->alignment);
-        char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
-        if (jl_typeof(x) != ety)
-            jl_error("pointerset: type mismatch in assign");
-        jl_assign_bits(pp, x);
     }
 }
 
@@ -339,8 +299,12 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     li->ast = ast;
     li->file = null_sym;
     li->line = 0;
+    li->pure = 0;
     if (ast != NULL && jl_is_expr(ast)) {
-        jl_value_t *body1 = skip_meta(jl_lam_body((jl_expr_t*)ast)->args);
+        jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
+        if (has_meta(body, pure_sym))
+            li->pure = 1;
+        jl_value_t *body1 = skip_meta(body);
         if (jl_is_linenode(body1)) {
             li->file = jl_linenode_file(body1);
             li->line = jl_linenode_line(body1);
@@ -857,6 +821,15 @@ jl_value_t *jl_box_bool(int8_t x)
     if (x)
         return jl_true;
     return jl_false;
+}
+
+DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
+{
+    jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
+    jl_set_typeof(box, jl_box_any_type);
+    // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
+    box->fieldptr[0] = v;
+    return box;
 }
 
 // Expr constructor for internal use ------------------------------------------

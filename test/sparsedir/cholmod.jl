@@ -3,7 +3,7 @@
 srand(123)
 using Base.Test
 
-using Base.SparseMatrix.CHOLMOD
+using Base.SparseArrays.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
@@ -318,8 +318,8 @@ for elty in (Float64, Complex{Float64})
     A1pdSparse = CHOLMOD.Sparse(
         A1pd.m,
         A1pd.n,
-        Base.SparseMatrix.decrement(A1pd.colptr),
-        Base.SparseMatrix.decrement(A1pd.rowval),
+        Base.SparseArrays.decrement(A1pd.colptr),
+        Base.SparseArrays.decrement(A1pd.rowval),
         A1pd.nzval)
 
     ## High level interface
@@ -564,7 +564,7 @@ b = rand(3)
 Asp = As[p,p]
 LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
 # LDp = sparse(Fs[:LD])
-Lp, dp = Base.SparseMatrix.CHOLMOD.getLd!(copy(LDp))
+Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
 Dp = spdiagm(dp)
 @test_approx_eq Fs\b Af\b
 @test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b

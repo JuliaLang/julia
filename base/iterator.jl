@@ -45,7 +45,8 @@ immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
 end
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = min(length(z.a), length(z.z))
-@generated function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+    @_pure_meta
     Tuple{S, T.parameters...}
 end
 eltype{I,Z}(::Type{Zip{I,Z}}) = tuple_type_cons(eltype(I), eltype(Z))

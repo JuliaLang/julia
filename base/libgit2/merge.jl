@@ -20,7 +20,7 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
     ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Oid}),
-                   ann_ref_ref, repo.ptr, fh.name, fh.url, fh.oid)
+                   ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
     return GitAnnotated(ann_ref_ref[])
 end
 
@@ -74,12 +74,13 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
 end
 
 """ Merge changes into current head """
-function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, merge_opts::MergeOptions,
-                checkout_opts = CheckoutOptions(checkout_strategy = Consts.CHECKOUT_SAFE))
+function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
+                merge_opts::MergeOptions = MergeOptions(),
+                checkout_opts::CheckoutOptions = CheckoutOptions())
     anns_size = Csize_t(length(anns))
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
-                   Ptr{MergeOptionsStruct}, Ptr{CheckoutOptions}),
+                   Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, anns, anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
     info("Review and commit merged changes.")
@@ -89,13 +90,15 @@ end
 """Internal implementation of merge.
 Returns `true` if merge was successful, otherwise `false`
 """
-function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, options::MergeOptions)
+function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
+                merge_opts::MergeOptions = MergeOptions(),
+                checkout_opts::CheckoutOptions = CheckoutOptions())
     ma, mp = merge_analysis(repo, anns)
     if isset(ma, Cint(Consts.MERGE_ANALYSIS_UP_TO_DATE))
         return true # no merge - everything is up to date
     end
 
-    ffPref = if fastforward
+    ffpref = if fastforward
         Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
     elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_NONE))
         Consts.MERGE_PREFERENCE_NONE
@@ -103,13 +106,11 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
         Consts.MERGE_PREFERENCE_NO_FASTFORWARD
     elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY))
         Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
-    end
-    if ffPref === nothing
-        warn("Unknown merge preference: $(mp).")
-        return false
+    else
+        throw(ArgumentError("unknown merge preference: $(mp)."))
     end
 
-    mergeResult = if ffPref == Consts.MERGE_PREFERENCE_NONE
+    merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
                 warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
@@ -118,9 +119,11 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
                 ffmerge!(repo, anns[1])
             end
         elseif isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns, options)
+            merge!(repo, anns,
+                   merge_opts=merge_opts,
+                   checkout_opts=checkout_opts)
         end
-    elseif ffPref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
+    elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
                 warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
@@ -132,18 +135,16 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool, op
             warn("Cannot perform fast-forward merge.")
             false
         end
-    elseif ffPref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
+    elseif ffpref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns, options)
+            merge!(repo, anns,
+                   merge_opts=merge_opts,
+                   checkout_opts=checkout_opts)
         end
+    else
+        throw(ArgumentError("unknown merge analysis result: $(ma)"))
     end
-
-    if mergeResult === nothing
-        warn("Unknown merge analysis result: $(ma). Merging is not possible.")
-        return false
-    end
-
-    return mergeResult
+    return merge_result
 end
 
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)

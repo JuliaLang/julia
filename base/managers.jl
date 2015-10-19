@@ -313,10 +313,7 @@ function socket_reuse_port()
             elseif rc < 0
                 throw(SystemError("setsockopt() SO_REUSEPORT : "))
             end
-
-            ccall(:jl_tcp_getsockname_v4, Int32,
-                        (Ptr{Void}, Ref{Cuint}, Ref{Cushort}),
-                        s.handle, client_host, client_port) < 0 && throw(SystemError("getsockname() : "))
+            getsockname(s)
         catch e
             # This is an issue only on systems with lots of client connections, hence delay the warning....
             nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)

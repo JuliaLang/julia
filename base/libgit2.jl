@@ -9,6 +9,7 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
+include("libgit2/utils.jl")
 include("libgit2/consts.jl")
 include("libgit2/types.jl")
 include("libgit2/error.jl")
@@ -30,7 +31,6 @@ include("libgit2/rebase.jl")
 include("libgit2/status.jl")
 include("libgit2/tree.jl")
 include("libgit2/callbacks.jl")
-include("libgit2/utils.jl")
 
 immutable State
     head::Oid
@@ -70,7 +70,8 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """ git diff-index HEAD [-- <path>]"""
-isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) = isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
+isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
+    isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """ git diff-index <treeish> [-- <path>]"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
@@ -141,17 +142,18 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
 end
 
 """ git fetch [<url>|<repository>] [<refspecs>]"""
-function fetch{T<:AbstractString}(repo::GitRepo;
+function fetch{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
                                   remote::AbstractString="origin",
                                   remoteurl::AbstractString="",
-                                  refspecs::Vector{T}=AbstractString[])
+                                  refspecs::Vector{T}=AbstractString[],
+                                  payload::Nullable{P}=Nullable{AbstractPayload}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb()))
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     catch err
         warn("fetch: $err")
@@ -161,19 +163,20 @@ function fetch{T<:AbstractString}(repo::GitRepo;
 end
 
 """ git push [<url>|<repository>] [<refspecs>]"""
-function push{T<:AbstractString}(repo::GitRepo;
+function push{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
               remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{T}=AbstractString[],
-              force::Bool=false)
+              force::Bool=false,
+              payload::Nullable{P}=Nullable{AbstractPayload}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        po = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb()))
-        push(rmt, refspecs, force=force, options=po)
+        push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+        push(rmt, refspecs, force=force, options=push_opts)
     finally
         finalize(rmt)
     end
@@ -184,8 +187,6 @@ function branch(repo::GitRepo)
     head_ref = head(repo)
     try
         branch(head_ref)
-    catch
-        ""
     finally
         finalize(head_ref)
     end
@@ -211,10 +212,9 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             Oid(commit)
         end
         iszero(commit_id) && return
-
         cmt =  get(GitCommit, repo, commit_id)
         try
-            branch_ref = create_branch(repo, cmt, branch_name, force=force)
+            branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             finalize(cmt)
         end
@@ -232,13 +232,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             end
         end
 
-        # checout selected branch
-        with(peel(GitTree, branch_ref)) do btree
-            checkout_tree(repo, btree)
-        end
+        if set_head
+            # checkout selected branch
+            with(peel(GitTree, branch_ref)) do btree
+                checkout_tree(repo, btree)
+            end
 
-        # switch head to the branch
-        set_head && head!(repo, branch_ref)
+            # switch head to the branch
+            head!(repo, branch_ref)
+        end
     finally
         finalize(branch_ref)
     end
@@ -289,17 +291,20 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
 end
 
 """ git clone [-b <branch>] [--bare] <url> <dir> """
-function clone(repo_url::AbstractString, repo_path::AbstractString;
+function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
-               remote_cb::Ptr{Void} = C_NULL)
-    # setup colne options
+               remote_cb::Ptr{Void} = C_NULL,
+               payload::Nullable{P}=Nullable{AbstractPayload}())
+    # setup clone options
+    fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
-                    bare = Int32(isbare),
-                    checkout_branch = isempty(branch) ? Cstring_NULL :
-                                      convert(Cstring, pointer(branch)),
-                    remote_cb = remote_cb
-                )
+                bare = Cint(isbare),
+                checkout_branch = isempty(branch) ? Cstring_NULL :
+                                  convert(Cstring, pointer(branch)),
+                fetch_opts=fetch_opts,
+                remote_cb = remote_cb
+            )
     return clone(repo_url, repo_path, clone_opts)
 end
 
@@ -357,14 +362,18 @@ function merge!(repo::GitRepo;
                 committish::AbstractString = "",
                 branch::AbstractString = "",
                 fastforward::Bool = false,
-                options = MergeOptions())
+                merge_opts::MergeOptions = MergeOptions(),
+                checkout_opts::CheckoutOptions = CheckoutOptions())
     # merge into head branch
     with(head(repo)) do head_ref
         upst_anns = if !isempty(committish) # merge committish into HEAD
             if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
                 fheads = fetchheads(repo)
                 filter!(fh->fh.ismerge, fheads)
-                length(fheads) == 0 && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no fetch reference for this branch."))
+                if length(fheads) == 0
+                    throw(Error.GitError(Error.Merge,Error.ERROR,
+                                   "There is no fetch reference for this branch."))
+                end
                 map(fh->GitAnnotated(repo,fh), fheads)
             else # merge commitish
                 [GitAnnotated(repo, committish)]
@@ -375,7 +384,10 @@ function merge!(repo::GitRepo;
                     [GitAnnotated(repo, brn_ref)]
                 end
             else # try to get tracking remote branch for the head
-                !isattached(repo) && throw(Error.GitError(Error.Merge, Error.ERROR, "There is no tracking information for the current branch."))
+                if !isattached(repo)
+                    throw(Error.GitError(Error.Merge, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
+                end
                 with(upstream(head_ref)) do tr_brn_ref
                     [GitAnnotated(repo, tr_brn_ref)]
                 end
@@ -383,11 +395,11 @@ function merge!(repo::GitRepo;
         end
 
         try
-            merge!(repo, upst_anns, fastforward, options)
+            merge!(repo, upst_anns, fastforward,
+                   merge_opts=merge_opts,
+                   checkout_opts=checkout_opts)
         finally
-            for ann in upst_anns
-                finalize(ann)
-            end
+            map(finalize, upst_anns)
         end
     end
 end

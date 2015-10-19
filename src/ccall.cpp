@@ -1,126 +1,6 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
-// --- the ccall intrinsic ---
-
-// --- library symbol lookup ---
-
-// map from "libX" to full soname "libX.so.ver"
-#if defined(__linux__) || defined(__FreeBSD__)
-static std::map<std::string, std::string> sonameMap;
-static bool got_sonames = false;
-
-extern "C" DLLEXPORT void jl_read_sonames(void)
-{
-    char *line=NULL;
-    size_t sz=0;
-#if defined(__linux__)
-    FILE *ldc = popen("/sbin/ldconfig -p", "r");
-#else
-    FILE *ldc = popen("/sbin/ldconfig -r", "r");
-#endif
-
-    while (!feof(ldc)) {
-        ssize_t n = getline(&line, &sz, ldc);
-        if (n == -1)
-            break;
-        if (n > 2 && isspace((unsigned char)line[0])) {
-#ifdef __linux__
-            int i = 0;
-            while (isspace((unsigned char)line[++i])) ;
-            char *name = &line[i];
-            char *dot = strstr(name, ".so");
-            i = 0;
-#else
-            char *name = strstr(line, ":-l");
-            if (name == NULL) continue;
-            strncpy(name, "lib", 3);
-            char *dot = strchr(name, '.');
-#endif
-
-            if (NULL == dot)
-                continue;
-
-#ifdef __linux__
-            // Detect if this entry is for the current architecture
-            while (!isspace((unsigned char)dot[++i])) ;
-            while (isspace((unsigned char)dot[++i])) ;
-            int j = i;
-            while (!isspace((unsigned char)dot[++j])) ;
-            char *arch = strstr(dot+i,"x86-64");
-            if (arch != NULL && arch < dot + j) {
-#ifdef _P32
-                continue;
-#endif
-            }
-            else {
-#ifdef _P64
-                continue;
-#endif
-            }
-#endif // __linux__
-
-            char *abslibpath = strrchr(line, ' ');
-            if (dot != NULL && abslibpath != NULL) {
-                std::string pfx(name, dot - name);
-                // Do not include ' ' in front and '\n' at the end
-                std::string soname(abslibpath+1, line+n-(abslibpath+1)-1);
-                sonameMap[pfx] = soname;
-            }
-        }
-    }
-
-    free(line);
-    pclose(ldc);
-}
-
-extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
-{
-    if (!got_sonames) {
-        jl_read_sonames();
-        got_sonames = true;
-    }
-    std::string str(pfx, n);
-    if (sonameMap.find(str) != sonameMap.end()) {
-        return sonameMap[str].c_str();
-    }
-    return NULL;
-}
-#endif
-
-// map from user-specified lib names to handles
-static std::map<std::string, uv_lib_t*> libMap;
-
-static uv_lib_t *get_library(char *lib)
-{
-    uv_lib_t *hnd;
-#ifdef _OS_WINDOWS_
-    if ((intptr_t)lib == 1)
-        return jl_exe_handle;
-    if ((intptr_t)lib == 2)
-        return jl_dl_handle;
-#endif
-    if (lib == NULL)
-        return jl_RTLD_DEFAULT_handle;
-    hnd = libMap[lib];
-    if (hnd != NULL)
-        return hnd;
-    hnd = (uv_lib_t *) jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
-    if (hnd != NULL)
-        libMap[lib] = hnd;
-    return hnd;
-}
-
-extern "C" DLLEXPORT
-void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
-{
-    uv_lib_t *handle = *hnd;
-    if (!handle)
-        *hnd = handle = get_library(f_lib);
-    void *ptr = jl_dlsym_e(handle, f_name);
-    if (!ptr)
-        jl_errorf("symbol \"%s\" could not be found: %s", f_name, uv_dlerror(handle));
-    return ptr;
-}
+// --- the ccall, cglobal, and llvm intrinsics ---
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
@@ -161,7 +41,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
                false, GlobalVariable::PrivateLinkage,
                initnul, f_lib);
             libMapGV[f_lib] = libptrgv;
-            libsym = get_library(f_lib);
+            libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
 #ifdef USE_MCJIT
             jl_llvm_to_jl_value[libptrgv] = libsym;
@@ -565,7 +445,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
             res = runtime_sym_lookup((PointerType*)lrt, sym.f_lib, sym.f_name, ctx);
         }
         else {
-            void *symaddr = jl_dlsym_e(get_library(sym.f_lib), sym.f_name);
+            void *symaddr = jl_dlsym_e(jl_get_library(sym.f_lib), sym.f_name);
             if (symaddr == NULL) {
                 std::stringstream msg;
                 msg << "cglobal: could not find symbol ";
@@ -1006,15 +886,16 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     static_rt = true;
                 }
             }
-            if (jl_exception_in_transit && jl_typeis(jl_exception_in_transit,
-                                                     jl_undefvarerror_type)) {
-                std::string msg = "ccall return type undefined: " +
-                                  std::string(((jl_sym_t*)args[2])->name );
-                emit_error(msg.c_str(), ctx);
-                JL_GC_POP();
-                return jl_cgval_t();
-            }
             if (rt == NULL) {
+                if (jl_exception_in_transit && jl_typeis(jl_exception_in_transit,
+                                                         jl_undefvarerror_type)
+                                            && jl_is_symbol(args[2])) {
+                    std::string msg = "ccall return type undefined: " +
+                                      std::string(((jl_sym_t*)args[2])->name);
+                    emit_error(msg.c_str(), ctx);
+                    JL_GC_POP();
+                    return jl_cgval_t();
+                }
                 emit_error("error interpreting ccall return type", ctx);
                 JL_GC_POP();
                 return jl_cgval_t();
@@ -1369,7 +1250,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
         }
         else {
-            void *symaddr = jl_dlsym_e(get_library(f_lib), f_name);
+            void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
             if (symaddr == NULL) {
                 JL_GC_POP();
                 std::stringstream msg;

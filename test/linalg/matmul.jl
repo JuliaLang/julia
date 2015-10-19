@@ -186,3 +186,10 @@ for elty in [Float32,Float64,Complex128,Complex64]
     A = rand(elty,3,3)
     @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
 end
+
+# 13593, #13488
+a = rand(3,3)
+b = rand(3,3)
+@test_throws ArgumentError A_mul_B!(a, a, b)
+@test_throws ArgumentError A_mul_B!(a, b, a)
+@test_throws ArgumentError A_mul_B!(a, a, a)

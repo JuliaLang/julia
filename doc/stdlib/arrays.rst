@@ -396,7 +396,34 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row. For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``\ .
+   Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.
+
+   .. doctest::
+
+       julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
+       (1,2,3,4,5,6)
+
+       julia> [a b c; d e f]
+       2x3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> hvcat((3,3), a,b,c,d,e,f)
+       2x3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> [a b;c d; e f]
+       3x2 Array{Int64,2}:
+        1  2
+        3  4
+        5  6
+
+       julia> hvcat((2,2,2), a,b,c,d,e,f)
+       3x2 Array{Int64,2}:
+        1  2
+        3  4
+        5  6
 
    If the first argument is a single integer ``n``\ , then all block rows are assumed to have ``n`` block columns.
 
@@ -882,10 +909,11 @@ BitArrays
 
 .. _stdlib-sparse:
 
-Sparse Matrices
----------------
+Sparse Vectors and Matrices
+---------------------------
 
-Sparse matrices support much of the same set of operations as dense matrices. The following functions are specific to sparse matrices.
+Sparse vectors and matrices largely support the same set of operations as their
+dense counterparts. The following functions are specific to sparse arrays.
 
 .. function:: sparse(I,J,V,[m,n,combine])
 
@@ -897,13 +925,13 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+   Create a sparse vector ``S`` of length ``m`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided.
 
 .. function:: sparsevec(D::Dict, [m])
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
+   Create a sparse vector of length ``m`` where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
 .. function:: issparse(S)
 
@@ -921,31 +949,31 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``\ . In julia, sparse vectors are really just sparse matrices with one column.
+   Convert a vector ``A`` into a sparse vector of length ``m``\ .
 
 .. function:: full(S)
 
    .. Docstring generated from Julia source
 
-   Convert a sparse matrix ``S`` into a dense matrix.
+   Convert a sparse matrix or vector ``S`` into a dense matrix or vector.
 
 .. function:: nnz(A)
 
    .. Docstring generated from Julia source
 
-   Returns the number of stored (filled) elements in a sparse matrix.
+   Returns the number of stored (filled) elements in a sparse array.
 
-.. function:: spzeros(m,n)
+.. function:: spzeros(m[,n])
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix of size ``m x n``\ . This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
+   Create a sparse vector of length ``m`` or sparse matrix of size ``m x n``\ . This sparse array will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
 
 .. function:: spones(S)
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix with the same structure as that of ``S``\ , but with every nonzero element having the value ``1.0``\ .
+   Create a sparse array with the same structure as that of ``S``\ , but with every nonzero element having the value ``1.0``\ .
 
 .. function:: speye(type,m[,n])
 
@@ -959,28 +987,29 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand([rng,] m,n,p [,rfn])
+.. function:: sprand([rng],m,[n],p::AbstractFloat,[rfn])
 
    .. Docstring generated from Julia source
 
-   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any
-   element being nonzero is independently given by ``p`` (and hence the mean
-   density of nonzeros is also exactly ``p``). Nonzero values are sampled from
-   the distribution specified by ``rfn``. The uniform distribution is used in
-   case ``rfn`` is not specified. The optional ``rng`` argument specifies a
-   random number generator, see :ref:`Random Numbers <random-numbers>`.
+   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in
+   which the probability of any element being nonzero is independently given by
+   ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero
+   values are sampled from the distribution specified by ``rfn``. The uniform
+   distribution is used in case ``rfn`` is not specified. The optional ``rng``
+   argument specifies a random number generator, see :ref:`Random Numbers
+   <random-numbers>`.
 
-.. function:: sprandn(m,n,p)
-
-   .. Docstring generated from Julia source
-
-   Create a random ``m`` by ``n`` sparse matrix with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
-
-.. function:: sprandbool(m,n,p)
+.. function:: sprandn(m[,n],p::AbstractFloat)
 
    .. Docstring generated from Julia source
 
-   Create a random ``m`` by ``n`` sparse boolean matrix with the specified (independent) probability ``p`` of any entry being ``true``\ .
+   Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
+
+.. function:: sprandbool(m[,n],p)
+
+   .. Docstring generated from Julia source
+
+   Create a random ``m`` by ``n`` sparse boolean matrix or length ``m`` sparse boolean vector with the specified (independent) probability ``p`` of any entry being ``true``\ .
 
 .. function:: etree(A[, post])
 
@@ -992,21 +1021,21 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Return the symmetric permutation of ``A``\ , which is ``A[p,p]``\ . ``A`` should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
+   Return the symmetric permutation of ``A``\ , which is ``A[p,p]``\ . ``A`` should be symmetric, sparse, and only contain nonzeros in the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned.
 
 .. function:: nonzeros(A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the structural nonzero values in sparse matrix ``A``\ . This includes zeros that are explicitly stored in the sparse matrix. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See ``rowvals(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See ``rowvals(A)`` and ``nzrange(A, col)``\ .
 
-.. function:: rowvals(A)
+.. function:: rowvals(A::SparseMatrixCSC)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the row indices of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See ``nonzeros(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See also ``nonzeros(A)`` and ``nzrange(A, col)``\ .
 
-.. function:: nzrange(A, col)
+.. function:: nzrange(A::SparseMatrixCSC, col)
 
    .. Docstring generated from Julia source
 

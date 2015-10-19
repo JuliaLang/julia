@@ -1563,14 +1563,15 @@ void jl_compile_all_defs(jl_function_t *gf)
                 continue;
             }
         }
-        if (m->func->linfo->unspecialized == NULL) {
+        func = m->func->linfo->unspecialized;
+        if (func == NULL) {
             func = jl_instantiate_method(m->func, jl_emptysvec);
             if (func->env != (jl_value_t*)jl_emptysvec)
                 func->env = NULL;
             m->func->linfo->unspecialized = func;
             jl_gc_wb(m->func->linfo, func);
-            precompile_unspecialized(func, m->sig, m->tvars);
         }
+        precompile_unspecialized(func, m->sig, m->tvars);
         m = m->next;
     }
     JL_GC_POP();

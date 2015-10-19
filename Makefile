@@ -426,6 +426,12 @@ distclean dist-clean:
 dist:
 	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
 
+ifeq ($(ARCH),x86_64)
+GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw64/etc/gitconfig
+else
+GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw32/etc/gitconfig
+endif
+
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifeq ($(ISX86),1)
@@ -442,7 +448,7 @@ ifneq ($(DESTDIR),)
 	$(error DESTDIR must not be set for make binary-dist)
 endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
-	cp $(JULIAHOME)/LICENSE.md $(prefix)
+	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
 ifneq ($(OS), WINNT)
 	-$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
@@ -462,20 +468,18 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
-	    mkdir $(DESTDIR)$(prefix)/Git && \
-	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
-	    echo "[core] eol = lf" >> "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
-	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
-	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
-	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
-	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && \
+	    mkdir $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git && \
+	    7z x PortableGit.7z -o"$(BUILDROOT)/julia-$(JULIA_COMMIT)/Git" && \
+	    echo "[core] eol = lf" >> "$(GITCONFIG)" && \
+	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(GITCONFIG)" )
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
-	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
+	cd $(BUILDROOT)/julia-$(JULIA_COMMIT) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
 
 	# build nsis package
-	$(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi)
+	cd $(BUILDROOT) && $(call spawn,$(JULIAHOME)/dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) -DMUI_ICON="$(call cygpath_w,$(JULIAHOME)/contrib/windows/julia.ico)" $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.nsi)
 
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
@@ -484,7 +488,7 @@ ifeq ($(OS), WINNT)
 else
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
 endif
-	rm -fr $(prefix)
+	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 # this target does not accept BUILDROOT
 light-source-dist.tmp: $(JULIAHOME)/doc/_build/html
@@ -594,7 +598,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1 \
 		"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libexpat1 mingw32-zlib1" && \
-	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
+	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll . && \
+	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-32-bit.7z.exe
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -603,17 +608,15 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1 \
 		"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libexpat1 mingw64-zlib1" && \
-	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
+	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll . && \
+	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-64-bit.7z.exe
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
-	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-1-g9eb16cb.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
-	chmod a+x ./nsis/makensis.exe && \
-	chmod a+x busybox.exe && \
-	$(JLDOWNLOAD) PortableGit.7z https://github.com/msysgit/msysgit/releases/download/Git-1.9.5-preview20141217/PortableGit-1.9.5-preview20141217.7z
+	chmod a+x ./nsis/makensis.exe

@@ -336,30 +336,35 @@ function rmprocs(args...; waitfor = 0.0)
         error("only process 1 can add and remove processes")
     end
 
-    rmprocset = []
-    for i in vcat(args...)
-        if i == 1
-            warn("rmprocs: process 1 not removed")
-        else
-            if haskey(map_pid_wrkr, i)
-                w = map_pid_wrkr[i]
-                set_worker_state(w, W_TERMINATING)
-                kill(w.manager, i, w.config)
-                push!(rmprocset, w)
+    lock(worker_lock)
+    try
+        rmprocset = []
+        for i in vcat(args...)
+            if i == 1
+                warn("rmprocs: process 1 not removed")
+            else
+                if haskey(map_pid_wrkr, i)
+                    w = map_pid_wrkr[i]
+                    set_worker_state(w, W_TERMINATING)
+                    kill(w.manager, i, w.config)
+                    push!(rmprocset, w)
+                end
             end
         end
-    end
 
-    start = time()
-    while (time() - start) < waitfor
-        if all(w -> w.state == W_TERMINATED, rmprocset)
-            break;
-        else
-            sleep(0.1)
+        start = time()
+        while (time() - start) < waitfor
+            if all(w -> w.state == W_TERMINATED, rmprocset)
+                break;
+            else
+                sleep(0.1)
+            end
         end
-    end
 
-    ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+        ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+    finally
+        unlock(worker_lock)
+    end
 end
 
 
@@ -594,6 +599,7 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
+channel_type{T}(rr::RemoteRef{T}) = T
 function serialize(s::SerializationState, rr::RemoteRef)
     i = worker_id_from_socket(s.io)
     #println("$(myid()) serializing $rr to $i")
@@ -604,14 +610,14 @@ function serialize(s::SerializationState, rr::RemoteRef)
     invoke(serialize, Tuple{SerializationState, Any}, s, rr)
 end
 
-function deserialize(s::SerializationState, t::Type{RemoteRef})
+function deserialize{T<:RemoteRef}(s::SerializationState, t::Type{T})
     rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    RemoteRef{channel_type(rr)}(where, rr.whence, rr.id)
 end
 
 # data stored by the owner of a RemoteRef
@@ -1075,7 +1081,20 @@ end
 # `manager` is of type ClusterManager. The respective managers are responsible
 # for launching the workers. All keyword arguments (plus a few default values)
 # are available as a dictionary to the `launch` methods
+#
+# Only one addprocs can be in progress at any time
+#
+const worker_lock = ReentrantLock()
 function addprocs(manager::ClusterManager; kwargs...)
+    lock(worker_lock)
+    try
+        addprocs_locked(manager::ClusterManager; kwargs...)
+    finally
+        unlock(worker_lock)
+    end
+end
+
+function addprocs_locked(manager::ClusterManager; kwargs...)
 
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(symbol(params[:topology]))

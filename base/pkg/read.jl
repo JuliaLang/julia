@@ -77,8 +77,8 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     else
         false
     end
+    res = true
     try
-        res = true
         for (ver,info) in avail
             if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
                 if LibGit2.is_ancestor_of(head, info.sha1, crepo)
@@ -130,8 +130,8 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
                 Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
                 continue
             end
-            base == sha1 && push!(ancestors,ver)
-            base == head && push!(descendants,ver)
+            string(base) == sha1 && push!(ancestors,ver)
+            string(base) == head && push!(descendants,ver)
         end
     finally
         cache_has_head && LibGit2.finalize(crepo)
@@ -178,18 +178,13 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        prepo = LibGit2.GitRepo(pkg)
-        try
-            try
-                ver = installed_version(pkg, prepo, ap)
-                fixed = isfixed(pkg, prepo, ap)
+        if ispath(pkg,".git")
+            LibGit2.with(LibGit2.GitRepo, pkg) do repo
+                ver = installed_version(pkg, repo, ap)
+                fixed = isfixed(pkg, repo, ap)
                 pkgs[pkg] = (ver, fixed)
-            catch e
-                pkgs[pkg] = (typemin(VersionNumber), true)
-            finally
-                LibGit2.finalize(prepo)
             end
-        catch
+        else
             pkgs[pkg] = (typemin(VersionNumber), true)
         end
     end

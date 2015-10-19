@@ -9,14 +9,14 @@ import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_
                  cholfact, det, diag, ishermitian, isposdef,
                  issym, ldltfact, logdet
 
-import Base.SparseMatrix: sparse, nnz
+importall ..SparseArrays
 
 export
     Dense,
     Factor,
     Sparse
 
-using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
+import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
 
 #########
 # Setup #
@@ -853,6 +853,9 @@ function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_l
 
     return o
 end
+
+# convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
+convert{Tv<:VTypes}(::Type{Sparse}, A::SparseVector{Tv,SuiteSparse_long}) = convert(Sparse, convert(SparseMatrixCSC, A))
 function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_long})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
@@ -994,7 +997,7 @@ function sparse(F::Factor)
         L, d = getLd!(LD)
         A = scale(L, d)*L'
     end
-    SparseMatrix.sortSparseMatrixCSC!(A)
+    SparseArrays.sortSparseMatrixCSC!(A)
     p = get_perm(F)
     if p != [1:s.n;]
         pinv = Array(Int, length(p))
@@ -1216,6 +1219,32 @@ function cholfact(A::Sparse; kws...)
     return F
 end
 
+doc"""
+    ldltfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}; shift=0, perm=Int[]) -> CHOLMOD.Factor
+
+Compute the `LDLt` factorization of a sparse symmetric or Hermitian matrix. A
+fill-reducing permutation is used. `F = ldltfact(A)` is most frequently used to
+solve systems of equations `A*x = b` with `F\b`. The returned factorization
+object `F` also supports the methods `diag`, `det`, and `logdet`. You can
+extract individual factors from `F` using `F[:L]`. However, since pivoting is
+on by default, the factorization is internally represented as `A == P'*L*D*L'*P`
+with a permutation matrix `P`; using just `L` without accounting for `P` will
+give incorrect answers. To include the effects of permutation, it's typically
+preferable to extact "combined" factors like `PtL = F[:PtL]` (the equivalent of
+`P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`). The complete list of
+supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
+
+Setting optional `shift` keyword argument computes the factorization of
+`A+shift*I` instead of `A`. If the `perm` argument is nonempty, it should be a
+permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's
+default AMD ordering).
+
+The function calls the C library CHOLMOD and many other functions from the
+library are wrapped but not exported.
+
+"""
+ldltfact(A::SparseMatrixCSC; shift=0, perm=Int[])
+
 function ldltfact(A::Sparse; kws...)
     cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
     set_print_level(cm, 0) # no printing from CHOLMOD by default
@@ -1294,13 +1323,15 @@ for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
     end
 end
 
+typealias SparseVecOrMat{Tv,Ti} Union{SparseVector{Tv,Ti}, SparseMatrixCSC{Tv,Ti}}
+
 function (\)(L::FactorComponent, b::Vector)
     reshape(convert(Matrix, L\Dense(b)), length(b))
 end
 function (\)(L::FactorComponent, B::Matrix)
     convert(Matrix, L\Dense(B))
 end
-function (\)(L::FactorComponent, B::SparseMatrixCSC)
+function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
 end
 
@@ -1311,12 +1342,12 @@ Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 (\)(L::Factor, B::Matrix) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
-(\)(L::Factor, B::SparseMatrixCSC) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
+(\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
 Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
 Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
-Ac_ldiv_B(L::Factor, B::SparseMatrixCSC) = Ac_ldiv_B(L, Sparse(B))
+Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
 
 ## Other convenience methods
 function diag{Tv}(F::Factor{Tv})
@@ -1398,7 +1429,7 @@ function ishermitian(A::Sparse{Complex{Float64}})
     end
 end
 
-(*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseMatrixCSC{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
-(*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, B::SparseMatrixCSC{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, B::SparseVecOrMat{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
 
 end #module

@@ -58,6 +58,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
         finalize(repo) # closing repo opened/created above
     end
 end
-prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) = prefetch(pkg, url, AbstractString[sha1...])
+prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) =
+    prefetch(pkg, url, AbstractString[sha1...])
 
 end # module

@@ -2,7 +2,7 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box, unbox
+import Core.Intrinsics: cglobal, box
 
 const OS_NAME = ccall(:jl_get_OS_NAME, Any, ())
 
@@ -58,10 +58,10 @@ else
     bitstype 32 Cwstring
 end
 
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, unbox(Ptr{T}, p))
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, unbox(Ptr{Cwchar_t}, p))
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, unbox(Cstring, p))
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, unbox(Cwstring, p))
+convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
+convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
 
 # here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
 pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)

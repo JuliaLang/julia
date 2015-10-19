@@ -247,6 +247,23 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
 }
 } // namespace
 
+#ifndef USE_MCJIT
+static void print_source_line(raw_ostream &stream, DebugLoc Loc)
+{
+    MDNode *inlinedAt = Loc.getInlinedAt(jl_LLVMContext);
+    if (inlinedAt != NULL) {
+        DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
+        stream << "Source line: " << inlineloc.getLine() << "\n";
+
+        DILexicalBlockFile innerscope = DILexicalBlockFile(Loc.getScope(jl_LLVMContext));
+        stream << "Source line: [inline] " << innerscope.getFilename().str().c_str() << ':' << Loc.getLine() << "\n";
+    }
+    else {
+        stream << "Source line: " << Loc.getLine() << "\n";
+    }
+}
+#endif
+
 extern "C"
 void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #ifndef USE_MCJIT
@@ -465,10 +482,21 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 
         if (lineIter != lineEnd) {
             nextLineAddr = (*lineIter).Address;
-            DISubprogram debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
             if (pass != 0) {
-                stream << "Filename: " << debugscope.getFilename() << "\n";
-                stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+                DebugLoc Loc = (*lineIter).Loc;
+                MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                StringRef FileName;
+                if (!outer) {
+                    DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
+                    FileName = debugscope.getFilename();
+                }
+                else {
+                    DebugLoc inlineloc = DebugLoc::getFromDILocation(outer);
+                    DILexicalBlockFile debugscope = DILexicalBlockFile(inlineloc.getScope(jl_LLVMContext));
+                    FileName = debugscope.getFilename();
+                }
+                stream << "Filename: " << FileName << "\n";
+                print_source_line(stream, (*lineIter).Loc);
             }
         }
 #endif
@@ -490,8 +518,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
                 nextLineAddr = (++lineIter)->first;
 #else
-                if (pass != 0)
-                    stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+                if (pass != 0) {
+                    print_source_line(stream, (*lineIter).Loc);
+                }
                 nextLineAddr = (*++lineIter).Address;
 #endif
             }

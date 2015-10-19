@@ -106,7 +106,7 @@ if ! [ -e julia-installer.exe ]; then
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
-for i in bin/*.dll Git/bin/msys-1.0.dll Git/bin/msys-perl5_8.dll Git/bin/*.exe; do
+for i in bin/*.dll Git/usr/bin/*.dll Git/usr/bin/*.exe; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
@@ -179,8 +179,6 @@ if [ -z "`which make 2>/dev/null`" ]; then
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
-  # msysgit has an ancient version of touch that fails with `touch -c nonexistent`
-  cp usr/Git/bin/echo.exe bin/touch.exe
   export PATH=$PWD/bin:$PATH
 fi
 
