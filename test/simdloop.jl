@@ -125,3 +125,117 @@ crng = CartesianRange(CartesianIndex{0}(),
                       CartesianIndex{0}())
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
 @test indexes == collect(crng)
+
+#==================================================================#
+# Codegen tests: check that vectorized LLVM code is actually emitted
+# https://github.com/JuliaLang/julia/issues/13686
+
+function has_llvm_vector(func, argtypes...)
+    # look for "vector.body:" in the generated LLVM code:
+    contains(Base._dump_function(func, argtypes, false, false, true, false), "vector.body:")
+end
+
+function simd_loop_long_expr(x, y, z)
+    # SIMD loop with a longer expression
+    @simd for i=1:length(x)
+        @inbounds begin
+            x[i] = y[i] * (z[i] > y[i]) * (z[i] < y[i]) * (z[i] >= y[i]) * (z[i] <= y[i])
+        end
+    end
+end
+
+function simd_loop_local_arrays()
+    # SIMD loop on local arrays declared without type annotations
+    x = Array(Float32,1000)
+    y = Array(Float32,1000)
+    z = Array(Float32,1000)
+    @simd for i = 1:length(x)
+        @inbounds x[i] = y[i] * z[i]
+    end
+end
+
+immutable ImmutableFields
+    x::Array{Float32, 1}
+    y::Array{Float32, 1}
+    z::Array{Float32, 1}
+end
+
+type MutableFields
+    x::Array{Float32, 1}
+    y::Array{Float32, 1}
+    z::Array{Float32, 1}
+end    
+
+function simd_loop_fields(obj)
+    # SIMD loop with field access
+    @simd for i = 1:length(obj.x)
+        @inbounds obj.x[i] = obj.y[i] * obj.z[i]
+    end
+end
+
+@generated function simd_loop_call{func}(::Type{Val{func}}, arguments)
+    # SIMD loop calling a configurable function on local arrays
+    arrays = []
+    decls = []
+    for (T, sym) in zip(arguments.types, "abcdefghij")
+        arr = Symbol(string(sym))
+        push!(arrays, :($arr[idx]))
+        # add type annotations to avoid confusing failures due to
+        # the function calls with failures due to type inference:
+        push!(decls, :($arr::Array{$T,1} = Array($T,1000)))
+    end
+    code = quote
+        $(Expr(:meta, :fastmath))
+        $(decls...)
+        @simd for idx=1:length(a)
+            @inbounds a[idx] = $func($(arrays[2:end]...))
+        end
+    end
+    code
+end
+
+# Check that the basic SIMD examples above actually generated vectorized LLVM code:
+for T in [Int32,Int64,Float32,Float64]
+    AR = Array{T,1}
+    @test has_llvm_vector(simd_loop_example_from_manual, AR, AR, AR)
+
+    # TODO: uncomment the following tests
+    # @test has_llvm_vector(simd_loop_with_multiple_reductions, AR, AR, AR)
+    # @test has_llvm_vector(simd_loop_long_expr, AR, AR, AR)
+    # TODO: uncomment the above tests
+end
+
+# Test for vectorization of intrinsic functions that LLVM supports:
+# cf. http://llvm.org/docs/Vectorizers.html#vectorization-of-function-calls
+for T in [Float32,Float64]
+    # sanity check or "meta-test" for the @generated function we use:
+    # this should not fail if the basic tests above passed
+    @test has_llvm_vector(simd_loop_call, Type{Val{:+}}, Tuple{T, T, T})
+
+    @test has_llvm_vector(simd_loop_call, Type{Val{:muladd}}, Tuple{T, T, T, T})
+    # TODO: uncomment the following tests
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:sqrt}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:sin}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:cos}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:exp}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:log}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:log2}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:log10}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:abs}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:floor}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:ceil}}, Tuple{T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:^}}, Tuple{T, T, T})
+    # @test has_llvm_vector(simd_loop_call, Type{Val{:fma}}, Tuple{T, T, T, T})
+    # TODO: uncomment the above tests
+end
+
+# Test for vectorization of local arrays without type annotations:
+# TODO: uncomment the following tests
+# @test has_llvm_vector(simd_loop_local_arrays)
+# TODO: uncomment the above tests
+
+# Test for vectorization of arrays accessed through fields:
+@test has_llvm_vector(simd_loop_fields, ImmutableFields)
+# TODO: uncomment the following tests
+# @test has_llvm_vector(simd_loop_fields, MutableFields)
+# TODO: uncomment the above tests
