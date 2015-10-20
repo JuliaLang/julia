@@ -115,6 +115,11 @@ function unique(C)
     out
 end
 
+doc"""
+    unique(f, itr)
+
+Returns an array containing one value from `itr` for each unique value produced by `f` applied to elements of `itr`.
+"""
 function unique(f::Callable, C)
     out = Vector{eltype(C)}()
     seen = Set()

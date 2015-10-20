@@ -784,6 +784,13 @@ immutable Prehashed
 end
 hash(x::Prehashed) = x.hash
 
+doc"""
+    unique(itr[, dim])
+
+Returns an array containing only the unique elements of the iterable `itr`, in
+the order that the first of each set of equivalent elements originally appears.
+If `dim` is specified, returns unique regions of the array `itr` along `dim`.
+"""
 @generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         1 <= dim <= $N || return copy(A)

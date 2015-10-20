@@ -179,19 +179,19 @@ specified port (2000) in this case. The same function may also be used to
 create various other kinds of servers::
 
     julia> listen(2000) # Listens on localhost:2000 (IPv4)
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen("testsocket") # Listens on a domain socket/named pipe
     PipeServer(active)
@@ -208,7 +208,7 @@ should be able to pass the same arguments to :func:`connect` as you did to liste
 establish the connection. So let's try that out (after having created the server above)::
 
     julia> connect(2000)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
     julia> Hello World
 
@@ -228,7 +228,7 @@ A great strength of Julia is that since the API is exposed synchronously even th
     Task
 
     julia> clientside=connect(2001)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
     julia> @async while true
               write(STDOUT,readline(clientside))
@@ -250,7 +250,7 @@ given by the ``host`` parameter on the port given by the port parameter. It
 allows you to do things like::
 
     julia> connect("google.com",80)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
 At the base of this functionality is :func:`getaddrinfo`, which will do the appropriate address resolution::
 
