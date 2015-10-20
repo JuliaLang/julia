@@ -1,6 +1,6 @@
 #!/bin/sh
 # build-time mini version of WinRPM, usage:
-# ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/ mingw64-zlib1
+# ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2/ mingw64-zlib1
 # depends on curl, xmllint, gunzip, sort -V, sha256sum, and p7zip
 
 set -e

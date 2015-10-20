@@ -188,7 +188,7 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
 
 If you prefer to cross-compile, the following steps should get you started.
 
-For maximum compatibility with packages that use [WinRPM.jl](https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it is recommended that you use OpenSUSE 13.1 for cross-compiling a Windows build of Julia. If you use a different Linux distribution or OS X, install [Vagrant](http://www.vagrantup.com/downloads) and use the following `Vagrantfile`:
+For maximum compatibility with packages that use [WinRPM.jl](https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it is recommended that you use OpenSUSE 13.2 for cross-compiling a Windows build of Julia. If you use a different Linux distribution or OS X, install [Vagrant](http://www.vagrantup.com/downloads) and use the following `Vagrantfile`:
 ```
 # Vagrantfile for MinGW-w64 cross-compilation of Julia
 
@@ -197,7 +197,7 @@ $script = <<SCRIPT
 export XC_HOST=x86_64-w64-mingw32
 # Change the following to 32 for 32 bit Julia:
 export BITS=64
-zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_13.1/windows:mingw:win$BITS.repo
+zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_13.2/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
 zypper -n install --no-recommends git make cmake tar wine which curl \
     python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools
@@ -214,7 +214,7 @@ make -j4 binary-dist
 SCRIPT
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "chef/opensuse-13.1"
+  config.vm.box = "bento/opensuse-13.2"
   config.vm.provider :virtualbox do |vb|
     # Use VBoxManage to customize the VM. For example to change memory:
     vb.memory = 2048
