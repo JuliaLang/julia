@@ -316,6 +316,9 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, j
         // since the sparams might be providing better type information
         // this might happen if an inner lambda was compiled as part
         // of running an unspecialized function
+        nli->fptr = jl_trampoline;
+        nli->functionObject = NULL;
+        nli->specFunctionObject = NULL;
         nli->functionID = 0;
         nli->specFunctionID = 0;
     }
@@ -1491,6 +1494,7 @@ void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer);
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
     jl_array_t *closed = jl_lam_capt((jl_expr_t*)ast);
+    jl_array_t *splist = jl_lam_staticparams((jl_expr_t*)ast);
     jl_value_t **tvs;
     int tvarslen;
     if (jl_is_typevar(tvars)) {
@@ -1501,55 +1505,75 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
         tvs = jl_svec_data(tvars);
         tvarslen = jl_svec_len(tvars);
     }
-    if (jl_in_vinfo_array(closed, ((jl_tvar_t*)tvs[0])->name))
-        return;
-    size_t i;
+
+    size_t i, j;
     jl_array_t *vi=NULL;
     JL_GC_PUSH1(&vi);
     for(i=0; i < tvarslen; i++) {
+        jl_sym_t *sp = ((jl_tvar_t*)tvs[i])->name;
+        int found = 0;
+        // add this item to closed
+        assert(!jl_in_vinfo_array(closed, sp));
         vi = jl_alloc_cell_1d(3);
-        jl_cellset(vi, 0, ((jl_tvar_t*)tvs[i])->name);
+        jl_cellset(vi, 0, sp);
         jl_cellset(vi, 1, jl_any_type);
         jl_cellset(vi, 2, jl_box_long(1));
         jl_cell_1d_push(closed, (jl_value_t*)vi);
+        // delete this item from the list of static parameters
+        for (j = 0; j < jl_array_len(splist); j++) {
+            if (jl_cellref(splist, j) == (jl_value_t*)sp) {
+                jl_cellset(splist, j, jl_cellref(splist, jl_array_len(splist) - 1));
+                jl_array_del_end(splist, 1);
+                found = 1;
+                break;
+            }
+        }
+        assert(found);
     }
-
-    // clear the AST.args[2][4] list of sparams
-    jl_array_t *splist = jl_lam_staticparams((jl_expr_t*)ast);
-    assert(jl_array_len(splist) == tvarslen);
-    jl_array_del_end(splist, jl_array_len(splist));
 
     JL_GC_POP();
 }
 
-static void all_p2c(jl_value_t *ast, jl_svec_t *tvars)
+// modifies ast to replace any lambda info with an unspecialized version
+// that does not use the specified tvars
+// adds these static parameter names to end of closure env; compile
+// assuming they are there. method cache will fill them in when
+// it constructs closures for new "specializations".
+static jl_value_t *all_p2c(jl_value_t *ast, jl_svec_t *tvars)
 {
+    if (tvars == jl_emptysvec)
+        return ast;
     if (jl_is_lambda_info(ast)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
-        li->ast = jl_prepare_ast(li, jl_emptysvec);
-        jl_gc_wb(li, li->ast);
-        parameters_to_closureenv(li->ast, tvars);
-        all_p2c(li->ast, tvars);
+        // use linfo->unspecialized to store the modified ast
+        jl_function_t *unspec = li->unspecialized;
+        if (unspec)
+            return (jl_value_t*)unspec->linfo;
+        unspec = jl_new_closure(NULL, NULL, li);
+        JL_GC_PUSH1(&unspec);
+        unspec->linfo = jl_add_static_parameters(li, jl_emptysvec, NULL); // copy linfo
+        jl_gc_wb(unspec, unspec->linfo);
+        unspec->linfo->ast = jl_prepare_ast(unspec->linfo, jl_emptysvec); // copy ast
+        jl_gc_wb(unspec->linfo, unspec->linfo->ast);
+        parameters_to_closureenv(unspec->linfo->ast, tvars); // move sparams to closure env
+        unspec->linfo->ast = all_p2c(unspec->linfo->ast, tvars);
+        jl_gc_wb(unspec, unspec->linfo->ast);
+        if (jl_array_len(jl_lam_staticparams((jl_expr_t*)unspec->linfo->ast)) == 0)
+            // mark this as compilable; otherwise, would need to make an unspecialized version of
+            // this unspecialized function to handle all of the static parameters
+            unspec->linfo->specTypes = jl_anytuple_type; // no gc_wb needed
+        li->unspecialized = unspec; // record result for reuse
+        jl_gc_wb(li, unspec);
+        JL_GC_POP();
+        return (jl_value_t*)unspec->linfo;
     }
     else if (jl_is_expr(ast)) {
         jl_expr_t *e = (jl_expr_t*)ast;
-        for(size_t i=0; i < jl_array_len(e->args); i++)
-            all_p2c(jl_exprarg(e,i), tvars);
+        jl_array_t *a = e->args;
+        for(size_t i=0; i < jl_array_len(a); i++)
+            jl_cellset(a, i, all_p2c(jl_cellref(a, i), tvars));
     }
-}
-
-static void precompile_linfo(jl_lambda_info_t *linfo, jl_tupletype_t *sig, jl_svec_t *tvars)
-{
-    assert(sig);
-    linfo->specTypes = sig;
-    jl_gc_wb(linfo, sig);
-    if (tvars != jl_emptysvec) {
-        // add static parameter names to end of closure env; compile
-        // assuming they are there. method cache will fill them in when
-        // it constructs closures for new "specializations".
-        all_p2c((jl_value_t*)linfo, tvars);
-    }
-    jl_trampoline_compile_linfo(linfo, 1);
+    return ast;
 }
 
 static int tupletype_any_bottom(jl_value_t *sig)
@@ -1657,7 +1681,12 @@ static void _compile_all_deq(jl_array_t *found)
             meth->func->linfo->unspecialized = unspec;
             jl_gc_wb(meth->func->linfo, unspec);
         }
-        precompile_linfo(unspec->linfo, meth->sig, meth->tvars);
+        unspec->linfo->specTypes = meth->sig;
+        jl_gc_wb(unspec->linfo, meth->sig);
+        unspec->linfo = (jl_lambda_info_t*)all_p2c((jl_value_t*)unspec->linfo, meth->tvars);
+        jl_gc_wb(unspec, unspec->linfo);
+        jl_trampoline_compile_linfo(unspec->linfo, 1);
+        assert(unspec->linfo->functionID > 0);
         meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
     }
     jl_printf(JL_STDERR, "\n");
@@ -2024,8 +2053,10 @@ void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_function_t *meth
         }
         meth->linfo->name = n;
     }
-    if (isstaged && tvars != jl_emptysvec) {
-        all_p2c((jl_value_t*)meth->linfo, tvars);
+    if (isstaged) {
+        meth = jl_new_closure(NULL, meth->env, meth->linfo); // copy meth
+        meth->linfo = (jl_lambda_info_t*)all_p2c((jl_value_t*)meth->linfo, tvars); // copy linfo and move static parameters to closure
+        jl_gc_wb(meth, meth->linfo);
     }
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
     JL_GC_POP();

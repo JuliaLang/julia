@@ -807,7 +807,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
                 // if the decl values haven't been evaluated yet (or alternately already compiled by jl_trampoline), do so now
                 li->ast = jl_prepare_ast(li, li->sparams);
                 jl_gc_wb(li, li->ast);
-                li->specTypes = jl_anytuple_type; // no gc_wb needed
+                if (jl_array_len(jl_lam_staticparams(li->ast)) == 0)
+                    // mark this as compilable; otherwise, will need to make an (un)specialized version of
+                    // to handle all of the static parameters before compiling
+                    li->specTypes = jl_anytuple_type; // no gc_wb needed
             }
             return expr;
         }
