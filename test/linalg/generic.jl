@@ -157,17 +157,17 @@ let
     w = normalize(v)
     @test w == [0.6, 0.8]
     @test norm(w) === 1.0
-    @test normalize!(v) == w
+    @test norm(normalize!(v) - w, Inf) < eps()
 end
 
 #Test potential overflow in normalize!
 let
-    δ = inv(prevfloat(typemax(float(nrm))))
+    δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
 
     @test norm(v) === 7.866824069956793e-309
     w = normalize(v)
-    @test norm(w) === 1.0
     @test w ≈ [1/√2, -1/√2]
-    @test normalize!(v) == w
+    @test norm(w) === 1.0
+    @test norm(normalize!(v) - w, Inf) < eps()
 end
