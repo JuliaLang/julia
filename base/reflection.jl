@@ -135,7 +135,13 @@ end
 
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
-code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
+function code_lowered(f, t::ANY=Tuple)
+    if isgeneric(f)
+        return map(m->uncompressed_ast(m.func.code), methods(f, t))
+    else
+        return Any[uncompressed_ast(f.code)]
+    end
+end
 function methods(f::Function,t::ANY)
     if !isgeneric(f)
         throw(ArgumentError("argument is not a generic function"))
@@ -223,18 +229,18 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     return str
 end
 
-code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata=true, dump_module=false) =
+code_llvm(io::IO, f::Function, types::ANY=Tuple, strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(f::ANY, types::ANY) = code_llvm(STDOUT, f, types)
-code_llvm_raw(f::ANY, types::ANY) = code_llvm(STDOUT, f, types, false)
-code_llvm(io::IO, f::ANY, t::ANY, args...) =
+code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
+code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
+code_llvm(io::IO, f::ANY, t::ANY=Tuple, args...) =
     code_llvm(io, call,
               tt_cons(isa(f, Type) ? Type{f} : typeof(f), t), args...)
 
-code_native(io::IO, f::Function, types::ANY) =
+code_native(io::IO, f::Function, types::ANY=Tuple) =
     print(io, _dump_function(f, types, true, false, false, false))
-code_native(f::ANY, types::ANY) = code_native(STDOUT, f, types)
-code_native(io::IO, f::ANY, t::ANY) =
+code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
+code_native(io::IO, f::ANY, t::ANY=Tuple) =
     code_native(io, call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
@@ -247,7 +253,7 @@ function func_for_method_checked(m, types)
     linfo::LambdaStaticData
 end
 
-function code_typed(f::Function, types::ANY; optimize=true)
+function code_typed(f::Function, types::ANY=Tuple; optimize=true)
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
@@ -268,12 +274,12 @@ function code_typed(f::Function, types::ANY; optimize=true)
     asts
 end
 
-function code_typed(f, t::ANY; optimize=true)
+function code_typed(f, t::ANY=Tuple; optimize=true)
     code_typed(call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t),
                optimize=optimize)
 end
 
-function return_types(f::Function, types::ANY)
+function return_types(f::Function, types::ANY=Tuple)
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
@@ -284,7 +290,7 @@ function return_types(f::Function, types::ANY)
     rt
 end
 
-function return_types(f, t::ANY)
+function return_types(f, t::ANY=Tuple)
     return_types(call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
 end
 
