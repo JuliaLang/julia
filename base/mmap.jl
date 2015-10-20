@@ -68,16 +68,18 @@ end # @unix_only
 
 @windows_only begin
 
-const PAGE_READONLY          = UInt32(0x02)
-const PAGE_READWRITE         = UInt32(0x04)
-const PAGE_WRITECOPY         = UInt32(0x08)
-const PAGE_EXECUTE_READ      = UInt32(0x20)
-const PAGE_EXECUTE_READWRITE = UInt32(0x40)
-const PAGE_EXECUTE_WRITECOPY = UInt32(0x80)
-const FILE_MAP_COPY          = UInt32(0x01)
-const FILE_MAP_WRITE         = UInt32(0x02)
-const FILE_MAP_READ          = UInt32(0x04)
-const FILE_MAP_EXECUTE       = UInt32(0x20)
+typealias DWORD Culong
+
+const PAGE_READONLY          = DWORD(0x02)
+const PAGE_READWRITE         = DWORD(0x04)
+const PAGE_WRITECOPY         = DWORD(0x08)
+const PAGE_EXECUTE_READ      = DWORD(0x20)
+const PAGE_EXECUTE_READWRITE = DWORD(0x40)
+const PAGE_EXECUTE_WRITECOPY = DWORD(0x80)
+const FILE_MAP_COPY          = DWORD(0x01)
+const FILE_MAP_WRITE         = DWORD(0x02)
+const FILE_MAP_READ          = DWORD(0x04)
+const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 function gethandle(io::IO)
     handle = Libc._get_osfhandle(RawFD(fd(io))).handle
@@ -86,7 +88,7 @@ function gethandle(io::IO)
 end
 
 settings(sh::Anonymous) = utf16(sh.name), sh.readonly, sh.create
-settings(io::IO) = convert(Ptr{Cwchar_t},C_NULL), isreadonly(io), true
+settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
 end # @windows_only
 
 # core impelementation of mmap
@@ -121,14 +123,14 @@ function mmap{T,N}(io::IO,
 
     @windows_only begin
         name, readonly, create = settings(io)
-        szfile = convert(Csize_t, len + offset)
+        szfile = convert(DWORD, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, Cint, Cint, Cint, Cwstring),
+        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
-                          ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (Cint, Cint, Cwstring),
-                            readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
+                          ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (DWORD, Cint, Cwstring),
+                                readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
         handle == C_NULL && error("could not create file mapping: $(Libc.FormatMessage())")
-        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
+        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, DWORD, DWORD, DWORD, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # @windows_only
