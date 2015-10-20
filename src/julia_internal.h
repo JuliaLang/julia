@@ -147,7 +147,7 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
 int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
-jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp);
+jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, jl_tupletype_t *types);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);
