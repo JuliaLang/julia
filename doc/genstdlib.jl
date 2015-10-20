@@ -288,6 +288,8 @@ for folder in ["stdlib", "manual", "devdocs"]
     end
 end
 
+println()
+
 exported_missing_count = 0
 unexported_missing_count = 0
 
@@ -303,7 +305,7 @@ for (d, v) in all_docs
         warn("Exported method missing doc for $val")
         exported_missing_count += 1
     else
-        info("Unexported method missing doc for $val")
+        # info("Unexported method missing doc for $val")
         unexported_missing_count += 1
     end
     # println(tryrst(d, false))
