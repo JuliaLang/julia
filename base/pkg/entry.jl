@@ -667,6 +667,12 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     errfile = tempname()
     close(open(errfile, "w")) # create empty file
     code = """
+        empty!(Base.LOAD_PATH)
+        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+        empty!(Base.LOAD_CACHE_PATH)
+        append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+        empty!(Base.DL_LOAD_PATH)
+        append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
             for path_ in eachline(STDIN)
                 path = chomp(path_)
