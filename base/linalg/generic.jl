@@ -547,19 +547,22 @@ Normalize the vector `v` in-place with respect to the `p`-norm.
 
 # See also
 
-`normalize`
+`normalize`, `qr`
 
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
+    __normalize!(v, nrm)
+end
 
+@inline function __normalize!{T<:AbstractFloat}(v::AbstractVector{T}, nrm::T)
     #The largest positive floating point number whose inverse is less than
     #infinity
-    const δ = inv(prevfloat(typemax(float(nrm))))
+    const δ = inv(prevfloat(typemax(T)))
 
     if nrm ≥ δ #Safe to multiply with inverse
         invnrm = inv(nrm)
-        scale!(v, invrm)
+        scale!(v, invnrm)
 
     else #Divide by norm; slower but more correct
         #Note 2015-10-19: As of Julia 0.4, @simd does not vectorize floating
@@ -590,7 +593,7 @@ Normalize the vector `v` with respect to the `p`-norm.
 
 # See also
 
-`normalize!`
+`normalize!`, `qr`
 """
 normalize(v::AbstractVector, p::Real=2) = v/norm(v, p)
 

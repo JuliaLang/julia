@@ -162,3 +162,11 @@ let
     Q=full(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
+
+let
+    debug && println("qr on AbstractVector")
+
+    v = [3.0, 4.0]
+    @test qr(v) == ([0.6, 0.8], 5.0)
+end
+
