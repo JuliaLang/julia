@@ -1347,3 +1347,13 @@ x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[1] == 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
+
+immutable SquaresVector <: AbstractArray{Int, 1}
+    count::Int
+end
+Base.size(S::SquaresVector) = (S.count,)
+Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+Base.getindex(S::SquaresVector, i::Int) = i*i
+foo_squares = SquaresVector(5)
+@test convert(Array{Int}, foo_squares) == [1,4,9,16,25]
+@test convert(Array{Int, 1}, foo_squares) == [1,4,9,16,25]
