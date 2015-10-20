@@ -39,7 +39,7 @@ int isnumtok_base(char *tok, value_t *pval, int base)
         return 0;
     if (!((tok[0]=='0' && tok[1]=='x') || (base >= 15)) &&
         strpbrk(tok, ".eEpP")) {
-        d = strtod_c(tok, &end);
+        d = jl_strtod_c(tok, &end);
         if (*end == '\0') {
             if (pval) *pval = mk_double(d);
             return 1;
@@ -55,7 +55,7 @@ int isnumtok_base(char *tok, value_t *pval, int base)
     // hexadecimal float literals
     else if (((tok[0]=='0' && tok[1]=='x') || (base == 16)) &&
         strpbrk(tok, "pP")) {
-        d = strtod_c(tok, &end);
+        d = jl_strtod_c(tok, &end);
         if (*end == '\0') {
             if (pval) *pval = mk_double(d);
             return 1;
