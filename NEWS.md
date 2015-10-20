@@ -43,18 +43,28 @@ Library improvements
 
   * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
 
-  * New method for generic QR with column pivoting ([#13480]).
+  * Linear algebra:
 
-  * A new `SparseVector` type allows for one-dimensional sparse arrays. Slicing
-    and reshaping sparse matrices now return vectors when appropriate. The
-    `sparsevec` function returns a one-dimensional sparse vector instead of a
-    one-column sparse matrix.
+    * New `normalize` and `normalize!` convenience functions for normalizing
+      vectors ([#13681]).
+
+    * QR
+
+      * New method for generic QR with column pivoting ([#13480]).
+
+      * New method for polar decompositions of `AbstractVector`s ([#13681]).
+
+    * A new `SparseVector` type allows for one-dimensional sparse arrays.
+      Slicing and reshaping sparse matrices now return vectors when
+      appropriate. The `sparsevec` function returns a one-dimensional sparse
+      vector instead of a one-column sparse matrix. ([#13440])
 
 Deprecated or removed
 ---------------------
 
-  * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated in favor
-    of versions that require the matrix to in factored form ([#13496]).
+  * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated
+    in favor of versions that require the matrix to be in factored form
+    ([#13496]).
 
 Julia v0.4.0 Release Notes
 ==========================
