@@ -718,23 +718,6 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     return gf;
 }
 
-static jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
-{
-    jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparams, linfo->module);
-    new_linfo->tfunc = linfo->tfunc;
-    new_linfo->name = linfo->name;
-    new_linfo->roots = linfo->roots;
-    new_linfo->specTypes = linfo->specTypes;
-    new_linfo->unspecialized = linfo->unspecialized;
-    new_linfo->specializations = linfo->specializations;
-    new_linfo->def = linfo->def;
-    new_linfo->capt = linfo->capt;
-    new_linfo->file = linfo->file;
-    new_linfo->line = linfo->line;
-    return new_linfo;
-}
-
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                     jl_binding_t *bnd,
                                     jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,

@@ -303,16 +303,14 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp)
     JL_GC_PUSH1(&sp);
     if (jl_svec_len(l->sparams) > 0)
         sp = jl_svec_append(sp, l->sparams);
-    jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp, l->module);
-    nli->name = l->name;
-    nli->fptr = l->fptr;
-    nli->functionObject = l->functionObject;
-    nli->specFunctionObject = l->specFunctionObject;
-    nli->functionID = l->functionID;
-    nli->specFunctionID = l->specFunctionID;
-    nli->file = l->file;
-    nli->line = l->line;
-    nli->def  = l->def;
+    jl_lambda_info_t *nli = jl_copy_lambda_info(l);
+    nli->sparams = sp; // no gc_wb needed
+    nli->tfunc = jl_nothing;
+    nli->capt = NULL;
+    nli->specializations = NULL;
+    nli->unspecialized = NULL;
+    nli->functionID = 0; // make sure this marked as needing to be compiled
+    nli->specFunctionID = 0;
     JL_GC_POP();
     return nli;
 }
@@ -806,23 +804,18 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
         newmeth = jl_instantiate_method(method, sparams);
     }
-    /*
-      if "method" itself can ever be compiled, for example for use as
-      an unspecialized method (see below), then newmeth->fptr might point
-      to some slow compiled code instead of jl_trampoline, meaning our
-      type-inferred code would never get compiled. this can be fixed with
-      the commented-out snippet below.
 
-      NOTE: this is now needed when we start with a system image compiled
-      with --compile=all.
-    */
-    /*
+    /* "method" itself should never get compiled,
+      for example, if an unspecialized method is needed,
+      the slow compiled code should be associated with
+      method->linfo->unspecialized, not method */
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
-           newmeth->fptr == &jl_trampoline);
-    */
-    if (newmeth->linfo && newmeth->linfo->ast && newmeth->fptr != &jl_trampoline) {
-        newmeth->fptr = &jl_trampoline;
-    }
+           (newmeth->fptr == &jl_trampoline &&
+            newmeth->linfo->fptr == &jl_trampoline &&
+            newmeth->linfo->functionObject == NULL &&
+            newmeth->linfo->specFunctionObject == NULL &&
+            newmeth->linfo->functionID == 0 &&
+            newmeth->linfo->specFunctionID == 0));
 
     (void)jl_method_cache_insert(mt, type, newmeth);
 
@@ -1515,6 +1508,12 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
         jl_cellset(vi, 2, jl_box_long(1));
         jl_cell_1d_push(closed, (jl_value_t*)vi);
     }
+
+    // clear the AST.args[2][4] list of sparams
+    jl_array_t *splist = jl_lam_staticparams((jl_expr_t*)ast);
+    assert(jl_array_len(splist) == tvarslen);
+    jl_array_del_end(splist, jl_array_len(splist));
+
     JL_GC_POP();
 }
 
@@ -1599,6 +1598,7 @@ static void _compile_all_deq(jl_array_t *found)
             if (spec && !jl_has_typevars((jl_value_t*)meth->sig)) {
                 // replace unspecialized func with specialized version
                 // if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
+                // that might cause a different method to match at runtime
                 meth->func = spec;
                 jl_gc_wb(meth, spec);
                 continue;
@@ -1638,7 +1638,6 @@ static void _compile_all_deq(jl_array_t *found)
                     complete = 0;
                 }
                 if (complete) {
-                    //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now
                     meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
                     continue;
                 }
@@ -1655,7 +1654,6 @@ static void _compile_all_deq(jl_array_t *found)
             if (!unspec->linfo->specTypes) unspec->linfo->specTypes = meth->sig; // no gc_wb needed
         }
         precompile_linfo(unspec->linfo, meth->sig, meth->tvars);
-        //meth->func->fptr = (jl_fptr_t)1; // invalidate fptr: meth should be unused now -- but isn't because staged functions corrupt the function lookup
         meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
     }
     jl_printf(JL_STDERR, "\n");
@@ -1699,7 +1697,7 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
                 return;
             }
             jl_methlist_t *meth = (jl_methlist_t*)v;
-            int use_mtable = (meth->func->linfo && !meth->func->linfo->specTypes);
+            int use_mtable = (meth->func->linfo && !meth->func->linfo->specTypes) && !(meth->isstaged);
             _compile_all_enq((jl_value_t*)meth->invokes, h, found, in_gf);
             _compile_all_enq((jl_value_t*)meth->next, h, found, in_gf);
             _compile_all_enq((jl_value_t*)meth->func, h, found, in_gf);
@@ -1711,16 +1709,9 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
         else if (jl_is_lambda_info(v)) {
             jl_lambda_info_t *li = (jl_lambda_info_t*)v;
             // if in_gf and !specTypes, the lambda will be compiled from the method table
-            if (!in_gf && !li->specTypes) {
-                // anonymous function: compile via unspecialized
-                jl_function_t *func = li->unspecialized;
-                if (func == NULL) {
-                    func = jl_new_closure(li->fptr, (jl_value_t*)jl_emptysvec, li);
-                    li->unspecialized = func;
-                    jl_gc_wb(li, func);
-                    if (!func->linfo->specTypes) func->linfo->specTypes = jl_anytuple_type; // no gc_wb needed
-                }
-                li = func->linfo;
+            if (!in_gf && !li->specTypes && li->unspecialized) {
+                // naked lambda from a gf: compile via unspecialized
+                li = li->unspecialized->linfo;
             }
             if (li->specTypes && li->fptr == jl_trampoline && !li->functionID) {
                 jl_cell_1d_push(found, (jl_value_t*)li);
@@ -1843,7 +1834,7 @@ JL_CALLABLE(jl_apply_generic)
             // of the function to be compiled without inference and run.
             jl_lambda_info_t *li = mfunc->linfo;
             if (li->unspecialized == NULL) {
-                li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
+                li->unspecialized = jl_instantiate_method(mfunc, jl_emptysvec);
                 if (mfunc->env != (jl_value_t*)jl_emptysvec)
                     li->unspecialized->env = NULL;
                 jl_gc_wb(li, li->unspecialized);

@@ -1105,44 +1105,73 @@ extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 extern "C" DLLEXPORT
 void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
 {
-    jl_function_t *sf = f;
-    if (tt != NULL) {
-        if (!jl_is_function(f) || !jl_is_gf(f)) {
-            return NULL;
-        }
-        sf = jl_get_specialization(f, tt);
+    if (!jl_is_function(f)) {
+        return NULL;
     }
-    if (sf == NULL || sf->linfo == NULL) {
-        sf = jl_method_lookup_by_type(jl_gf_mtable(f), tt, 0, 0);
-        if (sf == jl_bottom_func) {
-            return NULL;
+    jl_lambda_info_t *linfo = f->linfo;
+    JL_GC_PUSH1(&linfo);
+    if (jl_is_gf(f)) {
+        if (tt != NULL) {
+            jl_function_t *sf = jl_get_specialization(f, tt);
+            linfo = (sf == NULL ? NULL : sf->linfo);
+            if (linfo == NULL) {
+                sf = jl_method_lookup_by_type(jl_gf_mtable(f), tt, 0, 0);
+                if (sf == jl_bottom_func || sf == NULL) {
+                    JL_GC_POP();
+                    return NULL;
+                }
+                linfo = sf->linfo;
+            }
         }
-        jl_printf(JL_STDERR,
-                  "WARNING: Returned code may not match what actually runs.\n");
+        if (linfo && !linfo->specTypes) {
+            jl_printf(JL_STDERR,
+                      "WARNING: Returned code may not match what actually runs.\n");
+            if (linfo->unspecialized) {
+                linfo = linfo->unspecialized->linfo;
+            }
+            else {
+                // linfo can't be compiled directly,
+                // but we can compile a throw-away copy
+                // by leaking a bit of memory
+                // (since the compiled code is not usable)
+                linfo = jl_copy_lambda_info(linfo);
+                linfo->specTypes = tt;
+            }
+        }
     }
-    if (sf->linfo->specFunctionObject != NULL) {
+    else if (linfo && !linfo->specTypes) {
+        // anonymous function: compile directly
+        linfo->specTypes = jl_anytuple_type; // no gc_wb needed
+    }
+    if (linfo == NULL) {
+        JL_GC_POP();
+        return NULL;
+    }
+
+    if (linfo->specFunctionObject != NULL) {
         // found in the system image: force a recompile
-        Function *llvmf = (Function*)sf->linfo->specFunctionObject;
+        Function *llvmf = (Function*)linfo->specFunctionObject;
         if (llvmf->isDeclaration()) {
-            sf->linfo->specFunctionObject = NULL;
-            sf->linfo->functionObject = NULL;
+            linfo->specFunctionObject = NULL;
+            linfo->functionObject = NULL;
         }
     }
-    if (sf->linfo->functionObject != NULL) {
+    if (linfo->functionObject != NULL) {
         // found in the system image: force a recompile
-        Function *llvmf = (Function*)sf->linfo->functionObject;
+        Function *llvmf = (Function*)linfo->functionObject;
         if (llvmf->isDeclaration()) {
-            sf->linfo->specFunctionObject = NULL;
-            sf->linfo->functionObject = NULL;
+            linfo->specFunctionObject = NULL;
+            linfo->functionObject = NULL;
         }
     }
-    if (sf->linfo->functionObject == NULL && sf->linfo->specFunctionObject == NULL) {
-        jl_compile_linfo(sf->linfo);
+    if (linfo->functionObject == NULL && linfo->specFunctionObject == NULL) {
+        jl_compile_linfo(linfo);
     }
-    if (!getwrapper && sf->linfo->specFunctionObject != NULL)
-        return (Function*)sf->linfo->specFunctionObject;
+    JL_GC_POP();
+    if (!getwrapper && linfo->specFunctionObject != NULL)
+        return (Function*)linfo->specFunctionObject;
     else
-        return (Function*)sf->linfo->functionObject;
+        return (Function*)linfo->functionObject;
 }
 
 Function* CloneFunctionToModule(Function *F, Module *destModule)
@@ -4193,6 +4222,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
     size_t nreq = largslen;
     int va = 0;
 
+    if (2 * jl_array_len(jl_lam_staticparams(ast)) != jl_svec_len(sparams))
+        jl_error("wrong number of static-parameters on LambdaStaticData");
     if (!lam->specTypes)
         jl_error("function not valid for compiling"); // this could happen if the user tries to compile a generic-function
                                                       // without specializing (or unspecializing) it first
