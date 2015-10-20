@@ -309,13 +309,26 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, j
     nli->capt = NULL;
     nli->specializations = NULL;
     nli->unspecialized = NULL;
-    nli->fptr = jl_trampoline;
-    nli->functionObject = NULL;
-    nli->specFunctionObject = NULL;
-    nli->functionID = 0; // make sure this marked as needing to be compiled
-    nli->specFunctionID = 0;
     nli->specTypes = types;
     if (types) jl_gc_wb(nli, types);
+    if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) {
+        // make sure this marked as needing to be (re)compiled
+        // since the sparams might be providing better type information
+        // this might happen if an inner lambda was compiled as part
+        // of running an unspecialized function
+        nli->fptr = jl_trampoline;
+        nli->functionObject = NULL;
+        nli->specFunctionObject = NULL;
+        nli->functionID = 0;
+        nli->specFunctionID = 0;
+    }
+    else {
+        if (nli->fptr == jl_trampoline) {
+            jl_printf(JL_STDERR,"code missing for ");
+            jl_static_show(JL_STDERR, (jl_value_t*)nli);
+            jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
+        }
+    }
     JL_GC_POP();
     return nli;
 }
@@ -808,6 +821,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
       the slow compiled code should be associated with
       method->linfo->unspecialized, not method */
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
+           (newmeth->linfo->specTypes == method->linfo->specTypes) ||
            (newmeth->fptr == &jl_trampoline &&
             newmeth->linfo->fptr == &jl_trampoline &&
             newmeth->linfo->functionObject == NULL &&
@@ -1581,7 +1595,7 @@ static void _compile_all_deq(jl_array_t *found)
             // anonymous or specialized function
             jl_lambda_info_t *li = (jl_lambda_info_t*)thunk;
             assert(!jl_cellref(found, found_i + 1));
-            precompile_linfo(li, li->specTypes, jl_emptysvec);
+            jl_trampoline_compile_linfo(li, 1);
             assert(li->functionID > 0);
             continue;
         }

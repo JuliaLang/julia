@@ -198,7 +198,7 @@ typedef struct _jl_lambda_info_t {
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     struct _jl_module_t *module;
-    struct _jl_lambda_info_t *def;  // original this is specialized from
+    struct _jl_lambda_info_t *def;  // original this is specialized from, for consolidating codegen roots
     jl_value_t *capt;  // captured var info
     jl_sym_t *file;
     int32_t line;
