@@ -50,8 +50,8 @@ object PerfBreeze {
       val t1 = System.nanoTime()
       for(j <- 1 to 1000) {
         rand = generator.nextInt()
-        rands = rand.toString
-        parsed = rands.toInt
+        rands = if(rand < 0) "-" + abs(rand).toHexString else rand.toHexString
+        parsed = Integer.parseInt(rands, 16)
       }
       val t = System.nanoTime() - t1
       assert(rand == parsed)
@@ -73,14 +73,7 @@ object PerfBreeze {
   }
 
   def mandelperf() = {
-    var mandel_sum = 0
-    for(re <- -20 to 5) {
-      for(im <- -10 to 10) {
-        val m = mandel(re/10.0 + i * im/10.0)
-        mandel_sum += m
-      }
-    }
-    mandel_sum
+    for(re <- -20 to 5; im <- -10 to 10) yield mandel(re/10.0 + i * im/10.0)
   }
 
   def time_mandel() = {
@@ -91,14 +84,17 @@ object PerfBreeze {
     for(i <- 1 to NITER) {
       val t1 = System.nanoTime()
       for(j <- 1 to 100) {
-        mandel_sum = mandelperf()
-        mandel_sum2 += mandel_sum
+        val mandel_arr = mandelperf()
+        if(j == 1) {
+          mandel_sum = sum(mandel_arr)
+          mandel_sum2 += mandel_sum
+        }
       }
       val t = System.nanoTime() - t1
       if(t < tmin) tmin = t
     }
     assert(mandel_sum == 14791)
-    assert(mandel_sum2 == mandel_sum * 100 * NITER)
+    assert(mandel_sum2 == mandel_sum * NITER)
     tmin / 100.0
   }
 
