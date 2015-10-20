@@ -213,6 +213,7 @@ for T in [Float32,Float64]
     @test has_llvm_vector(simd_loop_call, Type{Val{:+}}, Tuple{T, T, T})
 
     @test has_llvm_vector(simd_loop_call, Type{Val{:muladd}}, Tuple{T, T, T, T})
+    @test has_llvm_vector(simd_loop_call, Type{Val{:abs}}, Tuple{T, T})
     # TODO: uncomment the following tests
     # @test has_llvm_vector(simd_loop_call, Type{Val{:sqrt}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:sin}}, Tuple{T, T})
@@ -221,7 +222,6 @@ for T in [Float32,Float64]
     # @test has_llvm_vector(simd_loop_call, Type{Val{:log}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:log2}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:log10}}, Tuple{T, T})
-    # @test has_llvm_vector(simd_loop_call, Type{Val{:abs}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:floor}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:ceil}}, Tuple{T, T})
     # @test has_llvm_vector(simd_loop_call, Type{Val{:^}}, Tuple{T, T, T})
