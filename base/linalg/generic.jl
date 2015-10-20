@@ -8,7 +8,7 @@ scale(s::Number, X::AbstractArray) = s*X
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 function generic_scale!(X::AbstractArray, s::Number)
-    for I in eachindex(X)
+    @simd for I in eachindex(X)
         @inbounds X[I] *= s
     end
     X
