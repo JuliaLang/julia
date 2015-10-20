@@ -279,13 +279,13 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+   Create a pipe to which all C and Julia level ``STDOUT`` output will be redirected. Returns a tuple ``(rd,wr)`` representing the pipe ends. Data written to ``STDOUT`` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old ``STDOUT`` object was cached by the user and needs to be replaced elsewhere.
 
 .. function:: redirect_stdout(stream)
 
    .. Docstring generated from Julia source
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
+   Replace ``STDOUT`` by stream for all C and julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
 
 .. function:: redirect_stderr([stream])
 
@@ -773,7 +773,7 @@ Memory-mapped I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TcpSocket
+.. function:: connect([host],port) -> TCPSocket
 
    .. Docstring generated from Julia source
 
@@ -785,7 +785,7 @@ Network I/O
 
    Connect to the Named Pipe / Domain Socket at ``path``
 
-.. function:: listen([addr,]port) -> TcpServer
+.. function:: listen([addr,]port) -> TCPServer
 
    .. Docstring generated from Julia source
 
@@ -833,11 +833,11 @@ Network I/O
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (UInt16,TcpServer)
+.. function:: listenany(port_hint) -> (UInt16,TCPServer)
 
    .. Docstring generated from Julia source
 
-   Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+   Create a ``TCPServer`` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 
 .. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 

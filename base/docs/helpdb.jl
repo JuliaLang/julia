@@ -2445,7 +2445,7 @@ The function calls the C library CHOLMOD and many other functions from the libra
 ldltfact(A::SparseMatrixCSC; shift=0, perm=Int[])
 
 doc"""
-    connect([host],port) -> TcpSocket
+    connect([host],port) -> TCPSocket
 
 Connect to the host `host` on port `port`
 """
@@ -6448,13 +6448,6 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 notify
 
 doc"""
-    unique(itr[, dim])
-
-Returns an array containing only the unique elements of the iterable `itr`, in the order that the first of each set of equivalent elements originally appears. If `dim` is specified, returns unique regions of the array `itr` along `dim`.
-"""
-unique
-
-doc"""
 ```rst
 ..  sub(A, inds...)
 
@@ -6852,7 +6845,7 @@ A macro to execute an expression, and return the value of the expression, elapse
 doc"""
     code_native(f, types)
 
-Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+Prints the native assembly instructions generated for running the method matching the given generic function and type signature to `STDOUT`.
 """
 code_native
 
@@ -8674,9 +8667,9 @@ Similar to `search`, but return only the start index at which the substring is f
 searchindex
 
 doc"""
-    listenany(port_hint) -> (UInt16,TcpServer)
+    listenany(port_hint) -> (UInt16,TCPServer)
 
-Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 """
 listenany
 
@@ -8782,7 +8775,7 @@ Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If ne
 intersect!
 
 doc"""
-    listen([addr,]port) -> TcpServer
+    listen([addr,]port) -> TCPServer
 
 Listen on port on the address specified by `addr`. By default this listens on localhost only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 """
@@ -10228,14 +10221,14 @@ unescape_string
 doc"""
     redirect_stdout()
 
-Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+Create a pipe to which all C and Julia level `STDOUT` output will be redirected. Returns a tuple `(rd,wr)` representing the pipe ends. Data written to `STDOUT` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old `STDOUT` object was cached by the user and needs to be replaced elsewhere.
 """
 redirect_stdout
 
 doc"""
     redirect_stdout(stream)
 
-Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a TcpSocket.
+Replace `STDOUT` by stream for all C and julia level output to `STDOUT`. Note that `stream` must be a TTY, a `Pipe` or a `TCPSocket`.
 """
 redirect_stdout(stream)
 

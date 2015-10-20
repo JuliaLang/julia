@@ -882,7 +882,7 @@ This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
 internally, the writing of each argument yields to other tasks while waiting for
 that part of the I/O to complete.
 
-``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
+``println`` to asynchronous streams like STDOUT, TCPSockets, "locks" the stream
 during a call. Consequently changing ``print`` to ``println`` in the above example
 results in::
 
