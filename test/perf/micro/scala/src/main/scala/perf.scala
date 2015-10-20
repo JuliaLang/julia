@@ -99,14 +99,51 @@ object PerfBreeze {
   }
 
   // time quicksort
+  def quicksort(a:Array[Double], lo:Int, hi:Int):Array[Double] = {
+    var i, l = lo
+    var j = hi
+
+    def _swap(i:Int, j:Int) = {
+      val tmp = a(i)
+      a(i) = a(j)
+      a(j) = tmp
+    }
+
+    while(i < hi) {
+      val pivot = a((l+hi)>>>1)
+      while(i <= j) {
+        while(a(i) < pivot) i += 1
+        while(a(j) > pivot) j -= 1
+        if(i <= j) {
+          _swap(i, j)
+          i += 1
+          j -= 1
+        }
+      }
+      if(l < j) quicksort(a, l, j)
+      l = j
+      j = hi
+    }
+    a
+  }
+
+  /*
+  def checksorted(a:Array[Double]):Boolean = {
+    for(i <- 0 to a.length-2) {
+      assert(a(i) < a(i+1))
+    }
+    true
+  }
+  */
+
   def time_quicksort() = {
     var tmin = Long.MaxValue
 
     for(i <- 1 to NITER) {
       val t1 = System.nanoTime()
       for(j <- 1 to 1000) {
-        val A = randomInt(5000, (1, Int.MaxValue))
-        Sorting.quickSort(A.data)
+        val A = DenseVector.rand[Double](5000)
+        quicksort(A.data, 0, 4999)
       }
       val t = System.nanoTime() - t1
       if(t < tmin) tmin = t
