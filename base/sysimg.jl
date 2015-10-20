@@ -238,6 +238,24 @@ include("client.jl")
 include("util.jl")
 
 # dense linear algebra
+# Temporary forward definitions until deprecations are fixed
+function Ac_mul_B(c,a,b)   end
+function A_mul_Bc(c,a,b)   end
+function Ac_mul_Bc(c,a,b)  end
+function At_mul_B(c,a,b)   end
+function A_mul_Bt(c,a,b)   end
+function Ac_mul_Bt(c,a,b)  end
+function At_mul_Bt(c,a,b)  end
+
+function A_mul_B!(c,a,b)    end
+function Ac_mul_B!(c,a,b)   end
+function A_mul_Bc!(c,a,b)   end
+function Ac_mul_Bc!(c,a,b)  end
+function At_mul_B!(c,a,b)   end
+function A_mul_Bt!(c,a,b)   end
+function Ac_mul_Bt!(c,a,b)  end
+function At_mul_Bt!(c,a,b)  end
+
 include("transpose.jl")
 include("linalg.jl")
 importall .LinAlg

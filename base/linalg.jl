@@ -10,6 +10,9 @@ import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transp
     imag, inv, isapprox, kron, ndims, power_by_squaring, print_matrix, promote_rule, real,
     round, setindex!, show, similar, size, transpose, transpose!, trunc, unsafe_getindex,
     unsafe_setindex!, untranspose
+# Remove one deprecations are removed
+import Base: Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, Ac_mul_Bt, At_mul_Bt, A_mul_B!,
+             Ac_mul_B!, A_mul_Bc!, Ac_mul_Bc!, At_mul_B!, A_mul_Bt!, Ac_mul_Bt!, At_mul_Bt!
 
 export
 # Modules
