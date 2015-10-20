@@ -94,7 +94,7 @@ function chol!(x::Number, uplo)
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
-chol(x::Number, uplo::Symbol=:U) = chol!(x, uplo)
+chol(x::Number, uplo=Val{:U}) = chol!(x, uplo)
 
 function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U,
                                  pivot::Union{Type{Val{false}},Type{Val{true}}}=Val{false}; tol=0.0)
