@@ -204,7 +204,7 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags)
     # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
     # process that launched the remote process.
     ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
-    while !success(detach(`$ssh -f $sshflags $user@$host -L $localp:$bind_addr:$port sleep 60`)) && cnt > 0
+    while !success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`)) && cnt > 0
         localport = next_tunnel_port()
         cnt -= 1
     end
