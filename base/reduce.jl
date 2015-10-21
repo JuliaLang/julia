@@ -381,6 +381,10 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
+# vectorized ∈ and ∉
+(.∈){T}(x::AbstractArray{T}, set) = [xx ∈ set for xx in x]
+(.∉){T}(x::AbstractArray{T}, set) = [xx ∉ set for xx in x]
+
 function contains(eq::Function, itr, x)
     for y in itr
         eq(y, x) && return true

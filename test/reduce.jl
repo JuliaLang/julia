@@ -234,6 +234,21 @@ Base.call(::SomeFunctor, x) = true
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
 
+# in-based operators
+@test ∈(1, 1:2) == true
+@test ∈(0, 1:2) == false
+@test ∉(0, 1:2) == true
+@test ∉(1, 1:2) == false
+
+@test ∋(1:2, 1) == true
+@test ∋(1:2, 0) == false
+@test ∌(1:2, 1) == false
+@test ∌(1:2, 0) == true
+
+# vectorized ∈ and ∉
+@test ([0,1,2,3] .∈ 1:2) == [false, true, true, false]
+@test ([0,1,2,3] .∉ 1:2) == [true, false, false, true]
+
 # contains
 
 @test contains("quick fox", "fox") == true
