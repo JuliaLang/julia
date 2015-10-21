@@ -304,3 +304,9 @@ let p = parse("try
     @test p.args[2] === false
     @test p.args[3].args[end] == parse("b,c = t")
 end
+
+# pr #13078
+@test parse("a in b in c") == Expr(:comparison, :a, :in, :b, :in, :c)
+@test parse("a||b→c&&d") == Expr(:call, :→,
+                                 Expr(symbol("||"), :a, :b),
+                                 Expr(symbol("&&"), :c, :d))
