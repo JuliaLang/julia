@@ -106,6 +106,8 @@ function istopfunction(topmod, f, sym)
     return false
 end
 
+isknownlength(t::DataType) = !isvatuple(t) && !(t.name===NTuple.name && !isa(t.parameters[1],Int))
+
 cmp_tfunc = (x,y)->Bool
 
 isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
@@ -781,8 +783,18 @@ function precise_container_types(args, types, vtypes, sv)
             end
         elseif ti === Union{}
             return nothing
-        elseif ti<:Tuple && (i==n || !isvatuple(ti))
-            result[i] = ti.parameters
+        elseif ti<:Tuple
+            if i == n
+                if ti.name === NTuple.name
+                    result[i] = Any[Vararg{ti.parameters[2]}]
+                else
+                    result[i] = ti.parameters
+                end
+            elseif isknownlength(ti)
+                result[i] = ti.parameters
+            else
+                return nothing
+            end
         elseif ti<:AbstractArray && i==n
             result[i] = Any[Vararg{eltype(ti)}]
         else
@@ -2948,7 +2960,7 @@ function inlining_pass(e::Expr, sv, ast)
                     newargs[i-3] = aarg.args[2:end]
                 elseif isa(aarg, Tuple)
                     newargs[i-3] = Any[ QuoteNode(x) for x in aarg ]
-                elseif (t<:Tuple) && t !== Union{} && !isvatuple(t) && effect_free(aarg,sv,true)
+                elseif isa(t,DataType) && t.name===Tuple.name && !isvatuple(t) && effect_free(aarg,sv,true)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
                     tp = t.parameters
                     newargs[i-3] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]
