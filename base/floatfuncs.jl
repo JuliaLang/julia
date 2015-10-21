@@ -193,7 +193,7 @@ fma_llvm(x::Float64, y::Float64, z::Float64) =
 # 1.0000000009313226 = 1 + 1/2^30
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-if (fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+if (ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
      1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
     fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
