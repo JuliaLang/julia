@@ -652,7 +652,7 @@ function run_work_thunk(thunk, print_error)
     catch err
         ce = CapturedException(err, catch_backtrace())
         result = RemoteException(ce)
-        print_error && print(STDERR, ce)
+        print_error && showerror(STDERR, ce)
     end
     result
 end
