@@ -136,7 +136,7 @@ end
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
 function code_lowered(f, t::ANY=Tuple)
-    if isgeneric(f)
+    if !isa(f, Function) || isgeneric(f)
         return map(m->uncompressed_ast(m.func.code), methods(f, t))
     else
         return Any[uncompressed_ast(f.code)]

@@ -1680,11 +1680,9 @@ static void _compile_all_deq(jl_array_t *found)
                 unspec->env = NULL;
             meth->func->linfo->unspecialized = unspec;
             jl_gc_wb(meth->func->linfo, unspec);
+            unspec->linfo = (jl_lambda_info_t*)all_p2c((jl_value_t*)unspec->linfo, meth->tvars);
+            jl_gc_wb(unspec, unspec->linfo);
         }
-        unspec->linfo->specTypes = meth->sig;
-        jl_gc_wb(unspec->linfo, meth->sig);
-        unspec->linfo = (jl_lambda_info_t*)all_p2c((jl_value_t*)unspec->linfo, meth->tvars);
-        jl_gc_wb(unspec, unspec->linfo);
         jl_trampoline_compile_linfo(unspec->linfo, 1);
         assert(unspec->linfo->functionID > 0);
         meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
