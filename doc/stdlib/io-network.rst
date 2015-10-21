@@ -279,13 +279,13 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+   Create a pipe to which all C and Julia level ``STDOUT`` output will be redirected. Returns a tuple ``(rd,wr)`` representing the pipe ends. Data written to ``STDOUT`` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old ``STDOUT`` object was cached by the user and needs to be replaced elsewhere.
 
 .. function:: redirect_stdout(stream)
 
    .. Docstring generated from Julia source
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
+   Replace ``STDOUT`` by stream for all C and julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
 
 .. function:: redirect_stderr([stream])
 
@@ -805,6 +805,8 @@ Network I/O
 
 .. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
 
+   .. Docstring generated from Julia source
+
    Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
 .. function:: parseip(addr)
@@ -841,7 +843,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Create a TCPServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+   Create a ``TCPServer`` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 
 .. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 
@@ -873,11 +875,11 @@ Network I/O
 
    This behavior of this function varies slightly across platforms. See <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 
-.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
+.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
 
    .. Docstring generated from Julia source
 
-   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices.
+   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices. ``ipv6only`` parameter disables dual stack mode. If it's ``true``\ , only IPv6 stack is created.
 
 .. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 
