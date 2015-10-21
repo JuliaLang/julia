@@ -805,6 +805,8 @@ Network I/O
 
 .. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
 
+   .. Docstring generated from Julia source
+
    Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
 .. function:: parseip(addr)

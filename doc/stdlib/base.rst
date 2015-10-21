@@ -899,7 +899,6 @@ System
 
    Get the IP address of the local machine.
 
-
 .. function:: getpid() -> Int32
 
    .. Docstring generated from Julia source
