@@ -1298,6 +1298,7 @@ export
     tempname,
     touch,
     uperm,
+    walkdir,
 
 # external processes ## TODO: whittle down these exports.
     detach,
