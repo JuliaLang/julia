@@ -138,6 +138,9 @@ end
 
 # returns an array of modules loaded, or nothing if failed
 function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteString, toplevel_load::Bool)
+    if JLOptions().use_compilecache == 0
+        return nothing
+    end
     restored = nothing
     if toplevel_load && myid() == 1 && nprocs() > 1
         recompile_stale(mod, path_to_try)
@@ -177,6 +180,9 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
 end
 
 function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
+    if JLOptions().use_compilecache == 0
+        return nothing
+    end
     if node == myid()
         paths = find_all_in_cache_path(mod)
     else
@@ -234,8 +240,10 @@ precompilableerror(ex, c) = false
 # to be prevent it from being precompiled (false).  __precompile__(true) is
 # ignored except within "require" call.
 function __precompile__(isprecompilable::Bool=true)
-    if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
-        !(isprecompilable && toplevel_load::Bool)
+    if (myid() == 1 &&
+        JLOptions().use_compilecache != 0 &&
+        isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
+        !(isprecompilable && toplevel_load::Bool))
         throw(PrecompilableError(isprecompilable))
     end
 end
@@ -246,19 +254,21 @@ function require_modname(name::AbstractString)
     # While we could also strip off the absolute path, the user may be
     # deliberately directing to a different file than what got
     # cached. So this takes a conservative approach.
-    if endswith(name, ".jl")
-        tmp = name[1:end-3]
-        for prefix in LOAD_CACHE_PATH
-            path = joinpath(prefix, tmp*".ji")
-            if isfile(path)
-                return tmp
+    if Bool(JLOptions().use_compilecache)
+        if endswith(name, ".jl")
+            tmp = name[1:end-3]
+            for prefix in LOAD_CACHE_PATH
+                path = joinpath(prefix, tmp*".ji")
+                if isfile(path)
+                    return tmp
+                end
             end
         end
     end
-    name
+    return name
 end
 
-doc"""
+"""
     reload(name::AbstractString)
 
 Force reloading of a package, even if it has been loaded before. This is intended for use
@@ -305,7 +315,6 @@ function require(mod::Symbol)
             end
             return
         end
-
         name = string(mod)
         path = find_in_node_path(name, nothing, 1)
         if path === nothing
@@ -347,9 +356,8 @@ include_string(txt::ByteString, fname::ByteString) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
           txt, sizeof(txt), fname, sizeof(fname))
 
-include_string(txt::AbstractString, fname::AbstractString) = include_string(bytestring(txt), bytestring(fname))
-
-include_string(txt::AbstractString) = include_string(txt, "string")
+include_string(txt::AbstractString, fname::AbstractString="string") =
+    include_string(bytestring(txt), bytestring(fname))
 
 function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
@@ -436,9 +444,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
         serialize(io, :(Base._track_dependencies[1] = true))
         serialize(io, :(Base.include($(abspath(input)))))
         if source !== nothing
-            serialize(io, quote
-                      delete!(task_local_storage(), :SOURCE_PATH)
-                      end)
+            serialize(io, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
         close(io)
         wait(pobj)
