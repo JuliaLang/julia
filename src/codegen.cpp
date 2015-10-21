@@ -1280,8 +1280,10 @@ extern "C" void jl_binding_deprecation_warning(jl_binding_t *b);
 static void cg_bdw(jl_binding_t *b, jl_codectx_t *ctx)
 {
     jl_binding_deprecation_warning(b);
-    show_source_loc(JL_STDERR, ctx);
-    jl_printf(JL_STDERR, "\n");
+    if (jl_options.depwarn) {
+        show_source_loc(JL_STDERR, ctx);
+        jl_printf(JL_STDERR, "\n");
+    }
 }
 
 // try to statically evaluate, NULL if not possible
