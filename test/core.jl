@@ -3450,3 +3450,14 @@ end
 @test f13647(X13647(1, false), X13647(1, false))
 @test !f13647(X13647(1, false), X13647(1, true))
 @test !f13647(X13647(2, false), X13647(1, false))
+
+# issue #13636
+module I13636
+foo(x) = 1
+end
+let cache = Dict()
+    function I13636.foo(y::Int;k::Int=1)
+        cache[1] = y+k
+    end
+end
+@test I13636.foo(1,k=2) == 3

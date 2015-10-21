@@ -3468,7 +3468,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
                 mn = jl_exprarg(mn,0);
             }
             theF = boxed(emit_expr(mn, ctx), ctx);
-            if (!iskw) {
+            if (jl_is_expr(mn)) {
                 mn = jl_fieldref(jl_exprarg(mn, 2), 0);
             }
         }
