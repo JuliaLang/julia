@@ -3378,3 +3378,28 @@ g13261() = f13261()
 type IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
 @test read!(IO13433(), Array(UInt8, 4)) == [0x01, 0x01, 0x01, 0x01]
+
+# issue #13647, comparing boxed isbits immutables
+immutable X13647
+    a::Int
+    b::Bool
+end
+function f13647(x, y)
+   z = false
+   z = y
+   x === z
+end
+@test f13647(X13647(1, false), X13647(1, false))
+@test !f13647(X13647(1, false), X13647(1, true))
+@test !f13647(X13647(2, false), X13647(1, false))
+
+# issue #13636
+module I13636
+foo(x) = 1
+end
+let cache = Dict()
+    function I13636.foo(y::Int;k::Int=1)
+        cache[1] = y+k
+    end
+end
+@test I13636.foo(1,k=2) == 3
