@@ -76,6 +76,7 @@ jl_options_t jl_options = { 0,    // quiet
 #else
                             JL_OPTIONS_USE_PRECOMPILED_YES,
 #endif
+                            JL_OPTIONS_USE_COMPILECACHE_YES,
                             NULL, // bindto
                             NULL, // outputbc
                             NULL, // outputo

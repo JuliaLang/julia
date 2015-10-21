@@ -1572,6 +1572,7 @@ typedef struct {
     int8_t worker;
     int8_t handle_signals;
     int8_t use_precompiled;
+    int8_t use_compilecache;
     const char *bindto;
     const char *outputbc;
     const char *outputo;
@@ -1620,6 +1621,9 @@ DLLEXPORT int jl_generating_output(void);
 
 #define JL_OPTIONS_USE_PRECOMPILED_YES 1
 #define JL_OPTIONS_USE_PRECOMPILED_NO 0
+
+#define JL_OPTIONS_USE_COMPILECACHE_YES 1
+#define JL_OPTIONS_USE_COMPILECACHE_NO 0
 
 // Version information
 #include <julia_version.h>
