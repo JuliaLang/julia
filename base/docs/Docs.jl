@@ -512,16 +512,12 @@ fexpr(ex) = isexpr(ex, [:function, :stagedfunction, :(=)]) && isexpr(ex.args[1],
 
 function docm(meta, def, define = true)
 
-    err = (
-        "invalid doc expression:", def, isexpr(def, :macrocall) ?
-        "'$(def.args[1])' is not documentable. See 'help?> Base.@__doc__' for details." : ""
-    )
-
     def′ = unblock(def)
 
     isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
         return vardoc(meta, nothing, namify(def′.args[1]))
 
+    ex = def # Save unexpanded expression for error reporting.
     def = macroexpand(def)
     def′ = unblock(def)
 
@@ -541,8 +537,22 @@ function docm(meta, def, define = true)
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
     __doc__!(meta, def′)       ? esc(def′) :
-    isa(def′, Expr)            ? error(strip(join(err, "\n\n"))) :
-    objdoc(meta, def′)
+
+    # All other expressions are undocumentable and should be handled on a case-by-case basis
+    # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
+    # retrieved from the `__META__` `ObjectIdDict` without a reference to the string.
+    isa(def′, Union{AbstractString, Expr}) ? docerror(ex) : objdoc(meta, def′)
+end
+
+function docerror(ex)
+    txt = """
+    invalid doc expression:
+
+    @doc "..." $(isa(ex, AbstractString) ? repr(ex) : ex)"""
+    if isexpr(ex, :macrocall)
+        txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
+    end
+    :(error($txt, "\n"))
 end
 
 function docm(ex)
