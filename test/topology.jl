@@ -2,7 +2,7 @@
 
 include("testdefs.jl")
 addprocs(4; topology="master_slave")
-@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(3,myid), 2)
+@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -11,7 +11,7 @@ function test_worker_counts()
     ws=sort(workers())
 
     for p in workers()
-        @test (true, true, true) == remotecall_fetch(p, np, nw, ws) for (x,y,z)
+        @test (true, true, true) == remotecall_fetch(p, np, nw, ws) do x,y,z
             (x==nprocs(), y==nworkers(), z==sort(workers()))
         end
     end
@@ -77,9 +77,9 @@ for p1 in workers()
         i1 = map_pid_ident[p1]
         i2 = map_pid_ident[p2]
         if (iseven(i1) && iseven(i2)) || (isodd(i1) && isodd(i2))
-            @test p2 == remotecall_fetch(p->remotecall_fetch(p,myid), p1, p2)
+            @test p2 == remotecall_fetch(p->remotecall_fetch(myid, p), p1, p2)
         else
-            @test_throws RemoteException remotecall_fetch(p->remotecall_fetch(p,myid), p1, p2)
+            @test_throws RemoteException remotecall_fetch(p->remotecall_fetch(myid, p), p1, p2)
         end
     end
 end
