@@ -47,16 +47,21 @@ end
 # Additional symbols were generated from the unicode-math LaTeX package
 # symbol listing, using the following script:
 #=
-# download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/unicode-math-table.tex", "unicode-math-table.tex")
+fname = "unicode-math-table.tex"
+isfile(fname) || download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/$fname", fname)
 const latex_strings = Set(values(Base.REPLCompletions.latex_symbols))
-open("unicode-math-table.tex") do f
+open(fname) do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
         c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
-            println("    \"", escape_string(x[3]), "\" => \"",
+            tabcomname = escape_string(x[3])
+            if startswith(tabcomname, "math")
+                tabcomname = tabcomname[5:end]
+            end
+            println("    \"", tabcomname, "\" => \"",
                     escape_string("$c"), "\",  # ", x[5])
         end
     end
@@ -2542,5 +2547,22 @@ const latex_symbols = Dict(
     "\\mttseven" => "𝟽",  # mathematical monospace digit 7
     "\\mtteight" => "𝟾",  # mathematical monospace digit 8
     "\\mttnine" => "𝟿",  # mathematical monospace digit 9
+
+    "\\triangleright" => "▷",  # (large) right triangle, open; z notation range restriction
+    "\\triangleleft" => "◁",  # (large) left triangle, open; z notation domain restriction
+    "\\leftouterjoin" => "⟕",  # left outer join
+    "\\rightouterjoin" => "⟖",  # right outer join
+    "\\fullouterjoin" => "⟗",  # full outer join
+    "\\Join" => "⨝",  # join
+    "\\underbar" => "̲",  # combining low line
+    "\\underleftrightarrow" => "͍",  # underleftrightarrow accent
+    "\\leftwavearrow" => "↜",  # left arrow-wavy
+    "\\rightwavearrow" => "↝",  # right arrow-wavy
+    "\\varbarwedge" => "⌅",  # /barwedge b: logical and, bar above [projective (bar over small wedge)]
+    "\\smallblacktriangleright" => "▸",  # right triangle, filled
+    "\\smallblacktriangleleft" => "◂",  # left triangle, filled
+    "\\leftmoon" => "☾",  # last quarter moon
+    "\\smalltriangleright" => "▹",  # right triangle, open
+    "\\smalltriangleleft" => "◃",  # left triangle, open
 
 )
