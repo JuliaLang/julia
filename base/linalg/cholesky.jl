@@ -23,24 +23,24 @@ function CholeskyPivoted{T}(A::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasIn
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{:U}})
+function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{UpperTriangular})
     C, info = LAPACK.potrf!('U', A)
     return @assertposdef UpperTriangular(C) info
 end
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{:L}})
+function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return @assertposdef LowerTriangular(C) info
 end
-chol!(A::StridedMatrix) = chol!(A, Val{:U})
+chol!(A::StridedMatrix) = chol!(A, UpperTriangular)
 
-function chol!{T}(A::AbstractMatrix{T}, ::Type{Val{:U}})
+function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
     n = chksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
                 A[k,k] -= A[i,k]'A[i,k]
             end
-            Akk = chol!(A[k,k], Val{:U})
+            Akk = chol!(A[k,k], UpperTriangular)
             A[k,k] = Akk
             AkkInv = inv(Akk')
             for j = k + 1:n
@@ -53,14 +53,14 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{Val{:U}})
     end
     return UpperTriangular(A)
 end
-function chol!{T}(A::AbstractMatrix{T}, ::Type{Val{:L}})
+function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
     n = chksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
                 A[k,k] -= A[k,i]*A[k,i]'
             end
-            Akk = chol!(A[k,k], Val{:L})
+            Akk = chol!(A[k,k], LowerTriangular)
             A[k,k] = Akk
             AkkInv = inv(Akk)
             for j = 1:k
@@ -78,13 +78,14 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{Val{:L}})
     return LowerTriangular(A)
 end
 
+doc"""
+    chol(A::AbstractMatrix) -> U
+
+Compute the Cholesky factorization of a positive definite matrix `A` and return the UpperTriangular matrix `U` such that `A = U'U`.
+"""
 function chol{T}(A::AbstractMatrix{T})
     S = promote_type(typeof(chol(one(T))), Float32)
     chol!(copy_oftype(A, S))
-end
-function chol{T}(A::AbstractMatrix{T}, uplo::Union{Type{Val{:L}}, Type{Val{:U}}})
-    S = promote_type(typeof(chol(one(T))), Float32)
-    chol!(copy_oftype(A, S), uplo)
 end
 function chol!(x::Number, uplo)
     rx = real(x)
@@ -94,50 +95,50 @@ function chol!(x::Number, uplo)
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
-chol(x::Number, uplo::Symbol=:U) = chol!(x, uplo)
+doc"""
+    chol(x::Number) -> y
 
-function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U,
-                                 pivot::Union{Type{Val{false}},Type{Val{true}}}=Val{false}; tol=0.0)
-    _cholfact!(A, pivot, uplo, tol=tol)
-end
-function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U; tol=0.0)
-    return Cholesky(chol!(A, Val{uplo}).data, uplo)
+Compute the square root of a non-negative number `x`.
+"""
+chol(x::Number, args...) = chol!(x, nothing)
+
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
+    _cholfact!(A, Val{false}, uplo)
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
+    _cholfact!(A, Val{true}, uplo; tol = tol)
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol = :U) =
+    _cholfact!(A, Val{false}, uplo)
+
+function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U)
+    if uplo == :U
+        return Cholesky(chol!(A, UpperTriangular).data, uplo)
+    else
+        return Cholesky(chol!(A, LowerTriangular).data, uplo)
+    end
 end
 function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0)
     uplochar = char_uplo(uplo)
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
-function cholfact!(A::StridedMatrix, uplo::Symbol=:U,
-                   pivot::Union{Type{Val{false}},Type{Val{true}}}=Val{false}; tol=0.0)
-    Cholesky(chol!(A, Val{uplo}).data, uplo)
+function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
+    if uplo == :U
+        Cholesky(chol!(A, UpperTriangular).data, 'U')
+    else
+        Cholesky(chol!(A, UpperTriangular).data, 'U')
+    end
 end
+cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) = throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
+cholfact!(A::StridedMatrix, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
 
-# function cholfact!{T<:BlasFloat,S}(C::Cholesky{T,S})
-#     _, info = LAPACK.potrf!(C.uplo, C.factors)
-#     info[1]>0 && throw(PosDefException(info[1]))
-#     C
-# end
-
-# cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) =
-#     cholfact!(copy(A), uplo, pivot, tol=tol)
-
-
-cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; tol=0.0) =
-    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, pivot; tol = tol)
-# _cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
-#     cholfact!(A, uplo, pivot, tol = tol)
-# _cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{false}}, uplo::Symbol=:U; tol=0.0) =
-#     cholfact!(A, uplo, pivot, tol = tol)
-
-# _cholfact{T}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U; tol=0.0) =
-#     cholfact!(A, uplo)
-# _cholfact{T}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
-#     throw(ArgumentError("pivot only supported for Float32, Float64, Complex{Float32} and Complex{Float64}"))
-
+cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
+    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{false})
+cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
+    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{true}; tol = tol)
+cholfact{T}(A::StridedMatrix{T}, uplo::Symbol = :U) = cholfact(A, uplo, Val{false})
 
 function cholfact(x::Number, uplo::Symbol=:U)
-    xf = fill(chol!(x, uplo), 1, 1)
+    xf = fill(chol(x), 1, 1)
     Cholesky(xf, uplo)
 end
 
@@ -155,7 +156,10 @@ convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) =
 convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
 full{T,S}(C::Cholesky{T,S}) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
-full(F::CholeskyPivoted) = (ip=invperm(F[:p]); (F[:L] * F[:U])[ip,ip])
+function full(F::CholeskyPivoted)
+    ip = invperm(F[:p])
+    return (F[:L] * F[:U])[ip,ip]
+end
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
