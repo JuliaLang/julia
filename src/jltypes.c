@@ -637,34 +637,6 @@ static long meet_tuple_lengths(long bv, long vv, int *bot)
     return vv;
 }
 
-// convert a type to the value it would have if assigned to a static parameter
-// in covariant context.
-// example: {Type{Int},} => {DataType,}
-// calling f{T}(x::T) as f({Int,}) should give T == {DataType,}, but we
-// might temporarily represent this type as {Type{Int},} for more precision.
-static jl_value_t *type_to_static_parameter_value(jl_value_t *t)
-{
-    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
-        return jl_typeof(jl_tparam0(t));
-    if (jl_is_tuple_type(t)) {
-        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
-        size_t l = jl_svec_len(p);
-        int changed = 0;
-        jl_svec_t *np = jl_alloc_svec(l);
-        JL_GC_PUSH1(&np);
-        for(size_t i=0; i < l; i++) {
-            jl_value_t *el = type_to_static_parameter_value(jl_svecref(p,i));
-            jl_svecset(np, i, el);
-            if (el != jl_svecref(p,i))
-                changed = 1;
-        }
-        jl_value_t *result = changed ? (jl_value_t*)jl_apply_tuple_type(np) : t;
-        JL_GC_POP();
-        return result;
-    }
-    return t;
-}
-
 static int match_intersection_mode = 0;
 static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b);
 
@@ -674,10 +646,6 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     jl_value_t *both=NULL;
     jl_tvar_t *new_b=NULL;
     JL_GC_PUSH3(&b, &both, &new_b);
-    if (var == covariant) {
-        // matching T to Type{S} in covariant context
-        b = type_to_static_parameter_value(b);
-    }
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!is_bnd(a,penv)) {
             JL_GC_POP();
@@ -764,11 +732,6 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                 if (jl_types_equal(b, penv->data[i+1])) {
                     JL_GC_POP();
                     return (jl_value_t*)a;
-                }
-                jl_value_t *ti = jl_type_intersection(b, penv->data[i+1]);
-                if (ti == (jl_value_t*)jl_bottom_type) {
-                    JL_GC_POP();
-                    return ti;
                 }
                 break;
             }
@@ -1266,6 +1229,34 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
     return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
 }
 
+// convert a type to the value it would have if assigned to a static parameter
+// in covariant context.
+// example: {Type{Int},} => {DataType,}
+// calling f{T}(x::T) as f({Int,}) should give T == {DataType,}, but we
+// might temporarily represent this type as {Type{Int},} for more precision.
+static jl_value_t *type_to_static_parameter_value(jl_value_t *t)
+{
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
+        return jl_typeof(jl_tparam0(t));
+    if (jl_is_tuple_type(t)) {
+        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
+        size_t l = jl_svec_len(p);
+        int changed = 0;
+        jl_svec_t *np = jl_alloc_svec(l);
+        JL_GC_PUSH1(&np);
+        for(size_t i=0; i < l; i++) {
+            jl_value_t *el = type_to_static_parameter_value(jl_svecref(p,i));
+            jl_svecset(np, i, el);
+            if (el != jl_svecref(p,i))
+                changed = 1;
+        }
+        jl_value_t *result = changed ? (jl_value_t*)jl_apply_tuple_type(np) : t;
+        JL_GC_POP();
+        return result;
+    }
+    return t;
+}
+
 /*
 void print_env(cenv_t *soln)
 {
@@ -1282,6 +1273,9 @@ void print_env(cenv_t *soln)
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
 {
+    jl_value_t *rt1=NULL, *rt2=NULL, *S=NULL;
+    JL_GC_PUSH3(&rt1, &rt2, &S);
+
     while (1) {
         int old_n = soln->n;
 
@@ -1293,7 +1287,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
             if (!jl_is_typevar(*pS)) {
                 // detect cycles
                 if (jl_has_typevars_from_v(*pS, &soln->data[i], 1))
-                    return 0;
+                    goto ret_no;
             }
         }
 
@@ -1313,7 +1307,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
         for(int i=0; i < env->n; i+=2) {
             jl_value_t *T = env->data[i];
             jl_value_t **pS = &env->data[i+1];
-            jl_value_t *S = *pS;
+            S = *pS;
             if (!jl_is_typevar(S)) {
                 for(int j=i+2; j < env->n; j+=2) {
                     jl_value_t *TT = env->data[j];
@@ -1321,8 +1315,10 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     if (TT == T) {
                         // found T=SS in env
                         if (!jl_is_typevar(SS)) {
-                            jl_value_t *m = meet(S, SS, covariant);
-                            if (m == NULL) return 0;
+                            rt1 = type_to_static_parameter_value(S);
+                            rt2 = type_to_static_parameter_value(SS);
+                            jl_value_t *m = meet(rt1, rt2, covariant);
+                            if (m == NULL) goto ret_no;
                             S = m;
                         }
                     }
@@ -1331,7 +1327,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                         jl_value_t **pTT = tvar_lookup(soln, &TT);
                         if (pTT != &TT) {
                             jl_value_t *m = meet(S, *pTT, covariant);
-                            if (m == NULL) return 0;
+                            if (m == NULL) goto ret_no;
                             S = m;
                         }
                     }
@@ -1348,18 +1344,18 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                         int bot = 0;
                         long mv = meet_tuple_lengths(~lenS, lenT, &bot);
                         if (bot)
-                            return 0;
+                            goto ret_no;
                         // NOTE: this is unused. can we do anything with it?
                         (void)mv;
                         //S = jl_box_long(mv);
                     }
                     else {
                         if (meet(*pT,S,covariant) == NULL)
-                            return 0;
+                            goto ret_no;
                     }
                 }
                 else {
-                    extend(T, S, soln);
+                    extend(T, type_to_static_parameter_value(S), soln);
                 }
             }
             else {
@@ -1367,7 +1363,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 if (pT != &T) {
                     if (tvar_lookup(soln, &S) == &S) {
                         jl_value_t *v = meet(S, *pT, covariant);
-                        if (v == NULL) return 0;
+                        if (v == NULL) goto ret_no;
                         extend(S, v, soln);
                         *pT = S;
                     }
@@ -1383,19 +1379,21 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
     for(int i=0; i < env->n; i+=2) {
         jl_value_t *T = env->data[i];
         jl_value_t **pS = &env->data[i+1];
-        jl_value_t *S = *pS;
+        S = *pS;
         if (tvar_lookup(soln, &T) == &T) {
             for(int j=i+2; j < env->n; j+=2) {
                 jl_value_t *TT = env->data[j];
                 jl_value_t *SS = env->data[j+1];
                 if (TT == T) {
-                    jl_value_t *m = meet(S, SS, covariant);
-                    if (m == NULL) return 0;
+                    rt1 = type_to_static_parameter_value(S);
+                    rt2 = type_to_static_parameter_value(SS);
+                    jl_value_t *m = meet(rt1, rt2, covariant);
+                    if (m == NULL) goto ret_no;
                     S = m;
                 }
                 else if (SS == T) {
                     jl_value_t *m = meet(S, *tvar_lookup(soln, &TT), covariant);
-                    if (m == NULL) return 0;
+                    if (m == NULL) goto ret_no;
                     S = m;
                 }
             }
@@ -1404,12 +1402,16 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     S = (jl_value_t*)jl_new_typevar(underscore_sym,
                                                     (jl_value_t*)jl_bottom_type, S);
                 }
-                extend(T, S, soln);
+                extend(T, type_to_static_parameter_value(S), soln);
             }
         }
     }
 
+    JL_GC_POP();
     return 1;
+ ret_no:
+    JL_GC_POP();
+    return 0;
 }
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
