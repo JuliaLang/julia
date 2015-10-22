@@ -830,32 +830,36 @@ function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    i = start(a)
+    mi = i
+    m, i = next(a, i)
+    while !done(a, i)
+        iold = i
+        ai, i = next(a, i)
         if ai > m || m!=m
             m = ai
-            mi = i
+            mi = iold
         end
     end
-    return (m, mi)
+    return (m, iterstate(mi))
 end
 
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    i = start(a)
+    mi = i
+    m, i = next(a, i)
+    while !done(a, i)
+        iold = i
+        ai, i = next(a, i)
         if ai < m || m!=m
             m = ai
-            mi = i
+            mi = iold
         end
     end
-    return (m, mi)
+    return (m, iterstate(mi))
 end
 
 indmax(a) = findmax(a)[2]

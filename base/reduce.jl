@@ -131,7 +131,9 @@ mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T)::T)
 mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
-function _mapreduce{T}(f, op, A::AbstractArray{T})
+_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
+
+function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
     n = Int(length(A))
     if n == 0
         return mr_empty(f, op, T)
@@ -152,7 +154,9 @@ function _mapreduce{T}(f, op, A::AbstractArray{T})
     end
 end
 
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
+_mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
+
+mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
 mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
@@ -395,12 +399,10 @@ function count(pred, itr)
     return n
 end
 
-function count(pred, a::AbstractArray)
+function count(pred, A::AbstractArray)
     n = 0
-    for i = 1:length(a)
-        @inbounds if pred(a[i])
-            n += 1
-        end
+    @inbounds for a in A
+        pred(a) && (n += 1)
     end
     return n
 end
