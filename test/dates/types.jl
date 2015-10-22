@@ -147,7 +147,7 @@ b = Dates.Date(2001)
 @test a != b
 @test Dates.Date(Dates.DateTime(Dates.Date(2012,7,1))) == Dates.Date(2012,7,1)
 
-#=y = Dates.Year(1)
+y = Dates.Year(1)
 m = Dates.Month(1)
 w = Dates.Week(1)
 d = Dates.Day(1)
@@ -173,4 +173,4 @@ ms = Dates.Millisecond(1)
 @test Dates.Date(d,y) == Dates.Date(1,1,1)
 @test Dates.Date(d,m) == Dates.Date(1,1,1)
 @test Dates.Date(m,y) == Dates.Date(1,1,1)
-=#
+
