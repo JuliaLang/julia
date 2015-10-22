@@ -125,8 +125,8 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg.chol!(X*X', Val{:L}))
-    U = full(Base.LinAlg.chol!(X*X', Val{:U}))
+    L = full(Base.LinAlg.chol!(X*X', LowerTriangular))
+    U = full(Base.LinAlg.chol!(X*X', UpperTriangular))
     XX = full(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
@@ -141,7 +141,6 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    for ul in (:U, :L)
-        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{Val{ul}}},copy(A), Val{ul}))
-    end
+    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end

@@ -111,11 +111,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input ``A``, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 
-.. function:: chol(A, [LU]) -> F
+.. function:: chol(A::AbstractMatrix) -> U
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky factorization of a symmetric positive definite matrix ``A`` and return the matrix ``F``\ . If ``LU`` is ``Val{:U}`` (Upper), ``F`` is of type ``UpperTriangular`` and ``A = F'*F``\ . If ``LU`` is ``Val{:L}`` (Lower), ``F`` is of type ``LowerTriangular`` and ``A = F*F'``\ . ``LU`` defaults to ``Val{:U}``\ .
+   Compute the Cholesky factorization of a positive definite matrix ``A`` and return the UpperTriangular matrix ``U`` such that ``A = U'U``\ .
+
+.. function:: chol(x::Number) -> y
+
+   .. Docstring generated from Julia source
+
+   Compute the square root of a non-negative number ``x``\ .
 
 .. function:: cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
