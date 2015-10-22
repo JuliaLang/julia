@@ -81,8 +81,55 @@ try
     end
     println(STDERR, "\nNOTE: The following 'LoadError: break me' indicates normal operation")
     @test_throws ErrorException Base.require(:FooBar)
+
 finally
     splice!(Base.LOAD_CACHE_PATH, 1)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
+end
+
+# test --compilecache=no command line option
+dir = mktempdir()
+let dir = mktempdir(),
+    Time_module = :Time4b3a94a1a081a8cb
+
+    try
+        open(joinpath(dir, "$Time_module.jl"), "w") do io
+            write(io, """
+            module $Time_module
+                __precompile__(true)
+                time = Base.time()
+            end
+            """)
+        end
+
+        eval(quote
+            insert!(LOAD_PATH, 1, $(dir))
+            insert!(Base.LOAD_CACHE_PATH, 1, $(dir))
+            Base.compilecache(:Time4b3a94a1a081a8cb)
+        end)
+
+        exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
+
+        testcode = """
+            insert!(LOAD_PATH, 1, $(repr(dir)))
+            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            using $Time_module
+            getfield($Time_module, :time)
+        """
+
+        t1_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
+        t2_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
+        @test t1_yes == t2_yes
+
+        t1_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
+        t2_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
+        @test t1_no != t2_no
+        @test parse(Float64, t1_no) < parse(Float64, t2_no)
+
+    finally
+        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(LOAD_PATH, 1)
+        rm(dir, recursive=true)
+    end
 end
