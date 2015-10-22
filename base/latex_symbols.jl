@@ -58,8 +58,8 @@ open(fname) do f
         if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             tabcomname = escape_string(x[3])
-            if startswith(tabcomname, "math")
-                tabcomname = tabcomname[5:end]
+            if startswith(tabcomname, "\\\\math")
+                tabcomname = string("\\\\", tabcomname[7:end])
             end
             println("    \"", tabcomname, "\" => \"",
                     escape_string("$c"), "\",  # ", x[5])
