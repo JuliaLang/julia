@@ -264,6 +264,9 @@ end
 @test docstrings_equal(@doc(BareModule.A), doc"A")
 @test docstrings_equal(@doc(BareModule.T), doc"T")
 
+@test_throws ErrorException @doc("...", "error")
+@test_throws ErrorException @doc("...", @time 0)
+
 # test that when no docs exist, they fallback to
 # the docs for the typeof(value)
 let d1 = @doc(DocsTest.val)
