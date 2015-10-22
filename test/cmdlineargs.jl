@@ -232,4 +232,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test readchomp(pipeline(ignorestatus(`$exename -f -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
     @test readchomp(pipeline(ignorestatus(`$exename -f --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
     @test readchomp(pipeline(ignorestatus(`$exename -f -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
+
+    # --compilecache={yes|no}
+    @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"
+    @test readchomp(`$exename --compilecache=yes -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"
+    @test readchomp(`$exename --compilecache=no -E "Bool(Base.JLOptions().use_compilecache)"`) == "false"
+    @test !success(`$exename --compilecache=foo -e "exit(0)"`)
 end
