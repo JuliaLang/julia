@@ -9,6 +9,8 @@ Language changes
 
   * `using` and `import` are now case-sensitive even on case-insensitive filesystems (common on Mac and Windows) ([#13542]).
 
+  * Relational symbols are now allowed as infix operators ([#8036]).
+
 Command-line option changes
 ---------------------------
 
