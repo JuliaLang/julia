@@ -178,6 +178,12 @@ end
 # it is important not to have the """ code reindent this line,
 # possibly converting \t to spaces.
 fakehistory = """
+# time: 2014-06-29 20:44:29 EDT
+# mode: julia
+\té
+# time: 2014-06-29 21:44:29 EDT
+# mode: julia
+\téé
 # time: 2014-06-30 17:32:49 EDT
 # mode: julia
 \tshell
@@ -282,7 +288,7 @@ begin
     @test buffercontents(LineEdit.buffer(s)) == "ll"
 
     # Test that searching backwards with a one-letter query doesn't
-    # return indefinitely the same match.
+    # return indefinitely the same match (#9352)
     LineEdit.enter_search(s, histp, true)
     write(ss.query_buffer, "l")
     LineEdit.update_display_buffer(ss, ss)
@@ -291,6 +297,16 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "shell"
+
+    # Test that searching backwards doesn't skip matches (#9352)
+    # (for a search with multiple one-byte characters, or UTF-8 characters)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "é") # matches right-most "é" in "éé"
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test buffercontents(LineEdit.buffer(s)) == "éé"
 
     # Issue #7551
     # Enter search mode and try accepting an empty result
