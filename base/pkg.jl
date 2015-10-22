@@ -56,4 +56,26 @@ test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractStri
 
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
 
+
+# point users to PkgDev
+register(args...) =
+    error("Pkg.register(pkg,[url]) has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
+tag(pkg, ver=nothing, commit=nothing) =
+    error("Pkg.tag(pkg, [ver, [commit]]) has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
+publish() =
+    error("Pkg.publish() has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
+generate(pkg, license) =
+    error("Pkg.generate(pkg, license) has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
+license(lic=nothing) =
+    error("Pkg.license([lic]) has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
 end # module
