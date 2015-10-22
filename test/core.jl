@@ -3461,3 +3461,15 @@ let cache = Dict()
     end
 end
 @test I13636.foo(1,k=2) == 3
+
+# issue #11327 and #13547
+@test_throws MethodError convert(Type{Int}, Float32)
+# TODO: this should probably be a MethodError in `convert`; not sure what's going on
+@test_throws TypeError Array{Type{Int64}}([Float32])
+abstract A11327
+abstract B11327 <: A11327
+f11327{T}(::Type{T},x::T) = x
+@test_throws MethodError f11327(Type{A11327},B11327)
+let T=TypeVar(:T,true)
+    @test typeintersect(Tuple{Type{T},T}, Tuple{Type{Type{Float64}},Type{Int}}) === Union{}
+end
