@@ -675,3 +675,12 @@ test_range_sum_diff(1.:5., linspace(0, 8, 5),
 let r = 0x02:0x05
     @test r[2:3] == 0x03:0x04
 end
+
+# Issue #13738
+for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
+    rr = r[r]
+    @test typeof(rr) == typeof(r)
+    @test r[r] == r
+    # these calls to similar must not throw:
+    @test size(similar(r, size(r))) == size(similar(r, length(r)))
+end

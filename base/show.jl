@@ -1056,7 +1056,7 @@ function print_matrix_row(io::IO,
 )
     for k = 1:length(A)
         j = cols[k]
-        if isassigned(X,i,j)
+        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(x)
             sx = sprint(showcompact_lim, x)
