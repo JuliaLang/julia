@@ -6,9 +6,9 @@
 cmd = `$(Base.julia_cmd()) --check-bounds=yes --depwarn=error parallel_exec.jl`
 
 (strm, proc) = open(cmd)
-errors = readall(strm)
+cmdout = readall(strm)
 wait(proc)
+println(cmdout);
 if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-    println(errors);
     error("Parallel test failed, cmd : $cmd")
 end
