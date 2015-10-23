@@ -236,16 +236,17 @@ each argument to the specified type. For example, the following call::
 will behave as if the following were written::
 
     ccall((:foo, "libfoo"), Void, (Int32, Float64),
-          Base.cconvert(Int32, Base.cconvert_gcroot(Int32, x)),
-          Base.cconvert(Float64, Base.cconvert_gcroot(Float64, y)))
+          Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
+          Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 
-Note that the primary fall-back method for ``cconvert`` is::
+``cconvert`` normally just calls ``convert``, but can be defined to return
+an arbitrary new object more appropriate for passing to C. For example,
+this is used to convert an ``Array`` of objects (e.g. strings) to an
+array of pointers.
 
-    cconvert(T,x) = convert(T, x)
-
-and the primary fallback method for ``cconvert_gcroot`` is::
-
-    cconvert_gcroot(T,x) = x
+``unsafe_convert`` handles conversion to ``Ptr`` types. It is considered
+unsafe because converting an object to a native pointer can hide the object
+from the garbage collector, causing it to be freed prematurely.
 
 Type Correspondences:
 ~~~~~~~~~~~~~~~~~~~~~
@@ -311,19 +312,18 @@ There are several special types to be aware of, as no other type can be defined 
 :Array{T,N}:
     When an array is passed to C as a ``Ptr{T}`` argument, it is
     not reinterpret-cast: Julia requires that the element type of the
-    array matches ``T``, and then address of the first element is passed.
+    array matches ``T``, and the address of the first element is passed.
 
     Therefore, if an ``Array`` contains data in the wrong format, it will
-    have to be explicitly converted using a call such as ``int32(a)``.
+    have to be explicitly converted using a call such as ``trunc(Int32,a)``.
 
     To pass an array ``A`` as a pointer of a different type *without*
     converting the data beforehand (for example, to pass a ``Float64`` array
-    to a function that operates on uninterpreted bytes), you can either
-    declare the argument as ``Ptr{Void}`` or you can explicitly call
-    ``pointer(A)``.
+    to a function that operates on uninterpreted bytes), you can
+    declare the argument as ``Ptr{Void}``.
 
     If an array of eltype ``Ptr{T}`` is passed as a ``Ptr{Ptr{T}}`` argument, the Julia base library
-    ``cconvert_gcroot`` function will attempt to first make a null-terminated copy of the array with
+    ``cconvert`` function will attempt to first make a null-terminated copy of the array with
     each element replaced by its ``cconvert`` version. This allows, for example, passing an ``argv``
     pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
 
