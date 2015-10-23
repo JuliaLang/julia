@@ -1131,7 +1131,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // First, if the ABI requires us to provide the space for the return
     // argument, allocate the box and store that as the first argument type
-    bool sretboxed;
+    bool sretboxed = false;
     if (sret) {
         jl_cgval_t sret_val = emit_new_struct(rt,1,NULL,ctx); // TODO: is it valid to be creating an incomplete type this way?
         assert(sret_val.typ != NULL && "Type was not concrete");
