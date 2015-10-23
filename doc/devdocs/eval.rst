@@ -12,11 +12,6 @@ Each chunk of code typically makes a trip through many esoteric acronyms such as
 `compile`, `parse`, `execute`, `JIT`, `interpret`, `box`, `unbox`, `intrinsic function`, `primitive function`
 before turning into the desired result (hopefully).
 
-Julia Execution
----------------
-
-The 10,000 foot view of the whole process is as follows:
-
 .. sidebar:: Definitions
 
    REPL
@@ -28,6 +23,12 @@ The 10,000 foot view of the whole process is as follows:
      The AST is the digital representation of the code structure.
      In this form the code has been tokenized for meaning
      so that it is more suitable for manipulation and execution.
+
+
+Julia Execution
+---------------
+
+The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
 2. The C function :c:func:`main` from `ui/repl.c` gets called.
@@ -97,11 +98,6 @@ This enables many future optimizations, such as unboxing of known immutable valu
 and compile-time hoisting of various run-time operations such as computing field offsets and function pointers.
 Type inference may also include other steps such as constant propagation and inlining.
 
-.. _codegen:
-
-JIT Code Generation
--------------------
-
 .. sidebar:: More Definitions
 
     JIT
@@ -145,6 +141,11 @@ JIT Code Generation
       Since they operate on bits directly, they must be compiled into a function
       and surrounded by a call to `Core.Intrinsics.box(T, ...)` to reassign type information to the value.
 
+.. _codegen:
+
+JIT Code Generation
+-------------------
+
 Codegen is the process of turning a Julia AST into native machine code.
 
 The JIT environment is initialized by an early call to `jl_init_codegen in codegen.cpp <https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp>`_.
@@ -168,11 +169,6 @@ Other parts of codegen are handled by various helper files:
 `intrinsics.cpp <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp>`_
   Handles the emission of various low-level intrinsic functions
 
-.. _sysimg:
-
-System Image
-------------
-
 .. sidebar:: Bootstrapping
 
     The process of creating a new system image is called "bootstrapping".
@@ -180,6 +176,11 @@ System Image
     The etymology of this word comes from the phrase "pulling one's self up by the bootstraps",
     and refers to the idea of starting from a very limited set of available functions and definitions
     and ending with the creation of a full-featured environment.
+
+.. _sysimg:
+
+System Image
+------------
 
 The system image is a precompiled archive of a set of Julia files.
 The `sys.ji` file distributed with Julia is one such system image,
