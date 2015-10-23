@@ -1235,7 +1235,7 @@ void jl_init_primitives(void)
     add_builtin_func("svec", jl_f_svec);
     add_builtin_func("method_exists", jl_f_methodexists);
     add_builtin_func("applicable", jl_f_applicable);
-    add_builtin_func("invoke", jl_f_invoke);
+    add_builtin_func("_invoke", jl_f_invoke);
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isdefined", jl_f_isdefined);
 

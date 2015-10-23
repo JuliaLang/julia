@@ -5,7 +5,7 @@ import Core.Intrinsics.ccall
 baremodule Base
 
 using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
+            kwcall, _apply, typeassert, apply_type, svec, _invoke
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include

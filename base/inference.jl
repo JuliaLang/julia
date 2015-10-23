@@ -957,7 +957,7 @@ function abstract_call(f, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInf
     if isgeneric(f)
         return abstract_call_gf(f, fargs, Tuple{argtypes...}, e)
     end
-    if is(f,invoke) && length(fargs)>1
+    if is(f, _invoke) && length(fargs)>1
         af = isconstantfunc(fargs[1], sv)
         if !is(af,false) && (af=_ieval(af);isgeneric(af))
             sig = argtypes[2]
@@ -3337,3 +3337,69 @@ end
 #tfunc(f,t) = methods(f,t)[1].func.code.tfunc
 
 ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
+
+
+const _enable_invoke_kw_hack = true
+
+function _get_kwsorter(f::Function)
+    if !isdefined(f.env, :kwsorter)
+        error("function $(f.env.name) does not accept keyword arguments")
+    end
+    return f.env.kwsorter
+end
+
+@generated _argtype(t) = t
+
+export invoke
+
+if _enable_invoke_kw_hack
+    function invoke{T<:Tuple}(f::Function, types::Type{T}, args...)
+        _invoke(f, types, args...)
+    end
+    function invoke{T<:Tuple}(f, types::Type{T}, args...)
+        _invoke(call, tuple_type_cons(_argtype(f), types), f, args...)
+    end
+    function _invoke_kw{T<:Tuple}(kws::Array, f::Function,
+                                  types::Type{T}, args...)
+        _invoke(_get_kwsorter(f), tuple_type_cons(Array, types), kws, args...)
+    end
+    function _invoke_kw{T<:Tuple}(kws::Array, f, types::Type{T}, args...)
+        _invoke_kw(kws, call, tuple_type_cons(_argtype(f), types), f, args...)
+    end
+    # Making forwarding of keyword arguments and generating keyword argument
+    # pack much faster by directly define the kwsorter
+    invoke.env.kwsorter = _invoke_kw
+else
+    # Pack keyword arguments, logic copied from jl_g_kwcall
+    function _pack_kwargs(kws::Array)
+        const kwlen = length(kws)
+        const ary = Array(Any, 2 * kwlen)
+
+        for i in 1:kwlen
+            const (key::Symbol, val) = kws[i]
+            @inbounds ary[2 * i - 1] = key
+            @inbounds ary[2 * i] = val
+        end
+        ary
+    end
+    function _invoke_imp{T<:Tuple}(f::Function, types::Type{T}, args, kws)
+        if isempty(kws)
+            _invoke(f, types, args...)
+        else
+            _invoke(_get_kwsorter(f), tuple_type_cons(Array, types),
+                    _pack_kwargs(kws), args...)
+        end
+    end
+    function invoke{T<:Tuple}(f::Function, types::Type{T}, args...; kws...)
+        _invoke_imp(f, types, args, kws)
+    end
+    function invoke{T<:Tuple}(f, types::Type{T}, args...; kws...)
+        _invoke_imp(call, tuple_type_cons(_argtype(f), types),
+                    (f, args...), kws)
+    end
+end
+
+# Don't worry about the performance for the old signature too much
+function invoke(f, types::Tuple, args...; kws...)
+    invoke(f, Tuple{types...}, args...; kws...)
+end
