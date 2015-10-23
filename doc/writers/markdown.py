@@ -522,6 +522,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_term(self, node):
         if not self._li_has_classifier:
+            self.add_text(':')
             self.end_state(end=None)
 
     def visit_termsep(self, node):
