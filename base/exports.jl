@@ -676,6 +676,8 @@ export
     lufact,
     lyap,
     norm,
+    normalize,
+    normalize!,
     nullspace,
     ordschur!,
     ordschur,
