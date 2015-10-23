@@ -150,3 +150,24 @@ let
     @test LinAlg.axpy!(α, x, deepcopy(y)) == x .* Matrix{Int}[α]
     @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
 end
+
+let
+    v = [3.0, 4.0]
+    @test norm(v) === 5.0
+    w = normalize(v)
+    @test w == [0.6, 0.8]
+    @test norm(w) === 1.0
+    @test norm(normalize!(v) - w, Inf) < eps()
+end
+
+#Test potential overflow in normalize!
+let
+    δ = inv(prevfloat(typemax(Float64)))
+    v = [δ, -δ]
+
+    @test norm(v) === 7.866824069956793e-309
+    w = normalize(v)
+    @test w ≈ [1/√2, -1/√2]
+    @test norm(w) === 1.0
+    @test norm(normalize!(v) - w, Inf) < eps()
+end

@@ -108,6 +108,49 @@ function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{true}}; thin::Bool=tru
     full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
 end
 
+"""
+    qr(v::AbstractVector)
+
+Computes the polar decomposition of a vector.
+
+# Input
+- `v::AbstractVector` - vector to normalize
+
+# Outputs
+- `w` - A unit vector in the direction of `v`
+- `r` - The norm of `v`
+
+# See also
+
+`normalize`, `normalize!`, `qr!`
+"""
+function qr(v::AbstractVector)
+    nrm = norm(v)
+    v/nrm, nrm
+end
+
+"""
+    qr!(v::AbstractVector)
+
+Computes the polar decomposition of a vector.
+
+# Input
+- `v::AbstractVector` - vector to normalize
+
+# Outputs
+- `w` - A unit vector in the direction of `v`
+- `r` - The norm of `v`
+
+# See also
+
+`normalize`, `normalize!`, `qr`
+"""
+function qr!(v::AbstractVector)
+    nrm = norm(v)
+    __normalize!(v, nrm), nrm
+end
+
+
 convert{T}(::Type{QR{T}},A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
 convert{T}(::Type{Factorization{T}}, A::QR) = convert(QR{T}, A)
 convert{T}(::Type{QRCompactWY{T}},A::QRCompactWY) = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
