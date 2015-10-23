@@ -177,3 +177,33 @@ const ≈ = isapprox
 rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
 rtoldefault{T<:Real}(::Type{T}) = 0
 rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = rtoldefault(promote_type(real(T),real(S)))
+
+# fused multiply-add
+fma_libm(x::Float32, y::Float32, z::Float32) =
+    ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
+fma_libm(x::Float64, y::Float64, z::Float64) =
+    ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
+fma_llvm(x::Float32, y::Float32, z::Float32) =
+    box(Float32,fma_float(unbox(Float32,x),unbox(Float32,y),unbox(Float32,z)))
+fma_llvm(x::Float64, y::Float64, z::Float64) =
+    box(Float64,fma_float(unbox(Float64,x),unbox(Float64,y),unbox(Float64,z)))
+# Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
+# onto a broken system libm; if so, use openlibm's fma instead
+# 1.0000305f0 = 1 + 1/2^15
+# 1.0000000009313226 = 1 + 1/2^30
+# If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
+# instead of the properly-rounded 0.30000000000000004; check after calling fma
+if (ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+    (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
+     1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
+    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
+else
+    fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
+end
+# This is necessary at least on 32-bit Intel Linux, since fma_llvm may
+# have called glibc, and some broken glibc fma implementations don't
+# properly restore the rounding mode
+Rounding.set_rounding_raw(Float32, Rounding.JL_FE_TONEAREST)
+Rounding.set_rounding_raw(Float64, Rounding.JL_FE_TONEAREST)
