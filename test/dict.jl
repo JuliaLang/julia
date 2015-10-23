@@ -81,6 +81,8 @@ let
     @test eltype(td) == Pair{AbstractString,Float64}
     @test keytype(td) == AbstractString
     @test valtype(td) == Float64
+    @test keytype(Dict{AbstractString,Float64}) === AbstractString
+    @test valtype(Dict{AbstractString,Float64}) === Float64
 end
 
 let
