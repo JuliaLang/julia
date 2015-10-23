@@ -57,3 +57,10 @@ let a = Any[[1]], q = QuoteNode([1])
     @test dca[1] !== a[1]
     @test deepcopy(q).value !== q.value
 end
+
+# issue #13124
+let a = rand(3, 5)
+    b = (a,a)
+    c = deepcopy(b)
+    @test c[1] === c[2]
+end

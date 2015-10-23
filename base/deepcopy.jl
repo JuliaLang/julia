@@ -56,7 +56,7 @@ end
 
 function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     if isbits(T)
-        return copy(x)
+        return (stackdict[x]=copy(x))
     end
     dest = similar(x)
     stackdict[x] = dest
