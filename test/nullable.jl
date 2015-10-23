@@ -266,7 +266,16 @@ end
 # issue #9462
 for T in types
     @test isa(convert(Nullable{Number}, Nullable(one(T))), Nullable{Number})
+    @test isa(convert(Nullable{Number}, one(T)), Nullable{Number})
+    @test isa(convert(Nullable{T}, one(T)), Nullable{T})
     @test isa(convert(Nullable{Any}, Nullable(one(T))), Nullable{Any})
+    @test isa(convert(Nullable{Any}, one(T)), Nullable{Any})
+
+    # one(T) is convertible to every type in types
+    # let's test that with Nullables
+    for S in types
+        @test isa(convert(Nullable{T}, one(S)), Nullable{T})
+    end
 end
 
 @test isnull(convert(Nullable, nothing))
