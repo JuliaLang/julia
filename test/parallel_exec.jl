@@ -402,14 +402,24 @@ catch ex
     @test collect(1:5) == sort(map(x->parse(Int, x), errors))
 end
 
-try
-    remotecall_fetch(()->throw(ErrorException("foobar")), id_other)
-    error("unexpected")
-catch ex
-    @test typeof(ex) == RemoteException
-    @test typeof(ex.captured) == CapturedException
-    @test typeof(ex.captured.ex) == ErrorException
-    @test ex.captured.ex.msg == "foobar"
+macro test_remoteexception_thrown(expr)
+    quote
+        try
+            $(esc(expr))
+            error("unexpected")
+        catch ex
+            @test typeof(ex) == RemoteException
+            @test typeof(ex.captured) == CapturedException
+            @test typeof(ex.captured.ex) == ErrorException
+            @test ex.captured.ex.msg == "foobar"
+        end
+    end
+end
+
+for id in [id_other, id_me]
+    @test_remoteexception_thrown remotecall_fetch(()->throw(ErrorException("foobar")), id)
+    @test_remoteexception_thrown remotecall_wait(()->throw(ErrorException("foobar")), id)
+    @test_remoteexception_thrown wait(remotecall(()->throw(ErrorException("foobar")), id))
 end
 
 # The below block of tests are usually run only on local development systems, since:
