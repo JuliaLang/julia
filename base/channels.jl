@@ -231,9 +231,12 @@ end
 # These defintions allow for any condition-like object to be used
 # with select.
 
-# @select if x |> value  ... will ultimately insert an expression value=_put!(x).
+# @select if x |> value  ... will ultimately insert an expression value=_take!(x).
 _take!(c::AbstractChannel) = take!(c)
 _take!(x) = wait(x)
+
+# @select if x <| value .... will ultimately inset value=put!(x), which currently
+# is only meanginful for channels and so no underscore varirant is used here.
 
 # These are used with the non-blocking variant of select, which will
 # only work with channels and tasks. Arbitrary conditionals can't be supported
