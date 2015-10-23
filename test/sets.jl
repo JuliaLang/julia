@@ -214,4 +214,14 @@ filter!(isodd, s)
 @test_throws ArgumentError first(Set())
 @test first(Set(2)) == 2
 
-# ########## end of set tests ##########
+# pop!
+let s = Set(1:5)
+    @test 2 in s
+    @test pop!(s, 2) == 2
+    @test !(2 in s)
+    @test_throws KeyError pop!(s, 2)
+    @test pop!(s, 2, ()) == ()
+    @test 3 in s
+    @test pop!(s, 3, ()) == 3
+    @test !(3 in s)
+end
