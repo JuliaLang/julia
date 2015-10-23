@@ -305,7 +305,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         pass
 
     def visit_desc_returns(self, node):
-        self.add_text(' -> ')
+        self.add_text(' :: ')
 
     def depart_desc_returns(self, node):
         pass
