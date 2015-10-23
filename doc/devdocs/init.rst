@@ -92,15 +92,6 @@ initialises 8-bit serialisation tags for 256 frequently used
 ``jl_value_t`` values. The serialisation mechanism uses these tags as
 shorthand (in lieu of storing whole objects) to save storage space.
 
-.. sidebar:: sysimg
-
-    If there is a sysimg file, it contains a pre-cooked image of the :mod:`Core` and :mod:`Main` modules (and whatever else is created by ``boot.jl``). See :ref:`dev-sysimg`.
-
-    `jl_restore_system_image() <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_ de-serialises the saved sysimg into the current Julia runtime environment and initialisation continues after :c:func:`jl_init_box_caches` below...
-
-    Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_ uses the :ref:`dev-ios`.
-
-
 If there is no sysimg file (:code:`!jl_options.image_file`) then
 then :mod:`Core` and :mod:`Main` modules are created and ``boot.jl`` is evaluated:
 
@@ -163,6 +154,14 @@ Finally `sigint_handler() <https://github.com/JuliaLang/julia/blob/master/src/si
 
 :c:func:`_julia_init` then returns `back to main() in julia/ui/repl.c
 <https://github.com/JuliaLang/julia/blob/master/ui/repl.c>`_ and main() calls :code:`true_main(argc, (char**)argv)`.
+
+.. sidebar:: sysimg
+
+    If there is a sysimg file, it contains a pre-cooked image of the :mod:`Core` and :mod:`Main` modules (and whatever else is created by ``boot.jl``). See :ref:`dev-sysimg`.
+
+    `jl_restore_system_image() <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_ de-serialises the saved sysimg into the current Julia runtime environment and initialisation continues after :c:func:`jl_init_box_caches` below...
+
+    Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_ uses the :ref:`dev-ios`.
 
 true_main()
 -----------
