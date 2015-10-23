@@ -125,7 +125,7 @@ function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     if uplo == :U
         Cholesky(chol!(A, UpperTriangular).data, 'U')
     else
-        Cholesky(chol!(A, UpperTriangular).data, 'U')
+        Cholesky(chol!(A, LowerTriangular).data, 'L')
     end
 end
 cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) = throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))

@@ -68,6 +68,8 @@ Deprecated or removed
     in favor of versions that require the matrix to be in factored form
     ([#13496]).
 
+  * Deprecate `chol(A,Val{:U/:L})` in favor of `chol(A)` ([#13680]).
+
 Julia v0.4.0 Release Notes
 ==========================
 
