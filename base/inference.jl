@@ -371,7 +371,7 @@ function extract_simple_tparam(Ai)
     return Bottom
 end
 
-has_typevars(t::ANY) = ccall(:jl_has_typevars, Cint, (Any,), t)!=0
+has_typevars(t::ANY, all=false) = ccall(:jl_has_typevars_, Cint, (Any,Cint), t, all)!=0
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
 const apply_type_tfunc = function (A, args...)
@@ -2283,7 +2283,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             if (is(f,apply_type) || is(f,fieldtype) ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :promote_type)) &&
-                    isleaftype(e.typ.parameters[1])
+                    !has_typevars(e.typ.parameters[1],true)
                 return (e.typ.parameters[1],())
             end
         end
