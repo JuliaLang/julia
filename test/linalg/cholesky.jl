@@ -67,6 +67,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test_approx_eq full(lapd) apd
     l = lapd[:L]
     @test_approx_eq l*l' apd
+    @test triu(capd.factors) ≈ lapd[:U]
+    @test tril(lapd.factors) ≈ capd[:L]
 
     #pivoted upper Cholesky
     if eltya != BigFloat
