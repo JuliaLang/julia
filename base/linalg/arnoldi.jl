@@ -11,29 +11,29 @@ Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
- * ``nev``: Number of eigenvalues
- * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
 
-   Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
- * ``which``: type of eigenvalues to compute. See the note below.
+* ``nev``: Number of eigenvalues
+* ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
+  Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+* ``which``: type of eigenvalues to compute. See the note below.
 
-   ========= ======================================================================================================================
-   ``which`` type of eigenvalues
-   ========= ======================================================================================================================
-   ``:LM``   eigenvalues of largest magnitude (default)
-   ``:SM``   eigenvalues of smallest magnitude
-   ``:LR``   eigenvalues of largest real part
-   ``:SR``   eigenvalues of smallest real part
-   ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
-   ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
-   ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
-   ========= ======================================================================================================================
+  ========= ======================================================================================================================
+  ``which`` type of eigenvalues
+  ========= ======================================================================================================================
+  ``:LM``   eigenvalues of largest magnitude (default)
+  ``:SM``   eigenvalues of smallest magnitude
+  ``:LR``   eigenvalues of largest real part
+  ``:SR``   eigenvalues of smallest real part
+  ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+  ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+  ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
+  ========= ======================================================================================================================
 
- * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
- * ``maxiter``: Maximum number of iterations (default = 300)
- * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
- * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
- * ``v0``: starting vector from which to start the iterations
+* ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+* ``maxiter``: Maximum number of iterations (default = 300)
+* ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
+* ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
+* ``v0``: starting vector from which to start the iterations
 
 ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
 
@@ -58,29 +58,29 @@ Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using Lanczos or Arnol
 real symmetric or general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
- * ``nev``: Number of eigenvalues
- * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
 
-   Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
- * ``which``: type of eigenvalues to compute. See the note below.
+* ``nev``: Number of eigenvalues
+* ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
+  Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
+* ``which``: type of eigenvalues to compute. See the note below.
 
-   ========= ======================================================================================================================
-   ``which`` type of eigenvalues
-   ========= ======================================================================================================================
-   ``:LM``   eigenvalues of largest magnitude (default)
-   ``:SM``   eigenvalues of smallest magnitude
-   ``:LR``   eigenvalues of largest real part
-   ``:SR``   eigenvalues of smallest real part
-   ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
-   ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
-   ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
-   ========= ======================================================================================================================
+  ========= ======================================================================================================================
+  ``which`` type of eigenvalues
+  ========= ======================================================================================================================
+  ``:LM``   eigenvalues of largest magnitude (default)
+  ``:SM``   eigenvalues of smallest magnitude
+  ``:LR``   eigenvalues of largest real part
+  ``:SR``   eigenvalues of smallest real part
+  ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+  ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+  ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
+  ========= ======================================================================================================================
 
- * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
- * ``maxiter``: Maximum number of iterations (default = 300)
- * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
- * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
- * ``v0``: starting vector from which to start the iterations
+* ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+* ``maxiter``: Maximum number of iterations (default = 300)
+* ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
+* ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
+* ``v0``: starting vector from which to start the iterations
 
 ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
 

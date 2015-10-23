@@ -7359,11 +7359,12 @@ doc"""
 Uses :func:`eigs` underneath.
 
 Inputs are:
- * ``A``: Linear operator. It can either subtype of ``AbstractArray`` (e.g., sparse matrix) or duck typed. For duck typing ``A`` has to support ``size(A)``, ``eltype(A)``, ``A * vector`` and ``A' * vector``.
- * ``nsv``: Number of singular values.
- * ``ritzvec``: Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``, default is ``true``. If ``false`` the singular vectors are omitted from the output.
- * ``tol``: tolerance, see :func:`eigs`.
- * ``maxiter``: Maximum number of iterations, see :func:`eigs`.
+
+* ``A``: Linear operator. It can either subtype of ``AbstractArray`` (e.g., sparse matrix) or duck typed. For duck typing ``A`` has to support ``size(A)``, ``eltype(A)``, ``A * vector`` and ``A' * vector``.
+* ``nsv``: Number of singular values.
+* ``ritzvec``: Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``, default is ``true``. If ``false`` the singular vectors are omitted from the output.
+* ``tol``: tolerance, see :func:`eigs`.
+* ``maxiter``: Maximum number of iterations, see :func:`eigs`.
 
 **Example**::
 
@@ -7604,14 +7605,13 @@ straight line to the given points `(x, y)`, i.e., such that the squared error
 between `y` and `a + b*x` is minimized.
 
 **Example**:
-```
-   using PyPlot
-   x = [1.0:12.0;]
-   y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
-   a, b = linreg(x, y)          # Linear regression
-   plot(x, y, "o")              # Plot (x, y) points
-   plot(x, [a+b*i for i in x])  # Plot line determined by linear regression
-```
+
+    using PyPlot
+    x = [1.0:12.0;]
+    y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+    a, b = linreg(x, y)          # Linear regression
+    plot(x, y, "o")              # Plot (x, y) points
+    plot(x, [a+b*i for i in x])  # Plot line determined by linear regression
 """
 linreg(x,y)
 
