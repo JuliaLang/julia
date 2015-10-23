@@ -92,8 +92,8 @@ end
 function n = parseintperf(t)
     for i = 1:t
         n = randi([0,2^32-1],1,'uint32');
-        s = dec2hex(n);
-        m = hex2dec(s);
+        s = sprintf('%08X',n);
+        m = sscanf(s,'%X');
         assert(m == n);
     end
 end
