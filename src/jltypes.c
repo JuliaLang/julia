@@ -122,7 +122,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_value_t **p, s
     return 0;
 }
 
-static int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
+DLLEXPORT int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, incl_wildcard, NULL, 0);
