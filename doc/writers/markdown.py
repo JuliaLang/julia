@@ -525,10 +525,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
             self.add_text(':')
             self.end_state(end=None)
 
-    def visit_termsep(self, node):
-        self.add_text(', ')
-        raise nodes.SkipNode
-
     def visit_definition(self, node):
         self.new_state()
 
