@@ -41,7 +41,7 @@ function package(
     isnew = !ispath(pkg)
     try
         if isnew
-            url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
+            url = isempty(user) ? "" : "https://github.com/$user/$pkg.jl.git"
             Generate.init(pkg,url,config=config)
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
