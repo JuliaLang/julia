@@ -839,9 +839,9 @@ DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 
 // checked arithmetic
 #define check_sadd(a,b) \
-        /* this test is a reduction of (b > 0) ? (a + b >= typemin(a)) : (a + b < typemin(a)) ==> overflow \
+        /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
          * where (a - a) == (typeof(a))0 */ \
-        (b > 0) == (a >= ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
+        (b > 0) ? (a > ~((a - a + 1) << (8 * sizeof(a) - 1)) - b) : (a < ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd, add, checked_sadd,  )
 #define check_uadd(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \
