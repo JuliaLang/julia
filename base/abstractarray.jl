@@ -189,13 +189,14 @@ end
 ## Constructors ##
 
 # default arguments to similar()
-similar{T}(a::AbstractArray{T})               = similar(a, T, size(a))
-similar(   a::AbstractArray, T)               = similar(a, T, size(a))
-similar{T}(a::AbstractArray{T}, dims::Dims)   = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::Int...) = similar(a, T, dims)
-similar(   a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
+similar{T}(a::AbstractArray{T})                          = similar(a, T, size(a))
+similar(   a::AbstractArray, T::Type)                    = similar(a, T, size(a))
+similar{T}(a::AbstractArray{T}, dims::DimsInteger)       = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)
+similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 # similar creates an Array by default
-similar(   a::AbstractArray, T, dims::Dims)   = Array(T, dims)
+similar(   a::AbstractArray, T::Type, dims::DimsInteger) = Array(T, dims...)
+similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)

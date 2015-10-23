@@ -3,6 +3,7 @@
 ## 1-dimensional ranges ##
 
 typealias Dims Tuple{Vararg{Int}}
+typealias DimsInteger Tuple{Vararg{Integer}}
 
 abstract Range{T} <: AbstractArray{T,1}
 
@@ -301,9 +302,6 @@ logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations
 
-similar(r::Range, T::Type, dims::Tuple{Vararg{Integer}}) = Array(T, dims...)
-similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
-
 size(r::Range) = (length(r),)
 
 isempty(r::StepRange) =
@@ -415,20 +413,20 @@ unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start +
 getindex(r::Range, ::Colon) = copy(r)
 unsafe_getindex(r::Range, ::Colon) = copy(r)
 
-getindex(r::UnitRange, s::UnitRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::UnitRange, s::UnitRange{Int})
+getindex{T<:Integer}(r::UnitRange, s::UnitRange{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
     st = oftype(r.start, r.start + s.start-1)
     range(st, length(s))
 end
 
-getindex(r::UnitRange, s::StepRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::UnitRange, s::StepRange{Int})
+getindex{T<:Integer}(r::UnitRange, s::StepRange{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
     st = oftype(r.start, r.start + s.start-1)
     range(st, step(s), length(s))
 end
 
-getindex(r::StepRange, s::Range{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::StepRange, s::Range{Int})
+getindex{T<:Integer}(r::StepRange, s::Range{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
+function unsafe_getindex{T<:Integer}(r::StepRange, s::Range{T})
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step(r)*step(s), length(s))
 end
