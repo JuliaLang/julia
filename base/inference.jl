@@ -2375,11 +2375,13 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     if incompletematch
         cost *= 4
     end
-    if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
+    if isgf && (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :done) ||
+       istopfunction(topmod, f, :unsafe_convert) || istopfunction(topmod, f, :cconvert))
         cost ÷= 4
     end
-    inline_op = isgeneric(f) && (f===(+) || f===(*) || f===min || f===max) && (3 <= length(argexprs) <= 9) &&
-        methsig == Tuple{Any,Any,Any,Vararg{Any}}
+    inline_op = isgf && (istopfunction(topmod, f, :+) || istopfunction(topmod, f, :*) ||
+        istopfunction(topmod, f, :min) || istopfunction(topmod, f, :max)) &&
+        (3 <= length(argexprs) <= 9) && methsig == Tuple{Any,Any,Any,Vararg{Any}}
     if !inline_op && !inline_worthy(body, cost)
         if incompletematch
             # inline a typeassert-based call-site, rather than a
