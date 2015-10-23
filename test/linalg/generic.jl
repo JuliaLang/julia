@@ -152,12 +152,17 @@ let
 end
 
 let
-    v = [3.0, 4.0]
-    @test norm(v) === 5.0
-    w = normalize(v)
-    @test w == [0.6, 0.8]
-    @test norm(w) === 1.0
-    @test norm(normalize!(v) - w, Inf) < eps()
+    vr = [3.0, 4.0]
+    for Tr in (Float32, Float64)
+        for T in (Tr, Complex{Tr})
+            v = convert(Vector{T}, vr)
+            @test norm(v) == 5.0
+            w = normalize(v)
+            @test norm(w - [0.6, 0.8], Inf) < eps(Tr)
+            @test norm(w) == 1.0
+            @test norm(normalize!(copy(v)) - w, Inf) < eps(Tr)
+        end
+    end
 end
 
 #Test potential overflow in normalize!
