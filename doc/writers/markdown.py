@@ -739,4 +739,4 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.end_state(wrap=False)
 
     def unknown_visit(self, node):
-        raise NotImplementedError('Unknown node: ' + node.__class__.__name__)
+        raise NotImplementedError('Unknown node: ' + node.__class__.__name__ + '\n' + node.astext())
