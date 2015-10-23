@@ -462,11 +462,11 @@ spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{Process
 
 function eachline(cmd::AbstractCmd, stdin)
     stdout = Pipe()
-    processes = spawn(cmd, (stdin,stdout,STDERR))
+    processes = spawn(cmd, (stdin,stdout,DevNull))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, ()->close(out))
+    return EachLine(out, ()->(close(out); success(processes) || pipeline_error(processes)))
 end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
@@ -475,12 +475,12 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=D
     if mode == "r"
         in = other
         out = io = Pipe()
-        processes = spawn(cmds, (in,out,STDERR))
+        processes = spawn(cmds, (in,out,DevNull))
         close(out.in)
     elseif mode == "w"
         in = io = Pipe()
         out = other
-        processes = spawn(cmds, (in,out,STDERR))
+        processes = spawn(cmds, (in,out,DevNull))
         close(in.out)
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
