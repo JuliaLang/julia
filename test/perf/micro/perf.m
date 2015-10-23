@@ -107,7 +107,6 @@ end
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
 function n = mandel(z)
-    n = 0;
     c = z;
     for n=0:79
         if abs(z)>2
@@ -119,14 +118,11 @@ function n = mandel(z)
 end
 
 function M = mandelperf(ignore)
-  M = zeros(length(-2.0:.1:0.5), length(-1:.1:1));
-  count = 1;
-  for r = -2:0.1:0.5
-    for i = -1:.1:1
-      M(count) = mandel(complex(r,i));
-      count = count + 1;
+    [X,M]=meshgrid(-2.0:.1:0.5,-1:.1:1);
+    X=complex(X,M);
+    for ix=1:numel(X)
+        M(ix) = mandel(X(ix));
     end
-  end
 end
 
 %% numeric vector quicksort %%
