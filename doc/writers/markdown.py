@@ -358,16 +358,16 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def visit_citation(self, node):
         if len(node) and isinstance(node[0], nodes.label):
-            self._citlabel = node[0].astext()
+            self._citlabel = '@' + node[0].astext()
         else:
             self._citlabel = ''
-        self.new_state(len(self._citlabel) + 3)
+        self.new_state(len(self._citlabel) + 4)
 
     def depart_citation(self, node):
-        self.end_state(first='[%s] ' % self._citlabel)
+        self.end_state(first='[%s]: ' % self._citlabel)
 
     def visit_citation_reference(self, node):
-        self.add_text('[%s]' % node.astext())
+        self.add_text('[@%s]' % node.astext())
         raise nodes.SkipNode
 
     def visit_label(self, node):
@@ -644,7 +644,10 @@ class MarkdownTranslator(nodes.NodeVisitor):
         pass
 
     def visit_reference(self, node):
-        pass
+        t = node.astext()
+        if t[0] == '[' and t[-1] == ']':
+            self.add_text('[@' + t[1:])
+            raise nodes.SkipNode
 
     def depart_reference(self, node):
         pass
