@@ -352,6 +352,10 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_footnote(self, node):
         self.end_state(first='[%s] ' % self._footnote)
 
+    def visit_footnote_reference(self, node):
+        self.add_text('[%s]' % node.astext())
+        raise nodes.SkipNode
+
     def visit_citation(self, node):
         if len(node) and isinstance(node[0], nodes.label):
             self._citlabel = node[0].astext()
@@ -361,6 +365,10 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_citation(self, node):
         self.end_state(first='[%s] ' % self._citlabel)
+
+    def visit_citation_reference(self, node):
+        self.add_text('[%s]' % node.astext())
+        raise nodes.SkipNode
 
     def visit_label(self, node):
         raise nodes.SkipNode
@@ -688,14 +696,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def depart_superscript(self, node):
         pass
-
-    def visit_footnote_reference(self, node):
-        self.add_text('[%s]' % node.astext())
-        raise nodes.SkipNode
-
-    def visit_citation_reference(self, node):
-        self.add_text('[%s]' % node.astext())
-        raise nodes.SkipNode
 
     def visit_Text(self, node):
         self.add_text(node.astext())
