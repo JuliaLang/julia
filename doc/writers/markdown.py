@@ -347,13 +347,13 @@ class MarkdownTranslator(nodes.NodeVisitor):
 
     def visit_footnote(self, node):
         self._footnote = node.children[0].astext().strip()
-        self.new_state(len(self._footnote) + 3)
+        self.new_state(len(self._footnote) + 5)
 
     def depart_footnote(self, node):
-        self.end_state(first='[%s] ' % self._footnote)
+        self.end_state(first='[^%s]: ' % self._footnote)
 
     def visit_footnote_reference(self, node):
-        self.add_text('[%s]' % node.astext())
+        self.add_text('[^%s]' % node.astext())
         raise nodes.SkipNode
 
     def visit_citation(self, node):
