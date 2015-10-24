@@ -243,10 +243,12 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.sectionlevel -= 1
 
     def visit_sidebar(self, node):
-        self.new_state('| ')
+        self.sectionlevel += 1
+        self.new_state(0)
 
     def depart_sidebar(self, node):
         self.end_state()
+        self.sectionlevel -= 1
 
     def visit_rubric(self, node):
         self.visit_section(node)
@@ -525,7 +527,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
             self.end_state(end=None)
 
     def visit_definition(self, node):
-        self.new_state()
+        self.new_state(2)
 
     def depart_definition(self, node):
         self.end_state()
@@ -556,7 +558,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.end_state()
 
     def visit_admonition(self, node):
-        self.new_state(0)
+        self.new_state(2)
 
     def depart_admonition(self, node):
         self.end_state()
