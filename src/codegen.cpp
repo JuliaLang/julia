@@ -3654,7 +3654,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix \"$\" in non-quoted expression");
-        if (jl_is_toplevel_only_expr(expr) &&
+        if ((jl_is_toplevel_only_expr(expr) ||
+                  head == abstracttype_sym  ||
+                  head == compositetype_sym ||
+                  head == bitstype_sym)     &&
             ctx->linfo->name == anonymous_sym && ctx->vars.empty() &&
             ctx->linfo->module == jl_current_module) {
             // call interpreter to run a toplevel expr from inside a
@@ -3665,11 +3668,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         }
         // some expression types are metadata and can be ignored
         if (valuepos || !(head == line_sym || head == type_goto_sym)) {
-            if (head == abstracttype_sym || head == compositetype_sym ||
-                head == bitstype_sym) {
-                jl_errorf("type definition not allowed inside a local scope");
-            }
-            else if (head == macro_sym) {
+            if (head == macro_sym) {
                 jl_errorf("macro definition not allowed inside a local scope");
             }
             else {
