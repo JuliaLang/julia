@@ -966,7 +966,7 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t 
         }
         ex = oldast;
     }
-    func = (jl_function_t*)jl_toplevel_eval_in(m->func->linfo->module, (jl_value_t*)ex, 1); // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
+    func = (jl_function_t*)jl_toplevel_eval_in_warn(m->func->linfo->module, (jl_value_t*)ex, 1); // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
     func->linfo->name = m->func->linfo->name;
     JL_GC_POP();
     return func;
@@ -1414,6 +1414,11 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *type
         sf = jl_mt_assoc_by_type(mt, types, cache, inexact);
     }
     return sf;
+}
+
+DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
+{
+    return jl_method_lookup_by_type(mt, types, 0, 0) != jl_bottom_func;
 }
 
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)

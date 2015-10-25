@@ -147,15 +147,15 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GlobalRef, NewvarNode, GenSym,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined,
-    # arraylen, arrayref, arrayset, arraysize,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
+    # arrayref, arrayset, arraysize,
     # _apply, kwcall,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
     # typeassert, apply_type,
     # method reflection
-    applicable, invoke, method_exists,
+    applicable, invoke,
     # constants
     nothing, Main,
     # intrinsics module
@@ -174,7 +174,7 @@ export
     #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
     #sdiv_int, shl_int, sitofp, sle_int, slt_int, smod_int,
     #srem_int, sub_float, sub_int, trunc_int, udiv_int, uitofp,
-    #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int
+    #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int, arraylen
 
 
 const (===) = is
@@ -259,6 +259,9 @@ end
 typealias ByteString Union{ASCIIString,UTF8String}
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
+
+eval(e::ANY) = eval(Main, e)
+eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
 # constructors for built-in types
 

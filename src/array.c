@@ -404,13 +404,6 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 }
 #endif
 
-JL_CALLABLE(jl_f_arraylen)
-{
-    JL_NARGS(arraylen, 1, 1);
-    JL_TYPECHK(arraylen, array, args[0]);
-    return jl_box_long(jl_array_len((jl_array_t*)args[0]));
-}
-
 JL_CALLABLE(jl_f_arraysize)
 {
     JL_NARGS(arraysize, 2, 2);

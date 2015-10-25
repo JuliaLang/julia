@@ -113,7 +113,7 @@ cmp_tfunc = (x,y)->Bool
 isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
 
 const IInf = typemax(Int) # integer infinity
-const n_ifunc = reinterpret(Int32,llvmcall)+1
+const n_ifunc = reinterpret(Int32,arraylen)+1
 const t_ifunc = Array{Tuple{Int,Int,Function},1}(n_ifunc)
 const t_ffunc_key = Array{Function,1}(0)
 const t_ffunc_val = Array{Tuple{Int,Int,Function},1}(0)
@@ -162,6 +162,7 @@ add_tfunc(eval(Core.Intrinsics,:cglobal), 1, 2,
 add_tfunc(eval(Core.Intrinsics,:select_value), 3, 3,
     # TODO: return Bottom if cnd is definitely not a Bool
     (cnd, x, y)->Union{x,y})
+add_tfunc(eval(Core.Intrinsics,:arraylen), 1, 1, x->Int)
 add_tfunc(is, 2, 2, cmp_tfunc)
 add_tfunc(issubtype, 2, 2, cmp_tfunc)
 add_tfunc(isa, 2, 2, cmp_tfunc)
@@ -169,9 +170,7 @@ add_tfunc(isdefined, 1, IInf, (args...)->Bool)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
 add_tfunc(nfields, 1, 1, x->Int)
 add_tfunc(_expr, 1, IInf, (args...)->Expr)
-add_tfunc(method_exists, 2, 2, cmp_tfunc)
 add_tfunc(applicable, 1, IInf, (f, args...)->Bool)
-add_tfunc(arraylen, 1, 1, x->Int)
 #add_tfunc(arrayref, 2,IInf,(a,i...)->(isa(a,DataType) && a<:Array ?
 #                                     a.parameters[1] : Any))
 #add_tfunc(arrayset, 3, IInf, (a,v,i...)->a)
