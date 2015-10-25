@@ -1091,3 +1091,16 @@ function test_read_nbyte()
     rm(fn)
 end
 test_read_nbyte()
+
+# DevNull
+@test !isreadable(DevNull)
+@test iswritable(DevNull)
+@test isopen(DevNull)
+@test write(DevNull, 0xff) == 0
+@test write(DevNull, 1234) == 0
+@test_throws EOFError read(DevNull, UInt8)
+@test close(DevNull) === nothing
+@test flush(DevNull) === nothing
+@test copy(DevNull) === DevNull
+@test eof(DevNull)
+@test print(DevNull, "go to /dev/null") === nothing
