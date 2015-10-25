@@ -1738,22 +1738,21 @@ function vcat(A::BitMatrix...)
     return B
 end
 
+function cat(catdim::Integer, X::Integer...)
+    reshape([X...], (ones(Int,catdim-1)..., length(X)))
+end
+
 # general case, specialized for BitArrays and Integers
 function cat(catdim::Integer, X::Union{BitArray, Integer}...)
     nargs = length(X)
     # using integers results in conversion to Array{Int}
     # (except in the all-Bool case)
-    has_bitarray = false
     has_integer = false
     for a in X
-        if isa(a, BitArray)
-            has_bitarray = true
-        else
-            has_integer = true
+        if isa(a, Integer)
+            has_integer = true; break
         end
     end
-    # just integers and no BitArrays -> general case
-    has_bitarray || return invoke(cat, Tuple{Integer, Vararg{Any}}, catdim, X...)
     dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
     d_max = maximum(ndimsX)
