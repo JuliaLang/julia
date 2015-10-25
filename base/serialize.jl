@@ -202,7 +202,7 @@ end
 
 function serialize{T<:AbstractString}(s::SerializationState, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
-    invoke(serialize, Tuple{SerializationState,Any}, s, convert(SubString{T}, convert(T,ss)))
+    serialize_any(s, convert(SubString{T}, convert(T,ss)))
 end
 
 # Don't serialize the pointers
@@ -402,7 +402,9 @@ function serialize(s::SerializationState, n::Int)
     write(s.io, n)
 end
 
-function serialize(s::SerializationState, x)
+serialize(s::SerializationState, x) = serialize_any(s, x)
+
+function serialize_any(s::SerializationState, x)
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
