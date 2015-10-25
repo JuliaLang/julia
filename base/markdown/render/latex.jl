@@ -136,5 +136,7 @@ latex(md) = sprint(latex, md)
 latexinline(md) = sprint(latexinline, md)
 latexesc(s) = sprint(latexesc, s)
 
+latexinline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+
 writemime(io::IO, ::MIME"text/latex", md::MD) = latex(io, md)
 #writemime(io::IO, ::MIME"text/latex", md::MD) = writemime(io, "text/plain", md)

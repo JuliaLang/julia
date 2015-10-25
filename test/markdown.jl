@@ -276,3 +276,6 @@ $|x| < 1$"""
 
 
 @test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$"
+
+# Issue #13759.
+@test latex(md" $x_{1}$ = $(1.0)") == "\$x_{1}\$ = 1.0\n"
