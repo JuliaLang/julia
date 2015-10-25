@@ -1084,6 +1084,7 @@ export
     isgeneric,
     isinteractive,
     less,
+    method_exists,
     methods,
     methodswith,
     module_name,

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
+using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
             kwcall, _apply, typeassert, apply_type, svec
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 

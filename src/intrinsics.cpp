@@ -920,6 +920,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal: return emit_cglobal(args, nargs, ctx);
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
+    case arraylen:
+        return mark_julia_type(emit_arraylen(emit_expr(args[1], ctx), args[1], ctx), false,
+                               jl_long_type);
 #if 0 // this section enables runtime-intrinsics (e.g. for testing), and disables their llvm counterparts
     default:
         int ldepth = ctx->gc.argDepth;

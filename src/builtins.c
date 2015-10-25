@@ -543,7 +543,12 @@ JL_CALLABLE(jl_f_kwcall)
 
 extern int jl_lineno;
 
-DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex, int delay_warn)
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
+{
+    return jl_toplevel_eval_in_warn(m, ex, 0);
+}
+
+DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
 {
     static int jl_warn_on_eval = 0;
     int last_delay_warn = jl_warn_on_eval;
@@ -585,23 +590,6 @@ DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex, int de
     jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
-}
-
-JL_CALLABLE(jl_f_top_eval)
-{
-    jl_module_t *m;
-    jl_value_t *ex;
-    if (nargs == 1) {
-        m = jl_main_module;
-        ex = args[0];
-    }
-    else {
-        JL_NARGS(eval, 2, 2);
-        JL_TYPECHK(eval, module, args[0]);
-        m = (jl_module_t*)args[0];
-        ex = args[1];
-    }
-    return jl_toplevel_eval_in(m, ex, 0);
 }
 
 JL_CALLABLE(jl_f_isdefined)
@@ -1057,29 +1045,6 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
         jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
 }
 
-JL_CALLABLE(jl_f_methodexists)
-{
-    JL_NARGS(method_exists, 2, 2);
-    JL_TYPECHK(method_exists, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("method_exists: not a generic function");
-    jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
-    if (jl_is_tuple(args[1])) {
-        // TODO: maybe deprecation warning, better checking
-        argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
-                                                      jl_nfields(argtypes));
-    }
-    else {
-        jl_check_type_tuple(args[1], jl_gf_name(args[0]), "method_exists");
-    }
-    jl_value_t *res = jl_method_lookup_by_type(jl_gf_mtable(args[0]),
-                                               (jl_tupletype_t*)argtypes,0,0)!=jl_bottom_func ?
-        jl_true : jl_false;
-    JL_GC_POP();
-    return res;
-}
-
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
@@ -1228,30 +1193,31 @@ void jl_init_primitives(void)
     add_builtin_func("issubtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
-    add_builtin_func("_apply", jl_f_apply);
-    add_builtin_func("kwcall", jl_f_kwcall);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
-    add_builtin_func("svec", jl_f_svec);
-    add_builtin_func("method_exists", jl_f_methodexists);
-    add_builtin_func("applicable", jl_f_applicable);
-    add_builtin_func("invoke", jl_f_invoke);
-    add_builtin_func("eval", jl_f_top_eval);
-    add_builtin_func("isdefined", jl_f_isdefined);
 
-    // functions for internal use
+    // field access
     add_builtin_func("getfield",  jl_f_get_field);
     add_builtin_func("setfield!",  jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
     add_builtin_func("nfields", jl_f_nfields);
-    add_builtin_func("_expr", jl_f_new_expr);
+    add_builtin_func("isdefined", jl_f_isdefined);
 
-    add_builtin_func("arraylen", jl_f_arraylen);
+    // array primitives
     add_builtin_func("arrayref", jl_f_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
     add_builtin_func("arraysize", jl_f_arraysize);
 
+    // method table utils
+    add_builtin_func("applicable", jl_f_applicable);
+    add_builtin_func("invoke", jl_f_invoke);
+
+    // internal functions
     add_builtin_func("apply_type", jl_f_instantiate_type);
+    add_builtin_func("_apply", jl_f_apply);
+    add_builtin_func("kwcall", jl_f_kwcall);
+    add_builtin_func("_expr", jl_f_new_expr);
+    add_builtin_func("svec", jl_f_svec);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

@@ -101,6 +101,8 @@
     ALIAS(ccall, ccall) \
     ALIAS(cglobal, cglobal) \
     ALIAS(llvmcall, llvmcall) \
+    /* object access */ \
+    ADD_I(arraylen, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(fptoui_auto, 1) \
     ADD_HIDDEN(fptosi_auto, 1)

@@ -345,3 +345,14 @@ function function_module(f, types::ANY)
     end
     m[1].func.code.module
 end
+
+function method_exists(f::ANY, t::ANY)
+    t = to_tuple_type(t)
+    if !isa(f,Function)
+        t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
+        f = call
+    elseif !isgeneric(f)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    return ccall(:jl_method_exists, Cint, (Any, Any), f.env, t) != 0
+end

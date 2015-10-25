@@ -70,13 +70,11 @@ static htable_t fptr_to_id;
 // (reverse of fptr_to_id)
 static jl_fptr_t id_to_fptrs[] = {
   NULL, NULL,
-  jl_f_throw, jl_f_is, jl_f_no_function, jl_f_typeof,
-  jl_f_subtype, jl_f_isa, jl_f_typeassert, jl_f_apply,
-  jl_f_top_eval, jl_f_isdefined, jl_f_tuple, jl_f_svec,
+  jl_f_throw, jl_f_is, jl_f_no_function, jl_f_typeof, jl_f_subtype, jl_f_isa,
+  jl_f_typeassert, jl_f_apply, jl_f_isdefined, jl_f_tuple, jl_f_svec,
   jl_f_get_field, jl_f_set_field, jl_f_field_type, jl_f_nfields,
-  jl_f_arraylen, jl_f_arrayref, jl_f_arrayset, jl_f_arraysize,
-  jl_f_instantiate_type, jl_f_kwcall, jl_trampoline,
-  jl_f_methodexists, jl_f_applicable, jl_f_invoke,
+  jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_instantiate_type,
+  jl_f_kwcall, jl_trampoline, jl_f_applicable, jl_f_invoke,
   jl_apply_generic, jl_unprotect_stack, jl_f_sizeof, jl_f_new_expr,
   jl_f_intrinsic_call,
   NULL };

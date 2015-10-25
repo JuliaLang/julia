@@ -931,3 +931,8 @@ DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_val
     JL_TYPECHK(isfalse, bool, isfalse);
     return (isfalse == jl_false ? b : a);
 }
+
+DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
+{
+    return jl_box_long(jl_array_len((jl_array_t*)a));
+}
