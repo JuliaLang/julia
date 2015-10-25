@@ -221,6 +221,15 @@ b = randn(3)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
 @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
+# conj
+
+cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+@test full(conj(cA)) == conj(full(cA))
+
+# exp
+A = sprandn(5,5,0.2)
+@test e.^A ≈ e.^full(A)
+
 # reductions
 pA = sparse(rand(3, 7))
 
@@ -942,6 +951,7 @@ perm = randperm(10)
 @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
 @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
 @test diagm(sparse(ones(1,5))) == speye(5)
+@test diagm(sparse(ones(5,1))) == speye(5)
 
 # triu/tril
 A = sprand(5,5,0.2)
