@@ -1140,3 +1140,22 @@ end
 let A = 2. * speye(5,5)
     @test full(spones(A)) == eye(full(A))
 end
+
+let
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+    A = A + A'
+    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+    A = A*A'
+    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+    A = A + A.'
+    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+    A = A*A.'
+    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test_throws ErrorException chol(A)
+    @test_throws ErrorException lu(A)
+    @test_throws ErrorException eig(A)
+    @test_throws ErrorException inv(A)
+end
