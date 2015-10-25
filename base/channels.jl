@@ -194,6 +194,64 @@ function parse_select_clause(clause)
     end
 end
 
+"""
+`@select`
+
+A select expression of the form:
+
+```julia
+@select begin
+    if clause
+        body
+    elseif clause
+        body
+    [else
+        default_body
+    ]
+    end
+end
+```
+
+Wait for multiple clauses simultaneously using an if-else syntax, taking a different action depending on which clause is available first.
+
+A clause has three possible forms:
+
+1) `event |> value`
+
+If `event` is an `AbstractChannel`, wait for a value to become available in the channel and assign `take!(event)` to `value`.
+if `event` is a `Task`, wait for the task to complete and assign `value` the return value of the task.
+
+2) `event |< value`
+
+Only suppored for `AbstractChannel`s. Wait for the channel to capabity to store an element, and then call `put!(event, value)`.
+
+3) `event`
+
+Calls `wait` on `event`, discarding the return value. Usable on any "waitable" events", which include channels, tasks, `Condition` objects, and processes.
+
+If a default branch is provided, `@select` will check arbitrary choose any event which is ready and execute its body, or will execute `default_body` if none of them are.
+
+Otherise, `@select` blocks until at least one event is ready.
+
+For example,
+
+```julia
+channel1 = Channel()
+channel2 = Channel()
+task = @task ...
+
+result = @select begin
+    if channel1 |> value
+        info("Took from channel1")
+        value
+    elseif channel2 <| :test
+        info("Put :test into channel2")
+    elseif task
+        info("task finished")
+    end
+end
+```
+"""
 macro select(expr)
     clauses = Tuple{SelectClause, Any}[]
     # @select can operate in blocking or nonblocking mode, determined by whether
@@ -409,6 +467,21 @@ function _select_block(clauses)
     take!(winner_ch)
 end
 
+"""
+`select(clauses[, block=true]) -> (clause_index, clause_value)`
+
+Functional form of the `@select` macro, intended to be used when the set of clauses is dynamic. In general, this method will be less performant than the macro variant.
+
+Clauses are specified as an array of tuples. Each tuple is expected to have 2 or 3 elements, as follows:
+
+1) The clause type (`:take` or `:put`)
+2) The waitable object
+3) If the clause type is `:put`, the value to insert into the object.
+
+If `block` is `true` (the default), wait for at least one clause to be satisfied and return a tuple whose first elmement is the index of the clause which unblocked first and whose whose second element is the value of the clause (see the manual on `select` for the meaning of clause value).
+
+Otherwise, an arbitrary available clause will be executed, or a return value of `(0, nothing)` will be returned  immediately if no clause is available.
+"""
 function select(clauses, block=true)
     if block
         _select_block(clauses)

@@ -461,6 +461,39 @@ case the loop runs as long as the channel has data or is open. The loop
 variable takes on all values added to the channel. An empty, closed channel
 causes the ``for`` loop to terminate.
 
+@select statements
+-------
+Often you will want to wait on multiple channels simultaneously, taking a different action depending on which channel is the first to have a value available (or have capacity to store a value). ``@select`` provides this functionality, provides a simple yet powerful mechanism for synchronizing different tasks and building computational pipelines.
+
+Consider this simple example which times out if a computation takes too long::
+
+    function do_big_computation(N)
+        put!(eig(randn(N, N)))
+    end
+
+    function compute_with_timeout(N, timeout)
+        output_channel = Channel()
+        timeout_channel = Channel()
+        @async begin
+            push!(output_channel, do_big_computation(N))
+        end
+
+        @async begin
+            sleep(timeout)
+            put!(timeout_channel, true)
+        end
+
+        @select begin
+            if output_channel |> value
+                println("Calculation produced $value")
+            elseif timeout_channel
+                println("Timed out waiting for computation")
+            end
+        end
+    end
+
+``@select`` can also be used for other asynchronous constructs besides channels, such as tasks and external processes. Consult the help for ``@select`` for full documentation.
+
 
 RemoteRefs and AbstractChannels
 -------------------------------
