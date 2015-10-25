@@ -29,7 +29,9 @@ end
 function arg_decl_parts(m::Method)
     tv = m.tvars
     if !isa(tv,SimpleVector)
-        tv = svec(tv)
+        tv = Any[tv]
+    else
+        tv = Any[tv...]
     end
     li = m.func.code
     e = uncompressed_ast(li)
