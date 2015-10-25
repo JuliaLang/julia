@@ -398,18 +398,18 @@ const apply_type_tfunc = function (A, args...)
     istuple = (headtype === Tuple)
     uncertain = false
     lA = length(A)
-    tparams = svec()
+    tparams = Any[]
     for i=2:max(lA,largs)
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
             uncertain |= has_typevars(aip1)
-            tparams = svec(tparams..., aip1)
+            push!(tparams, aip1)
         else
             if i<=lA
                 val = extract_simple_tparam(A[i])
                 if val !== Bottom
-                    tparams = svec(tparams..., val)
+                    push!(tparams, val)
                     continue
                 elseif isa(inference_stack,CallStack) && isa(A[i],Symbol)
                     sp = inference_stack.sv.sp
@@ -420,7 +420,7 @@ const apply_type_tfunc = function (A, args...)
                             # static parameter
                             val = sp[j+1]
                             if valid_tparam(val)
-                                tparams = svec(tparams..., val)
+                                push!(tparams, val)
                                 found = true
                                 break
                             end
@@ -437,9 +437,9 @@ const apply_type_tfunc = function (A, args...)
             end
             uncertain = true
             if istuple
-                tparams = svec(tparams..., Any)
+                push!(tparams, Any)
             else
-                tparams = svec(tparams..., headtype.parameters[i-1])
+                push!(tparams, headtype.parameters[i-1])
             end
         end
     end
@@ -614,7 +614,7 @@ const limit_tuple_type_n = function (t, lim::Int)
     p = t.parameters
     n = length(p)
     if n > lim
-        tail = reduce(typejoin, Bottom, svec(p[lim:(n-1)]..., unwrapva(p[n])))
+        tail = reduce(typejoin, Bottom, Any[p[lim:(n-1)]..., unwrapva(p[n])])
         return Tuple{p[1:(lim-1)]..., Vararg{tail}}
     end
     return t

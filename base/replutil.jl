@@ -256,7 +256,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             right_matches = 0
             tv = method.tvars
             if !isa(tv,SimpleVector)
-                tv = svec(tv)
+                tv = Any[tv]
             end
             if !isempty(tv)
                 show_delim_array(buf, tv, '{', ',', '}', false)
