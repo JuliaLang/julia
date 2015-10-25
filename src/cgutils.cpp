@@ -223,6 +223,41 @@ public:
         }
     }
 
+    Value *InjectFunctionProto(Function *F)
+    {
+	//return destModule->getOrInsertFunction(F->getName(), F->getFunctionType());
+        Function *NewF = destModule->getFunction(F->getName());
+        if (!NewF) {
+            NewF = Function::Create(F->getFunctionType(),
+                                          Function::ExternalLinkage,
+                                          F->getName(),destModule);
+            NewF->setAttributes(AttributeSet());
+
+            // FunctionType does not include any attributes. Copy them over manually
+            // as codegen may make decisions based on the presence of certain attributes
+            NewF->copyAttributesFrom(F);
+
+            AttributeSet OldAttrs = F->getAttributes();
+            // Clone any argument attributes that are present in the VMap.
+            auto ArgI = NewF->arg_begin();
+            for (const Argument &OldArg : F->args()) {
+                AttributeSet attrs =
+                    OldAttrs.getParamAttributes(OldArg.getArgNo() + 1);
+                if (attrs.getNumSlots() > 0)
+                    ArgI->addAttr(attrs);
+                ++ArgI;
+            }
+
+            NewF->setAttributes(
+              NewF->getAttributes()
+                  .addAttributes(NewF->getContext(), AttributeSet::ReturnIndex,
+                                 OldAttrs.getRetAttributes())
+                  .addAttributes(NewF->getContext(), AttributeSet::FunctionIndex,
+                                 OldAttrs.getFnAttributes()));
+        }
+	return NewF;
+    }
+
     virtual Value *materializeValueFor (Value *V)
     {
         Function *F = dyn_cast<Function>(V);
@@ -238,16 +273,21 @@ public:
                     // Not truly external
                     // Check whether we already emitted it once
                     if (emitted_function_symtab.find(shadow) != emitted_function_symtab.end())
-                        return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                        return InjectFunctionProto(F);
                     uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
                     if (addr) {
                         emitted_function_symtab[shadow] = addr;
-                        return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                        return InjectFunctionProto(F);
                     }
 
                     Function *oldF = destModule->getFunction(F->getName());
                     if (oldF)
                         return oldF;
+
+                    // Also check if this function is pending in any other module
+                    if (jl_ExecutionEngine->FindFunctionNamed(F->getName().data()))
+                        return InjectFunctionProto(F);
+
                     return CloneFunctionProto(F);
                 }
                 else if (!F->isDeclaration()) {
@@ -257,7 +297,7 @@ public:
             // Still a declaration and still in a different module
             if (F->isDeclaration() && F->getParent() != destModule) {
                 // Create forward declaration in current module
-                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                return InjectFunctionProto(F);
             }
         }
         else if (isa<GlobalVariable>(V)) {
