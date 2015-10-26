@@ -209,3 +209,25 @@ let A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
 end
+
+# Tests for #10298
+for elT in [Float32, Float64]
+    A1 = ones(elT,10,10)
+    A = convert(Array{Complex{elT}}, A1)
+    A[end,1] = Complex{elT}(nextfloat((A[end,1].re)), A[end,1].im)
+    @test issym(A)
+    A = A + triu(A1)im - tril(A1)im
+    @test ishermitian(A)
+
+    D=diagm(rand(100))*100
+    D[end,1] = nextfloat((D[end,1]))
+
+    for HOrS in [Hermitian, Symmetric]
+        @test isposdef(HOrS(D))
+        @test isposdef!(copy(HOrS(D)))
+    end
+    @test ishermitian(D)
+    @test issym(D)
+    @test isposdef(D)
+end
+
