@@ -62,6 +62,8 @@ write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
 write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
 write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
+write(to::IO, p::Ptr) = write(to, convert(UInt, p))
+
 function write(s::IO, a::AbstractArray)
     nb = 0
     for i in eachindex(a)
@@ -118,6 +120,8 @@ read(s::IO, ::Type{Bool})    = (read(s,UInt8)!=0)
 read(s::IO, ::Type{Float16}) = box(Float16,unbox(Int16,read(s,Int16)))
 read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
 read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
+
+read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s,UInt))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =

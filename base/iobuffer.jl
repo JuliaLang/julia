@@ -328,8 +328,6 @@ function write(to::AbstractIOBuffer, a::UInt8)
     sizeof(UInt8)
 end
 
-write(to::AbstractIOBuffer, p::Ptr) = write(to, convert(UInt, p))
-
 function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b))
     nr = min(nb, nb_available(io))
     if length(b) < nr
