@@ -1137,6 +1137,16 @@ end
 
 ## iteration utilities ##
 
+doc"""
+    foreach(f, c...) -> Void
+
+Call function `f` on each element of iterable `c`.
+For multiple iterable arguments, `f` is called elementwise.
+"""
+foreach(f) = (f(); nothing)
+foreach(f, itr) = (for x in itr; f(x); end; nothing)
+foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+
 # generic map on any iterator
 function map(f, iters...)
     result = []
