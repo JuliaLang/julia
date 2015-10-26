@@ -555,23 +555,19 @@ function normalize!(v::AbstractVector, p::Real=2)
     __normalize!(v, nrm)
 end
 
-@inline function __normalize!{T<:AbstractFloat}(v::AbstractVector{T}, nrm::T)
+@inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
     #The largest positive floating point number whose inverse is less than
     #infinity
-    const δ = inv(prevfloat(typemax(T)))
+    δ = inv(prevfloat(typemax(nrm)))
 
     if nrm ≥ δ #Safe to multiply with inverse
         invnrm = inv(nrm)
         scale!(v, invnrm)
 
-    else #Divide by norm; slower but more correct
-        #Note 2015-10-19: As of Julia 0.4, @simd does not vectorize floating
-        #point division, although vectorized intrinsics like DIVPD exist. I
-        #will leave the @simd annotation in, hoping that someone will improve
-        #the @simd macro in the future. - cjh
-        @inbounds @simd for i in eachindex(v)
-            v[i] /= nrm
-        end
+    else # scale elements to avoid overflow
+        εδ = eps(one(nrm))/δ
+        scale!(v, εδ)
+        scale!(v, inv(nrm*εδ))
     end
 
     v
@@ -595,5 +591,14 @@ Normalize the vector `v` with respect to the `p`-norm.
 
 `normalize!`, `qr`
 """
-normalize(v::AbstractVector, p::Real=2) = v/norm(v, p)
+function normalize(v::AbstractVector, p::Real = 2)
+    nrm = norm(v, p)
+    if length(v) > 0
+        vv = copy_oftype(v, typeof(v[1]/nrm))
+        return __normalize!(vv, nrm)
+    else
+        T = typeof(zero(eltype(v))/nrm)
+        return T[]
+    end
+end
 
