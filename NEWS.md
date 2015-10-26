@@ -61,6 +61,9 @@ Library improvements
       appropriate. The `sparsevec` function returns a one-dimensional sparse
       vector instead of a one-column sparse matrix. ([#13440])
 
+  * New `foreach` function for calling a function on every element of a collection when
+    the results are not needed.
+
 Deprecated or removed
 ---------------------
 
