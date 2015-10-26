@@ -331,3 +331,6 @@ let cmd = ["foo bar", "baz"]
 end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
+
+# issue #13616
+@test_throws ErrorException collect(eachline(`cat _doesnt_exist__111_`))
