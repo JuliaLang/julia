@@ -69,10 +69,12 @@ static inline void add_named_global(GlobalObject *gv, void *addr)
 static inline void add_named_global(GlobalValue *gv, void *addr)
 #endif
 {
-#ifdef USE_MCJIT
-
+#ifdef LLVM34
     StringRef name = gv->getName();
+#endif
+
 #ifdef _OS_WINDOWS_
+#ifdef LLVM35
     std::string imp_name;
     // setting DLLEXPORT correctly only matters when building a binary
     if (jl_generating_output()) {
@@ -89,13 +91,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
             addr = (void*)imp_addr;
         }
     }
-#endif
-    addComdat(gv);
-    sys::DynamicLibrary::AddSymbol(name, addr);
-
-#else // USE_MCJIT
-
-#ifdef _OS_WINDOWS_
+#else
     // setting DLLEXPORT correctly only matters when building a binary
     if (jl_generating_output()) {
         if (gv->getLinkage() == GlobalValue::ExternalLinkage)
@@ -108,7 +104,16 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
         addr = (void*)imp_addr;
 #endif
     }
+#endif
 #endif // _OS_WINDOWS_
+
+#ifdef USE_ORCJIT
+    addComdat(gv);
+    jl_ExecutionEngine->addGlobalMapping(name, addr);
+#elif defined(USE_MCJIT)
+    addComdat(gv);
+    sys::DynamicLibrary::AddSymbol(name, addr);
+#else // USE_MCJIT
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
 #endif // USE_MCJIT
 }
