@@ -753,6 +753,7 @@ export
     filter,
     foldl,
     foldr,
+    foreach,
     get,
     get!,
     getindex,
