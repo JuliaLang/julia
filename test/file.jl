@@ -1096,8 +1096,8 @@ test_read_nbyte()
 @test !isreadable(DevNull)
 @test iswritable(DevNull)
 @test isopen(DevNull)
-@test write(DevNull, 0xff) == 0
-@test write(DevNull, 1234) == 0
+@test write(DevNull, 0xff) === 1
+@test write(DevNull, Int32(1234)) === 4
 @test_throws EOFError read(DevNull, UInt8)
 @test close(DevNull) === nothing
 @test flush(DevNull) === nothing
