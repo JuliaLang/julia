@@ -66,6 +66,7 @@ void jl_set_gs_ctr(uint32_t ctr);
 
 void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name) \
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)

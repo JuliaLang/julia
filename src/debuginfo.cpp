@@ -52,7 +52,9 @@
 #include <cassert>
 using namespace llvm;
 
-extern DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
+#if defined(LLVM35) && !defined(LLVM36)
+extern ExecutionEngine *jl_ExecutionEngine;
+#endif
 
 #ifdef USE_MCJIT
 typedef object::SymbolRef SymRef;
@@ -454,11 +456,11 @@ char *jl_demangle(const char *name)
     return strdup(name);
 }
 
-JuliaJITEventListener *jl_jit_events;
-void RegisterJuliaJITEventListener()
+static JuliaJITEventListener *jl_jit_events;
+JITEventListener* CreateJuliaJITEventListener()
 {
     jl_jit_events = new JuliaJITEventListener();
-    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
+    return jl_jit_events;
 }
 
 // *name and *filename are either NULL or malloc'd pointers
