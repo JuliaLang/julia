@@ -706,7 +706,7 @@ Mathematical Functions
 
 .. function:: sign(x)
 
-   Return ``+1`` if ``x`` is positive, ``0`` if ``x == 0``, and ``-1`` if ``x`` is negative.
+   Return zero if ``x==0`` and :math:`x/|x|` otherwise (i.e., ±1 for real ``x``).
 
 .. function:: signbit(x)
 

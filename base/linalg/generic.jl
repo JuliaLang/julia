@@ -59,7 +59,8 @@ function generic_vecnormMinusInf(x)
     minabs = abs(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        minabs = Base.scalarmin(minabs, abs(v))
+        vnorm = norm(v)
+        minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
     return float(minabs)
 end
@@ -70,7 +71,8 @@ function generic_vecnormInf(x)
     maxabs = abs(v)
     while !done(x, s)
         (v, s) = next(x, s)
-        maxabs = Base.scalarmax(maxabs, abs(v))
+        vnorm = norm(v)
+        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
     return float(maxabs)
 end

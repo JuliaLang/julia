@@ -426,15 +426,19 @@ static uptrint_t hash_symbol(const char *str, size_t len)
 
 #define SYM_POOL_SIZE 524288
 
-static jl_sym_t *mk_symbol(const char *str)
+static size_t symbol_nbytes(size_t len)
+{
+    return (sizeof(jl_sym_t)+len+1+7)&-8;
+}
+
+static jl_sym_t *mk_symbol(const char *str, size_t len)
 {
 #ifndef MEMDEBUG
     static char *sym_pool = NULL;
     static char *pool_ptr = NULL;
 #endif
     jl_sym_t *sym;
-    size_t len = strlen(str);
-    size_t nb = (sizeof(jl_sym_t)+len+1+7)&-8;
+    size_t nb = symbol_nbytes(len);
 
     if (nb >= SYM_POOL_SIZE) {
         jl_error("Symbol length exceeds maximum length");
@@ -453,7 +457,8 @@ static jl_sym_t *mk_symbol(const char *str)
     sym->type = (jl_value_t*)jl_sym_type;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
-    strcpy(&sym->name[0], str);
+    memcpy(&sym->name[0], str, len);
+    sym->name[len] = 0;
     return sym;
 }
 
@@ -468,17 +473,17 @@ static void unmark_symbols_(jl_sym_t *root)
 
 void jl_unmark_symbols(void) { unmark_symbols_(symtab); }
 
-static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
+static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str, size_t len)
 {
     int x;
-    uptrint_t h = hash_symbol(str, strlen(str));
+    uptrint_t h = hash_symbol(str, len);
 
     // Tree nodes sorted by major key of (int(hash)) and minor key o (str).
     while (*ptree != NULL) {
         x = (int)(h-(*ptree)->hash);
         if (x == 0) {
-            x = strcmp(str, (*ptree)->name);
-            if (x == 0)
+            x = strncmp(str, (*ptree)->name, len);
+            if (x == 0 && (*ptree)->name[len] == 0)
                 return ptree;
         }
         if (x < 0)
@@ -489,27 +494,31 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     return ptree;
 }
 
-jl_sym_t *jl_symbol(const char *str)
+static jl_sym_t *_jl_symbol(const char *str, size_t len)
 {
     jl_sym_t **pnode;
 
-    pnode = symtab_lookup(&symtab, str);
+    pnode = symtab_lookup(&symtab, str, len);
     if (*pnode == NULL)
-        *pnode = mk_symbol(str);
+        *pnode = mk_symbol(str, len);
     return *pnode;
+}
+
+jl_sym_t *jl_symbol(const char *str)
+{
+    return _jl_symbol(str, strlen(str));
 }
 
 jl_sym_t *jl_symbol_lookup(const char *str)
 {
-    return *symtab_lookup(&symtab, str);
+    return *symtab_lookup(&symtab, str, strlen(str));
 }
 
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
 {
-    char *name = (char*)alloca(len+1);
-    memcpy(name, str, len);
-    name[len] = '\0';
-    return jl_symbol(name);
+    if (memchr(str, 0, len))
+        jl_error("Symbol name may not contain \\0");
+    return _jl_symbol(str, len);
 }
 
 DLLEXPORT jl_sym_t *jl_get_root_symbol() { return symtab; }
@@ -531,14 +540,21 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
     static char gs_name[14];
-    char *name = (char*)alloca(sizeof(gs_name)+len+3);
+    if (symbol_nbytes(len) >= SYM_POOL_SIZE)
+        jl_error("Symbol length exceeds maximum");
+    if (memchr(str, 0, len))
+        jl_error("Symbol name may not contain \\0");
+    char *name = (char*) (len >= 256 ? malloc(sizeof(gs_name)+len+3) :
+                          alloca(sizeof(gs_name)+len+3));
     char *n;
     name[0] = '#'; name[1] = '#'; name[2+len] = '#';
     memcpy(name+2, str, len);
     n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
     memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
     gs_ctr++;
-    return jl_symbol(name);
+    jl_sym_t *sym = _jl_symbol(name, len+3+sizeof(gs_name)-(n-gs_name)-1);
+    if (len >= 256) free(name);
+    return sym;
 }
 
 // allocating types -----------------------------------------------------------

@@ -315,6 +315,14 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     @test_approx_eq norm(xs, 3) cbrt(5)
     @test_approx_eq norm(xs, Inf) 1
 
+    # Issue #12552:
+    if elty <: FloatingPoint || elty <: Complex
+        for p in [-Inf,-1,1,2,3,Inf]
+            @test isnan(norm(elty[0,NaN],p))
+            @test isnan(norm(elty[NaN,0],p))
+        end
+    end
+
     ## Number
     norm(x[1:1]) === norm(x[1], -Inf)
     norm(x[1:1]) === norm(x[1], 0)

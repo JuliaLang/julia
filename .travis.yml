@@ -25,6 +25,8 @@ before_install:
         sudo add-apt-repository ppa:staticfloat/julia-deps -y;
         sudo apt-get update -qq -y;
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libdouble-conversion-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
+        git config --global user.name "Travis Buildbot";
+        git config --global user.email "travis@buildbot.example.org";
       elif [ `uname` = "Darwin" ]; then
         brew tap staticfloat/julia;
         brew rm --force $(brew deps julia);

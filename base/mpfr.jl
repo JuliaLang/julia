@@ -282,6 +282,7 @@ function -(x::BigFloat)
 end
 
 function sqrt(x::BigFloat)
+    isnan(x) && return x
     z = BigFloat()
     ccall((:mpfr_sqrt, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     if isnan(z)

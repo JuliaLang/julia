@@ -490,9 +490,17 @@ else
 PCRE_CONFIG = $(build_bindir)/pcre-config
 endif
 
-# Use 64-bit libraries by default on 64-bit architectures
+# Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 USE_BLAS64 ?= 1
+else # non MKL system blas is most likely LP64
+USE_BLAS64 ?= 0
+endif
+else
+USE_BLAS64 ?= 1
+endif
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)

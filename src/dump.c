@@ -738,10 +738,11 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
             len = read_uint8(s);
         else
             len = read_int32(s);
-        char *name = (char*)alloca(len+1);
+        char *name = (char*) (len >= 256 ? malloc(len+1) : alloca(len+1));
         ios_read(s, name, len);
         name[len] = '\0';
         jl_value_t *sym = (jl_value_t*)jl_symbol(name);
+        if (len >= 256) free(name);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, sym);
         return sym;
