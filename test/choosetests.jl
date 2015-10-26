@@ -2,16 +2,20 @@
 
 @doc """
 
-`tests, net_on = choosetests(choices)` selects a set of tests to be
-run. `choices` should be a vector of test names; if empty or set to
-`["all"]`, all tests are selected.
+`tests, codegen_tests, net_on = choosetests(choices)` selects a set of
+tests to be run. `choices` should be a vector of test names; if empty
+or set to `["all"]`, all tests are selected.
 
 This function also supports "test collections": specifically, "linalg"
- refers to collections of tests in the correspondingly-named
-directories.
+refers to collections of tests in the correspondingly-named directories.
 
-Upon return, `tests` is a vector of fully-expanded test names, and
-`net_on` is true if networking is available (required for some tests).
+Upon return, `tests` and `codegen_tests` are vectors of fully-expanded
+test names, and `net_on` is true if networking is available (required
+for some tests).
+
+`tests` contains general-purpose tests, while `codegen-tests` contains
+tests that require special exeflags to run, eg. inlining, optimisations
+etc. should not be disabled.
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -78,7 +82,11 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    net_required_for = ["socket", "parallel"]
+    codegen_testnames = ["simdloop"]
+
+    # net is required for networking tests and for tests that must be run in a worker process
+    # with different exeflags (eg. codegen tests)
+    net_required_for = ["socket", "parallel", codegen_testnames...]
     net_on = true
     try
         getipaddr()
@@ -98,5 +106,15 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on
+    # Separate the code generation tests, they need different exeflags
+    codegen_tests = []
+    filter!(tests) do t
+        if t in codegen_testnames
+            push!(codegen_tests, t)
+            return false
+        end
+        return true
+    end
+
+    tests, codegen_tests, net_on
 end

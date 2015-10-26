@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 include("choosetests.jl")
-tests, net_on = choosetests(ARGS)
+tests, codegen_tests, net_on = choosetests(ARGS)
 tests = unique(tests)
+codegen_tests = unique(codegen_tests)
 
 # Base.compile only works from node 1, so compile test is handled specially
 compile_test = "compile" in tests
@@ -10,11 +11,16 @@ if compile_test
     splice!(tests, findfirst(tests, "compile"))
 end
 
-cd(dirname(@__FILE__)) do
+function spawn_tests(tests, exeflags)
+    if isempty(tests)
+        return
+    end
+
     n = 1
+    procs = []
     if net_on
         n = min(8, CPU_CORES, length(tests))
-        n > 1 && addprocs(n; exeflags=`--check-bounds=yes --depwarn=error`)
+        procs = addprocs(n; exeflags=exeflags)
         blas_set_num_threads(1)
     end
 
@@ -42,7 +48,7 @@ cd(dirname(@__FILE__)) do
                     if (isa(resp, Integer) && (resp > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
                             rmprocs(p, waitfor=0.5)
-                            p = addprocs(1; exeflags=`--check-bounds=yes --depwarn=error`)[1]
+                            p = addprocs(1; exeflags=exeflags)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
                             # single process testing, bail if mem limit reached, or, on an exception.
@@ -64,11 +70,19 @@ cd(dirname(@__FILE__)) do
         error("Some tests exited with errors.")
     end
 
+#        @unix_only n > 1 && rmprocs(workers(), waitfor=5.0)
+    rmprocs(procs..., waitfor=5.0)
+
     if compile_test
         n > 1 && print("\tFrom worker 1:\t")
         runtests("compile")
     end
 
-    @unix_only n > 1 && rmprocs(workers(), waitfor=5.0)
+end
+
+cd(dirname(@__FILE__)) do
+    spawn_tests(tests, `--check-bounds=yes --depwarn=error`)
+    spawn_tests(codegen_tests, `--check-bounds=no --depwarn=error`)
+
     println("    \033[32;1mSUCCESS\033[0m")
 end
