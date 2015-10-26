@@ -1,5 +1,8 @@
 % 3D Lattice Boltzmann (BGK) model of a fluid.
-% (http://exolete.com/lbm/)
+%
+% From http://exolete.com/lbm/, reproduced here with the author's
+% permission.
+%
 % D3Q19 model. At each timestep, particle densities propagate
 % outwards in the directions indicated in the figure. An
 % equivalent 'equilibrium' density is found, and the densities
