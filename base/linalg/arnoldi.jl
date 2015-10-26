@@ -47,20 +47,20 @@ The following keyword arguments are supported:
    =============== ================================== ==================================
 ```
 """
-eigs(A; args...) = eigs(A, I; args...)
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; args...) = _eigs(A, I; args...)
+eigs(A; kwargs...) = eigs(A, I; kwargs...)
+eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; args...) = _eigs(A, B; args...)
-eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; args...) = throw(MethodError(eigs, Any[A,B,args...]))
-eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; args...) = throw(MethodError(eigs, Any[A,B,args...]))
-function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; args...)
+eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
+eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
+eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
+function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
-    eigs(convert(AbstractMatrix{Tnew}, A), I; args...)
+    eigs(convert(AbstractMatrix{Tnew}, A), I; kwargs...)
 end
-function eigs(A::AbstractMatrix, B::AbstractMatrix; args...)
+function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     T = promote_type(eltype(A), eltype(B))
     Tnew = typeof(zero(T)/sqrt(one(T)))
-    eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); args...)
+    eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
 end
 doc"""
 ```rst
@@ -106,7 +106,7 @@ The following keyword arguments are supported:
    =============== ================================== ==================================
 ```
 """
-eigs(A, B; args...) = _eigs(A, B; args...)
+eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
               nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
@@ -147,7 +147,7 @@ function _eigs(A, B;
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
         which != :LI && which != :SI && which != :BE)
-       throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
+        throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
     end
     if which == :BE && !sym
         throw(ArgumentError("which=:BE only possible for real symmetric problem"))
@@ -262,13 +262,13 @@ end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
-svds{T<:BlasFloat}(A::AbstractMatrix{T}; args...) = _svds(A; args...)
-svds(A::AbstractMatrix{BigFloat}; args...) = throw(MethodError(svds, Any[A, args...]))
-function svds{T}(A::AbstractMatrix{T}; args...)
+svds{T<:BlasFloat}(A::AbstractMatrix{T}; kwargs...) = _svds(A; kwargs...)
+svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
+function svds{T}(A::AbstractMatrix{T}; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
-    svds(convert(AbstractMatrix{Tnew}, A); args...)
+    svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
 end
-svds(A; args...) = _svds(A; args...)
+svds(A; kwargs...) = _svds(A; kwargs...)
 function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
     if nsv < 1
         throw(ArgumentError("number of singular values (nsv) must be ≥ 1, got $nsv"))
