@@ -160,15 +160,22 @@ end
 
 #Issue 7304
 let
-    A=[-√.5 -√.5; -√.5 √.5]
-    Q=full(qrfact(A)[:Q])
+    A = [-√.5 -√.5; -√.5 √.5]
+    Q = full(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
 
 let
     debug && println("qr on AbstractVector")
 
-    v = [3.0, 4.0]
-    @test qr(v) == ([0.6, 0.8], 5.0)
+    vr = [3.0, 4.0]
+    for Tr in (Float32, Float64)
+        for T in (Tr, Complex{Tr})
+            v = convert(Vector{T}, vr)
+            nv, nm = qr(v)
+            @test norm(nv - [0.6, 0.8], Inf) < eps(Tr)
+            @test nm == 5.0
+        end
+    end
 end
 
