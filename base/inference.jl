@@ -2721,6 +2721,14 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         expr = lastexpr.args[1]
     end
 
+    if length(stmts) == 1
+        # remove line number when inlining a single expression. see issue #13725
+        s = stmts[1]
+        if isa(s,Expr)&&is(s.head,:line) || isa(s,LineNumberNode)
+            pop!(stmts)
+        end
+    end
+
     if isa(expr,Expr)
         old_t = e.typ
         if old_t <: expr.typ
