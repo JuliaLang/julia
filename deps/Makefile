@@ -645,7 +645,7 @@ ifeq ($(BUILD_LLDB),1)
 		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER_LLDB),)
-	(cd $(LLVM_SRC_DIR)/tools/LLDB && \
+	(cd $(LLVM_SRC_DIR)/tools/lldb && \
 		git checkout $(LLVM_GIT_VER_LLDB))
 endif # LLVM_GIT_VER_CLANG
 endif # BUILD_LLDB
