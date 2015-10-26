@@ -21,6 +21,7 @@ function spawn_tests(tests, exeflags)
     if net_on
         n = min(8, CPU_CORES, length(tests))
         procs = addprocs(n; exeflags=exeflags)
+        println("Started workers $procs with flags $exeflags")
         blas_set_num_threads(1)
     end
 
@@ -33,7 +34,7 @@ function spawn_tests(tests, exeflags)
         max_worker_rss = typemax(Csize_t)
     end
     @sync begin
-        for p in workers()
+        for p in procs
             @async begin
                 while length(tests) > 0
                     test = shift!(tests)
