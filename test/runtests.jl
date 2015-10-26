@@ -17,7 +17,7 @@ function spawn_tests(tests, exeflags)
     end
 
     n = 1
-    procs = []
+    procs = workers()
     if net_on
         n = min(8, CPU_CORES, length(tests))
         procs = addprocs(n; exeflags=exeflags)
