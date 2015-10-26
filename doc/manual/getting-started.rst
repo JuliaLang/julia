@@ -112,6 +112,7 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -J, --sysimage <file>     Start up with the given system image file
      --precompiled={yes|no}    Use precompiled code from system image if available
+     --compilecache={yes|no}   Enable/disable incremental precompilation of modules\n"
      -H, --home <dir>          Set location of julia executable
      --startup-file={yes|no}   Load ~/.juliarc.jl
      -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)
