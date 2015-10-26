@@ -204,3 +204,11 @@ let # complex svds test
     @test_throws ArgumentError svds(A,nsv=0)
     @test_throws ArgumentError svds(A,nsv=20)
 end
+
+# test promotion
+eigs(rand(1:10, 10, 10))
+eigs(rand(1:10, 10, 10), rand(1:10, 10, 10) |> t -> t't)
+svds(rand(1:10, 10, 8))
+@test_throws MethodError eigs(big(rand(1:10, 10, 10)))
+@test_throws MethodError eigs(big(rand(1:10, 10, 10)), rand(1:10, 10, 10))
+@test_throws MethodError svds(big(rand(1:10, 10, 8)))
