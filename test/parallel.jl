@@ -539,3 +539,6 @@ end
 let t = schedule(@task f13168(100))
     @test schedule(t) === t
 end
+
+# issue #13122
+@test remotecall_fetch(workers()[1], identity, C_NULL) === C_NULL
