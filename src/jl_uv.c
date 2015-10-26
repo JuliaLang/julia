@@ -212,7 +212,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
                        uv_handle_type stderr_type, uv_pipe_t *stderr_pipe,
-                       int detach, char **env, char *cwd, uv_exit_cb cb)
+                       int flags, char **env, char *cwd, uv_exit_cb cb)
 {
     uv_process_options_t opts;
     uv_stdio_container_t stdio[3];
@@ -220,14 +220,12 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     opts.file = name;
     opts.env = env;
 #ifdef _OS_WINDOWS_
-    opts.flags = 0;
+    opts.flags = flags;
 #else
-    opts.flags = UV_PROCESS_RESET_SIGPIPE;
+    opts.flags = flags | UV_PROCESS_RESET_SIGPIPE;
 #endif
     opts.cwd = cwd;
     opts.args = argv;
-    if (detach)
-        opts.flags |= UV_PROCESS_DETACHED;
     opts.stdio = stdio;
     opts.stdio_count = 3;
     stdio[0].type = stdin_type;
