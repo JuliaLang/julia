@@ -67,7 +67,8 @@ extern "C" {
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
 // of what eventual threading support will change.
 
-// #define JULIA_ENABLE_THREADING
+// JULIA_ENABLE_THREADING is switched on in Make.inc if JULIA_THREADS is
+// set (in Make.user)
 
 #ifndef JULIA_ENABLE_THREADING
 // Definition for compiling non-thread-safe Julia.
