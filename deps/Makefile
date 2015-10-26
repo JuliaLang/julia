@@ -624,21 +624,7 @@ ifneq ($(LLVM_LLDB_TAR),)
 	mkdir -p $(LLVM_SRC_DIR)/tools/lldb
 	$(TAR) -C $(LLVM_SRC_DIR)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
 endif # LLVM_LLDB_TAR
-else
-ifeq ($(BUILD_LLVM_CLANG),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
-		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/clang  && \
-		git pull --ff-only)
-endif # BUILD_LLVM_CLANG
-ifeq ($(BUILD_LLDB),1)
-	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
-		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb  ) || \
-		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
-		git pull --ff-only)
-endif # BUILD_LLDB
-endif # LLVM_VER
-ifeq ($(LLVM_VER),svn)
+else # LLVM_VER
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
@@ -648,11 +634,21 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
 		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
 		git pull --ff-only)
-ifneq ($(LLVM_CLANG_VER),)
-	(cd $(LLVM_SRC_DIR) && \
-		git checkout $(LLVM_GIT_VER))
-endif # LLVM_CLANG_VER
+ifneq ($(LLVM_GIT_VER_CLANG),)
+	(cd $(LLVM_SRC_DIR)/tools/clang && \
+		git checkout $(LLVM_GIT_VER_CLANG))
+endif # LLVM_GIT_VER_CLANG
 endif # BUILD_LLVM_CLANG
+ifeq ($(BUILD_LLDB),1)
+	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
+		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb  ) || \
+		(cd $(LLVM_SRC_DIR)/tools/lldb  && \
+		git pull --ff-only)
+ifneq ($(LLVM_GIT_VER_LLDB),)
+	(cd $(LLVM_SRC_DIR)/tools/LLDB && \
+		git checkout $(LLVM_GIT_VER_LLDB))
+endif # LLVM_GIT_VER_CLANG
+endif # BUILD_LLDB
 endif # LLVM_VER
 	touch -c $@
 
