@@ -373,12 +373,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def visit_label(self, node):
         raise nodes.SkipNode
 
-    def visit_description(self, node):
-        pass
-
-    def depart_description(self, node):
-        pass
-
     def visit_tabular_col_spec(self, node):
         raise nodes.SkipNode
 
