@@ -47,7 +47,17 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
-    mkdir(path, mode)
+    try
+        mkdir(path, mode)
+    # If there is a problem with making the directory, but the directory
+    # does in fact exist, then ignore the error. Else re-throw it.
+    catch err
+        if isa(err, SystemError) && isdir(path)
+            return
+        else
+            rethrow()
+        end
+    end
 end
 
 mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
