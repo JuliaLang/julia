@@ -280,7 +280,6 @@ endif
 ifeq ($(JULIA_THREADS), 1)
 LLVM_VER := svn
 LLVM_GIT_URL_LLVM := https://github.com/JuliaLang/llvm.git -b jn/tls37
-JULIA_ENABLE_THREADING := 1
 endif
 
 # Compiler specific stuff
@@ -844,6 +843,12 @@ JLDFLAGS := -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
+endif
+
+# Threads
+ifeq ($(JULIA_THREADS), 1)
+JCFLAGS += -DJULIA_ENABLE_THREADING
+JCXXFLAGS += -DJULIA_ENABLE_THREADING
 endif
 
 # Intel VTune Amplifier
