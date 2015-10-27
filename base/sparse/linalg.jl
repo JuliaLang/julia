@@ -167,16 +167,10 @@ end
 ## solvers
 function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
-    n = length(B)
-    if isa(B, Vector)
-        nrowB = n
-        ncolB = 1
-    else
-        nrowB, ncolB = size(B)
-    end
-    ncol = chksquare(A)
+    nrowB, ncolB  = size(B, 1), size(B, 2)
+    ncol = LinAlg.chksquare(A)
     if nrowB != ncol
-        throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
     aa = A.nzval
@@ -185,33 +179,44 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 
     joff = 0
     for k = 1:ncolB
-        for j = 1:(nrowB-1)
-            jb = joff + j
+        for j = 1:nrowB
             i1 = ia[j]
-            i2 = ia[j+1]-1
-            B[jb] /= aa[i1]
-            bj = B[jb]
-            for i = i1+1:i2
-                B[joff+ja[i]] -= bj*aa[i]
+            i2 = ia[j + 1] - 1
+
+            # loop through the structural zeros
+            ii = i1
+            jai = ja[ii]
+            while ii <= i2 && jai < j
+                ii += 1
+                jai = ja[ii]
+            end
+
+            # check for zero pivot and divide with pivot
+            if jai == j
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
+                ii += 1
+            else
+                throw(LinAlg.SingularException(j))
+            end
+
+            # update remaining part
+            for i = ii:i2
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
         joff += nrowB
-        B[joff] /= aa[end]
     end
-    return B
+    B
 end
 
 function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
-    n = length(B)
-    if isa(B, Vector)
-        nrowB = n
-        ncolB = 1
-    else
-        nrowB, ncolB = size(B)
+    nrowB, ncolB = size(B, 1), size(B, 2)
+    ncol = LinAlg.chksquare(A)
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
-    ncol = chksquare(A)
-    if nrowB != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)")) end
 
     aa = A.nzval
     ja = A.rowval
@@ -219,21 +224,42 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 
     joff = 0
     for k = 1:ncolB
-        for j = nrowB:-1:2
-            jb = joff + j
+        for j = nrowB:-1:1
             i1 = ia[j]
-            i2 = ia[j+1]-1
-            B[jb] /= aa[i2]
-            bj = B[jb]
-            for i = i2-1:-1:i1
-                B[joff+ja[i]] -= bj*aa[i]
+            i2 = ia[j + 1] - 1
+
+            # loop through the structural zeros
+            ii = i2
+            jai = ja[ii]
+            while ii >= i1 && jai > j
+                ii -= 1
+                jai = ja[ii]
+            end
+
+            # check for zero pivot and divide with pivot
+            if jai == j
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
+                ii -= 1
+            else
+                throw(LinAlg.SingularException(j))
+            end
+
+            # update remaining part
+            for i = ii:-1:i1
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
-        B[joff+1] /= aa[1]
         joff += nrowB
     end
-   return B
+    B
 end
+
+A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+
+(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, full(B))
+(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, full(B))
 
 ## triu, tril
 
