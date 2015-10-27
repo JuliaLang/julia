@@ -642,9 +642,12 @@ class MarkdownTranslator(nodes.NodeVisitor):
         if t[0] == '[' and t[-1] == ']':
             self.add_text('[@' + t[1:])
             raise nodes.SkipNode
+        elif 'refuri' in node and node['refuri'][0:4] == 'http':
+            self.add_text('[')
 
     def depart_reference(self, node):
-        pass
+        if 'refuri' in node and node['refuri'][0:4] == 'http':
+            self.add_text('](' + node['refuri'] + ')')
 
     def visit_emphasis(self, node):
         self.add_text('*')
