@@ -137,14 +137,6 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-#  define NOINLINE __declspec(noinline)
-#  define NOINLINE_DECL(f) __declspec(noinline) f
-#else
-#  define NOINLINE __attribute__((noinline))
-#  define NOINLINE_DECL(f) f __attribute__((noinline))
-#endif
-
 typedef int bool_t;
 typedef unsigned char  byte_t;   /* 1 byte */
 
