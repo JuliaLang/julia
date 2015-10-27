@@ -1838,20 +1838,6 @@ Update `collection`, removing elements for which `function` is `false`. For asso
 filter!
 
 doc"""
-    schurfact(A) -> Schur
-
-Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and the unitary/orthogonal Schur vectors can be obtained with `F[:vectors]` or `F[:Z]` such that `A=F[:vectors]*F[:Schur]*F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
-"""
-schurfact(A)
-
-doc"""
-    schurfact(A, B) -> GeneralizedSchur
-
-Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F[:S]` and `F[:T]`, the left unitary/orthogonal Schur vectors can be obtained with `F[:left]` or `F[:Q]` and the right unitary/orthogonal Schur vectors can be obtained with `F[:right]` or `F[:Z]` such that `A=F[:left]*F[:S]*F[:right]'` and `B=F[:left]*F[:T]*F[:right]'`. The generalized eigenvalues of `A` and `B` can be obtained with `F[:alpha]./F[:beta]`.
-"""
-schurfact(A, B)
-
-doc"""
     base64decode(string)
 
 Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
@@ -2092,24 +2078,6 @@ doc"""
 Reseed the random number generator. If a `seed` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For `MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers or a filename, in which case the seed is read from a file. `RandomDevice` does not support seeding.
 """
 srand
-
-doc"""
-```rst
-..  schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
-
-See :func:`schurfact`
-```
-"""
-schur(A)
-
-doc"""
-```rst
-..  schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
-
-See :func:`schurfact`
-```
-"""
-schur(A,B)
 
 doc"""
     isexecutable(path) -> Bool
@@ -3067,42 +3035,6 @@ doc"""
 Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 """
 accept
-
-doc"""
-```rst
-..  ordschur(Q, T, select) -> Schur
-
-Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-```
-"""
-ordschur(Q, T, select)
-
-doc"""
-```rst
-..  ordschur(S, select) -> Schur
-
-Reorders the Schur factorization ``S`` of type ``Schur``.
-```
-"""
-ordschur(S::Schur, select)
-
-doc"""
-```rst
-..  ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both ``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
-```
-"""
-ordschur(S, T, Q, Z)
-
-doc"""
-```rst
-..  ordschur(GS, select) -> GeneralizedSchur
-
-Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
-```
-"""
-ordschur(GS::GeneralizedSchur, select)
 
 doc"""
     triu!(M)
@@ -6009,42 +5941,6 @@ sin
 
 doc"""
 ```rst
-..  ordschur!(Q, T, select) -> Schur
-
-Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
-```
-"""
-ordschur!(Q,T,select)
-
-doc"""
-```rst
-..  ordschur!(S, select) -> Schur
-
-Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
-```
-"""
-ordschur!(S,select)
-
-doc"""
-```rst
-..  ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
-
-Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
-```
-"""
-ordschur!(S,T,Q,Z,select)
-
-doc"""
-```rst
-..  ordschur!(GS, select) -> GeneralizedSchur
-
-Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
-```
-"""
-ordschur!(::LinAlg.GeneralizedSchur,select)
-
-doc"""
-```rst
 ..  Base.compilecache(module::ByteString)
 
 Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
@@ -6673,15 +6569,6 @@ ERROR: ArgumentError: indices must be unique and sorted
 ```
 """
 deleteat!(collection, itr)
-
-doc"""
-```rst
-..  schurfact!(A)
-
-Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
-```
-"""
-schurfact!
 
 doc"""
     read(stream, type)
