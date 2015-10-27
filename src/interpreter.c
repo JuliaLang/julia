@@ -18,7 +18,7 @@ extern int jl_lineno;
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym);
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
-                             int start, int toplevel);
+                             int toplevel);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 
@@ -211,6 +211,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl, ngensym);
         if (jl_is_func(f))
             return do_call(f, &args[1], nargs-1, NULL, locals, nl, ngensym);
+        else if (jl_is_intrinsic(f))
+            return do_call(jl_intrinsic_call_func, args, nargs, (jl_value_t*)f, locals, nl, ngensym);
         else
             return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl, ngensym);
     }
@@ -261,7 +263,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == body_sym) {
-        return eval_body(ex->args, locals, nl, ngensym, 0, 0);
+        return eval_body(ex->args, locals, nl, ngensym, 0);
     }
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
@@ -525,17 +527,23 @@ jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
     if (ngensym > 0) {
         JL_GC_PUSHARGS(locals, ngensym);
     }
-    jl_value_t *ret = eval_body(stmts, locals, 0, ngensym, 0, 1);
+    jl_value_t *ret = eval_body(stmts, locals, 0, ngensym, 1);
     if (ngensym > 0)
         JL_GC_POP();
     return ret;
 }
 
-static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
-                             int start, int toplevel)
-{
+// struct also keeps track of the next unused eh
+struct handler_chain {
     jl_handler_t __eh;
-    size_t i=start;
+    struct handler_chain *next;
+};
+
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
+                             int toplevel)
+{
+    struct handler_chain *eh_chain = NULL; // list of previously allocated eh contexts
+    size_t i = 0;
 
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -564,11 +572,19 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
                     return eval(ex, locals, nl, ngensym);
             }
             else if (head == enter_sym) {
-                jl_enter_handler(&__eh);
-                if (!jl_setjmp(__eh.eh_ctx,1)) {
-                    return eval_body(stmts, locals, nl, ngensym, i+1, toplevel);
+                jl_handler_t *__eh;
+                // see if there is an unused eh, or if a new one needs to be created
+                if (eh_chain) {
+                    __eh = &eh_chain->__eh;
+                    eh_chain = eh_chain->next;
                 }
                 else {
+                     __eh = &((struct handler_chain*)alloca(sizeof(struct handler_chain)))->__eh;
+                }
+
+                jl_enter_handler(__eh);
+                if (jl_setjmp(__eh->eh_ctx,1)) {
+                    // JL_CATCH handler
 #ifdef _OS_WINDOWS_
                     if (jl_exception_in_transit == jl_stackovf_exception)
                         _resetstkoflw();
@@ -579,7 +595,15 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
             }
             else if (head == leave_sym) {
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
-                jl_pop_handler(hand_n_leave);
+                while (hand_n_leave > 0) {
+                    // push each eh that gets popped onto the handler_chain for reuse
+                    jl_handler_t *__eh = jl_current_task->eh;
+                    struct handler_chain *next = eh_chain;
+                    eh_chain = container_of(__eh, struct handler_chain, __eh);
+                    eh_chain->next = next;
+                    jl_eh_restore_state(__eh); // JL_EH_POP handler
+                    hand_n_leave--;
+                }
             }
             else {
                 if (toplevel && jl_is_toplevel_only_expr(stmt))
@@ -623,7 +647,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
         locals[i*2]   = loc[(i-llength)*2];
         locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    r = eval_body(stmts, locals, nl, ngensym, 0, 1);
+    r = eval_body(stmts, locals, nl, ngensym, 1);
     JL_GC_POP();
     return r;
 }

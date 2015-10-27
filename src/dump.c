@@ -2375,7 +2375,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,
                      jl_globalref_type->name,
 
-                     jl_root_task, jl_bottom_func,
+                     jl_root_task, jl_bottom_func, jl_intrinsic_call_func,
 
                      NULL };
 

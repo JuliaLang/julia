@@ -3472,7 +3472,7 @@ void jl_init_types(void)
     jl_svecset(jl_lambda_info_type->types, 6, jl_function_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, (jl_value_t*)jl_emptysvec, NULL);
-
+    jl_intrinsic_call_func = jl_new_closure(jl_f_intrinsic_call, (jl_value_t*)jl_symbol("intrinsic_call"), NULL);
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_emptysvec, 32);
 

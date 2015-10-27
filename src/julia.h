@@ -810,6 +810,7 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
+#define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
 
 STATIC_INLINE int jl_is_bitstype(void *v)
 {

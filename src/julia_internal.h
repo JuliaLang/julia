@@ -79,6 +79,7 @@ JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
+extern jl_function_t *jl_intrinsic_call_func;
 void jl_install_default_signal_handlers(void);
 
 extern jl_datatype_t *jl_box_type;
