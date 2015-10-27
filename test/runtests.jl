@@ -25,6 +25,13 @@ function spawn_tests(tests, exeflags)
         blas_set_num_threads(1)
     end
 
+    for p in procs
+        remotecall_fetch(p) do
+            opts = Base.JLOptions()
+            println("Worker $p: $opts")
+        end
+    end
+
     @everywhere include("testdefs.jl")
 
     results=[]
