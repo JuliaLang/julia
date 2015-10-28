@@ -1273,6 +1273,15 @@ function map_promote(f, A::AbstractArray)
     return promote_to!(f, 2, dest, A)
 end
 
+# These are needed because map(eltype, As) is not inferrable
+promote_eltype_op(::Any) = Bottom
+promote_eltype_op{T}(op, ::AbstractArray{T}) = promote_op(op, T)
+promote_eltype_op{T}(op, ::T               ) = promote_op(op, T)
+promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = promote_op(op, R, S)
+promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::S) = promote_op(op, R, S)
+promote_eltype_op{R,S}(op, ::R, ::AbstractArray{S}) = promote_op(op, R, S)
+promote_eltype_op(op, A, B, C, D...) = promote_op(op, eltype(A), promote_eltype_op(op, B, C, D...))
+
 ## 1 argument
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)

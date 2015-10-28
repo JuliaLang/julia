@@ -7,6 +7,7 @@ importall ..Base.Operators
 import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring,
              print_matrix, transpose!, unsafe_getindex, unsafe_setindex!,
              isapprox
+using Base: promote_op, MulFun
 
 export
 # Modules
