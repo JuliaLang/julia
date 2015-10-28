@@ -60,7 +60,7 @@ ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
-first(a::AbstractArray) = a[1]
+first(a::AbstractArray) = a[first(eachindex(a))]
 
 function first(itr)
     state = start(itr)
