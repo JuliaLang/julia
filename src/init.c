@@ -545,6 +545,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
     jl_init_serializer();
+    jl_init_intrinsic_properties();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));

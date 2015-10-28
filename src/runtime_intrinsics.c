@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 // This is in implementation of the Julia intrinsic functions against boxed types
-// excluding the c interface (ccall, cglobal, llvmcall)
+// excluding the native function call interface (ccall, llvmcall)
 //
 // this file assumes a little-endian processor, although that isn't too hard to fix
 // it also assumes two's complement negative numbers, which might be a bit harder to fix
@@ -71,6 +71,54 @@ DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
     return p;
 }
 
+DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
+{
+    JL_TYPECHK(cglobal, type, ty);
+    jl_value_t *rt =
+        v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
+            (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type, jl_svec1(ty));
+
+    if (jl_is_tuple(v) && jl_nfields(v) == 1)
+        v = jl_fieldref(v, 0);
+
+    if (jl_is_pointer(v))
+        return jl_reinterpret(rt, v);
+
+    char *f_lib = NULL;
+    if (jl_is_tuple(v) && jl_nfields(v) > 1) {
+        jl_value_t *t1 = jl_fieldref(v, 1);
+        v = jl_fieldref(v, 0);
+        if (jl_is_symbol(t1))
+            f_lib = ((jl_sym_t*)t1)->name;
+        else if (jl_is_byte_string(t1))
+            f_lib = jl_string_data(t1);
+        else
+            JL_TYPECHK(cglobal, symbol, t1)
+    }
+
+    char *f_name = NULL;
+    if (jl_is_symbol(v))
+        f_name = ((jl_sym_t*)v)->name;
+    else if (jl_is_byte_string(v))
+        f_name = jl_string_data(v);
+    else
+        JL_TYPECHK(cglobal, symbol, v)
+
+#ifdef _OS_WINDOWS_
+    if (!f_lib)
+        f_lib = jl_dlfind_win32(f_name);
+#endif
+
+    void *ptr = jl_dlsym(jl_get_library(f_lib), f_name);
+    jl_value_t *jv = newobj(ptr, 1);
+    jl_set_typeof(jv, rt);
+    *(void**)jl_data_ptr(jv) = ptr;
+    return jv;
+}
+
+DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {
+    return jl_cglobal(v, (jl_value_t*)jl_void_type);
+}
 
 static inline unsigned int next_power_of_two(unsigned int val) {
   /* this function taken from libuv src/unix/core.c */
