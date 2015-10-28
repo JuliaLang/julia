@@ -104,7 +104,18 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     ispath(pkg,".git") || return typemin(VersionNumber)
 
     # get package repo head hash
-    head = string(LibGit2.head_oid(prepo))
+    local head
+    try
+        head = string(LibGit2.head_oid(prepo))
+    catch ex
+        # refs/heads/master does not exist
+        if isa(ex,LibGit2.GitError) &&
+            ex.code == LibGit2.Error.EUNBORNBRANCH
+            head = ""
+        else
+            rethrow(ex)
+        end
+    end
     isempty(head) && return typemin(VersionNumber)
 
     vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))

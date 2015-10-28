@@ -32,6 +32,8 @@ include("libgit2/status.jl")
 include("libgit2/tree.jl")
 include("libgit2/callbacks.jl")
 
+using .Error
+
 immutable State
     head::Oid
     index::Oid
@@ -371,7 +373,7 @@ function merge!(repo::GitRepo;
                 fheads = fetchheads(repo)
                 filter!(fh->fh.ismerge, fheads)
                 if isempty(fheads)
-                    throw(Error.GitError(Error.Merge,Error.ERROR,
+                    throw(GitError(Error.Merge, Error.ERROR,
                                    "There is no fetch reference for this branch."))
                 end
                 map(fh->GitAnnotated(repo,fh), fheads)
@@ -385,7 +387,7 @@ function merge!(repo::GitRepo;
                 end
             else # try to get tracking remote branch for the head
                 if !isattached(repo)
-                    throw(Error.GitError(Error.Merge, Error.ERROR,
+                    throw(GitError(Error.Merge, Error.ERROR,
                                    "There is no tracking information for the current branch."))
                 end
                 with(upstream(head_ref)) do tr_brn_ref
