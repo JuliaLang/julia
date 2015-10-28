@@ -118,6 +118,7 @@ void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
 DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v);
+jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo);
 extern jl_array_t *jl_module_init_order;
 
 #ifdef JL_USE_INTEL_JITEVENTS
@@ -147,7 +148,7 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
 int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
-jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp);
+jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, jl_tupletype_t *types);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);

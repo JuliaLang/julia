@@ -335,6 +335,28 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     return li;
 }
 
+jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+{
+    jl_lambda_info_t *new_linfo =
+        jl_new_lambda_info(linfo->ast, linfo->sparams, linfo->module);
+    new_linfo->tfunc = linfo->tfunc;
+    new_linfo->name = linfo->name;
+    new_linfo->roots = linfo->roots;
+    new_linfo->specTypes = linfo->specTypes;
+    new_linfo->unspecialized = linfo->unspecialized;
+    new_linfo->specializations = linfo->specializations;
+    new_linfo->def = linfo->def;
+    new_linfo->capt = linfo->capt;
+    new_linfo->file = linfo->file;
+    new_linfo->line = linfo->line;
+    new_linfo->fptr = linfo->fptr;
+    new_linfo->functionObject = linfo->functionObject;
+    new_linfo->specFunctionObject = linfo->specFunctionObject;
+    new_linfo->functionID = linfo->functionID;
+    new_linfo->specFunctionID = linfo->specFunctionID;
+    return new_linfo;
+}
+
 // symbols --------------------------------------------------------------------
 
 static jl_sym_t *symtab = NULL;
