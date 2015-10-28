@@ -59,3 +59,6 @@ end
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
 @test_approx_eq (x*(lufact(x) \ ones(2))) ones(2)
+
+@test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
+
