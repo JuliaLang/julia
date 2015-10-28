@@ -335,7 +335,8 @@ DLLEXPORT void jl_profile_stop_timer(void)
 void jl_install_default_signal_handlers(void)
 {
     ULONG StackSizeInBytes = sig_stack_size;
-    if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
+    pSetThreadStackGuarantee = jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
+    if (!pSetThreadStackGuarantee || !pSetThreadStackGuarantee(&StackSizeInBytes))
         pSetThreadStackGuarantee = NULL;
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGFPE");
