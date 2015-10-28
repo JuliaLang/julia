@@ -94,12 +94,12 @@ extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
 #endif
 
 // map from user-specified lib names to handles
-static std::map<std::string, uv_lib_t*> libMap;
+static std::map<std::string, void*> libMap;
 
 extern "C"
-uv_lib_t *jl_get_library(char *f_lib)
+void *jl_get_library(const char *f_lib)
 {
-    uv_lib_t *hnd;
+    void *hnd;
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == 1)
         return jl_exe_handle;
@@ -111,22 +111,19 @@ uv_lib_t *jl_get_library(char *f_lib)
     hnd = libMap[f_lib];
     if (hnd != NULL)
         return hnd;
-    hnd = (uv_lib_t *) jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT);
+    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT);
     if (hnd != NULL)
         libMap[f_lib] = hnd;
     return hnd;
 }
 
 extern "C" DLLEXPORT
-void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 {
-    uv_lib_t *handle = *hnd;
+    void *handle = *hnd;
     if (!handle)
         *hnd = handle = jl_get_library(f_lib);
-    void *ptr = jl_dlsym_e(handle, f_name);
-    if (!ptr)
-        jl_errorf("symbol \"%s\" could not be found: %s", f_name, uv_dlerror(handle));
-    return ptr;
+    return jl_dlsym(handle, f_name);
 }
 
 // miscellany

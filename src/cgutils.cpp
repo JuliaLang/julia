@@ -378,7 +378,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
 
 // --- emitting pointers directly into code ---
 
-static Value *literal_static_pointer_val(void *p, Type *t)
+static Value *literal_static_pointer_val(const void *p, Type *t)
 {
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,

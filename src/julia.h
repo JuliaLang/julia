@@ -1233,13 +1233,14 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
-typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
+typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
 DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags);
+DLLEXPORT int jl_dlclose(jl_uv_libhandle handle);
 DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
-DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
-char *jl_dlfind_win32(const char *name);
+const char *jl_dlfind_win32(const char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
 #if defined(__linux__) || defined(__FreeBSD__)

@@ -4,10 +4,10 @@
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
-static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_name, jl_codectx_t *ctx)
+static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
 {
     // in pseudo-code, this function emits the following:
-    //   global uv_lib_t **libptrgv
+    //   global HMODULE *libptrgv
     //   global void **llvmgv
     //   if (*llvmgv == NULL) {
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
@@ -15,7 +15,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     //   return (*llvmgv)
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pint8);
 
-    uv_lib_t *libsym = NULL;
+    void *libsym = NULL;
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
 #ifdef _OS_WINDOWS_
@@ -46,15 +46,15 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #ifdef USE_MCJIT
             jl_llvm_to_jl_value[libptrgv] = libsym;
 #else
-            *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
+            *((void**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
 #endif
         }
     }
     if (libsym == NULL) {
 #ifdef USE_MCJIT
-        libsym = (uv_lib_t*)jl_llvm_to_jl_value[libptrgv];
+        libsym = (void*)jl_llvm_to_jl_value[libptrgv];
 #else
-        libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
+        libsym = *((void**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
 #endif
     }
 
@@ -323,8 +323,8 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
 typedef struct {
     Value *jl_ptr;  // if the argument is a run-time computed pointer
     void *fptr;     // if the argument is a constant pointer
-    char *f_name;   // if the symbol name is known
-    char *f_lib;    // if a library name is specified
+    const char *f_name;   // if the symbol name is known
+    const char *f_lib;    // if a library name is specified
 } native_sym_arg_t;
 
 // --- parse :sym or (:sym, :lib) argument into address info ---
@@ -349,7 +349,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
     }
 
     void *fptr=NULL;
-    char *f_name=NULL, *f_lib=NULL;
+    const char *f_name=NULL, *f_lib=NULL;
     jl_value_t *t0 = NULL, *t1 = NULL;
     JL_GC_PUSH3(&ptr, &t0, &t1);
     if (ptr != NULL) {
@@ -849,7 +849,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
     Value *jl_ptr=NULL;
     void *fptr = NULL;
-    char *f_name = NULL, *f_lib = NULL;
+    const char *f_name = NULL, *f_lib = NULL;
     jl_ptr = symarg.jl_ptr;
     fptr = symarg.fptr;
     f_name = symarg.f_name;
