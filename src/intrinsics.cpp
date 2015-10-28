@@ -923,6 +923,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         f = fptoui_auto;
     if (f == fptosi && nargs == 1)
         f = fptosi_auto;
+    if (f == cglobal && nargs == 1)
+        f = cglobal_auto;
     unsigned expected_nargs = intrinsic_nargs[f];
     if (expected_nargs && expected_nargs != nargs) {
         jl_errorf("intrinsic #%d %s: wrong number of arguments", f, JL_I::jl_intrinsic_name((int)f));
@@ -930,6 +932,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
+    case cglobal_auto:
     case cglobal: return emit_cglobal(args, nargs, ctx);
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
     case arraylen:

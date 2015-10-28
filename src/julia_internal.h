@@ -335,6 +335,7 @@ void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
+void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void);
 void jl_init_stack_limits(int ismaster);
 void jl_init_root_task(void *stack, size_t ssize);
@@ -532,6 +533,8 @@ const char *jl_intrinsic_name(int f);
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
+JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
+JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
 
 JL_DLLEXPORT jl_value_t *jl_neg_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_int(jl_value_t *a, jl_value_t *b);

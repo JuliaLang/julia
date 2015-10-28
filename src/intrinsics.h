@@ -101,13 +101,14 @@
     ADD_I(pointerset, 4) \
     /* c interface */ \
     ALIAS(ccall, ccall) \
-    ALIAS(cglobal, cglobal) \
+    ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
     /* object access */ \
     ADD_I(arraylen, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(fptoui_auto, 1) \
-    ADD_HIDDEN(fptosi_auto, 1)
+    ADD_HIDDEN(fptosi_auto, 1) \
+    ADD_HIDDEN(cglobal_auto, 1)
 
 enum intrinsic {
 #define ADD_I(func, nargs) func,
@@ -154,10 +155,12 @@ JL_CALLABLE(jl_f_intrinsic_call)
     JL_NARGSV(intrinsic_call, 1);
     JL_TYPECHK(intrinsic_call, intrinsic, args[0]);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(args[0]);
-    if (f == fptoui && nargs == 1)
+    if (f == fptoui && nargs == 2)
         f = fptoui_auto;
-    if (f == fptosi && nargs == 1)
+    if (f == fptosi && nargs == 2)
         f = fptosi_auto;
+    if (f == cglobal && nargs == 2)
+        f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     JL_NARGS(intrinsic_call, 1 + fargs, 1 + fargs);
     switch (fargs) {
@@ -191,16 +194,31 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 #ifdef __cplusplus
 extern "C"
 #endif
-void jl_init_intrinsic_functions()
+void jl_init_intrinsic_properties(void)
+{
+#define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
+#define ADD_HIDDEN ADD_I
+#define ALIAS(alias, base) add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
+    ADD_HIDDEN(reinterpret, 2);
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
+
+}
+
+#ifdef __cplusplus
+extern "C"
+#endif
+void jl_init_intrinsic_functions(void)
 {
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
 
-#define ADD_I(name, nargs) add_intrinsic(inm, #name, name); add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
-#define ADD_HIDDEN(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
-#define ALIAS(alias, base) add_intrinsic(inm, #alias, alias); add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
-    ADD_HIDDEN(reinterpret, 2);
+#define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
+#define ADD_HIDDEN(name, nargs)
+#define ALIAS ADD_I
     INTRINSICS
 #undef ADD_I
 #undef ADD_HIDDEN
