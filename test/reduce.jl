@@ -271,6 +271,14 @@ end
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509
 
+A = reshape(map(UInt8, 101:109), (3,3))
+@test @inferred(sum(A)) == 945
+@test @inferred(sum(sub(A, 1:3, 1:3))) == 945
+
+A = reshape(map(UInt8, 1:100), (10,10))
+@test @inferred(sum(A)) == 5050
+@test @inferred(sum(sub(A, 1:10, 1:10))) == 5050
+
 # issue #11618
 @test sum([-0.0]) === -0.0
 @test sum([-0.0, -0.0]) === -0.0
