@@ -198,6 +198,7 @@ endif
 ## Common build target prefixes
 
 DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
+DEP_LIBS_STAGED := $(filter-out osxunwind suitesparse suitesparse-wrapper virtualenv,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
@@ -205,8 +206,9 @@ configure: $(addprefix configure-, $(DEP_LIBS))
 compile: $(addprefix compile-, $(DEP_LIBS))
 check: $(addprefix check-, $(DEP_LIBS))
 fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
-stage: $(addprefix stage-, $(DEP_LIBS))
+stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
 install: $(addprefix install-, $(DEP_LIBS))
+uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
@@ -249,9 +251,16 @@ define staged-install
 get-$(strip $1): $$($(call upper,$1)_SRC_FILE)
 stage-$(strip $1): $$(build_staging)/$2.tgz
 install-$(strip $1): $5
+uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+	-cd $$(build_prefix) && rm -dv -- $$$$(tar -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+reinstall-$(strip $1):
+	+$$(MAKE) uninstall-$(strip $1)
+	-rm $$(build_staging)/$2.tgz
+	+$$(MAKE) stage-$(strip $1)
+	+$$(MAKE) install-$(strip $1)
 $$(build_staging)/$2.tgz: $$($(call upper,$1)_SRC_FILE)
-	$$(MAKE) compile-$(strip $1)
-	$$(MAKE) fastcheck-$(strip $1)
+	+$$(MAKE) compile-$(strip $1)
+	+$$(MAKE) fastcheck-$(strip $1)
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
@@ -765,10 +774,6 @@ $(eval $(call staged-install, \
 stage-llvm: | $(llvm_python_workaround)
 endif # LLVM_USE_CMAKE
 
-reinstall-llvm:
-	-rm $(LLVM_OBJ_TARGET)
-	$(MAKE) -f $(SRCDIR)/Makefile -s install-llvm
-
 clean-llvm:
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 	-rm -f $(build_bindir)/llvm-config
@@ -916,10 +921,6 @@ OPENLIBM_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USE
 $(OPENLIBM_OBJ_SOURCE): $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-
-$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a: $(OPENLIBM_OBJ_SOURCE)
-	$(call make-install,$(OPENLIBM_SRC_DIR),$(OPENLIBM_FLAGS))
-	touch -c $(OPENLIBM_OBJ_TARGET)
 
 $(eval $(call staged-install, \
 	openlibm,$$(OPENLIBM_SRC_DIR), \
@@ -1593,8 +1594,11 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
+stage-fftw: stage-fftw-single stage-fftw-double
 fastcheck-fftw: fastcheck-fftw-single fastcheck-fftw-double
 install-fftw: install-fftw-single install-fftw-double
+uninstall-fftw: uninstall-fftw-single uninstall-fftw-double
+reinstall-fftw: reinstall-fftw-single reinstall-fftw-double
 
 configure-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
 compile-fftw-single: $(FFTW_SINGLE_SRC_TARGET)
@@ -1796,13 +1800,18 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	$(call make-install,libunwind-$(UNWIND_VER),)
-ifeq ($(ARCH), ppc64)
+
+define LIBUNWIND_INSTALL
+	$(call MAKE_INSTALL,$1,$2,$3)
+ifeq ($$(ARCH), ppc64)
 	@# workaround for configure script bug
-	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
+	mv $2/$$(build_prefix)/lib64/libunwind*.a $2/$$(build_libdir)
 endif
-	touch $@
+endef
+$(eval $(call staged-install, \
+	libunwind,libunwind-$(UNWIND_VER), \
+	LIBUNWIND_INSTALL,, \
+	$$(LIBUNWIND_TARGET_OBJ),))
 
 clean-unwind:
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
@@ -1812,13 +1821,11 @@ distclean-unwind:
 		$(SRCDIR)/srccache/libunwind-$(UNWIND_VER) \
 		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
-get-unwind: $(LIBUNWIND_SRC_FILE)
 configure-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/checked
 #todo: libunwind tests are known to fail, so they aren't run
 fastcheck-unwind: #none
-install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
@@ -2054,7 +2061,7 @@ $(GIT_SOURCE): $(BUILDDIR)/git-$(GIT_VER)/config.status
 $(BUILDDIR)/git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) $(BUILDDIR)/git-$(GIT_VER)/checked
-	$(call make-install,git-$(GIT_VER),NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)")
+	make install -C $(BUILDDIR)/git-$(GIT_VER) $(MAKE_COMMON) NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)"
 	touch -c $@
 
 clean-git:
@@ -2175,5 +2182,5 @@ install-libgit2: $(LIBGIT2_OBJ_TARGET)
 ## phony targets ##
 
 .PHONY: default compile install cleanall distcleanall \
-	get-* configure-* compile-* check-* install-* \
+	get-* configure-* compile-* check-* install-* uninstall-* \
 	clean-* distclean-* reinstall-* update-llvm
