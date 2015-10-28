@@ -6002,7 +6002,7 @@ extern "C" void jl_init_codegen(void)
         .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()}))
 #endif
         .setTargetOptions(options)
-#if defined(_OS_LINUX) && defined(_CPU_X86_64_)
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
         .setRelocationModel(Reloc::PIC_)
 #else
         .setRelocationModel(Reloc::Default)
