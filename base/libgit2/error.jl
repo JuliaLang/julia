@@ -2,6 +2,8 @@
 
 module Error
 
+export GitError
+
 @enum(Code, GIT_OK          = Cint(0),   # no error
             ERROR           = Cint(-01), # generic error
             ENOTFOUND       = Cint(-03), # requested object could not be found

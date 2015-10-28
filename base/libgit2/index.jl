@@ -112,8 +112,6 @@ function Base.count(idx::GitIndex)
 end
 
 function Base.getindex(idx::GitIndex, i::Csize_t)
-    # return ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
-    #               (Ptr{Void}, Csize_t), idx.ptr, i)
     ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
                   (Ptr{Void}, Csize_t), idx.ptr, i-1)
     ie_ptr == C_NULL && return nothing
