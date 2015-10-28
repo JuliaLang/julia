@@ -1979,8 +1979,8 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
     ast.args[2][3] = sv.gensym_types
 
     for (li::LambdaStaticData) in closures
-        if !li.inferred
-            a = li.ast
+        if !li.inferred && (isa(li.ast, Expr) || isdefined(li, :capt))
+            a = li.ast::Expr
             # pass on declarations of captured vars
             for vi in a.args[2][2]::Array{Any,1}
                 if (vi[3]&4)==0
