@@ -45,7 +45,7 @@ function string(c::ASCIIString...)
 end
 
 function ucfirst(s::ASCIIString)
-    if length(s) > 0 && 'a' <= s[1] <= 'z'
+    if !isempty(s) && 'a' <= s[1] <= 'z'
         t = ASCIIString(copy(s.data))
         t.data[1] -= 32
         return t
@@ -53,7 +53,7 @@ function ucfirst(s::ASCIIString)
     return s
 end
 function lcfirst(s::ASCIIString)
-    if length(s) > 0 && 'A' <= s[1] <= 'Z'
+    if !isempty(s) && 'A' <= s[1] <= 'Z'
         t = ASCIIString(copy(s.data))
         t.data[1] += 32
         return t

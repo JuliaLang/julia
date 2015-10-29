@@ -126,7 +126,7 @@ Computes the polar decomposition of a vector.
 """
 function qr(v::AbstractVector)
     nrm = norm(v)
-    if length(v) > 0
+    if !isempty(v)
         vv = copy_oftype(v, typeof(v[1]/nrm))
         return __normalize!(vv, nrm), nrm
     else

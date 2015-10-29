@@ -242,7 +242,7 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     for j in 1:n
         if (parent[j] != 0) continue end # skip j if it is not a root
         push!(stack, j)                  # place j on the stack
-        while (length(stack) > 0)        # while (stack is not empty)
+        while (!isempty(stack))        # while (stack is not empty)
             p = stack[end]               # p = top of stack
             i = head[p]                  # i = youngest child of p
             if (i == 0)

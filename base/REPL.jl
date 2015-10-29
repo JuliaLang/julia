@@ -385,7 +385,7 @@ function add_history(hist::REPLHistoryProvider, s)
     str = rstrip(bytestring(s.input_buffer))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    length(hist.history) > 0 &&
+    !isempty(hist.history) &&
         mode == hist.modes[end] && str == hist.history[end] && return
     push!(hist.modes, mode)
     push!(hist.history, str)
@@ -507,7 +507,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
         if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m == :ok
-                if length(prefix) == 0
+                if isempty(prefix)
                     # on empty prefix search, move cursor to the end
                     LineEdit.move_input_end(s)
                 else

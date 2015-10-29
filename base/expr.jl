@@ -112,7 +112,7 @@ function localize_vars(expr, esca)
 end
 
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
-    if length(args) == 0
+    if isempty(args)
         tag = sym
     else
         tag = Expr(sym, args...)

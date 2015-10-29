@@ -147,7 +147,7 @@ end
 
 function serialize_array_data(s::IO, a)
     elty = eltype(a)
-    if elty === Bool && length(a)>0
+    if elty === Bool && !isempty(a)
         last = a[1]
         count = 1
         for i = 2:length(a)
@@ -364,7 +364,7 @@ function serialize_type_data(s, t)
     serialize(s, tname)
     mod = t.name.module
     serialize(s, mod)
-    if length(t.parameters) > 0
+    if !isempty(t.parameters)
         if isdefined(mod,tname) && is(t,getfield(mod,tname))
             serialize(s, svec())
         else
@@ -639,7 +639,7 @@ function deserialize_datatype(s::SerializationState)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
     ty = getfield(mod,name)
-    if length(ty.parameters) == 0
+    if isempty(ty.parameters)
         t = ty
     else
         params = deserialize(s)

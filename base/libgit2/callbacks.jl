@@ -54,7 +54,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             userpass = prompt("Password for '$username@$url'", password=true)
         end
 
-        length(username) == 0 && length(userpass) == 0 && return Cint(-1)
+        isempty(username) && isempty(userpass) && return Cint(-1)
 
         err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring, Cstring),

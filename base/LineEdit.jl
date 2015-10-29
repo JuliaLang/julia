@@ -70,7 +70,7 @@ input_string(s::PromptState) = bytestring(s.input_buffer)
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
     str = input_string(s)
-    length(str) == 0 && return 0
+    isempty(str) && return 0
     rest = str[nextind(str, position(s.input_buffer)):end]
     return count(c->(c == '\n'), rest)
 end
@@ -143,7 +143,7 @@ end
 complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
 function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
-    if length(completions) == 0
+    if isempty(completions)
         beep(terminal(s))
     elseif !should_complete
         # should_complete is false for cases where we only want to show
@@ -156,7 +156,7 @@ function complete_line(s::PromptState, repeats)
         edit_replace(s, position(s.input_buffer), prev_pos, completions[1])
     else
         p = common_prefix(completions)
-        if length(p) > 0 && p != partial
+        if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
             # well complete that
             prev_pos = position(s.input_buffer)

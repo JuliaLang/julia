@@ -347,7 +347,7 @@ function init_parallel()
     global PGRP
     global LPROC
     LPROC.id = 1
-    assert(length(PGRP.workers) == 0)
+    assert(isempty(PGRP.workers))
     register_worker(LPROC)
 end
 

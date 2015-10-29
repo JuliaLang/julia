@@ -122,7 +122,7 @@ function complete_path(path::AbstractString, pos)
     end
     local files
     try
-        if length(dir) == 0
+        if isempty(dir)
             files = readdir()
         elseif isdir(dir)
             files = readdir(dir)
@@ -146,7 +146,7 @@ function complete_path(path::AbstractString, pos)
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
-    return matches, startpos:pos, length(matches) > 0
+    return matches, startpos:pos, !isempty(matches)
 end
 
 # Determines whether method_complete should be tried. It should only be done if
