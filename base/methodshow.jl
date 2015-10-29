@@ -181,4 +181,4 @@ end
 
 # override usual show method for Vector{Method}: don't abbreviate long lists
 writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
-    showarray(io, mt, limit=false)
+    showarray(IOContext(io, :limit_output => false), mt)

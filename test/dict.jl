@@ -257,7 +257,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        Base.showdict(s, d, limit=true, sz=(rows, cols))
+        Base.showdict(Base.IOContext(s, :limit_output => true), d, sz=(rows, cols))
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -266,7 +266,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            Base.showkv(s, f(d), limit=true, sz=(rows, cols))
+            Base.showkv(Base.IOContext(s, :limit_output => true), f(d), sz=(rows, cols))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
@@ -275,7 +275,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
         end
     end
     # Simply ensure these do not throw errors
-    Base.showdict(IOBuffer(), d, limit=false)
+    Base.showdict(IOBuffer(), d)
     @test !isempty(summary(d))
     @test !isempty(summary(keys(d)))
     @test !isempty(summary(values(d)))
@@ -285,7 +285,7 @@ end
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 sbuff = IOBuffer()
-Base.showdict(sbuff, Dict(Alpha()=>1), limit=true, sz=(10,20))
+Base.showdict(Base.IOContext(sbuff, :limit_output => true), Dict(Alpha()=>1), sz=(10,20))
 @test !contains(bytestring(sbuff), "…")
 
 # issue #2540
@@ -337,8 +337,9 @@ let
     a[3] = T10647(a)
     @test a == a
     show(IOBuffer(), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit_output => true), a)
     Base.showdict(IOBuffer(), a)
-    Base.showdict(IOBuffer(), a; limit=true)
+    Base.showdict(Base.IOContext(IOBuffer(), :limit_output => true), a)
 end
 
 
