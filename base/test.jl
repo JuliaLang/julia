@@ -405,7 +405,7 @@ function get_alignment(ts::DefaultTestSet, depth::Int)
     !ts.anynonpass && return ts_width
     # Return the maximum of this width and the minimum width
     # for all children (if they exist)
-    length(ts.results) == 0 && return ts_width
+    isempty(ts.results) && return ts_width
     child_widths = map(t->get_alignment(t, depth+1), ts.results)
     return max(ts_width, maximum(child_widths))
 end
@@ -505,7 +505,7 @@ By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types.
 """
 macro testset(args...)
-    length(args) > 0 || error("No arguments to @testset")
+    !isempty(args) || error("No arguments to @testset")
 
     tests = args[end]
 
@@ -557,7 +557,7 @@ The `@testloop` macro collects and returns a list of the return values of the
 in each iteration.
 """
 macro testloop(args...)
-    length(args) > 0 || error("no arguments to @testloop")
+    !isempty(args) || error("no arguments to @testloop")
 
     testloop = args[end]
     isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
@@ -652,7 +652,7 @@ test set is active, use the fallback default test set.
 """
 function get_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return length(testsets) == 0 ? fallback_testset : testsets[end]
+    return isempty(testsets) ? fallback_testset : testsets[end]
 end
 
 """
@@ -674,7 +674,7 @@ active test sets, returns the fallback default test set.
 """
 function pop_testset()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    ret = length(testsets) == 0 ? fallback_testset : pop!(testsets)
+    ret = isempty(testsets) ? fallback_testset : pop!(testsets)
     setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
     return ret
 end

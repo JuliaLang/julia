@@ -58,7 +58,7 @@ function commit(repo::GitRepo, msg::AbstractString;
     end
 
     # Retrieve parents from HEAD
-    if length(parent_ids) == 0
+    if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
             push!(parent_ids, Oid(repo, refname))
         end

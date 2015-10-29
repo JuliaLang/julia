@@ -430,7 +430,7 @@ function fix_kinds(region, kinds)
         if length(kinds) > length(region)
             throw(ArgumentError("too many transform kinds"))
         else
-            if length(kinds) == 0
+            if isempty(kinds)
                 throw(ArgumentError("must supply a transform kind"))
             end
             k = Array(Int32, length(region))

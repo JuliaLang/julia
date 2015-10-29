@@ -596,7 +596,7 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
 ## random BitArrays (AbstractRNG)
 
 function rand!(rng::AbstractRNG, B::BitArray)
-    length(B) == 0 && return B
+    isempty(B) && return B
     Bc = B.chunks
     rand!(rng, Bc)
     Bc[end] &= Base._msk_end(B)
