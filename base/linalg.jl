@@ -10,6 +10,7 @@ import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transp
     imag, inv, isapprox, kron, ndims, power_by_squaring, print_matrix, promote_rule, real,
     round, setindex!, show, similar, size, transpose, transpose!, trunc, unsafe_getindex,
     unsafe_setindex!
+using Base: promote_op, MulFun
 
 export
 # Modules
