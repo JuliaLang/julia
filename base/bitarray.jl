@@ -224,7 +224,7 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
-    length(B) == 0 && return B
+    isempty(B) && return B
     Bc = B.chunks
     if !y
         fill!(Bc, 0)
@@ -1488,7 +1488,7 @@ sum(A::BitArray, region) = reducedim(AddFun(), A, region)
 sum(B::BitArray) = countnz(B)
 
 function all(B::BitArray)
-    length(B) == 0 && return true
+    isempty(B) && return true
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)-1
@@ -1500,7 +1500,7 @@ function all(B::BitArray)
 end
 
 function any(B::BitArray)
-    length(B) == 0 && return false
+    isempty(B) && return false
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)
@@ -1533,7 +1533,7 @@ map!(f::Function, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_b
 # iterates bit-by-bit.
 function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
-    length(A) == 0 && return dest
+    isempty(A) && return dest
     for i=1:length(A.chunks)-1
         dest.chunks[i] = f(A.chunks[i])
     end
@@ -1542,7 +1542,7 @@ function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
 end
 function map!(f::BitFunctorBinary, dest::BitArray, A::BitArray, B::BitArray)
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
-    length(A) == 0 && return dest
+    isempty(A) && return dest
     for i=1:length(A.chunks)-1
         dest.chunks[i] = f(A.chunks[i], B.chunks[i])
     end

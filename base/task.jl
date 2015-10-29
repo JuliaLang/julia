@@ -31,14 +31,18 @@ end
 showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 
 type CompositeException <: Exception
-    exceptions::Array
+    exceptions::Vector{Any}
     CompositeException() = new(Any[])
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
+isempty(c::CompositeException) = isempty(c.exceptions)
+start(c::CompositeException) = start(c.exceptions)
+next(c::CompositeException, state) = next(c.exceptions, state)
+done(c::CompositeException, state) = done(c.exceptions, state)
 
 function showerror(io::IO, ex::CompositeException)
-    if length(ex) > 0
+    if !isempty(ex)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
@@ -405,7 +409,7 @@ function sync_end()
         end
     end
 
-    if length(c_ex) > 0
+    if !isempty(c_ex)
         throw(c_ex)
     end
     nothing

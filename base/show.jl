@@ -103,7 +103,7 @@ end
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
+    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         print(io, '{')
         n = length(x.parameters)
         for i = 1:n
@@ -187,7 +187,7 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 multiline = false
             else
                 x = itr[i]
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
                 newline && multiline && println(io)
                 if !isbits(x) && is(x, itr)
                     print(io, "#= circular reference =#")
@@ -227,7 +227,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, 
     if !done(itr,state)
         while true
             x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+            multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
             newline && multiline && println(io)
             if !isbits(x) && is(x, itr)
                 print(io, "#= circular reference =#")
@@ -903,7 +903,7 @@ function dumptype(io::IO, x, n::Int, indent)
                          any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
                         targs = join(t.parameters, ",")
                         println(io, indent, "  ", s,
-                                length(t.parameters) > 0 ? "{$targs}" : "",
+                                !isempty(t.parameters) ? "{$targs}" : "",
                                 " = ", t)
                     end
                 elseif isa(t, Union)
@@ -1195,7 +1195,7 @@ end
 summary(x) = string(typeof(x)) # e.g. Int64
 
 # sizes such as 0-dimensional, 4-dimensional, 2x3
-dims2string(d) = length(d) == 0 ? "0-dimensional" :
+dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), 'x')
 
@@ -1399,7 +1399,7 @@ print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
 print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
-    length(B) == 0 && return
+    isempty(B) && return
     Bc = B.chunks
     for i = 1:length(Bc)-1
         print_bit_chunk(io, Bc[i])

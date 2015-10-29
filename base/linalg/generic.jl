@@ -593,7 +593,7 @@ Normalize the vector `v` with respect to the `p`-norm.
 """
 function normalize(v::AbstractVector, p::Real = 2)
     nrm = norm(v, p)
-    if length(v) > 0
+    if !isempty(v)
         vv = copy_oftype(v, typeof(v[1]/nrm))
         return __normalize!(vv, nrm)
     else

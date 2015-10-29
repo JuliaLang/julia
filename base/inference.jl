@@ -222,7 +222,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
         end
     elseif isa(t,DataType)
         P = t.parameters
-        length(P) == 0 && return t
+        isempty(P) && return t
         if d > MAX_TYPE_DEPTH
             R = t.name.primary
         else
@@ -297,7 +297,7 @@ const getfield_tfunc = function (A, s0, name)
         for i=1:length(snames)
             if is(snames[i],fld)
                 R = s.types[i]
-                if length(s.parameters) == 0
+                if isempty(s.parameters)
                     return R, true
                 else
                     typ = limit_type_depth(R, 0, true,
@@ -2328,7 +2328,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             methfunc = f
         end
 
-        if length(methfunc.env) > 0
+        if !isempty(methfunc.env)
             # can't inline something with an env
             return NF
         end
@@ -2866,7 +2866,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
             if isa(res[2],Array)
                 res2 = res[2]::Array{Any,1}
-                if length(res2) > 0
+                if !isempty(res2)
                     prepend!(stmts,res2)
                     if !has_stmts
                         for stmt in res2

@@ -1136,13 +1136,13 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
 
     @sync begin
         while true
-            if length(launched) == 0
+            if isempty(launched)
                 istaskdone(t_launch) && break
                 @schedule (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
-            if (length(launched) > 0)
+            if !isempty(launched)
                 wconfig = shift!(launched)
                 let wconfig=wconfig
                     @async setup_launched_worker(manager, wconfig, launched_q)

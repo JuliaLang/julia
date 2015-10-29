@@ -179,7 +179,7 @@ type Base64DecodePipe <: IO
 end
 
 function read(b::Base64DecodePipe, t::Type{UInt8})
-    if length(b.cache) > 0
+    if !isempty(b.cache)
         return shift!(b.cache)
     else
         empty!(b.encvec)
@@ -193,7 +193,7 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
     end
 end
 
-eof(b::Base64DecodePipe) = length(b.cache) == 0 && eof(b.io)
+eof(b::Base64DecodePipe) = isempty(b.cache) && eof(b.io)
 close(b::Base64DecodePipe) = nothing
 
 # Decodes a base64-encoded string

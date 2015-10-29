@@ -278,7 +278,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
 
     m = m < 0 ? 0 : m
     n = n < 0 ? 0 : n
-    if length(V) == 0; return spzeros(eltype(V),Ti,m,n); end
+    if isempty(V); return spzeros(eltype(V),Ti,m,n); end
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -320,7 +320,7 @@ end
 
 ## sparse() can take its inputs in unsorted order (the parent method is now in csparse.jl)
 
-dimlub(I) = length(I)==0 ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
+dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), AddFun())
 

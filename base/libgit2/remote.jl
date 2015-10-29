@@ -64,7 +64,7 @@ function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
     msg = "libgit2.fetch: $msg"
-    no_refs = (length(refspecs) == 0)
+    no_refs = isempty(refspecs)
     !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_fetch, :libgit2), Cint,
@@ -78,7 +78,7 @@ end
 function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                                  force::Bool = false,
                                  options::PushOptions = PushOptions())
-    no_refs = (length(refspecs) == 0)
+    no_refs = (isempty(refspecs))
     !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_push, :libgit2), Cint,

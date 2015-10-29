@@ -221,7 +221,7 @@ permutations(a) = Permutations(a)
 start(p::Permutations) = [1:length(p.a);]
 function next(p::Permutations, s)
     perm = [p.a[si] for si in s]
-    if length(p.a) == 0
+    if isempty(p.a)
         # special case to generate 1 result for len==0
         return (perm,[1])
     end
@@ -456,7 +456,7 @@ end
 # vector b of length n describing the first index b[i] that belongs to partition i
 # integer n
 
-done(p::FixedSetPartitions, s) = length(s[1]) == 0 || s[1][1] > 1
+done(p::FixedSetPartitions, s) = isempty(s[1]) || s[1][1] > 1
 next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
 
 function nextfixedsetpartition(s::AbstractVector, m, a, b, n)

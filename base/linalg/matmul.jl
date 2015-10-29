@@ -510,7 +510,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         if tA == 'N'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[i, 1]*B[1, j] + A[i, 1]*B[1, j])
@@ -522,7 +522,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[i, 1]*B[j, 1] + A[i, 1]*B[j, 1])
@@ -534,7 +534,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[i, 1]*B[j, 1] + A[i, 1]*B[j, 1])
@@ -548,7 +548,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         elseif tA == 'T'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[1, j] + A[1, i]*B[1, j])
@@ -560,7 +560,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
@@ -572,7 +572,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
@@ -586,7 +586,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         else
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[1, j] + A[1, i]*B[1, j])
@@ -598,7 +598,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])
@@ -610,7 +610,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    if length(A) == 0 || length(B) == 0
+                    if isempty(A) || isempty(B)
                         Ctmp = zero(R)
                     else
                         Ctmp = zero(A[1, i]*B[j, 1] + A[1, i]*B[j, 1])

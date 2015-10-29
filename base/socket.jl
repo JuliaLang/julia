@@ -143,7 +143,7 @@ function parseipv4(str)
     i = 1
     ret = 0
     for f in fields
-        if length(f) == 0
+        if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
         if f[1] == '0'
