@@ -303,6 +303,8 @@ type Process <: AbstractPipe
         this
     end
 end
+pipe_reader(p::Process) = p.out
+pipe_writer(p::Process) = p.in
 
 immutable ProcessChain <: AbstractPipe
     processes::Vector{Process}
@@ -311,6 +313,8 @@ immutable ProcessChain <: AbstractPipe
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
+pipe_reader(p::ProcessChain) = p.out
+pipe_writer(p::ProcessChain) = p.in
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
