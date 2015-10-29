@@ -116,7 +116,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
     nothing
 end
 
-Base.show(io::IO, x::AbstractFloat) = _show(io, x, SHORTEST, 0, true)
+Base.show(io::IO, x::AbstractFloat) = Base.limit_output(io) ? showcompact(io, x) : _show(io, x, SHORTEST, 0, true)
 
 Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false)
 Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false)

@@ -27,6 +27,39 @@ function eof end
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
+# Generic wrappers around other IO objects
+abstract AbstractPipe <: IO
+function pipe_reader end
+function pipe_writer end
+
+write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
+write(io::AbstractPipe, bytes::Vector{UInt8}) = write(pipe_writer(io), bytes)
+write{T<:AbstractPipe}(io::T, args...) = write(pipe_writer(io), args...)
+write{S<:AbstractPipe}(io::S, a::Array) = write(pipe_writer(io), a)
+buffer_or_write(io::AbstractPipe, p::Ptr, n::Integer) = buffer_or_write(pipe_writer(io), p, n)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io))
+
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
+read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(pipe_reader(io), bytes)
+read{T<:AbstractPipe}(io::T, args...) = read(pipe_reader(io), args...)
+read!{T<:AbstractPipe}(io::T, args...) = read!(pipe_reader(io), args...)
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+readbytes(io::AbstractPipe) = readbytes(pipe_reader(io))
+readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+
+isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
+isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
+close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
+wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
+wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
+nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io))
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+
+
 ## byte-order mark, ntoh & hton ##
 
 const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]

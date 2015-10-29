@@ -13,7 +13,7 @@ import
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, round, show,
-        showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
+        sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
@@ -863,7 +863,6 @@ end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
 show(io::IO, b::BigFloat) = print(io, string(b))
-showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 # get/set exponent min/max
 get_emax() = ccall((:mpfr_get_emax, :libmpfr), Clong, ())

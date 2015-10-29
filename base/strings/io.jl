@@ -29,17 +29,40 @@ println(xs...) = println(STDOUT, xs...)
 
 ## conversion of general objects to strings ##
 
-function print_to_string(xs...)
+function sprint(size::Integer, f::Function, args...; env=nothing)
+    s = IOBuffer(Array(UInt8,size), true, true)
+    truncate(s,0)
+    if env !== nothing
+        f(IOContext(s, env), args...)
+    else
+        f(s, args...)
+    end
+    d = s.data
+    resize!(d,s.size)
+    bytestring(d)
+end
+sprint(f::Function, args...) = sprint(0, f, args...)
+
+function print_to_string(xs...; env=nothing)
     # specialized for performance reasons
     s = IOBuffer(Array(UInt8,isa(xs[1],AbstractString) ? endof(xs[1]) : 0), true, true)
-    for x in xs
-        print(s, x)
+    truncate(s,0)
+    if env !== nothing
+        env_io = IOContext(s, env)
+        for x in xs
+            print(env_io, x)
+        end
+    else
+        for x in xs
+            print(s, x)
+        end
     end
     d = s.data
     resize!(d,s.size)
     bytestring(d)
 end
 
+string_with_env(env, xs...) = print_to_string(xs...; env=env)
 string(xs...) = print_to_string(xs...)
 bytestring(s::AbstractString...) = print_to_string(s...)
 

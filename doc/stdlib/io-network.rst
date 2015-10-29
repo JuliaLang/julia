@@ -368,6 +368,29 @@ General I/O
 
    Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``\ .
 
+.. function:: IOContext{<:IO} <: IO
+
+   .. Docstring generated from Julia source
+
+   IOContext provides a mechanism for passing output-configuration keyword arguments through arbitrary show methods.
+
+   In short, it is an immutable Dictionary that is a subclass of IO.
+
+   .. code-block:: julia
+
+       IOContext(io::IO, KV::Pair)
+
+   Create a new entry in the IO Dictionary for the key => value pair
+
+   * use ``(key => value) in dict`` to see if this particular combination is in the properties set
+   * use ``get(dict, key, default)`` to retrieve the most recent value for a particular key
+
+   .. code-block:: julia
+
+       IOContext(io::IO, context::IOContext)
+
+   Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
+
 Text I/O
 --------
 
