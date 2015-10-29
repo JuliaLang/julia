@@ -332,9 +332,9 @@ function serialize(s::SerializationState, linfo::LambdaStaticData)
     serialize(s, lambda_number(linfo))
     serialize(s, uncompressed_ast(linfo))
     if isdefined(linfo.def, :roots)
-        serialize(s, linfo.def.roots)
+        serialize(s, linfo.def.roots::Vector{Any})
     else
-        serialize(s, [])
+        serialize(s, Any[])
     end
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
@@ -553,11 +553,11 @@ function deserialize(s::SerializationState, ::Type{LambdaStaticData})
         makenew = true
     end
     deserialize_cycle(s, linfo)
-    ast = deserialize(s)
-    roots = deserialize(s)
-    sparams = deserialize(s)
-    infr = deserialize(s)
-    mod = deserialize(s)
+    ast = deserialize(s)::Expr
+    roots = deserialize(s)::Vector{Any}
+    sparams = deserialize(s)::SimpleVector
+    infr = deserialize(s)::Bool
+    mod = deserialize(s)::Module
     capt = deserialize(s)
     if makenew
         linfo.ast = ast
@@ -566,7 +566,7 @@ function deserialize(s::SerializationState, ::Type{LambdaStaticData})
         linfo.module = mod
         linfo.roots = roots
         if !is(capt,nothing)
-            linfo.capt = capt
+            linfo.capt = capt::Vector{Any}
         end
         known_lambda_data[lnumber] = linfo
     end
