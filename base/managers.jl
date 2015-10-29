@@ -139,7 +139,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # detach launches the command in a new process group, allowing it to outlive
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched porcesses.
-    io, pobj = open(detach(cmd), "r")
+    io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
 
     wconfig = WorkerConfig()
     wconfig.io = io
@@ -236,8 +236,9 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exeflags = params[:exeflags]
 
     for i in 1:manager.np
-        io, pobj = open(detach(
-            setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
+        io, pobj = open(pipeline(detach(
+                setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)),
+            stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
