@@ -838,6 +838,26 @@ function ismodulecall(ex::Expr)
         isa(getfield(current_module(), ex.args[2]), Module)
 end
 
+function show(io::IO, tv::TypeVar)
+    tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
+    if isa(tvar_env, Vector{Any})
+        have_env = true
+        in_env = (tv in tvar_env::Vector{Any})
+    else
+        have_env = false
+        in_env = true
+    end
+    if !in_env && !is(tv.lb, Bottom)
+        show(io, tv.lb)
+        print(io, "<:")
+    end
+    write(io, tv.name)
+    if have_env ? !in_env : !is(tv.ub, Any)
+        print(io, "<:")
+        show(io, tv.ub)
+    end
+end
+
 # dump & xdump - structured tree representation like R's str()
 # - dump is for the user-facing structure
 # - xdump is for the internal structure
