@@ -200,15 +200,6 @@ function takebuf_raw(s::IOStream)
     return buf, sz
 end
 
-function sprint(size::Integer, f::Function, args...)
-    s = IOBuffer(Array(UInt8,size), true, true)
-    truncate(s,0)
-    f(s, args...)
-    takebuf_string(s)
-end
-
-sprint(f::Function, args...) = sprint(0, f, args...)
-
 write(x) = write(STDOUT::IO, x)
 
 function readuntil(s::IOStream, delim::UInt8)
