@@ -3,9 +3,8 @@
 module Broadcast
 
 using ..Cartesian
-import Base.promote_eltype
-import Base.@get!
-import Base.num_bit_chunks, Base._msk_end, Base.unsafe_bitgetindex
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
+using Base: AddFun, SubFun, MulFun, LDivFun, RDivFun, PowFun
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .%, .<<, .>>, .^
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -232,7 +231,7 @@ for (Bsig, Asig, gbf, gbb) in
 end
 
 
-broadcast(f, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
+broadcast(f, As...) = broadcast!(f, Array(promote_eltype_op(f, As...), broadcast_shape(As...)), As...)
 
 bitbroadcast(f, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
@@ -286,35 +285,28 @@ end
 
 ## elementwise operators ##
 
-.*(As::AbstractArray...) = broadcast(*, As...)
 .%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
 .<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
 .>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
 
-eltype_plus(As::AbstractArray...) = promote_eltype(As...)
-eltype_plus(As::AbstractArray{Bool}...) = typeof(true+true)
+eltype_plus(As::AbstractArray...) = promote_eltype_op(AddFun(), As...)
 
 .+(As::AbstractArray...) = broadcast!(+, Array(eltype_plus(As...), broadcast_shape(As...)), As...)
 
-type_minus(T, S) = promote_type(T, S)
-type_minus(::Type{Bool}, ::Type{Bool}) = typeof(true-true)
-
 function .-(A::AbstractArray, B::AbstractArray)
-    broadcast!(-, Array(type_minus(eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
+    broadcast!(-, Array(promote_op(SubFun(), eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
 end
 
-type_div(T,S) = promote_type(T,S)
-type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = typeof(one(T)/one(S))
-type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}}) = Complex{type_div(T,S)}
-type_div{T,S}(::Type{Complex{T}},::Type{S})          = Complex{type_div(T,S)}
-type_div{T,S}(::Type{T},::Type{Complex{S}})          = Complex{type_div(T,S)}
+eltype_mul(As::AbstractArray...) = promote_eltype_op(MulFun(), As...)
+
+.*(As::AbstractArray...) = broadcast!(*, Array(eltype_mul(As...), broadcast_shape(As...)), As...)
 
 function ./(A::AbstractArray, B::AbstractArray)
-    broadcast!(/, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(/, Array(promote_op(RDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 function .\(A::AbstractArray, B::AbstractArray)
-    broadcast!(\, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(\, Array(promote_op(LDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
@@ -327,12 +319,8 @@ function .//(A::AbstractArray, B::AbstractArray)
     broadcast!(//, Array(type_rdiv(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
-type_pow(T,S) = promote_type(T,S)
-type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
-type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
-
 function .^(A::AbstractArray, B::AbstractArray)
-    broadcast!(^, Array(type_pow(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(^, Array(promote_op(PowFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 ## element-wise comparison operators returning BitArray ##
