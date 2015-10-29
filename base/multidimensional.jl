@@ -640,7 +640,7 @@ end
 @generated function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     N = length(I)
     quote
-        length(X) == 0 && return B
+        isempty(X) && return B
         f0 = first(I0)
         l0 = length(I0)
 
@@ -674,7 +674,7 @@ end
         f0 = first(I0)
         l0 = length(I0)
         l0 == 0 && return B
-        @nexprs $N d->(length(I[d]) == 0 && return B)
+        @nexprs $N d->(isempty(I[d]) && return B)
 
         gap_lst_1 = 0
         @nexprs $N d->(gap_lst_{d+1} = length(I[d]))

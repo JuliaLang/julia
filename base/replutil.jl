@@ -337,7 +337,7 @@ function show_method_candidates(io::IO, ex::MethodError)
         end
     end
 
-    if length(lines) != 0 # Display up to three closest candidates
+    if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             println(io)
             print(io, "Closest candidates are:")

@@ -370,7 +370,7 @@ function merge!(repo::GitRepo;
             if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
                 fheads = fetchheads(repo)
                 filter!(fh->fh.ismerge, fheads)
-                if length(fheads) == 0
+                if isempty(fheads)
                     throw(Error.GitError(Error.Merge,Error.ERROR,
                                    "There is no fetch reference for this branch."))
                 end

@@ -187,7 +187,7 @@ function pinv{T}(D::Diagonal{T})
 end
 function pinv{T}(D::Diagonal{T}, tol::Real)
     Di = similar(D.diag)
-    if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
+    if( !isempty(D.diag) ) maxabsD = maximum(abs(D.diag)) end
     for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])
