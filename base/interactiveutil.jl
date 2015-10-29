@@ -209,21 +209,36 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
 
-function code_warntype(io::IO, f, t::ANY)
+function code_warntype(io::IO, f, t::ANY; optimize=true)
     task_local_storage(:TYPEEMPHASIZE, true)
     try
-        ct = code_typed(f, t)
-        for ast in ct
-            println(io, "Variables:")
+        types = to_tuple_type(t)
+        isleaf = isleaftype(types)
+        meths = filter(_methods(f,types,-1)) do x
+            isstaged(x[3]) && !isleaf ? false : true
+        end
+        asts = code_typed(f,types)
+        assert(length(meths) == length(asts))
+        len = length(meths)
+        for i = 1:len
+            m, ast = meths[i][end], asts[i]
+            println(io)
+            print(io, "Method: ")
+            println(io, m)
+            println(io, "\nVariables:")
             vars = ast.args[2][1]
             for v in vars
                 print(io, "  ", v[1])
                 show_expr_type(io, v[2])
-                print(io, '\n')
+                println(io)
             end
             print(io, "\nBody:\n  ")
             show_unquoted(io, ast.args[3], 2)
-            print(io, '\n')
+            println(io)
+            if len > 1 && i < len
+                h,w = tty_size()
+                println(io,"\u2015"^w)
+            end
         end
     finally
         task_local_storage(:TYPEEMPHASIZE, false)

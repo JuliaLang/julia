@@ -253,10 +253,18 @@ function func_for_method_checked(m, types)
     linfo::LambdaStaticData
 end
 
+isstaged(m::Method) = m.isstaged
+
 function code_typed(f::Function, types::ANY=Tuple; optimize=true)
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
+        # if the method is a @generated function and the argument types are not concrete,
+        # skip the method as the generated function cannot be instantiated
+        isleaf = isleaftype(types)
+        if isstaged(x[3]) && !isleaf
+            continue
+        end
         linfo = func_for_method_checked(x, types)
         if optimize
             (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo,
@@ -281,13 +289,19 @@ end
 
 function return_types(f::Function, types::ANY=Tuple)
     types = to_tuple_type(types)
-    rt = []
+    rt = Any[]
     for x in _methods(f,types,-1)
+        # if the method is a @generated function and the argument types are not concrete,
+        # skip the method as the generated function cannot be instantiated
+        isleaf = isleaftype(types)
+        if isstaged(x[3]) && !isleaf
+            continue
+        end
         linfo = func_for_method_checked(x,types)
-        (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
+        (tree,ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
-    rt
+    return unique(rt)
 end
 
 function return_types(f, t::ANY=Tuple)
