@@ -932,6 +932,7 @@ void jl_dump_compiles(void *s)
 // --- entry point ---
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam);
+static void jl_finalize_module(Module *m);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
@@ -978,6 +979,9 @@ static Function *to_function(jl_lambda_info_t *li)
     }
 #endif
     FPM->run(*f);
+    if (!imaging_mode) {
+        jl_finalize_module(f->getParent());
+    }
     //n_compile++;
     // print out the function's LLVM code
     //jl_static_show(JL_STDERR, (jl_value_t*)li);
@@ -1071,11 +1075,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
                     list->data[i].f = mover.CloneFunction(list->data[i].f);
                 }
             }
+            jl_finalize_module(m);
         }
         #endif
 
         Function *llvmf = (Function*)li->functionObject;
-        jl_finalize_module(llvmf->getParent());
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
