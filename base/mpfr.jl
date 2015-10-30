@@ -919,6 +919,11 @@ end
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
+
+    if isnan(x) || isinf(x)
+        return string("BigFloat(", Float64(x), ", ", precision(x), ")")
+    end
+
     # In general, the number of decimal places needed to read back the number exactly
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)
@@ -926,14 +931,17 @@ function string(x::BigFloat)
     buf = Base.StringVector(lng + 1)
     # format strings are guaranteed to contain no NUL, so we don't use Cstring
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
+
     if lng < k + 5 # print at least k decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
     elseif lng > k + 8
         buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
+
     n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
     return String(resize!(buf,n))
+
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
