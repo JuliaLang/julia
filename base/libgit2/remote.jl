@@ -78,7 +78,7 @@ end
 function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                                  force::Bool = false,
                                  options::PushOptions = PushOptions())
-    no_refs = (isempty(refspecs))
+    no_refs = isempty(refspecs)
     !no_refs && (sa = StrArrayStruct(refspecs...))
     try
         @check ccall((:git_remote_push, :libgit2), Cint,
