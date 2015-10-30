@@ -109,6 +109,11 @@ jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
+jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
+                                      jl_function_t *method);
+jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
+                                      jl_function_t *method, jl_svec_t *tvars,
+                                      int8_t isstaged);
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 void jl_add_constructors(jl_datatype_t *t);
