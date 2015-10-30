@@ -14,6 +14,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -147,6 +148,8 @@ JL_THREAD jl_task_t *jl_root_task;
 DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 
+static void start_task();
+
 #ifdef COPY_STACKS
 static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
@@ -213,6 +216,12 @@ static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 #ifdef COPY_STACKS
     t->stkbuf = NULL;
 #endif
+    if (ti_tid != 0) {
+        // For now, only thread 0 runs the task scheduler.
+        // The others return to the thread loop
+        jl_switchto(jl_root_task, jl_nothing);
+        abort();
+    }
     if (task_done_hook_func == NULL) {
         task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                             jl_symbol("task_done_hook"));
@@ -242,15 +251,24 @@ static void NOINLINE NORETURN start_task()
     abort();
 }
 
+#ifdef COPY_STACKS
+void jl_set_stackbase(char *__stk)
+{
+    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
+}
+#else
+void jl_set_stackbase(char *__stk) { }
+#endif
+
 #ifndef ASM_COPY_STACKS
-static void NOINLINE set_base_ctx(char *__stk)
+void NOINLINE jl_set_base_ctx(char *__stk)
 {
     if (jl_setjmp(jl_base_ctx, 1)) {
         start_task();
     }
 }
 #else
-void set_base_ctx(char *__stk) { }
+void jl_set_base_ctx(char *__stk) { }
 #endif
 
 
@@ -261,7 +279,7 @@ DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #ifdef COPY_STACKS
     char __stk;
     jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
-    set_base_ctx(&__stk); // separate function, to record the size of a stack frame
+    jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
 }
 
@@ -850,6 +868,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->eh = NULL;
     t->gcstack = NULL;
     t->stkbuf = NULL;
+    t->tid = 0;
 
 #ifdef COPY_STACKS
     t->bufsz = 0;
@@ -935,6 +954,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
 #else
+    // TODO update for threads
     jl_current_task->stack = stack;
     jl_current_task->ssize = ssize;
 #endif
@@ -952,6 +972,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->backtrace = jl_nothing;
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
+    jl_current_task->tid = ti_tid;
 
     jl_root_task = jl_current_task;
 

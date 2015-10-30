@@ -143,10 +143,18 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
+
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
 extern JL_THREAD void *jl_stackbase;
 #endif
+
+void jl_set_stackbase(char *__stk);
+void jl_set_base_ctx(char *__stk);
+
+void jl_init_threading(void);
+void jl_start_threads(void);
+void jl_shutdown_threading(void);
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
@@ -158,6 +166,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
+jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
 jl_value_t* skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);

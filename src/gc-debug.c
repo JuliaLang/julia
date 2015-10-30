@@ -139,19 +139,25 @@ static void clear_mark(int bits)
             bits_save[i].len = 0;
         }
     }
-    void *current_heap = NULL;
-    bigval_t *bigs[2];
-    bigs[0] = big_objects;
-    bigs[1] = big_objects_marked;
-    for (int i = 0; i < 2; i++) {
-        bigval_t *v = bigs[i];
+    bigval_t *v;
+    FOR_EACH_HEAP
+        v = big_objects;
         while (v != NULL) {
             void* gcv = &v->header;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
         }
+    END
+
+    v = big_objects_marked;
+    while (v != NULL) {
+        void* gcv = &v->header;
+        if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
+        gc_bits(gcv) = bits;
+        v = v->next;
     }
+
     for (int h = 0; h < REGION_COUNT; h++) {
         region_t* region = regions[h];
         if (!region) break;
@@ -161,7 +167,10 @@ static void clear_mark(int bits)
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
                         gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
-                        pool_t *pool = &norm_pools[pg->pool_n];
+                        pool_t *pool;
+                        FOR_HEAP(pg->thread_n)
+                            pool = &pools[pg->pool_n];
+                        END
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {

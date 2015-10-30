@@ -20,6 +20,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -524,6 +525,21 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
+
+#if defined(__linux__)
+    int ncores = jl_cpu_cores();
+    if (ncores > 1) {
+        cpu_set_t cpumask;
+        CPU_ZERO(&cpumask);
+        for(int i=0; i < ncores; i++) {
+            CPU_SET(i, &cpumask);
+        }
+        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
+    }
+#endif
+
+    jl_init_threading();
+
     jl_gc_init();
     jl_gc_enable(0);
     jl_init_frontend();
@@ -535,6 +551,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
 
     jl_init_codegen();
+
+    jl_start_threads();
+
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
     jl_init_serializer();
 
@@ -548,7 +567,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         jl_current_module = jl_core_module;
-        jl_root_task->current_module = jl_current_module;
+        int t;
+        for(t=0; t < jl_n_threads; t++) {
+            (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+        }
 
         jl_load("boot.jl", sizeof("boot.jl"));
         jl_get_builtin_hooks();
@@ -588,7 +610,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     jl_current_module = jl_main_module;
-    jl_root_task->current_module = jl_current_module;
+    int t;
+    for(t=0; t < jl_n_threads; t++) {
+        (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+    }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
@@ -698,11 +723,14 @@ static jl_value_t *basemod(char *name)
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
-    jl_root_task->tls = jl_nothing;
-    jl_root_task->consumers = jl_nothing;
-    jl_root_task->donenotify = jl_nothing;
-    jl_root_task->exception = jl_nothing;
-    jl_root_task->result = jl_nothing;
+    int t;
+    for(t=0; t < jl_n_threads; t++) {
+        (*jl_all_task_states[t].proot_task)->tls = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->consumers = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->donenotify = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->exception = jl_nothing;
+        (*jl_all_task_states[t].proot_task)->result = jl_nothing;
+    }
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");

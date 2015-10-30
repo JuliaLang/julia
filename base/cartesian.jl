@@ -2,7 +2,7 @@
 
 module Cartesian
 
-export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif
+export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 ### Cartesian-specific macros
 
@@ -96,6 +96,19 @@ function _nall(N::Int, criterion::Expr)
     end
     conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
     Expr(:&&, conds...)
+end
+
+# Check whether any of variables i1, i2, ... satisfy criterion
+macro nany(N, criterion)
+    _nany(N, criterion)
+end
+
+function _nany(N::Int, criterion::Expr)
+    if criterion.head != :->
+        error("Second argument must be an anonymous function expression yielding the criterion")
+    end
+    conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
+    Expr(:||, conds...)
 end
 
 macro ntuple(N, ex)

@@ -1863,6 +1863,8 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 1;
 }
 
+JL_DEFINE_MUTEX_EXT(typecache);
+
 // look up a type in a cache by binary or linear search.
 // if found, returns the index of the found item. if not found, returns
 // ~n, where n is the index where the type should be inserted.
@@ -1905,11 +1907,14 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
 static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
     int ord = is_typekey_ordered(key, n);
+    JL_LOCK(typecache);
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
-    return (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
+    jl_value_t *t = (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
+    JL_UNLOCK(typecache);
+    return t;
 }
 
-static int t_uid_ctr = 1;
+static volatile int t_uid_ctr = 1;
 
 int  jl_get_t_uid_ctr(void) { return t_uid_ctr; }
 void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
@@ -1917,7 +1922,7 @@ void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 int jl_assign_type_uid(void)
 {
     assert(t_uid_ctr != 0);
-    return t_uid_ctr++;
+    return JL_ATOMIC_FETCH_AND_ADD(t_uid_ctr, 1);
 }
 
 static int is_cacheable(jl_datatype_t *type)
@@ -1985,11 +1990,14 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
+        JL_LOCK(typecache);
         ssize_t idx = lookup_type_idx(type->name, type->parameters->data,
                                       jl_svec_len(type->parameters), ord);
         if (idx >= 0)
-            return jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
-        cache_insert_type((jl_value_t*)type, ~idx, ord);
+            type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
+        else
+            cache_insert_type((jl_value_t*)type, ~idx, ord);
+        JL_UNLOCK(typecache);
     }
     return (jl_value_t*)type;
 }

@@ -17,11 +17,8 @@
 
 // codegen options ------------------------------------------------------------
 
-// (Experimental) codegen support for thread-local storage
-// #define CODEGEN_TLS
-
 // (Experimental) Use MCJIT ELF, even where it's not the native format
-// #define FORCE_ELF
+//#define FORCE_ELF
 
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
@@ -93,6 +90,20 @@
 #define COPY_STACKS
 #endif
 
+// threading options ----------------------------------------------------------
+
+// controls for when threads sleep
+#define THREAD_SLEEP_THRESHOLD_NAME	"JULIA_THREAD_SLEEP_THRESHOLD"
+#define DEFAULT_THREAD_SLEEP_THRESHOLD	1e9	// cycles (1e9==1sec@1GHz)
+
+// defaults for # threads
+#define NUM_THREADS_NAME		"JULIA_NUM_THREADS"
+#define DEFAULT_NUM_THREADS		4
+
+// affinitization behavior
+#define MACHINE_EXCLUSIVE_NAME		"JULIA_EXCLUSIVE"
+#define DEFAULT_MACHINE_EXCLUSIVE	0
+
 // sanitizer defaults ---------------------------------------------------------
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
@@ -101,11 +112,6 @@
 #  define MEMDEBUG
 #  define KEEP_BODIES
 #  endif
-// Memory sanitizer also needs thread-local storage
-#  if __has_feature(memory_sanitizer)
-#  define CODEGEN_TLS
-#  endif
 #endif
-
 
 #endif
