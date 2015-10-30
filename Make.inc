@@ -276,6 +276,12 @@ else
 DISABLE_ASSERTIONS := -DNDEBUG
 endif
 
+# Threads
+ifeq ($(JULIA_THREADS), 1)
+LLVM_VER := svn
+LLVM_GIT_URL_LLVM := https://github.com/JuliaLang/llvm.git -b jn/tls37
+endif
+
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -403,10 +409,6 @@ endif
 else #USECCACHE
 CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
-endif
-
-ifeq ($(LLVM_VER),svn)
-JCXXFLAGS += -std=c++11
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -604,7 +606,7 @@ JCFLAGS += -fsigned-char
 
 LLVM_ASSERTIONS=1
 #LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-LLVM_VER:=3.6.1
+LLVM_VER:=3.7.0
 
 override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
@@ -656,7 +658,6 @@ endif # LLVM_CONFIG undefined
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS+=-DSYSTEM_LLVM
-LLVM_VER := $(shell $(LLVM_CONFIG) --version)
 endif # SYSTEM_LLVM
 
 ifeq ($(BUILD_OS),$(OS))
@@ -844,6 +845,11 @@ JLDFLAGS := -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
+endif
+
+# Threads
+ifeq ($(JULIA_THREADS), 1)
+JCPPFLAGS += -DJULIA_ENABLE_THREADING
 endif
 
 # Intel VTune Amplifier

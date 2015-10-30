@@ -302,6 +302,9 @@ include("deprecated.jl")
 include("docs/helpdb.jl")
 include("docs/basedocs.jl")
 
+# threads
+include("threads.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()

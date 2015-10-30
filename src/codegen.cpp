@@ -920,6 +920,8 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
     }
 }
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 uint64_t last_time = 0;
@@ -936,6 +938,7 @@ static void jl_finalize_module(Module *m);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
+    JL_LOCK(codegen)
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -960,6 +963,7 @@ static Function *to_function(jl_lambda_info_t *li)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
+        JL_UNLOCK(codegen)
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
@@ -998,6 +1002,7 @@ static Function *to_function(jl_lambda_info_t *li)
     }
     nested_compile = last_n_c;
     jl_gc_inhibit_finalizers(nested_compile);
+    JL_UNLOCK(codegen)
     JL_SIGATOMIC_END();
     if (dump_compiles_stream != NULL) {
         uint64_t this_time = jl_hrtime();
@@ -1054,6 +1059,7 @@ static void jl_finalize_module(Module *m)
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
+    JL_LOCK(codegen)
     // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
@@ -1122,6 +1128,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         JL_SIGATOMIC_END();
     }
     f->fptr = li->fptr;
+    JL_UNLOCK(codegen)
 }
 
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
@@ -5540,11 +5547,22 @@ static void init_julia_llvm_env(Module *m)
                            "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
 
+#ifdef JULIA_ENABLE_THREADING
+#define JL_THREAD_MODEL ,GlobalValue::GeneralDynamicTLSModel
+#else
+#define JL_THREAD_MODEL
+#endif
     jlpgcstack_var =
         new GlobalVariable(*m, T_ppjlvalue,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack");
-    add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
+                           NULL, "jl_pgcstack", NULL JL_THREAD_MODEL);
+    add_named_global(jlpgcstack_var, jl_dlsym(jl_dl_handle, "jl_pgcstack"));
+
+    jlexc_var =
+        new GlobalVariable(*m, T_pjlvalue,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_exception_in_transit", NULL JL_THREAD_MODEL);
+    add_named_global(jlexc_var, jl_dlsym(jl_dl_handle, "jl_exception_in_transit"));
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
@@ -5558,8 +5576,6 @@ static void init_julia_llvm_env(Module *m)
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
     jlemptysvec_var = global_to_llvm("jl_emptysvec", (void*)&jl_emptysvec, m);
     jlemptytuple_var = global_to_llvm("jl_emptytuple", (void*)&jl_emptytuple, m);
-    jlexc_var = global_to_llvm("jl_exception_in_transit",
-                               (void*)&jl_exception_in_transit, m);
     jldiverr_var = global_to_llvm("jl_diverror_exception",
                                   (void*)&jl_diverror_exception, m);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",
@@ -6247,7 +6263,11 @@ extern "C" void jl_init_codegen(void)
         .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()}))
 #endif
         .setTargetOptions(options)
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+        .setRelocationModel(Reloc::PIC_)
+#else
         .setRelocationModel(Reloc::Default)
+#endif
         .setCodeModel(CodeModel::JITDefault)
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
@@ -6282,6 +6302,7 @@ extern "C" void jl_init_codegen(void)
     // FastISel seems to be buggy for ARM. Ref #13321
     jl_TargetMachine->setFastISel(true);
 #endif
+
 #if defined(LLVM38)
     engine_module->setDataLayout(jl_TargetMachine->createDataLayout());
 #elif defined(LLVM36) && !defined(LLVM37)
