@@ -71,3 +71,12 @@ end
 @test Dates.Year(3) < Dates.Month(37)
 @test_throws InexactError convert(Dates.Year, Dates.Month(37))
 @test_throws InexactError Dates.Month(Dates.Year(typemax(Int64)))
+
+# Ensure that conversion of 32-bit integers work
+let dt = DateTime(1915,1,1,12)
+    unix = Int32(Dates.datetime2unix(dt))
+    julian = Int32(Dates.datetime2julian(dt))
+
+    @test Dates.unix2datetime(unix) == dt
+    @test Dates.julian2datetime(julian) == dt
+end
