@@ -634,23 +634,21 @@ DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 }
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
-DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
+DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
-    if (!uv_lib)
+    if (!handle)
         return NULL;
 
-    void *handle = uv_lib->handle;
 #ifdef __APPLE__
     // Iterate through all images currently in memory
     for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        uv_lib_t *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
-        void *probe_handle = probe_lib->handle;
-        uv_dlclose(probe_lib);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
-        if (((intptr_t)handle & (-4)) == ((intptr_t)probe_handle & (-4)))
+        if (((intptr_t)handle & (-4)) == ((intptr_t)probe_lib & (-4)))
             return image_name;
     }
 

@@ -204,18 +204,18 @@ static inline char *jl_copy_str(char **to, const char *from)
 DLLEXPORT uint64_t jl_hrtime(void);
 
 // libuv stuff:
-DLLEXPORT extern uv_lib_t *jl_dl_handle;
-DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
+DLLEXPORT extern void *jl_dl_handle;
+DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 #if defined(_OS_WINDOWS_)
-DLLEXPORT extern uv_lib_t *jl_exe_handle;
-extern uv_lib_t *jl_ntdll_handle;
-extern uv_lib_t *jl_kernel32_handle;
-extern uv_lib_t *jl_crtdll_handle;
-extern uv_lib_t *jl_winsock_handle;
+DLLEXPORT extern void *jl_exe_handle;
+extern void *jl_ntdll_handle;
+extern void *jl_kernel32_handle;
+extern void *jl_crtdll_handle;
+extern void *jl_winsock_handle;
 #endif
 
-uv_lib_t *jl_get_library(char *f_lib);
-DLLEXPORT void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd);
+void *jl_get_library(const char *f_lib);
+DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd);
 
 
 // libuv wrappers:
