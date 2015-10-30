@@ -5981,7 +5981,12 @@ static void init_julia_llvm_env(Module *m)
     jlpow_func = Function::Create(FunctionType::get(T_float64, pow_type, false),
                                   Function::ExternalLinkage,
                                   "pow", m);
-    add_named_global(jlpow_func, (void*)&pow);
+    add_named_global(jlpow_func,
+#ifdef _COMPILER_MICROSOFT_
+        static_cast<double (*)(double, double)>(&pow));
+#else
+        (void*)&pow);
+#endif
 #endif
 
     // set up optimization passes
