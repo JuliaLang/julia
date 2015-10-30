@@ -53,7 +53,7 @@ test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
 test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
 
-function multiline(s::String)
+function multiline(s::AbstractString)
     return [(s,0),
         ("multiline = true\n"*s, 17)
     ]
