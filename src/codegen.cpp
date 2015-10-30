@@ -4726,7 +4726,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line
                 // Variable type
-                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,specsig));
+                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,false));
 #else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
@@ -4734,7 +4734,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 argname->name,    // Variable name
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, specsig), // Variable type
+                julia_type_to_di(varinfo.value.typ, ctx.dbuilder,false), // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + i + 1);                   // Argument number (1-based)
@@ -4777,7 +4777,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 s->name,                // Variable name
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, specsig), // Variable type
+                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, false), // Variable type
                 false,                  // May be optimized out
                 0                       // Flags (TODO: Do we need any)
 #ifndef LLVM38
@@ -4801,7 +4801,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 vname->name,            // Variable name
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, specsig), // Variable type
+                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, false), // Variable type
                 false,                  // May be optimized out
                 0                       // Flags (TODO: Do we need any)
 #ifndef LLVM38
@@ -4835,7 +4835,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SmallVector<int64_t, 9> addr;
                 addr.push_back(llvm::dwarf::DW_OP_plus);
                 addr.push_back(i * sizeof(void*));
-                //addr.push_back(llvm::dwarf::DW_OP_deref);
+                addr.push_back(llvm::dwarf::DW_OP_deref);
 #ifdef LLVM37
                 ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
                 ctx.dbuilder->createExpression(addr),
@@ -6131,7 +6131,6 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
     //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
-
     FPM->doInitialization();
 }
 
