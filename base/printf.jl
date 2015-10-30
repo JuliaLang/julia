@@ -1154,7 +1154,7 @@ function _printf(macroname, io, fmt, args)
 end
 
 macro printf(args...)
-    !isempty(args) || throw(ArgumentError("@printf: called with no arguments"))
+    isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
         _printf("@printf", :STDOUT, args[1], args[2:end])
     else
@@ -1165,7 +1165,7 @@ macro printf(args...)
 end
 
 macro sprintf(args...)
-    !isempty(args) || throw(ArgumentError("@sprintf: called with zero arguments"))
+    isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
