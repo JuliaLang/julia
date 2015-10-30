@@ -8,6 +8,7 @@ const SCAL_CUTOFF = 2048
 const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
+const IAMAX_CUTOFF = 8
 
 function scale!{T<:BlasFloat}(X::Array{T}, s::T)
     if length(X) < SCAL_CUTOFF
@@ -67,6 +68,13 @@ vecnorm1{T<:BlasReal}(x::Union{Array{T},StridedVector{T}}) =
 
 vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
+
+function vecnormInf{T<:BlasFloat}(x::Union{Array{T}, StridedVector{T}})
+    if length(x) < IAMAX_CUTOFF
+        return generic_vecnormInf(x)
+    end
+    @inbounds return abs(x[BLAS.iamax(x)])
+end
 
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
