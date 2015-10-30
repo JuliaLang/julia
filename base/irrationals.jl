@@ -91,9 +91,9 @@ macro irrational(sym, val, def)
         $bigconvert
         Base.convert(::Type{Float64}, ::Irrational{$qsym}) = $val
         Base.convert(::Type{Float32}, ::Irrational{$qsym}) = $(Float32(val))
-        @assert isa(big($esym), BigFloat)
-        @assert Float64($esym) == Float64(big($esym))
-        @assert Float32($esym) == Float32(big($esym))
+#        @assert isa(big($esym), BigFloat)
+#        @assert Float64($esym) == Float64(big($esym))
+#        @assert Float32($esym) == Float32(big($esym))
     end
 end
 

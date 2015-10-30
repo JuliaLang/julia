@@ -2,6 +2,7 @@
 
 module Printf
 using Base.Grisu
+using Base.GMP: MPZ
 export @printf, @sprintf
 
 ### printf formatter generation ###
@@ -865,7 +866,7 @@ function decode(b::Int, x::BigInt)
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
     ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
+          (Ptr{UInt8}, Cint, Ptr{MPZ}), DIGITS, b, &x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
 end
@@ -885,7 +886,7 @@ function decode_0ct(x::BigInt)
     neg && (x.size = -x.size)
     p = convert(Ptr{UInt8}, DIGITS) + 1
     ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
+          (Ptr{UInt8}, Cint, Ptr{MPZ}), p, 8, &x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
 end
