@@ -206,7 +206,7 @@ extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 #endif
 
 extern int globalUnique;
-uv_lib_t *jl_sysimg_handle = NULL;
+void *jl_sysimg_handle = NULL;
 uint64_t jl_sysimage_base = 0;
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
@@ -254,7 +254,7 @@ static int jl_load_sysimg_so()
 #endif
 
 #ifdef _OS_WINDOWS_
-        jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
+        jl_sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
         if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
             jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
@@ -1838,7 +1838,7 @@ DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     }
 
     // Get handle to sys.so
-    jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    jl_sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
 
     // set cpu target if unspecified by user and available from sysimg
     // otherwise default to native.
