@@ -1588,7 +1588,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_function_t *meth = (jl_function_t*)jl_deserialize_value(s, NULL);
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
         int8_t isstaged = read_int8(s);
-        jl_add_method(gf, types, meth, tvars, isstaged);
+        jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
     }
 }
 
@@ -2074,9 +2074,6 @@ DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
     return 0;
 }
-
-jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
-                                      jl_function_t *method);
 
 static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
 {
