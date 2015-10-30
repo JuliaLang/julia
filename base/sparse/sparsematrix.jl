@@ -700,7 +700,8 @@ function gen_broadcast_body_sparse(f::Function, is_first_sparse::Bool)
         colptr1 = A_1.colptr; rowval1 = A_1.rowval; nzval1 = A_1.nzval
         colptr2 = A_2.colptr; rowval2 = A_2.rowval; nzval2 = A_2.nzval
 
-        nnzB = nnz(A_1) * div(B.n, A_1.n) * div(B.m, A_1.m)  +
+        nnzB = isempty(B) ? 0 :
+               nnz(A_1) * div(B.n, A_1.n) * div(B.m, A_1.m)  +
                nnz(A_2) * div(B.n, A_2.n) * div(B.m, A_2.m)
         if length(rowvalB) < nnzB
             resize!(rowvalB, nnzB)
@@ -860,7 +861,8 @@ function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
         Base.Broadcast.check_broadcast_shape(size(B), $A1)
         Base.Broadcast.check_broadcast_shape(size(B), $A2)
 
-        nnzB = nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
+        nnzB = isempty(B) ? 0 :
+               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
         if length(B.rowval) < nnzB
             resize!(B.rowval, nnzB)
         end
