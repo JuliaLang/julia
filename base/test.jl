@@ -505,7 +505,7 @@ By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types.
 """
 macro testset(args...)
-    !isempty(args) || error("No arguments to @testset")
+    isempty(args) && error("No arguments to @testset")
 
     tests = args[end]
 
@@ -557,7 +557,7 @@ The `@testloop` macro collects and returns a list of the return values of the
 in each iteration.
 """
 macro testloop(args...)
-    !isempty(args) || error("no arguments to @testloop")
+    isempty(args) && error("no arguments to @testloop")
 
     testloop = args[end]
     isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
