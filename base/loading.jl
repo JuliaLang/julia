@@ -421,11 +421,12 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(detach(`$(julia_cmd())
-                           --output-ji $output --output-incremental=yes
-                           --startup-file=no --history-file=no
-                           --color=$(have_color ? "yes" : "no")
-                           --eval $code_object`), "w", STDOUT)
+    io, pobj = open(pipeline(detach(`$(julia_cmd())
+                                    --output-ji $output --output-incremental=yes
+                                    --startup-file=no --history-file=no
+                                    --color=$(have_color ? "yes" : "no")
+                                    --eval $code_object`), stderr=STDERR),
+                    "w", STDOUT)
     try
         serialize(io, quote
                   empty!(Base.LOAD_PATH)

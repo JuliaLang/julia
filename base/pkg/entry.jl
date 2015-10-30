@@ -542,11 +542,11 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
             end
         end
     """
-    io, pobj = open(detach(`$(Base.julia_cmd())
-                           --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-                           --history-file=no
-                           --color=$(Base.have_color ? "yes" : "no")
-                           --eval $code`), "w", STDOUT)
+    io, pobj = open(pipeline(detach(`$(Base.julia_cmd())
+                                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+                                    --history-file=no
+                                    --color=$(Base.have_color ? "yes" : "no")
+                                    --eval $code`), stderr=STDERR), "w", STDOUT)
     try
         build!(pkgs, io, seen)
         close(io)
