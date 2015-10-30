@@ -633,6 +633,10 @@ end
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 ./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
 
+# Matrix multiplication/solve on ranges, A*r should treat r as collected vector
+*{T}(A::AbstractArray{T, 2}, r::Range) = A*collect(r)
+\{T}(A::AbstractArray{T, 2}, r::Range) = A\collect(r)
+
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
     UnitRange{promote_type(T1,T2)}
 convert{T}(::Type{UnitRange{T}}, r::UnitRange{T}) = r

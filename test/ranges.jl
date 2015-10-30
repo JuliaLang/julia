@@ -244,6 +244,11 @@ end
 @test all(([1:5;] - (1:5)) .== 0)
 @test all(((1:5) - [1:5;]) .== 0)
 
+# matrix multiplication between matrix and range, e.g. A*r
+@test [1 2 3;]*(1:3) == [14]
+# and a matrix solve A\r
+@test [1 0; 0 1]\linspace(1,2,2) ≈ [1., 2.]
+
 # tricky floating-point ranges
 
 @test [0.1:0.1:0.3;]   == [linspace(0.1,0.3,3);]     == [1:3;]./10
