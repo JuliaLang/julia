@@ -505,9 +505,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
-    HMODULE jl_dbghelp = jl_dlopen("dbghelp.dll", 0);
+    HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", 0);
     if (jl_dbghelp)
-        hSymRefreshModuleList = jl_dlsym(jl_dbghelp, "SymRefreshModuleList");
+        hSymRefreshModuleList = (BOOL (WINAPI*)(HANDLE)) jl_dlsym(jl_dbghelp, "SymRefreshModuleList");
 #endif
 
 #if defined(JL_USE_INTEL_JITEVENTS)

@@ -45,7 +45,7 @@ extern char *julia_home;
 #   endif
 #endif
 
-static char* NORETURN jl_dlerror(const char *fmt, const char *sym) {
+static void NORETURN jl_dlerror(const char *fmt, const char *sym) {
 #ifdef _OS_WINDOWS_
     CHAR reason[256];
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -93,7 +93,7 @@ DLLEXPORT int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
-    return FreeLibrary(handle);
+    return FreeLibrary((HMODULE) handle);
 #else
     dlerror(); /* Reset error status. */
     if (!handle) return -1;
@@ -216,7 +216,7 @@ void *jl_load_dynamic_library(const char *modname, unsigned flags)
 void *jl_dlsym_e(void *handle, const char *symbol)
 {
 #ifdef _OS_WINDOWS_
-    void *ptr = GetProcAddress(handle, symbol);
+    void *ptr = GetProcAddress((HMODULE) handle, symbol);
 #else
     dlerror(); /* Reset error status. */
     void *ptr = dlsym(handle, symbol);
