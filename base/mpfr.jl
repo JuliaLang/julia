@@ -830,13 +830,21 @@ function string(x::BigFloat)
     lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
     buf = Array(UInt8, lng + 1)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
+
     if lng < k + 5 # print at least k decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
     elseif lng > k + 8
         buf = Array(UInt8, lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    return bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+
+    string_repn = bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+
+    if string_repn == "inf"  # BigFloat returns inf
+        string_repn = "Inf"
+    end
+
+    string_repn
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))

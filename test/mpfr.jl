@@ -863,3 +863,9 @@ let b = IOBuffer()
 end
 
 @test isnan(sqrt(BigFloat(NaN)))
+
+# string representations of infinity
+@test string(BigFloat(Inf)) == "Inf"
+@test parse(BigFloat, "inf") == Inf
+@test parse(BigFloat, "Inf") == Inf
+@test parse(BigFloat, "Inf") == BigFloat(Inf)
