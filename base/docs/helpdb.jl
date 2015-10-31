@@ -328,7 +328,7 @@ Libdl.dlclose
 doc"""
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
 """
 Libdl.dlsym_e
 
