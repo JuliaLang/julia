@@ -7011,9 +7011,9 @@ multiplied by the larger matrix dimension.
 For inverting dense ill-conditioned matrices in a least-squares sense,
 ``tol = sqrt(eps(real(float(one(eltype(M))))))`` is recommended.
 
-For more information, see [8859]_, [B96]_, [S84]_, [KY88]_.
+For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
 
-.. [8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
+.. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 .. [B96] Åke Björck, "Numerical Methods for Least Squares Problems",
    SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51.
    `doi:10.1137/1.9781611971484 <http://epubs.siam.org/doi/book/10.1137/1.9781611971484>`_
