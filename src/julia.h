@@ -278,8 +278,8 @@ typedef struct _jl_lambda_info_t {
     // hidden fields:
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
-    int8_t inInference : 1;
-    int8_t inCompile : 1;
+    uint8_t inInference : 1;
+    uint8_t inCompile : 1;
     jl_fptr_t fptr;             // jlcall entry point
     void *functionObject;       // jlcall llvm Function
     void *cFunctionList;        // c callable llvm Functions
