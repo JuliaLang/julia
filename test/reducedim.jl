@@ -121,14 +121,14 @@ for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
                           ((2,), reshape([1.0,2.0], 2, 1), reshape([1,4], 2, 1)),
                           ((1,2), fill(1.0,1,1),fill(1,1,1))]
     @test findmin(A, tup) == (rval, rind)
-    @test findmin!(similar(rval), similar(rind), A) == (rval, rind)
+    @test Base.findmin!(similar(rval), similar(rind), A) == (rval, rind)
 end
 
 for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
                           ((2,), reshape([6.0,5.0], 2, 1), reshape([5,2], 2, 1)),
                           ((1,2), fill(6.0,1,1),fill(5,1,1))]
     @test findmax(A, tup) == (rval, rind)
-    @test findmax!(similar(rval), similar(rind), A) == (rval, rind)
+    @test Base.findmax!(similar(rval), similar(rind), A) == (rval, rind)
 end
 
 # issue #6672
