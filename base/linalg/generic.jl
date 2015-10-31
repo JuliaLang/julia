@@ -608,4 +608,3 @@ function normalize(v::AbstractVector, p::Real = 2)
         return T[]
     end
 end
-

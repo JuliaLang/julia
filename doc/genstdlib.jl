@@ -253,7 +253,7 @@ function translate(file)
                     end
                 end
                 if doc == nothing || torst(doc, false) == nothing
-                    info("no docs for $full in $mod")
+                    info("$file: no docs for $full in $mod")
                     println(io, l)
                     doccing = false
                     start_new_section()
