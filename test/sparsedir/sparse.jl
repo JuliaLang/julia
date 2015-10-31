@@ -886,6 +886,14 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test BF[:,1] .^ A == BF[:,1] .^ AF
 end
 
+# test broadcasting for empty matrices
+@test spzeros(0,0)  + spzeros(0,0)  == zeros(0,0)
+@test spzeros(0,0)  * spzeros(0,0)  == zeros(0,0)
+@test spzeros(1,0) .+ spzeros(2,1)  == zeros(2,0)
+@test spzeros(1,0) .* spzeros(2,1)  == zeros(2,0)
+@test spzeros(1,2) .+ spzeros(0,1)  == zeros(0,2)
+@test spzeros(1,2) .* spzeros(0,1)  == zeros(0,2)
+
 # test throws
 A = sprandbool(5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
