@@ -28,7 +28,6 @@ function term(io::IO, md::BlockQuote, columns)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
-    println(io)
 end
 
 function term(io::IO, md::List, columns)
@@ -93,7 +92,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, md)
+    print(io, replace(md, r"[\s\t\n]+", " "))
 end
 
 function terminline(io::IO, md::Bold)
@@ -109,7 +108,7 @@ function terminline(io::IO, md::LineBreak)
 end
 
 function terminline(io::IO, md::Image)
-    print(io, "(Image: $(md.alt))")
+    terminline(io, "(Image: $(md.alt))")
 end
 
 function terminline(io::IO, md::Link)
