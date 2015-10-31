@@ -1306,7 +1306,7 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = cell(np)
 
     for i in 1:np
-        io, pobj = open(detach(cmd), "r")
+        io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
         io_objs[i] = io
     end
 

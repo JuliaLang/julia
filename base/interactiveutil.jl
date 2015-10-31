@@ -33,18 +33,18 @@ function edit(file::AbstractString, line::Integer)
     end
     const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(name, "emacs") || name == "gedit"
-        spawn(`$command +$line $file`)
+        spawn(pipeline(`$command +$line $file`, stderr=STDERR))
     elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         run(`$command +$line $file`)
     elseif name == "textmate" || name == "mate" || name == "kate"
-        spawn(`$command $file -l $line`)
+        spawn(pipeline(`$command $file -l $line`, stderr=STDERR))
     elseif startswith(name, "subl") || name == "atom"
-        spawn(`$command $file:$line`)
+        spawn(pipeline(`$command $file:$line`, stderr=STDERR))
     elseif OS_NAME == :Windows && (name == "start" || name == "open")
-        spawn(`cmd /c start /b $file`)
+        spawn(pipeline(`cmd /c start /b $file`, stderr=STDERR))
         println(no_line_msg)
     elseif OS_NAME == :Darwin && (name == "start" || name == "open")
-        spawn(`open -t $file`)
+        spawn(pipeline(`open -t $file`, stderr=STDERR))
         println(no_line_msg)
     else
         run(`$command $file`)
@@ -79,7 +79,7 @@ less(file, line::Integer) = error("could not find source file for function")
 
 @osx_only begin
     function clipboard(x)
-        open(`pbcopy`, "w") do io
+        open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
@@ -101,7 +101,7 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
               c == :xclip ? `xclip -quiet -in -selection clipboard` :
             error("unexpected clipboard command: $c")
-        open(cmd, "w") do io
+        open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
@@ -110,7 +110,7 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
             error("unexpected clipboard command: $c")
-        readall(cmd)
+        readall(pipeline(cmd, stderr=STDERR))
     end
 end
 
