@@ -241,7 +241,7 @@ public:
             // FunctionType does not include any attributes. Copy them over manually
             // as codegen may make decisions based on the presence of certain attributes
             NewF->copyAttributesFrom(F);
-            
+
             // Declarations are not allowed to have personality routines, but
             // copyAttributesFrom sets them anyway, so clear them again manually
             NewF->setPersonalityFn(nullptr);
