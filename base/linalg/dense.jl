@@ -436,20 +436,6 @@ function factorize{T}(A::Matrix{T})
     qrfact(A, Val{true})
 end
 
-(\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
-
-function (\)(A::StridedMatrix, B::StridedVecOrMat)
-    m, n = size(A)
-    if m == n
-        if istril(A)
-            return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
-        end
-        istriu(A) && return \(UpperTriangular(A),B)
-        return \(lufact(A),B)
-    end
-    return qrfact(A,Val{true})\B
-end
-
 ## Moore-Penrose pseudoinverse
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
     m, n = size(A)
