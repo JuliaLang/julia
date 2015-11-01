@@ -124,7 +124,7 @@ function serialize(s::SerializationState, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
     for i = 1:length(v)
-        serialize(s.io, v[i])
+        serialize(s, v[i])
     end
 end
 
