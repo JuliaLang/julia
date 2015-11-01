@@ -319,12 +319,9 @@ private:
         JuliaOJIT &JIT;
     };
 };
-static JuliaOJIT *jl_ExecutionEngine;
+DLLEXPORT JuliaOJIT *jl_ExecutionEngine;
 #else
-#if !defined(LLVM35) || defined(LLVM36)
-static
-#endif
-  ExecutionEngine *jl_ExecutionEngine;
+DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 #endif
 
 #ifdef USE_MCJIT
