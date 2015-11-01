@@ -325,19 +325,26 @@ function inv{T}(A::AbstractMatrix{T})
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
 end
 
-function \{T}(A::AbstractMatrix{T}, B::AbstractVecOrMat{T})
-    if size(A,1) != size(B,1)
-        throw(DimensionMismatch("left and right hand sides should have the same number of rows, left hand side has $(size(A,1)) rows, but right hand side has $(size(B,1)) rows."))
+function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
+    m, n = size(A)
+    if m == n
+        if istril(A)
+            if istriu(A)
+                return Diagonal(A) \ B
+            else
+                return LowerTriangular(A) \ B
+            end
+        end
+        if istriu(A)
+            return UpperTriangular(A) \ B
+        end
+        return lufact(A) \ B
     end
-    factorize(A)\B
-end
-function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
-    TC = typeof(one(TA)/one(TB))
-    convert(AbstractMatrix{TC}, A)\convert(AbstractArray{TC}, B)
+    return qrfact(A,Val{true}) \ B
 end
 
-\(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
-/(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
+(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 

@@ -826,6 +826,15 @@ scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)
     if m == n
+        if istril(A)
+            if istriu(A)
+                return return Diagonal(A)
+            else
+                return LowerTriangular(A)
+            end
+        elseif istriu(A)
+            return UpperTriangular(A)
+        end
         AC = CHOLMOD.Sparse(A)
         if ishermitian(AC)
             try

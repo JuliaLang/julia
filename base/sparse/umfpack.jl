@@ -115,9 +115,22 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 end
 lufact(A::SparseMatrixCSC) = lufact(float(A))
 
-function show(io::IO, f::UmfpackLU)
-    println(io, "UMFPACK LU Factorization of a $(f.m)-by-$(f.n) sparse matrix")
-    f.numeric != C_NULL && println(io, f.numeric)
+size(F::UmfpackLU) = (F.m, F.n)
+function size(F::UmfpackLU, dim::Integer)
+    if dim < 1
+        error("arraysize: dimension out of range")
+    elseif dim == 1
+        return Int(F.m)
+    elseif dim == 2
+        return Int(F.n)
+    else
+        return 1
+    end
+end
+
+function show(io::IO, F::UmfpackLU)
+    println(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
+    F.numeric != C_NULL && println(io, F.numeric)
 end
 
 ## Wrappers for UMFPACK functions
