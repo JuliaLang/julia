@@ -23,33 +23,33 @@ function editor()
     return args
 end
 
-function edit(file::AbstractString, line::Integer=0)
+function edit(path::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
-    issrc = length(file)>2 && file[end-2:end] == ".jl"
+    issrc = length(path)>2 && path[end-2:end] == ".jl"
     if issrc
-        f = find_source_file(file)
-        f !== nothing && (file = f)
+        f = find_source_file(path)
+        f !== nothing && (path = f)
     end
     background = true
     line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
-        cmd = line != 0 ? `$command +$line $file` : `$command $file`
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
-        cmd = line != 0 ? `$command +$line $file` : `$command $file`
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
-        cmd = line != 0 ? `$command $file -l $line` : `$command $file`
+        cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || name == "atom"
-        cmd = line != 0 ? `$command $file:$line` : `$command $file`
+        cmd = line != 0 ? `$command $path:$line` : `$command $path`
     elseif OS_NAME == :Windows && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $file`
+        cmd = `cmd /c start /b $path`
         line_unsupported = true
     elseif OS_NAME == :Darwin && (name == "start" || name == "open")
-        cmd = `open -t $file`
+        cmd = `open -t $path`
         line_unsupported = true
     else
-        cmd = `$command $file`
+        cmd = `$command $path`
         background = false
         line_unsupported = true
     end
