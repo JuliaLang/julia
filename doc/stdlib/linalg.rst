@@ -167,6 +167,56 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Same as ``ldltfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
 
+.. function:: qr(v::AbstractVector)
+
+   .. Docstring generated from Julia source
+
+   Computes the polar decomposition of a vector.
+
+   Input
+   *****
+
+
+   * ``v::AbstractVector`` - vector to normalize
+
+   Outputs
+   *******
+
+
+   * ``w`` - A unit vector in the direction of ``v``
+   * ``r`` - The norm of ``v``
+
+   See also
+   ********
+
+
+   ``normalize``\ , ``normalize!``\ , ``LinAlg.qr!``
+
+.. function:: LinAlg.qr!(v::AbstractVector)
+
+   .. Docstring generated from Julia source
+
+   Computes the polar decomposition of a vector. Instead of returning a new vector as ``qr(v::AbstractVector)``\ , this function mutates the input vector ``v`` in place.
+
+   Input
+   *****
+
+
+   * ``v::AbstractVector`` - vector to normalize
+
+   Outputs
+   *******
+
+
+   * ``w`` - A unit vector in the direction of ``v`` (This is a mutation of ``v``\ ).
+   * ``r`` - The norm of ``v``
+
+   See also
+   ********
+
+
+   ``normalize``\ , ``normalize!``\ , ``qr``
+
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    .. Docstring generated from Julia source
@@ -664,6 +714,56 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For example, if ``A`` is a matrix and ``p=2``\ , then this is equivalent to the Frobenius norm.
 
+.. function:: normalize!(v, [p=2])
+
+   .. Docstring generated from Julia source
+
+   Normalize the vector ``v`` in-place with respect to the ``p``\ -norm.
+
+   Inputs
+   ******
+
+
+   * ``v::AbstractVector`` - vector to be normalized
+   * ``p::Real`` - The ``p``\ -norm to normalize with respect to. Default: 2
+
+   Output
+   ******
+
+
+   * ``v`` - A unit vector being the input vector, rescaled to have norm 1.         The input vector is modified in-place.
+
+   See also
+   ********
+
+
+   ``normalize``\ , ``qr``
+
+.. function:: normalize(v, [p=2])
+
+   .. Docstring generated from Julia source
+
+   Normalize the vector ``v`` with respect to the ``p``\ -norm.
+
+   Inputs
+   ******
+
+
+   * ``v::AbstractVector`` - vector to be normalized
+   * ``p::Real`` - The ``p``\ -norm to normalize with respect to. Default: 2
+
+   Output
+   ******
+
+
+   * ``v`` - A unit vector being a copy of the input vector, scaled to have norm 1
+
+   See also
+   ********
+
+
+   ``normalize!``\ , ``qr``
+
 .. function:: cond(M, [p])
 
    .. Docstring generated from Julia source
@@ -733,8 +833,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
 
-   .. [issue8859] Issue 8859, "Fix least squares",
-      https://github.com/JuliaLang/julia/pull/8859
+   .. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
    .. [B96] Åke Björck, "Numerical Methods for Least Squares Problems",
       SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51.
       `doi:10.1137/1.9781611971484 <http://epubs.siam.org/doi/book/10.1137/1.9781611971484>`_

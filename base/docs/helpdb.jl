@@ -328,7 +328,7 @@ Libdl.dlclose
 doc"""
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
 """
 Libdl.dlsym_e
 
@@ -7118,13 +7118,6 @@ doc"""
 Sum absolute values of elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 """
 sumabs!
-
-doc"""
-    abs(x)
-
-Absolute value of `x`
-"""
-abs
 
 doc"""
     Sys.set_process_title(title::AbstractString)

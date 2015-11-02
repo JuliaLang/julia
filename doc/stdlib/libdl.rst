@@ -60,7 +60,7 @@
 
    .. Docstring generated from Julia source
 
-   Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+   Look up a symbol from a shared library handle, silently return ``NULL`` pointer on lookup failure.
 
 .. function:: dlclose(handle)
 
