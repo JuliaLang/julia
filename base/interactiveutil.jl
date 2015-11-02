@@ -23,7 +23,7 @@ function editor()
     return args
 end
 
-function edit(file::AbstractString, line::Integer)
+function edit(file::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
     issrc = length(file)>2 && file[end-2:end] == ".jl"
@@ -34,14 +34,14 @@ function edit(file::AbstractString, line::Integer)
     background = true
     line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
-        cmd = `$command +$line $file`
+        cmd = line != 0 ? `$command +$line $file` : `$command $file`
     elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
-        cmd = `$command +$line $file`
+        cmd = line != 0 ? `$command +$line $file` : `$command $file`
         background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
-        cmd = `$command $file -l $line`
+        cmd = line != 0 ? `$command $file -l $line` : `$command $file`
     elseif startswith(name, "subl") || name == "atom"
-        cmd = `$command $file:$line`
+        cmd = line != 0 ? `$command $file:$line` : `$command $file`
     elseif OS_NAME == :Windows && (name == "start" || name == "open")
         cmd = `cmd /c start /b $file`
         line_unsupported = true
@@ -59,7 +59,7 @@ function edit(file::AbstractString, line::Integer)
     else
         run(cmd)
     end
-    line_unsupported && println("Unknown editor: no line number information passed.\nThe method is defined at line $line.")
+    line != 0 && line_unsupported && println("Unknown editor: no line number information passed.\nThe method is defined at line $line.")
 
     nothing
 end
@@ -69,7 +69,6 @@ function edit(m::Method)
     edit(string(file), line)
 end
 
-edit(file::AbstractString) = edit(file, 1)
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
