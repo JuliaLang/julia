@@ -64,11 +64,11 @@ Getting Around
 
    Compute the amount of memory used by all unique objects reachable from the argument. Keyword argument ``exclude`` specifies a type of objects to exclude from the traversal.
 
-.. function:: edit(file::AbstractString, [line])
+.. function:: edit(path::AbstractString, [line])
 
    .. Docstring generated from Julia source
 
-   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
+   Edit a file or directory optionally providing a line number to edit the file at. Returns to the julia prompt when you quit the editor.
 
 .. function:: edit(function, [types])
 
