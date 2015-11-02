@@ -733,8 +733,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
 
-   .. [issue8859] Issue 8859, "Fix least squares",
-      https://github.com/JuliaLang/julia/pull/8859
+   .. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
    .. [B96] Åke Björck, "Numerical Methods for Least Squares Problems",
       SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51.
       `doi:10.1137/1.9781611971484 <http://epubs.siam.org/doi/book/10.1137/1.9781611971484>`_
@@ -817,11 +816,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       26(4), 2005, 1179-1193.
       `doi:10.1137/090768539 <http://dx.doi.org/10.1137/090768539>`_
 
-.. function:: logm(A)
+.. function:: logm(A::StridedMatrix)
 
    .. Docstring generated from Julia source
 
-   If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a warning is printed and whenever possible a nonprincipal matrix function is returned.
+   If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.
 
    If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if ``A`` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
 
