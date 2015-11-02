@@ -1175,3 +1175,15 @@ let
     @test_throws ErrorException eig(A)
     @test_throws ErrorException inv(A)
 end
+
+let
+    n = 100
+    A = sprandn(n, n, 0.5) + sqrt(n)*I
+    x = LowerTriangular(A)*ones(n)
+    @test LowerTriangular(A)\x ≈ ones(n)
+    x = UpperTriangular(A)*ones(n)
+    @test UpperTriangular(A)\x ≈ ones(n)
+    A[2,2] = 0
+    @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
+    @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
+end
