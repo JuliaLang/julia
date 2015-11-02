@@ -318,8 +318,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, j
         // this might happen if an inner lambda was compiled as part
         // of running an unspecialized function
         nli->fptr = jl_trampoline;
-        nli->functionObject = NULL;
-        nli->specFunctionObject = NULL;
+        nli->functionObjects.functionObject = NULL;
+        nli->functionObjects.specFunctionObject = NULL;
         nli->functionID = 0;
         nli->specFunctionID = 0;
     }
@@ -829,8 +829,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
            (newmeth->linfo->specTypes == method->linfo->specTypes) ||
            (newmeth->fptr == &jl_trampoline &&
             newmeth->linfo->fptr == &jl_trampoline &&
-            newmeth->linfo->functionObject == NULL &&
-            newmeth->linfo->specFunctionObject == NULL &&
+            newmeth->linfo->functionObjects.functionObject == NULL &&
+            newmeth->linfo->functionObjects.specFunctionObject == NULL &&
             newmeth->linfo->functionID == 0 &&
             newmeth->linfo->specFunctionID == 0));
 
@@ -1460,7 +1460,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf,
                                              jl_value_t *type, int lim);
 
 // compile-time method lookup
-jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
+jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types, void *cyclectx)
 {
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
@@ -1498,10 +1498,10 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
         goto not_found;
     }
     if (sf->linfo->inInference) goto not_found;
-    if (sf->linfo->functionObject == NULL) {
+    if (sf->linfo->functionObjects.functionObject == NULL) {
         if (sf->fptr != &jl_trampoline)
             goto not_found;
-        jl_compile_linfo(sf->linfo);
+        jl_compile_linfo(sf->linfo, cyclectx);
     }
     JL_GC_POP();
     return sf;
@@ -1646,7 +1646,7 @@ static void _compile_all_deq(jl_array_t *found)
         if (jl_is_leaf_type((jl_value_t*)meth->sig)) {
             // usually can create a specialized version of the function,
             // if the signature is already a leaftype
-            jl_function_t *spec = jl_get_specialization(func, meth->sig);
+            jl_function_t *spec = jl_get_specialization(func, meth->sig, NULL);
             if (spec && !jl_has_typevars((jl_value_t*)meth->sig)) {
                 // replace unspecialized func with specialized version
                 // if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
@@ -1683,7 +1683,7 @@ static void _compile_all_deq(jl_array_t *found)
                             continue; // signature wouldn't be callable / is invalid -- skip it
                         }
                         if (jl_is_leaf_type(sig)) {
-                            if (jl_get_specialization(func, (jl_tupletype_t*)sig)) {
+                            if (jl_get_specialization(func, (jl_tupletype_t*)sig, NULL)) {
                                 if (!jl_has_typevars((jl_value_t*)sig)) continue;
                             }
                         }
@@ -1840,7 +1840,7 @@ void jl_compile_all(void)
 
 JL_DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tupletype_t *types)
 {
-    (void)jl_get_specialization(f, types);
+    (void)jl_get_specialization(f, types, NULL);
 }
 
 #ifdef JL_TRACE
@@ -1858,6 +1858,11 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 }
 #endif
 
+static jl_value_t *verify_type(jl_value_t *v)
+{
+assert(jl_typeof(jl_typeof(v)));
+return v;
+}
 
 JL_CALLABLE(jl_apply_generic)
 {
@@ -1898,10 +1903,10 @@ JL_CALLABLE(jl_apply_generic)
                     li->unspecialized->env = NULL;
                 jl_gc_wb(li, li->unspecialized);
             }
-            return jl_apply_unspecialized(mfunc, args, nargs);
+            return verify_type(jl_apply_unspecialized(mfunc, args, nargs));
         }
         assert(!mfunc->linfo || !mfunc->linfo->inInference);
-        return jl_apply(mfunc, args, nargs);
+        return verify_type(jl_apply(mfunc, args, nargs));
     }
 
     // cache miss case
@@ -1927,7 +1932,7 @@ JL_CALLABLE(jl_apply_generic)
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
     jl_value_t *res = jl_apply(mfunc, args, nargs);
     JL_GC_POP();
-    return res;
+    return verify_type(res);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf,

@@ -321,9 +321,9 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
     li->tfunc = jl_nothing;
     li->fptr = &jl_trampoline;
     li->roots = NULL;
-    li->functionObject = NULL;
-    li->specFunctionObject = NULL;
-    li->cFunctionList = NULL;
+    li->functionObjects.functionObject = NULL;
+    li->functionObjects.specFunctionObject = NULL;
+    li->functionObjects.cFunctionList = NULL;
     li->functionID = 0;
     li->specFunctionID = 0;
     li->specTypes = NULL;
@@ -353,8 +353,8 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;
     new_linfo->fptr = linfo->fptr;
-    new_linfo->functionObject = linfo->functionObject;
-    new_linfo->specFunctionObject = linfo->specFunctionObject;
+    new_linfo->functionObjects.functionObject = linfo->functionObjects.functionObject;
+    new_linfo->functionObjects.specFunctionObject = linfo->functionObjects.specFunctionObject;
     new_linfo->functionID = linfo->functionID;
     new_linfo->specFunctionID = linfo->specFunctionID;
     return new_linfo;
