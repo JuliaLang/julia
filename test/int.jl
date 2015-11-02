@@ -158,5 +158,3 @@ end
 #@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
 @test checked_mul(UInt128(2)^127, UInt128(2)) === UInt128(0)
 # broken
-
-    
