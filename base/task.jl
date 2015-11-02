@@ -113,8 +113,6 @@ function wait(t::Task)
     return t.result
 end
 
-suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
-
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     err = (t.state == :failed)
@@ -156,16 +154,6 @@ function task_done_hook(t::Task)
                 active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) &&
                 active_repl_backend.in_eval
                 throwto(active_repl_backend.backend_task, result)
-            end
-            if !suppress_excp_printing(t)
-                let bt = t.backtrace
-                    # run a new task to print the error for us
-                    @schedule with_output_color(:red, STDERR) do io
-                        print(io, "ERROR (unhandled task failure): ")
-                        showerror(io, result, bt)
-                        println(io)
-                    end
-                end
             end
         end
         # if a finished task accidentally gets into the queue, wait()
@@ -428,10 +416,6 @@ function sync_add(r)
     spawns = get(task_local_storage(), :SPAWNS, ())
     if !is(spawns,())
         push!(spawns[1], r)
-        if isa(r, Task)
-            tls_r = get_task_tls(r)
-            tls_r[:SUPPRESS_EXCEPTION_PRINTING] = true
-        end
     end
     r
 end
