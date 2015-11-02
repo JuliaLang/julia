@@ -538,6 +538,12 @@ Iterable Collections
        julia> all(i->(4<=i<=6), [4,5,6])
        true
 
+.. function:: foreach(f, c...) -> Void
+
+   .. Docstring generated from Julia source
+
+   Call function ``f`` on each element of iterable ``c``\ . For multiple iterable arguments, ``f`` is called elementwise. ``foreach`` should be used instead of ``map`` when the results of ``f`` are not needed, for example in ``foreach(println, array)``\ .
+
 .. function:: map(f, c...) -> collection
 
    .. Docstring generated from Julia source
@@ -884,17 +890,17 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
 
-.. function:: keytype(collection)
+.. function:: keytype(type)
 
    .. Docstring generated from Julia source
 
-   For associative collection types, this will be the type of the Key, This is not defined for non-associative collections
+   Get the key type of an associative collection type. Behaves similarly to ``eltype``\ .
 
-.. function:: valtype(collection)
+.. function:: valtype(type)
 
    .. Docstring generated from Julia source
 
-   For associative collection types, this will be the type of the Value, This is not defined for non-associative collections
+   Get the value type of an associative collection type. Behaves similarly to ``eltype``\ .
 
 Fully implemented by:
 
