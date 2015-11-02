@@ -18,9 +18,9 @@ function editor()
         default_editor = "emacs"
     end
     # Note: the editor path can include spaces (if escaped) and flags.
-    command = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
-    isempty(command) && error("editor is empty")
-    return command
+    args = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
+    isempty(args) && error("editor is empty")
+    return args
 end
 
 function edit(file::AbstractString, line::Integer)
@@ -31,25 +31,36 @@ function edit(file::AbstractString, line::Integer)
         f = find_source_file(file)
         f !== nothing && (file = f)
     end
-    const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    background = true
+    line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
-        spawn(pipeline(`$command +$line $file`, stderr=STDERR))
+        cmd = `$command +$line $file`
     elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
-        run(`$command +$line $file`)
+        cmd = `$command +$line $file`
+        background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
-        spawn(pipeline(`$command $file -l $line`, stderr=STDERR))
+        cmd = `$command $file -l $line`
     elseif startswith(name, "subl") || name == "atom"
-        spawn(pipeline(`$command $file:$line`, stderr=STDERR))
+        cmd = `$command $file:$line`
     elseif OS_NAME == :Windows && (name == "start" || name == "open")
-        spawn(pipeline(`cmd /c start /b $file`, stderr=STDERR))
-        println(no_line_msg)
+        cmd = `cmd /c start /b $file`
+        line_unsupported = true
     elseif OS_NAME == :Darwin && (name == "start" || name == "open")
-        spawn(pipeline(`open -t $file`, stderr=STDERR))
-        println(no_line_msg)
+        cmd = `open -t $file`
+        line_unsupported = true
     else
-        run(`$command $file`)
-        println(no_line_msg)
+        cmd = `$command $file`
+        background = false
+        line_unsupported = true
     end
+
+    if background
+        spawn(pipeline(cmd, stderr=STDERR))
+    else
+        run(cmd)
+    end
+    line_unsupported && println("Unknown editor: no line number information passed.\nThe method is defined at line $line.")
+
     nothing
 end
 
