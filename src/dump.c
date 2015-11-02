@@ -1387,9 +1387,9 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->capt = jl_deserialize_value(s, &li->capt);
         if (li->capt) jl_gc_wb(li, li->capt);
         li->fptr = &jl_trampoline;
-        li->functionObject = NULL;
-        li->cFunctionList = NULL;
-        li->specFunctionObject = NULL;
+        li->functionObjects.functionObject = NULL;
+        li->functionObjects.cFunctionList = NULL;
+        li->functionObjects.specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = (jl_function_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);

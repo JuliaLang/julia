@@ -43,6 +43,7 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
+    "../src/jitlayers.cpp",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
