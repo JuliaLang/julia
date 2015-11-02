@@ -74,15 +74,15 @@ end
 # On llvm <3.5+ even though the the compilation fails on the first try,
 # llvm still adds the intrinsice declaration to the module and subsequent calls
 # are succesfull.
-if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
-
-function undeclared_ceil(x::Float64)
-    llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
-        ret double %2""", Float64, Tuple{Float64}, x)
-end
-@test_throws ErrorException undeclared_ceil(4.2)
-
-end
+#if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
+#
+#function undeclared_ceil(x::Float64)
+#    llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
+#        ret double %2""", Float64, Tuple{Float64}, x)
+#end
+#@test_throws ErrorException undeclared_ceil(4.2)
+#
+#end
 
 function declared_floor(x::Float64)
     llvmcall(

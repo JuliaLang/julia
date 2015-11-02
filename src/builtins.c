@@ -1015,7 +1015,7 @@ void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer)
             }
         }
     }
-    jl_compile_linfo(linfo);
+    jl_compile_linfo(linfo, NULL);
     if (jl_boot_file_loaded && jl_is_expr(linfo->ast)) {
         linfo->ast = jl_compress_ast(linfo, linfo->ast);
         jl_gc_wb(linfo, linfo->ast);
