@@ -75,6 +75,20 @@ World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 > baz
 > ```""" |> plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
 
+# Terminal (markdown) output
+
+# multiple whitespace is ignored
+@test sprint(term, md"a  b") == "  a b\n"
+@test sprint(term, md"- a
+        not code") == "    •  a not code\n"
+@test sprint(term, md"[x](https://julialang.org)") == "  x\n"
+@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
+
+# enumeration is normalized
+@test sprint(term, md"""
+    1. a
+    3. b""") == "    1. a\n    2. b\n"
+
 # HTML output
 
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
