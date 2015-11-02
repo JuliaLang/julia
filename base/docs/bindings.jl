@@ -1,11 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-export @var
-
 immutable Binding
     mod::Module
     var::Symbol
-    Binding(m, v) = new(Base.which_module(m, v), v)
+    Binding(m::Module, v::Symbol) = new(Base.which_module(m, v), v)
 end
 
 function splitexpr(x::Expr)
@@ -19,8 +17,4 @@ splitexpr(other)     = error("Invalid @var syntax `$other`.")
 isvar(x) = isexpr(x, [:macrocall, :.])
 isvar(::Symbol) = true
 
-macro var(x)
-    :(Binding($(splitexpr(x)...)))
-end
-
-Base.show(io::IO, x::Binding) = print(io, "$(x.mod).$(x.var)")
+Base.show(io::IO, x::Binding) = print(io, x.mod, ".", x.var)

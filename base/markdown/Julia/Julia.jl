@@ -7,8 +7,16 @@
 
 include("interp.jl")
 
-@flavor julia [blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
+let features = [blocktex, hashheader, list, indentcode, fencedcode,
                blockquote, github_table, horizontalrule, setextheader, paragraph,
 
-               linebreak, escapes, tex, interp, en_dash, inline_code,
+               linebreak, escapes, tex, en_dash, inline_code,
                asterisk_bold, asterisk_italic, image, link]
+
+global julia, julia_interp
+
+@flavor julia [features...]
+
+@flavor julia_interp [features..., blockinterp, interp]
+
+end

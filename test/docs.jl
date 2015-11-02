@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.DocObj
+
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
@@ -19,8 +21,8 @@ end
 @doc ("I am a module";) ModuleMacroDoc
 @doc ("I am a macro";)  :@ModuleMacroDoc.m
 
-@test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == "I am a macro"
+@test ((@doc ModuleMacroDoc)::DocObj).content    == "I am a module"
+@test ((@doc ModuleMacroDoc.@m)::DocObj).content == "I am a macro"
 
 # General tests for docstrings.
 
@@ -135,14 +137,41 @@ function docstrings_equal(d1, d2)
     io2 = IOBuffer()
     writemime(io1, MIME"text/markdown"(), d1)
     writemime(io2, MIME"text/markdown"(), d2)
-    takebuf_string(io1) == takebuf_string(io2)
+    str1 = takebuf_string(io1)
+    str2 = takebuf_string(io2)
+    eq = str1 == str2
+    if !eq
+        println()
+        show(str1)
+        println()
+        show(str2)
+        println()
+    end
+    return eq
+end
+function docstrings_nequal(d1, d2)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    writemime(io1, MIME"text/markdown"(), d1)
+    writemime(io2, MIME"text/markdown"(), d2)
+    str1 = takebuf_string(io1)
+    str2 = takebuf_string(io2)
+    eq = str1 == str2
+    if eq
+        println()
+        show(str1)
+        println()
+        show(str2)
+        println()
+    end
+    return !eq
 end
 
-@test meta(DocsTest)[DocsTest] == doc"DocsTest"
+@test (meta(DocsTest)[DocsTest]::DocObj).content == (doc"DocsTest"::DocObj).content
 
 # Check that plain docstrings store a module reference.
 # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
-@test meta(DocsTest)[DocsTest].meta[:module] == DocsTest
+# @test meta(DocsTest)[DocsTest].meta[:module] == DocsTest
 
 let f = DocsTest.f
     funcdoc = meta(DocsTest)[f]
@@ -170,14 +199,14 @@ let h = DocsTest.h
 end
 
 let AT = DocsTest.AT
-    @test meta(DocsTest)[AT] == doc"AT"
+    @test (meta(DocsTest)[AT]::DocObj).content == (doc"AT"::DocObj).content
 end
 
 let BT = DocsTest.BT
-    @test meta(DocsTest)[BT] == doc"BT"
+    @test (meta(DocsTest)[BT]::DocObj).content == (doc"BT"::DocObj).content
 end
 
-@test meta(DocsTest)[DocsTest.BT2] == doc"BT2"
+@test (meta(DocsTest)[DocsTest.BT2]::DocObj).content == (doc"BT2"::DocObj).content
 
 let T = DocsTest.T
     typedoc = meta(DocsTest)[T]
@@ -193,12 +222,12 @@ let IT = DocsTest.IT
     @test docstrings_equal(typedoc.fields[:y], doc"IT.y")
 end
 
-@test @doc(DocsTest.TA) == doc"TA"
+@test (@doc(DocsTest.TA)::DocObj).content == (doc"TA"::DocObj).content
 
-@test @doc(DocsTest.@mac) == doc"@mac"
+@test (@doc(DocsTest.@mac)::DocObj).content == (doc"@mac"::DocObj).content
 
-@test @doc(DocsTest.G) == doc"G"
-@test @doc(DocsTest.K) == doc"K"
+@test (@doc(DocsTest.G)::DocObj).content == "G"
+@test (@doc(DocsTest.K)::DocObj).content == "K"
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
@@ -221,8 +250,8 @@ let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
 end
 
 let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
-    @test haskey(fields, :one) && fields[:one] == doc"one"
-    @test haskey(fields, :two) && fields[:two] == doc"two"
+    @test haskey(fields, :one) && (fields[:one]::DocObj).content == "one"
+    @test haskey(fields, :two) && (fields[:two]::DocObj).content == "two"
 end
 
 "BareModule"
@@ -308,15 +337,15 @@ end
 
 let funcdoc = meta(MacroGenerated)[MacroGenerated.f]
     @test funcdoc.order == [Tuple{Any}]
-    @test funcdoc.meta[Tuple{Any}] == doc"f"
+    @test (funcdoc.meta[Tuple{Any}]::DocObj).content == (doc"f"::DocObj).content
 end
 
 @test isdefined(MacroGenerated, :_f)
 
 let funcdoc = meta(MacroGenerated)[MacroGenerated.g]
     @test funcdoc.order == [Tuple{Any}, Tuple{Any, Any}]
-    @test funcdoc.meta[Tuple{Any}] == doc"g"
-    @test funcdoc.meta[Tuple{Any, Any}] == doc"g"
+    @test (funcdoc.meta[Tuple{Any}]::DocObj).content == (doc"g"::DocObj).content
+    @test (funcdoc.meta[Tuple{Any, Any}]::DocObj).content == (doc"g"::DocObj).content
 end
 
 @test isdefined(MacroGenerated, :_g)
@@ -325,7 +354,7 @@ end
 @test @doc(I) !== nothing
 
 # Issue #12700.
-@test @doc(DocsTest.@m) == doc"Inner.@m"
+@test (@doc(DocsTest.@m)::DocObj).content == (doc"Inner.@m"::DocObj).content
 
 # issue 11993
 # Check if we are documenting the expansion of the macro
@@ -339,13 +368,11 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc @m2_11993)
-    @test docstrings_equal(d, doc"""
-    No documentation found.
-
-    ```julia
+    @test docstrings_equal(d, Docs.catdoc(Any[doc"""No documentation found.""",
+    doc"""```julia
     @m2_11993()
     ```
-    """)
+    """]))
 end
 
 @doc "Now @m2... should be documented" :@m2_11993
@@ -408,7 +435,7 @@ f12593_2() = 1
 @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
-@test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
+@test docstrings_nequal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
                         Docs.doc(getindex, Tuple{Type{Int64},Int}))
 
 # test that macro documentation works
@@ -461,11 +488,7 @@ end
 
 @test docstrings_equal(
     @doc(I13068.A.foo),
-    doc"""
-    foo from A
-
-    foo from B
-    """
+    Docs.catdoc(Any[doc"""foo from A""", doc"""foo from B"""])
 )
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Int}), doc"foo from A")
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Float64}), doc"foo from B")
@@ -494,9 +517,7 @@ undocumented(x,y) = 3
 
 end
 
-@test docstrings_equal(@doc(Undocumented.A), doc"""
-No documentation found.
-
+@test docstrings_equal(@doc(Undocumented.A), Docs.catdoc(Any[doc"""No documentation found.""", doc"""
 **Summary:**
 ```julia
 abstract Undocumented.A <: Any
@@ -507,11 +528,9 @@ abstract Undocumented.A <: Any
 Undocumented.B
 Undocumented.C
 ```
-""")
+"""]))
 
-@test docstrings_equal(@doc(Undocumented.B), doc"""
-No documentation found.
-
+@test docstrings_equal(@doc(Undocumented.B), Docs.catdoc(Any[doc"""No documentation found.""", doc"""
 **Summary:**
 ```julia
 abstract Undocumented.B <: Undocumented.A
@@ -521,20 +540,16 @@ abstract Undocumented.B <: Undocumented.A
 ```julia
 Undocumented.D
 ```
-""")
+"""]))
 
-@test docstrings_equal(@doc(Undocumented.C), doc"""
-No documentation found.
-
+@test docstrings_equal(@doc(Undocumented.C), Docs.catdoc(Any[doc"""No documentation found.""", doc"""
 **Summary:**
 ```julia
 type Undocumented.C <: Undocumented.A
 ```
-""")
+"""]))
 
-@test docstrings_equal(@doc(Undocumented.D), doc"""
-No documentation found.
-
+@test docstrings_equal(@doc(Undocumented.D), Docs.catdoc(Any[doc"""No documentation found.""", doc"""
 **Summary:**
 ```julia
 immutable Undocumented.D <: Undocumented.B
@@ -546,12 +561,13 @@ one   :: Any
 two   :: UTF8String
 three :: Float64
 ```
-""")
+"""]))
 
 let d = @doc Undocumented.f
     io = IOBuffer()
     writemime(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io),"""
+    docstr = takebuf_string(io)
+    @test startswith(docstr, """
     No documentation found.
 
     `Undocumented.f` is an anonymous `Function`.
@@ -571,7 +587,10 @@ end
 
 # Bindings.
 
-import Base.Docs: @var, Binding
+import Base.Docs: splitexpr, Binding
+macro var(x)
+    :(Binding($(splitexpr(x)...)))
+end
 
 let x = Binding(Base, symbol("@time"))
     @test @var(@time) == x

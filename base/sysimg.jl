@@ -290,9 +290,10 @@ importall .SparseArrays
 
 # Documentation
 
-include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs
+
+include("markdown/Markdown.jl")
 using .Markdown
 
 # deprecated functions

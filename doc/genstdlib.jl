@@ -119,6 +119,20 @@ flat_content(xs::Vector) = reduce((xs, x) -> vcat(xs,flat_content(x)), [], xs)
 flat_content(md::MD) = flat_content(md.content)
 
 flatten(md::MD) = MD(flat_content(md))
+function flatten(doc::Base.DocObj)
+    if isa(doc.content, MD)
+        md = doc.content
+    elseif doc.parser == :md || doc.parser == :Markdown
+        md = Markdown.parse(doc.content)
+    elseif doc.parser == :catdoc
+        md = MD(map(flatten, doc.content)...)
+    elseif doc.parser == :string
+        md = MD(doc.content)
+    else
+        assert("can't flatten unknown format $doc")
+    end
+    return MD(flat_content(MD))
+end
 
 isrst(md) =
     length(flatten(md).content) == 1 &&

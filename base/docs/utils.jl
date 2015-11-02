@@ -43,14 +43,6 @@ macro html_str(s)
     :(HTML($s))
 end
 
-function catdoc(xs::HTML...)
-    HTML() do io
-        for x in xs
-            writemime(io, MIME"text/html"(), x)
-        end
-    end
-end
-
 export Text, @text_str
 
 """
@@ -79,14 +71,6 @@ Create a `Text` object from a literal string.
 """
 macro text_str(s)
     :(Text($s))
-end
-
-function catdoc(xs::Text...)
-    Text() do io
-        for x in xs
-            writemime(io, MIME"text/plain"(), x)
-        end
-    end
 end
 
 # REPL help
@@ -314,11 +298,16 @@ function docsearch(haystack::Array, needle)
     false
 end
 function docsearch(haystack, needle)
-    warn_once("unable to search documentation of type $(typeof(haystack))")
+    Base.warn_once("unable to search documentation of type $(typeof(haystack))")
     false
 end
 
 ## Searching specific documentation objects
+function docsearch(haystack::DocObj, needle)
+    docsearch(haystack.content, needle) && return true
+    false
+end
+
 function docsearch(haystack::TypeDoc, needle)
     docsearch(haystack.main, needle) && return true
     for v in values(haystack.fields)
@@ -337,35 +326,6 @@ function docsearch(haystack::FuncDoc, needle)
     end
     false
 end
-
-## Markdown search simply strips all markup and searches plain text version
-docsearch(haystack::Markdown.MD, needle) =
-    docsearch(stripmd(haystack.content), needle)
-
-"""
-    stripmd(x)
-
-Strip all Markdown markup from x, leaving the result in plain text. Used
-internally by apropos to make docstrings containing more than one markdown
-element searchable.
-"""
-stripmd(x::AbstractString) = x  # base case
-stripmd(x::Vector) = string(map(stripmd, x)...)
-stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
-stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
-stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
-stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)
-stripmd(x::Markdown.HorizontalRule) = " "
-stripmd(x::Markdown.Image) = "$(stripmd(x.alt)) $(x.url)"
-stripmd(x::Markdown.Italic) = "$(stripmd(x.text))"
-stripmd(x::Markdown.LaTeX) = "$(x.formula)"
-stripmd(x::Markdown.LineBreak) = " "
-stripmd(x::Markdown.Link) = "$(stripmd(x.text)) $(x.url)"
-stripmd(x::Markdown.List) = join(map(stripmd, x.items), " ")
-stripmd(x::Markdown.MD) = join(map(stripmd, x.content), " ")
-stripmd(x::Markdown.Paragraph) = stripmd(x.content)
-stripmd(x::Markdown.Table) =
-    join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
 # Apropos searches through all available documentation for some string or regex
 """

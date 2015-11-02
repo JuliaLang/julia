@@ -500,6 +500,6 @@ precompile(Base.set_valid_processes, (Array{Int, 1}, ))
 
 
 # Speed up repl help
-sprint(Markdown.term, @doc mean)
-sprint(Docs.repl_search, "mean")
-sprint(Docs.repl_corrections, "meen")
+#sprint(Markdown.term, @doc mean)
+#sprint(Docs.repl_search, "mean")
+#sprint(Docs.repl_corrections, "meen")

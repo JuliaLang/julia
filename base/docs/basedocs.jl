@@ -1,10 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import .Docs: keywords
+import .Markdown: @md_str
 
 keywords[:hello] = keywords[:hi] = doc"Hello, Human."
 
-const intro = doc"""
+const intro = DocObj(md"""
   **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
       http://docs.julialang.org/
@@ -16,7 +17,7 @@ const intro = doc"""
   For help on a specific function or macro, type `?` followed
   by its name, e.g. `?fft`, `?@time` or `?html`, and press
   enter.
-  """
+  """, :string, @__FILE__)
 
 keywords[:help] = keywords[:?] = keywords[:julia] = intro
 

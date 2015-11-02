@@ -52,12 +52,12 @@ will cause that specific method to be documented, as opposed to the whole functi
 docs are concatenated together in the order they were defined to provide docs for the
 function.
 """
-:(Base.DocBootstrap.@doc)
+:(Base.@doc)
 
 include("bindings.jl")
 
-import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
+import Base: DocObj, writemime
 
 export doc
 
@@ -67,26 +67,23 @@ const modules = Module[]
 
 const META′ = :__META__
 
-meta(mod) = mod.(META′)
+meta(mod) = isdefined(mod, META′) ? mod.(META′) : init_meta(mod)
 
 meta() = meta(current_module())
 
-macro init()
-    META = esc(META′)
-    quote
-        if !isdefined($(Expr(:quote, META′)))
-            const $META = ObjectIdDict()
-            doc!($META, @doc_str $("Documentation metadata for `$(current_module())`."))
-            push!(modules, current_module())
-            nothing
-        end
-    end
+function init_meta(mod)
+    META = ObjectIdDict()
+    META[META] = DocObj("Documentation metadata for `$mod`.", :Markdown, Symbol(""))
+    push!(modules, mod)
+    eval(mod, :(const $(META′) = $META))
+    META
 end
 
-"`doc!(obj, data)`: Associate the metadata `data` with `obj`."
-function doc!(obj, data)
-    meta()[obj] = data
+"`doc!(obj, mod, data)`: Associate the metadata `data` with `obj` in module `mod`."
+function doc!(obj, mod::Module, data::DocObj)
+    meta(mod)[obj] = data
 end
+doc!(obj, data::DocObj) = doc!(obj, current_module(), data)
 
 function get_obj_meta(obj)
     for mod in modules
@@ -121,14 +118,14 @@ end
 
 function macrosummary(name::Symbol, func::Function)
     if !isdefined(func,:code) || func.code == nothing
-        return Markdown.parse("\n")
+        return DocObj("\n", :string, Symbol(""))
     end
     io  = IOBuffer()
     write(io, "```julia\n")
     write(io, name)
     write_lambda_signature(io, func.code)
     write(io, "\n```")
-    return Markdown.parse(takebuf_string(io))
+    return DocObj(takebuf_string(io), :Markdown, Symbol(""))
 end
 
 function functionsummary(func::Function)
@@ -143,7 +140,7 @@ function functionsummary(func::Function)
         end
     end
     write(io, "\n```")
-    return Markdown.parse(takebuf_string(io))
+    return DocObj(takebuf_string(io), :Markdown, Symbol(""))
 end
 
 function doc(b::Binding)
@@ -154,28 +151,26 @@ function doc(b::Binding)
         if d === nothing
             if startswith(string(b.var),'@')
                 # check to see if the binding var is a macro
-                d = catdoc(Markdown.parse("""
+                d = catdoc(Any[DocObj("""
                 No documentation found.
-
-                """), macrosummary(b.var, v))
+                """, :Markdown, Symbol("")), macrosummary(b.var, v)])
             elseif isa(v,Function)
-                d = catdoc(Markdown.parse("""
+                d = catdoc(Any[DocObj("""
                 No documentation found.
 
                 `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
-                """), functionsummary(v))
+                """, :Markdown, Symbol("")), functionsummary(v)])
             elseif isa(v,DataType)
-                d = catdoc(Markdown.parse("""
+                d = catdoc(Any[DocObj("""
                 No documentation found.
-
-                """), typesummary(v))
+                """, :Markdown, Symbol("")), typesummary(v)])
             else
                 T = typeof(v)
-                d = catdoc(Markdown.parse("""
+                d = catdoc(Any[DocObj("""
                 No documentation found.
 
                 `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is of type `$T`:
-                """), typesummary(typeof(v)))
+                """, :Markdown, Symbol("")), typesummary(typeof(v))])
             end
         end
     end
@@ -220,34 +215,32 @@ type FuncDoc
     main
     order::Vector{Type}
     meta::ObjectIdDict
-    source::ObjectIdDict
 end
 
-FuncDoc() = FuncDoc(nothing, [], ObjectIdDict(), ObjectIdDict())
+FuncDoc() = FuncDoc(nothing, [], ObjectIdDict())
 
 # handles the :(function foo end) form
-function doc!(f::Function, data)
-    doc!(f, Union{}, data, nothing)
+function doc!(f::Function, mod::Module, data::DocObj)
+    doc_function!(f, mod, Union{}, data)
 end
 
 type_morespecific(a::Type, b::Type) =
     (ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
 
 # handles the :(function foo(x...); ...; end) form
-function doc!(f::Function, sig::ANY, data, source)
-    fd = get!(meta(), f, FuncDoc())
-    isa(fd, FuncDoc) || error("can not document a method when the function already has metadata")
+function doc_function!(f, mod::Module, sig::ANY, data::DocObj)
+    fd = get!(meta(mod), f, isa(f, DataType) ? TypeDoc() : FuncDoc())
+    isa(fd, FuncDoc) || isa(fd, TypeDoc) || error("can not document a method when the object already has metadata")
     haskey(fd.meta, sig) || push!(fd.order, sig)
     sort!(fd.order, lt=type_morespecific)
     fd.meta[sig] = data
-    fd.source[sig] = source
 end
+doc_function!(f, sig::ANY, data::DocObj) = doc_function!(f, current_module(), sig, data)
 
 """
-`catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
+`catdoc(xs)`: Combine the documentation metadata `xs` into a single meta object.
 """
-catdoc() = nothing
-catdoc(xs...) = vcat(xs...)
+catdoc(xs::Vector{Any}) = isempty(xs) ? nothing : DocObj(xs, :catdoc, @__FILE__)
 
 # Type Documentation
 
@@ -255,22 +248,22 @@ isdoc(s::AbstractString) = true
 
 isdoc(x) = isexpr(x, :string) ||
     (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str")) ||
-    (isexpr(x, :call) && x.args[1] == Expr(:., Base.Markdown, QuoteNode(:doc_str)))
-
-dict_expr(d) = :(Dict($([:(Pair($(Expr(:quote, f)), $d)) for (f, d) in d]...)))
+    (isexpr(x, :call) && x.args[1] == Expr(:., Base, QuoteNode(:DocObj)))
 
 function field_meta(def)
-    meta = Dict()
+    fielddesc = Expr(:call)
+    meta = fielddesc.args
+    push!(meta, :vcat)
     doc = nothing
     for l in def.args[3].args
         if isdoc(l)
-            doc = mdify(l)
+            doc = doc_expr(l)
         elseif doc !== nothing && (isa(l, Symbol) || isexpr(l, :(::)))
-            meta[namify(l)] = doc
+            push!(meta, :(Pair($(Expr(:quote, namify(l))), $doc)))
             doc = nothing
         end
     end
-    return dict_expr(meta)
+    return :(Dict{Symbol, Any}($fielddesc))
 end
 
 type TypeDoc
@@ -282,20 +275,12 @@ end
 
 TypeDoc() = TypeDoc(nothing, Dict(), [], ObjectIdDict())
 
-function doc!(t::DataType, data, fields)
-    td = get!(meta(), t, TypeDoc())
+function doc_type!(t::DataType, mod::Module, data::DocObj, fields)
+    td = get!(meta(mod), t, TypeDoc())
     td.main = data
     td.fields = fields
 end
-
-function doc!(T::DataType, sig::ANY, data, source)
-    td = get!(meta(), T, TypeDoc())
-    if !isa(td, TypeDoc)
-        error("can not document a method when the type already has metadata")
-    end
-    !haskey(td.meta, sig) && push!(td.order, sig)
-    td.meta[sig] = data
-end
+doc_type!(t::DataType, data::DocObj, fields) = doc_type!(t, current_module(), data, fields)
 
 function doc(obj::Base.Callable, sig::Type = Union)
     isgeneric(obj) && sig !== Union && isempty(methods(obj, sig)) && return nothing
@@ -323,11 +308,11 @@ function doc(obj::Base.Callable, sig::Type = Union)
         for group in groups
             append!(results, [group.meta[s] for s in reverse(group.order)])
         end
-     else
+    else
         sort!(results, lt = (a, b) -> type_morespecific(first(a), first(b)))
         results = map(last, results)
     end
-    catdoc(results...)
+    catdoc(results)
 end
 doc(f::Base.Callable, args::Any...) = doc(f, Tuple{args...})
 
@@ -360,7 +345,7 @@ function typesummary(T::DataType)
         ```
         """)
     end
-    Markdown.parse(join(parts,'\n'))
+    DocObj(join(parts,'\n'), :Markdown, Symbol(""))
 end
 
 isfield(x) = isexpr(x, :.) &&
@@ -386,13 +371,13 @@ function doc(m::Module)
     md === nothing || return md
     readme = Pkg.dir(string(m), "README.md")
     if isfile(readme)
-        return Markdown.parse_file(readme)
+        return DocObj(readall(readme), :Markdown, readme)
     end
 end
 
 # Keywords
 
-const keywords = Dict{Symbol,Any}()
+const keywords = Dict{Symbol,DocObj}()
 
 # Usage macros
 
@@ -409,19 +394,19 @@ namify(ex::Expr) = isexpr(ex, :.) ? ex : namify(ex.args[1])
 namify(ex::QuoteNode) = ex.value
 namify(sy::Symbol) = sy
 
-function mdify(ex)
-    if isa(ex, AbstractString) || isexpr(ex, :string)
-        :(Markdown.doc_str($(esc(ex)), @__FILE__, current_module()))
+function doc_expr(str)
+    if isa(str, AbstractString)
+        parser = :Markdown
     else
-        esc(ex)
+        parser = :string
     end
+    :(DocObj($(esc(str)), $(QuoteNode(parser)), @__FILE__))
 end
 
 function namedoc(meta, def, name)
     quote
-        @init
         $(esc(def))
-        doc!($(esc(name)), $(mdify(meta)))
+        Docs.doc!($(esc(name)), $(doc_expr(meta)))
         nothing
     end
 end
@@ -429,18 +414,16 @@ end
 function funcdoc(meta, def, def′)
     f = esc(namify(def′))
     quote
-        @init
         $(esc(def))
-        doc!($f, $(esc(signature(def′))), $(mdify(meta)), $(esc(quot(def′))))
+        Docs.doc_function!($f, $(esc(signature(def′))), $(doc_expr(meta)))
         $f
     end
 end
 
 function typedoc(meta, def, def′)
     quote
-        @init
         $(esc(def))
-        doc!($(esc(namify(def′.args[2]))), $(mdify(meta)), $(field_meta(unblock(def′))))
+        Docs.doc_type!($(esc(namify(def′.args[2]))), $(doc_expr(meta)), $(field_meta(unblock(def′))))
         nothing
     end
 end
@@ -463,16 +446,14 @@ end
 
 function objdoc(meta, def)
     quote
-        @init
-        doc!($(esc(def)), $(mdify(meta)))
+        Docs.doc!($(esc(def)), $(doc_expr(meta)))
     end
 end
 
 function vardoc(meta, def, name)
     quote
-        @init
         $(esc(def))
-        doc!(@var($(esc(name))), $(mdify(meta)))
+        Docs.doc!(Docs.Binding($(splitexpr(name)...)), $(doc_expr(meta)))
     end
 end
 
@@ -560,11 +541,25 @@ function docerror(ex)
 end
 
 function docm(ex)
-    isexpr(ex, :->)                        ? docm(ex.args...) :
-    isa(ex,Symbol) && haskey(keywords, ex) ? keywords[ex] :
-    isexpr(ex, :call)                      ? findmethod(ex) :
-    isvar(ex)                              ? :(doc(@var($(esc(ex))))) :
-    :(doc($(esc(ex))))
+    # implementation for Base.@doc
+    # adds or returns documentation,
+    # depending on the arguments
+    if isexpr(ex, :->)
+        # add documentation
+        return docm(ex.args...)
+    elseif isa(ex,Symbol) && haskey(keywords, ex)
+        # return documentation for :keyword
+        return QuoteNode(keywords[ex])
+    elseif isexpr(ex, :call)
+        # return documentation for call()
+        return findmethod(ex)
+    elseif isvar(ex)
+        # return documentation for @var, var, and m.var
+        return :(doc(Docs.Binding($(splitexpr(ex)...))))
+    else
+        # return documentation for anything else by first evaluating `ex`
+        return :(doc($(esc(ex))))
+    end
 end
 
 function findmethod(ex)
@@ -572,19 +567,33 @@ function findmethod(ex)
     :(doc($f, $(esc(signature(ex)))))
 end
 
+# Document display
+
+const doc_renders = Dict{Symbol, Function}()
+
+doc_renders[:catdoc] = (io::IO, mime::MIME, docs::DocObj) ->
+    for doc in docs.content
+        writemime(io, mime, doc)
+    end
+
+doc_renders[:string] = (io::IO, mime::MIME"text/plain", docs::DocObj) ->
+    if isa(docs.content, AbstractString)
+        println(io, docs.content)
+    else
+        writemime(io, mime, docs.content)
+    end
+
+function writemime(io::IO, mime::MIME"text/plain", docs::DocObj)
+    get(doc_renders, docs.parser, doc_renders[:string])(io, mime, docs)
+end
+
+function writemime(io::IO, mime::MIME, docs::DocObj)
+    get(doc_renders, docs.parser, doc_renders[:string])(io, mime, docs)
+end
+
 # Swap out the bootstrap macro with the real one
-
 Base.DocBootstrap.setexpand!(docm)
-
-# Names are resolved relative to the Base module, so inject the ones we need there.
-
-eval(Base, :(import .Docs: @init, @var, doc!, doc, @doc_str))
-
 Base.DocBootstrap.loaddocs()
-
-# MD support
-
-catdoc(md::MD...) = MD(md...)
 
 include("utils.jl")
 

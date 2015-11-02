@@ -20,7 +20,7 @@ include("render/rst.jl")
 
 include("render/terminal/render.jl")
 
-export readme, license, @md_str, @doc_str
+export readme, license, @md_str
 
 parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 parse_file(file::AbstractString; flavor = julia) = parse(readall(file), flavor = flavor)
@@ -31,30 +31,13 @@ readme(pkg::Module; flavor = github) = readme(string(pkg), flavor = flavor)
 license(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavor = flavor)
 license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
-function mdexpr(s, flavor = :julia)
+function mdexpr(s, flavor = :julia_interp)
     md = parse(s, flavor = symbol(flavor))
     esc(toexpr(md))
 end
 
-function docexpr(s, flavor = :julia)
-    quote
-        let md = $(mdexpr(s, flavor))
-            md.meta[:path] = @__FILE__
-            md.meta[:module] = current_module()
-            md
-        end
-    end
-end
-
 macro md_str(s, t...)
     mdexpr(s, t...)
-end
-
-doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
-doc_str(md::AbstractString, file, mod) = doc_str(parse(md), file, mod)
-
-macro doc_str(s, t...)
-    :(doc_str($(mdexpr(s, t...)), @__FILE__, current_module()))
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
@@ -62,5 +45,38 @@ function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
         display(d, md)
     end
 end
+
+"""
+    stripmd(x)
+
+Strip all Markdown markup from x, leaving the result in plain text. Used
+internally by apropos to make docstrings containing more than one markdown
+element searchable.
+"""
+stripmd(x::AbstractString) = x  # base case
+stripmd(x::Vector) = string(map(stripmd, x)...)
+stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
+stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
+stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
+stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)
+stripmd(x::Markdown.HorizontalRule) = " "
+stripmd(x::Markdown.Image) = "$(stripmd(x.alt)) $(x.url)"
+stripmd(x::Markdown.Italic) = "$(stripmd(x.text))"
+stripmd(x::Markdown.LaTeX) = "$(x.formula)"
+stripmd(x::Markdown.LineBreak) = " "
+stripmd(x::Markdown.Link) = "$(stripmd(x.text)) $(x.url)"
+stripmd(x::Markdown.List) = join(map(stripmd, x.items), " ")
+stripmd(x::Markdown.MD) = join(map(stripmd, x.content), " ")
+stripmd(x::Markdown.Paragraph) = stripmd(x.content)
+stripmd(x::Markdown.Table) =
+    join([join(map(stripmd, r), " ") for r in x.rows], " ")
+
+## Markdown search simply strips all markup and searches plain text version
+Base.Docs.docsearch(haystack::Markdown.MD, needle) =
+    Base.Docs.docsearch(stripmd(haystack.content), needle)
+
+# Merge Markdown documents for Base.Docs
+Base.Docs.doc_renders[:Markdown] = Base.Docs.doc_renders[:md] =
+    (io::IO, mime::MIME, docs::Base.DocObj) -> writemime(io, mime, parse(docs.content))
 
 end
