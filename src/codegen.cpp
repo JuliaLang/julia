@@ -4057,7 +4057,11 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
             funcName.str(), m);
+    addComdat(cw);
     cw->setAttributes(attrs);
+#ifdef LLVM37
+    cw->addFnAttr("no-frame-pointer-elim", "true");
+#endif
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
     builder.SetInsertPoint(b0);
     DebugLoc noDbg;
@@ -4289,6 +4293,9 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     Function *w = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                                    funcName.str(), f->getParent());
     addComdat(w);
+#ifdef LLVM37
+    w->addFnAttr("no-frame-pointer-elim", "true");
+#endif
     Function::arg_iterator AI = w->arg_begin();
     /* const Argument &fArg = */ *AI++;
     Value *argArray = AI++;
@@ -4544,6 +4551,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
         if (ctx.sret)
             f->addAttribute(1, Attribute::StructRet);
         addComdat(f);
+#ifdef LLVM37
+        f->addFnAttr("no-frame-pointer-elim", "true");
+#endif
         if (lam->specFunctionObject == NULL) {
             lam->specFunctionObject = (void*)f;
             lam->specFunctionID = jl_assign_functionID(f);
@@ -4558,6 +4568,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
         f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), m);
         addComdat(f);
+#ifdef LLVM37
+        f->addFnAttr("no-frame-pointer-elim", "true");
+#endif
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
             lam->functionID = jl_assign_functionID(f);

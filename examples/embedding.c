@@ -99,6 +99,7 @@ int main()
         }
     }
 
-    jl_atexit_hook();
-    return 0;
+    int ret = 0;
+    jl_atexit_hook(ret);
+    return ret;
 }
