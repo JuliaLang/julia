@@ -7,7 +7,8 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/DebugInfo/DIContext.h>
 #ifdef LLVM37
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
+#include <llvm/Object/SymbolSize.h>
 #endif
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/IR/Function.h>
@@ -79,7 +80,7 @@ struct ObjectInfo {
 #elif defined(LLVM36)
     size_t slide;
 #endif
-#ifdef _OS_DARWIN_
+#if defined(_OS_DARWIN_) && !defined(LLVM37)
     const char *name;
 #endif
 };
@@ -207,68 +208,62 @@ public:
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
 #endif
     {
-        uint64_t Addr;
-        uint64_t Size;
-        object::SymbolRef::Type SymbolType;
 #ifdef LLVM36
         object::section_iterator Section = obj.section_begin();
         object::section_iterator EndSection = obj.section_end();
-        uint64_t SectionAddr = 0;
-        StringRef sName;
 #else
         object::section_iterator Section = obj.begin_sections();
         object::section_iterator EndSection = obj.end_sections();
-        bool isText;
-#ifndef _OS_LINUX_
-        StringRef sName;
-#endif
-#endif
-
-#ifdef _OS_WINDOWS_
-#ifndef LLVM36
-        uint64_t SectionAddr = 0;
-#endif
-        uint64_t SectionSize = 0;
-        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #endif
 
 #if defined(_OS_WINDOWS_)
-#if defined(_CPU_X86_64_)
+        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
         uint8_t *UnwindData = NULL;
+#if defined(_CPU_X86_64_)
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
+            StringRef sName;
+#ifdef LLVM37
+            sName = sym_iter.getName().get();
+#else
             sym_iter.getName(sName);
+#endif
+            uint8_t **pAddr = NULL;
             if (sName.equals("__UnwindData")) {
-                sym_iter.getAddress(Addr);
-                sym_iter.getSection(Section);
-#  ifdef LLVM36
-                assert(Section->isText());
-                Section->getName(sName);
-                SectionAddr = L.getSectionLoadAddress(sName);
-                Addr += SectionAddr;
-#  else
-                if (Section->isText(isText) || !isText) assert(0 && "!isText");
-                Section->getAddress(SectionAddr);
-#  endif
-                UnwindData = (uint8_t*)Addr;
-                if (SectionAddrCheck)
-                    assert(SectionAddrCheck == SectionAddr);
-                else
-                    SectionAddrCheck = SectionAddr;
+                pAddr = &UnwindData;
+            } else if (sName.equals("__catchjmp")) {
+                pAddr = &catchjmp;
             }
-            if (sName.equals("__catchjmp")) {
-                sym_iter.getAddress(Addr);
+            if (pAddr) {
+                uint64_t Addr, SectionAddr;
+#if defined(LLVM38)
+                Addr = sym_iter.getAddress().get();
+                Section = sym_iter.getSection().get();
+                assert(Section != EndSection && Section->isText());
+                SectionAddr = L.getSectionLoadAddress(*Section);
+#elif defined(LLVM37)
+                Addr = sym_iter.getAddress().get();
                 sym_iter.getSection(Section);
-#  ifdef LLVM36
-                assert(Section->isText());
+                assert(Section != EndSection && Section->isText());
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
-                Addr += SectionAddr;
-#  else
-                if (Section->isText(isText) || !isText) assert(0 && "!isText");
+#elif defined(LLVM36)
+                sym_iter.getAddress(Addr);
+                sym_iter.getSection(Section);
+                assert(Section != EndSection && Section->isText());
+                Section->getName(sName);
+                SectionAddr = L.getSectionLoadAddress(sName);
+#else // LLVM35
+                sym_iter.getAddress(Addr);
+                sym_iter.getSection(Section);
+                assert(Section != EndSection);
+                assert(!Section->isText(isText) && isText);
                 Section->getAddress(SectionAddr);
-#  endif
-                catchjmp = (uint8_t*)Addr;
+#endif
+#ifdef LLVM36
+                Addr += SectionAddr;
+#endif
+                *pAddr = (uint8_t*)Addr;
                 if (SectionAddrCheck)
                     assert(SectionAddrCheck == SectionAddr);
                 else
@@ -277,6 +272,7 @@ public:
         }
         assert(catchjmp);
         assert(UnwindData);
+        assert(SectionAddrCheck);
         catchjmp[0] = 0x48;
         catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&_seh_exception_handle]
         *(uint64_t*)(&catchjmp[2]) = (uint64_t)&_seh_exception_handler;
@@ -290,13 +286,69 @@ public:
         UnwindData[5] = 0x03; // mov RBP, RSP
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionAddr); // relative location of catchjmp
-#else // defined(_OS_X86_64_)
-        uint8_t *UnwindData = NULL;
+        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionAddrCheck); // relative location of catchjmp
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
-#ifdef LLVM35
+#ifdef LLVM37
+        auto symbols = object::computeSymbolSizes(obj);
+        for(const auto &sym_size : symbols) {
+            const object::SymbolRef &sym_iter = sym_size.first;
+            object::SymbolRef::Type SymbolType = sym_iter.getType();
+            if (SymbolType != object::SymbolRef::ST_Function) continue;
+            uint64_t Size = sym_size.second;
+            uint64_t Addr = sym_iter.getAddress().get();
+#ifdef LLVM38
+            Section = sym_iter.getSection().get();
+#else
+            sym_iter.getSection(Section);
+#endif
+            if (Section == EndSection) continue;
+            if (!Section->isText()) continue;
+#ifdef LLVM38
+            uint64_t SectionAddr = L.getSectionLoadAddress(*Section);
+#else
+            StringRef secName;
+            Section->getName(secName);
+            uint64_t SectionAddr = L.getSectionLoadAddress(secName);
+#endif
+            Addr += SectionAddr;
+#if defined(_OS_WINDOWS_)
+            uint64_t SectionSize = Section->getSize();
+            StringRef sName = sym_iter.getName().get();
+#   ifdef _CPU_X86_
+            if (sName[0] == '_') sName = sName.substr(1);
+#   endif
+            if (SectionAddrCheck)
+                assert(SectionAddrCheck == SectionAddr);
+            else
+                SectionAddrCheck = SectionAddr;
+            create_PRUNTIME_FUNCTION(
+                   (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
+                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
+#endif
+            ObjectInfo tmp = {&obj, (size_t)Size, L.clone().release()};
+            objectmap[Addr] = tmp;
+        }
+
+#else // pre-LLVM37
+        uint64_t Addr;
+        uint64_t Size;
+        object::SymbolRef::Type SymbolType;
+#ifdef LLVM36
+        uint64_t SectionAddr = 0;
+        StringRef sName;
+#else
+        bool isText;
+#ifndef _OS_LINUX_
+        StringRef sName;
+#endif
+#ifdef _OS_WINDOWS_
+        uint64_t SectionAddr = 0;
+#endif
+#endif
+
+#if defined(LLVM35)
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
@@ -327,6 +379,7 @@ public:
             if (!Addr) continue;
 #   endif
 #elif defined(_OS_WINDOWS_)
+            uint64_t SectionSize = 0;
 #   if defined(LLVM36)
             SectionSize = Section->getSize();
 #   else
@@ -376,6 +429,7 @@ public:
             ObjectInfo tmp = {obj.getObjectFile(), (size_t)Size};
             objectmap[Addr] = tmp;
         }
+#endif
 #endif
     }
 
@@ -770,9 +824,6 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     if (it != objmap.end() &&
         (intptr_t)(*it).first + (*it).second.size > pointer) {
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
-        // *name should always be NULL here, free it anyway just to be more
-        // robust
-        free(*name);
         *name = jl_demangle((*it).second.name);
         DIContext *context = NULL; // versions of MCJIT < 3.7 can't handle MachO relocations
 #else
@@ -996,7 +1047,7 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 {
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
-    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.SectionSize > dwAddr) {
+    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.size > dwAddr) {
         return (DWORD64)(intptr_t)(*it).first;
     }
     return 0;
