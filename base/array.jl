@@ -274,7 +274,7 @@ collect(itr) = collect(eltype(itr), itr)
 ## Iteration ##
 start(A::Array) = 1
 next(a::Array,i) = (a[i],i+1)
-done(a::Array,i) = (i > length(a))
+done(a::Array,i) = i == length(a)+1
 
 ## Indexing: getindex ##
 
