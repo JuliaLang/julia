@@ -30,13 +30,10 @@ function select_block_test(t1, t2, t3, t4)
     end
 
     @select begin
-        if c1 |> x
-            "Got $x from c1"
-        elseif c2
-            "Got a message from c2"
-        elseif c3 <| :write_test
-            "Wrote to c3"
-        elseif task |> z
+        c1 |> x           => "Got $x from c1"
+        c2                =>  "Got a message from c2"
+        c3 <| :write_test => "Wrote to c3"
+        task |> z         => begin
             "Task finished with $z"
         end
     end
@@ -59,13 +56,9 @@ function select_nonblock_test(test)
     end
 
     @select begin
-        if c |> x
-            "Got $x from c"
-        elseif c2 <| 1
-            "Wrote to c2"
-        else
-            "Default case"
-        end
+        c |> x => "Got $x from c"
+        c2 <| 1 => "Wrote to c2"
+        _ => "Default case"
     end
 end
 
