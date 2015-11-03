@@ -484,11 +484,8 @@ Consider this simple example which times out if a computation takes too long::
         end
 
         @select begin
-            if output_channel |> value
-                println("Calculation produced $value")
-            elseif timeout_channel
-                println("Timed out waiting for computation")
-            end
+            output_channel |> value => println("Calculation produced $value")
+            timeout_channel         => println("Timed out waiting for computation")
         end
     end
 
