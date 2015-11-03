@@ -73,7 +73,7 @@ struct FuncInfo {
 #else
 struct ObjectInfo {
     const object::ObjectFile* object;
-    size_t SectionSize;
+    size_t size;
 #ifdef LLVM37
     const llvm::LoadedObjectInfo *L;
 #elif defined(LLVM36)
@@ -224,37 +224,27 @@ public:
 #endif
 #endif
 
+#ifdef _OS_WINDOWS_
 #ifndef LLVM36
         uint64_t SectionAddr = 0;
 #endif
         uint64_t SectionSize = 0;
+        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
+#endif
 
 #if defined(_OS_WINDOWS_)
-        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #if defined(_CPU_X86_64_)
         uint8_t *UnwindData = NULL;
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
-#  ifdef LLVM37
-            sName = sym_iter.getName().get();
-#  else
             sym_iter.getName(sName);
-#  endif
             if (sName.equals("__UnwindData")) {
-#  ifdef LLVM37
-                Addr = sym_iter.getAddress().get();
-#  else
                 sym_iter.getAddress(Addr);
-#  endif
                 sym_iter.getSection(Section);
 #  ifdef LLVM36
                 assert(Section->isText());
-#    ifdef LLVM38
-                SectionAddr = L.getSectionLoadAddress(*Section);
-#    else
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
-#    endif
                 Addr += SectionAddr;
 #  else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
@@ -267,20 +257,12 @@ public:
                     SectionAddrCheck = SectionAddr;
             }
             if (sName.equals("__catchjmp")) {
-#  ifdef LLVM37
-                Addr = sym_iter.getAddress().get();
-#  else
                 sym_iter.getAddress(Addr);
-#  endif
                 sym_iter.getSection(Section);
 #  ifdef LLVM36
                 assert(Section->isText());
-#    ifdef LLVM38
-                SectionAddr = L.getSectionLoadAddress(*Section);
-#    else
                 Section->getName(sName);
                 SectionAddr = L.getSectionLoadAddress(sName);
-#    endif
                 Addr += SectionAddr;
 #  else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
@@ -316,48 +298,22 @@ public:
 
 #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
-#           ifdef LLVM37
-                SymbolType = sym_iter.getType();
-#           else
-                sym_iter.getType(SymbolType);
-#           endif
+            sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-#           ifdef LLVM37
-                Addr = sym_iter.getAddress().get();
-#           else
-                sym_iter.getAddress(Addr);
-#           endif
-#           ifdef LLVM38
-                Section = sym_iter.getSection().get();
-#           else
-                sym_iter.getSection(Section);
-#           endif
+            sym_iter.getSize(Size);
+            sym_iter.getAddress(Addr);
+            sym_iter.getSection(Section);
             if (Section == EndSection) continue;
 #if defined(LLVM36)
             if (!Section->isText()) continue;
-#    ifdef LLVM38
-            SectionAddr = L.getSectionLoadAddress(*Section);
-#    else
             Section->getName(sName);
             SectionAddr = L.getSectionLoadAddress(sName);
-#    endif
             Addr += SectionAddr;
 #else
             if (Section->isText(isText) || !isText) continue;
 #endif
-#if defined(LLVM36)
-            SectionSize = Section->getSize();
-#else
-            Section->getAddress(SectionAddr);
-            Section->getSize(SectionSize);
-#endif
 #ifdef _OS_DARWIN_
-#   if defined(LLVM37)
-            Size = Section->getSize();
-            sName = sym_iter.getName().get();
-#   else
             sym_iter.getName(sName);
-#   endif
 #   if defined(LLVM36)
             if (sName[0] == '_') {
                 sName = sName.substr(1);
@@ -371,14 +327,13 @@ public:
             if (!Addr) continue;
 #   endif
 #elif defined(_OS_WINDOWS_)
-#   if defined(LLVM37)
-            assert(obj.isELF());
-            Size = ((llvm::object::ELFSymbolRef)sym_iter).getSize();
-            sName = sym_iter.getName().get();
+#   if defined(LLVM36)
+            SectionSize = Section->getSize();
 #   else
-            sym_iter.getSize(Size);
-            sym_iter.getName(sName);
+            Section->getAddress(SectionAddr);
+            Section->getSize(SectionSize);
 #   endif
+            sym_iter.getName(sName);
 #   ifdef _CPU_X86_
             if (sName[0] == '_') sName = sName.substr(1);
 #   endif
@@ -396,7 +351,7 @@ public:
 #else
                 obj.getObjectFile();
 #endif
-            ObjectInfo tmp = {objfile, SectionSize
+            ObjectInfo tmp = {objfile, (size_t)Size
 #ifdef LLVM37
                 ,L.clone().release()
 #elif defined(LLVM36)
@@ -813,7 +768,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
         objmap.lower_bound(pointer);
 
     if (it != objmap.end() &&
-        (intptr_t)(*it).first + (*it).second.SectionSize > pointer) {
+        (intptr_t)(*it).first + (*it).second.size > pointer) {
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
         // *name should always be NULL here, free it anyway just to be more
         // robust
@@ -934,7 +889,7 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
 
     if (fit != objmap.end()) {
-        *symsize = fit->second.SectionSize;
+        *symsize = fit->second.size;
         *object = fit->second.object;
 #if defined(LLVM36) && !defined(LLVM37)
         *slide = fit->second.slide;
