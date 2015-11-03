@@ -57,11 +57,6 @@ typedef struct {
 } ti_threadwork_t;
 
 
-// basic functions for thread creation
-int  ti_threadcreate(uv_thread_t *thread_id, int proc_num,
-                     void (*thread_fun)(void *), void *thread_arg);
-void ti_threadsetaffinity(uint64_t thread_id, int proc_num);
-
 // thread function
 void ti_threadfun(void *arg);
 
