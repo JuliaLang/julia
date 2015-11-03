@@ -1573,7 +1573,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
         std::vector<Type *> fargt(0);
         fargt.push_back(T_pjlvalue);
         FunctionType *ft = FunctionType::get(T_size, fargt, false);
-        Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft);
+        Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft); // TODO: move to codegen init block
         return builder.CreateCall(prepare_call(alen), t);
     }
 #endif
