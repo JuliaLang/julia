@@ -150,4 +150,15 @@ temp_pkg_dir() do
         Pkg.installed("NOTGIT") == typemin(VersionNumber)
         Pkg.installed()["NOTGIT"] == typemin(VersionNumber)
     end
+
+    begin
+        # don't bork when a Pkg repo is bare, issue #13804
+        pth = joinpath(Pkg.dir(), "BAREGIT")
+        mkdir(pth)
+        # create a bare repo (isbare = true)
+        repo = LibGit2.init(pth, true)
+        @test repo.ptr != C_NULL
+        finalize(repo)
+        Pkg.update()
+    end
 end
