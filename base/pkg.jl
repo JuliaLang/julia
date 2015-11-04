@@ -2,9 +2,9 @@
 
 module Pkg
 
-export Git, Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
+export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       update, resolve, test, build, free, pin, PkgError
+       update, resolve, test, build, free, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -55,6 +55,8 @@ test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
+
+setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
 
 
 # point users to PkgDev

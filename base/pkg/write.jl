@@ -27,7 +27,7 @@ function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
 end
 
 function checkout(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
-    LibGit2.set_remote_url(repo, Read.url(pkg))
+    LibGit2.set_remote_url(repo, Cache.normalize_url(Read.url(pkg)))
     LibGit2.checkout!(repo, sha1)
 end
 
