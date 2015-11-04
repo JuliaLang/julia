@@ -282,6 +282,25 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
+doc"""
+```rst
+..  logm(A::StridedMatrix)
+
+If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.
+
+If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if ``A`` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
+
+.. [AH12] Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling
+   and squaring algorithms for the matrix logarithm", SIAM Journal on
+   Scientific Computing, 34(4), 2012, C153-C169.
+   `doi:10.1137/110852553 <http://dx.doi.org/10.1137/110852553>`_
+.. [AHR13] Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton,
+   "Computing the Fréchet derivative of the matrix logarithm and estimating
+   the condition number", SIAM Journal on Scientific Computing, 35(4), 2013,
+   C394-C410.
+   `doi:10.1137/120885991 <http://dx.doi.org/10.1137/120885991>`_
+```
+"""
 function logm(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
@@ -307,9 +326,6 @@ function logm(A::StridedMatrix)
             break
         end
     end
-    if np_real_eigs
-        warn("Matrix with nonpositive real eigenvalues, a nonprincipal matrix logarithm will be returned.")
-    end
 
     if isreal(A) && ~np_real_eigs
         return real(retmat)
@@ -317,7 +333,10 @@ function logm(A::StridedMatrix)
         return retmat
     end
 end
-logm(a::Number) = (b = log(complex(a)); imag(b) == 0 ? real(b) : b)
+function logm(a::Number)
+    b = log(complex(a))
+    return imag(b) == 0 ? real(b) : b
+end
 logm(a::Complex) = log(a)
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
