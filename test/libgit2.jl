@@ -142,7 +142,7 @@ temp_dir() do dir
 
         @testset "bare" begin
             path = joinpath(dir, "Example.Bare")
-            repo = LibGit2.init(path, Cuint(1))
+            repo = LibGit2.init(path, true)
             try
                 @test isdir(path)
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
