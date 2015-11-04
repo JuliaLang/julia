@@ -25,7 +25,7 @@ DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABL
 DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_compile(jl_function_t *f) { }
+void jl_compile_linfo(jl_lambda_info_t *li) { }
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 {
     if (!specsig)
