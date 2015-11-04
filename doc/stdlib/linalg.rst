@@ -442,83 +442,93 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
 
-.. function:: schurfact(A) -> Schur
+.. function:: schurfact(A::StridedMatrix) -> F::Schur
 
    .. Docstring generated from Julia source
 
-   Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
+   Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the orthogonal/unitary Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A = F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
 
-.. function:: schurfact!(A)
-
-   .. Docstring generated from Julia source
-
-   Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
-
-.. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+.. function:: schurfact!(A::StridedMatrix) -> F::Schur
 
    .. Docstring generated from Julia source
 
-   See :func:`schurfact`
+   Same as ``schurfact`` but uses the input argument as workspace.
 
-.. function:: ordschur(Q, T, select) -> Schur
-
-   .. Docstring generated from Julia source
-
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
-
-.. function:: ordschur!(Q, T, select) -> Schur
+.. function:: schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector
 
    .. Docstring generated from Julia source
 
-   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
+   Computes the Schur factorization of the matrix ``A``\ . The methods returns the (quasi) triangular Schur factor ``T`` and the orthogonal/unitary Schur vectors ``Z`` such that ``A = Z*T*Z'``\ . The eigenvalues of ``A`` are returned in the vector ``λ``\ .
 
-.. function:: ordschur(S, select) -> Schur
+   See ``schurfact``
 
-   .. Docstring generated from Julia source
-
-   Reorders the Schur factorization ``S`` of type ``Schur``.
-
-.. function:: ordschur!(S, select) -> Schur
+.. function:: ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
 
    .. Docstring generated from Julia source
 
-   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
+   Reorders the Schur factorization ``F`` of a matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered factorization ``F`` object. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or excluded via ``select``\ .
 
-.. function:: schurfact(A, B) -> GeneralizedSchur
+.. function:: ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
+
+   .. Docstring generated from Julia source
+
+   Same as ``ordschur`` but overwrites the factorization ``F``\ .
+
+.. function:: ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
+
+   .. Docstring generated from Julia source
+
+   ..  ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
+
+   Reorders the Schur factorization of a real matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered matrices ``T`` and ``Z`` as well as the vector of eigenvalues ``λ``\ . The selected eigenvalues appear in the leading diagonal of ``T`` and the the corresponding leading columns of ``Z`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or excluded via ``select``\ .
+
+.. function:: ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
+
+   .. Docstring generated from Julia source
+
+   Same as ``ordschur`` but overwrites the input arguments.
+
+.. function:: schurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
 
    .. Docstring generated from Julia source
 
    Computes the Generalized Schur (or QZ) factorization of the matrices ``A`` and ``B``\ . The (quasi) triangular Schur factors can be obtained from the ``Schur`` object ``F`` with ``F[:S]`` and ``F[:T]``\ , the left unitary/orthogonal Schur vectors can be obtained with ``F[:left]`` or ``F[:Q]`` and the right unitary/orthogonal Schur vectors can be obtained with ``F[:right]`` or ``F[:Z]`` such that ``A=F[:left]*F[:S]*F[:right]'`` and ``B=F[:left]*F[:T]*F[:right]'``\ . The generalized eigenvalues of ``A`` and ``B`` can be obtained with ``F[:alpha]./F[:beta]``\ .
 
-.. function:: schur(A,B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+.. function:: schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
 
    .. Docstring generated from Julia source
 
-   See :func:`schurfact`
+   Same as ``schurfact`` but uses the input matrices ``A`` and ``B`` as workspace.
 
-.. function:: ordschur(S, T, Q, Z, select) -> GeneralizedSchur
-
-   .. Docstring generated from Julia source
-
-   Reorders the Generalized Schur factorization of a matrix ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``GS``.  The selected eigenvalues appear in the leading diagonal of both ``(GS[:S], GS[:T])`` and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = GS[:Q]*(GS[:S], GS[:T])*GS[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``GS[:alpha]./GS[:beta]``.
-
-.. function:: ordschur!(S, T, Q, Z, select) -> GeneralizedSchur
+.. function:: ordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
 
    .. Docstring generated from Julia source
 
-   Reorders the Generalized Schur factorization of a matrix by overwriting the matrices ``(S, T, Q, Z)`` in the process.  See :func:`ordschur`.
+   Reorders the Generalized Schur factorization ``F`` of a matrix pair ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``F``\ .  The selected eigenvalues appear in the leading diagonal of both ``F[:S]`` and F[:T]``, and the left and right orthogonal/unitary Schur vectors are also reordered such that `(A, B) = F[:Q]*(F[:S], F[:T])*F[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``F[:alpha]./F[:beta]``\ .
 
-.. function:: ordschur(GS, select) -> GeneralizedSchur
-
-   .. Docstring generated from Julia source
-
-   Reorders the Generalized Schur factorization of a Generalized Schur object.  See :func:`ordschur`.
-
-.. function:: ordschur!(GS, select) -> GeneralizedSchur
+.. function:: ordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
 
    .. Docstring generated from Julia source
 
-   Reorders the Generalized Schur factorization of a Generalized Schur object by overwriting the object with the new factorization.  See :func:`ordschur`.
+   Same as ``ordschur`` but overwrites the factorization ``F``\ .
+
+.. function:: ordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+
+   .. Docstring generated from Julia source
+
+   Reorders the Generalized Schur factorization of a matrix pair ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns the matrices ``S``\ , ``T``\ , ``Q``\ , ``Z`` and vectors ``α`` and ``β``\ .  The selected eigenvalues appear in the leading diagonal of both ``S`` and ``T``\ , and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = Q*(S, T)*Z^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``α./β``\ .
+
+.. function:: ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+
+   .. Docstring generated from Julia source
+
+   Same as ``ordschur`` but overwrites the factorization the input arguments.
+
+.. function:: schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+
+   .. Docstring generated from Julia source
+
+   See ``schurfact``
 
 .. function:: svdfact(A, [thin=true]) -> SVD
 
