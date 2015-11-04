@@ -18,38 +18,49 @@ function editor()
         default_editor = "emacs"
     end
     # Note: the editor path can include spaces (if escaped) and flags.
-    command = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
-    isempty(command) && error("editor is empty")
-    return command
+    args = shell_split(get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor))))
+    isempty(args) && error("editor is empty")
+    return args
 end
 
-function edit(file::AbstractString, line::Integer)
+function edit(path::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
-    issrc = length(file)>2 && file[end-2:end] == ".jl"
+    issrc = length(path)>2 && path[end-2:end] == ".jl"
     if issrc
-        f = find_source_file(file)
-        f !== nothing && (file = f)
+        f = find_source_file(path)
+        f !== nothing && (path = f)
     end
-    const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    background = true
+    line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
-        spawn(pipeline(`$command +$line $file`, stderr=STDERR))
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
-        run(`$command +$line $file`)
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
+        background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
-        spawn(pipeline(`$command $file -l $line`, stderr=STDERR))
+        cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || name == "atom"
-        spawn(pipeline(`$command $file:$line`, stderr=STDERR))
+        cmd = line != 0 ? `$command $path:$line` : `$command $path`
     elseif OS_NAME == :Windows && (name == "start" || name == "open")
-        spawn(pipeline(`cmd /c start /b $file`, stderr=STDERR))
-        println(no_line_msg)
+        cmd = `cmd /c start /b $path`
+        line_unsupported = true
     elseif OS_NAME == :Darwin && (name == "start" || name == "open")
-        spawn(pipeline(`open -t $file`, stderr=STDERR))
-        println(no_line_msg)
+        cmd = `open -t $path`
+        line_unsupported = true
     else
-        run(`$command $file`)
-        println(no_line_msg)
+        cmd = `$command $path`
+        background = false
+        line_unsupported = true
     end
+
+    if background
+        spawn(pipeline(cmd, stderr=STDERR))
+    else
+        run(cmd)
+    end
+    line != 0 && line_unsupported && println("Unknown editor: no line number information passed.\nThe method is defined at line $line.")
+
     nothing
 end
 
@@ -58,7 +69,6 @@ function edit(m::Method)
     edit(string(file), line)
 end
 
-edit(file::AbstractString) = edit(file, 1)
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
