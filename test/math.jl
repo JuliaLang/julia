@@ -681,3 +681,8 @@ end
 @test_throws DomainError 2 ^ -2
 @test_throws DomainError (-2)^(2.2)
 @test_throws DomainError (-2.0)^(2.2)
+
+# issue #13748
+let A = [1 2; 3 4]; B = [5 6; 7 8]; C = [9 10; 11 12]
+    @test muladd(A,B,C) == A*B + C
+end
