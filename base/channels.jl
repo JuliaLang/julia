@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractChannel{T}
+abstract AbstractChannel
 
-type Channel{T} <: AbstractChannel{T}
+type Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
     state::Symbol
