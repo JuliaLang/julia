@@ -183,6 +183,12 @@ let s = 0
     end
     @test s == 256
 
+    s = 0
+    for i = typemin(UInt8):one(UInt8):typemax(UInt8)
+        s += 1
+    end
+    @test s == 256
+
     # loops past typemax(Int)
     n = 0
     s = Int128(0)

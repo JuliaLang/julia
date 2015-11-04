@@ -387,22 +387,36 @@ done(r::LinSpace, i::Int) = length(r) < i
 next{T}(r::LinSpace{T}, i::Int) =
     (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
-# NOTE: For ordinal ranges, we assume start+step might be from a
-# lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
-start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
+start(r::StepRange) = oftype(r.start + r.step, r.start)
 next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
 done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
-done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
+done{T,S}(r::StepRange{T,S}, i::Integer) =
+    isempty(r) | (i == oftype(i, r.stop) + r.step)
 
-start(r::UnitRange) = oftype(r.start+1, r.start)
-next{T}(r::UnitRange{T}, i) = (convert(T,i), i+1)
-done(r::UnitRange, i) = i==oftype(i,r.stop)+1
+start{T}(r::UnitRange{T}) = oftype(r.start + one(T), r.start)
+next{T}(r::UnitRange{T}, i) = (convert(T, i), i + one(T))
+done{T}(r::UnitRange{T}, i) = i == oftype(i, r.stop) + one(T)
 
+
+# some special cases to favor default Int type to avoid overflow
+let smallint = (Int === Int64 ?
+                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
+                Union{Int8,UInt8,Int16,UInt16})
+    global start
+    global next
+    start{T<:smallint}(r::StepRange{T}) = convert(Int, r.start)
+    next{T<:smallint}(r::StepRange{T}, i) = (i % T, i + r.step)
+    start{T<:smallint}(r::UnitRange{T}) = convert(Int, r.start)
+    next{T<:smallint}(r::UnitRange{T}, i) = (i % T, i + 1)
+end
 
 ## indexing
 
 getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
 unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
+unsafe_getindex{T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}}(v::Range{T},
+                                                                i::Integer) =
+    (first(v) + (i - 1) * step(v)) % T
 
 getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
 unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
