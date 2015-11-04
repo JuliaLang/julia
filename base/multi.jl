@@ -460,7 +460,7 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef{RemoteStore}
+type RemoteRef{T<:AbstractChannel}
     where::Int
     whence::Int
     id::Int
