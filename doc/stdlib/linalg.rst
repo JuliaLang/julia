@@ -458,7 +458,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Computes the Schur factorization of the matrix ``A``\ . The methods returns the (quasi) triangular Schur factor ``T`` and the orthogonal/unitary Schur vectors ``Z`` such that ``A = Z*T*Z'``\ . The eigenvalues of ``A`` are returned in the vector ``λ``\ .
+   Computes the Schur factorization of the matrix ``A``\ . The methods return the (quasi) triangular Schur factor ``T`` and the orthogonal/unitary Schur vectors ``Z`` such that ``A = Z*T*Z'``\ . The eigenvalues of ``A`` are returned in the vector ``λ``\ .
 
    See ``schurfact``
 
@@ -466,7 +466,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Reorders the Schur factorization ``F`` of a matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered factorization ``F`` object. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or excluded via ``select``\ .
+   Reorders the Schur factorization ``F`` of a matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered factorization ``F`` object. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via ``select``\ .
 
 .. function:: ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
 
@@ -478,9 +478,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ..  ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
-
-   Reorders the Schur factorization of a real matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered matrices ``T`` and ``Z`` as well as the vector of eigenvalues ``λ``\ . The selected eigenvalues appear in the leading diagonal of ``T`` and the the corresponding leading columns of ``Z`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or excluded via ``select``\ .
+   Reorders the Schur factorization of a real matrix ``A = Z*T*Z'`` according to the logical array ``select`` returning the reordered matrices ``T`` and ``Z`` as well as the vector of eigenvalues ``λ``\ . The selected eigenvalues appear in the leading diagonal of ``T`` and the the corresponding leading columns of ``Z`` form an orthogonal/unitary basis of the corresponding right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be either both included or both excluded via ``select``\ .
 
 .. function:: ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
 
@@ -504,7 +502,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Reorders the Generalized Schur factorization ``F`` of a matrix pair ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns a GeneralizedSchur object ``F``\ .  The selected eigenvalues appear in the leading diagonal of both ``F[:S]`` and F[:T]``, and the left and right orthogonal/unitary Schur vectors are also reordered such that `(A, B) = F[:Q]*(F[:S], F[:T])*F[:Z]^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``F[:alpha]./F[:beta]``\ .
+   Reorders the Generalized Schur factorization ``F`` of a matrix pair ``(A, B) = (Q*S*Z', Q*T*Z')`` according to the logical array ``select`` and returns a GeneralizedSchur object ``F``\ .  The selected eigenvalues appear in the leading diagonal of both ``F[:S]`` and ``F[:T]``\ , and the left and right orthogonal/unitary Schur vectors are also reordered such that ``(A, B) = F[:Q]*(F[:S], F[:T])*F[:Z]'`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``F[:alpha]./F[:beta]``\ .
 
 .. function:: ordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
 
@@ -516,7 +514,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Reorders the Generalized Schur factorization of a matrix pair ``(A, B) = (Q*S*Z^{H}, Q*T*Z^{H})`` according to the logical array ``select`` and returns the matrices ``S``\ , ``T``\ , ``Q``\ , ``Z`` and vectors ``α`` and ``β``\ .  The selected eigenvalues appear in the leading diagonal of both ``S`` and ``T``\ , and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = Q*(S, T)*Z^{H}`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``α./β``\ .
+   Reorders the Generalized Schur factorization of a matrix pair ``(A, B) = (Q*S*Z', Q*T*Z')`` according to the logical array ``select`` and returns the matrices ``S``\ , ``T``\ , ``Q``\ , ``Z`` and vectors ``α`` and ``β``\ .  The selected eigenvalues appear in the leading diagonal of both ``S`` and ``T``\ , and the left and right unitary/orthogonal Schur vectors are also reordered such that ``(A, B) = Q*(S, T)*Z'`` still holds and the generalized eigenvalues of ``A`` and ``B`` can still be obtained with ``α./β``\ .
 
 .. function:: ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
 
