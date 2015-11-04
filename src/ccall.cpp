@@ -37,9 +37,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         runtime_lib = true;
         libptrgv = libMapGV[f_lib];
         if (libptrgv == NULL) {
-            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
+            libptrgv = global_proto(new GlobalVariable(T_pint8,
                false, GlobalVariable::PrivateLinkage,
-               initnul, f_lib);
+               initnul, f_lib));
             libMapGV[f_lib] = libptrgv;
             libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
@@ -66,9 +66,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         // the symbol of the actual function.
         std::string name = f_name;
         name = "ccall_" + name;
-        llvmgv = new GlobalVariable(*jl_Module, T_pint8,
+        llvmgv = global_proto(new GlobalVariable(T_pint8,
            false, GlobalVariable::PrivateLinkage,
-           initnul, name);
+           initnul, name));
         symMapGV[f_name] = llvmgv;
 #ifdef USE_MCJIT
         jl_llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
@@ -506,7 +506,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_rethrow_with_add("error interpreting IR argument");
     }
     }
-    int i = 1;
     if (ir == NULL) {
         jl_error("Cannot statically evaluate first argument to llvmcall");
     }
@@ -576,15 +575,10 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     bool retboxed;
     Type *rettype = julia_type_to_llvm(rtt, &retboxed);
     if (isString) {
-        // Make sure to find a unique name
         std::string ir_name;
-        while(true) {
-            std::stringstream name;
-            name << (ctx->f->getName().str()) << "u" << i++;
-            ir_name = name.str();
-            if (jl_Module->getFunction(ir_name) == NULL)
-                break;
-        }
+        std::stringstream name;
+        name << (ctx->f->getName().str()) << "_llvmcall";
+        ir_name = name.str();
 
         bool first = true;
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
@@ -605,13 +599,13 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
+        Module *m = new Module(ir_name, jl_LLVMContext);
 #ifdef LLVM36
-        Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
-        if (!failed)
-            m = jl_Module;
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"), *m, Err);
+        if (failed)
+            m = NULL;
 #else
-        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
+        m = ParseAssemblyString(ir_string.c_str(), *m, Err, jl_LLVMContext);
 #endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
@@ -620,6 +614,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
+        delete m;
     }
     else {
         assert(isPtr);
@@ -632,10 +627,9 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             assert(*it == f->getFunctionType()->getParamType(i));
 
 #ifdef USE_MCJIT
-        if (f->getParent() != jl_Module) {
-            FunctionMover mover(jl_Module,f->getParent());
-            f = mover.CloneFunction(f);
-        }
+        //TODO: FunctionMover mover(jl_Module, f->getParent());
+        //f = mover.CloneFunction(f);
+        //delete m;
 #endif
 
         //f->dump();
@@ -661,7 +655,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
     // the actual call
-    assert(f->getParent() == jl_Module); // no prepare_call(f) is needed below, since this was just emitted into the same module
+    assert(!f->getParent());
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     ctx->to_inline.push_back(inst);
 
@@ -1273,7 +1267,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     if (needStackRestore) {
-        stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+        stacksave = CallInst::Create(Intrinsic::getDeclaration(shadow_module,
                                                                Intrinsic::stacksave));
         if (savespot)
             instList.insertAfter((Instruction*)savespot, (Instruction*)stacksave);
@@ -1296,7 +1290,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         result = ret;
     if (needStackRestore) {
         assert(stacksave != NULL);
-        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+        builder.CreateCall(Intrinsic::getDeclaration(shadow_module,
                                                      Intrinsic::stackrestore),
                            stacksave);
     }

@@ -25,41 +25,56 @@ static Instruction *tbaa_decorate(MDNode* md, Instruction* load_or_store)
 }
 
 // Fixing up references to other modules for MCJIT
+static GlobalVariable *global_proto(GlobalVariable *G) {
+    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
+            G->isConstant(), GlobalVariable::ExternalLinkage,
+            NULL, G->getName(), G->getThreadLocalMode());
+    MaterializerMap[proto] = G;
+    return proto;
+}
+
+static Function *function_proto(Function *F) {
+    Function *NewF = Function::Create(F->getFunctionType(),
+                            Function::ExternalLinkage,
+                            F->getName());
+    NewF->setAttributes(AttributeSet());
+
+    // FunctionType does not include any attributes. Copy them over manually
+    // as codegen may make decisions based on the presence of certain attributes
+    NewF->copyAttributesFrom(F);
+
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway, so clear them again manually
+    NewF->setPersonalityFn(nullptr);
+
+    AttributeSet OldAttrs = F->getAttributes();
+    // Clone any argument attributes that are present in the VMap.
+    auto ArgI = NewF->arg_begin();
+    for (const Argument &OldArg : F->args()) {
+        AttributeSet attrs =
+            OldAttrs.getParamAttributes(OldArg.getArgNo() + 1);
+        if (attrs.getNumSlots() > 0)
+            ArgI->addAttr(attrs);
+        ++ArgI;
+    }
+
+    NewF->setAttributes(
+      NewF->getAttributes()
+          .addAttributes(NewF->getContext(), AttributeSet::ReturnIndex,
+                         OldAttrs.getRetAttributes())
+          .addAttributes(NewF->getContext(), AttributeSet::FunctionIndex,
+                         OldAttrs.getFnAttributes()));
+
+    return NewF;
+}
+
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
-#ifdef USE_MCJIT
-    if (G->getParent() != jl_Module) {
-        GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
-        if (!gv) {
-            gv = new GlobalVariable(*jl_Module, G->getType()->getElementType(),
-                                    G->isConstant(), GlobalVariable::ExternalLinkage,
-                                    NULL, G->getName(), NULL, G->getThreadLocalMode());
-        }
-        return gv;
-    }
-#endif
     return G;
 }
 
 static llvm::Value *prepare_call(llvm::Value* Callee)
 {
-#ifdef USE_MCJIT
-    llvm::Function *F = dyn_cast<Function>(Callee);
-    if (!F)
-        return Callee;
-    if (F->getParent() != jl_Module) {
-        Function *ModuleF = jl_Module->getFunction(F->getName());
-        if (ModuleF) {
-            return ModuleF;
-        }
-        else {
-            return Function::Create(F->getFunctionType(),
-                                    Function::ExternalLinkage,
-                                    F->getName(),
-                                    jl_Module);
-        }
-    }
-#endif
     return Callee;
 }
 
@@ -108,15 +123,14 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 #endif // _OS_WINDOWS_
 
 #ifdef USE_ORCJIT
-    addComdat(gv);
     jl_ExecutionEngine->addGlobalMapping(name, addr);
 #elif defined(USE_MCJIT)
-    addComdat(gv);
     sys::DynamicLibrary::AddSymbol(name, addr);
 #else // USE_MCJIT
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
 #endif // USE_MCJIT
 }
+
 
 // --- string constants ---
 static std::map<const std::string, GlobalVariable*> stringConstants;
@@ -129,24 +143,20 @@ static GlobalVariable *stringConst(const std::string &txt)
 {
     GlobalVariable *gv = stringConstants[txt];
     static int strno = 0;
-    // in inference, we can not share string constants between
-    // modules as there might be multiple compiles on the stack
-    // with calls in between them.
-    if (gv == NULL || jl_in_inference) {
+    if (gv == NULL) {
         std::stringstream ssno;
         std::string vname;
         ssno << strno;
         vname += "_j_str";
         vname += ssno.str();
-        gv = new GlobalVariable(*jl_Module,
-                                ArrayType::get(T_int8, txt.length()+1),
+        gv = global_proto(new GlobalVariable(ArrayType::get(T_int8, txt.length()+1),
                                 true,
                                 imaging_mode ? GlobalVariable::PrivateLinkage : GlobalVariable::ExternalLinkage,
                                 ConstantDataArray::get(getGlobalContext(),
                                                        ArrayRef<unsigned char>(
                                                        (const unsigned char*)txt.c_str(),
                                                        txt.length()+1)),
-                                vname);
+                                vname));
         gv->setUnnamedAddr(true);
         stringConstants[txt] = gv;
         strno++;
@@ -159,13 +169,13 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
-DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 
+#ifdef USE_MCJIT
+DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 // In imaging mode, cache a fast mapping of Function * to code address
 // because this is queried in the hot path
 static std::map<Function *, uint64_t> emitted_function_symtab;
 
-#ifdef USE_MCJIT
 class FunctionMover : public ValueMaterializer
 {
 public:
@@ -230,41 +240,12 @@ public:
 
     Value *InjectFunctionProto(Function *F)
     {
-	//return destModule->getOrInsertFunction(F->getName(), F->getFunctionType());
         Function *NewF = destModule->getFunction(F->getName());
         if (!NewF) {
-            NewF = Function::Create(F->getFunctionType(),
-                                          Function::ExternalLinkage,
-                                          F->getName(),destModule);
-            NewF->setAttributes(AttributeSet());
-
-            // FunctionType does not include any attributes. Copy them over manually
-            // as codegen may make decisions based on the presence of certain attributes
-            NewF->copyAttributesFrom(F);
-
-            // Declarations are not allowed to have personality routines, but
-            // copyAttributesFrom sets them anyway, so clear them again manually
-            NewF->setPersonalityFn(nullptr);
-
-            AttributeSet OldAttrs = F->getAttributes();
-            // Clone any argument attributes that are present in the VMap.
-            auto ArgI = NewF->arg_begin();
-            for (const Argument &OldArg : F->args()) {
-                AttributeSet attrs =
-                    OldAttrs.getParamAttributes(OldArg.getArgNo() + 1);
-                if (attrs.getNumSlots() > 0)
-                    ArgI->addAttr(attrs);
-                ++ArgI;
-            }
-
-            NewF->setAttributes(
-              NewF->getAttributes()
-                  .addAttributes(NewF->getContext(), AttributeSet::ReturnIndex,
-                                 OldAttrs.getRetAttributes())
-                  .addAttributes(NewF->getContext(), AttributeSet::FunctionIndex,
-                                 OldAttrs.getFnAttributes()));
+            NewF = function_proto(NewF);
+            destModule->getFunctionList().push_back(NewF);
         }
-	return NewF;
+        return NewF;
     }
 
     virtual Value *materializeValueFor (Value *V)
@@ -623,10 +604,10 @@ static Value *julia_gv(const char *cname, void *addr)
     std::stringstream gvname;
     gvname << cname << globalUnique++;
     // no existing GlobalVariable, create one and store it
-    GlobalVariable *gv = new GlobalVariable(*jl_Module, T_pjlvalue,
+    GlobalVariable *gv = new GlobalVariable(T_pjlvalue,
                            false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)T_pjlvalue), gvname.str());
-    addComdat(gv);
+    gv = global_proto(gv);
 
     // make the pointer valid for this session
 #ifdef USE_MCJIT
@@ -1573,7 +1554,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
         std::vector<Type *> fargt(0);
         fargt.push_back(T_pjlvalue);
         FunctionType *ft = FunctionType::get(T_size, fargt, false);
-        Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft);
+        Value *alen = shadown_module->getOrInsertFunction("jl_array_len_", ft);
         return builder.CreateCall(prepare_call(alen), t);
     }
 #endif

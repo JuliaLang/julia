@@ -8,7 +8,7 @@ namespace JL_I {
 
 using namespace JL_I;
 static Function *runtime_func[num_intrinsics];
-static void jl_init_intrinsic_functions_codegen(Module *m)
+static void jl_init_intrinsic_functions_codegen()
 {
     std::vector<Type *> args1(0); \
     args1.push_back(T_pjlvalue); \
@@ -22,7 +22,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
 
 #define ADD_I(name, nargs) do { \
         Function *func = Function::Create(FunctionType::get(T_pjlvalue, args##nargs, false), \
-                                          Function::ExternalLinkage, "jl_"#name, m); \
+                                          Function::ExternalLinkage, "jl_"#name); \
         runtime_func[name] = func; \
         add_named_global(func, (void*)&jl_##name); \
     } while (0);
@@ -688,7 +688,7 @@ static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codect
 static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 {
     Value *preffunc = // TODO: move this to the codegen initialization code section
-        jl_Module->getOrInsertFunction("jl_pointerref",
+        shadow_module->getOrInsertFunction("jl_pointerref",
                                        FunctionType::get(T_pjlvalue, two_pvalue_llvmt, false));
     int ldepth = ctx->gc.argDepth;
     jl_cgval_t parg = emit_boxed_rooted(e, ctx);
@@ -756,7 +756,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
 static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
     Value *psetfunc = // TODO: move this to the codegen initialization code section
-        jl_Module->getOrInsertFunction("jl_pointerset",
+        shadow_module->getOrInsertFunction("jl_pointerset",
                                        FunctionType::get(T_void, three_pvalue_llvmt, false));
     int ldepth = ctx->gc.argDepth;
     jl_cgval_t parg = emit_boxed_rooted(e, ctx);
@@ -1218,7 +1218,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case fma_float: {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
-      Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
+      Value *fmaintr = Intrinsic::getDeclaration(shadow_module, Intrinsic::fma,
                                    ArrayRef<Type*>(x->getType()));
 #ifdef LLVM37
       return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
@@ -1236,7 +1236,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #else
       return builder.CreateCall3
 #endif
-        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+        (Intrinsic::getDeclaration(shadow_module, Intrinsic::fmuladd,
                                    ArrayRef<Type*>(x->getType())),
          #ifdef LLVM37
          {FP(x), FP(y), FP(z)}
@@ -1259,7 +1259,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Value *ix = JL_INT(x); Value *iy = JL_INT(y);
         assert(ix->getType() == iy->getType());
         Value *intr =
-            Intrinsic::getDeclaration(jl_Module,
+            Intrinsic::getDeclaration(shadow_module,
                f==checked_sadd ?
                Intrinsic::sadd_with_overflow :
                (f==checked_uadd ?
@@ -1379,17 +1379,17 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case bswap_int:
         x = JL_INT(x);
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap,
+            Intrinsic::getDeclaration(shadow_module, Intrinsic::bswap,
                                       ArrayRef<Type*>(x->getType())), x);
     case ctpop_int:
         x = JL_INT(x);
         return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
+            Intrinsic::getDeclaration(shadow_module, Intrinsic::ctpop,
                                       ArrayRef<Type*>(x->getType())), x);
     case ctlz_int: {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
+        Value *ctlz = Intrinsic::getDeclaration(shadow_module, Intrinsic::ctlz,
                                       ArrayRef<Type*>(types));
 #ifdef LLVM37
         return builder.CreateCall(ctlz, {x, ConstantInt::get(T_int1,0)});
@@ -1400,7 +1400,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case cttz_int: {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types));
+        Value *cttz = Intrinsic::getDeclaration(shadow_module, Intrinsic::cttz, ArrayRef<Type*>(types));
 #ifdef LLVM37
         return builder.CreateCall(cttz, {x, ConstantInt::get(T_int1, 0)});
 #else
@@ -1421,7 +1421,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     {
         x = FP(x);
 #ifdef LLVM34
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::fabs,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
 #else
@@ -1473,25 +1473,25 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     }
     case ceil_llvm: {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::ceil,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case floor_llvm: {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::floor,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::floor,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case trunc_llvm: {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::trunc,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case rint_llvm: {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::rint,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::rint,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
@@ -1499,7 +1499,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         x = FP(x);
         raise_exception_unless(builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(),0.0)),
                                prepare_global(jldomerr_var), ctx);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::sqrt,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
@@ -1509,7 +1509,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Type *tx = x->getType(); // TODO: LLVM expects this to be i32
 #ifdef LLVM36
         Type *ts[1] = { tx };
-        Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
+        Value *powi = Intrinsic::getDeclaration(shadow_module, Intrinsic::powi,
             ArrayRef<Type*>(ts));
 #ifdef LLVM37
         return builder.CreateCall(powi, {x, y});
@@ -1524,7 +1524,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     }
     case sqrt_llvm_fast: {
         x = FP(x);
-        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+        return builder.CreateCall(Intrinsic::getDeclaration(shadow_module, Intrinsic::sqrt,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
@@ -1538,16 +1538,14 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 
 #define BOX_F(ct,jl_ct)                                                    \
     box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),     \
-                                   "jl_box_"#ct, (void*)&jl_box_##ct, m);
+                                   "jl_box_"#ct, (void*)&jl_box_##ct);
 
 #define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
 #define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
-static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
-                              void *addr, Module *m)
+static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname, void *addr)
 {
-    Function *f =
-        Function::Create(ft, Function::ExternalLinkage, cname, m);
+    Function *f = Function::Create(ft, Function::ExternalLinkage, cname);
     add_named_global(f, addr);
     return f;
 }
