@@ -412,7 +412,6 @@ iterstate(i) = i
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
-eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
 
 function eachindex(A::AbstractArray, B::AbstractArray)
     @_inline_meta
@@ -422,8 +421,16 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(linearindexing(A,B...), A, B...)
 end
-eachindex(::LinearFast, A::AbstractArray, B::AbstractArray) = 1:max(length(A),length(B))
-eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...) = 1:max(length(A), map(length, B)...)
+eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+function eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...)
+    @_inline_meta
+    1:_maxlength(A, B...)
+end
+_maxlength(A) = length(A)
+function _maxlength(A, B, C...)
+    @_inline_meta
+    max(length(A), _maxlength(B, C...))
+end
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
