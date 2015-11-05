@@ -113,14 +113,16 @@ end
 
 Computes the polar decomposition of a vector.
 
-# Input
+Input:
+
 - `v::AbstractVector` - vector to normalize
 
-# Outputs
+Outputs:
+
 - `w` - A unit vector in the direction of `v`
 - `r` - The norm of `v`
 
-# See also
+See also:
 
 `normalize`, `normalize!`, `LinAlg.qr!`
 """
@@ -141,14 +143,16 @@ end
 Computes the polar decomposition of a vector. Instead of returning a new vector
 as `qr(v::AbstractVector)`, this function mutates the input vector `v` in place.
 
-# Input
+Input:
+
 - `v::AbstractVector` - vector to normalize
 
-# Outputs
+Outputs:
+
 - `w` - A unit vector in the direction of `v` (This is a mutation of `v`).
 - `r` - The norm of `v`
 
-# See also
+See also:
 
 `normalize`, `normalize!`, `qr`
 """
