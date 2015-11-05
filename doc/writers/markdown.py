@@ -284,7 +284,7 @@ class MarkdownTranslator(nodes.NodeVisitor):
         self.add_text('`')
 
     def depart_desc_signature(self, node):
-        self.add_text('`')
+        self.add_text('`:')
         self.end_state(wrap=False, end=None)
 
     def visit_desc_name(self, node):
@@ -332,15 +332,8 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_desc_optional(self, node):
         self.add_text(']')
 
-    def visit_desc_annotation(self, node):
-        pass
-
-    def depart_desc_annotation(self, node):
-        pass
-
     def visit_desc_content(self, node):
-        self.new_state()
-        self.add_text(self.nl)
+        self.new_state(2)
 
     def depart_desc_content(self, node):
         self.end_state()
