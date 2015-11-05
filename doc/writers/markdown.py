@@ -637,10 +637,17 @@ class MarkdownTranslator(nodes.NodeVisitor):
             raise nodes.SkipNode
         elif 'refuri' in node and node['refuri'][0:4] == 'http':
             self.add_text('[')
+        elif 'refuri' in node and len(node['refuri']) > 0:
+            if 'reftitle' not in node:
+                self.add_text('[')
 
     def depart_reference(self, node):
         if 'refuri' in node and node['refuri'][0:4] == 'http':
             self.add_text('](' + node['refuri'] + ')')
+        elif 'refuri' in node and len(node['refuri']) > 0:
+            if 'reftitle' not in node:
+                self.add_text(']')
+                # self.add_text('](' + node['refuri'] + ')')
 
     def visit_emphasis(self, node):
         self.add_text('*')
