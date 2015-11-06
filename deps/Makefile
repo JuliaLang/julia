@@ -914,8 +914,8 @@ OPENLIBM_GIT_URL := git://github.com/JuliaLang/openlibm.git
 OPENLIBM_TAR_URL = https://api.github.com/repos/JuliaLang/openlibm/tarball/$1
 $(eval $(call git-external,openlibm,OPENLIBM,Makefile,libopenlibm.$(SHLIB_EXT),$(BUILDDIR)))
 
-OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE := $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 $(OPENLIBM_OBJ_SOURCE): $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
@@ -956,8 +956,8 @@ OPENSPECFUN_OBJ_SOURCE := $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/libopenspecfun.$(SH
 OPENSPECFUN_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(CFLAGS) $(OPENSPECFUN_CFLAGS)"
 
 ifeq ($(USE_SYSTEM_LIBM),0)
-	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
-$(OPENSPECFUN_OBJ_SOURCE): $(OPENLIBM_OBJ_TARGET)
+OPENSPECFUN_FLAGS += USE_OPENLIBM=1
+$(OPENSPECFUN_OBJ_SOURCE) $(build_staging)/$(OPENSPECFUN_SRC_DIR).tgz: | $(OPENLIBM_OBJ_TARGET)
 endif
 
 $(OPENSPECFUN_OBJ_SOURCE): $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/Makefile
@@ -1299,13 +1299,8 @@ endif
 ## LAPACK ##
 
 LAPACK_SRC_FILE := $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
-ifeq ($(USE_SYSTEM_LAPACK), 0)
-LAPACK_OBJ_TARGET := $(build_shlibdir)/liblapack.$(SHLIB_EXT)
 LAPACK_OBJ_SOURCE := $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
-else
-LAPACK_OBJ_TARGET :=
-LAPACK_OBJ_SOURCE :=
-endif
+LAPACK_OBJ_TARGET := $(build_shlibdir)/liblapack.$(SHLIB_EXT)
 
 LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS) -O0" OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
 ifneq ($(OS),WINNT)
@@ -1320,9 +1315,9 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc: $(LAPACK_SRC_FILE)
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)
+$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a $(build_staging)/lapack-$(LAPACK_VER).tgz: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(OS),Darwin)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
+$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a $(build_staging)/lapack-$(LAPACK_VER).tgz: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
 endif
 $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc
 	$(MAKE) -C $(dir $@) lapacklib $(LAPACK_MFLAGS)
@@ -1415,9 +1410,9 @@ $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status $(build_staging)/arpack-ng-$(ARPACK_VER).tgz: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status $(build_staging)/arpack-ng-$(ARPACK_VER).tgz: | $(LAPACK_OBJ_TARGET)
 endif
 
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
@@ -1959,6 +1954,7 @@ $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure: $(MPFR_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
+$(build_staging)/mpfr-$(MPFR_VER).tgz: | $(MPFR_DEPS)
 $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure | $(MPFR_DEPS)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
