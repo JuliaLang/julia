@@ -156,9 +156,8 @@ General Parallel Computing Support
 
    Equivalent to ``addprocs(CPU_CORES)``
 
-   Note that workers do not run a ``.juliarc.jl`` startup script, nor do they
-   synchronize their global state (such as global variables, new method
-   definitions, and loaded modules) with any of the other running processes.
+   Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
+   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 .. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
 
