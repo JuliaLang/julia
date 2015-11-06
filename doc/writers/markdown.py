@@ -673,12 +673,6 @@ class MarkdownTranslator(nodes.NodeVisitor):
     def depart_literal_strong(self, node):
         self.add_text('**')
 
-    def visit_title_reference(self, node):
-        self.add_text('*')
-
-    def depart_title_reference(self, node):
-        self.add_text('*')
-
     def visit_literal(self, node):
         self.add_text('`')
 
