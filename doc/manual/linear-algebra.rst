@@ -126,5 +126,5 @@ Legend:
 
 The uniform scaling operator
 ----------------------------
-A :class:`UniformScaling` operator represents a scalar times the identity operator, ``λ*I``. The identity operator  :class:`I` is defined as a constant and is an instance of :class:`UniformScaling`. The size of these operators are generic and match the other matrix in the binary operations :obj:`+`, :obj:`-`, :obj:`*` and :obj:`\\`. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator :class: `I` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead.
+A :class:`UniformScaling` operator represents a scalar times the identity operator, ``λ*I``. The identity operator  :class:`I` is defined as a constant and is an instance of :class:`UniformScaling`. The size of these operators are generic and match the other matrix in the binary operations :obj:`+`, :obj:`-`, :obj:`*` and :obj:`\\`. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator :class:`I` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead.
 

@@ -9,7 +9,7 @@ symbol      meaning
 =========   ================================================
 ``@m``      invoke macro ``m``; followed by space-separated expressions
 ``!``       prefix "not" operator
-``a!( )``   at the end of a function name, `!` indicates that a function modifies its argument(s)
+``a!( )``   at the end of a function name, ``!`` indicates that a function modifies its argument(s)
 ``#``       begin single line comment
 ``#=``      begin multi-line comment (these are nestable)
 ``=#``      end multi-line comment
