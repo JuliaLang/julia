@@ -235,7 +235,7 @@ argument indicating the relative tolerance)::
    in test_approx_eq at test.jl:68
 
 Note that these macros will fail immediately, and are not compatible
-with :func:`@testset`, so using `@test isapprox` is encouraged when
+with :func:`@testset`, so using ``@test isapprox`` is encouraged when
 writing new tests.
 
 .. function:: @test_approx_eq(a, b)

@@ -242,7 +242,7 @@ Julia syntax. As an alternative, Julia allows "splicing" or interpolation
 of literals or expressions into quoted expressions. Interpolation is
 indicated by the ``$`` prefix.
 
-In this example, the literal value of `a` is interpolated:
+In this example, the literal value of ``a`` is interpolated:
 
 .. doctest::
 
@@ -961,7 +961,7 @@ function is generated is really an implementation detail; it *might* be only
 once, but it *might* also be more often. As a consequence, you should
 *never* write a generated function with side effects - when, and how often,
 the side effects occur is undefined. (This is true for macros too - and just
-like for macros, the use of `eval` in a generated function is a sign that
+like for macros, the use of :func:`eval` in a generated function is a sign that
 you're doing something the wrong way.)
 
 The example generated function ``foo`` above did not do anything a normal
@@ -1017,12 +1017,12 @@ These examples are hopefully helpful to illustrate how generated functions
 work, both in the definition end and at the call site; however, *don't
 copy them*, for the following reasons:
 
-* the `foo` function has side-effects, and it is undefined exactly when,
+* the ``foo`` function has side-effects, and it is undefined exactly when,
   how often or how many times these side-effects will occur
-* the `bar` function solves a problem that is better solved with multiple
-  dispatch - defining `bar(x) = x` and `bar(x::Integer) = x^2` will do
+* the ``bar`` function solves a problem that is better solved with multiple
+  dispatch - defining ``bar(x) = x`` and ``bar(x::Integer) = x^2`` will do
   the same thing, but it is both simpler and faster.
-* the `baz` function is pathologically insane
+* the ``baz`` function is pathologically insane
 
 Instead, now that we have a better understanding for how generated functions
 work, let's use them to build some more advanced functionality...
