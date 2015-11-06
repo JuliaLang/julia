@@ -267,7 +267,7 @@ $$(build_staging)/$2.tgz: $$($(call upper,$1)_SRC_FILE)
 	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@ .
 $5: $$(build_staging)/$2.tgz
 	mkdir -p $$(build_prefix)
-	tar -xzf $$< -C $$(build_prefix)
+	tar -xUzf $$< -C $$(build_prefix)
 	$6
 	touch -c $$@
 endef
