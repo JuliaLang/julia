@@ -296,7 +296,7 @@ void *jl_install_thread_signal_handler(void)
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    act.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
     if (sigaction(SIGUSR2, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
@@ -492,6 +492,7 @@ void jl_install_default_signal_handlers(void)
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     // need to ensure the following signals are not SIG_IGN, even though they will be blocked
+    act_die.sa_flags = SA_SIGINFO | SA_RESTART;
 #if defined(HAVE_ITIMER)
     if (sigaction(SIGPROF, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
