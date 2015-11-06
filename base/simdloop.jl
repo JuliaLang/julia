@@ -46,8 +46,8 @@ simd_outer_range(r) = 0:0
 # Get trip count for inner loop.
 simd_inner_length(r,j::Int) = length(r)
 
-# Construct user-level index from original range, outer loop index j, and inner loop index i.
-simd_index(r,j::Int,i) = first(r)+i*step(r)
+# Construct user-level element from original range, outer loop index j, and inner loop index i.
+@inline simd_index(r,j::Int,i) = Base.unsafe_getindex(r,i+1)
 
 # Compile Expr x in context of @simd.
 function compile(x)
