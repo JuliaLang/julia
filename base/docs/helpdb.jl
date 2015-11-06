@@ -1044,13 +1044,6 @@ Compute the minimum absolute values over the singleton dimensions of `r`, and wr
 minabs!
 
 doc"""
-    prevprod([k_1,k_2,...], n)
-
-Previous integer not greater than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-prevprod
-
-doc"""
     @evalpoly(z, c...)
 
 Evaluate the polynomial $\sum_k c[k] z^{k-1}$ for the
@@ -1146,34 +1139,6 @@ doc"""
 Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
 """
 precision
-
-doc"""
-    partitions(n)
-
-Generate all integer arrays that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n))`.
-"""
-partitions(n::Integer)
-
-doc"""
-    partitions(n, m)
-
-Generate all arrays of `m` integers that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n,m))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n,m))`.
-"""
-partitions(n::Integer, m::Integer)
-
-doc"""
-    partitions(array)
-
-Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(array))`.
-"""
-partitions(array)
-
-doc"""
-    partitions(array, m)
-
-Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array,m))` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using `length(partitions(array,m))`.
-"""
-partitions(array, m::Integer)
 
 doc"""
     readlines(stream)
@@ -2021,13 +1986,6 @@ doc"""
 Compute hyperbolic sine of `x`
 """
 sinh
-
-doc"""
-    permutations(array)
-
-Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use `collect(permutations(array))` to get an array of all permutations.
-"""
-permutations
 
 doc"""
 ```rst
@@ -4766,15 +4724,6 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 sizehint!
 
 doc"""
-    permute!(v, p)
-
-Permute vector `v` in-place, according to permutation `p`. No checking is done to verify that `p` is a permutation.
-
-To return a new permutation, use `v[p]`. Note that this is generally faster than `permute!(v,p)` for large vectors.
-"""
-permute!
-
-doc"""
     ifelse(condition::Bool, x, y)
 
 Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using `ifelse` instead of an `if` statement can eliminate the branch in generated code and provide higher performance in tight loops.
@@ -5947,20 +5896,6 @@ doc"""
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
 code_lowered
-
-doc"""
-    nthperm(v, k)
-
-Compute the kth lexicographic permutation of a vector.
-"""
-nthperm(v,k)
-
-doc"""
-    nthperm(p)
-
-Return the `k` that generated permutation `p`. Note that `nthperm(nthperm([1:n], k)) == k` for `1 <= k <= factorial(n)`.
-"""
-nthperm(p)
 
 doc"""
     values(collection)
@@ -7295,13 +7230,6 @@ The `dir` keyword argument can be used to specify a working directory for the co
 setenv
 
 doc"""
-    invperm(v)
-
-Return the inverse permutation of v.
-"""
-invperm
-
-doc"""
     lowercase(string)
 
 Returns `string` with all characters converted to lowercase.
@@ -7766,13 +7694,6 @@ The inverse of `ind2sub`, returns the linear index corresponding to the provided
 sub2ind
 
 doc"""
-    isperm(v) -> Bool
-
-Returns `true` if `v` is a valid permutation.
-"""
-isperm
-
-doc"""
     super(T::DataType)
 
 Return the supertype of DataType `T`.
@@ -8068,13 +7989,6 @@ doc"""
 Register a function `f(x)` to be called when there are no program-accessible references to `x`. The behavior of this function is unpredictable if `x` is of a bits type.
 """
 finalizer
-
-doc"""
-    nextprod([k_1,k_2,...], n)
-
-Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-nextprod
 
 doc"""
     <<(x, n)
@@ -9818,13 +9732,6 @@ The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns `
 nextpow2
 
 doc"""
-    ipermute!(v, p)
-
-Like permute!, but the inverse of the given permutation is applied.
-"""
-ipermute!
-
-doc"""
 ```rst
 ..  full(F)
 
@@ -10191,13 +10098,6 @@ An iterator that generates at most the first `n` elements of `iter`.
 take
 
 doc"""
-    combinations(array, n)
-
-Generate all combinations of `n` elements from an indexable object. Because the number of combinations can be very large, this function returns an iterator object. Use `collect(combinations(array,n))` to get an array of all combinations.
-"""
-combinations
-
-doc"""
     frexp(val)
 
 Return `(x,exp)` such that `x` has a magnitude in the interval $[1/2, 1)$ or 0,
@@ -10438,15 +10338,6 @@ doc"""
 Tests whether a character is a lowercase letter, or whether this is true for all elements of a string. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.
 """
 islower
-
-doc"""
-```rst
-..  nthperm!(v, k)
-
-In-place version of :func:`nthperm`.
-```
-"""
-nthperm!
 
 doc"""
     cell(dims)

@@ -2267,10 +2267,6 @@ end
 @test nextprod([2,3,5],30) == 30
 @test nextprod([2,3,5],33) == 36
 
-@test_throws ArgumentError prevprod([2,3,5],Int128(typemax(Int))+1)
-@test prevprod([2,3,5],30) == 30
-@test prevprod([2,3,5],33) == 32
-
 @test nextfloat(0.0) == 5.0e-324
 @test prevfloat(0.0) == -5.0e-324
 @test nextfloat(-0.0) == 5.0e-324
