@@ -37,7 +37,7 @@ directory ``src/``.
 |``sys.c``            | I/O and operating system utility functions                  |
 +---------------------+-------------------------------------------------------------+
 
-Some of the `.cpp` files form a group that compile to a single object.
+Some of the ``.cpp`` files form a group that compile to a single object.
 
 The difference between an intrinsic and a builtin is that a builtin is a first class
 function that can be used like any other Julia function.  An intrinsic can operate
@@ -50,7 +50,7 @@ Julia currently uses LLVM's `Type Based Alias Analysis <http://llvm.org/docs/Lan
 To find the comments that document the inclusion relationships, look for ``static MDNode*``
 in ``src/codegen.cpp``.
 
-The `-O` option enables LLVM's `Basic Alias Analysis <http://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass>`_.
+The ``-O`` option enables LLVM's `Basic Alias Analysis <http://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass>`_.
 
 Building Julia with a different version of LLVM
 -----------------------------------------------
@@ -76,7 +76,7 @@ Here are example settings using ``bash`` syntax:
 
 * ``export JULIA_LLVM_ARGS = -print-after-all`` dumps IR after each pass.
 
-* ``export JULIA_LLVM_ARGS = -debug-only=loop-vectorize`` dumps LLVM `DEBUG(`...`)`
+* ``export JULIA_LLVM_ARGS = -debug-only=loop-vectorize`` dumps LLVM ``DEBUG(...)``
   diagnostics for loop vectorizer *if* you built Julia with ``LLVM_ASSERTIONS=1``.
   Otherwise you will get warnings about "Unknown command line argument".
   Counter-intuitively, building Julia with ``LLVM_DEBUG=1`` is *not* enough to

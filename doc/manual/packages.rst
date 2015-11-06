@@ -570,7 +570,7 @@ going to have to do a *force push*:
   it with ``git remote add myfork
   https://github.com/myaccount/Foo.jl.git``, where the URL comes from
   the "clone URL" on your GitHub fork's page.
-- Force-push to your fork with ``git push myfork +fixbar``. The `+`
+- Force-push to your fork with ``git push myfork +fixbar``. The ``+``
   indicates that this should replace the ``fixbar`` branch found at
   ``myfork``.
 
@@ -933,7 +933,7 @@ For example, the line::
     Distributions 0.1
 
 is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
-Suffixing a version with `-` allows any pre-release versions as well. For example::
+Suffixing a version with ``-`` allows any pre-release versions as well. For example::
 
     Distributions 0.1-
 

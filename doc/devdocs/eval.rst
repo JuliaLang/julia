@@ -8,8 +8,8 @@ One of the hardest parts about learning how the Julia Language runs code is lear
 how all of the pieces work together to execute a block of code.
 
 Each chunk of code typically makes a trip through many esoteric acronyms such as (in no particular order),
-`flisp`, `AST`, `C++`, `LLVM`, `eval`, `typeinf`, `macroexpand`, `sysimg` (or `system image`), `bootstrapping`,
-`compile`, `parse`, `execute`, `JIT`, `interpret`, `box`, `unbox`, `intrinsic function`, `primitive function`
+``flisp``, ``AST``, ``C++``, ``LLVM``, ``eval``, ``typeinf``, ``macroexpand``, ``sysimg`` (or ``system image``), ``bootstrapping``,
+``compile``, ``parse``, ``execute``, ``JIT``, ``interpret``, ``box``, ``unbox``, ``intrinsic function``, ``primitive function``
 before turning into the desired result (hopefully).
 
 .. sidebar:: Definitions
@@ -30,26 +30,26 @@ Julia Execution
 
 The 10,000 foot view of the whole process is as follows:
 
-1. The user starts `julia`.
-2. The C function :c:func:`main` from `ui/repl.c` gets called.
+1. The user starts ``julia``.
+2. The C function :c:func:`main` from ``ui/repl.c`` gets called.
    This function processes the command line arguments, filling in the :c:type:`jl_options` struct and setting the variable :code:`ARGS`.
    It then initializes Julia (by calling `julia_init in task.c <https://github.com/JuliaLang/julia/blob/master/src/task.c>`_,
    which may load a previously compiled sysimg_).
    Finally, it passes off control to Julia by calling `Base._start() <https://github.com/JuliaLang/julia/blob/master/base/client.jl>`_.
-#. When `_start()` takes over control, the subsequent sequence of commands depends on the command line arguments given.
+#. When ``_start()`` takes over control, the subsequent sequence of commands depends on the command line arguments given.
    For example, if a filename was supplied, it will proceed to execute that file. Otherwise, it will start an interactive REPL.
 #. Skipping the details about how the REPL interacts with the user,
    let's just say the program ends up with a block of code that it wants to run.
 #. If the block of code to run is in a file, `jl_load(char *filename) <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_
-   gets invoked to load the file and parse_ it. Each fragment of code is then passed to `eval` to execute.
+   gets invoked to load the file and parse_ it. Each fragment of code is then passed to ``eval`` to execute.
 #. Each fragment of code (or AST), is handed off to :func:`eval` to turn into results.
 #. :func:`eval` takes each code fragment and tries to run it in `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_.
-#. :c:func:`jl_toplevel_eval_flex` decides whether the code is a "toplevel" action (such as `using` or `module`), which would be invalid inside a function.
+#. :c:func:`jl_toplevel_eval_flex` decides whether the code is a "toplevel" action (such as ``using`` or ``module``), which would be invalid inside a function.
    If so, it passes off the code to the toplevel interpreter.
 #. :c:func:`jl_toplevel_eval_flex` then expands_ the code to eliminate any macros and to "lower" the AST to make it simpler to execute.
 #. :c:func:`jl_toplevel_eval_flex` then uses some simple heuristics to decide whether to JIT compiler the AST or to interpret it directly.
 #. The bulk of the work to interpret code is handled by `eval in interpreter.c <https://github.com/JuliaLang/julia/blob/master/src/interpreter.c>`_.
-#. If instead, the code is compiled, the bulk of the work is handled by `codegen.cpp`.
+#. If instead, the code is compiled, the bulk of the work is handled by ``codegen.cpp``.
    Whenever a Julia function is called for the first time with a given set of argument types, `type inference`_ will be run on that function.
    This information is used by the codegen_ step to generate faster code.
 #. Eventually, the user quits the REPL, or the end of the program is reached, and the :func:`_start` method returns.
@@ -80,8 +80,8 @@ Macro Expansion
 ---------------
 
 When :func:`eval` encounters a macro, it expands that AST node before attempting to evaluate the expression.
-Macro expansion involves a handoff from :func:`eval` (in Julia), to the parser function :c:func:`jl_macroexpand` (written in `flisp`)
-to the Julia macro itself (written in - what else - `Julia`) via :c:func:`fl_invoke_julia_macro`, and back.
+Macro expansion involves a handoff from :func:`eval` (in Julia), to the parser function :c:func:`jl_macroexpand` (written in ``flisp``)
+to the Julia macro itself (written in - what else - Julia) via :c:func:`fl_invoke_julia_macro`, and back.
 
 Typically, macro expansion is invoked as a first step during a call to :func:`expand`/:c:func:`jl_expand`,
 although it can also be invoked directly by a call to :func:`macroexpand`/:c:func:`jl_macroexpand`.
@@ -139,7 +139,7 @@ Type inference may also include other steps such as constant propagation and inl
       These pseudo-functions implement operations on raw bits such as add and sign extend
       that cannot be expressed directly in any other way.
       Since they operate on bits directly, they must be compiled into a function
-      and surrounded by a call to `Core.Intrinsics.box(T, ...)` to reassign type information to the value.
+      and surrounded by a call to ``Core.Intrinsics.box(T, ...)`` to reassign type information to the value.
 
 .. _codegen:
 
@@ -164,7 +164,7 @@ Other parts of codegen are handled by various helper files:
   Handles backtraces for JIT functions
 
 `ccall.cpp <https://github.com/JuliaLang/julia/blob/master/src/ccall.cpp>`_
-  Handles the ccall and llvmcall FFI, along with various `abi_*.cpp` files
+  Handles the ccall and llvmcall FFI, along with various ``abi_*.cpp`` files
 
 `intrinsics.cpp <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp>`_
   Handles the emission of various low-level intrinsic functions
@@ -183,14 +183,14 @@ System Image
 ------------
 
 The system image is a precompiled archive of a set of Julia files.
-The `sys.ji` file distributed with Julia is one such system image,
+The ``sys.ji`` file distributed with Julia is one such system image,
 generated by executing the file `sysimg.jl <https://github.com/JuliaLang/julia/blob/master/base/sysimg.jl>`_,
 and serializing the resulting environment (including Types, Functions, Modules, and all other defined values)
 into a file. Therefore, it contains a frozen version of the :mod:`Main`, :mod:`Core`, and :mod:`Base` modules (and whatever else was in the environment at the end of bootstrapping).
 This serializer/deserializer is implemented by `jl_save_system_image/jl_restore_system_image in dump.c <https://github.com/JuliaLang/julia/blob/master/src/dump.c>`_.
 
 If there is no sysimg file (:code:`jl_options.image_file == NULL`),
-this also implies that `--build` was given on the command line,
+this also implies that ``--build`` was given on the command line,
 so the final result should be a new sysimg file.
 During Julia initialization, minimal :mod:`Core` and :mod:`Main` modules are created.
 Then a file named ``boot.jl`` is evaluated from the current directory.

@@ -204,7 +204,7 @@ The base Julia installation has in-built support for two types of clusters:
 Functions :func:`addprocs`, :func:`rmprocs`, :func:`workers`, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
 
-Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 Other types of clusters can be supported by writing your own custom

@@ -271,8 +271,8 @@ that Julia does them correctly.
 For other types, :func:`isequal` defaults to calling :func:`==`, so if you want to
 define equality for your own types then you only need to add a :func:`==`
 method.  If you define your own equality function, you should probably
-define a corresponding :func:`hash` method to ensure that `isequal(x,y)`
-implies `hash(x) == hash(y)`.
+define a corresponding :func:`hash` method to ensure that ``isequal(x,y)``
+implies ``hash(x) == hash(y)``.
 
 Chaining comparisons
 ~~~~~~~~~~~~~~~~~~~~

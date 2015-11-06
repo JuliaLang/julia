@@ -128,8 +128,8 @@ inside a specific function or set of functions, you have two options:
 What does the ``...`` operator do?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The two uses of the `...` operator: slurping and splatting
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The two uses of the ``...`` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Many newcomers to Julia find the use of ``...`` operator confusing. Part of
 what makes the ``...`` operator confusing is that it means two different things
