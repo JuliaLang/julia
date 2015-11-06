@@ -430,7 +430,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
                 error_unless(isbits, "reinterpret: expected bitstype value for second argument", ctx);
             }
             else {
-                emit_error("reinterpet: expected bitstype value for second argument", ctx);
+                emit_error("reinterpret: expected bitstype value for second argument", ctx);
                 return jl_cgval_t();
             }
         }
@@ -438,10 +438,10 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
             if (isboxed) {
                 Value *size = emit_datatype_size(typ);
                 error_unless(builder.CreateICmpEQ(size, ConstantInt::get(T_int32, nb)),
-                            "reinterpet: argument size does not match size of target type", ctx);
+                            "reinterpret: argument size does not match size of target type", ctx);
             }
             else {
-                emit_error("reinterpet: argument size does not match size of target type", ctx);
+                emit_error("reinterpret: argument size does not match size of target type", ctx);
                 return jl_cgval_t();
             }
         }

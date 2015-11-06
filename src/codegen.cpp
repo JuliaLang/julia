@@ -4401,7 +4401,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     int va = 0;
 
     if ((jl_array_len(jl_lam_staticparams(ast)) == 0) != (jl_svec_len(sparams) == 0)) // TODO: more accurate check
-        jl_error("wrong number of static-parameters on LambdaStaticData");
+        jl_error("wrong number of static parameters on LambdaStaticData");
 
     assert(lam->specTypes); // this could happen if the user tries to compile a generic-function
                             // without specializing (or unspecializing) it first
