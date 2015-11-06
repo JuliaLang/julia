@@ -449,8 +449,8 @@ C name                  Standard Julia Alias    Julia Base Type
 
 .. warning::
 
-Julia's ``Char`` type is 32 bits, which is not the same as the wide character
-type (``wchar_t`` or ``wint_t``) on all platforms.
+    Julia's ``Char`` type is 32 bits, which is not the same as the wide character
+    type (``wchar_t`` or ``wint_t``) on all platforms.
 
 .. note::
 
