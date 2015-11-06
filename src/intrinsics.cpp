@@ -757,7 +757,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
 {
     Value *psetfunc = // TODO: move this to the codegen initialization code section
         jl_Module->getOrInsertFunction("jl_pointerset",
-                                       FunctionType::get(T_void, three_pvalue_llvmt, false));
+                                       FunctionType::get(T_pjlvalue, three_pvalue_llvmt, false));
     int ldepth = ctx->gc.argDepth;
     jl_cgval_t parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx).V;
