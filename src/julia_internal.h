@@ -335,6 +335,12 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 
+#define JL_GF_CALLSITE_CACHE_SIZE 4
+DLLEXPORT jl_value_t *jl_apply_cached(jl_value_t *F, jl_value_t **args,
+                                      uint32_t nargs, uint64_t mask,
+                                      void **cache, jl_lambda_info_t *linfo,
+                                      size_t root_offset);
+
 #ifdef __cplusplus
 }
 #endif

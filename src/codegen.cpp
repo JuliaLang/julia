@@ -485,6 +485,7 @@ static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlnsvec_func;
 static Function *jlapplygeneric_func;
+static Function *jlapplycached_func;
 static Function *jlgetfield_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
@@ -5777,6 +5778,19 @@ static void init_julia_llvm_env(Module *m)
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_get_field];
     jlapplygeneric_func = jlcall_func_to_llvm("jl_apply_generic", (void*)&jl_apply_generic, m);
+
+    std::vector<Type*> applycachedargs(0);
+    applycachedargs.push_back(T_pjlvalue);
+    applycachedargs.push_back(T_ppjlvalue);
+    applycachedargs.push_back(T_uint32);
+    applycachedargs.push_back(T_uint64);
+    applycachedargs.push_back(T_ppint8);
+    applycachedargs.push_back(T_pjlvalue);
+    applycachedargs.push_back(T_size);
+    jlapplycached_func = Function::Create(
+        FunctionType::get(T_void, applycachedargs, false),
+        Function::ExternalLinkage, "jl_apply_cached", m);
+    add_named_global(jlapplycached_func, (void*)&jl_apply_cached);
 
     jltypeassert_func = Function::Create(FunctionType::get(T_void, two_pvalue_llvmt, false),
                                         Function::ExternalLinkage,
