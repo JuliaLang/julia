@@ -541,6 +541,7 @@ function docm(meta, def, define = true)
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
     __doc__!(meta, def′)       ? esc(def′) :
+    isexpr(def′, :error)       ? esc(def′) :
 
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
