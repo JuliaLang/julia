@@ -1846,8 +1846,8 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 }
 #endif
 
-
-JL_CALLABLE(jl_apply_generic)
+static jl_function_t *jl_specialize_generic(jl_value_t *F, jl_value_t **args,
+                                            uint32_t nargs, int *specialized)
 {
     assert(jl_is_gf(F));
     jl_methtable_t *mt = jl_gf_mtable(F);
@@ -1873,7 +1873,8 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc != jl_bottom_func) {
 #ifdef JL_TRACE
         if (traceen)
-            jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
+            jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name,
+                      mfunc->linfo->line);
 #endif
         if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
@@ -1886,10 +1887,12 @@ JL_CALLABLE(jl_apply_generic)
                     li->unspecialized->env = NULL;
                 jl_gc_wb(li, li->unspecialized);
             }
-            return jl_apply_unspecialized(mfunc, args, nargs);
+            *specialized = 0;
+            return mfunc;
         }
         assert(!mfunc->linfo || !mfunc->linfo->inInference);
-        return jl_apply(mfunc, args, nargs);
+        *specialized = 1;
+        return mfunc;
     }
 
     // cache miss case
@@ -1913,7 +1916,23 @@ JL_CALLABLE(jl_apply_generic)
         jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
 #endif
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
-    jl_value_t *res = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    *specialized = 1;
+    return mfunc;
+}
+
+JL_CALLABLE(jl_apply_generic)
+{
+    int specialized = 0;
+    jl_function_t *mfunc = jl_specialize_generic(F, args, nargs, &specialized);
+    JL_GC_PUSH1(&mfunc);
+    jl_value_t *res;
+    if (specialized) {
+        res = jl_apply(mfunc, args, nargs);
+    }
+    else {
+        res = jl_apply_unspecialized(mfunc, args, nargs);
+    }
     JL_GC_POP();
     return res;
 }
