@@ -318,6 +318,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams, jl_mod
     li->tfunc = jl_nothing;
     li->fptr = &jl_trampoline;
     li->roots = NULL;
+    li->dynRoots = NULL;
     li->functionObject = NULL;
     li->specFunctionObject = NULL;
     li->cFunctionList = NULL;
@@ -342,6 +343,7 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->tfunc = linfo->tfunc;
     new_linfo->name = linfo->name;
     new_linfo->roots = linfo->roots;
+    new_linfo->dynRoots = linfo->dynRoots;
     new_linfo->specTypes = linfo->specTypes;
     new_linfo->unspecialized = linfo->unspecialized;
     new_linfo->specializations = linfo->specializations;

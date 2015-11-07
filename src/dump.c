@@ -826,6 +826,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int32(s, li->line);
         jl_serialize_value(s, (jl_value_t*)li->module);
         jl_serialize_value(s, (jl_value_t*)li->roots);
+        jl_serialize_value(s, (jl_value_t*)li->dynRoots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
         jl_serialize_value(s, (jl_value_t*)li->unspecialized);
@@ -1374,6 +1375,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->module);
         li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
         if (li->roots) jl_gc_wb(li, li->roots);
+        li->dynRoots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->dynRoots);
+        if (li->dynRoots) jl_gc_wb(li, li->dynRoots);
         li->def = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
         jl_gc_wb(li, li->def);
         li->capt = jl_deserialize_value(s, &li->capt);
