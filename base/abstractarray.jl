@@ -409,6 +409,7 @@ next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx
 done(A::AbstractArray,i) = done(i[1], i[2])
 
 iterstate(i) = i
+iterstate(i::Tuple{UnitRange{Int},Int}) = i[2]
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
