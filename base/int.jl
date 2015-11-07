@@ -57,17 +57,27 @@ typemin(typeof(x))`, `abs(x) == x`, not `-x` as might be expected.
 abs(x::Signed) = flipsign(x,x)
 
 """
+    Base.checked_abs(x)
+
+The absolute value of `x`, with overflow error trapping where applicable.
+For types for which no overflow can happen during `abs`, this is equivalent
+to `abs(x)`.
+"""
+function checked_abs end
+
+"""
     Base.checked_abs(x::Signed)
 
-The absolute value of `x`, with signed integer overflow error trapping.
-`checked_abs` will throw an `OverflowError` when `x == typemin(typeof(x))`.
-Otherwise `checked_abs` behaves as `abs`, though the overflow protection may
-impose a perceptible performance penalty.
+For signed integers, throws an `OverflowError` when `x == typemin(typeof(x))`.
+Otherwise, behaves as `abs`, though the overflow protection may impose a perceptible
+performance penalty.
 """
 function checked_abs{T<:Signed}(x::T)
     x == typemin(T) && throw(OverflowError())
     abs(x)
 end
+
+checked_abs(x::Unsigned) = abs(x)
 
 ~(n::Integer) = -n-1
 
