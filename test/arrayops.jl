@@ -1141,10 +1141,10 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
-@test eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
-@test eachindex(zeros(3),sub(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
-@test eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
+@test @inferred(eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@test @inferred(eachindex(zeros(3),sub(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 
 
 #rotates
@@ -1286,6 +1286,7 @@ Base.setindex!(A::LinSlowMatrix, v, i::Integer, j::Integer) = A.data[i,j] = v
 
 A = rand(3,5)
 B = LinSlowMatrix(A)
+S = sub(A, :, :)
 
 @test A == B
 @test B == A
@@ -1295,48 +1296,117 @@ B = LinSlowMatrix(A)
 for (a,b) in zip(A, B)
     @test a == b
 end
+for (a,s) in zip(A, S)
+    @test a == s
+end
 
 C = copy(B)
 @test A == C
 @test B == C
 
-@test vec(A) == vec(B)
-@test minimum(A) == minimum(B)
-@test maximum(A) == maximum(B)
+@test vec(A) == vec(B) == vec(S)
+@test minimum(A) == minimum(B) == minimum(S)
+@test maximum(A) == maximum(B) == maximum(S)
 
 a, ai = findmin(A)
 b, bi = findmin(B)
-@test a == b
-@test ai == bi
+s, si = findmin(S)
+@test a == b == s
+@test ai == bi == si
 
 a, ai = findmax(A)
 b, bi = findmax(B)
-@test a == b
-@test ai == bi
+s, si = findmax(S)
+@test a == b == s
+@test ai == bi == si
 
 fill!(B, 2)
 @test all(x->x==2, B)
 
-i,j = findn(B)
 iall = (1:size(A,1)).*ones(Int,size(A,2))'
 jall = ones(Int,size(A,1)).*(1:size(A,2))'
+i,j = findn(B)
+@test vec(i) == vec(iall)
+@test vec(j) == vec(jall)
+fill!(S, 2)
+i,j = findn(S)
 @test vec(i) == vec(iall)
 @test vec(j) == vec(jall)
 
 copy!(B, A)
+copy!(S, A)
 
-@test cat(1, A, B) == cat(1, A, A)
-@test cat(2, A, B) == cat(2, A, A)
+@test cat(1, A, B, S) == cat(1, A, A, A)
+@test cat(2, A, B, S) == cat(2, A, A, A)
 
-@test cumsum(A, 1) == cumsum(B, 1)
-@test cumsum(A, 2) == cumsum(B, 2)
+@test cumsum(A, 1) == cumsum(B, 1) == cumsum(S, 1)
+@test cumsum(A, 2) == cumsum(B, 2) == cumsum(S, 2)
 
-@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1)
-@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2)
+@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1) == mapslices(v->sort(v), S, 1)
+@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2) == mapslices(v->sort(v), S, 2)
 
-@test flipdim(A, 1) == flipdim(B, 1)
-@test flipdim(A, 2) == flipdim(B, 2)
+@test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
+@test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
 
-@test A + 1 == B + 1
-@test 2*A == 2*B
-@test A/3 == B/3
+@test A + 1 == B + 1 == S + 1
+@test 2*A == 2*B == 2*S
+@test A/3 == B/3 == S/3
+
+# issue #13250
+x13250 = zeros(3)
+x13250[UInt(1):UInt(2)] = 1.0
+@test x13250[1] == 1.0
+@test x13250[2] == 1.0
+@test x13250[3] == 0.0
+
+# issue #13254
+let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
+    f1() = [1]
+    f2() = [1;]
+    f3() = [1;2]
+    f4() = [1;2.0]
+    f5() = [1 2]
+    f6() = [1 2.0]
+    f7() = Int[1]
+    f8() = Float64[1]
+    f9() = Int[1;]
+    f10() = Float64[1;]
+    f11() = Int[1;2]
+    f12() = Float64[1;2]
+    f13() = Int[1;2.0]
+    f14() = Int[1 2]
+    f15() = Float64[1 2]
+    f16() = Int[1 2.0]
+    f17() = [1:2;]
+    f18() = Int[1:2;]
+    f19() = Float64[1:2;]
+    f20() = [1:2;1:2]
+    f21() = Int[1:2;1:2]
+    f22() = Float64[1:2;1:2]
+    f23() = [1:2;1.0:2.0]
+    f24() = Int[1:2;1.0:2.0]
+    f25() = [1:2 1:2]
+    f26() = Int[1:2 1:2]
+    f27() = Float64[1:2 1:2]
+    f28() = [1:2 1.0:2.0]
+    f29() = Int[1:2 1.0:2.0]
+    f30() = [A;]
+    f31() = Int[A;]
+    f32() = Float64[A;]
+    f33() = [A;A]
+    f34() = Int[A;A]
+    f35() = Float64[A;A]
+    f36() = [A;B]
+    f37() = Int[A;B]
+    f38() = [A A]
+    f39() = Int[A A]
+    f40() = Float64[A A]
+    f41() = [A B]
+    f42() = Int[A B]
+
+    for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
+              f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
+              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
+        @test isleaftype(Base.return_types(f, ())[1])
+    end
+end

@@ -252,7 +252,7 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I::Int...)
+function setindex_shape_check(X::AbstractArray, I...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
@@ -289,16 +289,16 @@ end
 setindex_shape_check(X::AbstractArray) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
 
-setindex_shape_check(X::AbstractArray, i::Int) =
+setindex_shape_check(X::AbstractArray, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int, j::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i, j) =
     (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
+function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -307,7 +307,7 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
         throw_setindex_mismatch(X, (i,j))
     end
 end
-setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
+setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to a supported index type (Array, Colon, or Int)
 to_index(i::Int) = i

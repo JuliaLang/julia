@@ -646,22 +646,72 @@ function warnbanner(msg...; label="[ WARNING ]", prefix="")
     warn(prefix="", "="^cols)
 end
 
-function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+function build!(pkgs::Vector, buildstream::IO, seen::Set)
     for pkg in pkgs
         pkg == "julia" && continue
         pkg in seen && continue
-        build!(Read.requires_list(pkg),errs,push!(seen,pkg))
+        build!(Read.requires_list(pkg),buildstream,push!(seen,pkg))
         Read.isinstalled(pkg) || error("$pkg is not an installed package")
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
-        info("Building $pkg")
-        cd(dirname(path)) do
-            try evalfile(path)
-            catch err
-                warnbanner(err, label="[ ERROR: $pkg ]")
+        println(buildstream, path) # send to build process for evalfile
+        flush(buildstream)
+    end
+end
+
+function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    # To isolate the build from the running Julia process, we
+    # execute the build.jl files in a separate process that
+    # is sitting there waiting for paths to evaluate.   Errors
+    # are serialized to errfile for later retrieval into errs[pkg]
+    errfile = tempname()
+    close(open(errfile, "w")) # create empty file
+    code = """
+        empty!(Base.LOAD_PATH)
+        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+        empty!(Base.LOAD_CACHE_PATH)
+        append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+        empty!(Base.DL_LOAD_PATH)
+        append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+        open("$(escape_string(errfile))", "a") do f
+            for path_ in eachline(STDIN)
+                path = chomp(path_)
+                pkg = basename(dirname(dirname(path)))
+                try
+                    info("Building \$pkg")
+                    cd(dirname(path)) do
+                        evalfile(path)
+                    end
+                catch err
+                    Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
+                    serialize(f, pkg)
+                    serialize(f, err)
+                end
+            end
+        end
+    """
+    io, pobj = open(detach(`$(Base.julia_cmd())
+                           --history-file=no
+                           --color=$(Base.have_color ? "yes" : "no")
+                           --eval $code`), "w", STDOUT)
+    try
+        build!(pkgs, io, seen)
+        close(io)
+        wait(pobj)
+        success(pobj) || error("Build process failed.")
+        open(errfile, "r") do f
+            while !eof(f)
+                pkg = deserialize(f)
+                err = deserialize(f)
                 errs[pkg] = err
             end
         end
+    catch
+        kill(pobj)
+        close(io)
+        rethrow()
+    finally
+        isfile(errfile) && Base.rm(errfile)
     end
 end
 

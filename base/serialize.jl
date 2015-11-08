@@ -102,7 +102,7 @@ end
 serialize(s::SerializationState, x::Bool) = x ? writetag(s.io, TRUE_TAG) :
                                                 writetag(s.io, FALSE_TAG)
 
-serialize(s::SerializationState, ::Ptr) = error("cannot serialize a pointer")
+serialize(s::SerializationState, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
 
 serialize(s::SerializationState, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
@@ -124,7 +124,7 @@ function serialize(s::SerializationState, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
     for i = 1:length(v)
-        serialize(s.io, v[i])
+        serialize(s, v[i])
     end
 end
 
@@ -202,7 +202,7 @@ end
 
 function serialize{T<:AbstractString}(s::SerializationState, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
-    invoke(serialize, Tuple{SerializationState,Any}, s, convert(SubString{T}, convert(T,ss)))
+    serialize_any(s, convert(SubString{T}, convert(T,ss)))
 end
 
 # Don't serialize the pointers
@@ -281,6 +281,8 @@ function serialize(s::SerializationState, f::Function)
         mod = ()
         if isa(f.env,Symbol)
             mod = Core
+        elseif isdefined(f.env, :module) && isa(f.env.module, Module)
+            mod = f.env.module
         elseif !is(f.env.defs, ())
             mod = f.env.defs.func.code.module
         end
@@ -400,7 +402,9 @@ function serialize(s::SerializationState, n::Int)
     write(s.io, n)
 end
 
-function serialize(s::SerializationState, x)
+serialize(s::SerializationState, x) = serialize_any(s, x)
+
+function serialize_any(s::SerializationState, x)
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
@@ -646,8 +650,6 @@ function deserialize_datatype(s::SerializationState)
     end
     deserialize(s, t)
 end
-
-deserialize{T}(s::SerializationState, ::Type{Ptr{T}}) = convert(Ptr{T}, 0)
 
 function deserialize(s::SerializationState, ::Type{Task})
     t = Task(()->nothing)

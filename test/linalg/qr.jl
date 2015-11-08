@@ -54,6 +54,8 @@ debug && println("QR decomposition (without pivoting)")
                 @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
+                    ac = copy(a)
+                    @test qrfact!(a[:, 1:5])\b == qrfact!(sub(ac, :, 1:5))\b
                 end
 
 debug && println("Thin QR decomposition (without pivoting)")

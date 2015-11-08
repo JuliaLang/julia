@@ -39,7 +39,9 @@ end
 
 # Ptr
 create_serialization_stream() do s
-    @test_throws ErrorException serialize(s, C_NULL)
+    serialize(s, C_NULL)
+    seekstart(s)
+    @test deserialize(s) === C_NULL
 end
 
 # Integer
@@ -319,3 +321,26 @@ create_serialization_stream() do s
     r2 = deserialize(s)
     @test r1 == r2
 end
+
+# issue #13452
+module Test13452
+using Base.Test
+
+module Shell
+export foo
+foo(x) = error("Instances must implement foo")
+end
+
+module Instance1
+using ..Shell
+Shell.foo(x::Int) = "This is an Int"
+end
+
+using .Shell, .Instance1
+io = IOBuffer()
+serialize(io, foo)
+str = takebuf_string(io)
+@test isempty(search(str, "Instance1"))
+@test !isempty(search(str, "Shell"))
+
+end  # module Test13452

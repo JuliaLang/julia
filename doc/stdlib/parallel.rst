@@ -97,7 +97,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Wrap an expression in a ``Task`` and add it to the scheduler's queue.
+   Wrap an expression in a ``Task`` and add it to the local machine's scheduler queue.
 
 .. function:: @task
 
@@ -156,7 +156,7 @@ General Parallel Computing Support
 
    Equivalent to ``addprocs(CPU_CORES)``
 
-   Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+   Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
    (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 .. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
@@ -401,7 +401,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Wraps an expression in a closure and schedules it to run on the local machine. Also adds it to the set of items that the nearest enclosing ``@sync`` waits for.
+   Like ``@schedule``\ , ``@async`` wraps an expression in a ``Task`` and adds it to the local machine's scheduler queue. Additionally it adds the task to the set of items that the nearest enclosing ``@sync`` waits for. ``@async`` also wraps the expression in a ``let x=x, y=y, ...`` block to create a new scope with copies of all variables referenced in the expression.
 
 .. function:: @sync
 

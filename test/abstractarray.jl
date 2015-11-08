@@ -370,6 +370,17 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
+# A custom linear slow array that insists upon Cartesian indexing
+type TSlowNIndexes{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+Base.linearindexing{A<:TSlowNIndexes}(::Type{A}) = Base.LinearSlow()
+Base.size(A::TSlowNIndexes) = size(A.data)
+Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) indexes")
+Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
+
+
+
 type GenericIterator{N} end
 Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
@@ -452,6 +463,12 @@ function test_vcat_depwarn(::Type{TestAbstractArray})
     end
 end
 
+# Issue 13315
+function test_13315(::Type{TestAbstractArray})
+    U = UInt(1):UInt(2)
+    @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
+end
+
 #----- run tests -------------------------------------------------------------#
 
 for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
@@ -471,3 +488,9 @@ test_map(TestAbstractArray)
 test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
 test_vcat_depwarn(TestAbstractArray)
+test_13315(TestAbstractArray)
+
+A = TSlowNIndexes(rand(2,2))
+@test_throws ErrorException A[1]
+@test A[1,1] == A.data[1]
+@test first(A) == A.data[1]

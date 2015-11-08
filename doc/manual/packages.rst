@@ -570,7 +570,7 @@ going to have to do a *force push*:
   it with ``git remote add myfork
   https://github.com/myaccount/Foo.jl.git``, where the URL comes from
   the "clone URL" on your GitHub fork's page.
-- Force-push to your fork with ``git push myfork +fixbar``. The `+`
+- Force-push to your fork with ``git push myfork +fixbar``. The ``+``
   indicates that this should replace the ``fixbar`` branch found at
   ``myfork``.
 
@@ -800,7 +800,7 @@ on GitHub, push your changes to your fork, and open a pull request::
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/applications>`_ and try again.
+    <https://github.com/settings/tokens>`_ and try again.
 
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
@@ -933,7 +933,7 @@ For example, the line::
     Distributions 0.1
 
 is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
-Suffixing a version with `-` allows any pre-release versions as well. For example::
+Suffixing a version with ``-`` allows any pre-release versions as well. For example::
 
     Distributions 0.1-
 

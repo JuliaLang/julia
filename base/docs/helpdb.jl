@@ -328,7 +328,7 @@ Libdl.dlclose
 doc"""
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
 """
 Libdl.dlsym_e
 
@@ -363,6 +363,13 @@ doc"""
 Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`, `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
 """
 Libc.TmStruct
+
+doc"""
+    dlext
+
+File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
+"""
+Libdl.dlext
 
 doc"""
     time(t::TmStruct)
@@ -2264,7 +2271,7 @@ promote
 doc"""
     @schedule
 
-Wrap an expression in a `Task` and add it to the scheduler's queue.
+Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
 """
 :@schedule
 
@@ -2438,7 +2445,7 @@ The function calls the C library CHOLMOD and many other functions from the libra
 ldltfact(A::SparseMatrixCSC; shift=0, perm=Int[])
 
 doc"""
-    connect([host],port) -> TcpSocket
+    connect([host],port) -> TCPSocket
 
 Connect to the host `host` on port `port`
 """
@@ -3831,7 +3838,34 @@ utf8(s)
 doc"""
     hvcat(rows::Tuple{Vararg{Int}}, values...)
 
-Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row. For example, `[a b;c d e]` calls `hvcat((2,3),a,b,c,d,e)`.
+Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.
+
+```jldoctest
+julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
+(1,2,3,4,5,6)
+
+julia> [a b c; d e f]
+2x3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> hvcat((3,3), a,b,c,d,e,f)
+2x3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> [a b;c d; e f]
+3x2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+
+julia> hvcat((2,2,2), a,b,c,d,e,f)
+3x2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+```
 
 If the first argument is a single integer `n`, then all block rows are assumed to have `n` block columns.
 """
@@ -3972,7 +4006,7 @@ doc"""
 
 Equivalent to ``addprocs(CPU_CORES)``
 
-Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 ```
 """
@@ -4183,7 +4217,11 @@ pipeline(command)
 doc"""
     serialize(stream, value)
 
-Write an arbitrary value to a stream in an opaque format, such that it can be read back by `deserialize`. The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image.
+Write an arbitrary value to a stream in an opaque format, such that it can be read back by `deserialize`.
+The read-back value will be as identical as possible to the original.
+In general, this process will not work if the reading and writing are done by different versions of Julia,
+or an instance of Julia with a different system image.
+`Ptr` values are serialized as all-zero bit patterns (`NULL`).
 """
 serialize
 
@@ -4428,7 +4466,7 @@ erfinv
 doc"""
     @async
 
-Wraps an expression in a closure and schedules it to run on the local machine. Also adds it to the set of items that the nearest enclosing `@sync` waits for.
+Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local machine's scheduler queue. Additionally it adds the task to the set of items that the nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...` block to create a new scope with copies of all variables referenced in the expression.
 """
 :@async
 
@@ -6414,13 +6452,6 @@ Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (t
 notify
 
 doc"""
-    unique(itr[, dim])
-
-Returns an array containing only the unique elements of the iterable `itr`, in the order that the first of each set of equivalent elements originally appears. If `dim` is specified, returns unique regions of the array `itr` along `dim`.
-"""
-unique
-
-doc"""
 ```rst
 ..  sub(A, inds...)
 
@@ -6818,7 +6849,7 @@ A macro to execute an expression, and return the value of the expression, elapse
 doc"""
     code_native(f, types)
 
-Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+Prints the native assembly instructions generated for running the method matching the given generic function and type signature to `STDOUT`.
 """
 code_native
 
@@ -6980,9 +7011,9 @@ multiplied by the larger matrix dimension.
 For inverting dense ill-conditioned matrices in a least-squares sense,
 ``tol = sqrt(eps(real(float(one(eltype(M))))))`` is recommended.
 
-For more information, see [8859]_, [B96]_, [S84]_, [KY88]_.
+For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
 
-.. [8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
+.. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 .. [B96] Åke Björck, "Numerical Methods for Least Squares Problems",
    SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51.
    `doi:10.1137/1.9781611971484 <http://epubs.siam.org/doi/book/10.1137/1.9781611971484>`_
@@ -8640,9 +8671,9 @@ Similar to `search`, but return only the start index at which the substring is f
 searchindex
 
 doc"""
-    listenany(port_hint) -> (UInt16,TcpServer)
+    listenany(port_hint) -> (UInt16,TCPServer)
 
-Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 """
 listenany
 
@@ -8748,7 +8779,7 @@ Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If ne
 intersect!
 
 doc"""
-    listen([addr,]port) -> TcpServer
+    listen([addr,]port) -> TCPServer
 
 Listen on port on the address specified by `addr`. By default this listens on localhost only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 """
@@ -10194,14 +10225,14 @@ unescape_string
 doc"""
     redirect_stdout()
 
-Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+Create a pipe to which all C and Julia level `STDOUT` output will be redirected. Returns a tuple `(rd,wr)` representing the pipe ends. Data written to `STDOUT` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old `STDOUT` object was cached by the user and needs to be replaced elsewhere.
 """
 redirect_stdout
 
 doc"""
     redirect_stdout(stream)
 
-Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a TcpSocket.
+Replace `STDOUT` by stream for all C and julia level output to `STDOUT`. Note that `stream` must be a TTY, a `Pipe` or a `TCPSocket`.
 """
 redirect_stdout(stream)
 

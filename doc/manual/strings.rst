@@ -751,7 +751,7 @@ with the number or name of the capture group::
     "45"
 
 Captures can be referenced in a substitution string when using :func:`replace`
-by using ``\n`` to refer to the `n`th capture group and prefixing the
+by using ``\n`` to refer to the nth capture group and prefixing the
 subsitution string with ``s``. Capture group 0 refers to the entire match object.
 Named capture groups can be referenced in the substitution with ``g<groupname>``.
 For example::

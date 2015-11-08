@@ -362,11 +362,12 @@ type:
     in getindex at ./essentials.jl:211
     in show_delim_array at show.jl:229
     in show at show.jl:257
-    in anonymous at show.jl:1278
-    in with_output_limit at ./show.jl:1255
-    in showlimited at show.jl:1277
+    in anonymous at show.jl:1294
+    in with_output_limit at ./show.jl:1271
+    in showlimited at show.jl:1293
     in display at multimedia.jl:120
-    in display at multimedia.jl:151
+    [inlined code] from multimedia.jl:151
+    in display at multimedia.jl:162
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)

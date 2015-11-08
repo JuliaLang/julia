@@ -336,6 +336,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
     io, pobj = open(detach(`$(julia_cmd())
                            --output-ji $output --output-incremental=yes
                            --startup-file=no --history-file=no
+                           --color=$(have_color ? "yes" : "no")
                            --eval $code_object`), "w", STDOUT)
     try
         serialize(io, quote
@@ -429,7 +430,8 @@ function stale_cachefile(modpath, cachefile)
             return true # cache file was compiled from a different path
         end
         for (f,ftime) in files
-            if mtime(f) != ftime
+            # Issue #13606: compensate for Docker images rounding mtimes
+            if mtime(f) ∉ (ftime, floor(ftime))
                 return true
             end
         end

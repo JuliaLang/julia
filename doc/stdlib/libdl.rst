@@ -60,13 +60,17 @@
 
    .. Docstring generated from Julia source
 
-   Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
+   Look up a symbol from a shared library handle, silently return ``NULL`` pointer on lookup failure.
 
 .. function:: dlclose(handle)
 
    .. Docstring generated from Julia source
 
    Close shared library referenced by handle.
+
+.. data:: dlext
+
+   File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
 
 .. function:: find_library(names, locations)
 

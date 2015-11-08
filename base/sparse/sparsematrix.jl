@@ -750,8 +750,8 @@ function gen_broadcast_body_sparse(f::Function, is_first_sparse::Bool)
         colptr1 = A_1.colptr; rowval1 = A_1.rowval; nzval1 = A_1.nzval
         colptr2 = A_2.colptr; rowval2 = A_2.rowval; nzval2 = A_2.nzval
 
-        nnzB = nnz(A_1) * div(B.n, A_1.n) * div(B.m, A_1.m)  +
-               nnz(A_2) * div(B.n, A_2.n) * div(B.m, A_2.m)
+        nnzB = isempty(B) ? 0 : (nnz(A_1) * div(B.n, A_1.n) * div(B.m, A_1.m)  +
+                                 nnz(A_2) * div(B.n, A_2.n) * div(B.m, A_2.m))
         if length(rowvalB) < nnzB
             resize!(rowvalB, nnzB)
         end
@@ -910,7 +910,8 @@ function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
         Base.Broadcast.check_broadcast_shape(size(B), $A1)
         Base.Broadcast.check_broadcast_shape(size(B), $A2)
 
-        nnzB = nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
+        nnzB = isempty(B) ? 0 :
+               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
         if length(B.rowval) < nnzB
             resize!(B.rowval, nnzB)
         end
@@ -1494,10 +1495,12 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
 
-    nI = length(I)
-    avgM = div(nnz(A),n)
+    nI   = length(I)
+    nzA  = nnz(A)
+    avgM = div(nzA,n)
     # heuristics based on experiments
-    alg = ((nI - avgM) > 2^8) ? 1 :
+    alg = ((m > nzA) && (m > nI)) ? 0 :
+          ((nI - avgM) > 2^8) ? 1 :
           ((avgM - nI) > 2^10) ? 0 : 2
 
     (alg == 0) ? getindex_I_sorted_bsearch_A(A, I, J) :

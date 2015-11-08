@@ -47,9 +47,21 @@ The following keyword arguments are supported:
    =============== ================================== ==================================
 ```
 """
-eigs(A; args...) = eigs(A, I; args...)
+eigs(A; kwargs...) = eigs(A, I; kwargs...)
+eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
-
+eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
+eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
+eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
+function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...)
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    eigs(convert(AbstractMatrix{Tnew}, A), I; kwargs...)
+end
+function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
+    T = promote_type(eltype(A), eltype(B))
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
+end
 doc"""
 ```rst
 ..  eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
@@ -94,7 +106,8 @@ The following keyword arguments are supported:
    =============== ================================== ==================================
 ```
 """
-function eigs(A, B;
+eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
+function _eigs(A, B;
               nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
               ritzvec::Bool=true)
@@ -134,7 +147,7 @@ function eigs(A, B;
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
         which != :LI && which != :SI && which != :BE)
-       throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
+        throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
     end
     if which == :BE && !sym
         throw(ArgumentError("which=:BE only possible for real symmetric problem"))
@@ -229,12 +242,19 @@ end
 
 
 ## svds
-
-type SVDOperator{T,S} <: AbstractArray{T, 2}
+### Restrict operator to BlasFloat because ARPACK only supports that. Loosen restriction
+### when we switch to our own implementation
+type SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
     X::S
     m::Int
     n::Int
-    SVDOperator(X::S) = new(X, size(X,1), size(X,2))
+    SVDOperator(X::AbstractMatrix) = new(X, size(X, 1), size(X, 2))
+end
+
+function SVDOperator{T}(A::AbstractMatrix{T})
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    Anew = convert(AbstractMatrix{Tnew}, A)
+    SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
 ## v = [ left_singular_vector; right_singular_vector ]
@@ -242,7 +262,14 @@ end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
-function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
+svds{T<:BlasFloat}(A::AbstractMatrix{T}; kwargs...) = _svds(A; kwargs...)
+svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
+function svds{T}(A::AbstractMatrix{T}; kwargs...)
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
+end
+svds(A; kwargs...) = _svds(A; kwargs...)
+function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
     if nsv < 1
         throw(ArgumentError("number of singular values (nsv) must be ≥ 1, got $nsv"))
     end
@@ -250,7 +277,7 @@ function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, m
         throw(ArgumentError("number of singular values (nsv) must be ≤ $(minimum(size(X))), got $nsv"))
     end
     otype = eltype(X)
-    ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
+    ex    = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
     ind   = [1:2:nsv*2;]
     sval  = abs(ex[1][ind])
 

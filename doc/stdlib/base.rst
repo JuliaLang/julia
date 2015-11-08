@@ -1371,7 +1371,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to ``STDOUT``\ .
 
 .. function:: @code_native
 

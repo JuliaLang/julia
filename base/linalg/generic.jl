@@ -8,8 +8,8 @@ scale(s::Number, X::AbstractArray) = s*X
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 function generic_scale!(X::AbstractArray, s::Number)
-    for i = 1:length(X)
-        @inbounds X[i] *= s
+    for I in eachindex(X)
+        @inbounds X[I] *= s
     end
     X
 end
@@ -18,8 +18,14 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
-    for i = 1:length(X)
-        @inbounds C[i] = X[i]*s
+    if size(C) == size(X)
+        for I in eachindex(C, X)
+            @inbounds C[I] = X[I]*s
+        end
+    else
+        for (IC, IX) in zip(eachindex(C), eachindex(X))
+            @inbounds C[IC] = X[IX]*s
+        end
     end
     C
 end
@@ -427,20 +433,20 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)
 end
 
-# BLAS-like in-place y=alpha*x+y function (see also the version in blas.jl
+# BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
-function axpy!(alpha, x::AbstractArray, y::AbstractArray)
+function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
         throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
     end
     for i = 1:n
-        @inbounds y[i] += alpha * x[i]
+        @inbounds y[i] += x[i]*α
     end
     y
 end
 
-function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
+function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     elseif minimum(rx) < 1 || maximum(rx) > length(x)
@@ -451,7 +457,7 @@ function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArr
         throw(ArgumentError("rx has length $(length(rx)), but ry has length $(length(ry))"))
     end
     for i = 1:length(rx)
-        @inbounds y[ry[i]] += alpha * x[rx[i]]
+        @inbounds y[ry[i]] += x[rx[i]]*α
     end
     y
 end

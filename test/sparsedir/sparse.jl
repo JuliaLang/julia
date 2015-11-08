@@ -221,6 +221,15 @@ b = randn(3)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
 @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
+# conj
+
+cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+@test full(conj(cA)) == conj(full(cA))
+
+# exp
+A = sprandn(5,5,0.2)
+@test e.^A ≈ e.^full(A)
+
 # reductions
 pA = sparse(rand(3, 7))
 
@@ -879,6 +888,14 @@ let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A
     @test BF[:,1] .^ A == BF[:,1] .^ AF
 end
 
+# test broadcasting for empty matrices
+@test spzeros(0,0)  + spzeros(0,0)  == zeros(0,0)
+@test spzeros(0,0)  * spzeros(0,0)  == zeros(0,0)
+@test spzeros(1,0) .+ spzeros(2,1)  == zeros(2,0)
+@test spzeros(1,0) .* spzeros(2,1)  == zeros(2,0)
+@test spzeros(1,2) .+ spzeros(0,1)  == zeros(0,2)
+@test spzeros(1,2) .* spzeros(0,1)  == zeros(0,2)
+
 # test throws
 A = sprandbool(5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
@@ -942,6 +959,7 @@ perm = randperm(10)
 @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
 @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
 @test diagm(sparse(ones(1,5))) == speye(5)
+@test diagm(sparse(ones(5,1))) == speye(5)
 
 # triu/tril
 A = sprand(5,5,0.2)
@@ -1139,4 +1157,29 @@ end
 
 let A = 2. * speye(5,5)
     @test full(spones(A)) == eye(full(A))
+end
+
+let
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+    A = A*A'
+    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+    A = A*A.'
+    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test_throws ErrorException chol(A)
+    @test_throws ErrorException lu(A)
+    @test_throws ErrorException eig(A)
+    @test_throws ErrorException inv(A)
+end
+
+let
+    n = 100
+    A = sprandn(n, n, 0.5) + sqrt(n)*I
+    x = LowerTriangular(A)*ones(n)
+    @test LowerTriangular(A)\x ≈ ones(n)
+    x = UpperTriangular(A)*ones(n)
+    @test UpperTriangular(A)\x ≈ ones(n)
+    A[2,2] = 0
+    @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
+    @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end

@@ -219,7 +219,7 @@ function next(g::GraphemeIterator, i)
         k = ℓ
         c0 = c
     end
-    return (s[i:j], k)
+    return (SubString(s, i, j), k)
 end
 
 ==(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s

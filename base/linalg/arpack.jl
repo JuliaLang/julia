@@ -59,7 +59,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             elseif ido[1] == 99
                 break
             else
-                error("Internal ARPACK error")
+                throw(ARPACKException("unexpected behavior"))
             end
         elseif mode == 3 && bmat == "I" # corresponds to dsdrv2, dndrv2 or zndrv2
             if ido[1] == -1 || ido[1] == 1
@@ -67,7 +67,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             elseif ido[1] == 99
                 break
             else
-                error("Internal ARPACK error")
+                throw(ARPACKException("unexpected behavior"))
             end
         elseif mode == 2 # corresponds to dsdrv3, dndrv3 or zndrv3
             if ido[1] == -1 || ido[1] == 1
@@ -81,7 +81,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             elseif ido[1] == 99
                 break
             else
-                error("Internal ARPACK error")
+                throw(ARPACKException("unexpected behavior"))
             end
         elseif mode == 3 && bmat == "G" # corresponds to dsdrv4, dndrv4 or zndrv4
             if ido[1] == -1
@@ -93,7 +93,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             elseif ido[1] == 99
                 break
             else
-                error("Internal ARPACK error")
+                throw(ARPACKException("unexpected behavior"))
             end
         else
             throw(ArgumentError("ARPACK mode ($mode) not yet supported"))
@@ -133,7 +133,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ByteString,
         neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
-        if info[1] != 0; throw(ARPACKException(info[1])); end
+        if info[1] != 0
+            throw(ARPACKException(info[1]))
+        end
 
         p = sortperm(dmap(d[1:nev]), rev=true)
         return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
@@ -145,7 +147,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ByteString,
         seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
-        if info[1] != 0; throw(ARPACKException(info[1])); end
+        if info[1] != 0
+            throw(ARPACKException(info[1]))
+        end
 
         p = sortperm(dmap(d), rev=true)
         return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
@@ -162,7 +166,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ByteString,
         neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
-        if info[1] != 0; throw(ARPACKException(info[1])); end
+        if info[1] != 0
+            throw(ARPACKException(info[1]))
+        end
         evec = complex(Array(T, n, nev+1), Array(T, n, nev+1))
 
         j = 1
@@ -181,7 +187,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ByteString,
                 evec[:,j] = v[:,j]
                 j += 1
             else
-                error("ARPACK unexpected behavior")
+                throw(ARPACKException("unexpected behavior"))
             end
         end
 

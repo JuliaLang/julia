@@ -14,7 +14,7 @@ Base.convert{R<:Real}(::Type{R},x::Date)     = convert(R,value(x))
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 function unix2datetime(x)
-    rata = UNIXEPOCH + round(Int64,1000*x)
+    rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
 # Returns unix seconds since 1970-01-01T00:00:00
@@ -32,7 +32,7 @@ datetime2rata(dt::DateTime) = days(dt)
 # Julian conversions
 const JULIANEPOCH = value(DateTime(-4713,11,24,12))
 function julian2datetime(f)
-    rata = JULIANEPOCH + round(Int64,86400000*f)
+    rata = JULIANEPOCH + round(Int64, Int64(86400000) * f)
     return DateTime(UTM(rata))
 end
 # Returns # of julian days since -4713-11-24T12:00:00

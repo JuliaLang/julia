@@ -194,7 +194,7 @@ end
 @test ⊊(Set([1]), Set([1,2]))
 @test !⊊(Set([1]), Set([1]))
 @test ⊈(Set([1]), Set([2]))
-@test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5, 6])
+@test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5,6])
 
 # unique
 u = unique([1,1,2])
@@ -212,4 +212,16 @@ filter!(isodd, s)
 @test_throws ArgumentError first(Set())
 @test first(Set(2)) == 2
 
-# ########## end of set tests ##########
+# pop!
+let s = Set(1:5)
+    @test 2 in s
+    @test pop!(s, 2) == 2
+    @test !(2 in s)
+    @test_throws KeyError pop!(s, 2)
+    @test pop!(s, 2, ()) == ()
+    @test 3 in s
+    @test pop!(s, 3, ()) == 3
+    @test !(3 in s)
+end
+
+@test pop!(Set(1:2), 2, nothing) == 2

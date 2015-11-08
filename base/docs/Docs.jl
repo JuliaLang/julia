@@ -88,11 +88,15 @@ function doc!(obj, data)
     meta()[obj] = data
 end
 
-"`doc(obj)`: Get the metadata associated with `obj`."
-function doc(obj)
+function get_obj_meta(obj)
     for mod in modules
         haskey(meta(mod), obj) && return meta(mod)[obj]
     end
+end
+
+"`doc(obj)`: Get the metadata associated with `obj`."
+function doc(obj)
+    get_obj_meta(obj)
 end
 
 function write_lambda_signature(io::IO, lam::LambdaStaticData)
@@ -143,7 +147,7 @@ function functionsummary(func::Function)
 end
 
 function doc(b::Binding)
-    d = invoke(doc, Tuple{Any}, b)
+    d = get_obj_meta(b)
     if d === nothing
         v = getfield(b.mod,b.var)
         d = doc(v)
@@ -378,7 +382,7 @@ end
 # Modules
 
 function doc(m::Module)
-    md = invoke(doc, Tuple{Any}, m)
+    md = get_obj_meta(m)
     md === nothing || return md
     readme = Pkg.dir(string(m), "README.md")
     if isfile(readme)
@@ -512,16 +516,12 @@ fexpr(ex) = isexpr(ex, [:function, :stagedfunction, :(=)]) && isexpr(ex.args[1],
 
 function docm(meta, def, define = true)
 
-    err = (
-        "invalid doc expression:", def, isexpr(def, :macrocall) ?
-        "'$(def.args[1])' is not documentable. See 'help?> Base.@__doc__' for details." : ""
-    )
-
     def′ = unblock(def)
 
     isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
         return vardoc(meta, nothing, namify(def′.args[1]))
 
+    ex = def # Save unexpanded expression for error reporting.
     def = macroexpand(def)
     def′ = unblock(def)
 
@@ -541,8 +541,23 @@ function docm(meta, def, define = true)
     isvar(def′)                ? objdoc(meta, def′) :
     isexpr(def′, :tuple)       ? multidoc(meta, def′.args) :
     __doc__!(meta, def′)       ? esc(def′) :
-    isa(def′, Expr)            ? error(strip(join(err, "\n\n"))) :
-    objdoc(meta, def′)
+    isexpr(def′, :error)       ? esc(def′) :
+
+    # All other expressions are undocumentable and should be handled on a case-by-case basis
+    # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
+    # retrieved from the `__META__` `ObjectIdDict` without a reference to the string.
+    isa(def′, Union{AbstractString, Expr}) ? docerror(ex) : objdoc(meta, def′)
+end
+
+function docerror(ex)
+    txt = """
+    invalid doc expression:
+
+    @doc "..." $(isa(ex, AbstractString) ? repr(ex) : ex)"""
+    if isexpr(ex, :macrocall)
+        txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
+    end
+    :(error($txt, "\n"))
 end
 
 function docm(ex)

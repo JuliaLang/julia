@@ -23,11 +23,11 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         convert{T,S}(::Type{Matrix}, A::$t{T,S}) = convert(Matrix{T}, A)
 
         function similar{T,S,Tnew}(A::$t{T,S}, ::Type{Tnew}, dims::Dims)
-            if dims[1] != dims[2]
-                throw(ArgumentError("Triangular matrix must be square"))
-            end
             if length(dims) != 2
                 throw(ArgumentError("Triangular matrix must have two dimensions"))
+            end
+            if dims[1] != dims[2]
+                throw(ArgumentError("Triangular matrix must be square"))
             end
             B = similar(A.data, Tnew, dims)
             return $t(B)
@@ -119,33 +119,41 @@ getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
-    if i >= j
-        throw(BoundsError(A,(i,j)))
+    if i > j
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        throw(BoundsError(A,(i,j)))
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
-    if i <= j
-        throw(BoundsError(A,(i,j)))
+    if i < j
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+    elseif i == j
+        x == 1 || throw(ArgumentError("cannot set diagonal index ($i, $j) of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+    else
+        A.data[i,j] = x
     end
-    A.data[i,j] = x
     return A
 end
 
@@ -362,7 +370,7 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -979,41 +987,25 @@ for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!)
     @eval begin
         function ($f){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::UnitUpperTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UnitUpperTriangular{TA,S},UnitLowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
-    @eval begin
-        function ($f){TA,TB,S}(A::UnitLowerTriangular{TA,S}, B::StridedVecOrMat{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::UpperTriangular{TA,S}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB,S}(A::Union{UpperTriangular{TA,S},LowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
-    @eval begin
-        function ($f){TA,TB,S}(A::LowerTriangular{TA,S}, B::StridedVecOrMat{TB})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
     end
 end
@@ -1022,41 +1014,25 @@ for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!)
     @eval begin
         function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UnitUpperTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
-    @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UnitLowerTriangular{TB,S})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::UpperTriangular{TB,S})
+        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UpperTriangular{TB,S},LowerTriangular{TB,S}})
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
-        end
-    end
-end
-for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
-    @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::LowerTriangular{TB,S})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
+            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
         end
     end
 end

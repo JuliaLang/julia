@@ -12,45 +12,45 @@ import Base.SparseMatrix: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
-    message :: AbstractString
+    message::AbstractString
 end
 
 function umferror(status::Integer)
-     if status==UMFPACK_OK
-         return
-     elseif status==UMFPACK_WARNING_singular_matrix
-         throw(MatrixIllConditionedException("singular matrix"))
-     elseif status==UMFPACK_WARNING_determinant_underflow
-         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
-     elseif status==UMFPACK_WARNING_determinant_overflow
-         throw(MatrixIllConditionedException("the determinant overflowed"))
-     elseif status==UMFPACK_ERROR_out_of_memory
-         throw(OutOfMemoryError())
-     elseif status==UMFPACK_ERROR_invalid_Numeric_object
-         throw(ArgumentError("invalid UMFPack numeric object"))
-     elseif status==UMFPACK_ERROR_invalid_Symbolic_object
-         throw(ArgumentError("invalid UMFPack symbolic object"))
-     elseif status==UMFPACK_ERROR_argument_missing
-         throw(ArgumentError("a required argument to UMFPack is missing"))
-     elseif status==UMFPACK_ERROR_n_nonpositive
-         throw(BoundsError("the number of rows or columns of the matrix must be greater than zero"))
-     elseif status==UMFPACK_ERROR_invalid_matrix
-         throw(ArgumentError("invalid matrix"))
-     elseif status==UMFPACK_ERROR_different_pattern
-         throw(ArgumentError("pattern of the matrix changed"))
-     elseif status==UMFPACK_ERROR_invalid_system
-         throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
-     elseif status==UMFPACK_ERROR_invalid_permutation
-         throw(ArgumentError("invalid permutation"))
-     elseif status==UMFPACK_ERROR_file_IO
-         throw(ErrorException("error saving / loading UMFPack decomposition"))
-     elseif status==UMFPACK_ERROR_ordering_failed
-         throw(ErrorException("the ordering method failed"))
-     elseif status==UMFPACK_ERROR_internal_error
-         throw(ErrorException("an internal error has occurred, of unknown cause"))
-     else
-         throw(ErrorException("unknown UMFPack error code: $status"))
-     end
+    if status==UMFPACK_OK
+        return
+    elseif status==UMFPACK_WARNING_singular_matrix
+        throw(LinAlg.SingularException(0))
+    elseif status==UMFPACK_WARNING_determinant_underflow
+        throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
+    elseif status==UMFPACK_WARNING_determinant_overflow
+        throw(MatrixIllConditionedException("the determinant overflowed"))
+    elseif status==UMFPACK_ERROR_out_of_memory
+        throw(OutOfMemoryError())
+    elseif status==UMFPACK_ERROR_invalid_Numeric_object
+        throw(ArgumentError("invalid UMFPack numeric object"))
+    elseif status==UMFPACK_ERROR_invalid_Symbolic_object
+        throw(ArgumentError("invalid UMFPack symbolic object"))
+    elseif status==UMFPACK_ERROR_argument_missing
+        throw(ArgumentError("a required argument to UMFPack is missing"))
+    elseif status==UMFPACK_ERROR_n_nonpositive
+        throw(BoundsError("the number of rows or columns of the matrix must be greater than zero"))
+    elseif status==UMFPACK_ERROR_invalid_matrix
+        throw(ArgumentError("invalid matrix"))
+    elseif status==UMFPACK_ERROR_different_pattern
+        throw(ArgumentError("pattern of the matrix changed"))
+    elseif status==UMFPACK_ERROR_invalid_system
+        throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
+    elseif status==UMFPACK_ERROR_invalid_permutation
+        throw(ArgumentError("invalid permutation"))
+    elseif status==UMFPACK_ERROR_file_IO
+        throw(ErrorException("error saving / loading UMFPack decomposition"))
+    elseif status==UMFPACK_ERROR_ordering_failed
+        throw(ErrorException("the ordering method failed"))
+    elseif status==UMFPACK_ERROR_internal_error
+        throw(ErrorException("an internal error has occurred, of unknown cause"))
+    else
+        throw(ErrorException("unknown UMFPack error code: $status"))
+    end
 end
 
 macro isok(A)
@@ -170,8 +170,9 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException(""))
-            umferror(status)
+            if status != UMFPACK_WARNING_singular_matrix
+                umferror(status)
+            end
             U.numeric = tmp[1]
             return U
         end
@@ -184,8 +185,9 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException(""))
-            umferror(status)
+            if status != UMFPACK_WARNING_singular_matrix
+                umferror(status)
+            end
             U.numeric = tmp[1]
             return U
         end

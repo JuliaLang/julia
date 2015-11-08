@@ -264,6 +264,9 @@ end
 @test docstrings_equal(@doc(BareModule.A), doc"A")
 @test docstrings_equal(@doc(BareModule.T), doc"T")
 
+@test_throws ErrorException @doc("...", "error")
+@test_throws ErrorException @doc("...", @time 0)
+
 # test that when no docs exist, they fallback to
 # the docs for the typeof(value)
 let d1 = @doc(DocsTest.val)
@@ -411,6 +414,13 @@ f12593_2() = 1
 # test that macro documentation works
 @test (Docs.@repl @assert) !== nothing
 
+@test (Docs.@repl 0) !== nothing
+
+let t = @doc(DocsTest.t(::Int, ::Int))
+    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+end
+
 # Issue #13467.
 @test (Docs.@repl @r_str) !== nothing
 
@@ -460,6 +470,9 @@ end
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Int}), doc"foo from A")
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Float64}), doc"foo from B")
 @test Docs.doc(I13068.A.foo, Tuple{Char}) === nothing
+
+# Issue #13905.
+@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(symbol("@x")))
 
 # Undocumented DataType Summaries.
 

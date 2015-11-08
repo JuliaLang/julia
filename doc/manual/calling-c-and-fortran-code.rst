@@ -222,7 +222,7 @@ to fail or produce indeterminate results on a different system.
 Note that no C header files are used anywhere in the process of calling C
 functions: you are responsible for making sure that your Julia types and
 call signatures accurately reflect those in the C header file. (The `Clang
-package` <https://github.com/ihnorton/Clang.jl> can be used to auto-generate
+package <https://github.com/ihnorton/Clang.jl>`_ can be used to auto-generate
 Julia code from a C header file.)
 
 Auto-conversion:
@@ -236,16 +236,17 @@ each argument to the specified type. For example, the following call::
 will behave as if the following were written::
 
     ccall((:foo, "libfoo"), Void, (Int32, Float64),
-          Base.cconvert(Int32, Base.cconvert_gcroot(Int32, x)),
-          Base.cconvert(Float64, Base.cconvert_gcroot(Float64, y)))
+          Base.unsafe_convert(Int32, Base.cconvert(Int32, x)),
+          Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 
-Note that the primary fall-back method for ``cconvert`` is::
+``cconvert`` normally just calls ``convert``, but can be defined to return
+an arbitrary new object more appropriate for passing to C. For example,
+this is used to convert an ``Array`` of objects (e.g. strings) to an
+array of pointers.
 
-    cconvert(T,x) = convert(T, x)
-
-and the primary fallback method for ``cconvert_gcroot`` is::
-
-    cconvert_gcroot(T,x) = x
+``unsafe_convert`` handles conversion to ``Ptr`` types. It is considered
+unsafe because converting an object to a native pointer can hide the object
+from the garbage collector, causing it to be freed prematurely.
 
 Type Correspondences:
 ~~~~~~~~~~~~~~~~~~~~~
@@ -311,19 +312,18 @@ There are several special types to be aware of, as no other type can be defined 
 :Array{T,N}:
     When an array is passed to C as a ``Ptr{T}`` argument, it is
     not reinterpret-cast: Julia requires that the element type of the
-    array matches ``T``, and then address of the first element is passed.
+    array matches ``T``, and the address of the first element is passed.
 
     Therefore, if an ``Array`` contains data in the wrong format, it will
-    have to be explicitly converted using a call such as ``int32(a)``.
+    have to be explicitly converted using a call such as ``trunc(Int32,a)``.
 
     To pass an array ``A`` as a pointer of a different type *without*
     converting the data beforehand (for example, to pass a ``Float64`` array
-    to a function that operates on uninterpreted bytes), you can either
-    declare the argument as ``Ptr{Void}`` or you can explicitly call
-    ``pointer(A)``.
+    to a function that operates on uninterpreted bytes), you can
+    declare the argument as ``Ptr{Void}``.
 
     If an array of eltype ``Ptr{T}`` is passed as a ``Ptr{Ptr{T}}`` argument, the Julia base library
-    ``cconvert_gcroot`` function will attempt to first make a null-terminated copy of the array with
+    ``cconvert`` function will attempt to first make a null-terminated copy of the array with
     each element replaced by its ``cconvert`` version. This allows, for example, passing an ``argv``
     pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
 
@@ -341,7 +341,7 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +===================================+=================+======================+===================================+
 | ``unsigned char``                 | ``CHARACTER``   | ``Cuchar``           | ``UInt8``                         |
 |                                   |                 |                      |                                   |
-| ``bool`` (`C++`)                  |                 |                      |                                   |
+| ``bool`` (C++)                    |                 |                      |                                   |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``short``                         | ``INTEGER*2``   | ``Cshort``           | ``Int16``                         |
 |                                   |                 |                      |                                   |
@@ -351,7 +351,7 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``int``                           | ``INTEGER*4``   | ``Cint``             | ``Int32``                         |
 |                                   |                 |                      |                                   |
-| ``BOOL`` (`C`, typical)           | ``LOGICAL*4``   |                      |                                   |
+| ``BOOL`` (C, typical)             | ``LOGICAL*4``   |                      |                                   |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``unsigned int``                  |                 | ``Cuint``            | ``UInt32``                        |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
@@ -433,40 +433,55 @@ C name                  Standard Julia Alias    Julia Base Type
                                                 ``UInt16`` (Windows)
 ======================  ======================  =======
 
-`Remember`: when calling a Fortran function, all inputs must be passed by reference, so all type correspondences
-above should contain an additional ``Ptr{..}`` or ``Ref{..}`` wrapper around their type specification.
+.. note::
 
-`Warning`: For string arguments (``char*``) the Julia type should be ``Cstring`` (if NUL-terminated data is expected)
-or either ``Ptr{Cchar}`` or ``Ptr{UInt8}`` otherwise (these two pointer types have the same effect), as described above,
-not ``ASCIIString``. Similarly, for array arguments (``T[]`` or ``T*``), the Julia
-type should again be ``Ptr{T}``, not ``Vector{T}``.
+    When calling a Fortran function, all inputs must be passed by reference, so
+    all type correspondences above should contain an additional ``Ptr{..}`` or
+    ``Ref{..}`` wrapper around their type specification.
 
-`Warning`: Julia's ``Char`` type is 32 bits, which is not the same as the wide
-character type (``wchar_t`` or ``wint_t``) on all platforms.
+.. warning::
 
-`Note`: For ``wchar_t*`` arguments, the Julia type should be ``Cwstring`` (if the C routine
-expects a NUL-terminated string) or ``Ptr{Cwchar_t}`` otherwise,
-and data can be converted to/from ordinary Julia strings by the
-``wstring(s)`` function (equivalent to either ``utf16(s)`` or ``utf32(s)``
-depending upon the width of ``Cwchar_t``); this conversion will be called
-automatically for ``Cwstring`` arguments.    Note also that ASCII, UTF-8,
-UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
-it can be passed to C functions expecting NUL-terminated data without making
-a copy (but using the ``Cwstring`` type will cause an error to be thrown
-if the string itself contains NUL characters).
+    For string arguments (``char*``) the Julia type should be ``Cstring`` (if NUL-
+    terminated data is expected) or either ``Ptr{Cchar}`` or ``Ptr{UInt8}``
+    otherwise (these two pointer types have the same effect), as described above,
+    not ``ASCIIString``. Similarly, for array arguments (``T[]`` or ``T*``), the
+    Julia type should again be ``Ptr{T}``, not ``Vector{T}``.
 
-`Note`: C functions that take an argument of the type ``char**`` can be called by using
-a ``Ptr{Ptr{UInt8}}`` type within Julia. For example,
-C functions of the form::
+.. warning::
 
-    int main(int argc, char **argv);
+    Julia's ``Char`` type is 32 bits, which is not the same as the wide character
+    type (``wchar_t`` or ``wint_t``) on all platforms.
 
-can be called via the following Julia code::
+.. note::
 
-    argv = [ "a.out", "arg1", "arg2" ]
-    ccall(:main, Int32, (Int32, Ptr{Ptr{UInt8}}), length(argv), argv)
+    For ``wchar_t*`` arguments, the Julia type should be ``Cwstring`` (if the C
+    routine expects a NUL-terminated string) or ``Ptr{Cwchar_t}`` otherwise, and
+    data can be converted to/from ordinary Julia strings by the ``wstring(s)``
+    function (equivalent to either ``utf16(s)`` or ``utf32(s)`` depending upon the
+    width of ``Cwchar_t``); this conversion will be called automatically for
+    ``Cwstring`` arguments.    Note also that ASCII, UTF-8, UTF-16, and UTF-32
+    string data in Julia is internally NUL-terminated, so it can be passed to C
+    functions expecting NUL-terminated data without making a copy (but using the
+    ``Cwstring`` type will cause an error to be thrown if the string itself
+    contains NUL characters).
 
-`Note`: A C function declared to return ``Void`` will return the value ``nothing`` in Julia.
+.. note::
+
+    C functions that take an argument of the type ``char**`` can be called by
+    using a ``Ptr{Ptr{UInt8}}`` type within Julia. For example, C functions of the
+    form::
+
+        int main(int argc, char **argv);
+
+    can be called via the following Julia code::
+
+        argv = [ "a.out", "arg1", "arg2" ]
+        ccall(:main, Int32, (Int32, Ptr{Ptr{UInt8}}), length(argv), argv)
+
+.. note::
+
+    A C function declared to return ``Void`` will return the value ``nothing`` in
+    Julia.
 
 Struct Type correspondences
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -524,7 +539,7 @@ Memory allocation and deallocation of such objects must be
 handled by calls to the appropriate cleanup routines in the libraries
 being used, just like in any C program. Do not try to free an object
 received from a C library with ``Libc.free`` in Julia, as this may result
-in the ``free`` function being called via the wrong `libc` library and
+in the ``free`` function being called via the wrong ``libc`` library and
 cause Julia to crash. The reverse (passing an object allocated in Julia
 to be freed by an external library) is equally invalid.
 

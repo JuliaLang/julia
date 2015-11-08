@@ -61,8 +61,12 @@ end
 
 function token(user::AbstractString=user())
     tokfile = Dir.path(".github","token")
-    isfile(tokfile) && return strip(readchomp(tokfile))
-    status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
+    if isfile(tokfile)
+        tok = strip(readchomp(tokfile))
+        !isempty(tok) && return tok
+    end
+    params = merge(AUTH_DATA, ["fingerprint" => randstring(40)])
+    status, header, content = curl("https://api.github.com/authorizations",params,`-u $user`)
     tfa = false
 
     # Check for two-factor authentication
@@ -71,33 +75,12 @@ function token(user::AbstractString=user())
         info("Two-factor authentication in use.  Enter auth code.  (You may have to re-enter your password.)")
         print(STDERR, "Authentication code: ")
         code = readline(STDIN) |> chomp
-        status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-H "X-GitHub-OTP: $code" -u $user`)
+        status, header, content = curl("https://api.github.com/authorizations",params,`-H "X-GitHub-OTP: $code" -u $user`)
     end
 
     if status == 422
         error_code = json().parse(content)["errors"][1]["code"]
-        if error_code == "already_exists"
-            if tfa
-                info("Retrieving existing GitHub token. (You may have to re-enter your password twice more.)")
-                status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
-                status != 401 && error("$status: $(json().parse(content)["message"])")
-                print(STDERR, "New authentication code: ")
-                code = readline(STDIN) |> chomp
-                status, header, content = curl("https://api.github.com/authorizations",`-H "X-GitHub-OTP: $code" -u $user`)
-            else
-                info("Retrieving existing GitHub token. (You may have to re-enter your password.)")
-                status, header, content = curl("https://api.github.com/authorizations", `-u $user`)
-            end
-            (status >= 400) && error("$status: $(json().parse(content)["message"])")
-            for entry in json().parse(content)
-                if entry["note"] == AUTH_NOTE
-                    tok = entry["token"]
-                    break
-                end
-            end
-        else
-            error("GitHub returned validation error (422): $error_code: $(json().parse(content)["message"])")
-        end
+        error("GitHub returned validation error (422): $error_code: $(json().parse(content)["message"])")
     else
         (status != 401 && status != 403) || error("$status: $(json().parse(content)["message"])")
         tok = json().parse(content)["token"]

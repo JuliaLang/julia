@@ -364,7 +364,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             return A, tau, jpvt
         end
 
-        function geqrt!(A::StridedMatrix{$elty}, T::Matrix{$elty})
+        function geqrt!(A::StridedMatrix{$elty}, T::StridedMatrix{$elty})
             chkstride1(A)
             m, n = size(A)
             minmn = min(m, n)
@@ -388,7 +388,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             A, T
         end
 
-        function geqrt3!(A::StridedMatrix{$elty}, T::Matrix{$elty})
+        function geqrt3!(A::StridedMatrix{$elty}, T::StridedMatrix{$elty})
             chkstride1(A); chkstride1(T)
             m, n = size(A); p, q = size(T)
             if m < n
@@ -546,7 +546,7 @@ dimension of `A`.
 
 Returns `A` and `T` modified in-place.
 """
-geqrt!(A::StridedMatrix, T::Matrix)
+geqrt!(A::StridedMatrix, T::StridedMatrix)
 
 """
     geqrt3!(A, T)
@@ -559,7 +559,7 @@ equal the smallest dimension of `A`.
 
 Returns `A` and `T` modified in-place.
 """
-geqrt3!(A::StridedMatrix, T::Matrix)
+geqrt3!(A::StridedMatrix, T::StridedMatrix)
 
 """
     geqrf!(A, tau)
@@ -1544,7 +1544,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
 #       DOUBLE PRECISION   ALPHA( * ), BETA( * ), RWORK( * )
 #       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
 #      $                   U( LDU, * ), V( LDV, * ), WORK( * )
-        function ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::Matrix{$elty}, B::Matrix{$elty})
+        function ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
             if size(B, 2) != n
@@ -1657,7 +1657,7 @@ diagonal. If `jobu = U`, the orthogonal/unitary matrix `U` is computed. If
 the orthogonal/unitary matrix `Q` is computed. If `job{u,v,q} = N`, that
 matrix is not computed.
 """
-ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::Matrix, B::Matrix)
+ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix, B::StridedMatrix)
 
 ## Expert driver and generalized eigenvalue problem
 for (geevx, ggev, elty) in
@@ -2336,10 +2336,10 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             end
             C
         end
-        function gemqrt!(side::Char, trans::Char, V::Matrix{$elty}, T::Matrix{$elty}, C::StridedVecOrMat{$elty})
+        function gemqrt!(side::Char, trans::Char, V::StridedMatrix{$elty}, T::StridedMatrix{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
-            chkstride1(T, C)
+            chkstride1(V, T, C)
             m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
             nb, k = size(T)
             if k == 0 return C end
@@ -2371,7 +2371,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             if !(1 <= nb <= k)
                 throw(DimensionMismatch("Wrong value for nb = $nb, which must be between 1 and $k"))
             end
-            ldc = max(1, stride(C,2))
+            ldc = stride(C, 2)
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(gemqrt)), liblapack), Void,
@@ -2381,7 +2381,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                  Ptr{$elty}, Ptr{BlasInt}),
                 &side, &trans, &m, &n,
                 &k, &nb, V, &ldv,
-                T, &max(1,stride(T,2)), C, &ldc,
+                T, &max(1,stride(T,2)), C, &max(1,ldc),
                 work, info)
             @lapackerror
             return C
@@ -2433,7 +2433,7 @@ Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrt!`. `C` is overwritten.
 """
-gemqrt!(side::Char, trans::Char, V::Matrix, T::Matrix, C::StridedVecOrMat)
+gemqrt!(side::Char, trans::Char, V::StridedMatrix, T::StridedMatrix, C::StridedVecOrMat)
 
 # (PO) positive-definite symmetric matrices,
 for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in

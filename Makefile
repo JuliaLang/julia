@@ -394,6 +394,12 @@ distclean dist-clean:
 dist:
 	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
 
+ifeq ($(ARCH),x86_64)
+GITCONFIG := $(DESTDIR)$(prefix)/Git/mingw64/etc/gitconfig
+else
+GITCONFIG := $(DESTDIR)$(prefix)/Git/mingw32/etc/gitconfig
+endif
+
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifeq ($(ISX86),1)
@@ -429,10 +435,8 @@ ifeq ($(OS), WINNT)
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
 	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
-	    echo "[core] eol = lf" >> "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
-	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
-	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
-	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
+	    echo "[core] eol = lf" >> "$(GITCONFIG)" && \
+	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(GITCONFIG)" )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
@@ -571,9 +575,7 @@ endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
-	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-1-g9eb16cb.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
-	chmod a+x ./nsis/makensis.exe && \
-	chmod a+x busybox.exe
+	chmod a+x ./nsis/makensis.exe
