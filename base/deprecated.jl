@@ -843,6 +843,15 @@ for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
     end
 end
 
+# 13232
+@deprecate with_bigfloat_precision setprecision
+@deprecate set_bigfloat_precision(prec) setprecision(prec)
+@deprecate get_bigfloat_precision() precision(BigFloat)
+
+@deprecate set_rounding setrounding
+@deprecate with_rounding setrounding
+@deprecate get_rounding rounding
+
 #13465
 @deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) covm(x, mean, corrected)
 @deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) covm(X, mean, vardim, corrected)
