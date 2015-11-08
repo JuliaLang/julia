@@ -863,3 +863,26 @@ let b = IOBuffer()
 end
 
 @test isnan(sqrt(BigFloat(NaN)))
+
+# test constructors and `big` with additional precision and rounding mode:
+
+for prec in (10, 100, 1000)
+    for val in (pi, eu)
+
+        @show prec, val
+
+        a = BigFloat(val, prec, RoundDown)
+        b = BigFloat(val, prec, RoundUp)
+
+        @test b - a == BigFloat(eps(a), prec)
+    end
+end
+
+set_bigfloat_precision(100)
+a = BigFloat(3.1)
+set_bigfloat_precision(1000)
+b = BigFloat(3.1, 100)
+@test a == b
+
+
+@test_throws ArgumentError eps(nextfloat(BigFloat(0.0)))

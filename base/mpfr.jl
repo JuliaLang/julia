@@ -21,7 +21,8 @@ import
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, get_rounding,
-        set_rounding, maxintfloat, widen, significand, frexp, tryparse
+        set_rounding, maxintfloat, widen, significand, frexp, tryparse,
+        big
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
@@ -50,10 +51,10 @@ type BigFloat <: AbstractFloat
     sign::Cint
     exp::Clong
     d::Ptr{Culong}
-    function BigFloat()
-        N = get_bigfloat_precision()
+    function BigFloat(; prec=get_bigfloat_precision())
+
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, Base.GMP._mpfr_clear_func)
         return z
     end
@@ -66,7 +67,19 @@ end
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
-convert(::Type{BigFloat}, x::BigFloat) = x
+doc"""
+    BigFloat(x::BigFloat)
+
+Converts the `BigFloat` `x` to a `BigFloat` with the current global precision.
+Note that this makes a *copy* of `x` even if the precision of `x` is already
+the current global precision.
+"""
+function call(::Type{BigFloat}, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    return z
+end
+
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
@@ -93,11 +106,38 @@ convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culo
 convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
 convert(::Type{BigFloat}, x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
+
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Cstring, Int32, Int32), &z, s, base, ROUNDING_MODE[end])
     err == 0 ? Nullable(z) : Nullable{BigFloat}()
 end
+
+# constructors with given precision:
+doc"""
+    BigFloat(x, precision)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part).
+"""
+function BigFloat(x, precision::Integer)
+    with_bigfloat_precision(precision) do
+        BigFloat(x)
+    end
+end
+
+doc"""
+    BigFloat(x, precision, rounding_mode)
+
+Create a `BigFloat` representation of `x` with given precision (number of bits in
+the fractional part) and given rounding mode.
+"""
+function BigFloat(x, precision::Integer, rounding_mode::RoundingMode)
+    with_rounding(BigFloat, rounding_mode) do
+        BigFloat(x, precision)
+    end
+end
+
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
@@ -686,11 +726,11 @@ function precision(x::BigFloat)
 end
 
 get_bigfloat_precision() = DEFAULT_PRECISION[end]
-function set_bigfloat_precision(x::Int)
+function set_bigfloat_precision(x::Integer)
     if x < 2
         throw(DomainError())
     end
-    DEFAULT_PRECISION[end] = x
+    DEFAULT_PRECISION[end] = Int(x)
 end
 
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
@@ -793,22 +833,27 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
 function nextfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
-          &z, &x, ROUNDING_MODE[end])
-    ccall((:mpfr_nextabove, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
+    z = BigFloat(prec=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_nextabove, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
     return z
 end
 
 function prevfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
-          &z, &x, ROUNDING_MODE[end])
-    ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
+    z = BigFloat(prec=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
+    ccall((:mpfr_nextbelow, :libmpfr), Void, (Ptr{BigFloat},), &z) # modifies z
     return z
 end
 
-eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+function eps(x::BigFloat)
+    BigFloat(nextfloat(x) - x, prec=precision(x))
+    distance == big(0.0) && throw(ArgumentError("eps not defined for tiny numbers"))
+    return distance
+end
+
+eps(::Type{BigFloat}) = eps(BigFloat(1))
+
 
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
@@ -836,7 +881,10 @@ function string(x::BigFloat)
         buf = Array(UInt8, lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    return bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+
+    repr = bytestring(pointer(buf), (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng)
+    return repr == "inf" ? "Inf" : repr
+
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
@@ -855,4 +903,5 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
 
-end #module
+
+end # module
