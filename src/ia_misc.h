@@ -7,6 +7,10 @@
 #include <immintrin.h>
 #include "support/dtypes.h"
 
+#if defined(__i386__) && defined(__GNUC__) && !defined(__SSE2__)
+#error Julia can only be built for architectures above Pentium 4. Pass -march=pentium4, or set MARCH=pentium4 and ensure that -march is not passed separately with an older architecture.
+#endif
+
 #if defined(__i386__)
 
 STATIC_INLINE unsigned long long rdtsc(void)
