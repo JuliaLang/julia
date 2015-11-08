@@ -892,7 +892,7 @@ Mathematical Functions
    .. Docstring generated from Julia source
 
    ``round(x)`` rounds ``x`` to an integer value according to the default
-   rounding mode (see :func:`get_rounding`), returning a value of the same type as
+   rounding mode (see :func:`rounding`), returning a value of the same type as
    ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
    integer, with ties (fractional values of 0.5) being rounded to the even
    integer.

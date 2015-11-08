@@ -67,6 +67,16 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * The following function names have been simplified and unified ([#13232]):
+
+    * `get_bigfloat_precision`  -> `precision(BigFloat)`
+    * `set_bigfloat_precision`  -> `setprecision`
+    * `with_bigfloat_precision` -> `setprecision`
+
+    * `get_rounding`            -> `rounding`
+    * `set_rounding`            -> `setrounding`
+    * `with_rounding`           -> `setrounding`
+
   * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated
     in favor of versions that require the matrix to be in factored form
     ([#13496]).
@@ -987,7 +997,7 @@ Deprecated or removed
 
   * The `Stat` type is renamed `StatStruct` ([#4670]).
 
-  * `set_rounding`, `get_rounding` and `with_rounding` now take an additional
+  * `setrounding`, `rounding` and `setrounding` now take an additional
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007]).
 
