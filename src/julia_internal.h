@@ -335,6 +335,13 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 
+STATIC_INLINE int jl_type_is_type(jl_value_t *t)
+{
+    return (t == (jl_value_t*)jl_datatype_type ||
+            t == (jl_value_t*)jl_uniontype_type ||
+            t == (jl_value_t*)jl_typector_type);
+}
+
 #define JL_GF_CALLSITE_CACHE_SIZE 4
 DLLEXPORT jl_value_t *jl_apply_cached(jl_value_t *F, jl_value_t **args,
                                       uint32_t nargs, uint64_t mask,

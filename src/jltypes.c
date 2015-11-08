@@ -66,8 +66,7 @@ jl_value_t *jl_nothing;
 int jl_is_type(jl_value_t *v)
 {
     jl_value_t *t = jl_typeof(v);
-    return (t == (jl_value_t*)jl_datatype_type || t == (jl_value_t*)jl_uniontype_type ||
-            t == (jl_value_t*)jl_typector_type);
+    return jl_type_is_type(t);
 }
 
 STATIC_INLINE int is_unspec(jl_datatype_t *dt)
