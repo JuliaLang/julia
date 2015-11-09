@@ -535,7 +535,7 @@ Building an advanced macro
 Here is a simplified definition of Julia's :obj:`@assert` macro::
 
     macro assert(ex)
-        return :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
+        return :( $ex ? nothing : throw(AssertionError($(string(ex)))) )
     end
 
 This macro can be used like this:
@@ -550,8 +550,8 @@ This macro can be used like this:
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
 
-    1==1.0 ? nothing : error("Assertion failed: ", "1==1.0")
-    1==0 ? nothing : error("Assertion failed: ", "1==0")
+    1==1.0 ? nothing : throw(AssertionError("1==1.0"))
+    1==0 ? nothing : throw(AssertionError("1==0"))
 
 That is, in the first call, the expression ``:(1==1.0)`` is spliced into
 the test condition slot, while the value of ``string(:(1==1.0))`` is
@@ -572,8 +572,8 @@ ellipses following the last argument::
 
     macro assert(ex, msgs...)
         msg_body = isempty(msgs) ? ex : msgs[1]
-        msg = string("assertion failed: ", msg_body)
-        return :($ex ? nothing : error($msg))
+        msg = string(msg_body)
+        return :($ex ? nothing : throw(AssertionError($msg)))
     end
 
 Now :obj:`@assert` has two modes of operation, depending upon the number of
