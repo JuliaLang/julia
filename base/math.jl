@@ -24,7 +24,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2,
+             max, min, minmax, ^, exp2, muladd,
              exp10, expm1, log1p,
              sign_mask, exponent_mask, exponent_one, exponent_half,
              significand_mask, significand_bits, exponent_bits, exponent_bias
@@ -378,6 +378,9 @@ function mod2pi(x::Int64)
   fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end
+
+# generic fallback; for number types, promotion.jl does promotion
+muladd(x,y,z) = x*y+z
 
 # More special functions
 include("special/trig.jl")
