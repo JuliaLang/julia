@@ -3,7 +3,7 @@
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Vector{RemoteRef}
+    refs::Vector
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
@@ -63,7 +63,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Array(RemoteRef, length(pids))
+        refs = Array(Future, length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -83,26 +83,8 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
+        initialize_shared_array(S, s, onlocalhost, init, pids)
         shm_seg_name = ""
-
-        if onlocalhost
-            init_loc_flds(S)
-
-            # In the event that myid() is not part of pids, s will not be set
-            # in the init function above, hence setting it here if available.
-            S.s = s
-        else
-            S.pidx = 0
-        end
-
-        # if present init function is called on each of the parts
-        if isa(init, Function)
-            @sync begin
-                for p in pids
-                    @async remotecall_wait(init, p, S)
-                end
-            end
-        end
 
     finally
         if shm_seg_name != ""
@@ -134,7 +116,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     mode == "r" && !isfile(filename) && throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Array(RemoteRef, length(pids))
+    refs = Array(Future, length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
@@ -163,7 +145,11 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     end
 
     S = SharedArray{T,N}(dims, pids, refs, filename)
+    initialize_shared_array(S, s, onlocalhost, init, pids)
+    S
+end
 
+function initialize_shared_array(S, s, onlocalhost, init, pids)
     if onlocalhost
         init_loc_flds(S)
         # In the event that myid() is not part of pids, s will not be set
@@ -181,6 +167,19 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
             end
         end
     end
+
+    finalizer(S, finalize_refs)
+    S
+end
+
+function finalize_refs{T,N}(S::SharedArray{T,N})
+    for r in S.refs
+        finalize(r)
+    end
+    empty!(S.pids)
+    empty!(S.refs)
+    init_loc_flds(S)
+    S.s = Array(T, ntuple(d->0,N))
     S
 end
 
@@ -193,7 +192,7 @@ linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
-    refs = Array(RemoteRef, length(a.pids))
+    refs = Array(Future, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
             reshape(fetch(r),d)
@@ -270,7 +269,13 @@ sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 function init_loc_flds{T,N}(S::SharedArray{T,N})
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
-        S.s = fetch(S.refs[S.pidx])
+        if isa(S.refs[1], Future)
+            refid = remoteref_id(S.refs[S.pidx])
+        else
+            refid = S.refs[S.pidx]
+        end
+        c = channel_from_id(refid)
+        S.s = fetch(c)
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
@@ -287,6 +292,15 @@ function serialize(s::SerializationState, S::SharedArray)
     for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
             Serializer.writetag(s.io, Serializer.UNDEFREF_TAG)
+        elseif n == :refs
+            v = getfield(S, n)
+            if isa(v[1], Future)
+                # convert to ids to avoid distributed GC overhead
+                ids = [remoteref_id(x) for x in v]
+                serialize(s, ids)
+            else
+                serialize(s, v)
+            end
         else
             serialize(s, getfield(S, n))
         end
