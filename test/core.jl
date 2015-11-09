@@ -3473,3 +3473,10 @@ f11327{T}(::Type{T},x::T) = x
 let T=TypeVar(:T,true)
     @test typeintersect(Tuple{Type{T},T}, Tuple{Type{Type{Float64}},Type{Int}}) === Union{}
 end
+
+# issue 13855
+@eval @noinline function foo13855(x)
+    $(Expr(:localize, :(() -> () -> x)))
+end
+@test foo13855(Base.AddFun())() == Base.AddFun()
+@test foo13855(Base.MulFun())() == Base.MulFun()
