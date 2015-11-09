@@ -20,6 +20,9 @@ Compiler/Runtime improvements
 Library improvements
 --------------------
 
+  * Most of the  combinatorics functions have been moved from `Base`
+    to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
+
   * Packages:
 
     * The package system (`Pkg`) is now based on the `libgit2` library, rather
