@@ -205,7 +205,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)
 
-    hdr = i18n_arr[1, :]
+    hdr = i18n_arr[1:1, :]
     data = i18n_arr[2:end, :]
     writedlm(i18n_buff, i18n_arr, ',')
     @test (data, hdr) == readcsv(i18n_buff, header=true)

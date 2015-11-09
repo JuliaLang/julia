@@ -93,7 +93,7 @@ a = rand(1, 1, 8, 8, 1)
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 @test A[2:6] == [2:6;]
-@test A[1:3,2,2:4] == cat(3,46:48,86:88,126:128)
+@test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
 @test A[:,3:9] == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
@@ -111,7 +111,7 @@ tmp = cat([1,3],blk,blk)
 
 x = rand(2,2)
 b = x[1,:]
-@test isequal(size(b), (1, 2))
+@test isequal(size(b), (2,))
 b = x[:,1]
 @test isequal(size(b), (2,))
 
@@ -129,7 +129,7 @@ B[[3,1],[2,4]] = [21 22; 23 24]
 B[4,[2,3]] = 7
 @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
+@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
 a = [3, 5, -7, 6]
 b = [4, 6, 2, -7, 1]
@@ -575,12 +575,12 @@ let
 
     @test isequal(c[:,1], cv)
     @test isequal(c[:,3], cv2)
-    @test isequal(c[4,:], [2.0 2.0 2.0 2.0]*1000)
+    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
 
     c = cumsum_kbn(A, 2)
 
-    @test isequal(c[1,:], cv2')
-    @test isequal(c[3,:], cv')
+    @test isequal(c[1,:], cv2)
+    @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
 end
