@@ -302,3 +302,12 @@ function f13127()
     takebuf_string(buf)
 end
 @test f13127() == "f"
+
+#test methodshow.jl functions
+@test Base.inbase(Base)
+@test Base.inbase(LinAlg)
+
+@test contains(sprint(io -> writemime(io,"text/plain",methods(Base.inbase))),"inbase(m::Module)")
+@test contains(sprint(io -> writemime(io,"text/html",methods(Base.inbase))),"inbase(m::<b>Module</b>)")
+
+@test contains(Base.url(methods(eigs).defs),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/linalg/arnoldi.jl#L")
