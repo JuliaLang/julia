@@ -11,7 +11,7 @@ if [ -z "$tag" ]; then
   exit 1
 fi
 version=$(cat VERSION)
-majmin=$(echo $version | cut -d. -f1-2)
+majmin=$(cut -d. -f1-2 VERSION)
 if [ "$tag" != "v$version" ]; then
   echo "error: tagged commit does not match content of VERSION file" >&2
   exit 1
@@ -49,8 +49,12 @@ cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
 shasum -a 256 julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.sha256
 md5sum julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.md5
 
+gpg -u julia --armor --detach-sig julia-$version-full.tar.gz
+gpg -u julia --armor --detach-sig julia-$version.tar.gz
+gpg -u julia --armor --detach-sig julia-$version-linux-x86_64.tar.gz
+gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
+
 echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
 echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"
 echo "to set all S3 uploads to publicly readable, and replace $majmin-latest binaries."
 # TODO: also automate uploads via aws cli and github api?
-# gpg signing of linux binaries and source tarballs?
