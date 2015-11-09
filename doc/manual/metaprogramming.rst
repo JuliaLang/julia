@@ -545,7 +545,7 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    ERROR: AssertionError: 1 == 0
+    ERROR: Assertion failed: 1 == 0
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
