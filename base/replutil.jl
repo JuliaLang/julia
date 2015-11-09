@@ -208,7 +208,7 @@ function showerror(io::IO, ex::MethodError)
     try
         show_method_candidates(io, ex)
     catch
-        warn("Unable to show method candidates")
+        warn(io, "Error showing method candidates, aborted")
     end
 end
 
