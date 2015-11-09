@@ -233,8 +233,8 @@ macro ip_str(str)
     return parseip(str)
 end
 
-immutable InetAddr
-    host::IPAddr
+immutable InetAddr{T<:IPAddr}
+    host::T
     port::UInt16
 
     function InetAddr(host, port::Integer)
@@ -245,6 +245,7 @@ immutable InetAddr
     end
 end
 
+InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
