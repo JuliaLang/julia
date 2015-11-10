@@ -106,8 +106,7 @@ if ! [ -e julia-installer.exe ]; then
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
-# TODO: replace Git/bin with Git/usr/bin after 0.4.1 is released
-for i in bin/*.dll Git/bin/*.dll Git/bin/*.exe; do
+for i in bin/*.dll Git/usr/bin/*.dll Git/usr/bin/*.exe; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
