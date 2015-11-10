@@ -109,7 +109,7 @@ function complete_keyword(s::ByteString)
     sorted_keywords[r]
 end
 
-function complete_path(path::AbstractString, pos)
+function complete_path(path::AbstractString, pos; use_envpath=false)
     if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -141,6 +141,38 @@ function complete_path(path::AbstractString, pos)
             push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
+
+    if use_envpath && length(dir) == 0
+        # Look for files in PATH as well
+        local pathdirs = split(ENV["PATH"], @unix? ":" : ";")
+
+        for pathdir in pathdirs
+            local actualpath
+            try
+                actualpath = realpath(pathdir)
+            catch
+                # Bash doesn't expect every folder in PATH to exist, so neither shall we
+                continue
+            end
+
+            if actualpath != pathdir && in(actualpath,pathdirs)
+                # Remove paths which (after resolving links) are in the env path twice.
+                # Many distros eg. point /bin to /usr/bin but have both in the env path.
+                continue
+            end
+
+            local filesinpath = readdir(pathdir)
+
+            for file in filesinpath
+                # In a perfect world, we would filter on whether the file is executable
+                # here, or even on whether the current user can execute the file in question.
+                if startswith(file, prefix) && isfile(joinpath(pathdir, file))
+                    push!(matches, file)
+                end
+            end
+        end
+    end
+
     matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
@@ -440,8 +472,9 @@ function shell_completions(string, pos)
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
     if all(s -> isa(s, AbstractString), args.args[end].args)
-        # Treat this as a path (perhaps give a list of commands in the future as well?)
-        return complete_path(join(args.args[end].args), pos)
+        # Treat this as a path
+        # Also try looking into the env path if the user wants to complete the first argument
+        return complete_path(join(args.args[end].args), pos, use_envpath=length(args.args) < 2)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
