@@ -15,7 +15,7 @@ endif
 
 FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -Wc++-compat
 endif
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)

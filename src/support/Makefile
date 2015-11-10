@@ -28,7 +28,7 @@ DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 FLAGS := $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden \
-		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition
+		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition -Wc++-compat
 endif
 
 DEBUGFLAGS += $(FLAGS)
