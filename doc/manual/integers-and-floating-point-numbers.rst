@@ -623,7 +623,7 @@ by calling :func:`setprecision` and
 :func:`setrounding`, and all further calculations will take
 these changes in account.  Alternatively, the precision or the
 rounding can be changed only within the execution of a particular
-block of code by using the same functions with a `do` block:
+block of code by using the same functions with a ``do`` block:
 
 .. doctest::
 
