@@ -47,8 +47,8 @@ let inet = Base.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.port == 1024
 end
 # test InetAddr invalid port
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), -1)
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
+@test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), -1)
+@test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
 
 # isless and comparisons
 @test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
