@@ -110,9 +110,9 @@ void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t 
 
 DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
-    if (var->name[0] == '#') {
+    if (jl_symbol_name(var)[0] == '#') {
         // convention for renamed variables: #...#original_name
-        char *nxt = strchr(var->name+1, '#');
+        char *nxt = strchr(jl_symbol_name(var) + 1, '#');
         if (nxt)
             var = jl_symbol(nxt+1);
     }
@@ -519,7 +519,7 @@ JL_CALLABLE(jl_f_kwcall)
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL) {
         jl_exceptionf(jl_argumenterror_type, "function %s does not accept keyword arguments",
-                      jl_gf_name(f)->name);
+                      jl_symbol_name(jl_gf_name(f)));
     }
 
     for(size_t i=0; i < nkeys*2; i+=2) {
@@ -562,12 +562,13 @@ DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, i
     jl_module_t *task_last_m = jl_current_task->current_module;
     if (!delay_warn && jl_options.incremental && jl_generating_output()) {
         if (m != last_m) {
-            jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n", m->name->name, last_m->name->name);
+            jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n",
+                      jl_symbol_name(m->name), jl_symbol_name(last_m->name));
             jl_static_show(JL_STDERR, ex);
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
         else if (jl_warn_on_eval) {
-            jl_printf(JL_STDERR, "WARNING: eval from staged function in module %s:    \n", m->name->name);
+            jl_printf(JL_STDERR, "WARNING: eval from staged function in module %s:    \n", jl_symbol_name(m->name));
             jl_static_show(JL_STDERR, ex);
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for these modules **\n\n");
         }
@@ -713,7 +714,7 @@ JL_CALLABLE(jl_f_set_field)
         jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
-        jl_errorf("type %s is immutable", st->name->name->name);
+        jl_errorf("type %s is immutable", jl_symbol_name(st->name->name));
     size_t idx;
     if (jl_is_long(args[1])) {
         idx = jl_unbox_long(args[1])-1;
@@ -764,9 +765,9 @@ JL_CALLABLE(jl_f_nfields)
 
 // conversion -----------------------------------------------------------------
 
-DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
+DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
 {
-    return s->name;
+    return jl_symbol_name(s);
 }
 
 //WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
@@ -940,7 +941,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
         }
         if (jl_show_gf==NULL || stream==NULL) {
             jl_printf(JL_STDERR, " could not show value of type %s",
-                      ((jl_datatype_t*)jl_typeof(v))->name->name->name);
+                      jl_symbol_name(((jl_datatype_t*)jl_typeof(v))->name->name));
             return;
         }
         jl_value_t *args[2] = {stream,v};
@@ -1044,7 +1045,7 @@ DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *t)
 static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 {
     if (!jl_is_tuple_type(t))
-        jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, t);
+        jl_type_error_rt(jl_symbol_name(name), ctx, (jl_value_t*)jl_type_type, t);
 }
 
 JL_CALLABLE(jl_f_applicable)
@@ -1319,10 +1320,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         if (li->specTypes) {
             n += jl_printf(out, ".");
             n += jl_show_svec(out, li->specTypes->parameters,
-                              li->name->name, "(", ")");
+                              jl_symbol_name(li->name), "(", ")");
         }
         else {
-            n += jl_printf(out, ".%s(?)", li->name->name);
+            n += jl_printf(out, ".%s(?)", jl_symbol_name(li->name));
         }
         // The following is nice for debugging, but allocates memory and generates a lot of output
         // so it may not be a good idea to to have it active
@@ -1338,7 +1339,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
             n += jl_printf(out, ".");
         }
-        n += jl_printf(out, "%s", dv->name->name->name);
+        n += jl_printf(out, "%s", jl_symbol_name(dv->name->name));
         if (dv->parameters && (jl_value_t*)dv != dv->name->primary &&
             !jl_types_equal((jl_value_t*)dv, (jl_value_t*)jl_tuple_type)) {
             size_t j, tlen = jl_nparams(dv);
@@ -1359,7 +1360,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     }
     else if (vt == jl_function_type) {
         if (jl_is_gf(v)) {
-            n += jl_printf(out, "%s", jl_gf_name(v)->name);
+            n += jl_printf(out, "%s", jl_symbol_name(jl_gf_name(v)));
         }
         else {
             n += jl_printf(out, "#<function ");
@@ -1428,7 +1429,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
             n += jl_printf(out, "<:");
         }
-        n += jl_printf(out, "%s%s<:", (((jl_tvar_t*)v)->bound)?"#":"", ((jl_tvar_t*)v)->name->name);
+        n += jl_printf(out, "%s%s<:", (((jl_tvar_t*)v)->bound)?"#":"",
+                       jl_symbol_name(((jl_tvar_t*)v)->name));
         n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
     }
     else if (vt == jl_module_type) {
@@ -1437,22 +1439,22 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             n += jl_static_show_x(out, (jl_value_t*)m->parent, depth);
             n += jl_printf(out, ".");
         }
-        n += jl_printf(out, "%s", m->name->name);
+        n += jl_printf(out, "%s", jl_symbol_name(m->name));
     }
     else if (vt == jl_sym_type) {
-        n += jl_printf(out, ":%s", ((jl_sym_t*)v)->name);
+        n += jl_printf(out, ":%s", jl_symbol_name((jl_sym_t*)v));
     }
     else if (vt == jl_gensym_type) {
         n += jl_printf(out, "GenSym(%" PRIuPTR ")",
                        (uintptr_t)((jl_gensym_t*)v)->id);
     }
     else if (vt == jl_symbolnode_type) {
-        n += jl_printf(out, "%s::", jl_symbolnode_sym(v)->name);
+        n += jl_printf(out, "%s::", jl_symbol_name(jl_symbolnode_sym(v)));
         n += jl_static_show_x(out, jl_symbolnode_type(v), depth);
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
-        n += jl_printf(out, ".%s", jl_globalref_name(v)->name);
+        n += jl_printf(out, ".%s", jl_symbol_name(jl_globalref_name(v)));
     }
     else if (vt == jl_labelnode_type) {
         n += jl_printf(out, "%" PRIuPTR ":", jl_labelnode_label(v));
@@ -1482,7 +1484,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     }
     else if (vt == jl_linenumbernode_type) {
         n += jl_printf(out, "# line %" PRIuPTR " %s",
-                       jl_linenode_line(v), jl_linenode_file(v)->name);
+                       jl_linenode_line(v), jl_symbol_name(jl_linenode_file(v)));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
@@ -1495,7 +1497,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             char sep = ' ';
             if (e->head == body_sym)
                 sep = '\n';
-            n += jl_printf(out, "Expr(:%s", e->head->name);
+            n += jl_printf(out, "Expr(:%s", jl_symbol_name(e->head));
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {
                 n += jl_printf(out, ",%c", sep);
@@ -1554,7 +1556,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         else {
             for (size_t i = 0; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", ((jl_sym_t*)jl_svecref(vt->name->names, i))->name);
+                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
                     //jl_fielddesc_t f = t->fields[i];
                     n += jl_printf(out, "=");
                 }
