@@ -42,7 +42,7 @@ jl_thread_task_state_t *jl_all_task_states;
 jl_gcframe_t ***jl_all_pgcstacks;
 
 // return calling thread's ID
-DLLEXPORT int16_t jl_threadid() { return ti_tid; }
+DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 // must be called by each thread at startup
@@ -380,7 +380,7 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 
 #if PROFILE_JL_THREADING
 
-void ti_reset_timings()
+void ti_reset_timings(void)
 {
     int i;
     prep_ticks = 0;
@@ -405,7 +405,7 @@ void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
 
 #define TICKS_TO_SECS(t)        (((double)(t)) / (cpu_ghz * 1e9))
 
-void jl_threading_profile()
+void jl_threading_profile(void)
 {
     if (!fork_ticks) return;
 
@@ -426,7 +426,7 @@ void jl_threading_profile()
 
 #else //!PROFILE_JL_THREADING
 
-void jl_threading_profile()
+void jl_threading_profile(void)
 {
 }
 

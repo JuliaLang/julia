@@ -22,7 +22,8 @@ FLAGS := \
 	-I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
-		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition -Wc++-compat
+		 -Wpointer-arith -Wundef
+override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
 

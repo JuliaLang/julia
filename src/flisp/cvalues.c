@@ -1167,9 +1167,9 @@ int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
 }
 
 #if defined(_OS_WINDOWS_)
-__declspec(noreturn) static void DivideByZeroError();
+__declspec(noreturn) static void DivideByZeroError(void);
 #else
-static void DivideByZeroError() __attribute__ ((__noreturn__));
+static void DivideByZeroError(void) __attribute__ ((__noreturn__));
 #endif
 
 static void DivideByZeroError(void)
