@@ -303,13 +303,25 @@ Bits Types:
 
 There are several special types to be aware of, as no other type can be defined to behave the same:
 
-:Float32: Exactly corresponds to the ``float`` type in C (or ``REAL*4`` in Fortran).
-:Float64: Exactly corresponds to the ``double`` type in C (or ``REAL*8`` in Fortran).
-:Complex64: Exactly corresponds to the ``complex float`` type in C (or ``COMPLEX*8`` in Fortran).
-:Complex128: Exactly corresponds to the ``complex double`` type in C (or ``COMPLEX*16`` in Fortran).
-:Signed: Exactly corresponds to the ``signed`` type annotation in C (or any ``INTEGER`` type in Fortran). Any Julia type that is not a subtype of ``Signed`` is assumed to be unsigned.
-:Ref{T}: Behaves like a ``Ptr{T}`` that owns its memory.
-:Array{T,N}:
+``Float32``
+    Exactly corresponds to the ``float`` type in C (or ``REAL*4`` in Fortran).
+
+``Float64``
+    Exactly corresponds to the ``double`` type in C (or ``REAL*8`` in Fortran).
+
+``Complex64``
+    Exactly corresponds to the ``complex float`` type in C (or ``COMPLEX*8`` in Fortran).
+
+``Complex128``
+    Exactly corresponds to the ``complex double`` type in C (or ``COMPLEX*16`` in Fortran).
+
+``Signed``
+    Exactly corresponds to the ``signed`` type annotation in C (or any ``INTEGER`` type in Fortran). Any Julia type that is not a subtype of ``Signed`` is assumed to be unsigned.
+
+``Ref{T}``
+    Behaves like a ``Ptr{T}`` that owns its memory.
+
+``Array{T,N}``
     When an array is passed to C as a ``Ptr{T}`` argument, it is
     not reinterpret-cast: Julia requires that the element type of the
     array matches ``T``, and the address of the first element is passed.
@@ -326,7 +338,6 @@ There are several special types to be aware of, as no other type can be defined 
     ``cconvert`` function will attempt to first make a null-terminated copy of the array with
     each element replaced by its ``cconvert`` version. This allows, for example, passing an ``argv``
     pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
-
 
 On all systems we currently support, basic C/C++ value types may be
 translated to Julia types as follows. Every C type also has a corresponding
