@@ -576,17 +576,15 @@ typedef struct _jl_gcframe_t {
 } jl_gcframe_t;
 
 // NOTE: it is the caller's responsibility to make sure arguments are
-// rooted. foo(f(), g()) will not work, and foo can't do anything about it,
-// so the caller must do
-// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
+// rooted such that the gc can see them on the stack.
+// `foo(f(), g())` is not safe,
+// since the result of `f()` is not rooted during the call to `g()`,
+// and the arguments to foo are not gc-protected during the call to foo.
+// foo can't do anything about it, so the caller must do:
+// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH2(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
 extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
-
-#define JL_GC_PUSH(...)                                                   \
-  void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
-                       __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH1(arg1)                                                 \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
