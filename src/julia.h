@@ -149,33 +149,30 @@ DLLEXPORT void jl_threading_profile(void);
 
 // core data types ------------------------------------------------------------
 
-#ifndef _COMPILER_MICROSOFT_
-#define JL_DATA_TYPE \
-    struct _jl_value_t *fieldptr0[0];
-#else
 #define JL_DATA_TYPE
-#endif
 
-typedef struct _jl_value_t {
-    JL_DATA_TYPE
-    struct _jl_value_t *fieldptr[];
-} jl_value_t;
+typedef struct _jl_value_t jl_value_t;
+
+// typedef struct _jl_value_t {
+//     JL_DATA_TYPE
+//     struct _jl_value_t *fieldptr[];
+// } jl_value_t;
 
 typedef struct {
     union {
         jl_value_t *type; // 16-bytes aligned
         uintptr_t type_bits;
-        struct {
-            uintptr_t gc_bits:2;
-        };
+        uintptr_t gc_bits:2;
     };
-    jl_value_t value;
+    // jl_value_t value;
 } jl_taggedvalue_t;
 
-#define jl_astaggedvalue__MACRO(v) container_of((v),jl_taggedvalue_t,value)
-#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_astaggedvalue__MACRO(v)->type_bits&~(uintptr_t)15))
-#define jl_astaggedvalue jl_astaggedvalue__MACRO
-#define jl_typeof jl_typeof__MACRO
+#define jl_astaggedvalue(v)                                             \
+    ((jl_taggedvalue_t*)((char*)(v) - sizeof(jl_taggedvalue_t)))
+#define jl_valueof(v)                                           \
+    ((jl_value_t*)((char*)(v) + sizeof(jl_taggedvalue_t)))
+#define jl_typeof(v)                                                    \
+    ((jl_value_t*)(jl_astaggedvalue(v)->type_bits & ~(uintptr_t)15))
 static inline void jl_set_typeof(void *v, void *t)
 {
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
@@ -188,7 +185,7 @@ typedef struct _jl_sym_t {
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
     uptrint_t hash;    // precomputed hash value
-    JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
+    // JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
 
 typedef struct _jl_gensym_t {
@@ -199,7 +196,8 @@ typedef struct _jl_gensym_t {
 typedef struct {
     JL_DATA_TYPE
     size_t length;
-    jl_value_t *data[];
+    // pointer size aligned
+    // jl_value_t *data[];
 } jl_svec_t;
 
 typedef struct {
@@ -361,7 +359,12 @@ typedef struct _jl_datatype_t {
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
-    size_t fields[];
+    // Last field needs to be pointer size aligned
+    // union {
+    //     jl_fielddesc8_t field8[];
+    //     jl_fielddesc16_t field16[];
+    //     jl_fielddesc32_t field32[];
+    // };
 } jl_datatype_t;
 
 typedef struct {
@@ -692,7 +695,7 @@ DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isal
 
 #define jl_svec_len(t)              (((jl_svec_t*)(t))->length)
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
-#define jl_svec_data(t)             (((jl_svec_t*)(t))->data)
+#define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 STATIC_INLINE jl_value_t *jl_svecref(void *t, size_t i)
 {
@@ -763,16 +766,16 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_tparam1(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 1)
 #define jl_tparam(t,i) jl_svecref(((jl_datatype_t*)(t))->parameters, i)
 
+// get a pointer to the data in a datatype
+#define jl_data_ptr(v)  ((jl_value_t**)v)
+
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
-#define jl_string_len(s)  (jl_array_len(((jl_array_t*)(s)->fieldptr[0])))
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
+#define jl_string_data(s) ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
+#define jl_string_len(s)  (jl_array_len((jl_array_t*)(jl_data_ptr(s)[0])))
+#define jl_iostr_data(s)  ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
-
-// get a pointer to the data in a datatype
-#define jl_data_ptr(v)  (((jl_value_t*)v)->fieldptr)
 
 // struct type info
 #define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
@@ -780,30 +783,39 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->nfields)
 
+// inline version with strong type check to detect typos in a `->name` chain
+STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
+{
+    return (char*)s + LLT_ALIGN(sizeof(jl_sym_t), sizeof(void*));
+}
+#define jl_symbol_name(s) jl_symbol_name_(s)
+
+#define jl_datatype_fields(d) ((char*)(d) + sizeof(jl_datatype_t))
+
 #define DEFINE_FIELD_ACCESSORS(f)                                       \
     static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)       \
     {                                                                   \
         if (st->fielddesc_type == 0) {                                  \
-            return ((jl_fielddesc8_t*)st->fields)[i].f;                 \
+            return ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f;     \
         }                                                               \
         else if (st->fielddesc_type == 1) {                             \
-            return ((jl_fielddesc16_t*)st->fields)[i].f;                \
+            return ((jl_fielddesc16_t*)jl_datatype_fields(st))[i].f;    \
         }                                                               \
         else {                                                          \
-            return ((jl_fielddesc32_t*)st->fields)[i].f;                \
+            return ((jl_fielddesc32_t*)jl_datatype_fields(st))[i].f;    \
         }                                                               \
     }                                                                   \
     static inline void jl_field_set##f(jl_datatype_t *st, int i,        \
                                        uint32_t val)                    \
     {                                                                   \
         if (st->fielddesc_type == 0) {                                  \
-            ((jl_fielddesc8_t*)st->fields)[i].f = val;                  \
+            ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f = val;      \
         }                                                               \
         else if (st->fielddesc_type == 1) {                             \
-            ((jl_fielddesc16_t*)st->fields)[i].f = val;                 \
+            ((jl_fielddesc16_t*)jl_datatype_fields(st))[i].f = val;     \
         }                                                               \
         else {                                                          \
-            ((jl_fielddesc32_t*)st->fields)[i].f = val;                 \
+            ((jl_fielddesc32_t*)jl_datatype_fields(st))[i].f = val;     \
         }                                                               \
     }
 

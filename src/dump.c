@@ -526,7 +526,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         write_int32(s, dt->alignment);
         write_int8(s, dt->haspadding);
         size_t fieldsize = jl_fielddesc_size(dt->fielddesc_type);
-        ios_write(s, (char*)dt->fields, nf * fieldsize);
+        ios_write(s, jl_datatype_fields(dt), nf * fieldsize);
         jl_serialize_value(s, dt->types);
     }
 
@@ -693,7 +693,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
     }
     else if (jl_is_symbol(v)) {
-        size_t l = strlen(((jl_sym_t*)v)->name);
+        size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
         if (l <= 255) {
             writetag(s, jl_symbol_type);
             write_uint8(s, (uint8_t)l);
@@ -702,7 +702,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             writetag(s, (jl_value_t*)LongSymbol_tag);
             write_int32(s, l);
         }
-        ios_write(s, ((jl_sym_t*)v)->name, l);
+        ios_write(s, jl_symbol_name((jl_sym_t*)v), l);
     }
     else if (jl_is_globalref(v)) {
         if (mode == MODE_AST && jl_globalref_mod(v) == tree_enclosing_module) {
@@ -981,9 +981,9 @@ void jl_serialize_mod_list(ios_t *s)
                 jl_module_t *child = (jl_module_t*)b->value;
                 if (child->name == b->name) {
                     // this is the original/primary binding for the submodule
-                    size_t l = strlen(child->name->name);
+                    size_t l = strlen(jl_symbol_name(child->name));
                     write_int32(s, l);
-                    ios_write(s, child->name->name, l);
+                    ios_write(s, jl_symbol_name(child->name), l);
                     write_uint64(s, child->uuid);
                 }
             }
@@ -1002,7 +1002,8 @@ static void jl_serialize_header(ios_t *s)
     write_uint16(s, JI_FORMAT_VERSION);
     ios_write(s, (char *) &BOM, 2);
     write_uint8(s, sizeof(void*));
-    const char *OS_NAME = jl_get_OS_NAME()->name, *ARCH = jl_get_ARCH()->name;
+    const char *OS_NAME = jl_symbol_name(jl_get_OS_NAME());
+    const char *ARCH = jl_symbol_name(jl_get_ARCH());
     ios_write(s, OS_NAME, strlen(OS_NAME)+1);
     ios_write(s, ARCH, strlen(ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
@@ -1129,7 +1130,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->alignment = read_int32(s);
         dt->haspadding = read_int8(s);
         size_t fieldsize = jl_fielddesc_size(fielddesc_type);
-        ios_read(s, (char*)dt->fields, nf * fieldsize);
+        ios_read(s, jl_datatype_fields(dt), nf * fieldsize);
         dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
         jl_gc_wb(dt, dt->types);
     }
@@ -1223,7 +1224,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_svec_t *sv = jl_alloc_svec_uninit(len);
         if (usetable)
             arraylist_push(&backref_list, (jl_value_t*)sv);
-        jl_value_t **data = sv->data;
+        jl_value_t **data = jl_svec_data(sv);
         for(i=0; i < len; i++) {
             data[i] = jl_deserialize_value(s, &data[i]);
         }
@@ -1652,8 +1653,8 @@ DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
             read_uint16(s) == JI_FORMAT_VERSION &&
             ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
             read_uint8(s) == sizeof(void*) &&
-            readstr_verify(s, jl_get_OS_NAME()->name) && !read_uint8(s) &&
-            readstr_verify(s, jl_get_ARCH()->name) && !read_uint8(s) &&
+            readstr_verify(s, jl_symbol_name(jl_get_OS_NAME())) && !read_uint8(s) &&
+            readstr_verify(s, jl_symbol_name(jl_get_ARCH())) && !read_uint8(s) &&
             readstr_verify(s, JULIA_VERSION_STRING) && !read_uint8(s) &&
             readstr_verify(s, jl_git_branch()) && !read_uint8(s) &&
             readstr_verify(s, jl_git_commit()) && !read_uint8(s));
@@ -1687,7 +1688,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
     JL_TRY {
         switch (how) {
             case 1: { // rehash ObjectIdDict
-                jl_array_t **a = (jl_array_t**)&v->fieldptr[0];
+                jl_array_t **a = (jl_array_t**)v;
                 jl_idtable_rehash(a, jl_array_len(*a));
                 jl_gc_wb(v, *a);
                 break;
@@ -1698,12 +1699,14 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
-                        jl_errorf("invalid redefinition of constant %s", mod->name->name); // this also throws
+                        jl_errorf("invalid redefinition of constant %s",
+                                  jl_symbol_name(mod->name)); // this also throws
                     }
                     if (jl_generating_output() && jl_options.incremental) {
-                        jl_errorf("cannot replace module %s during incremental precompile", mod->name->name);
+                        jl_errorf("cannot replace module %s during incremental precompile", jl_symbol_name(mod->name));
                     }
-                    jl_printf(JL_STDERR, "WARNING: replacing module %s\n", mod->name->name);
+                    jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
+                              jl_symbol_name(mod->name));
                 }
                 b->value = v;
                 jl_gc_wb_binding(b, v);
