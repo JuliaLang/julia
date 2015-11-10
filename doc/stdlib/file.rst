@@ -248,7 +248,7 @@
 
    .. Docstring generated from Julia source
 
-   Returns ``true`` if the current user has permission to execute ``path``\ , ``false`` otherwise.
+   Returns ``true`` if ``path`` is executable, ``false`` otherwise.
 
 .. function:: isfifo(path) -> Bool
 
