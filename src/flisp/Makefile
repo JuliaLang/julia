@@ -35,7 +35,7 @@ FLAGS := -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden \
-		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition
+		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition -Wc++-compat
 endif
 
 DEBUGFLAGS += $(FLAGS)
