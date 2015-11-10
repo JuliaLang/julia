@@ -227,6 +227,18 @@ General I/O
 
    Determine whether a stream is read-only.
 
+.. function:: iswritable(io) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if the specified IO object is writable (if that can be determined).
+
+.. function:: isreadable(io) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if the specified IO object is readable (if that can be determined).
+
 .. function:: isopen(object) -> Bool
 
    .. Docstring generated from Julia source
