@@ -502,7 +502,7 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     std::error_code err;
     StringRef fname_ref = StringRef(fname);
     raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
-#elif  LLVM35
+#elif defined(LLVM35)
     std::string err;
     raw_fd_ostream OS(fname, err, sys::fs::F_None);
 #else
@@ -564,9 +564,9 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #endif
 #ifdef LLVM37
     // No DataLayout pass needed anymore.
-#elif LLVM36
+#elif defined(LLVM36)
         PM.add(new DataLayoutPass());
-#elif LLVM35
+#elif defined(LLVM35)
         PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
 #else
         PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));

@@ -40,7 +40,7 @@ STATIC_INLINE uint64_t rdtsc()
 
 #endif  /* __i386__ */
 
-#if (__MIC__)
+#ifdef __MIC__
 
 STATIC_INLINE void cpu_pause()
 {

@@ -21,7 +21,8 @@ FLAGS := \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
 	-I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
+		 -Wpointer-arith -Wundef -Wstrict-prototypes -Wold-style-definition
 endif
 
 
