@@ -116,7 +116,7 @@
 using namespace llvm;
 
 // LLVM version compatibility macros
-#if LLVM37
+#ifdef LLVM37
 using namespace llvm::legacy;
 #define LLVM37_param(x) (x),
 #else
@@ -342,7 +342,7 @@ static FunctionPassManager *FPM;
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
-#elif LLVM35
+#elif defined(LLVM35)
 static DataLayoutPass *jl_data_layout;
 #else
 static DataLayout *jl_data_layout;
@@ -444,7 +444,7 @@ static GlobalVariable *jlemptytuple_var;
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if JL_NEED_FLOATTEMP_VAR
+#ifdef JL_NEED_FLOATTEMP_VAR
 static GlobalVariable *jlfloattemp_var;
 #endif
 static GlobalVariable *jlpgcstack_var;
@@ -1029,7 +1029,7 @@ static void jl_setup_module(Module *m)
 #endif
         m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     }
-#elif LLVM36
+#elif defined(LLVM36)
     if (jl_ExecutionEngine)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
@@ -4660,7 +4660,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // TODO: Fix when moving to new LLVM version
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
-        #elif LLVM37
+        #elif defined(LLVM37)
         DICompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
@@ -4669,7 +4669,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
 #ifdef LLVM37
         DISubroutineType *subrty;
-#elif LLVM36
+#elif defined(LLVM36)
         DISubroutineType subrty;
 #else
         DICompositeType subrty;
@@ -5414,7 +5414,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
     }
 }
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && SYSTEM_LLVM
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && defined(SYSTEM_LLVM)
 #define INSTCOMBINE_BUG
 #define V128_BUG
 #endif
@@ -5614,7 +5614,7 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_dl_handle");
     add_named_global(jldll_var, (void*)&jl_dl_handle);
 #endif
-#if JL_NEED_FLOATTEMP_VAR
+#ifdef JL_NEED_FLOATTEMP_VAR
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
         addComdat(new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
@@ -6024,9 +6024,9 @@ static void init_julia_llvm_env(Module *m)
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
-#elif LLVM36
+#elif defined(LLVM36)
     jl_data_layout = new llvm::DataLayoutPass();
-#elif LLVM35
+#elif defined(LLVM35)
     jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
 #else
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
@@ -6100,12 +6100,12 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     FPM->add(createLoopDeletionPass());         // Delete dead loops
-#if LLVM35
+#if defined(LLVM35)
     FPM->add(createSimpleLoopUnrollPass());     // Unroll small loops
 #else
     FPM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
-#if !LLVM35 && !defined(INSTCOMBINE_BUG)
+#if !defined(LLVM35) && !defined(INSTCOMBINE_BUG)
     FPM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
@@ -6136,7 +6136,7 @@ static void init_julia_llvm_env(Module *m)
     if (jl_options.opt_level>=1)
         FPM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
 #endif
-#if LLVM35
+#if defined(LLVM35)
     FPM->add(createLoopVectorizePass());         // Vectorize loops
     FPM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
@@ -6356,7 +6356,7 @@ extern "C" void jl_init_codegen(void)
 #endif
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
     engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
-#elif LLVM36
+#elif defined(LLVM36)
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
