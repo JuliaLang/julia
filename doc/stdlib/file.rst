@@ -244,12 +244,6 @@
 
    Returns ``true`` if ``path`` is a directory, ``false`` otherwise.
 
-.. function:: isexecutable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to execute ``path``\ , ``false`` otherwise.
-
 .. function:: isfifo(path) -> Bool
 
    .. Docstring generated from Julia source
@@ -280,12 +274,6 @@
 
    Returns ``true`` if ``path`` is a valid filesystem path, ``false`` otherwise.
 
-.. function:: isreadable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to read ``path``\ , ``false`` otherwise.
-
 .. function:: issetgid(path) -> Bool
 
    .. Docstring generated from Julia source
@@ -309,12 +297,6 @@
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` has the sticky bit set, ``false`` otherwise.
-
-.. function:: iswritable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to write to ``path``\ , ``false`` otherwise.
 
 .. function:: homedir() -> AbstractString
 

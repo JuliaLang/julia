@@ -156,9 +156,9 @@ else
     # Use iconv to generate the other data
     for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
         output_path = joinpath(unicodedir, encoding*".unicode")
-        f = Base.FS.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
+        f = Base.Filesystem.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
         run(pipeline(`iconv -f $primary_encoding -t $encoding $primary_path`, f))
-        Base.FS.close(f)
+        Base.Filesystem.close(f)
     end
 
     f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
