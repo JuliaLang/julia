@@ -39,10 +39,6 @@
 #include <link.h>
 #endif
 
-#define __STDC_CONSTANT_MACROS
-#define __STDC_LIMIT_MACROS
-#include <llvm-c/Target.h>
-
 #ifdef __SSE__
 #include <xmmintrin.h>
 #endif
@@ -485,7 +481,7 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 // subnormal_flags should be declared atomic.
 static volatile int32_t subnormal_flags = 1;
 
-static int32_t get_subnormal_flags()
+static int32_t get_subnormal_flags(void)
 {
     uint32_t f = subnormal_flags;
     if (f & 1) {
@@ -562,7 +558,7 @@ DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t
     *float64align = __alignof(double);
 }
 
-DLLEXPORT jl_value_t *jl_is_char_signed()
+DLLEXPORT jl_value_t *jl_is_char_signed(void)
 {
     return ((char)255) < 0 ? jl_true : jl_false;
 }
@@ -728,7 +724,7 @@ DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
-DLLEXPORT jl_sym_t* jl_get_OS_NAME()
+DLLEXPORT jl_sym_t* jl_get_OS_NAME(void)
 {
 #if defined(_OS_WINDOWS_)
     return jl_symbol("Windows");
@@ -744,7 +740,7 @@ DLLEXPORT jl_sym_t* jl_get_OS_NAME()
 #endif
 }
 
-DLLEXPORT jl_sym_t* jl_get_ARCH()
+DLLEXPORT jl_sym_t* jl_get_ARCH(void)
 {
     static jl_sym_t* ARCH = NULL;
     if (!ARCH)
@@ -752,7 +748,7 @@ DLLEXPORT jl_sym_t* jl_get_ARCH()
     return ARCH;
 }
 
-DLLEXPORT size_t jl_maxrss()
+DLLEXPORT size_t jl_maxrss(void)
 {
 #if defined(_OS_WINDOWS_)
 	PROCESS_MEMORY_COUNTERS counter;

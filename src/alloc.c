@@ -457,7 +457,7 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     return _jl_symbol(str, len);
 }
 
-DLLEXPORT jl_sym_t *jl_get_root_symbol() { return symtab; }
+DLLEXPORT jl_sym_t *jl_get_root_symbol(void) { return symtab; }
 
 static uint32_t gs_ctr = 0;  // TODO: per-thread
 uint32_t jl_get_gs_ctr(void) { return gs_ctr; }

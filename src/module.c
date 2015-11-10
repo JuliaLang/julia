@@ -543,7 +543,7 @@ DLLEXPORT void jl_declare_constant(jl_binding_t *b)
     b->constp = 1;
 }
 
-DLLEXPORT jl_value_t *jl_get_current_module()
+DLLEXPORT jl_value_t *jl_get_current_module(void)
 {
     return (jl_value_t*)jl_current_module;
 }

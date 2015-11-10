@@ -84,7 +84,7 @@ extern "C" {
 DLLEXPORT int16_t jl_threadid(void);
 DLLEXPORT void *jl_threadgroup(void);
 DLLEXPORT void jl_cpu_pause(void);
-DLLEXPORT void jl_threading_profile();
+DLLEXPORT void jl_threading_profile(void);
 
 #if __GNUC__
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
@@ -1204,8 +1204,8 @@ DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 DLLEXPORT long jl_getallocationgranularity(void);
 DLLEXPORT int jl_is_debugbuild(void);
-DLLEXPORT jl_sym_t* jl_get_OS_NAME();
-DLLEXPORT jl_sym_t* jl_get_ARCH();
+DLLEXPORT jl_sym_t* jl_get_OS_NAME(void);
+DLLEXPORT jl_sym_t* jl_get_ARCH(void);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1714,8 +1714,8 @@ DLLEXPORT extern int jl_ver_minor(void);
 DLLEXPORT extern int jl_ver_patch(void);
 DLLEXPORT extern int jl_ver_is_release(void);
 DLLEXPORT extern const char* jl_ver_string(void);
-DLLEXPORT const char *jl_git_branch();
-DLLEXPORT const char *jl_git_commit();
+DLLEXPORT const char *jl_git_branch(void);
+DLLEXPORT const char *jl_git_commit(void);
 
 // nullable struct representations
 typedef struct {
