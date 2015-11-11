@@ -212,12 +212,12 @@ uint64_t jl_sysimage_base = 0;
 #include <dbghelp.h>
 #endif
 
-DLLEXPORT int jl_running_on_valgrind()
+DLLEXPORT int jl_running_on_valgrind(void)
 {
     return RUNNING_ON_VALGRIND;
 }
 
-static int jl_load_sysimg_so()
+static int jl_load_sysimg_so(void)
 {
 #ifndef _OS_WINDOWS_
     Dl_info dlinfo;
@@ -403,7 +403,7 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
     }
 }
 
-static void jl_update_all_fptrs()
+static void jl_update_all_fptrs(void)
 {
     //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
     jl_value_t ***gvars = sysimg_gvars;
@@ -1807,7 +1807,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT ios_t *jl_create_system_image()
+DLLEXPORT ios_t *jl_create_system_image(void)
 {
     ios_t *f; f = (ios_t*)malloc(sizeof(ios_t));
     ios_mem(f, 1000000);
@@ -2142,7 +2142,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
     return t;
 }
 
-static void jl_recache_types()
+static void jl_recache_types(void)
 {
     size_t i = 0;
     while (i < flagref_list.len) {

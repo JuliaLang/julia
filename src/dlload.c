@@ -245,10 +245,12 @@ const char *jl_dlfind_win32(const char *f_name)
     if (jl_dlsym_e(jl_ntdll_handle, f_name))
         return "ntdll";
     if (jl_dlsym_e(jl_crtdll_handle, f_name))
+#if defined(_MSC_VER)
 #if _MSC_VER == 1800
         return "msvcr120";
-#elif defined(_MSC_VER)
+#else
 #error This version of MSVC has not been tested.
+#endif
 #else
         return "msvcrt";
 #endif

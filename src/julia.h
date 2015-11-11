@@ -84,7 +84,7 @@ extern "C" {
 DLLEXPORT int16_t jl_threadid(void);
 DLLEXPORT void *jl_threadgroup(void);
 DLLEXPORT void jl_cpu_pause(void);
-DLLEXPORT void jl_threading_profile();
+DLLEXPORT void jl_threading_profile(void);
 
 #if __GNUC__
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
@@ -576,17 +576,15 @@ typedef struct _jl_gcframe_t {
 } jl_gcframe_t;
 
 // NOTE: it is the caller's responsibility to make sure arguments are
-// rooted. foo(f(), g()) will not work, and foo can't do anything about it,
-// so the caller must do
-// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
+// rooted such that the gc can see them on the stack.
+// `foo(f(), g())` is not safe,
+// since the result of `f()` is not rooted during the call to `g()`,
+// and the arguments to foo are not gc-protected during the call to foo.
+// foo can't do anything about it, so the caller must do:
+// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH2(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
 extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
-
-#define JL_GC_PUSH(...)                                                   \
-  void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
-                       __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH1(arg1)                                                 \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
@@ -1206,8 +1204,8 @@ DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 DLLEXPORT long jl_getallocationgranularity(void);
 DLLEXPORT int jl_is_debugbuild(void);
-DLLEXPORT jl_sym_t* jl_get_OS_NAME();
-DLLEXPORT jl_sym_t* jl_get_ARCH();
+DLLEXPORT jl_sym_t* jl_get_OS_NAME(void);
+DLLEXPORT jl_sym_t* jl_get_ARCH(void);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1716,8 +1714,8 @@ DLLEXPORT extern int jl_ver_minor(void);
 DLLEXPORT extern int jl_ver_patch(void);
 DLLEXPORT extern int jl_ver_is_release(void);
 DLLEXPORT extern const char* jl_ver_string(void);
-DLLEXPORT const char *jl_git_branch();
-DLLEXPORT const char *jl_git_commit();
+DLLEXPORT const char *jl_git_branch(void);
+DLLEXPORT const char *jl_git_commit(void);
 
 // nullable struct representations
 typedef struct {

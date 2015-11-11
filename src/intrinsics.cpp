@@ -1050,7 +1050,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *x = auto_unbox(args[2],ctx);
         if (x->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-#if JL_NEED_FLOATTEMP_VAR
+#ifdef JL_NEED_FLOATTEMP_VAR
         // Target platform might carry extra precision.
         // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's

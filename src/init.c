@@ -328,7 +328,7 @@ void *init_stdio_handle(uv_file fd,int readable)
     return handle;
 }
 
-void init_stdio()
+void init_stdio(void)
 {   //order must be 2,1,0
     JL_STDERR = (uv_stream_t*)init_stdio_handle(STDERR_FILENO,0);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle(STDOUT_FILENO,0);
@@ -489,7 +489,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
-#if _MSC_VER == 1800
+#if defined(_MSC_VER) && _MSC_VER == 1800
     jl_crtdll_handle = jl_dlopen("msvcr120.dll", 0);
 #else
     jl_crtdll_handle = jl_dlopen("msvcrt.dll", 0);
@@ -634,14 +634,14 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
 extern int asprintf(char **str, const char *fmt, ...);
 
-DLLEXPORT int jl_generating_output()
+DLLEXPORT int jl_generating_output(void)
 {
     return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
 }
 
 void jl_compile_all(void);
 
-static void julia_save()
+static void julia_save(void)
 {
     if (!jl_generating_output())
         return;

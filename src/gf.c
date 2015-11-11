@@ -1539,7 +1539,7 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
                 break;
             }
         }
-        assert(found);
+        assert(found); (void)found;
     }
 
     JL_GC_POP();
