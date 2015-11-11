@@ -367,7 +367,7 @@ end
     end
 end
 
-setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
+@inline setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
 @inline function unsafe_setindex!(B::BitArray, x, i::Int)
     unsafe_bitsetindex!(B.chunks, convert(Bool, x), i)
     return B
