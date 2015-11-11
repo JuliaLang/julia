@@ -71,40 +71,31 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 {
 #ifdef LLVM34
     StringRef name = gv->getName();
+#ifdef _OS_WINDOWS_
+    std::string imp_name;
+#endif
 #endif
 
 #ifdef _OS_WINDOWS_
-#ifdef LLVM35
-    std::string imp_name;
     // setting DLLEXPORT correctly only matters when building a binary
     if (jl_generating_output()) {
+#ifdef LLVM35
         // add the __declspec(dllimport) attribute
         gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
         // this will cause llvm to rename it, so we do the same
         imp_name = Twine("__imp_", name).str();
         name = StringRef(imp_name);
-        // __imp_ functions are jmp stubs (no additional work needed)
-        // __imp_ variables are indirection pointers, so use malloc to simulate that too
-        if (isa<GlobalVariable>(gv)) {
-            void** imp_addr = (void**)malloc(sizeof(void**));
-            *imp_addr = addr;
-            addr = (void*)imp_addr;
-        }
-    }
 #else
-    // setting DLLEXPORT correctly only matters when building a binary
-    if (jl_generating_output()) {
         if (gv->getLinkage() == GlobalValue::ExternalLinkage)
             gv->setLinkage(GlobalValue::DLLImportLinkage);
-#ifdef _P64
-        // the following is correct by observation,
-        // as long as everything stays within a 32-bit offset :/
+#endif
+#if defined(_P64) || defined(LLVM35)
+        // __imp_ variables are indirection pointers, so use malloc to simulate that
         void** imp_addr = (void**)malloc(sizeof(void**));
         *imp_addr = addr;
         addr = (void*)imp_addr;
 #endif
     }
-#endif
 #endif // _OS_WINDOWS_
 
 #ifdef USE_ORCJIT
