@@ -303,6 +303,13 @@ function f13127()
 end
 @test f13127() == "f"
 
+let a = Pair(1.0,2.0)
+    @test sprint(show,a) == "1.0=>2.0"
+end
+let a = Pair(Pair(1,2),Pair(3,4))
+    @test sprint(show,a) == "(1=>2)=>(3=>4)"
+end
+
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test Base.inbase(LinAlg)
