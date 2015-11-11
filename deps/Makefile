@@ -279,7 +279,7 @@ endif
 $5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@

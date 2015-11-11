@@ -318,7 +318,7 @@ static int gc_debug_alloc_check(jl_alloc_num_t *num)
 }
 
 static char *gc_stack_lo;
-static void gc_debug_init()
+static void gc_debug_init(void)
 {
     gc_stack_lo = (char*)gc_get_stack_ptr();
     char *env = getenv("JL_GC_NO_GENERATIONAL");
@@ -330,17 +330,17 @@ static void gc_debug_init()
     gc_debug_alloc_init(&gc_debug_env.print, "PRINT");
 }
 
-static inline int gc_debug_check_pool()
+static inline int gc_debug_check_pool(void)
 {
     return gc_debug_alloc_check(&gc_debug_env.pool);
 }
 
-static inline int gc_debug_check_other()
+static inline int gc_debug_check_other(void)
 {
     return gc_debug_alloc_check(&gc_debug_env.other);
 }
 
-void gc_debug_print_status()
+void gc_debug_print_status(void)
 {
     uint64_t pool_count = gc_debug_env.pool.num;
     uint64_t other_count = gc_debug_env.other.num;
@@ -351,7 +351,7 @@ void gc_debug_print_status()
               n_pause);
 }
 
-static inline void gc_debug_print()
+static inline void gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&gc_debug_env.print))
         return;
@@ -391,21 +391,21 @@ static void gc_scrub(char *stack_hi)
 
 #else
 
-static inline int gc_debug_check_other()
+static inline int gc_debug_check_other(void)
 {
     return 0;
 }
 
-static inline int gc_debug_check_pool()
+static inline int gc_debug_check_pool(void)
 {
     return 0;
 }
 
-static inline void gc_debug_print()
+static inline void gc_debug_print(void)
 {
 }
 
-static inline void gc_debug_init()
+static inline void gc_debug_init(void)
 {
 }
 

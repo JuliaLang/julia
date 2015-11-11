@@ -282,7 +282,7 @@ static region_t *find_region(void *ptr, int maybe);
     ((GC_PAGE_DATA((data) - GC_PAGE_OFFSET) - \
       &(region)->pages[0][0])/GC_PAGE_SZ)
 
-NOINLINE static uintptr_t gc_get_stack_ptr()
+NOINLINE static uintptr_t gc_get_stack_ptr(void)
 {
     void *dummy = NULL;
     // The mask is to suppress the compiler warning about returning
@@ -1972,7 +1972,7 @@ static void big_obj_stats(void);
 #endif
 
 #ifdef OBJPROFILE
-static void reset_obj_profile()
+static void reset_obj_profile(void)
 {
     for(int g=0; g < 3; g++) {
         htable_reset(&obj_counts[g], 0);

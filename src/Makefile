@@ -21,7 +21,9 @@ FLAGS := \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
 	-I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
+		 -Wpointer-arith -Wundef
+override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
 
@@ -90,13 +92,14 @@ $(BUILDDIR):
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
 
+# source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
@@ -113,13 +116,18 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) \
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
+# additional dependency links
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp intrinsics.h cgutils.cpp ccall.cpp abi_*.cpp)
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-debug.c
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
+$(BUILDDIR)/dump.o $(BUILDDIR)/dump.dbg.obj: $(addprefix $(SRCDIR)/,common_symbols1.inc common_symbols2.inc)
+$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): threading.h threadgroup.h ia_misc.h
+$(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): APInt-C.h
 
+# archive library file rules
 $(BUILDDIR)/support/libsupport.a: $(SRCDIR)/support/*.h $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 

@@ -148,7 +148,7 @@ JL_THREAD jl_task_t *jl_root_task;
 DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 
-static void start_task();
+static void start_task(void);
 
 #ifdef COPY_STACKS
 static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
@@ -241,7 +241,7 @@ static void throw_if_exception_set(jl_task_t *t)
     }
 }
 
-static void NOINLINE NORETURN start_task()
+static void NOINLINE NORETURN start_task(void)
 {
     // this runs the first time we switch to a task
     jl_task_t *t = jl_current_task;
@@ -353,7 +353,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             void *stackbase = jl_stackbase;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
-            stackbase -= 0x20;
+            stackbase = (char*)stackbase - 0x20;
 #endif
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
@@ -790,14 +790,14 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     free(inlinedat_file);
 }
 
-DLLEXPORT void jlbacktrace()
+DLLEXPORT void jlbacktrace(void)
 {
     size_t n = bt_size; //bt_size > 40 ? 40 : bt_size;
     for(size_t i=0; i < n; i++)
         gdblookup(bt_data[i]);
 }
 
-DLLEXPORT void gdbbacktrace()
+DLLEXPORT void gdbbacktrace(void)
 {
     record_backtrace();
     jlbacktrace();
