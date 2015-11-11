@@ -353,7 +353,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             void *stackbase = jl_stackbase;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
-            stackbase -= 0x20;
+            stackbase = (char*)stackbase - 0x20;
 #endif
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"

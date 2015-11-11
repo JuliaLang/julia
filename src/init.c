@@ -489,7 +489,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
-#if _MSC_VER == 1800
+#if defined(_MSC_VER) && _MSC_VER == 1800
     jl_crtdll_handle = jl_dlopen("msvcr120.dll", 0);
 #else
     jl_crtdll_handle = jl_dlopen("msvcrt.dll", 0);

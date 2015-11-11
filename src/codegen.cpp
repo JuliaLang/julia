@@ -4590,7 +4590,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             AttributeSet::FunctionIndex,*attr));
 #endif
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && LLVM35
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && defined(LLVM35)
     f->setHasUWTable(); // force NeedsWinEH
 #endif
 
