@@ -3,7 +3,8 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: GMP_VERSION, Limb
+using Base.GMP: GMP_VERSION, Limb, GMPRandState
+using Base.MPFR: urandomb
 
 export srand,
        rand, rand!,
@@ -125,6 +126,36 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     return mts
 end
 randjump(r::MersenneTwister, jumps::Integer) = randjump(r, jumps, dSFMT.JPOLY1e21)
+
+## BigFloat using GMPRandState
+
+immutable BigFloatRNG <: AbstractRNG
+    randstate::GMPRandState
+    seed::Vector{UInt32}
+    function BigFloatRNG(seed_::Vector{UInt32})
+        s = big(0)
+        for i in seed_
+            s = s << 32 + i
+        end
+        randstate = GMPRandState(s)
+        gmprng = new(randstate, seed_)
+    end
+    BigFloatRNG() = BigFloatRNG([UInt32(0)])
+end
+
+function srand(r::BigFloatRNG, seed::Vector{UInt32})
+    r.seed = seed
+    s = big(0)
+    for i in seed
+        s = s << 32 + i
+    end
+    r.randstate = GMPRandState(s)
+    return r
+end
+
+function rand(r::BigFloatRNG, ::Type{BigFloat})
+    urandomb(r.randstate)
+end
 
 ## initialization
 
@@ -1363,5 +1394,7 @@ function randcycle(r::AbstractRNG, n::Integer)
     return a
 end
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+
+
 
 end # module

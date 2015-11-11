@@ -22,7 +22,7 @@ import
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax
+import Base.GMP: ClongMax, CulongMax, CdoubleMax, GMPRandState
 
 import Base.Math.lgamma_r
 
@@ -879,5 +879,14 @@ get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
 set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
 set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
+
+
+function urandomb(randstate::GMPRandState)
+    z = BigFloat()
+    ccall((:mpfr_urandomb,:libmpfr), Int32,
+          (Ptr{BigFloat}, Ptr{GMPRandState}),
+           &z, &randstate)
+    z
+end
 
 end #module
