@@ -451,16 +451,24 @@ c, r, res = test_scomplete(s)
     let
         oldpath = ENV["PATH"]
         path = tempdir()
-        ENV["PATH"] = path
+        # PATH can also contain folders which we aren't actually allowed to read.
+        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+        ENV["PATH"] = string(path, ":", unreadable)
+
         file = joinpath(path, "tmp-executable")
         touch(file)
         chmod(file, 0o755)
+        mkdir(unreadable)
+        chmod(unreadable, 0o000)
+
         s = "tmp-execu"
         c,r = test_scomplete(s)
         @test "tmp-executable" in c
         @test r == 1:9
         @test s[r] == "tmp-execu"
+
         rm(file)
+        rm(unreadable)
         ENV["PATH"] = oldpath
     end
 
