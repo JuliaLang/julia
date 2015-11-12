@@ -310,21 +310,17 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     ind = 1
     @inbounds begin
         for i = 1:length(Bc)-1
-            u = UInt64(1)
             c = UInt64(0)
             for j = 0:63
-                A[ind]!=0 && (c |= u)
+                c |= (UInt64(A[ind] != 0) << j)
                 ind += 1
-                u <<= 1
             end
             Bc[i] = c
         end
-        u = UInt64(1)
         c = UInt64(0)
         for j = 0:_mod64(l-1)
-            A[ind]!=0 && (c |= u)
+            c |= (UInt64(A[ind] != 0) << j)
             ind += 1
-            u <<= 1
         end
         Bc[end] = c
     end
