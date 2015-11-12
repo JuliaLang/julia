@@ -115,11 +115,12 @@ static void ti_init_master_thread(void)
 {
 #ifdef _OS_WINDOWS_
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
-                         GetCurrentProcess(), &jl_all_task_states[0].system_id, 0,
+                         GetCurrentProcess(), &hMainThread, 0,
                          TRUE, DUPLICATE_SAME_ACCESS)) {
         jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
-        jl_all_task_states[0].system_id = INVALID_HANDLE_VALUE;
+        hMainThread = INVALID_HANDLE_VALUE;
     }
+    jl_all_task_states[0].system_id = hMainThread;
 #else
     jl_all_task_states[0].system_id = pthread_self();
 #endif
