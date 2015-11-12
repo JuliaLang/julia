@@ -181,7 +181,7 @@ int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
 #ifdef _OS_WINDOWS_
-extern volatile HANDLE hMainThread;
+extern HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
 DWORD64 jl_getUnwindInfo(ULONG64 dwBase);
 extern volatile int jl_in_stackwalk;

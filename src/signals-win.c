@@ -110,7 +110,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #endif
 }
 
-volatile HANDLE hMainThread = NULL;
+HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -260,7 +260,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 }
 #endif
 
-DLLEXPORT void jl_install_sigint_handler()
+DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
@@ -310,7 +310,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int jl_profile_start_timer()
+DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
@@ -331,12 +331,12 @@ DLLEXPORT int jl_profile_start_timer()
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void jl_profile_stop_timer()
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
 
-void jl_install_default_signal_handlers()
+void jl_install_default_signal_handlers(void)
 {
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGFPE");
@@ -356,7 +356,7 @@ void jl_install_default_signal_handlers()
     SetUnhandledExceptionFilter(exception_handler);
 }
 
-void *jl_install_thread_signal_handler()
+void *jl_install_thread_signal_handler(void)
 {
     // Ensure the stack overflow handler has enough space to collect the backtrace
     ULONG StackSizeInBytes = sig_stack_size;
