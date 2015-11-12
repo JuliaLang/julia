@@ -95,7 +95,7 @@ DLLEXPORT void jl_threading_profile(void);
        __sync_lock_test_and_set(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
        __sync_lock_release(&(a))
-#elif _WIN32
+#elif defined(_OS_WINDOWS_)
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
