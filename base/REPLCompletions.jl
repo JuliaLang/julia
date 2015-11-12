@@ -161,7 +161,18 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
                 continue
             end
 
-            local filesinpath = readdir(pathdir)
+            local filesinpath
+            try
+                filesinpath = readdir(pathdir)
+            catch e
+                # Bash allows dirs in PATH that can't be read, so we should as well.
+                if isa(e, SystemError)
+                    continue
+                else
+                    # We only handle SystemErrors here
+                    rethrow(e)
+                end
+            end
 
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
