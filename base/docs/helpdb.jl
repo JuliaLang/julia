@@ -6114,9 +6114,9 @@ See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``
 minmax
 
 doc"""
-    mktemp([parent=tempdir()])
+    mktemp([parent=tempdir()]; suffix="")
 
-Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io` is an open file object for this path.
+Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` (with suffix `suffix`) and `io` is an open file object for this path.
 """
 mktemp(?)
 

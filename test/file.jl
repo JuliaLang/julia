@@ -219,6 +219,12 @@ close(f)
 @test readall(p) == "Here is some text"
 rm(p)
 
+(p, f) = mktemp(suffix=".foo")
+close(f)
+@test isfile(p) == true
+@test endswith(p, ".foo") == true
+rm(p)
+
 let
     tmp_path = mktemp() do p, io
         @test isfile(p)

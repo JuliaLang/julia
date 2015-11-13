@@ -188,9 +188,13 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
+function mktemp(parent=tempdir(); suffix="")
+    b = joinpath(parent, "tmpXXXXXX$suffix")
+    if length(suffix) > 0
+        p = ccall(:mkstemps, Int32, (Ptr{UInt8}, Cint), b, length(suffix))
+    else
+        p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b)
+    end
     systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
@@ -225,8 +229,8 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     resize!(tname,lentname+1)
     return utf8(UTF16String(tname))
 end
-function mktemp(parent=tempdir())
-    filename = tempname(parent, UInt32(0))
+function mktemp(parent=tempdir(); suffix="")
+    filename = tempname(parent, UInt32(0)) * suffix
     return (filename, Base.open(filename, "r+"))
 end
 function mktempdir(parent=tempdir())
@@ -246,8 +250,8 @@ function mktempdir(parent=tempdir())
 end
 end
 
-function mktemp(fn::Function, parent=tempdir())
-    (tmp_path, tmp_io) = mktemp(parent)
+function mktemp(fn::Function, parent=tempdir(); suffix="")
+    (tmp_path, tmp_io) = mktemp(parent, suffix=suffix)
     try
         fn(tmp_path, tmp_io)
     finally
