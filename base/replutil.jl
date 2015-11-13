@@ -14,17 +14,59 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
 end
 
 # writemime for ranges, e.g.
-#  3-element UnitRange{Int64,Int}
+#  3-element UnitRange{Int64} (1:3):
 #   1,2,3
 # or for more elements than fit on screen:
 #   1.0,2.0,3.0,…,6.0,7.0,8.0
-function writemime(io::IO, ::MIME"text/plain", r::Range)
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        with_output_limit(()->print_range(io, r))
+# or for zero elements:
+#   0-element UnitRange{Int64} (3:1)
+# with options to display pre-0.5 behavior, e.g. linspace(1.0, 3.0, 5)
+# and to display type and fields, and/or list the contents like an array.
+"""
+    writemime(stream, mime, range)
+
+prints a `Range` object with user-selectable options. By default it prints
+the type, a shorthand definition, and a list of the contents. Additional
+named keywords are as follows: `rangeverbose` [`true`] selects whether
+info beyond the shorthand definition is shown. If verbose, then at minimum the
+type info is shown (e.g., `UnitRange{Int64}`). `rangeinfo` = 0, [1], 2
+selects whether the range definition should be given (0) not at all, (1) as
+a shorthand (e.g., `1:3`), or (2) as full constructor (e.g., `LinSpace{Int64}(...)`).
+`rangelist` [`true`] selects whether the contents should be shown.
+If the range is empty, then at minimum the shorthand definition is shown.
+"""
+function writemime(io::IO, ::MIME"text/plain", r::Range;
+    rangeverbose = true, rangeinfo = 1, rangelist = true)
+    if rangeverbose                      # at minimum show type, e.g.
+        print(io, summary(r))            #   5-element LinSpace{Float64}
+        if rangeinfo == 1 ||             # default is to print shorthand, e.g.
+          (rangeinfo == 0 && isempty(r))
+            print(io, " ")               #   1:3
+            if typeof(r) <: LinSpace
+                show(io, r)
+            else # FloatRange or OrdinalRange should be wrapped in parens
+                print(io, "(")
+                show(io,r)
+                print(io, ")")
+            end
+        elseif rangeinfo == 2           # or print constructor info,
+            print(io, "(")              #   (1,3)
+            for i in 1:nfields(r)-1
+                print(io, getfield(r, i), ",")
+            end
+            print(io, getfield(r, nfields(r)), ")")
+        end
+        if rangelist && !isempty(r)     # list contents if there are any
+            println(io, ":")
+            with_output_limit(()->print_range(io,r))
+        end
+    else                                # terse behavior (like v0.4 and earlier)
+        show(io,r)                      # e.g., linspace(1.0, 3.0, 5)
     end
 end
+# Note that for above, one can select different options by overwriting, e.g.
+#   Base.writemime(io::IO, mime:MIME"text/plain", r::Range) = Base.writemime(io,
+#     mime, r, rangeverbose = false)
 
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     print(io, summary(v))
