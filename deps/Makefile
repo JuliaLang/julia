@@ -1790,7 +1790,6 @@ $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(SRCDIR)/srccache/gmp-$(GMP_VER).t
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/gmp_6.0.0_osx.patch
 	echo 1 > $@
 $(BUILDDIR)/gmp-$(GMP_VER)/config.status: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched
 	mkdir -p $(dir $@)
@@ -2024,8 +2023,6 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres` -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-else ifneq ($(OS), Darwin)
-LIBGIT2_OPTS += -DREQUIRE_OPENSSL=ON
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
