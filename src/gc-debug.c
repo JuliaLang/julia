@@ -299,7 +299,7 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
 {
     // Not very generic and robust but good enough for a debug option
     char buff[128];
-    sprintf(buff, "JL_GC_ALLOC_%s", name);
+    sprintf(buff, "JULIA_GC_ALLOC_%s", name);
     char *env = getenv(buff);
     if (!env)
         return;
@@ -321,7 +321,7 @@ static char *gc_stack_lo;
 static void gc_debug_init(void)
 {
     gc_stack_lo = (char*)gc_get_stack_ptr();
-    char *env = getenv("JL_GC_NO_GENERATIONAL");
+    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
     if (env && strcmp(env, "0") != 0) {
         gc_debug_env.sweep_mask = GC_MARKED;
     }
