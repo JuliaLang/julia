@@ -317,7 +317,11 @@ end
 @test contains(sprint(io -> writemime(io,"text/plain",methods(Base.inbase))),"inbase(m::Module)")
 @test contains(sprint(io -> writemime(io,"text/html",methods(Base.inbase))),"inbase(m::<b>Module</b>)")
 
-@test contains(Base.url(methods(eigs).defs),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/linalg/arnoldi.jl#L")
+if isempty(Base.GIT_VERSION_INFO.commit)
+    @test contains(Base.url(methods(eigs).defs),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/linalg/arnoldi.jl#L")
+else
+    @test contains(Base.url(methods(eigs).defs),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/linalg/arnoldi.jl#L")
+end
 
 # print_matrix should be able to handle small and large objects easily, test by
 # calling writemime. This also indirectly tests print_matrix_row, which
