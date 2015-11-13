@@ -262,7 +262,7 @@ function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b
     x
 end
 
-function \{T,S}(A::Bidiagonal{T}, B::StridedVecOrMat{S})
+function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
 end
