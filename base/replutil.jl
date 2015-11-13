@@ -14,14 +14,17 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
 end
 
 # writemime for ranges, e.g.
-#  3-element UnitRange{Int64,Int}
+#  3-element UnitRange{Int64} 1:3,
 #   1,2,3
 # or for more elements than fit on screen:
 #   1.0,2.0,3.0,…,6.0,7.0,8.0
+# or for zero elements:
+#   0-element UnitRange{Int64} 3:1
 function writemime(io::IO, ::MIME"text/plain", r::Range)
-    print(io, summary(r))
+    print(io, summary(r), " ")
+    show(io, r)
     if !isempty(r)
-        println(io, ":")
+        println(io, ",")
         with_output_limit(()->print_range(io, r))
     end
 end
