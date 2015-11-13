@@ -21,6 +21,8 @@ TODO:
 #ifndef _MSC_VER
 #include <unistd.h>
 #include <sched.h>
+#else
+#define sleep(x) Sleep(1000*x)
 #endif
 
 #include "julia.h"
