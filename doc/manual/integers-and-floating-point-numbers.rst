@@ -116,7 +116,7 @@ system's signed and unsigned native integer types respectively.::
     # 64-bit system:
     julia> Int
     Int64
-    julia> Uint
+    julia> UInt
     Uint64
 
 Larger integer literals that cannot be represented using only 32 bits
