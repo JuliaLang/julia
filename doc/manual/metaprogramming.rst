@@ -1036,7 +1036,7 @@ indices - in other words, to calculate the index ``i`` that can be used to
 index into an array ``A`` using ``A[i]``, instead of ``A[x,y,z,...]``. One
 possible implementation is the following::
 
-    function sub2ind_loop(dims::NTuple{N}, I::Integer...)
+    function sub2ind_loop{N}(dims::NTuple{N}, I::Integer...)
         ind = I[N] - 1
         for i = N-1:-1:1
             ind = I[i]-1 + dims[i]*ind
