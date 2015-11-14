@@ -2126,6 +2126,11 @@ end
 @test !isprime(0xffffffffffffffc7)
 @test !isprime(0xffffffffffffffc9)
 
+for T in [Int8,UInt8,Int16,UInt16,Int128,UInt128]
+    @test isprime(T(2))
+    @test !isprime(T(4))
+end
+
 # issue #5210
 @test prod([ k^v for (k,v) in factor(typemax(UInt32)) ]) == typemax(UInt32)
 @test prod([ k^v for (k,v) in factor(typemax(Int8)) ]) == typemax(Int8)
