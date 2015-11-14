@@ -178,7 +178,7 @@ typedef struct _gcpage_t {
     struct {
         uint16_t pool_n : 8; // index (into norm_pool) of pool that owns this page
         uint16_t allocd : 1; // true if an allocation happened in this page since last sweep
-        uint16_t gc_bits : 2; // this is a bitwise | of all gc_bits in this page
+        uint16_t pg_gc_bits : 2; // this is a bitwise | of all gc_bits in this page
     };
     uint16_t nfree; // number of free objects in this page.
                     // invalid if pool that owns this page is allocating objects from this page.
@@ -801,7 +801,7 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
 #endif
     }
     _gc_setmark(o, mark_mode);
-    page->gc_bits |= mark_mode;
+    page->pg_gc_bits |= mark_mode;
     verify_val(jl_valueof(o));
     return mark_mode;
 }
@@ -1179,7 +1179,7 @@ static void sweep_malloced_arrays(void)
 // pool allocation
 static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
 {
-    pg->gc_bits = 0;
+    pg->pg_gc_bits = 0;
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     FOR_HEAP (pg->thread_n)
         pg->pool_n = p - pools;
@@ -1373,6 +1373,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl, int sweep_mask, int osize)
 {
+    assert(sweep_mask == GC_MARKED || sweep_mask == GC_MARKED_NOESC);
 #ifdef FREE_PAGES_EAGER
     int freedall;
 #else
@@ -1390,10 +1391,10 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl, int sweep_ma
     freedall = 1;
     old_nfree += pg->nfree;
 
-    if (pg->gc_bits == GC_MARKED) {
+    if (pg->pg_gc_bits == GC_MARKED) {
         // this page only contains GC_MARKED and free cells
-        // if we are doing a quick sweep and nothing has been allocated inside since last sweep
-        // we can skip it
+        // if we are doing a quick sweep and nothing has been allocated inside
+        // since last sweep we can skip it
         if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
             // the position of the freelist begin/end in this page is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
@@ -1405,7 +1406,7 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl, int sweep_ma
             goto free_page;
         }
     }
-    else if (pg->gc_bits == GC_CLEAN) {
+    else if (!(pg->pg_gc_bits & GC_MARKED)) {
         goto free_page;
     }
 
@@ -1484,9 +1485,9 @@ static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl, int sweep_ma
     }
     else {
         if (sweep_mask == GC_MARKED)
-            pg->gc_bits = GC_CLEAN;
+            pg->pg_gc_bits = GC_CLEAN;
         if (sweep_mask == GC_MARKED_NOESC)
-            pg->gc_bits = GC_MARKED;
+            pg->pg_gc_bits = GC_MARKED;
         nfree += pg->nfree;
     }
 
