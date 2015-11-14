@@ -277,7 +277,7 @@ static jl_svec_t *jl_compute_type_union(jl_value_t **types, size_t ntypes)
     // sort Union components by specificity, so "complex" type Unions work as
     // long as there are no ambiguities (see e.g. issue #126).
     // TODO: maybe warn about ambiguities
-    qsort(result->data, j, sizeof(jl_value_t*), union_elt_morespecific);
+    qsort(jl_svec_data(result), j, sizeof(jl_value_t*), union_elt_morespecific);
     JL_GC_POP();
     return result;
 }
@@ -1263,7 +1263,7 @@ void print_env(cenv_t *soln)
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
         T = soln->data[i]; S = soln->data[i+1];
-        jl_printf(JL_STDOUT, "%s@%x=", ((jl_tvar_t*)T)->name->name, T);
+        jl_printf(JL_STDOUT, "%s@%x=", jl_symbol_name(((jl_tvar_t*)T)->name), T);
         jl_static_show(JL_STDOUT, S);
         jl_printf(JL_STDOUT, " ");
     }
@@ -1710,7 +1710,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     else {
         assert(jl_is_datatype(tc));
         tp = ((jl_datatype_t*)tc)->parameters;
-        tname = ((jl_datatype_t*)tc)->name->name->name;
+        tname = jl_symbol_name(((jl_datatype_t*)tc)->name->name);
         stprimary = (jl_datatype_t*)((jl_datatype_t*)tc)->name->primary;
     }
     for(i=0; i < n; i++) {
@@ -1991,7 +1991,7 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
     if (is_cacheable(type)) {
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
         JL_LOCK(typecache);
-        ssize_t idx = lookup_type_idx(type->name, type->parameters->data,
+        ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
                                       jl_svec_len(type->parameters), ord);
         if (idx >= 0)
             type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
@@ -2254,7 +2254,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 jl_value_t *val = env[i*2+1];
                 if (check && !jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
                     jl_type_error_rt("type parameter",
-                                     ((jl_tvar_t*)t)->name->name,
+                                     jl_symbol_name(((jl_tvar_t*)t)->name),
                                      t, val);
                 }
                 return val;
@@ -2298,8 +2298,8 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, elt != tv);
             if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
                 if (!jl_subtype(iparams[i], tv, 0)) {
-                    jl_type_error_rt(tt->name->name->name,
-                                     ((jl_tvar_t*)tv)->name->name,
+                    jl_type_error_rt(jl_symbol_name(tt->name->name),
+                                     jl_symbol_name(((jl_tvar_t*)tv)->name),
                                      tv, iparams[i]);
                 }
             }

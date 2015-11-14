@@ -43,8 +43,6 @@ JL_DEFINE_MUTEX(finalizers)
 #define GC_QUEUED 2 // if it is reachable it will be marked as old
 #define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
 
-#define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
-
 // This struct must be kept in sync with the Julia type of the same name in base/util.jl
 typedef struct {
     int64_t     allocd;
@@ -1664,8 +1662,9 @@ static int push_root(jl_value_t *v, int d, int bits)
     // some values have special representations
     if (vt == (jl_value_t*)jl_simplevector_type) {
         size_t l = jl_svec_len(v);
-        MARK(v, bits = gc_setmark(v, l*sizeof(void*) + sizeof(jl_svec_t), GC_MARKED_NOESC));
-        jl_value_t **data = ((jl_svec_t*)v)->data;
+        MARK(v, bits = gc_setmark(v, l * sizeof(void*) +
+                                  sizeof(jl_svec_t), GC_MARKED_NOESC));
+        jl_value_t **data = jl_svec_data(v);
         nptr += l;
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];

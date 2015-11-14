@@ -451,7 +451,7 @@ static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
 static value_t julia_to_scm_(jl_value_t *v)
 {
     if (jl_is_symbol(v))
-        return symbol(((jl_sym_t*)v)->name);
+        return symbol(jl_symbol_name((jl_sym_t*)v));
     if (jl_is_gensym(v)) {
         size_t idx = ((jl_gensym_t*)v)->id;
         size_t i;

@@ -82,7 +82,7 @@ DLLEXPORT const char *jl_typename_str(jl_value_t *v)
 {
     if (!jl_is_datatype(v))
         return NULL;
-    return ((jl_datatype_t*)v)->name->name->name;
+    return jl_symbol_name(((jl_datatype_t*)v)->name->name);
 }
 
 // get the name of typeof(v) as a string
@@ -304,16 +304,19 @@ DLLEXPORT const char *jl_git_commit(void)
 }
 
 // Create function versions of some useful macros
-#undef jl_astaggedvalue
-DLLEXPORT jl_taggedvalue_t *jl_astaggedvalue(jl_value_t *v)
+DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
-    return jl_astaggedvalue__MACRO(v);
+    return jl_astaggedvalue(v);
 }
 
-#undef jl_typeof
-DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v)
+DLLEXPORT jl_value_t *(jl_valueof)(jl_taggedvalue_t *v)
 {
-    return jl_typeof__MACRO(v);
+    return jl_valueof(v);
+}
+
+DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
+{
+    return jl_typeof(v);
 }
 
 #ifdef __cplusplus
