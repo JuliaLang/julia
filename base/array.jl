@@ -420,9 +420,9 @@ end
 
 function push!{T}(a::Array{T,1}, item)
     # convert first so we don't grow the array if the assignment won't work
-    item = convert(T, item)
+    itemT = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
-    a[end] = item
+    a[end] = itemT
     return a
 end
 
