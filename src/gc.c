@@ -345,26 +345,26 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
 }
 
-static int finalize_object(jl_value_t *o)
+static void finalize_object(arraylist_t *list, jl_value_t *o)
 {
-    int success = 0;
+    /* int success = 0; */
     jl_value_t *f = NULL;
     JL_GC_PUSH1(&f);
-    for(int i = 0; i < finalizer_list.len; i+=2) {
-        if (o == (jl_value_t*)finalizer_list.items[i]) {
-            f = (jl_value_t*)finalizer_list.items[i+1];
-            if (i < finalizer_list.len - 2) {
-                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
-                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
+    for(int i = 0; i < list->len; i+=2) {
+        if (o == (jl_value_t*)list->items[i]) {
+            f = (jl_value_t*)list->items[i+1];
+            if (i < list->len - 2) {
+                list->items[i] = list->items[list->len-2];
+                list->items[i+1] = list->items[list->len-1];
                 i -= 2;
             }
-            finalizer_list.len -= 2;
+            list->len -= 2;
             run_finalizer(o, f);
-            success = 1;
+            /* success = 1; */
         }
     }
     JL_GC_POP();
-    return success;
+    /* return success; */
 }
 
 static void run_finalizers(void)
@@ -421,7 +421,10 @@ DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 void jl_finalize(jl_value_t *o)
 {
     JL_LOCK(finalizers);
-    (void)finalize_object(o);
+    // No need to check the to_finalize list since the user is apparently
+    // still holding a reference to the object
+    finalize_object(&finalizer_list, o);
+    finalize_object(&finalizer_list_marked, o);
     JL_UNLOCK(finalizers);
 }
 
