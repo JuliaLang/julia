@@ -42,6 +42,22 @@ end
 # issue #4718
 @test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+let z = zip(1:2)
+    @test collect(z) == [(1,), (2,)]
+    # Issue #13979
+    @test eltype(z) == Tuple{Int}
+end
+
+let z = zip(1:2, 3:4)
+    @test collect(z) == [(1,3), (2,4)]
+    @test eltype(z) == Tuple{Int,Int}
+end
+
+let z = zip(1:2, 3:4, 5:6)
+    @test collect(z) == [(1,3,5), (2,4,6)]
+    @test eltype(z) == Tuple{Int,Int,Int}
+end
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
