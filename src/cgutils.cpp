@@ -363,11 +363,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     if (jl_is_bitstype(jt)) {
         uint64_t SizeInBits = jdt == jl_bool_type ? 1 : 8*jdt->size;
     #ifdef LLVM37
-        llvm::DIType *t = dbuilder->createBasicType(jdt->name->name->name,SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        llvm::DIType *t = dbuilder->createBasicType(jl_symbol_name(jdt->name->name),SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
     #else
-        DIType t = dbuilder->createBasicType(jdt->name->name->name,SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        DIType t = dbuilder->createBasicType(jl_symbol_name(jdt->name->name),SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
         jdt->ditype = M;
         return t;
@@ -379,7 +379,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         size_t ntypes = jl_datatype_nfields(jst);
         llvm::DICompositeType *ct = dbuilder->createStructType(
             NULL,                       // Scope
-            jdt->name->name->name,      // Name
+            jl_symbol_name(jdt->name->name),      // Name
             NULL,                       // File
             0,                          // LineNumber
             8*jdt->size,                // SizeInBits
@@ -396,7 +396,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         dbuilder->replaceArrays(ct, dbuilder->getOrCreateArray(ArrayRef<Metadata*>(Elements)));
         return ct;
     } else {
-        jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt, jdt->name->name->name, NULL, 0, NULL);
+        jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt, jl_symbol_name(jdt->name->name), NULL, 0, NULL);
         return (llvm::DIType*)jdt->ditype;
     }
     #endif
@@ -639,22 +639,22 @@ static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, voi
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
     // to create a readable name of the form prefixModA.ModB.name
-    size_t len = strlen(name->name)+strlen(prefix)+1;
+    size_t len = strlen(jl_symbol_name(name))+strlen(prefix)+1;
     jl_module_t *parent = mod, *prev = NULL;
     while (parent != NULL && parent != prev) {
-        len += strlen(parent->name->name)+1;
+        len += strlen(jl_symbol_name(parent->name))+1;
         prev = parent;
         parent = parent->parent;
     }
     char *fullname = (char*)alloca(len);
     strcpy(fullname, prefix);
-    len -= strlen(name->name)+1;
-    strcpy(fullname+len,name->name);
+    len -= strlen(jl_symbol_name(name))+1;
+    strcpy(fullname + len, jl_symbol_name(name));
     parent = mod;
     prev = NULL;
     while (parent != NULL && parent != prev) {
-        size_t part = strlen(parent->name->name)+1;
-        strcpy(fullname+len-part,parent->name->name);
+        size_t part = strlen(jl_symbol_name(parent->name))+1;
+        strcpy(fullname+len-part,jl_symbol_name(parent->name));
         fullname[len-1] = '.';
         len -= part;
         prev = parent;
@@ -805,7 +805,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
                 return T_void;
             StructType *structdecl;
             if (!isTuple) {
-                structdecl = StructType::create(jl_LLVMContext, jst->name->name->name);
+                structdecl = StructType::create(jl_LLVMContext, jl_symbol_name(jst->name->name));
                 jst->struct_decl = structdecl;
             }
             std::vector<Type*> latypes(0);
@@ -916,8 +916,9 @@ static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype
 
 static Value *emit_typeptr_addr(Value *p)
 {
-   ssize_t offset = (offsetof(jl_taggedvalue_t,value) - offsetof(jl_taggedvalue_t,type)) / sizeof(jl_value_t*);
-   return emit_nthptr_addr(p, -offset);
+    ssize_t offset = (sizeof(jl_taggedvalue_t) -
+                      offsetof(jl_taggedvalue_t, type)) / sizeof(jl_value_t*);
+    return emit_nthptr_addr(p, -offset);
 }
 
 static Value *emit_typeof(Value *tt)

@@ -113,14 +113,17 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_declare_constant(b);
     if (b->value != NULL) {
         if (!jl_is_module(b->value)) {
-            jl_errorf("invalid redefinition of constant %s", name->name);
+            jl_errorf("invalid redefinition of constant %s",
+                      jl_symbol_name(name));
         }
         if (jl_generating_output() && jl_options.incremental) {
-            jl_errorf("cannot replace module %s during incremental compile", name->name);
+            jl_errorf("cannot replace module %s during incremental compile",
+                      jl_symbol_name(name));
         }
         if (!jl_generating_output()) {
             // suppress warning "replacing module Core.Inference" during bootstrapping
-            jl_printf(JL_STDERR, "WARNING: replacing module %s\n", name->name);
+            jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
+                      jl_symbol_name(name));
         }
     }
     jl_module_t *newm = jl_new_module(name);
@@ -188,13 +191,14 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             // remove non-exported macros
-            if (b->name->name[0]=='@' && !b->exportp && b->owner==newm)
+            if (jl_symbol_name(b->name)[0]=='@' &&
+                !b->exportp && b->owner == newm)
                 b->value = NULL;
             // error for unassigned exports
             /*
             if (b->exportp && b->owner==newm && b->value==NULL)
                 jl_errorf("identifier %s exported from %s is not initialized",
-                          b->name->name, newm->name->name);
+                          jl_symbol_name(b->name), jl_symbol_name(newm->name));
             */
         }
     }
@@ -347,7 +351,8 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                 m = (jl_module_t*)mb->value;
                 if ((mb->owner == m0 && m != NULL && !jl_is_module(m)) ||
                     (isimp && (m == NULL || !jl_is_module(m))))
-                    jl_errorf("invalid module path (%s does not name a module)", var->name);
+                    jl_errorf("invalid module path (%s does not name a module)",
+                              jl_symbol_name(var));
                 // If the binding has been resolved but is (1) undefined, and (2) owned
                 // by the module we're importing into, then allow the import into the
                 // undefined variable (by setting m back to m0).
@@ -368,11 +373,12 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             }
         }
         if (retrying && require_func) {
-            jl_printf(JL_STDERR, "WARNING: requiring \"%s\" in module \"%s\" did not define a corresponding module.\n", var->name, jl_current_module->name->name);
+            jl_printf(JL_STDERR, "WARNING: requiring \"%s\" in module \"%s\" did not define a corresponding module.\n", jl_symbol_name(var),
+                      jl_symbol_name(jl_current_module->name));
             return NULL;
         }
         else {
-            jl_errorf("in module path: %s not defined", var->name);
+            jl_errorf("in module path: %s not defined", jl_symbol_name(var));
         }
     }
 
@@ -430,7 +436,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-            jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+            jl_errorf("invalid %s statement: name exists but does not refer to a module", jl_symbol_name(ex->head));
         jl_module_importall(jl_current_module, m);
         return jl_nothing;
     }
@@ -634,7 +640,8 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_is_tuple_type(super) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
-        jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
+        jl_errorf("invalid subtyping in definition of %s",
+                  jl_symbol_name(tt->name->name));
     }
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
@@ -682,11 +689,13 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     jl_value_t *gf=NULL;
 
     if (bnd && bnd->value != NULL && !bnd->constp)
-        jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
+        jl_errorf("cannot define function %s; it already has a value",
+                  jl_symbol_name(bnd->name));
     if (*bp != NULL) {
         gf = *bp;
         if (!jl_is_gf(gf))
-            jl_errorf("cannot define function %s; it already has a value", name->name);
+            jl_errorf("cannot define function %s; it already has a value",
+                      jl_symbol_name(name));
     }
     if (bnd)
         bnd->constp = 1;
@@ -712,7 +721,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     JL_GC_PUSH4(&gf, &tvars, &argtypes, &f);
 
     if (bnd && bnd->value != NULL && !bnd->constp) {
-        jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
+        jl_errorf("cannot define function %s; it already has a value",
+                  jl_symbol_name(bnd->name));
     }
 
     if (*bp != NULL) {
@@ -772,7 +782,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                 }
             }
             if (!jl_is_gf(gf)) {
-                jl_errorf("cannot define function %s; it already has a value", name->name);
+                jl_errorf("cannot define function %s; it already has a value",
+                          jl_symbol_name(name));
             }
         }
         if (iskw) {
@@ -792,18 +803,21 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
-                          jl_lam_argname(li,i)->name, name->name, li->file->name, li->line);
+                          jl_symbol_name(jl_lam_argname(li,i)),
+                          jl_symbol_name(name), jl_symbol_name(li->file),
+                          li->line);
         }
     }
 
-    int ishidden = !!strchr(name->name, '#');
+    int ishidden = !!strchr(jl_symbol_name(name), '#');
     for(size_t i=0; i < jl_svec_len(tvars); i++) {
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
-            jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
+            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
         if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      ((jl_tvar_t*)tv)->name->name, name->name);
+                      jl_symbol_name(((jl_tvar_t*)tv)->name),
+                      jl_symbol_name(name));
             print_func_loc(JL_STDERR, f->linfo);
             jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
         }
@@ -848,7 +862,8 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_
                         ((jl_tvar_t*)tv)->name) {
                         jl_printf(JL_STDERR,
                                   "WARNING: local variable %s conflicts with a static parameter in %s",
-                                  ((jl_tvar_t*)tv)->name->name, fname->name);
+                                  jl_symbol_name(((jl_tvar_t*)tv)->name),
+                                  jl_symbol_name(fname));
                         print_func_loc(JL_STDERR, li);
                         jl_printf(JL_STDERR, ".\n");
                     }
