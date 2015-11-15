@@ -465,7 +465,7 @@ if DoFullTest
     script = joinpath(dirname(@__FILE__), "topology.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
 
-    (strm, proc) = open(cmd)
+    (strm, proc) = open(pipeline(cmd, stderr=STDERR))
     wait(proc)
     if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         println(readall(strm))
