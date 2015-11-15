@@ -193,3 +193,8 @@ catch ex
 end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
+
+@test Base.is_unix(:Darwin)
+@test Base.is_unix(:FreeBSD)
+@test_throws ArgumentError Base.is_unix(:BeOS)
+@unix_only @test Base.windows_version() == (0,0)
