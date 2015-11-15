@@ -5,7 +5,7 @@
 
 cmd = `$(Base.julia_cmd()) --check-bounds=yes --depwarn=error parallel_exec.jl`
 
-(strm, proc) = open(cmd)
+(strm, proc) = open(pipeline(cmd, stderr=STDERR))
 cmdout = readall(strm)
 wait(proc)
 println(cmdout);
