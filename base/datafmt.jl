@@ -563,7 +563,7 @@ function writedlm_cell{T}(io::IO, elt::AbstractString, dlm::T, quotes::Bool)
     end
 end
 writedlm_cell(io::IO, elt, dlm, quotes) = print(io, elt)
-function writedlm(io::IO, a::AbstractVecOrMat, dlm; opts...)
+function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
@@ -582,17 +582,32 @@ end
 
 writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
+# write an iterable row as dlm-separated items
+function writedlm_row(io::IO, row, dlm, quotes)
+    state = start(row)
+    while !done(row, state)
+        (x, state) = next(row, state)
+        writedlm_cell(io, x, dlm, quotes)
+        done(row, state) ? write(io,'\n') : print(io,dlm)
+    end
+end
+
+# If the row is a single string, write it as a string rather than
+# iterating over characters. Also, include the common case of
+# a Number (handled correctly by the generic writedlm_row above)
+# purely as an optimization.
+function writedlm_row(io::IO, row::Union{Number,AbstractString}, dlm, quotes)
+    writedlm_cell(io, row, dlm, quotes)
+    write(io, '\n')
+end
+
+# write an iterable collection of iterable rows
 function writedlm(io::IO, itr, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
     for row in itr
-        state = start(row)
-        while !done(row, state)
-            (x, state) = next(row, state)
-            writedlm_cell(pb, x, dlm, quotes)
-            done(row, state) ? write(pb,'\n') : print(pb,dlm)
-        end
+        writedlm_row(pb, row, dlm, quotes)
         (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
     end
     write(io, takebuf_array(pb))
@@ -608,7 +623,7 @@ end
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
-writemime(io::IO, ::MIME"text/csv", a::AbstractVecOrMat) = writedlm(io, a, ',')
-writemime(io::IO, ::MIME"text/tab-separated-values", a::AbstractVecOrMat) = writedlm(io, a, '\t')
+writemime(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
+writemime(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
 
 end # module DataFmt
