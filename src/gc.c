@@ -1563,7 +1563,8 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
             verify_parent1("module", m, &vb, "binding_buff");
 #endif
             if (b->value != NULL) {
-                verify_parent2("module", m, &b->value, "binding(%s)", b->name->name);
+                verify_parent2("module", m, &b->value, "binding(%s)",
+                               jl_symbol_name(b->name));
                 refyoung |= gc_push_root(b->value, d);
             }
             if (b->globalref != NULL)
@@ -2180,7 +2181,7 @@ void jl_gc_collect(int full)
             else {
                 collect_interval = default_collect_interval/2;
 #ifdef GC_DEBUG_ENV
-                sweep_mask = gc_debug_env.sweep_mask;
+                sweep_mask = jl_gc_debug_env.sweep_mask;
 #else
                 sweep_mask = GC_MARKED_NOESC;
 #endif
