@@ -244,6 +244,10 @@ mod1{T<:Real}(x::T, y::T) = no_op_err("mod1", T)
 rem1{T<:Real}(x::T, y::T) = no_op_err("rem1", T)
 fld1{T<:Real}(x::T, y::T) = no_op_err("fld1", T)
 
+min(x::Real) = x
+max(x::Real) = x
+minmax(x::Real) = (x, x)
+
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
