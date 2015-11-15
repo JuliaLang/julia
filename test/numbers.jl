@@ -55,6 +55,9 @@
 @test min(1.0,1) == 1
 
 # min, max and minmax
+@test min(1) === 1
+@test max(1) === 1
+@test minmax(1) === (1, 1)
 @test minmax(5, 3) == (3, 5)
 @test minmax(3., 5.) == (3., 5.)
 @test minmax(5., 3.) == (3., 5.)
