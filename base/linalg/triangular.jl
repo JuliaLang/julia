@@ -5,11 +5,13 @@
 abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} # could be renamed to Triangular when than name has been fully deprecated
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
-for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
+          :UnitUpperTriangular)
     @eval begin
         immutable $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
             data::S
         end
+        $t(A::$t) = A
         function $t(A::AbstractMatrix)
             Base.LinAlg.chksquare(A)
             return $t{eltype(A), typeof(A)}(A)
