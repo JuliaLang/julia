@@ -545,3 +545,6 @@ Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed b
 
 # JuliaLang/julia#13440
 @test isa(SparseArrays, Module)
+
+# JuliaLang/julia#12819
+@test Compat.Filesystem.JL_O_RDWR == Compat.Filesystem.JL_O_RDWR

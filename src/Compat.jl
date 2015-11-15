@@ -706,4 +706,10 @@ if VERSION < v"0.5.0-dev+763"
     const SparseArrays = Base.SparseMatrix
 end
 
+if VERSION < v"0.5.0-dev+1229"
+    const Filesystem = Base.FS
+else
+    import Base.Filesystem
+end
+
 end # module
