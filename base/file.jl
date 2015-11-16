@@ -226,7 +226,17 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     return utf8(UTF16String(tname))
 end
 function mktemp(parent=tempdir(); suffix="")
-    filename = tempname(parent, UInt32(0)) * suffix
+    filename = tempname(parent, UInt32(0))
+    if length(suffix) > 0
+        if !endswith(filename, ".TMP")
+            error("mktemp failed: invalid result by GetTempFileName")
+        end
+        new_filename = filename[1:length(filename)-4] * suffix
+        # NOTE: new_filename is not guaranteed to exist,
+        #       but at least then mv will error out.
+        mv(filename, new_filename)
+        filename = new_filename
+    end
     return (filename, Base.open(filename, "r+"))
 end
 function mktempdir(parent=tempdir())
