@@ -227,7 +227,7 @@ function code_warntype(io::IO, f, t::ANY)
         vars = ast.args[2][1]
         for v in vars
             print(emph_io, "  ", v[1])
-            show_expr_type(emph_io, v[2])
+            show_expr_type(emph_io, v[2], true)
             print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
