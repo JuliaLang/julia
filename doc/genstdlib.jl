@@ -1,7 +1,7 @@
 using .Markdown
 using Base.Markdown: MD
 
-cd(dirname(@__FILE__))
+@__FILE__() != nothing && cd(dirname(@__FILE__))
 
 isop(func) = ismatch(r"[^\w@!.]|^!$", func)
 

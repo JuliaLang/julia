@@ -1,0 +1,36 @@
+using .Markdown
+using Base.Markdown: MD
+
+@__FILE__() != nothing && cd(dirname(@__FILE__))
+
+function mapfiles{S<:AbstractString}(f::Function, files::Vector{S}; clobber::Bool=false)
+    for file in files
+        open(file, "r") do r
+            try
+                tmp, w = mktemp()
+                mv(tmp, f(file, r, w), remove_destination=clobber)
+            catch
+                rm(tmp)
+                close(w)
+                rethrow()
+            end
+        end
+    end
+end
+
+using Glob
+
+syntax_css = pwd() * "/css/syntax.css"
+screen_css = pwd() * "/css/screen.css"
+
+mapfiles(glob("_build/markdown/**/*.md"), clobber=true) do name, r, w
+    print(w, """
+    <html><head>
+    <link rel="stylesheet" href="$syntax_css" type="text/css" />
+    <link rel="stylesheet" href="$screen_css" type="text/css" media="screen, projection" />
+    </head><body>
+    """)
+    Markdown.html(w, Markdown.parse(readall(r)))
+    print(w, "</body>")
+    replace(name, r"\.md$", ".html")
+end
