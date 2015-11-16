@@ -45,7 +45,7 @@ end
 function test_outer(a)
     test_inner(a)
 end
-#test_inlined_symbols(test_outer, Tuple{Int64})
+test_inlined_symbols(test_outer, Tuple{Int64})
 
 # Test case 2:
 # Make sure that an error is thrown for the undeclared
