@@ -6646,10 +6646,8 @@ of the argument:
 * `Task`: Wait for a `Task` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called `wait`).
 * `RawFD`: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
-If no argument is passed, the task blocks for an undefined period. If the task's
-state is set to `:waiting`, it can only be restarted by an explicit call to
-`schedule` or `yieldto`. If the task's state is `:runnable`, it might be
-restarted unpredictably.
+If no argument is passed, the task blocks for an undefined period.
+A task can only be restarted by an explicit call to `schedule` or `yieldto`.
 
 Often `wait` is called within a `while` loop to ensure a waited-for condition
 is met before proceeding.
@@ -10405,13 +10403,6 @@ doc"""
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-doc"""
-    istaskstarted(task) -> Bool
-
-Tell whether a task has started executing.
-"""
-istaskstarted
 
 doc"""
     clamp(x, lo, hi)

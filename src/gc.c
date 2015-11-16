@@ -1592,31 +1592,32 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
-    if (ta->stkbuf != NULL || ta == jl_current_task) {
-        if (ta->stkbuf != NULL) {
-            gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
-        }
-#ifdef COPY_STACKS
-        ptrint_t offset;
-        if (ta == *jl_all_task_states[ta->tid].pcurrent_task) {
-            offset = 0;
-            // FIXME - do we need to mark stacks on other threads?
-            gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[ta->tid], offset, d);
-        }
-        else {
-            offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
-            gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d);
-        }
-#else
-        gc_mark_stack((jl_value_t*)ta, ta->gcstack, 0, d);
+    int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
+    // FIXME - we need to mark stacks on other threads
+    int curtask = (ta == *jl_all_task_states[0].pcurrent_task);
+    if (stkbuf) {
+#ifndef COPY_STACKS
+        if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
 #endif
+        gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
+    }
+    if (curtask) {
+        gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[0], 0, d);
+    }
+    else if (stkbuf) {
+        ptrint_t offset;
+#ifdef COPY_STACKS
+        offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
+#else
+        offset = 0;
+#endif
+        gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d);
     }
 }
 
 NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 {
     if (ta->parent) gc_push_root(ta->parent, d);
-    if (ta->last) gc_push_root(ta->last, d);
     gc_push_root(ta->tls, d);
     gc_push_root(ta->consumers, d);
     gc_push_root(ta->donenotify, d);

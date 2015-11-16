@@ -1454,7 +1454,6 @@ typedef struct _jl_handler_t {
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     struct _jl_task_t *parent;
-    struct _jl_task_t *last;
     jl_value_t *tls;
     jl_sym_t *state;
     jl_value_t *consumers;
@@ -1464,9 +1463,6 @@ typedef struct _jl_task_t {
     jl_value_t *backtrace;
     jl_function_t *start;
     jl_jmp_buf ctx;
-#ifndef COPY_STACKS
-    void *stack;
-#endif
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
