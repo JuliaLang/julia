@@ -59,7 +59,7 @@ test_inlined_symbols(test_outer, Tuple{Int64})
     end
 end
 function bar()
-    for i = 1:3 
+    for i = 1:3
         foo(i==1)
     end
 end
