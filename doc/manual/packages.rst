@@ -371,8 +371,34 @@ want to make (this is your *commit message*), and then hit "Propose
 file change."  Your changes will be submitted for consideration by the
 package owner(s) and collaborators.
 
+For larger documentation changes---and especially ones that you expect
+to have to update in response to feedback---you might find it easier
+to use the procedure for code changes described below.
+
 Code changes
 ~~~~~~~~~~~~
+
+Executive summary
+^^^^^^^^^^^^^^^^^
+
+Here we assume you've already set up git on your local machine and
+have a GitHub account (see above).  Let's imagine you're fixing a bug
+in the Images package::
+
+  Pkg.checkout("Images")           # check out the master branch
+  <here, make sure your bug is still a bug and hasn't been fixed already>
+  cd(Pkg.dir("Images"))
+  ;git checkout -b myfixes         # create a branch for your changes
+  <edit code>                      # be sure to add a test for your bug
+  Pkg.test("Images")               # make sure everything works now
+  ;git commit -a -m "Fix foo by calling bar"   # write a descriptive message
+  Pkg.submit("Images")
+
+The last line will present you with a link to submit a pull request
+to incorporate your changes.
+
+Detailed description
+^^^^^^^^^^^^^^^^^^^^
 
 If you want to fix a bug or add new functionality, you want to be able
 to test your changes before you submit them for consideration. You
