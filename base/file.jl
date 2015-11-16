@@ -190,11 +190,7 @@ tempdir() = dirname(tempname())
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir(); suffix="")
     b = joinpath(parent, "tmpXXXXXX$suffix")
-    if length(suffix) > 0
-        p = ccall(:mkstemps, Int32, (Ptr{UInt8}, Cint), b, length(suffix))
-    else
-        p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b)
-    end
+    p = ccall(:mkstemps, Int32, (Ptr{UInt8}, Cint), b, length(suffix))
     systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
