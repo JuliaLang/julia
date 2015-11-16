@@ -904,3 +904,17 @@ end
 export isreadable, iswritable, isexecutable
 
 @deprecate RemoteRef RemoteChannel
+
+function tty_size()
+    depwarn("tty_size is deprecated. use `iosize(io)` as a replacement", :tty_size)
+    if isdefined(Base, :active_repl)
+        os = REPL.outstream(Base.active_repl)
+        if isa(os, Terminals.TTYTerminal)
+            return iosize(os)
+        end
+    end
+    if isdefined(Base, :STDOUT)
+        return iosize(STDOUT)
+    end
+    return iosize()
+end
