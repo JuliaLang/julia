@@ -22,12 +22,15 @@ using Glob
 
 syntax_css = pwd() * "/css/syntax.css"
 screen_css = pwd() * "/css/screen.css"
+highlight_js = pwd() * "/js/highlight.pack.js"
 
 mapfiles(glob("_build/markdown/**/*.md"), clobber=true) do name, r, w
     print(w, """
     <html><head>
-    <link rel="stylesheet" href="$syntax_css" type="text/css" />
-    <link rel="stylesheet" href="$screen_css" type="text/css" media="screen, projection" />
+        <link rel="stylesheet" href="$syntax_css" type="text/css" />
+        <link rel="stylesheet" href="$screen_css" type="text/css" media="screen, projection" />
+        <script src="$highlight_js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
     </head><body>
     """)
     Markdown.html(w, Markdown.parse(readall(r)))
