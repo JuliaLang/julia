@@ -692,7 +692,7 @@ end
 include("require.jl")
 @noinline function require(f::AbstractString)
     depwarn("`require` is deprecated, use `using` or `import` instead", :require)
-    if endswith(f,".jl") || contains(f,path_separator)
+    if endswith(f,".jl") || contains(f,Filesystem.path_separator)
         # specifying file path
         OldRequire.require(f)
     else
