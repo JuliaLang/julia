@@ -26,7 +26,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
         julia = joinpath(JULIA_HOME, "julia")
-        ld = find_system_linker()
+        cc = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to
         try
@@ -65,8 +65,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
-            if ld != nothing
-                link_sysimg(sysimg_path, ld)
+            if cc != nothing
+                link_sysimg(sysimg_path, cc)
             else
                 info("System image successfully built at $sysimg_path.ji")
             end
@@ -89,18 +89,18 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     end
 end
 
-# Search for a linker to link sys.o into sys.dl_ext.  Honor LD environment variable.
-function find_system_linker()
-    if haskey( ENV, "LD" )
-        if !success(`$(ENV["LD"]) -v`)
-            warn("Using linker override $(ENV["LD"]), but unable to run `$(ENV["LD"]) -v`")
+# Search for a compiler to link sys.o into sys.dl_ext.  Honor LD environment variable.
+function find_system_compiler()
+    if haskey( ENV, "CC" )
+        if !success(`$(ENV["CC"]) -v`)
+            warn("Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`")
         end
-        return ENV["LD"]
+        return ENV["CC"]
     end
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     @windows_only try
-        require("WinRPM")
+        eval(Main, :(using WinRPM))
         winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
             "sys-root","mingw","bin","gcc.exe")
         if success(`$winrpmgcc --version`)
@@ -113,33 +113,28 @@ function find_system_linker()
     end
 
 
-    # See if `ld` exists
+    # See if `cc` exists
     try
-        if success(`ld -v`)
-            return "ld"
+        if success(`cc -v`)
+            return "cc"
         end
     end
 
-    warn( "No supported linker found; startup times will be longer" )
+    warn( "No supported compiler found; startup times will be longer" )
 end
 
 # Link sys.o into sys.$(dlext)
-function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
+function link_sysimg(sysimg_path=default_sysimg_path, cc=find_system_compiler())
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
     FLAGS = ["-L$julia_libdir"]
-    if OS_NAME == :Darwin
-        push!(FLAGS, "-dylib")
-        push!(FLAGS, "-macosx_version_min")
-        push!(FLAGS, "10.7")
-    else
-        push!(FLAGS, "-shared")
-    end
+
+    push!(FLAGS, "-shared")
     push!(FLAGS, "-ljulia")
     @windows_only push!(FLAGS, "-lssp")
 
     info("Linking sys.$(Libdl.dlext)")
-    run(`$ld $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
+    run(`$cc $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
 
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
     @windows_only begin
