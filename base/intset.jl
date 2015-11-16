@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type IntSet
+abstract AbstractSet{T}
+
+type IntSet <: AbstractSet{Int}
     bits::Array{UInt32,1}
     limit::Int
     fill1s::Bool
@@ -161,7 +163,8 @@ function copy!(to::IntSet, from::IntSet)
     union!(to, from)
 end
 
-function in(n::Integer, s::IntSet)
+in(n, s::IntSet) = n < 0 ? false : (n > typemax(Int) ? s.fill1s : in(convert(Int, n), s))
+function in(n::Int, s::IntSet)
     if n >= s.limit
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1
