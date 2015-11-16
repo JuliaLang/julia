@@ -13,6 +13,16 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
+@test_throws SystemError mkdir(file)
+let err = nothing
+    try
+        mkdir(file)
+    catch err
+        io = IOBuffer()
+        showerror(io, err)
+        @test takebuf_string(io) == "SystemError (with $file): mkdir: File exists"
+    end
+end
 
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     dirlink = joinpath(dir, "dirlink")
