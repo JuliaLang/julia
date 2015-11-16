@@ -92,7 +92,7 @@ function funfun(x)
     x
 end
 
-tag = Base.have_color ? string("2y",Base.text_colors[:red],"::Any") : "2y::ANY"
+tag = Base.have_color ? string("(2y)",Base.text_colors[:red],"::Any") : "(2y)::ANY"
 @test warntype_hastag(funfun, Tuple{Float64}, tag)
 
 # Make sure emphasis is not used for other functions
@@ -212,4 +212,10 @@ let t13464 = "hey there sailor"
     catch err13464
         @test startswith(err13464.msg, "expression is not a function call, or is too complex")
     end
+end
+
+let ex = :(a + b)
+    @test string(ex) == "a + b"
+    ex.typ = Integer
+    @test string(ex) == "(a + b)::Integer"
 end

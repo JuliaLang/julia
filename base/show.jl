@@ -363,6 +363,7 @@ isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
+const prec_decl = operator_precedence(:(::))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -397,19 +398,16 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty)
+function show_expr_type(io::IO, ty, emph)
     if is(ty, Function)
         print(io, "::F")
     elseif is(ty, IntrinsicFunction)
         print(io, "::I")
     else
-        emph = typeemphasize(io)
         if emph && !isleaftype(ty)
             emphasize(io, "::$ty")
         else
-            if !is(ty, Any)
-                print(io, "::$ty")
-            end
+            print(io, "::$ty")
         end
     end
 end
@@ -493,7 +491,10 @@ show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.',
 
 function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
     print(io, ex.name)
-    show_expr_type(io, ex.typ)
+    emphstate = typeemphasize(io)
+    if emphstate || ex.typ !== Any
+        show_expr_type(io, ex.typ, emphstate)
+    end
 end
 
 function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
@@ -530,7 +531,17 @@ end
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
+    emphstate = typeemphasize(io)
     show_type = true
+    if (ex.head == :(=) ||
+        ex.head == :boundscheck ||
+        ex.head == :gotoifnot ||
+        ex.head == :return)
+        show_type = false
+    end
+    if !emphstate && ex.typ === Any
+        show_type = false
+    end
     # dot (i.e. "x.y")
     if is(head, :(.))
         show_unquoted(io, args[1], indent + indent_width)
@@ -581,7 +592,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if (in(ex.args[1], (GlobalRef(Base, :box), TopNode(:box), :throw)) ||
             ismodulecall(ex) ||
             (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
-            show_type = typeemphasize(io)
+            show_type = false
+        end
+        if show_type
+            prec = prec_decl
         end
 
         # scalar multiplication (i.e. "100x")
@@ -810,9 +824,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # print anything else as "Expr(head, args...)"
     else
         show_type = false
-        emphstate = typeemphasize(io)
         if emphstate && ex.head !== :lambda && ex.head !== :method
             io = IOContext(io, :TYPEEMPHASIZE => false)
+            emphstate = false
         end
         print(io, "\$(Expr(")
         show(io, ex.head)
@@ -822,13 +836,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-    if (ex.head == :(=) ||
-        ex.head == :boundscheck ||
-        ex.head == :gotoifnot ||
-        ex.head == :return)
-        show_type = false
-    end
-    show_type && show_expr_type(io, ex.typ)
+    show_type && show_expr_type(io, ex.typ, emphstate)
 end
 
 function ismodulecall(ex::Expr)
