@@ -29,7 +29,7 @@ import Base:
     flush,
     read,
     readuntil,
-    size,
+    iosize,
     start_reading,
     stop_reading,
     write,
@@ -43,7 +43,7 @@ import Base:
 abstract TextTerminal <: Base.IO
 
 # INTERFACE
-size(::TextTerminal) = error("Unimplemented")
+iosize(::TextTerminal) = error("Unimplemented")
 writepos(t::TextTerminal, x, y, s::Array{UInt8,1}) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
@@ -88,8 +88,8 @@ function writepos(t::TextTerminal, x, y, args...)
     cmove(t, x, y)
     write(t, args...)
 end
-width(t::TextTerminal) = size(t)[2]
-height(t::TextTerminal) = size(t)[1]
+width(t::TextTerminal) = iosize(t)[2]
+height(t::TextTerminal) = iosize(t)[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -131,14 +131,10 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
-@windows_only begin
-    ispty(s::Base.TTY) = s.ispty
-    ispty(s) = false
-end
 @windows ? begin
     function raw!(t::TTYTerminal,raw::Bool)
         check_open(t.in_stream)
-        if ispty(t.in_stream)
+        if Base.ispty(t.in_stream)
             run(if raw
                     `stty raw -echo onlcr -ocrnl opost`
                 else
@@ -162,26 +158,8 @@ disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
 end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
     write(t.out_stream, "$(CSI)?1l\x1b>")
 
-let s = zeros(Int32, 2)
-    function Base.size(t::TTYTerminal)
-        @windows_only if ispty(t.out_stream)
-            try
-                h,w = map(x->parse(Int,x),split(readall(open(`stty size`, "r", t.out_stream)[1])))
-                w > 0 || (w = 80)
-                h > 0 || (h = 24)
-                return h,w
-            catch
-                return 24,80
-            end
-        end
-        Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
-                                          Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
-                                          t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-        w,h = s[1],s[2]
-        w > 0 || (w = 80)
-        h > 0 || (h = 24)
-        (Int(h),Int(w))
-    end
+function Base.iosize(t::UnixTerminal)
+    return iosize(t.out_stream)
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")

@@ -61,7 +61,13 @@ getindex(io::IO, key) = throw(KeyError(key))
 get(io::IOContext, key, default) = get(io.dict, key, default)
 get(io::IO, key, default) = default
 
-limit_output(io::IO) = get(io, :limit_output, false) === true
+"    limit_output(io) -> Bool
+Output hinting for identifying contexts where the user requested a compact output"
+limit_output(::ANY) = false
+limit_output(io::IOContext) = get(io, :limit_output, false) === true
+
+iosize(io::IOContext) = haskey(io, :iosize) ? io[:iosize] : iosize(io.io)
+
 
 show(io::IO, x::ANY) = show_default(io, x)
 function show_default(io::IO, x::ANY)
@@ -1177,7 +1183,6 @@ Also options to use different ellipsis characters hdots,
 vdots, ddots. These are repeated every hmod or vmod elements.
 """
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
                       pre::AbstractString = " ",  # pre-matrix string
                       sep::AbstractString = "  ", # separator between elements
                       post::AbstractString = "",  # post-matrix string
@@ -1185,7 +1190,12 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    screenheight, screenwidth = sz
+    if !limit_output(io)
+        screenheight = screenwidth = typemax(Int)
+    else
+        sz = iosize(io)
+        screenheight, screenwidth = sz[1] - 4, sz[2]
+    end
     screenwidth -= length(pre) + length(post)
     presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
@@ -1285,7 +1295,8 @@ summary(a::AbstractArray) =
     string(dims2string(size(a)), " ", typeof(a))
 
 # n-dimensional arrays
-function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
+function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
+    limit::Bool = limit_output(io)
     if isempty(a)
         return
     end
@@ -1357,12 +1368,8 @@ end
 # array output. Not sure I want to do it this way.
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
-                   header::Bool=true,
-                   sz = (s = tty_size(); (s[1]-4, s[2])),
-                   repr=false)
-    rows, cols = sz
+                   header::Bool=true, repr=false)
     header && print(io, summary(X))
-    limit::Bool = limit_output(io)
     if !isempty(X)
         header && println(io, ":")
         if ndims(X) == 0
@@ -1372,23 +1379,19 @@ function showarray(io::IO, X::AbstractArray;
                 return print(io, undef_ref_str)
             end
         end
-        if !limit
-            rows = cols = typemax(Int)
-            sz = (rows, cols)
-        end
         if repr
-            if ndims(X)<=2
+            if ndims(X) <= 2
                 print_matrix_repr(io, X)
             else
-                show_nd(io, X, limit, print_matrix_repr, false)
+                show_nd(io, X, print_matrix_repr, false)
             end
         else
             punct = (" ", "  ", "")
-            if ndims(X)<=2
-                print_matrix(io, X, sz, punct...)
+            if ndims(X) <= 2
+                print_matrix(io, X, punct...)
             else
-                show_nd(io, X, limit,
-                        (io,slice)->print_matrix(io,slice,sz,punct...),
+                show_nd(io, X,
+                        (io, slice) -> print_matrix(io, slice, punct...),
                         !repr)
             end
         end
