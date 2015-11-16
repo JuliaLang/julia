@@ -585,8 +585,7 @@ getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 ### show and friends
 
 function showarray(io::IO, x::AbstractSparseVector;
-                   header::Bool=true,
-                   rows = Base.tty_size()[1], repr=false)
+                   header::Bool=true, repr=false)
 
     n = length(x)
     nzind = nonzeroinds(x)
@@ -598,7 +597,7 @@ function showarray(io::IO, x::AbstractSparseVector;
     end
 
     limit::Bool = Base.limit_output(io)
-    half_screen_rows = limit ? div(rows - 8, 2) : typemax(Int)
+    half_screen_rows = limit ? div(iosize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     sep = "\n\t"
     for k = 1:length(nzind)

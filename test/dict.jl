@@ -257,7 +257,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        Base.showdict(Base.IOContext(s, :limit_output => true), d, sz=(rows, cols))
+        io = Base.IOContext(Base.IOContext(s, :limit_output => true), :iosize => (rows, cols))
+        Base.showdict(io, d)
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -266,7 +267,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            Base.showkv(Base.IOContext(s, :limit_output => true), f(d), sz=(rows, cols))
+            io = Base.IOContext(Base.IOContext(s, :limit_output => true), :iosize => (rows, cols))
+            Base.showkv(io, f(d))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
@@ -284,17 +286,23 @@ end
 # issue #9463
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
-sbuff = IOBuffer()
-Base.showdict(Base.IOContext(sbuff, :limit_output => true), Dict(Alpha()=>1), sz=(10,20))
-@test !contains(bytestring(sbuff), "…")
+let sbuff = IOBuffer(),
+    io = Base.IOContext(Base.IOContext(sbuff, :limit_output => true), :iosize => (10, 20))
+
+    Base.showdict(io, Dict(Alpha()=>1))
+    @test !contains(bytestring(sbuff), "…")
+    @test endswith(bytestring(sbuff), "α => 1")
+end
 
 # issue #2540
-d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
-@test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
+let d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
+    @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
+end
 
 # issue #2629
-d = Dict{AbstractString,AbstractString}([ a => "foo" for a in ["a","b","c"]])
-@test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
+let d = Dict{AbstractString,AbstractString}([ a => "foo" for a in ["a","b","c"]])
+    @test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
+end
 
 # issue #5886
 d5886 = Dict()

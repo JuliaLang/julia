@@ -378,6 +378,45 @@ function close(stream::Union{LibuvStream, LibuvServer})
     nothing
 end
 
+@windows_only begin
+    ispty(s::TTY) = s.ispty
+    ispty(s::IO) = false
+end
+
+"    iosize(io) -> (lines, columns)
+Return the nominal size of the screen that may be used for rendering output to this io object"
+iosize(io::IO) = iosize()
+iosize() = (parse(Int, get(ENV, "LINES",   "24")),
+            parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
+
+function iosize(io::TTY)
+    local h::Int, w::Int
+    default_size = iosize()
+
+    @windows_only if ispty(io)
+        # io is actually a libuv pipe but a cygwin/msys2 pty
+        try
+            h, w = map(x -> parse(Int, x), split(readall(open(Base.Cmd(ByteString["stty", "size"]), "r", io)[1])))
+            h > 0 || (h = default_size[1])
+            w > 0 || (w = default_size[2])
+            return h, w
+        catch
+            return default_size
+        end
+    end
+
+    s1 = Ref{Int32}(0)
+    s2 = Ref{Int32}(0)
+    Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
+                                      Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
+                                      io, s1, s2) != 0)
+    w, h = s1[], s2[]
+    h > 0 || (h = default_size[1])
+    w > 0 || (w = default_size[2])
+    return h, w
+end
+
+
 ### Libuv callbacks ###
 
 #from `connect`

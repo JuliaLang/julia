@@ -94,7 +94,7 @@ end
 function repl_search(io::IO, s)
     pre = "search:"
     print(io, pre)
-    printmatches(io, s, completions(s), cols=Base.tty_size()[2]-length(pre))
+    printmatches(io, s, completions(s), cols = iosize(io)[2] - length(pre))
     println(io, "\n")
 end
 
@@ -243,7 +243,7 @@ end
 
 printmatch(args...) = printfuzzy(STDOUT, args...)
 
-function printmatches(io::IO, word, matches; cols = Base.tty_size()[2])
+function printmatches(io::IO, word, matches; cols = iosize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
@@ -254,9 +254,9 @@ function printmatches(io::IO, word, matches; cols = Base.tty_size()[2])
     end
 end
 
-printmatches(args...; cols = Base.tty_size()[2]) = printmatches(STDOUT, args..., cols = cols)
+printmatches(args...; cols = iosize(STDOUT)[2]) = printmatches(STDOUT, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = Base.tty_size()[2])
+function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = iosize(io)[2])
     i = 0
     total = 0
     for i = 1:length(ss)
@@ -266,13 +266,13 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = Base.tty
     print_joined(io, ss[1:i], delim, last)
 end
 
-print_joined_cols(args...; cols = Base.tty_size()[2]) = print_joined_cols(STDOUT, args...; cols=cols)
+print_joined_cols(args...; cols = iosize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)
 
 function print_correction(io, word)
     cors = levsort(word, accessible(current_module()))
     pre = "Perhaps you meant "
     print(io, pre)
-    print_joined_cols(io, cors, ", ", " or "; cols = Base.tty_size()[2]-length(pre))
+    print_joined_cols(io, cors, ", ", " or "; cols = iosize(io)[2] - length(pre))
     println(io)
     return
 end
