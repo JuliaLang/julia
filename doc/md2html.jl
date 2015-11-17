@@ -1,7 +1,10 @@
+@__FILE__() != nothing && cd(dirname(@__FILE__))
+
+include("../base/markdown/Markdown.jl")
+
+import Markdown
 using .Markdown
 using Base.Markdown: MD
-
-@__FILE__() != nothing && cd(dirname(@__FILE__))
 
 function mapfiles{S<:AbstractString}(f::Function, files::Vector{S}; clobber::Bool=false)
     for file in files

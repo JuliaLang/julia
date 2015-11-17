@@ -158,8 +158,6 @@ code, table.benchmarks tbody {
 }
 
 pre {
-  border: 1px solid #ddd;
-  margin: 1em 0;
   padding: .75em 1.25em;
   line-height: 1em;
   overflow: auto;
