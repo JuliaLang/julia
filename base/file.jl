@@ -228,10 +228,11 @@ end
 function mktemp(parent=tempdir(); suffix="")
     filename = tempname(parent, UInt32(0))
     if length(suffix) > 0
-        if !endswith(filename, ".TMP")
+        fnlen = length(filename)
+        if fnlen < 4 || lowercase(filename[fnlen-3:end]) != ".tmp"
             error("mktemp failed: invalid result by GetTempFileName")
         end
-        new_filename = filename[1:length(filename)-4] * suffix
+        new_filename = filename[1:fnlen-4] * suffix
         # NOTE: new_filename is not guaranteed to exist,
         #       but at least then mv will error out.
         mv(filename, new_filename)
