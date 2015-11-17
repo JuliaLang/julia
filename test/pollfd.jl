@@ -9,7 +9,7 @@
 # Writable ends are always tested for writability before a write
 
 n = 20
-intvls = [2, .2, .1, .002]
+intvls = [2, .2, .1, .005]
 
 pipe_fds = cell(n)
 for i in 1:n
