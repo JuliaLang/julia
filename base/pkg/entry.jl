@@ -173,7 +173,7 @@ end
 
 function clone(url_or_pkg::AbstractString)
     urlpath = joinpath("METADATA",url_or_pkg,"url")
-    if isfile(urlpath)
+    if !(':' in url_or_pkg) && isfile(urlpath)
         pkg = url_or_pkg
         url = readchomp(urlpath)
         # TODO: Cache.prefetch(pkg,url)
