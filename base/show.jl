@@ -51,6 +51,8 @@ pipe_reader(io::IOContext) = io.io
 pipe_writer(io::IOContext) = io.io
 lock(io::IOContext) = lock(io.io)
 unlock(io::IOContext) = unlock(io.io)
+takebuf_string(io::IOContext) = takebuf_string(io.io)
+takebuf_array(io::IOContext) = takebuf_array(io.io)
 
 in(key_value::Pair, io::IOContext) = in(key_value, io.dict, is)
 in(key_value::Pair, io::IO) = false
@@ -418,7 +420,7 @@ function show_expr_type(io::IO, ty, emph)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
+emphasize(io, str::AbstractString) = print_with_color(:red, io, str) do io, str; print(io, uppercase(str)); end
 
 show_linenumber(io::IO, file, line) = print(io," # ", file,", line ",line,':')
 

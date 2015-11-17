@@ -307,24 +307,124 @@ end
 
 ## printing with color ##
 
-function with_output_color(f::Function, color::Symbol, io::IO, args...)
-    buf = IOBuffer()
-    have_color && print(buf, get(text_colors, color, color_normal))
-    try f(buf, args...)
+with_output_color(f::Function, color::Symbol, io::IO, args...) = with_output_color(f, f, color, io, args...)
+function with_output_color(f::Function, alt::Function, color::Symbol, io::IO, args...)
+    buf, known = with_formatter(io, color)
+    try
+        known ? f(buf, args...) : alt(buf, args...)
     finally
-        have_color && print(buf, color_normal)
-        print(io, takebuf_string(buf))
+        finalize_formatter(io, buf)
     end
 end
 
 print_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(print, color, io, msg...)
+print_with_color(alt::Function, color::Symbol, io::IO, msg::AbstractString...) =
+    with_output_color(print, alt, color, io, msg...)
 print_with_color(color::Symbol, msg::AbstractString...) =
     print_with_color(color, STDOUT, msg...)
+
 println_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(println, color, io, msg...)
+println_with_color(alt::Function, color::Symbol, io::IO, msg::AbstractString...) =
+    with_output_color(println, alt, color, io, msg...)
 println_with_color(color::Symbol, msg::AbstractString...) =
     println_with_color(color, STDOUT, msg...)
+
+# Basic text formatter (ignores most fmt tags)
+function with_formatter(io::IO, fmt::Symbol)
+    buf = IOBuffer()
+    fmt === :para && print(buf, "\n")
+    return buf, fmt === :plain || fmt === :para
+end
+function finalize_formatter(io::IO, fmt_io::IO)
+    print(io, takebuf_string(fmt_io))
+end
+
+# ANSI text formatter (or pass-through)
+ansi_formatted(io::IOContext) = get(io, :ansi, false) === true
+function with_formatter(io::IOContext, fmt::Symbol)
+    # try the formatter for io.io
+    buf, known = with_formatter(io.io, fmt)
+    buf = IOContext(buf, io)
+    if ansi_formatted(io)
+        if known
+            # skip ansi formatting if it was handled by the inner formatter
+            fmt = ""
+        else
+            fmt = get(text_colors, fmt, "")
+            # non-existent format
+            isempty(fmt) && return buf, false
+            print(buf, fmt)
+        end
+        # record current format string
+        return IOContext(buf, :ansi_previous => fmt), true
+    end
+    return buf, known
+end
+function finalize_formatter(io::IOContext, fmt_io::IO)
+    if ansi_formatted(io)
+        # if ansi formatting was enabled, restore the previous ansi state
+        prev = get(io, :ansi_previous, color_normal)
+        isempty(prev) || print(fmt_io, prev)
+    end
+    # commit and finalize the result
+    finalize_formatter(io.io, fmt_io)
+end
+
+# HTML text streaming formatter
+const html_tags = Dict{Symbol, Tuple{ASCIIString, ASCIIString}}([
+    :para => ("<div>", "</div>"),
+    :plain => ("<span>", "</span>"),
+    :bold => ("<b>", "</b>"),
+    :italic => ("<i>", "</i>"),
+    :blue => ("<span style='color:blue'>", "</span>"),
+    :red => ("<span style='color:red'>", "</span>"),
+    :green => ("<span style='color:green'>", "</span>"),
+    :white => ("<span style='color:white'>", "</span>"),
+    :black => ("<span style='color:black'>", "</span>"),
+    :yellow => ("<span style='color:yellow'>", "</span>"),
+    :magenta => ("<span style='color:magenta'>", "</span>"),
+    :cyan => ("<span style='color:cyan'>", "</span>"),
+    ])
+type HTMLBuilder <: AbstractPipe
+    tag::Symbol
+    children::Vector{Union{ByteString, HTMLBuilder}}
+    buf::IOBuffer
+    HTMLBuilder(tag::Symbol) = new(tag, fieldtype(HTMLBuilder, :children)(), IOBuffer())
+end
+pipe_writer(io::HTMLBuilder) = io.buf
+pipe_reader(io::HTMLBuilder) = error("HTMLBuffer not byte-readable")
+takebuf_string(io::HTMLBuilder) = io
+function with_formatter(io::HTMLBuilder, fmt::Symbol)
+    return HTMLBuilder(fmt), fmt in keys(html_tags)
+end
+function finalize_formatter(io::HTMLBuilder, fmt_io::IO)
+    print(io, takebuf_string(fmt_io))
+end
+html_escape(str::ByteString) = replace(replace(replace(str, "<", "&lt;"), ">", "&gt;"), "\n", "<br>") # TODO
+function flush!(io::HTMLBuilder)
+    nb_available(io.buf) > 0 && push!(io.children, html_escape(takebuf_string(io.buf)))
+    nothing
+end
+function print(io::HTMLBuilder, html::HTMLBuilder)
+    flush!(io)
+    push!(io.children, html)
+end
+function print(io::HTMLBuilder, html::ByteString)
+    flush!(io)
+    push!(io.children, html_escape(html))
+end
+function print(io::IO, html::HTMLBuilder)
+    tags = get(html_tags, html.tag, ("", ""))
+    print(io, tags[1])
+    for child in html.children
+        print(io, child)
+    end
+    print(io, html_escape(takebuf_string(html.buf)))
+    print(io, tags[2])
+end
+
 
 ## warnings and messages ##
 

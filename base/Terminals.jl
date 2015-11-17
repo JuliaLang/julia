@@ -181,5 +181,9 @@ eof(t::UnixTerminal) = eof(t.in_stream)
 
 @unix_only hascolor(t::TTYTerminal) = (startswith(t.term_type, "xterm") || success(`tput setaf 0`))
 @windows_only hascolor(t::TTYTerminal) = true
+"""    hascolor(t::TTYTerminal)
+Returns whether terminal `t` supports ANSI formatting codes
+(however, this does not indicate whether they should be used during printing)"""
+hascolor
 
 end # module

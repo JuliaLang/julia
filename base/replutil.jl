@@ -267,7 +267,7 @@ function show_method_candidates(io::IO, ex::MethodError)
         name = isgeneric(func) ? func.env.name : :anonymous
         for method in methods(func)
             haskey(UNSHOWN_METHODS, method) && continue
-            buf = IOBuffer()
+            buf = with_formatter(io, :normal)[1]
             sig = method.sig.parameters
             use_constructor_syntax = func == call && !isempty(sig) && isa(sig[1], DataType) &&
                                      !isempty(sig[1].parameters) && isa(sig[1].parameters[1], DataType)
@@ -302,12 +302,8 @@ function show_method_candidates(io::IO, ex::MethodError)
                 if use_constructor_syntax && i == 1
                     right_matches += i
                 elseif t_in === Union{}
-                    if Base.have_color
-                        Base.with_output_color(:red, buf) do buf
-                            print(buf, "::$sigstr")
-                        end
-                    else
-                        print(buf, "!Matched::$sigstr")
+                    Base.print_with_color(:red, buf, "::$sigstr") do buf, sig
+                        print(buf, "!Matched$sig")
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -341,12 +337,8 @@ function show_method_candidates(io::IO, ex::MethodError)
                             sigstr = string(sigtype)
                         end
                         print(buf, ", ")
-                        if Base.have_color
-                            Base.with_output_color(:red, buf) do buf
-                                print(buf, "::$sigstr")
-                            end
-                        else
-                            print(buf, "!Matched::$sigstr")
+                        Base.print_with_color(:red, buf, "::$sigstr") do buf, sig
+                            print(buf, "!Matched$sig")
                         end
                     end
                 end
@@ -369,7 +361,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                     break
                 end
                 i += 1
-                print(io, takebuf_string(line[1]))
+                finalize_formatter(io, line[1])
             end
         end
     end

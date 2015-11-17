@@ -34,7 +34,7 @@ import ..LineEdit:
 
 abstract AbstractREPL
 
-answer_color(::AbstractREPL) = ""
+answer_color_symbol(::AbstractREPL) = :plain
 
 type REPLBackend
     repl_channel::Channel
@@ -109,18 +109,18 @@ end
 ==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, ::MIME"text/plain", x)
-    io = outstream(d.repl)
-    Base.have_color && write(io, answer_color(d.repl))
-    writemime(io, MIME("text/plain"), x)
-    println(io)
+    Base.with_output_color(answer_color_symbol(d.repl), outstream(d.repl)) do io
+        writemime(io, MIME("text/plain"), x)
+        println(io)
+    end
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool)
     repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
+    print_response(outstream(repl), val, bt, show_value, specialdisplay(repl))
 end
-function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, val::ANY, bt, show_value::Bool, specialdisplay=nothing)
     while true
         try
             if bt !== nothing
@@ -215,7 +215,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             put!(repl_channel, (ast, 1))
             val, bt = take!(response_channel)
             if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, false)
+                print_response(repl, val, bt, true)
             end
         end
         write(repl.terminal, '\n')
@@ -233,7 +233,7 @@ type LineEditREPL <: AbstractREPL
     hascolor::Bool
     prompt_color::AbstractString
     input_color::AbstractString
-    answer_color::AbstractString
+    answer_color_symbol::Symbol
     shell_color::AbstractString
     help_color::AbstractString
     history_file::Bool
@@ -248,16 +248,16 @@ type LineEditREPL <: AbstractREPL
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing)
 end
-outstream(r::LineEditREPL) = r.t
+outstream(r::LineEditREPL) = r.hascolor ? IOContext(r.t, :ansi => true) : r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
 LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               true,
-                                              julia_green,
+                                              Base.text_colors[:green],
                                               Base.input_color(),
-                                              Base.answer_color(),
+                                              Base.answer_color_symbol(),
                                               Base.text_colors[:red],
                                               Base.text_colors[:yellow],
                                               false, false, false, envcolors)
@@ -579,8 +579,6 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
-const julia_green = "\033[1m\033[32m"
-
 function return_callback(s)
     ast = Base.syntax_deprecation_warnings(false) do
         Base.parse_input_line(bytestring(LineEdit.buffer(s)))
@@ -621,7 +619,7 @@ function respond(f, repl, main; pass_empty = false)
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
-                print_response(repl, val, bt, true, Base.have_color)
+                print_response(repl, val, bt, true)
             end
         end
         prepare_next(repl)
@@ -748,7 +746,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             finalizer(replc, replc->close(f))
             hist_from_file(hp, f)
         catch e
-            print_response(repl, e, catch_backtrace(), true, Base.have_color)
+            print_response(repl, e, catch_backtrace(), true)
             println(outstream(repl))
             info("Disabling history file for this session.")
             repl.history_file = false
@@ -865,30 +863,23 @@ function run_frontend(repl::LineEditREPL, backend)
     dopushdisplay && popdisplay(d)
 end
 
-if isdefined(Base, :banner_color)
-    banner(io, t) = banner(io, hascolor(t))
-    banner(io, x::Bool) = print(io, x ? Base.banner_color : Base.banner_plain)
-else
-    banner(io,t) = Base.banner(io)
-end
-
 ## StreamREPL ##
 
 type StreamREPL <: AbstractREPL
     stream::IO
     prompt_color::AbstractString
     input_color::AbstractString
-    answer_color::AbstractString
+    answer_color_symbol::Symbol
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 
 outstream(s::StreamREPL) = s.stream
 
-StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.text_colors[:white], Base.answer_color_symbol())
 
-answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
-answer_color(r::StreamREPL) = r.answer_color
+answer_color_symbol(r::LineEditREPL) = r.envcolors ? Base.answer_color_symbol() : r.answer_color_symbol
+answer_color_symbol(r::StreamREPL) = r.answer_color_symbol
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
@@ -917,14 +908,14 @@ end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = Base.have_color
-    banner(repl.stream, have_color)
+    Base.banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while repl.stream.open
         if have_color
-            print(repl.stream,repl.prompt_color)
+            print(repl.stream, repl.prompt_color)
         end
         print(repl.stream, "julia> ")
         if have_color
@@ -939,7 +930,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
             put!(repl_channel, (ast, 1))
             val, bt = take!(response_channel)
             if !ends_with_semicolon(line)
-                print_response(repl, val, bt, true, have_color)
+                print_response(repl, val, bt, true)
             end
         end
     end
