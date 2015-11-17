@@ -233,7 +233,7 @@ function mktemp(parent=tempdir(); suffix="")
             error("mktemp failed: invalid result by GetTempFileName")
         end
         new_filename = filename[1:fnlen-4] * suffix
-        # NOTE: new_filename is not guaranteed to exist,
+        # NOTE: new_filename is not guaranteed to be nonexistent,
         #       but at least then mv will error out.
         mv(filename, new_filename)
         filename = new_filename
