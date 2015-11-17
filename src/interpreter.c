@@ -102,7 +102,8 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 static void check_can_assign_type(jl_binding_t *b)
 {
     if (b->constp && b->value != NULL && !jl_is_datatype(b->value))
-        jl_errorf("invalid redefinition of constant %s", b->name->name);
+        jl_errorf("invalid redefinition of constant %s",
+                  jl_symbol_name(b->name));
 }
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
@@ -371,11 +372,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         assert(jl_is_svec(para));
         vnb  = eval(args[2], locals, nl, ngensym);
         if (!jl_is_long(vnb))
-            jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
+            jl_errorf("invalid declaration of bits type %s",
+                      jl_symbol_name((jl_sym_t*)name));
         ssize_t nb = jl_unbox_long(vnb);
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
-                      ((jl_sym_t*)name)->name);
+                      jl_symbol_name((jl_sym_t*)name));
         dt = jl_new_bitstype(name, jl_any_type, (jl_svec_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;
@@ -421,7 +423,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             for(size_t i=0; i < jl_svec_len(dt->types); i++) {
                 jl_value_t *elt = jl_svecref(dt->types, i);
                 if (!jl_is_type(elt) && !jl_is_typevar(elt))
-                    jl_type_error_rt(dt->name->name->name, "type definition", (jl_value_t*)jl_type_type, elt);
+                    jl_type_error_rt(jl_symbol_name(dt->name->name),
+                                     "type definition",
+                                     (jl_value_t*)jl_type_type, elt);
             }
             super = eval(args[3], locals, nl, ngensym);
             jl_set_datatype_super(dt, super);
@@ -496,7 +500,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     else if (ex->head == inert_sym) {
         return args[0];
     }
-    jl_errorf("unsupported or misplaced expression %s", ex->head->name);
+    jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));
     return (jl_value_t*)jl_nothing;
 }
 

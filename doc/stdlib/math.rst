@@ -892,7 +892,7 @@ Mathematical Functions
    .. Docstring generated from Julia source
 
    ``round(x)`` rounds ``x`` to an integer value according to the default
-   rounding mode (see :func:`get_rounding`), returning a value of the same type as
+   rounding mode (see :func:`rounding`), returning a value of the same type as
    ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
    integer, with ties (fractional values of 0.5) being rounded to the even
    integer.
@@ -1076,7 +1076,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   The absolute value of ``x``\ , with signed integer overflow error trapping. ``checked_abs`` will throw an ``OverflowError`` when ``x == typemin(typeof(x))``\ . Otherwise ``checked_abs`` behaves as ``abs``\ , though the overflow protection may impose a perceptible performance penalty.
+   For signed integers, throws an ``OverflowError`` when ``x == typemin(typeof(x))``\ . Otherwise, behaves as ``abs``\ , though the overflow protection may impose a perceptible performance penalty.
 
 .. function:: abs2(x)
 

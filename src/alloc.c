@@ -182,7 +182,8 @@ int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
         }
     }
     if (err)
-        jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
+        jl_errorf("type %s has no field %s", jl_symbol_name(t->name->name),
+                  jl_symbol_name(fld));
     return -1;
 }
 
@@ -370,7 +371,7 @@ static uptrint_t hash_symbol(const char *str, size_t len)
 
 static size_t symbol_nbytes(size_t len)
 {
-    return (sizeof_jl_taggedvalue_t+sizeof(jl_sym_t)+len+1+7)&-8;
+    return (sizeof_jl_taggedvalue_t + sizeof(jl_sym_t) + len + 1 + 7) & -8;
 }
 
 static jl_sym_t *mk_symbol(const char *str, size_t len)
@@ -387,20 +388,20 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     }
 
 #ifdef MEMDEBUG
-    sym = (jl_sym_t*)&((jl_taggedvalue_t*)malloc(nb))->value;
+    sym = (jl_sym_t*)jl_valueof(malloc(nb));
 #else
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
-    sym = (jl_sym_t*)&((jl_taggedvalue_t*)pool_ptr)->value;
+    sym = (jl_sym_t*)jl_valueof(pool_ptr);
     pool_ptr += nb;
 #endif
     jl_set_typeof(sym, jl_sym_type);
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
-    memcpy(&sym->name[0], str, len);
-    sym->name[len] = 0;
+    memcpy(jl_symbol_name(sym), str, len);
+    jl_symbol_name(sym)[len] = 0;
     return sym;
 }
 
@@ -414,8 +415,8 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, j
     while (*ptree != NULL) {
         x = (int)(h-(*ptree)->hash);
         if (x == 0) {
-            x = strncmp(str, (*ptree)->name, len);
-            if (x == 0 && (*ptree)->name[len] == 0)
+            x = strncmp(str, jl_symbol_name(*ptree), len);
+            if (x == 0 && jl_symbol_name(*ptree)[len] == 0)
                 return ptree;
         }
         if (parent != NULL) *parent = *ptree;
@@ -457,7 +458,7 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     return _jl_symbol(str, len);
 }
 
-DLLEXPORT jl_sym_t *jl_get_root_symbol() { return symtab; }
+DLLEXPORT jl_sym_t *jl_get_root_symbol(void) { return symtab; }
 
 static uint32_t gs_ctr = 0;  // TODO: per-thread
 uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
@@ -600,11 +601,11 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
         // hack to avoid making two versions of basic types needed
         // during bootstrapping
-        if (!strcmp(((jl_sym_t*)name)->name, "Int32"))
+        if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int32"))
             t = jl_int32_type;
-        else if (!strcmp(((jl_sym_t*)name)->name, "Int64"))
+        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int64"))
             t = jl_int64_type;
-        else if (!strcmp(((jl_sym_t*)name)->name, "Bool"))
+        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Bool"))
             t = jl_bool_type;
     }
     if (t == NULL)
@@ -850,7 +851,7 @@ DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
     jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
     jl_set_typeof(box, jl_box_any_type);
     // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
-    box->fieldptr[0] = v;
+    *(jl_value_t**)box = v;
     return box;
 }
 

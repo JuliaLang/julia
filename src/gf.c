@@ -230,7 +230,8 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt, jl
         ml = mt->cache;
  mt_assoc_bt_lkup:
     while (ml != (void*)jl_nothing) {
-        if (cache_match_by_type(jl_svec_data(types->parameters), jl_datatype_nfields(types),
+        if (cache_match_by_type(jl_svec_data(types->parameters),
+                                jl_datatype_nfields(types),
                                 ml->sig, ml->va)) {
             return ml->func;
         }
@@ -729,7 +730,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             if (jl_svec_len(sparams) > 0) {
                 lastdeclt = (jl_value_t*)
                     jl_instantiate_type_with((jl_value_t*)lastdeclt,
-                                             sparams->data,
+                                             jl_svec_data(sparams),
                                              jl_svec_len(sparams)/2);
             }
             jl_svecset(limited, i, lastdeclt);
@@ -916,7 +917,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
     }
     if (n != l) {
         jl_svec_t *en = jl_alloc_svec_uninit(n);
-        memcpy(en->data, ee, n*sizeof(void*));
+        memcpy(jl_svec_data(en), ee, n*sizeof(void*));
         *penv = en;
     }
     JL_GC_POP();
@@ -1171,7 +1172,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
                 goto done_chk_amb;  // ok, intersection is covered
             l = l->next;
         }
-        n = fname->name;
+        n = jl_symbol_name(fname);
         s = JL_STDERR;
         jl_printf(s, "WARNING: New definition \n    %s", n);
         jl_static_show_func_sig(s, (jl_value_t*)type);
@@ -1216,11 +1217,14 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
                 (l->func->linfo->module != method->linfo->module)) {
                 jl_module_t *newmod = method->linfo->module;
                 JL_STREAM *s = JL_STDERR;
-                jl_printf(s, "WARNING: Method definition %s", method->linfo->name->name);
+                jl_printf(s, "WARNING: Method definition %s",
+                          jl_symbol_name(method->linfo->name));
                 jl_static_show_func_sig(s, (jl_value_t*)type);
-                jl_printf(s, " in module %s", l->func->linfo->module->name->name);
+                jl_printf(s, " in module %s",
+                          jl_symbol_name(l->func->linfo->module->name));
                 print_func_loc(s, l->func->linfo);
-                jl_printf(s, " overwritten in module %s", newmod->name->name);
+                jl_printf(s, " overwritten in module %s",
+                          jl_symbol_name(newmod->name));
                 print_func_loc(s, method->linfo);
                 jl_printf(s, ".\n");
             }
@@ -1539,7 +1543,7 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
                 break;
             }
         }
-        assert(found);
+        assert(found); (void)found;
     }
 
     JL_GC_POP();
@@ -2030,7 +2034,7 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
 {
     long lno = li->line;
     if (lno > 0) {
-        char *fname = ((jl_sym_t*)li->file)->name;
+        char *fname = jl_symbol_name((jl_sym_t*)li->file);
         jl_printf(s, " at %s:%ld", fname, lno);
     }
 }

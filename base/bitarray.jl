@@ -310,21 +310,17 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     ind = 1
     @inbounds begin
         for i = 1:length(Bc)-1
-            u = UInt64(1)
             c = UInt64(0)
             for j = 0:63
-                A[ind]!=0 && (c |= u)
+                c |= (UInt64(A[ind] != 0) << j)
                 ind += 1
-                u <<= 1
             end
             Bc[i] = c
         end
-        u = UInt64(1)
         c = UInt64(0)
         for j = 0:_mod64(l-1)
-            A[ind]!=0 && (c |= u)
+            c |= (UInt64(A[ind] != 0) << j)
             ind += 1
-            u <<= 1
         end
         Bc[end] = c
     end
@@ -359,15 +355,12 @@ end
     i1, i2 = get_chunks_id(i)
     u = UInt64(1) << i2
     @inbounds begin
-        if x
-            Bc[i1] |= u
-        else
-            Bc[i1] &= ~u
-        end
+        c = Bc[i1]
+        Bc[i1] = ifelse(x, c | u, c & ~u)
     end
 end
 
-setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
+@inline setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
 @inline function unsafe_setindex!(B::BitArray, x, i::Int)
     unsafe_bitsetindex!(B.chunks, convert(Bool, x), i)
     return B
@@ -417,11 +410,7 @@ function unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
             if Imsk & u != 0
                 lx < c && throw_setindex_mismatch(X, c)
                 x = convert(Bool, unsafe_getindex(X, c))
-                if x
-                    C |= u
-                else
-                    C &= ~u
-                end
+                C = ifelse(x, C | u, C & ~u)
                 c += 1
             end
             u <<= 1

@@ -328,10 +328,13 @@ For example, the following code will not work as intended::
 
 However, this code will not initialize all of ``a``, since each
 process will have a separate copy of it. Parallel for loops like these
-must be avoided. Fortunately, distributed arrays can be used to get
-around this limitation (see the
-`DistributedArrays.jl <https://github.com/JuliaParallel/DistributedArrays.jl>`_
-package).
+must be avoided. Fortunately,  `Shared Arrays <#shared-arrays>`_
+can be used to get around this limitation::
+
+    a = SharedArray(Float64,10)
+    @parallel for i=1:10
+      a[i] = i
+    end
 
 Using "outside" variables in parallel loops is perfectly reasonable if
 the variables are read-only::

@@ -114,7 +114,6 @@
 
 # type Task
 #     parent::Task
-#     last::Task
 #     storage::Any
 #     consumers
 #     started::Bool

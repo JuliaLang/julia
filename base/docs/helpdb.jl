@@ -1044,13 +1044,6 @@ Compute the minimum absolute values over the singleton dimensions of `r`, and wr
 minabs!
 
 doc"""
-    prevprod([k_1,k_2,...], n)
-
-Previous integer not greater than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-prevprod
-
-doc"""
     @evalpoly(z, c...)
 
 Evaluate the polynomial $\sum_k c[k] z^{k-1}$ for the
@@ -1148,34 +1141,6 @@ Get the precision of a floating point number, as defined by the effective number
 precision
 
 doc"""
-    partitions(n)
-
-Generate all integer arrays that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n))`.
-"""
-partitions(n::Integer)
-
-doc"""
-    partitions(n, m)
-
-Generate all arrays of `m` integers that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n,m))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n,m))`.
-"""
-partitions(n::Integer, m::Integer)
-
-doc"""
-    partitions(array)
-
-Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(array))`.
-"""
-partitions(array)
-
-doc"""
-    partitions(array, m)
-
-Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array,m))` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using `length(partitions(array,m))`.
-"""
-partitions(array, m::Integer)
-
-doc"""
     readlines(stream)
 
 Read all lines as an array.
@@ -1238,20 +1203,6 @@ For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
 """
 Ac_rdiv_B
 
-doc"""
-```rst
-..  set_rounding(T, mode)
-
-Set the rounding mode of floating point type ``T``, controlling the
-rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
-:func:`/` and :func:`sqrt`) and type conversion.
-
-Note that this may affect other types, for instance changing the rounding
-mode of ``Float64`` will change the rounding mode of ``Float32``. See
-``get_rounding`` for available modes
-```
-"""
-set_rounding
 
 doc"""
     linspace(start, stop, n=100)
@@ -1700,7 +1651,7 @@ julia> Float32(1/3, RoundUp)
 0.33333334f0
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float32
 
@@ -2023,13 +1974,6 @@ Compute hyperbolic sine of `x`
 sinh
 
 doc"""
-    permutations(array)
-
-Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use `collect(permutations(array))` to get an array of all permutations.
-"""
-permutations
-
-doc"""
 ```rst
 ..  ceil([T,] x, [digits, [base]])
 
@@ -2078,13 +2022,6 @@ doc"""
 Reseed the random number generator. If a `seed` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For `MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers or a filename, in which case the seed is read from a file. `RandomDevice` does not support seeding.
 """
 srand
-
-doc"""
-    isexecutable(path) -> Bool
-
-Returns `true` if the current user has permission to execute `path`, `false` otherwise.
-"""
-isexecutable
 
 doc"""
     acot(x)
@@ -3122,7 +3059,7 @@ doc"""
 ..  round([T,] x, [digits, [base]], [r::RoundingMode])
 
 ``round(x)`` rounds ``x`` to an integer value according to the default
-rounding mode (see :func:`get_rounding`), returning a value of the same type as
+rounding mode (see :func:`rounding`), returning a value of the same type as
 ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
 integer, with ties (fractional values of 0.5) being rounded to the even
 integer.
@@ -3854,7 +3791,7 @@ julia> Float64(pi, RoundUp)
 3.1415926535897936
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float64
 
@@ -4764,15 +4701,6 @@ doc"""
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
 """
 sizehint!
-
-doc"""
-    permute!(v, p)
-
-Permute vector `v` in-place, according to permutation `p`. No checking is done to verify that `p` is a permutation.
-
-To return a new permutation, use `v[p]`. Note that this is generally faster than `permute!(v,p)` for large vectors.
-"""
-permute!
 
 doc"""
     ifelse(condition::Bool, x, y)
@@ -5692,9 +5620,9 @@ Get the fully-qualified name of a module as a tuple of symbols. For example, `fu
 fullname
 
 doc"""
-    isreadable(path) -> Bool
+    isreadable(io) -> Bool
 
-Returns `true` if the current user has permission to read `path`, `false` otherwise.
+Returns `true` if the specified IO object is readable (if that can be determined).
 """
 isreadable
 
@@ -5947,20 +5875,6 @@ doc"""
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
 code_lowered
-
-doc"""
-    nthperm(v, k)
-
-Compute the kth lexicographic permutation of a vector.
-"""
-nthperm(v,k)
-
-doc"""
-    nthperm(p)
-
-Return the `k` that generated permutation `p`. Note that `nthperm(nthperm([1:n], k)) == k` for `1 <= k <= factorial(n)`.
-"""
-nthperm(p)
 
 doc"""
     values(collection)
@@ -6222,7 +6136,7 @@ isreadonly
 
 doc"""
 ```rst
-..  get_rounding(T)
+..  rounding(T)
 
 Get the current floating point rounding mode for type ``T``, controlling
 the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
@@ -6232,7 +6146,7 @@ Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
 ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
 ```
 """
-get_rounding
+rounding
 
 doc"""
 ```rst
@@ -6447,18 +6361,33 @@ Like `broadcast_function`, but for `broadcast!`.
 broadcast!_function
 
 doc"""
-    with_rounding(f::Function, T, mode)
+```rst
+..  setrounding(T, mode)
+
+Set the rounding mode of floating point type ``T``, controlling the
+rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
+:func:`/` and :func:`sqrt`) and type conversion.
+
+Note that this may affect other types, for instance changing the rounding
+mode of ``Float64`` will change the rounding mode of ``Float32``. See
+``rounding`` for available modes
+```
+"""
+setrounding(T, mode)
+
+doc"""
+    setrounding(f::Function, T, mode)
 
 Change the rounding mode of floating point type `T` for the duration of `f`. It is logically equivalent to:
 
-    old = get_rounding(T)
-    set_rounding(T, mode)
+    old = rounding(T)
+    setrounding(T, mode)
     f()
-    set_rounding(T, old)
+    setrounding(T, old)
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
-with_rounding
+setrounding(f::Function, T, mode)
 
 doc"""
     sleep(seconds)
@@ -6717,10 +6646,8 @@ of the argument:
 * `Task`: Wait for a `Task` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called `wait`).
 * `RawFD`: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
-If no argument is passed, the task blocks for an undefined period. If the task's
-state is set to `:waiting`, it can only be restarted by an explicit call to
-`schedule` or `yieldto`. If the task's state is `:runnable`, it might be
-restarted unpredictably.
+If no argument is passed, the task blocks for an undefined period.
+A task can only be restarted by an explicit call to `schedule` or `yieldto`.
 
 Often `wait` is called within a `while` loop to ensure a waited-for condition
 is met before proceeding.
@@ -7295,13 +7222,6 @@ The `dir` keyword argument can be used to specify a working directory for the co
 setenv
 
 doc"""
-    invperm(v)
-
-Return the inverse permutation of v.
-"""
-invperm
-
-doc"""
     lowercase(string)
 
 Returns `string` with all characters converted to lowercase.
@@ -7766,13 +7686,6 @@ The inverse of `ind2sub`, returns the linear index corresponding to the provided
 sub2ind
 
 doc"""
-    isperm(v) -> Bool
-
-Returns `true` if `v` is a valid permutation.
-"""
-isperm
-
-doc"""
     super(T::DataType)
 
 Return the supertype of DataType `T`.
@@ -7808,11 +7721,11 @@ Join path components into a full path. If some argument is an absolute path, the
 joinpath
 
 doc"""
-    get_bigfloat_precision()
+    precision(BigFloat)
 
 Get the precision (in bits) currently used for `BigFloat` arithmetic.
 """
-get_bigfloat_precision
+precision(::Type{BigFloat})
 
 doc"""
     homedir() -> AbstractString
@@ -8068,13 +7981,6 @@ doc"""
 Register a function `f(x)` to be called when there are no program-accessible references to `x`. The behavior of this function is unpredictable if `x` is of a bits type.
 """
 finalizer
-
-doc"""
-    nextprod([k_1,k_2,...], n)
-
-Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-nextprod
 
 doc"""
     <<(x, n)
@@ -8441,16 +8347,16 @@ Compute $e^x$.
 exp
 
 doc"""
-    with_bigfloat_precision(f::Function,precision::Integer)
+    setprecision(f::Function, precision::Integer)
 
 Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
 
-    old = get_bigfloat_precision()
-    set_bigfloat_precision(precision)
+    old = precision(BigFloat)
+    setprecision(BigFloat, precision)
     f()
-    set_bigfloat_precision(old)
+    setprecision(BigFloat, old)
 """
-with_bigfloat_precision
+setprecision
 
 doc"""
     searchindex(string, substring, [start])
@@ -9527,11 +9433,11 @@ Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modi
 issorted
 
 doc"""
-    set_bigfloat_precision(x::Int64)
+    setprecision(x::Int64)
 
 Set the precision (in bits) to be used to `BigFloat` arithmetic.
 """
-set_bigfloat_precision
+setprecision
 
 doc"""
     isbits(T)
@@ -9816,13 +9722,6 @@ doc"""
 The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns `-nextpow2(-n)` for negative arguments.
 """
 nextpow2
-
-doc"""
-    ipermute!(v, p)
-
-Like permute!, but the inverse of the given permutation is applied.
-"""
-ipermute!
 
 doc"""
 ```rst
@@ -10191,13 +10090,6 @@ An iterator that generates at most the first `n` elements of `iter`.
 take
 
 doc"""
-    combinations(array, n)
-
-Generate all combinations of `n` elements from an indexable object. Because the number of combinations can be very large, this function returns an iterator object. Use `collect(combinations(array,n))` to get an array of all combinations.
-"""
-combinations
-
-doc"""
     frexp(val)
 
 Return `(x,exp)` such that `x` has a magnitude in the interval $[1/2, 1)$ or 0,
@@ -10440,15 +10332,6 @@ Tests whether a character is a lowercase letter, or whether this is true for all
 islower
 
 doc"""
-```rst
-..  nthperm!(v, k)
-
-In-place version of :func:`nthperm`.
-```
-"""
-nthperm!
-
-doc"""
     cell(dims)
 
 Construct an uninitialized cell array (heterogeneous array). `dims` can be either a tuple or a series of integer arguments.
@@ -10520,13 +10403,6 @@ doc"""
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-doc"""
-    istaskstarted(task) -> Bool
-
-Tell whether a task has started executing.
-"""
-istaskstarted
 
 doc"""
     clamp(x, lo, hi)
@@ -10745,9 +10621,9 @@ Create a "value type" out of `c`, which must be an `isbits` value. The intent of
 Val
 
 doc"""
-    iswritable(path) -> Bool
+    iswritable(io) -> Bool
 
-Returns `true` if the current user has permission to write to `path`, `false` otherwise.
+Returns `true` if the specified IO object is writable (if that can be determined).
 """
 iswritable
 

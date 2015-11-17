@@ -757,7 +757,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
 {
     Value *psetfunc = // TODO: move this to the codegen initialization code section
         jl_Module->getOrInsertFunction("jl_pointerset",
-                                       FunctionType::get(T_void, three_pvalue_llvmt, false));
+                                       FunctionType::get(T_pjlvalue, three_pvalue_llvmt, false));
     int ldepth = ctx->gc.argDepth;
     jl_cgval_t parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx).V;
@@ -1050,7 +1050,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *x = auto_unbox(args[2],ctx);
         if (x->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-#if JL_NEED_FLOATTEMP_VAR
+#ifdef JL_NEED_FLOATTEMP_VAR
         // Target platform might carry extra precision.
         // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's

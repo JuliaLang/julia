@@ -279,7 +279,7 @@ endif
 $5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
@@ -1790,7 +1790,6 @@ $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(SRCDIR)/srccache/gmp-$(GMP_VER).t
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/gmp_6.0.0_osx.patch
 	echo 1 > $@
 $(BUILDDIR)/gmp-$(GMP_VER)/config.status: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched
 	mkdir -p $(dir $@)
@@ -2024,8 +2023,6 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres` -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-else ifneq ($(OS), Darwin)
-LIBGIT2_OPTS += -DREQUIRE_OPENSSL=ON
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt

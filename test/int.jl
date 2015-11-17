@@ -143,6 +143,12 @@ for T in SItypes
     @test_throws OverflowError checked_abs(typemin(T))
 end
 
+for T in UItypes
+    @test checked_abs(one(T)) == one(T)
+end
+
+@test checked_abs(BigInt(-1)) == BigInt(1)
+
 # Checked operations on UInt128 are currently broken
 # FIXME: #4905
 

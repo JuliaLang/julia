@@ -276,7 +276,7 @@ Note: for systems that support rpm-based package managers, the necessary depende
 
 @vtjnash occassionally upload his builds, so you can also download those to save build time:
 - [x86_64-w64-mingw64 gcc-5.2.0 MacOS-10.10 (105 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1601&authkey=!ANpFOoCqFGYTcHM&ithint=file%2cgz)
-- [i686-w64-mingw64 gcc-5.2.0 MacOS-10.10 (143 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1603&authkey=!AFFN2E_8hytOaoc&ithint=file%2cgz)
+- [i686-w64-mingw64 gcc-5.2.0 MacOS-10.10 (89 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1607&authkey=!AFrL8G5G70iYhUU&ithint=file%2cgz)
 - [*-w64-mingw64 gcc-4.9.2 Ubuntu-15.04 (168 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1602&authkey=!ABhstrqDG-4zdLo&ithint=file%2cgz)
 
 Then run the build:

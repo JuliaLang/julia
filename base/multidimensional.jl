@@ -166,7 +166,7 @@ index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_lengths_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_lengths_dim(A, dim+1, I...)...)
 @inline index_lengths_dim(A, dim, i::AbstractArray, I...) = (length(i), index_lengths_dim(A, dim+1, I...)...)
 
-# shape of array to create for getindex() with indexes I, dropping trailing scalars
+# shape of array to create for getindex() with indexes I, dropping scalars
 index_shape(A::AbstractArray, I::AbstractArray) = size(I) # Linear index reshape
 index_shape(A::AbstractArray, I::AbstractArray{Bool}) = (sum(I),) # Logical index
 index_shape(A::AbstractArray, I::Colon) = (length(A),)
@@ -174,7 +174,7 @@ index_shape(A::AbstractArray, I::Colon) = (length(A),)
 index_shape_dim(A, dim, I::Real...) = ()
 index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_shape_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_shape_dim(A, dim+1, i, I...)...)
-@inline index_shape_dim(A, dim, ::Real, I...) = (1, index_shape_dim(A, dim+1, I...)...)
+@inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, dim+1, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector{Bool}, I...) = (sum(i), index_shape_dim(A, dim+1, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector, I...) = (length(i), index_shape_dim(A, dim+1, I...)...)
 
@@ -238,7 +238,8 @@ end
         $(Expr(:meta, :inline))
         D = eachindex(dest)
         Ds = start(D)
-        @nloops $N i dest d->(j_d = unsafe_getindex(I[d], i_d)) begin
+        idxlens = index_lengths(src, I...) # TODO: unsplat?
+        @nloops $N i d->(1:idxlens[d]) d->(j_d = unsafe_getindex(I[d], i_d)) begin
             d, Ds = next(D, Ds)
             v = @ncall $N unsafe_getindex src j
             unsafe_setindex!(dest, v, d)
@@ -248,18 +249,18 @@ end
 end
 
 # checksize ensures the output array A is the correct size for the given indices
-checksize(A::AbstractArray, I::AbstractArray) = size(A) == size(I) || throw(DimensionMismatch("index 1 has size $(size(I)), but size(A) = $(size(A))"))
-checksize(A::AbstractArray, I::AbstractArray{Bool}) = length(A) == sum(I) || throw(DimensionMismatch("index 1 selects $(sum(I)) elements, but length(A) = $(length(A))"))
-@generated function checksize(A::AbstractArray, I...)
-    N = length(I)
-    quote
-        @nexprs $N d->(_checksize(A, d, I[d]) || throw(DimensionMismatch("index $d selects $(length(I[d])) elements, but size(A, $d) = $(size(A,d))")))
-    end
-end
-_checksize(A::AbstractArray, dim, I) = size(A, dim) == length(I)
-_checksize(A::AbstractArray, dim, I::AbstractVector{Bool}) = size(A, dim) == sum(I)
-_checksize(A::AbstractArray, dim, ::Colon) = true
-_checksize(A::AbstractArray, dim, ::Real) = size(A, dim) == 1
+@noinline throw_checksize_error(arr, dim, idx) = throw(DimensionMismatch("index $d selects $(length(I[d])) elements, but size(A, $d) = $(size(A,d))"))
+
+checksize(A::AbstractArray, I::AbstractArray) = size(A) == size(I) || throw_checksize_error(A, 1, I)
+checksize(A::AbstractArray, I::AbstractArray{Bool}) = length(A) == sum(I) || throw_checksize_error(A, 1, I)
+
+checksize(A::AbstractArray, I...) = _checksize(A, 1, I...)
+_checksize(A::AbstractArray, dim) = true
+# Skip scalars
+_checksize(A::AbstractArray, dim, ::Real, J...) = _checksize(A, dim, J...)
+_checksize(A::AbstractArray, dim, I, J...) = (size(A, dim) == length(I) || throw_checksize_error(A, dim, I); _checksize(A, dim+1, J...))
+_checksize(A::AbstractArray, dim, I::AbstractVector{Bool}, J...) = (size(A, dim) == sum(I) || throw_checksize_error(A, dim, I); _checksize(A, dim+1, J...))
+_checksize(A::AbstractArray, dim, ::Colon, J...) = _checksize(A, dim+1, J...)
 
 @inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!(v::BitArray, x, ind::Real) = (Base.unsafe_bitsetindex!(v.chunks, convert(Bool, x), to_index(ind)); v)
@@ -585,7 +586,8 @@ end
 
         storeind = 1
         Xc, Bc = X.chunks, B.chunks
-        @nloops($N, i, d->1:size(X, d+1),
+        idxlens = index_lengths(B, I0, I...) # TODO: unsplat?
+        @nloops($N, i, d->(1:idxlens[d+1]),
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
                 begin # BODY
@@ -608,7 +610,8 @@ end
         $(symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        @nloops $N i X d->(offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
+        idxlens = index_lengths(B, I...) # TODO: unsplat?
+        @nloops $N i d->(1:idxlens[d]) d->(offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end

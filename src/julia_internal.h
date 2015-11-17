@@ -48,7 +48,7 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 void jl_gc_inhibit_finalizers(int state);
 
 #ifdef GC_DEBUG_ENV
-void gc_debug_print_status();
+void gc_debug_print_status(void);
 #else
 #define gc_debug_print_status()
 #endif

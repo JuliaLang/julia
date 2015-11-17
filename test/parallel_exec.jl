@@ -242,7 +242,7 @@ map!(x->1, d)
 @test fill!(d, 2.) == fill(2, 10, 10)
 @test d[:] == fill(2, 100)
 @test d[:,1] == fill(2, 10)
-@test d[1,:] == fill(2, 1, 10)
+@test d[1,:] == fill(2, 10)
 
 # Boundary cases where length(S) <= length(pids)
 @test 2.0 == remotecall_fetch(D->D[2], id_other, Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
@@ -465,7 +465,7 @@ if DoFullTest
     script = joinpath(dirname(@__FILE__), "topology.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
 
-    (strm, proc) = open(cmd)
+    (strm, proc) = open(pipeline(cmd, stderr=STDERR))
     wait(proc)
     if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         println(readall(strm))
@@ -574,7 +574,12 @@ function f13168(n)
     val
 end
 let t = schedule(@task f13168(100))
-    @test schedule(t) === t
+    @test t.state == :queued
+    @test_throws ErrorException schedule(t)
+    yield()
+    @test t.state == :done
+    @test_throws ErrorException schedule(t)
+    @test isa(wait(t),Float64)
 end
 
 # issue #13122

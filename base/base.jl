@@ -7,7 +7,9 @@ end
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
-    SystemError(p::AbstractString, e::Integer) = new(p, e)
+    extrainfo
+    SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
+    SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
     SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 

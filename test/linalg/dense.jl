@@ -408,7 +408,7 @@ for elty in (Float64, Complex{Float64})
                                  1/5 1/6 1/7 1/8])
     @test_approx_eq expm(logm(A4)) A4
 
-    A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1]); println("B")
+    A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
     @test_approx_eq expm(logm(A5)) A5
 
     A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
