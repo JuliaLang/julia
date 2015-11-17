@@ -343,7 +343,7 @@ In mainstream
 object oriented languages, such as C++, Java, Python and Ruby, composite
 types also have named functions associated with them, and the
 combination is called an "object". In purer object-oriented languages,
-such as Python and Ruby, all values are objects whether they are
+such as Ruby or Smalltalk, all values are objects whether they are
 composites or not. In less pure object oriented languages, including C++
 and Java, some values, such as integers and floating-point values, are
 not objects, while instances of user-defined composite types are true
