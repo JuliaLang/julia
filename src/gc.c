@@ -1849,6 +1849,7 @@ double clock_now(void);
 
 extern jl_module_t *jl_old_base_module;
 extern jl_array_t *jl_module_init_order;
+extern jl_function_t *jl_unhandled_exception_handler;
 
 static int inc_count = 0;
 static int quick_count = 0;
@@ -1875,6 +1876,7 @@ static void pre_mark(void)
     if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell, 0);
     gc_push_root(jl_exception_in_transit, 0);
     gc_push_root(jl_task_arg_in_transit, 0);
+    if (jl_unhandled_exception_handler) gc_push_root(jl_unhandled_exception_handler, 0);
     if (jl_module_init_order != NULL)
         gc_push_root(jl_module_init_order, 0);
 

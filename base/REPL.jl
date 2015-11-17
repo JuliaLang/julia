@@ -37,32 +37,44 @@ abstract AbstractREPL
 answer_color(::AbstractREPL) = ""
 
 type REPLBackend
-    repl_channel::Channel
-    response_channel::Channel
-    in_eval::Bool
-    ans
-    backend_task::Task
-    REPLBackend(repl_channel, response_channel, in_eval, ans) =
-        new(repl_channel, response_channel, in_eval, ans)
+    repl_channel::Channel # channel for AST
+    response_channel::Channel # channel for results: (value, nothing) or (error, backtrace)
+    task::Task # current backend task
+    responded::Bool # flag indicating the state of this backend
 end
 
+function put_backend_response(backend::REPLBackend, response, validsource::Bool)
+    if validsource && !backend.responded
+        backend.responded = true
+        put!(backend.response_channel, response)
+    else
+        @schedule begin
+            println(STDERR, "Got a REPL eval result, but already returned a result:")
+            value, bt = response
+            if bt !== nothing
+                showerror(STDERR, value, bt)
+            else
+                show(STDERR, value)
+            end
+        end
+    end
+    nothing
+end
+
+# note: the name of this function is significant for printing error backtraces
 function eval_user_input(ast::ANY, backend::REPLBackend)
-    iserr, lasterr, bt = false, (), nothing
-    while true
+    iserr, lasterr = false, (nothing, ())
+    while !backend.responded
         try
             if iserr
-                put!(backend.response_channel, (lasterr, bt))
+                put_backend_response(backend, lasterr, backend.task == current_task())
                 iserr, lasterr = false, ()
             else
-                ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
-                eval(Main, :(ans = $(getindex)($(Any[ans]), 1)))
-                backend.in_eval = true
                 value = eval(Main, ast)
-                backend.in_eval = false
-                backend.ans = value
-                put!(backend.response_channel, (value, nothing))
+                eval(Main, :(ans = $(Expr(:quote, value))))
+                put_backend_response(backend, (value, nothing), backend.task == current_task())
             end
             break
         catch err
@@ -70,28 +82,70 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 println("SYSTEM ERROR: Failed to report error to REPL frontend")
                 println(err)
             end
-            iserr, lasterr = true, err
-            bt = catch_backtrace()
+            iserr, lasterr = true, (err, catch_backtrace())
         end
     end
 end
 
+"""    set_unhandled_exception_handler(f)
+Register the function `f` as the current unhandled exception handler.
+If `f` is not a function, the handler is uninstalled.
+The return value is the current exception handler, or `nothing` if none is installed.
+"""
+function set_unhandled_exception_handler(f)
+    ccall(:jl_set_unhandled_exception_handler, Any, (Any,), f)
+end
+
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
-    backend = REPLBackend(repl_channel, response_channel, false, nothing)
-    backend.backend_task = @schedule begin
+    local backend # keep track of the current backend
+                  # each backend can look at this to see if it has been replaced
+                  # by the unhandled_exception_handler
+    new_backend_task = function()
         # include looks at this to determine the relative include path
         # nothing means cwd
-        while true
+        while current_task() == backend.task
             tls = task_local_storage()
             tls[:SOURCE_PATH] = nothing
-            ast, show_value = take!(backend.repl_channel)
+            ast, show_value = take!(repl_channel)
             if show_value == -1
-                # exit flag
+                # graceful exit flag
+                set_unhandled_exception_handler(last)
                 break
             end
+            backend.responded = false
             eval_user_input(ast, backend)
         end
+        nothing
     end
+    backend = REPLBackend(repl_channel, response_channel, Task(new_backend_task), true)
+    schedule(backend.task)
+
+    last = set_unhandled_exception_handler() do excpt
+        if istaskdone(backend.task)
+            # our backend is gone, so reset to the previous exception handler
+            set_unhandled_exception_handler(last)
+            last === nothing || last()
+            return
+        end
+
+        # setup a handler for unhandled exceptions (such as from root task or finish_task_hook)
+        # that tries to forward these errors to the REPL frontend
+        if isa(excpt, InterruptException) && backend.task.state == :runnable && isempty(Base.Workqueue)
+            # attempt to forward the interrupt to the backend task
+            Base.throwto(backend.task, excpt)
+        else
+            # otherwise, try to return this failure directly to the REPL frontend
+            # and orphan the old backend
+            if !backend.responded
+                backend.task = Task(new_backend_task) # let the old backend keep spinning (albeit without a consumer now)
+            end
+            put_backend_response(backend, (excpt, catch_backtrace()), true)
+            schedule(backend.task)
+        end
+        wait()
+        # returning from this function would signal to the system that the error couldn't be handled
+    end
+
     backend
 end
 

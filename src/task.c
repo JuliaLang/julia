@@ -801,6 +801,16 @@ DLLEXPORT void gdbbacktrace(void)
     jlbacktrace();
 }
 
+jl_function_t *jl_unhandled_exception_handler;
+DLLEXPORT jl_value_t *jl_set_unhandled_exception_handler(jl_value_t* v)
+{
+    jl_value_t *old = (jl_value_t*)jl_unhandled_exception_handler;
+    if (jl_is_function(v))
+        jl_unhandled_exception_handler = (jl_function_t*)v;
+    else
+        jl_unhandled_exception_handler = NULL;
+    return old ? old : jl_nothing;
+}
 
 // yield to exception handler
 void NORETURN throw_internal(jl_value_t *e)
@@ -811,11 +821,24 @@ void NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
-        jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+        if (jl_unhandled_exception_handler) {
+            JL_TRY {
+                jl_apply(jl_unhandled_exception_handler, &e, 1);
+            }
+            JL_CATCH {
+                jl_printf(JL_STDERR, "fatal: unhandled_exception_handler threw an error.\n");
+                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_printf(JL_STDERR, "\nwhile handling:\n");
+            }
+        }
+        else {
+            jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+        }
         jl_static_show(JL_STDERR, e);
         jl_printf(JL_STDERR, "\n");
         jlbacktrace();
         jl_exit(1);
+        abort();
     }
     assert(0);
 }
