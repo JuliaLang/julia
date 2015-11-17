@@ -1465,7 +1465,8 @@ typedef struct _jl_task_t {
     jl_jmp_buf ctx;
     size_t bufsz;
     void *stkbuf;
-    size_t ssize;
+    size_t ssize:31;
+    size_t started:1;
 
     // current exception handler
     jl_handler_t *eh;
