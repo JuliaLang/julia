@@ -719,34 +719,34 @@ bool_fintrinsic(fpiseq,fpiseq)
 bool_fintrinsic(fpislt,fpislt)
 
 // bitwise operators
-#define and(a,b) a & b
-bi_iintrinsic_fast(LLVMAnd, and, and_int, u)
-#define or(a,b) a | b
-bi_iintrinsic_fast(LLVMOr, or, or_int, u)
-#define xor(a,b) a ^ b
-bi_iintrinsic_fast(LLVMXor, xor, xor_int, u)
-#define shl(a,b) b >= 8 * sizeof(a) ? 0 : a << b
-bi_iintrinsic_cnvtb_fast(LLVMShl, shl, shl_int, u, 1)
-#define lshr(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
-bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr, lshr_int, u, 1)
-#define ashr(a,b) \
+#define and_op(a,b) a & b
+bi_iintrinsic_fast(LLVMAnd, and_op, and_int, u)
+#define or_op(a,b) a | b
+bi_iintrinsic_fast(LLVMOr, or_op, or_int, u)
+#define xor_op(a,b) a ^ b
+bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
+#define shl_op(a,b) b >= 8 * sizeof(a) ? 0 : a << b
+bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
+#define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
+bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
+#define ashr_op(a,b) \
         /* if ((signed)a > 0) [in two's complement] ? ... : ...) */ \
         (a >> (host_char_bit * sizeof(a) - 1)) ? ~(b >= 8 * sizeof(a) ? 0 : (~a) >> b) : (b >= 8 * sizeof(a) ? 0 : a >> b)
-bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr, ashr_int, u, 1)
-//#define bswap(a) __builtin_bswap(a)
-//un_iintrinsic_fast(LLVMByteSwap, bswap, bswap_int, u)
+bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, u, 1)
+//#define bswap_op(a) __builtin_bswap(a)
+//un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
-//#define ctpop(a) __builtin_ctpop(a)
-//uu_iintrinsic_fast(LLVMCountPopulation, ctpop, ctpop_int, u)
+//#define ctpop_op(a) __builtin_ctpop(a)
+//uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
-//#define ctlz(a) __builtin_ctlz(a)
-//uu_iintrinsic_fast(LLVMCountLeadingZeros, ctlz_int, u)
+//#define ctlz_op(a) __builtin_ctlz(a)
+//uu_iintrinsic_fast(LLVMCountLeadingZeros, ctlz_op, ctlz_int, u)
 uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
-//#define cttz(a) __builtin_cttz(a)
-//uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz, cttz_int, u)
+//#define cttz_op(a) __builtin_cttz(a)
+//uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
-#define not(a) ~a
-un_iintrinsic_fast(LLVMFlipAllBits, not, not_int, u)
+#define not_op(a) ~a
+un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 
 // conversions
 cvt_iintrinsic(LLVMTrunc, trunc_int)
@@ -839,9 +839,9 @@ DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 
 // checked arithmetic
 #define check_sadd(a,b) \
-        /* this test is a reduction of (b > 0) ? (a + b >= typemin(a)) : (a + b < typemin(a)) ==> overflow \
+        /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
          * where (a - a) == (typeof(a))0 */ \
-        (b > 0) == (a >= ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
+        (b > 0) ? (a > ~((a - a + 1) << (8 * sizeof(a) - 1)) - b) : (a < ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
 checked_iintrinsic_fast(LLVMAdd_sov, check_sadd, add, checked_sadd,  )
 #define check_uadd(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \

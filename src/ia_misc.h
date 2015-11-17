@@ -7,6 +7,10 @@
 #include <immintrin.h>
 #include "support/dtypes.h"
 
+#if defined(__i386__) && defined(__GNUC__) && !defined(__SSE2__)
+#error Julia can only be built for architectures above Pentium 4. Pass -march=pentium4, or set MARCH=pentium4 and ensure that -march is not passed separately with an older architecture.
+#endif
+
 #if defined(__i386__)
 
 STATIC_INLINE unsigned long long rdtsc(void)
@@ -18,7 +22,7 @@ STATIC_INLINE unsigned long long rdtsc(void)
 
 #elif defined(__x86_64__)
 
-STATIC_INLINE uint64_t rdtsc()
+STATIC_INLINE uint64_t rdtsc(void)
 {
     unsigned hi, lo;
     __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
@@ -29,16 +33,16 @@ STATIC_INLINE uint64_t rdtsc()
 
 #include <intrin.h>
 
-STATIC_INLINE uint64_t rdtsc()
+STATIC_INLINE uint64_t rdtsc(void)
 {
     return __rdtsc();
 }
 
 #endif  /* __i386__ */
 
-#if (__MIC__)
+#ifdef __MIC__
 
-STATIC_INLINE void cpu_pause()
+STATIC_INLINE void cpu_pause(void)
 {
     _mm_delay_64(100);
 }
@@ -48,24 +52,24 @@ STATIC_INLINE void cpu_delay(int64_t cycles)
     _mm_delay_64(cycles);
 }
 
-STATIC_INLINE void cpu_mfence()
+STATIC_INLINE void cpu_mfence(void)
 {
     __asm__ __volatile__ ("":::"memory");
 }
 
-STATIC_INLINE void cpu_sfence()
+STATIC_INLINE void cpu_sfence(void)
 {
     __asm__ __volatile__ ("":::"memory");
 }
 
-STATIC_INLINE void cpu_lfence()
+STATIC_INLINE void cpu_lfence(void)
 {
     __asm__ __volatile__ ("":::"memory");
 }
 
 #else  /* !__MIC__ */
 
-STATIC_INLINE void cpu_pause()
+STATIC_INLINE void cpu_pause(void)
 {
     _mm_pause();
 }
@@ -77,17 +81,17 @@ STATIC_INLINE void cpu_delay(int64_t cycles)
         _mm_pause();
 }
 
-STATIC_INLINE void cpu_mfence()
+STATIC_INLINE void cpu_mfence(void)
 {
     _mm_mfence();
 }
 
-STATIC_INLINE void cpu_sfence()
+STATIC_INLINE void cpu_sfence(void)
 {
     _mm_sfence();
 }
 
-STATIC_INLINE void cpu_lfence()
+STATIC_INLINE void cpu_lfence(void)
 {
     _mm_lfence();
 }

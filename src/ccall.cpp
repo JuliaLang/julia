@@ -1,6 +1,10 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
+#include "support/hashing.h"
 
 // --- the ccall, cglobal, and llvm intrinsics ---
+
+// keep track of llvmcall declarations
+static std::set<u_int64_t> llvmcallDecls;
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
@@ -357,7 +361,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             ptr = jl_fieldref(ptr,0);
         }
         if (jl_is_symbol(ptr))
-            f_name = ((jl_sym_t*)ptr)->name;
+            f_name = jl_symbol_name((jl_sym_t*)ptr);
         else if (jl_is_byte_string(ptr))
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
@@ -374,13 +378,13 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             jl_value_t *t0 = jl_fieldref(ptr,0);
             jl_value_t *t1 = jl_fieldref(ptr,1);
             if (jl_is_symbol(t0))
-                f_name = ((jl_sym_t*)t0)->name;
+                f_name = jl_symbol_name((jl_sym_t*)t0);
             else if (jl_is_byte_string(t0))
                 f_name = jl_string_data(t0);
             else
                 JL_TYPECHKS(fname, symbol, t0);
             if (jl_is_symbol(t1))
-                f_lib = ((jl_sym_t*)t1)->name;
+                f_lib = jl_symbol_name((jl_sym_t*)t1);
             else if (jl_is_byte_string(t1))
                 f_lib = jl_string_data(t1);
             else
@@ -473,9 +477,9 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGSV(llvmcall, 3)
-    jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
+    jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     jl_svec_t *stt = NULL;
-    JL_GC_PUSH4(&ir, &rt, &at, &stt);
+    JL_GC_PUSH5(&ir, &rt, &at, &stt, &decl);
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -510,10 +514,19 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     if (ir == NULL) {
         jl_error("Cannot statically evaluate first argument to llvmcall");
     }
+    if (jl_is_tuple(ir)) {
+        // if the IR is a tuple, we expect (declarations, ir)
+        if (jl_nfields(ir) != 2)
+            jl_error("Tuple as first argument to llvmcall must have exactly two children");
+        decl = jl_fieldref(ir,0);
+        ir = jl_fieldref(ir,1);
+        if (!jl_is_byte_string(decl))
+            jl_error("Declarations passed to llvmcall must be a string");
+    }
     bool isString = jl_is_byte_string(ir);
     bool isPtr = jl_is_cpointer(ir);
     if (!isString && !isPtr) {
-        jl_error("First argument to llvmcall must be a string or pointer to an LLVM Function");
+        jl_error("IR passed to llvmcall must be a string or pointer to an LLVM Function");
     }
 
     JL_TYPECHK(llvmcall, type, rt);
@@ -600,6 +613,30 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         llvm::raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
 
+        if (decl != NULL) {
+            std::stringstream declarations(jl_string_data(decl));
+
+            // parse string line by line
+            std::string declstr;
+            while (std::getline(declarations, declstr, '\n')) {
+                u_int64_t declhash = memhash(declstr.c_str(), declstr.length());
+                if (llvmcallDecls.count(declhash) == 0) {
+                    // Findi  name of declaration by searching for '@'
+                    std::string::size_type atpos = declstr.find('@') + 1;
+                    // Find end of declaration by searching for '('
+                    std::string::size_type bracepos = declstr.find('(');
+                    // Declaration name is the string between @ and (
+                    std::string declname = declstr.substr(atpos, bracepos - atpos);
+
+                    // Check if declaration already present in module
+                    if(jl_Module->getNamedValue(declname) == NULL) {
+                        ir_stream << "; Declarations\n" << declstr << "\n";
+                    }
+
+                    llvmcallDecls.insert(declhash);
+                }
+            }
+        }
         ir_stream << "; Number of arguments: " << nargt << "\n"
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
         << jl_string_data(ir) << "\n}";
@@ -891,7 +928,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                          jl_undefvarerror_type)
                                             && jl_is_symbol(args[2])) {
                     std::string msg = "ccall return type undefined: " +
-                                      std::string(((jl_sym_t*)args[2])->name);
+                                      std::string(jl_symbol_name((jl_sym_t*)args[2]));
                     emit_error(msg.c_str(), ctx);
                     JL_GC_POP();
                     return jl_cgval_t();

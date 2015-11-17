@@ -205,5 +205,5 @@ end
 # This is necessary at least on 32-bit Intel Linux, since fma_llvm may
 # have called glibc, and some broken glibc fma implementations don't
 # properly restore the rounding mode
-Rounding.set_rounding_raw(Float32, Rounding.JL_FE_TONEAREST)
-Rounding.set_rounding_raw(Float64, Rounding.JL_FE_TONEAREST)
+Rounding.setrounding_raw(Float32, Rounding.JL_FE_TONEAREST)
+Rounding.setrounding_raw(Float64, Rounding.JL_FE_TONEAREST)

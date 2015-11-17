@@ -133,7 +133,7 @@ function tryrst(md, remove_decl)
         return Markdown.rst(md)
     catch e
         warn("Error converting docstring:")
-#        display(md)
+        # display(md)
         println(e)
         return
     end
@@ -141,7 +141,7 @@ end
 
 torst(md,remove_decl) = isrst(md) ? flatten(md).content[1].code : tryrst(md, remove_decl)
 
-function split_decl_rst(md, decl)
+function split_decl_rst(md)
     if isrst(md)
         rst_text = flatten(md).content[1].code
         ls = split(rst_text, "\n")
@@ -158,14 +158,17 @@ function split_decl_rst(md, decl)
             end
             return decl, join(ls[body_start:end], "\n")
         end
-        return decl, rst_text
     else
         if isa(md.content[1], Markdown.Code) && md.content[1].language == ""
-            decl = ".. function:: " * replace(shift!(md.content).code, "\n",
+            sigs = shift!(md.content)
+            decl = ".. function:: " * replace(sigs.code, "\n",
                                               "\n              ")
+            body = Markdown.rst(md)
+            unshift!(md.content, sigs)
+            return decl, body
         end
-        return decl, Markdown.rst(md)
     end
+    return "", ""
 end
 
 # Disable by default since it is hard to eliminate false positives
@@ -239,17 +242,19 @@ function translate(file)
                     end
                 end
                 doc = nothing
+                decl = nothing
+                body = nothing
                 for mdoc in getdoc(mod, funcname)
-                    trst = tryrst(mdoc, false)
-                    trst !== nothing || continue
-                    if contains(replace(trst, r"[\n ][\n ]+", " "),
-                                " " * replace(full, r"[\n ][\n ]+", " "))
+                    mdecl, mbody = split_decl_rst(mdoc)
+                    if contains(replace(mdecl, r"[\n ][\n ]+", " "),
+                                replace(".. function:: " * full,
+                                        r"[\n ][\n ]+", " "))
                         if doc != nothing
                             error("duplicate $full $l")
                         end
                         doc = mdoc
-                    else
-                        #@show trst full
+                        decl = mdecl
+                        body = mbody
                     end
                 end
                 if doc == nothing || torst(doc, false) == nothing
@@ -262,7 +267,6 @@ function translate(file)
                 delete!(all_docs, doc)
                 doccing = true
                 start_func_doc(full)
-                decl, body = split_decl_rst(doc, l)
                 println(io, decl)
                 println(io)
                 println(io, "   .. Docstring generated from Julia source\n")

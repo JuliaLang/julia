@@ -30,7 +30,6 @@ let a=[1:10;]
     end
 end
 @test sum(randperm(6)) == 21
-@test nthperm([0,1,2],3) == [1,0,2]
 
 numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
             UInt8, UInt16, UInt32, UInt64, UInt128,

@@ -451,7 +451,7 @@ static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
 static value_t julia_to_scm_(jl_value_t *v)
 {
     if (jl_is_symbol(v))
-        return symbol(((jl_sym_t*)v)->name);
+        return symbol(jl_symbol_name((jl_sym_t*)v));
     if (jl_is_gensym(v)) {
         size_t idx = ((jl_gensym_t*)v)->id;
         size_t i;
@@ -800,6 +800,9 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
     }
     else if (jl_is_lambda_info(expr)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
+        /* TODO: restore the following optimization. it can reduce the number of anonymous functions in the compiler,
+              but it can cause an issue when Expr(:localize) clones variable types into the closure environment,
+              defeating the test below that this lambda doesn't have a closure environment (#13855)
         if (sp == jl_emptysvec && li->ast &&
             (jl_is_expr(li->ast) ? jl_array_len(jl_lam_capt((jl_expr_t*)li->ast)) == 0 : li->capt == NULL)) {
             // share the inner function if the outer function has no sparams to insert
@@ -813,7 +816,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
                     li->specTypes = jl_anytuple_type; // no gc_wb needed
             }
             return expr;
-        }
+        } */
         JL_GC_PUSH1(&li);
         li = jl_add_static_parameters(li, sp, li->specTypes);
         // inner lambda does not need the "def" link. it leads to excess object

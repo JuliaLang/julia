@@ -18,8 +18,8 @@ static int is_addr_on_stack(void *addr)
     return ((char*)addr > (char*)jl_stack_lo-3000000 &&
             (char*)addr < (char*)jl_stack_hi);
 #else
-    return ((char*)addr > (char*)jl_current_task->stack-8192 &&
-            (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
+    return ((char*)addr > (char*)jl_current_task->stkbuf &&
+            (char*)addr < (char*)jl_current_task->stkbuf + jl_current_task->ssize);
 #endif
 }
 

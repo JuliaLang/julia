@@ -34,10 +34,10 @@ end
 <(x::Float32, y::Irrational) = x <= Float32(y,RoundDown)
 <(x::Irrational, y::Float16) = Float32(x,RoundUp) <= y
 <(x::Float16, y::Irrational) = x <= Float32(y,RoundDown)
-<(x::Irrational, y::BigFloat) = with_bigfloat_precision(precision(y)+32) do
+<(x::Irrational, y::BigFloat) = setprecision(precision(y)+32) do
     big(x) < y
 end
-<(x::BigFloat, y::Irrational) = with_bigfloat_precision(precision(x)+32) do
+<(x::BigFloat, y::Irrational) = setprecision(precision(x)+32) do
     x < big(y)
 end
 

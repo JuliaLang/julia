@@ -68,3 +68,75 @@ end
     """%3 = add i32 %1, %0
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) == 3
+
+# Test whether declarations work properly
+# This test only work properly for llvm 3.5+
+# On llvm <3.5+ even though the the compilation fails on the first try,
+# llvm still adds the intrinsice declaration to the module and subsequent calls
+# are succesfull.
+if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
+
+function undeclared_ceil(x::Float64)
+    llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
+        ret double %2""", Float64, Tuple{Float64}, x)
+end
+@test_throws ErrorException undeclared_ceil(4.2)
+
+end
+
+function declared_floor(x::Float64)
+    llvmcall(
+        ("""declare double @llvm.floor.f64(double)""",
+         """%2 = call double @llvm.floor.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x)
+end
+@test_approx_eq declared_floor(4.2) 4.
+
+function doubly_declared_floor(x::Float64)
+    llvmcall(
+        ("""declare double @llvm.floor.f64(double)""",
+         """%2 = call double @llvm.floor.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x+1)-1
+end
+@test_approx_eq doubly_declared_floor(4.2) 4.
+
+function doubly_declared2_trunc(x::Float64)
+    a = llvmcall(
+        ("""declare double @llvm.trunc.f64(double)""",
+         """%2 = call double @llvm.trunc.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x)
+    b = llvmcall(
+        ("""declare double @llvm.trunc.f64(double)""",
+         """%2 = call double @llvm.trunc.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x+1)-1
+    a + b
+end
+@test_approx_eq doubly_declared2_trunc(4.2) 8.
+
+# Test for single line
+function declared_ceil(x::Float64)
+    llvmcall(
+        ("declare double @llvm.ceil.f64(double)",
+         """%2 = call double @llvm.ceil.f64(double %0)
+            ret double %2"""),
+    Float64, Tuple{Float64}, x)
+end
+
+@test_approx_eq declared_ceil(4.2) 5.0
+
+# Test for multiple lines
+function ceilfloor(x::Float64)
+    llvmcall(
+        ("""declare double @llvm.ceil.f64(double)
+            declare double @llvm.floor.f64(double)""",
+         """%2 = call double @llvm.ceil.f64(double %0)
+            %3 = call double @llvm.floor.f64(double %2)
+            ret double %3"""),
+    Float64, Tuple{Float64}, x)
+end
+
+@test_approx_eq ceilfloor(7.4) 8.0

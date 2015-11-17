@@ -503,9 +503,12 @@ keywords[:ccall] = doc"""
 
 keywords[:llvmcall] = doc"""
       llvmcall(IR::String, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+      llvmcall((declarations::String, IR::String), ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
   Call LLVM IR string in the first argument. Similar to an LLVM function `define`
   block, arguments are available as consecutive unnamed SSA variables (%0, %1, etc.).
+
+  The optional declarations string contains external functions declarations that are necessary for llvm to compile the IR string. Multiple declarations can be passed in by separating them with line breaks.
 
   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 

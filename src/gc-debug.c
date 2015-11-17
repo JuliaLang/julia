@@ -222,7 +222,7 @@ static void gc_verify_track(void)
             if (lostval_parent != NULL) break;
         }
         if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
-            lostval = arraylist_pop(&lostval_parents);
+            lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
         }
         else {
             jl_printf(JL_STDERR, "Missing write barrier found !\n");
@@ -285,15 +285,19 @@ typedef struct {
     uint64_t max;
 } jl_alloc_num_t;
 
-DLLEXPORT struct {
+typedef struct {
     int sweep_mask;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
     jl_alloc_num_t print;
-} gc_debug_env = {GC_MARKED_NOESC,
-                  {0, 0, 0, 0},
-                  {0, 0, 0, 0},
-                  {0, 0, 0, 0}};
+} jl_gc_debug_env_t;
+
+DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
+    GC_MARKED_NOESC,
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+};
 
 static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
 {
@@ -318,32 +322,32 @@ static int gc_debug_alloc_check(jl_alloc_num_t *num)
 }
 
 static char *gc_stack_lo;
-static void gc_debug_init()
+static void gc_debug_init(void)
 {
     gc_stack_lo = (char*)gc_get_stack_ptr();
     char *env = getenv("JL_GC_NO_GENERATIONAL");
     if (env && strcmp(env, "0") != 0) {
-        gc_debug_env.sweep_mask = GC_MARKED;
+        jl_gc_debug_env.sweep_mask = GC_MARKED;
     }
-    gc_debug_alloc_init(&gc_debug_env.pool, "POOL");
-    gc_debug_alloc_init(&gc_debug_env.other, "OTHER");
-    gc_debug_alloc_init(&gc_debug_env.print, "PRINT");
+    gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
+    gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
+    gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
 }
 
-static inline int gc_debug_check_pool()
+static inline int gc_debug_check_pool(void)
 {
-    return gc_debug_alloc_check(&gc_debug_env.pool);
+    return gc_debug_alloc_check(&jl_gc_debug_env.pool);
 }
 
-static inline int gc_debug_check_other()
+static inline int gc_debug_check_other(void)
 {
-    return gc_debug_alloc_check(&gc_debug_env.other);
+    return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void gc_debug_print_status()
+void gc_debug_print_status(void)
 {
-    uint64_t pool_count = gc_debug_env.pool.num;
-    uint64_t other_count = gc_debug_env.other.num;
+    uint64_t pool_count = jl_gc_debug_env.pool.num;
+    uint64_t other_count = jl_gc_debug_env.other.num;
     jl_printf(JL_STDOUT,
               "Allocations: %" PRIu64 " "
               "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
@@ -351,9 +355,9 @@ void gc_debug_print_status()
               n_pause);
 }
 
-static inline void gc_debug_print()
+static inline void gc_debug_print(void)
 {
-    if (!gc_debug_alloc_check(&gc_debug_env.print))
+    if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
     gc_debug_print_status();
 }
@@ -391,21 +395,21 @@ static void gc_scrub(char *stack_hi)
 
 #else
 
-static inline int gc_debug_check_other()
+static inline int gc_debug_check_other(void)
 {
     return 0;
 }
 
-static inline int gc_debug_check_pool()
+static inline int gc_debug_check_pool(void)
 {
     return 0;
 }
 
-static inline void gc_debug_print()
+static inline void gc_debug_print(void)
 {
 }
 
-static inline void gc_debug_init()
+static inline void gc_debug_init(void)
 {
 }
 

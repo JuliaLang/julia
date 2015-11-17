@@ -477,9 +477,6 @@
               <string>gensym</string>
               <string>get</string>
               <string>get!</string>
-              <string>get_bigfloat_precision</string>
-              <string>get_bigfloat_rounding</string>
-              <string>get_rounding</string>
               <string>getaddrinfo</string>
               <string>gethostname</string>
               <string>getindex</string>
@@ -901,6 +898,7 @@
               <string>rotl90</string>
               <string>rotr90</string>
               <string>round</string>
+              <string>rounding</string>
               <string>rpad</string>
               <string>rref</string>
               <string>rsearch</string>
@@ -930,14 +928,13 @@
               <string>select!</string>
               <string>send</string>
               <string>serialize</string>
-              <string>set_bigfloat_precision</string>
-              <string>set_bigfloat_rounding</string>
-              <string>set_rounding</string>
               <string>setdiff</string>
               <string>setdiff!</string>
               <string>setenv</string>
               <string>setfield</string>
               <string>setindex!</string>
+              <string>setprecision</string>
+              <string>setrounding</string>
               <string>shift!</string>
               <string>show</string>
               <string>showall</string>
@@ -1103,9 +1100,6 @@
               <string>whos</string>
               <string>widemul</string>
               <string>widen</string>
-              <string>with_bigfloat_precision</string>
-              <string>with_bigfloat_rounding</string>
-              <string>with_rounding</string>
               <string>workers</string>
               <string>workspace</string>
               <string>write</string>

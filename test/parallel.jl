@@ -3,9 +3,17 @@
 # Run the parallel test outside of the main driver, since it runs off its own
 # set of workers.
 
-cmd = `$(Base.julia_cmd()) --check-bounds=yes --depwarn=error parallel_exec.jl`
+inline_flag = Base.JLOptions().can_inline == 1 ? "" : "--inline=no"
+cov_flag = ""
+if Base.JLOptions().code_coverage == 1
+    cov_flag = "--code-coverage=user"
+elseif Base.JLOptions().code_coverage == 2
+    cov_flag = "--code-coverage=all"
+end
 
-(strm, proc) = open(cmd)
+cmd = `$(Base.julia_cmd()) $inline_flag $cov_flag --check-bounds=yes --depwarn=error parallel_exec.jl`
+
+(strm, proc) = open(pipeline(cmd, stderr=STDERR))
 cmdout = readall(strm)
 wait(proc)
 println(cmdout);

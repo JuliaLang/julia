@@ -233,18 +233,12 @@ macro ip_str(str)
     return parseip(str)
 end
 
-type InetAddr
-    host::IPAddr
+immutable InetAddr{T<:IPAddr}
+    host::T
     port::UInt16
-
-    function InetAddr(host, port::Integer)
-        if !(0 <= port <= typemax(UInt16))
-            throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
-        end
-        new(host,UInt16(port))
-    end
 end
 
+InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
@@ -726,7 +720,7 @@ function listenany(default_port)
             return (addr.port,sock)
         end
         close(sock)
-        addr.port += 1
+        addr = InetAddr(addr.host, addr.port + 1)
         if addr.port==default_port
             error("no ports available")
         end

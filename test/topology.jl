@@ -40,8 +40,8 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exeflags = params[:exeflags]
 
     for i in 1:manager.np
-        io, pobj = open(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker`, dir=dir)), "r")
+        io, pobj = open(pipeline(detach(
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker`, dir=dir)); stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io

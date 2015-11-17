@@ -18,7 +18,7 @@ extern "C" {
 static int c_locale_initialized = 0;
 static locale_t c_locale;
 
-locale_t get_c_locale()
+locale_t get_c_locale(void)
 {
   if(!c_locale_initialized)
   {

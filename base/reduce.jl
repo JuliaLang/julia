@@ -393,16 +393,8 @@ end
 
 function count(pred, itr)
     n = 0
-    for x in itr
-        pred(x) && (n += 1)
-    end
-    return n
-end
-
-function count(pred, A::AbstractArray)
-    n = 0
-    @inbounds for a in A
-        pred(a) && (n += 1)
+    @inbounds for x in itr
+        n += pred(x)
     end
     return n
 end
