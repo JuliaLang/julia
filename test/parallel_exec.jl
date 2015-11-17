@@ -2,7 +2,14 @@
 
 using Base.Test
 
-addprocs(3; exeflags=`--check-bounds=yes --depwarn=error`)
+inline_flag = Base.JLOptions().can_inline == 1 ? "" : "--inline=no"
+cov_flag = ""
+if Base.JLOptions().code_coverage == 1
+    cov_flag = "--code-coverage=user"
+elseif Base.JLOptions().code_coverage == 2
+    cov_flag = "--code-coverage=all"
+end
+addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
