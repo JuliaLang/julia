@@ -64,7 +64,7 @@ cd(f::Function) = cd(f, homedir())
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
-    systemerror(:mkdir, ret != 0)
+    systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
 function mkpath(path::AbstractString, mode::Unsigned=0o777)

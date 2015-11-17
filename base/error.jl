@@ -31,7 +31,7 @@ kwerr(kw) = error("unrecognized keyword argument \"", kw, "\"")
 
 ## system error handling ##
 
-systemerror(p, b::Bool) = b ? throw(Main.Base.SystemError(string(p))) : nothing
+systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
 ## assertion functions and macros ##
 
