@@ -66,6 +66,7 @@ end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
 
