@@ -348,15 +348,18 @@ end
 
 function serialize(s::SerializationState, t::Task)
     serialize_cycle(s, t) && return
-    if !istaskdone(t)
+    if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
+    state = [t.code,
+        t.storage,
+        t.state == :queued || t.state == :runnable ? (:runnable) : t.state,
+        t.result,
+        t.exception]
     writetag(s.io, TASK_TAG)
-    serialize(s, t.code)
-    serialize(s, t.storage)
-    serialize(s, t.state == :queued || t.state == :runnable ? (:runnable) : t.state)
-    serialize(s, t.result)
-    serialize(s, t.exception)
+    for fld in state
+        serialize(s, fld)
+    end
 end
 
 function serialize_type_data(s, t)

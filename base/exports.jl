@@ -1011,6 +1011,7 @@ export
     consume,
     current_task,
     istaskdone,
+    istaskstarted,
     lock,
     notify,
     produce,
