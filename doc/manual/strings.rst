@@ -935,7 +935,7 @@ would only run with stable ``0.2`` versions, and exclude such versions as
 ``0.2`` versions, the lower bound check should be modified like this: ``v"0.2-"
 <= VERSION``.
 
-Another non-standard version specification extension allows to use a trailing
+Another non-standard version specification extension allows one to use a trailing
 ``+`` to express an upper limit on build versions, e.g.  ``VERSION >
 "v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
 builds: it will return ``false`` for version ``v"0.2-rc1+win64"`` and ``true``
