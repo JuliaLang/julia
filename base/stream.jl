@@ -1017,8 +1017,8 @@ type UVError <: Exception
     UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 
-struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{UInt8},(Int32,),err.code))
-uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Ptr{UInt8},(Int32,),err.code))
+struverror(err::UVError) = bytestring(ccall(:uv_strerror,Cstring,(Int32,),err.code))
+uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Cstring,(Int32,),err.code))
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
 uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing

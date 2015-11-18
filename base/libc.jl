@@ -121,7 +121,7 @@ end
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Ptr{UInt8}, (Cstring, Cstring, Ptr{TmStruct}),
+    r = ccall(:strptime, Cstring, (Cstring, Cstring, Ptr{TmStruct}),
               timestr, fmt, &tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be
@@ -163,7 +163,7 @@ end
 
 errno() = ccall(:jl_errno, Cint, ())
 errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
-strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
+strerror(e::Integer) = bytestring(ccall(:strerror, Cstring, (Int32,), e))
 strerror() = strerror(errno())
 
 @windows_only begin

@@ -134,7 +134,7 @@ function serialize(s::SerializationState, x::Symbol)
         return write_as_tag(s.io, tag)
     end
     pname = unsafe_convert(Ptr{UInt8}, x)
-    ln = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
+    ln = Int(ccall(:strlen, Csize_t, (Cstring,), pname))
     if ln <= 255
         writetag(s.io, SYMBOL_TAG)
         write(s.io, UInt8(ln))

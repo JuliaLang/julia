@@ -57,7 +57,7 @@ function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
     ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
 end
 pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
-    pointer_to_string(p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
+    pointer_to_string(p, ccall(:strlen, Csize_t, (Cstring,), p), own)
 
 # convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)

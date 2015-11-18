@@ -101,16 +101,16 @@ alignment_of(A::FakeArray) = Int32(0)
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Cstring,Ptr{UInt8}), fname, "w")
+    f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :w)
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
-    ccall(:fputs, Int32, (Ptr{UInt8},Ptr{Void}), " "^256, f)
+    ccall(:fputs, Int32, (Ptr{UInt8},Ptr{Void}), " "^256, f) # no NUL, hence no Cstring
     ccall((:fftwf_export_wisdom_to_file,libfftwf), Void, (Ptr{Void},), f)
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
 function import_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Cstring,Ptr{UInt8}), fname, "r")
+    f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :r)
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
        ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0

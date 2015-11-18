@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 @unix_only begin
-    _getenv(var::AbstractString) = ccall(:getenv, Ptr{UInt8}, (Cstring,), var)
+    _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
     _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 end
 
