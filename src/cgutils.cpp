@@ -190,7 +190,7 @@ public:
         Function::arg_iterator DestI = NewF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
             DestI->setName(I->getName());    // Copy the name over...
-            VMap[I] = DestI++;        // Add mapping to VMap
+            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
         }
 
     #ifdef LLVM36

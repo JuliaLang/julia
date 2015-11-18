@@ -749,7 +749,7 @@ static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 static AllocaInst *emit_static_alloca(Type *lty)
 {
     return new AllocaInst(lty, "",
-            /*InsertBefore=*/builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
+            /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
 }
 
 static inline jl_cgval_t ghostValue(jl_value_t *typ)
@@ -1382,7 +1382,7 @@ Function* CloneFunctionToModule(Function *F, Module *destModule)
     Function::arg_iterator DestI = NewF->arg_begin();
     for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
         DestI->setName(I->getName());    // Copy the name over...
-        VMap[I] = DestI++;        // Add mapping to VMap
+        VMap[&*I] = &*DestI++;        // Add mapping to VMap
     }
 
     SmallVector<ReturnInst*, 8> Returns;
@@ -1417,7 +1417,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
                 BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
                 // iterate over instructions in basic block
                 for (; f2_il != (*f2_bb).getInstList().end(); ) {
-                    Instruction *inst = f2_il++;
+                    Instruction *inst = &*f2_il++;
                     // remove dbg.declare and dbg.value calls
                     if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
                         inst->eraseFromParent();
@@ -3423,7 +3423,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             && !vi.isArgument && !is_stable_expr(r, ctx)) {
         Instruction *newroot = cast<Instruction>(emit_local_slot(ctx->gc.argSpaceSize++, ctx));
         newroot->removeFromParent(); // move it to the gc frame basic block so it can be reused as needed
-        newroot->insertAfter(ctx->gc.last_gcframe_inst);
+        newroot->insertAfter(&*ctx->gc.last_gcframe_inst);
         vi.memloc = newroot;
         vi.hasGCRoot = true; // this has been discovered to need a gc root, add it now
         //TODO: move this logic after the emit_expr
@@ -3969,7 +3969,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     }
     BasicBlock::iterator bbi(gc->gcframe);
     AllocaInst *newgcframe = gc->gcframe;
-    builder.SetInsertPoint(++gc->last_gcframe_inst); // set insert *before* point, e.g. after the gcframe
+    builder.SetInsertPoint(&*++gc->last_gcframe_inst); // set insert *before* point, e.g. after the gcframe
     // Allocate the real GC frame
     // n_frames++;
     newgcframe->setOperand(0, ConstantInt::get(T_int32, 2 + gc->argSpaceSize + gc->maxDepth)); // fix up the size of the gc frame
@@ -4114,7 +4114,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = NULL;
     if (sret)
-        sretPtr = AI++;
+        sretPtr = &*AI++;
 
     Value *result;
     size_t FParamIndex = 0;
@@ -4128,7 +4128,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     }
 
     for (size_t i = 0; i < nargs; i++) {
-        Value *val = AI++;
+        Value *val = &*AI++;
         jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed, argboxed;
         Type *t = julia_type_to_llvm(jargty, &isboxed);
@@ -4308,7 +4308,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 #endif
     Function::arg_iterator AI = w->arg_begin();
     /* const Argument &fArg = */ *AI++;
-    Value *argArray = AI++;
+    Value *argArray = &*AI++;
     /* const Argument &argCount = *AI++; */
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", w);
 
@@ -4726,10 +4726,17 @@ static Function *emit_function(jl_lambda_info_t *lam)
                                     0,            // ScopeLine
                                     0,            // Flags
                                     true,         // isOptimized
-                                    f);           // Fn
+        #ifdef LLVM38
+                                    nullptr);       // Template Parameters
+        #else
+                                    f);             // Function
+        #endif
         // set initial line number
         inlineLoc = DebugLoc::get(lno, 0, (MDNode*)SP, NULL);
         builder.SetCurrentDebugLocation(inlineLoc);
+        #ifdef LLVM38
+        f->setSubprogram(SP);
+        #endif
         #ifndef LLVM37
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
         #endif
@@ -4842,9 +4849,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
-        fArg = AI++;
-        argArray = AI++;
-        argCount = AI++;
+        fArg = &*AI++;
+        argArray = &*AI++;
+        argCount = &*AI++;
         ctx.argArray = argArray;
         ctx.argCount = argCount;
 
@@ -5054,9 +5061,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 if (type_is_ghost(llvmArgType)) // this argument is not actually passed
                     theArg = ghostValue(argType);
                 else if (llvmArgType->isAggregateType())
-                    theArg = mark_julia_slot(AI++, argType); // this argument is by-pointer
+                    theArg = mark_julia_slot(&*AI++, argType); // this argument is by-pointer
                 else
-                    theArg = mark_julia_type(AI++, isboxed, argType);
+                    theArg = mark_julia_type(&*AI++, isboxed, argType);
             }
             else {
                 Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i));
@@ -5293,7 +5300,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
             if (ctx.sret)
-                builder.CreateStore(retval, ctx.f->arg_begin());
+                builder.CreateStore(retval, &*ctx.f->arg_begin());
             if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
             else
