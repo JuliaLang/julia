@@ -3234,7 +3234,7 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
     jl_sym_type->struct_decl = NULL;
-    jl_sym_type->ditype = NULL; 
+    jl_sym_type->ditype = NULL;
     jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
     jl_sym_type->pointerfree = 0;
