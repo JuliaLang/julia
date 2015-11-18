@@ -190,7 +190,7 @@ public:
         Function::arg_iterator DestI = NewF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
             DestI->setName(I->getName());    // Copy the name over...
-            VMap[I] = DestI++;        // Add mapping to VMap
+            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
         }
 
     #ifdef LLVM36
@@ -1205,7 +1205,7 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
 // --- loading and storing ---
 
 static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx) {
-    return new AllocaInst(lty, "", /*InsertBefore=*/ctx->gc.gcframe);
+    return new AllocaInst(lty, "", /*InsertBefore=*/&*ctx->gc.gcframe);
 }
 
 static Value *emit_reg2mem(Value *v, jl_codectx_t *ctx) {
