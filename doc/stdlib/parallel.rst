@@ -268,7 +268,39 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteRef``\ .
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ .
+
+.. function:: Future()
+
+   .. Docstring generated from Julia source
+
+   Create a ``Future`` on the local machine.
+
+.. function:: Future(n)
+
+   .. Docstring generated from Julia source
+
+   Create a ``Future`` on process ``n``\ .
+
+.. function:: RemoteChannel()
+
+   .. Docstring generated from Julia source
+
+   Make an reference to a ``Channel{Any}(1)`` on the local machine.
+
+.. function:: RemoteChannel(n)
+
+   .. Docstring generated from Julia source
+
+   Make an reference to a ``Channel{Any}(1)`` on process ``n``\ .
+
+.. function:: RemoteChannel(f::Function, pid)
+
+   .. Docstring generated from Julia source
+
+   Create references to remote channels of a specific size and type. ``f()`` is a function that when executed on ``pid`` must return an implementation of an ``AbstractChannel``\ .
+
+   For example, ``RemoteChannel(()->Channel{Int}(10), pid)``\ , will return a reference to a channel of type ``Int`` and size 10 on ``pid``\ .
 
 .. function:: wait([x])
 
@@ -276,14 +308,15 @@ General Parallel Computing Support
 
    Block the current task until some event occurs, depending on the type of the argument:
 
-   * ``RemoteRef``\ : Wait for a value to become available for the specified remote reference.
+   * ``RemoteChannel`` : Wait for a value to become available on the specified remote channel.
+   * ``Future`` : Wait for a value to become available for the specified future.
    * ``Channel``\ : Wait for a value to be appended to the channel.
    * ``Condition``\ : Wait for ``notify`` on a condition.
    * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
    * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
    * ``RawFD``\ : Wait for changes on a file descriptor (see ``poll_fd`` for keyword arguments and return code)
 
-   If no argument is passed, the task blocks for an undefined period. If the task's state is set to ``:waiting``\ , it can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ . If the task's state is ``:runnable``\ , it might be restarted unpredictably.
+   If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ .
 
    Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition is met before proceeding.
 
@@ -293,7 +326,8 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``\ . Does not remove the item fetched:
 
-   * ``RemoteRef``\ : Wait for and get the value of a remote reference. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
+   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
+   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
 .. function:: remotecall_wait(func, id, args...)
@@ -308,11 +342,17 @@ General Parallel Computing Support
 
    Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
-.. function:: put!(RemoteRef, value)
+.. function:: put!(RemoteChannel, value)
 
    .. Docstring generated from Julia source
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``\ . Returns its first argument.
+   Store a value to the remote channel. If the channel is full, blocks until space is available. Returns its first argument.
+
+.. function:: put!(Future, value)
+
+   .. Docstring generated from Julia source
+
+   Store a value to a future. Future's are write-once remote references. A ``put!`` on an already set ``Future`` throws an Exception. All asynchronous remote calls return ``Future``\ s and set the value to the return value of the call upon completion.
 
 .. function:: put!(Channel, value)
 
@@ -320,11 +360,11 @@ General Parallel Computing Support
 
    Appends an item to the channel. Blocks if the channel is full.
 
-.. function:: take!(RemoteRef)
+.. function:: take!(RemoteChannel)
 
    .. Docstring generated from Julia source
 
-   Fetch the value of a remote reference, removing it so that the reference is empty again.
+   Fetch a value from a remote channel, also removing it in the processs.
 
 .. function:: take!(Channel)
 
@@ -332,19 +372,25 @@ General Parallel Computing Support
 
    Removes and returns a value from a ``Channel``\ . Blocks till data is available.
 
-.. function:: isready(r::RemoteRef)
+.. function:: isready(r::RemoteChannel)
 
    .. Docstring generated from Julia source
 
-   Determine whether a ``RemoteRef`` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. It is recommended that this function only be used on a ``RemoteRef`` that is assigned once.
+   Determine whether a ``RemoteChannel`` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. However, it can be safely used on a ``Future`` since they are assigned only once.
 
-   If the argument ``RemoteRef`` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for ``r`` in a separate task instead, or to use a local ``RemoteRef`` as a proxy:
+.. function:: isready(r::Future)
+
+   .. Docstring generated from Julia source
+
+   Determine whether a ``Future`` has a value stored to it.
+
+   If the argument ``Future`` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for ``r`` in a separate task instead, or to use a local ``Channel`` as a proxy:
 
    .. code-block:: julia
 
-       rr = RemoteRef()
-       @async put!(rr, remotecall_fetch(long_computation, p))
-       isready(rr)  # will not block
+       c = Channel(1)
+       @async put!(c, remotecall_fetch(long_computation, p))
+       isready(c)  # will not block
 
 .. function:: close(Channel)
 
@@ -354,18 +400,6 @@ General Parallel Computing Support
 
    * ``put!`` on a closed channel.
    * ``take!`` and ``fetch`` on an empty, closed channel.
-
-.. function:: RemoteRef()
-
-   .. Docstring generated from Julia source
-
-   Make an uninitialized remote reference on the local machine.
-
-.. function:: RemoteRef(n)
-
-   .. Docstring generated from Julia source
-
-   Make an uninitialized remote reference on process ``n``\ .
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
@@ -377,13 +411,13 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Creates a closure around an expression and runs it on an automatically-chosen process, returning a ``RemoteRef`` to the result.
+   Creates a closure around an expression and runs it on an automatically-chosen process, returning a ``Future`` to the result.
 
 .. function:: @spawnat
 
    .. Docstring generated from Julia source
 
-   Accepts two arguments, ``p`` and an expression. A closure is created around the expression and run asynchronously on process ``p``\ . Returns a ``RemoteRef`` to the result.
+   Accepts two arguments, ``p`` and an expression. A closure is created around the expression and run asynchronously on process ``p``\ . Returns a ``Future`` to the result.
 
 .. function:: @fetch
 
