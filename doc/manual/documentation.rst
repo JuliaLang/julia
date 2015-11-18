@@ -70,7 +70,7 @@ example:
     arguments, i.e. `*(x,y,z...)`.
     """
     function *(x, y)
-      # ... [implementation sold seperately] ...
+      # ... [implementation sold separately] ...
     end
 
     "When applied to strings, concatenates them."
