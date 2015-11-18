@@ -27,8 +27,10 @@ function mkcachedir()
         if !isdir(rootcache)
             mkdir(rootcache)
         end
-        symlink(rootcache, cache)
-        return
+        try
+            symlink(rootcache, cache)
+            return
+        end
     end
     mkdir(cache)
 end
