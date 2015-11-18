@@ -22,14 +22,16 @@ end
 
 cd(dirname(@__FILE__)) do
 
-# @test !isempty(Libdl.find_library(["libccalltest"], [dirname(@__FILE__)]))
-
 # Find the private library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
-if ccall(:jl_is_debugbuild, Cint, ()) != 0
-    private_libdir = dirname(abspath(Libdl.dlpath("libjulia-debug")))
+private_libdir = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    dirname(abspath(Libdl.dlpath("libjulia-debug")))
 else
-    private_libdir = dirname(abspath(Libdl.dlpath("libjulia")))
+    dirname(abspath(Libdl.dlpath("libjulia")))
 end
+
+@test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
+@test !isempty(Libdl.find_library("libccalltest", [private_libdir]))
+@test !isempty(Libdl.find_library(:libccalltest, [private_libdir]))
 
 # dlopen should be able to handle absolute and relative paths, with and without dlext
 let dl = C_NULL
