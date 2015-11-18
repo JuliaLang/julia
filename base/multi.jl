@@ -439,7 +439,7 @@ function deregister_worker(pg, pid)
     end
     push!(map_del_wrkr, pid)
 
-    # delete this worker from our RemoteRef client sets
+    # delete this worker from our remote reference client sets
     ids = []
     tonotify = []
     for (id,rv) in pg.refs
@@ -462,25 +462,50 @@ function deregister_worker(pg, pid)
 end
 
 ## remote refs ##
-
 const client_refs = WeakKeyDict()
 
-type RemoteRef{T<:AbstractChannel}
+abstract AbstractRemoteRef
+
+type Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    # TODO: cache value if it's fetched, but don't serialize the cached value
+    v::Nullable{Any}
 
-    function RemoteRef(w, wh, id)
-        r = new(w,wh,id)
-        found = getkey(client_refs, r, false)
-        if !is(found,false)
-            return found
+    Future(w, wh, id) = Future(w, wh, id, Nullable{Any}())
+    Future(w, wh, id, v) = (r = new(w,wh,id,v); test_existing_ref(r))
+end
+finalize_future(f::Future) = (isnull(f.v) && send_del_client(f))
+
+type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
+    where::Int
+    whence::Int
+    id::Int
+
+    RemoteChannel(w, wh, id) = (r = new(w,wh,id); test_existing_ref(r))
+end
+
+function test_existing_ref(r::Future)
+    found = getkey(client_refs, r, false)
+    if !is(found,false)
+        if isnull(found.v) && !isnull(r.v)
+            # we have recd the value from another source, probably a deserialized ref, send a del_client message
+            send_del_client(r)
+            found.v = r.v
         end
-        client_refs[r] = true
-        finalizer(r, send_del_client)
-        r
+        return found
     end
+    client_refs[r] = true
+    finalizer(r, finalize_future)
+    r
+end
+
+function test_existing_ref(r::RemoteChannel)
+    found = getkey(client_refs, r, false)
+    !is(found,false) && return found
+    client_refs[r] = true
+    finalizer(r, send_del_client)
+    r
 end
 
 let REF_ID::Int = 1
@@ -491,53 +516,77 @@ let REF_ID::Int = 1
     next_rrid_tuple() = (myid(),next_ref_id())
 end
 
-RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-RemoteRef(w::Worker) = RemoteRef(w.id)
-function RemoteRef(pid::Integer=myid())
+Future(w::LocalProcess) = Future(w.id)
+Future(w::Worker) = Future(w.id)
+function Future(pid::Integer=myid())
     rrid = next_rrid_tuple()
-    RemoteRef{Channel{Any}}(pid, rrid[1], rrid[2])
+    Future(pid, rrid[1], rrid[2])
 end
 
-function RemoteRef(f::Function, pid::Integer=myid())
+function RemoteChannel(pid::Integer=myid())
+    rrid = next_rrid_tuple()
+    RemoteChannel{Channel{Any}}(pid, rrid[1], rrid[2])
+end
+function RemoteChannel(f::Function, pid::Integer=myid())
     remotecall_fetch(pid, f, next_rrid_tuple()) do f, rrid
         rv=lookup_ref(rrid, f)
-        RemoteRef{typeof(rv.c)}(myid(), rrid[1], rrid[2])
+        RemoteChannel{typeof(rv.c)}(myid(), rrid[1], rrid[2])
     end
 end
 
-hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+remoteref_id(r::AbstractRemoteRef) = (r.whence, r.id)
+function channel_from_id(id)
+    rv = get(PGRP.refs, id, false)
+    if rv === false
+        throw(ErrorException("Local instance of remote reference not found"))
+    end
+    rv.c
+end
 
 lookup_ref(id, f=def_rv_channel) = lookup_ref(PGRP, id, f)
 function lookup_ref(pg, id, f)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue(f)
+        rv = RemoteValue(f())
         pg.refs[id] = rv
         push!(rv.clientset, id[1])
     end
     rv
 end
+function isready(rr::Future)
+    !isnull(rr.v) && return true
 
-function isready(rr::RemoteRef, args...)
-    rid = rr2id(rr)
+    rid = remoteref_id(rr)
+    if rr.where == myid()
+        isready(lookup_ref(rid).c)
+    else
+        remotecall_fetch(rid->isready(lookup_ref(rid).c), rr.where, rid)
+    end
+end
+
+function isready(rr::RemoteChannel, args...)
+    rid = remoteref_id(rr)
     if rr.where == myid()
         isready(lookup_ref(rid).c, args...)
     else
-        remotecall_fetch(id->isready(lookup_ref(rid).c, args...), rr.where, rid)
+        remotecall_fetch(rid->isready(lookup_ref(rid).c, args...), rr.where, rid)
     end
 end
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
-    rv = lookup_ref(id)
-    delete!(rv.clientset, client)
-    if isempty(rv.clientset)
-        delete!(pg.refs, id)
-        #print("$(myid()) collected $id\n")
+    rv = get(pg.refs, id, false)
+
+    if rv != false
+        delete!(rv.clientset, client)
+        if isempty(rv.clientset)
+            delete!(pg.refs, id)
+            #print("$(myid()) collected $id\n")
+        end
     end
     nothing
 end
@@ -556,16 +605,16 @@ function start_gc_msgs_task()
     end
 end
 
-function send_del_client(rr::RemoteRef)
+function send_del_client(rr)
     if rr.where == myid()
-        del_client(rr2id(rr), myid())
+        del_client(remoteref_id(rr), myid())
     else
         if in(rr.where, map_del_wrkr)
             # for a removed worker, don't bother
             return
         end
         w = worker_from_id(rr.where)
-        push!(w.del_msgs, (rr2id(rr), myid()))
+        push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
         notify(any_gc_flag)
     end
@@ -580,54 +629,69 @@ end
 
 function add_clients(pairs::Vector)
     for p in pairs
-        add_client(p[1], p[2])
+        add_client(p[1], p[2]...)
     end
 end
 
-function send_add_client(rr::RemoteRef, i)
+function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
-        add_client(rr2id(rr), i)
+        add_client(remoteref_id(rr), i)
     elseif i != rr.where
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
-        push!(w.add_msgs, (rr2id(rr), i))
+        #println("$(myid()) adding $((remoteref_id(rr), i)) for $(rr.where)")
+        push!(w.add_msgs, (remoteref_id(rr), i))
         w.gcflag = true
         notify(any_gc_flag)
     end
 end
 
-channel_type{T}(rr::RemoteRef{T}) = T
-function serialize(s::SerializationState, rr::RemoteRef)
-    i = worker_id_from_socket(s.io)
-    #println("$(myid()) serializing $rr to $i")
-    if i != -1
-        #println("send add $rr to $i")
-        send_add_client(rr, i)
+channel_type{T}(rr::RemoteChannel{T}) = T
+
+serialize(s::SerializationState, f::Future) = serialize(s, f, isnull(f.v))
+serialize(s::SerializationState, rr::RemoteChannel) = serialize(s, rr, true)
+function serialize(s::SerializationState, rr::AbstractRemoteRef, addclient)
+    if addclient
+        p = worker_id_from_socket(s.io)
+        (p !== rr.where) && send_add_client(rr, p)
     end
     invoke(serialize, Tuple{SerializationState, Any}, s, rr)
 end
 
-function deserialize{T<:RemoteRef}(s::SerializationState, t::Type{T})
-    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
-    where = rr.where
-    if where == myid()
-        add_client(rr2id(rr), myid())
-    end
-    # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef{channel_type(rr)}(where, rr.whence, rr.id)
+function deserialize{T<:Future}(s::SerializationState, t::Type{T})
+    f = deserialize_rr(s,t)
+    Future(f.where, f.whence, f.id) # ctor adds to ref table
 end
 
-# data stored by the owner of a RemoteRef
+function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
+    rr = deserialize_rr(s,t)
+    # call ctor to make sure this rr gets added to the client_refs table
+    RemoteChannel{channel_type(rr)}(rr.where, rr.whence, rr.id)
+end
+
+function deserialize_rr(s, t)
+    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
+    if rr.where == myid()
+        # send_add_client() is not executed when the ref is being
+        # serialized to where it exists
+        add_client(remoteref_id(rr), myid())
+    end
+    rr
+end
+
+# data stored by the owner of a remote reference
 def_rv_channel() = Channel(1)
 type RemoteValue
     c::AbstractChannel
-    clientset::IntSet
+    clientset::IntSet # Set of workerids that have a reference to this channel.
+                      # Keeping ids instead of a count aids in cleaning up upon
+                      # a worker exit.
+
     waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue(f::Function) = new(f(), IntSet(), 0)
+    RemoteValue(c) = new(c, IntSet(), 0)
 end
 
 wait(rv::RemoteValue) = wait(rv.c)
@@ -662,7 +726,7 @@ function run_work_thunk(rv::RemoteValue, thunk)
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue(def_rv_channel)
+    rv = RemoteValue(def_rv_channel())
     (PGRP::ProcessGroup).refs[rid] = rv
     push!(rv.clientset, rid[1])
     schedule(@task(run_work_thunk(rv,thunk)))
@@ -671,7 +735,7 @@ end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-#function localize_ref(r::RemoteRef)
+#function localize_ref(r::RemoteChannel)
 #    if r.where == myid()
 #        fetch(r)
 #    else
@@ -705,15 +769,15 @@ function local_remotecall_thunk(f, args)
 end
 
 function remotecall(f, w::LocalProcess, args...)
-    rr = RemoteRef(w)
-    schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
+    rr = Future(w)
+    schedule_call(remoteref_id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
 function remotecall(f, w::Worker, args...)
-    rr = RemoteRef(w)
+    rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, CallMsg{:call}(f, args, rr2id(rr)))
+    send_msg(w, CallMsg{:call}(f, args, remoteref_id(rr)))
     rr
 end
 
@@ -747,8 +811,8 @@ function remotecall_wait(f, w::Worker, args...)
     prid = next_rrid_tuple()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
-    rr = RemoteRef(w)
-    send_msg(w, CallWaitMsg(f, args, rr2id(rr), prid))
+    rr = Future(w)
+    send_msg(w, CallWaitMsg(f, args, remoteref_id(rr), prid))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
     isa(v, RemoteException) && throw(v)
@@ -775,8 +839,8 @@ end
 remote_do(f, id::Integer, args...) = remote_do(f, worker_from_id(id), args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
-    rid = rr2id(rr)
+function call_on_owner(f, rr::AbstractRemoteRef, args...)
+    rid = remoteref_id(rr)
     if rr.where == myid()
         f(rid, args...)
     else
@@ -795,16 +859,48 @@ function wait_ref(rid, callee, args...)
     end
     nothing
 end
-wait(r::RemoteRef, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
+wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid()); r)
+wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
+
+function fetch_future(rid, callee)
+    rv = lookup_ref(rid);
+    v = fetch(rv.c)
+    del_client(rid, callee)
+    v
+end
+function fetch(r::Future)
+    !isnull(r.v) && return get(r.v)
+    v=call_on_owner(fetch_future, r, myid())
+    r.v=v
+    v
+end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
-fetch(r::RemoteRef, args...) = call_on_owner(fetch_ref, r, args...)
+fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 fetch(x::ANY) = x
 
-# storing a value to a RemoteRef
+isready(rv::RemoteValue, args...) = isready(rv.c, args...)
+function put!(rr::Future, v)
+    !isnull(rr.v) && error("Future can be set only once")
+    call_on_owner(put_future, rr, v, myid())
+    rr.v = v
+    rr
+end
+function put_future(rid, v, callee)
+    rv = lookup_ref(rid)
+    isready(rv) && error("Future can be set only once")
+    put!(rv, v)
+    # The callee has the value and hence can be removed from the remote store.
+    del_client(rid, callee)
+    nothing
+end
+
+
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-put_ref(rid, args...) = put!(lookup_ref(rid), args...)
-put!(rr::RemoteRef, args...) = (call_on_owner(put_ref, rr, args...); rr)
+put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
+put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+
+# take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
 function take_ref(rid, callee, args...)
@@ -812,10 +908,12 @@ function take_ref(rid, callee, args...)
     isa(v, RemoteException) && (myid() == callee) && throw(v)
     v
 end
-take!(rr::RemoteRef, args...) = call_on_owner(take_ref, rr, myid(), args...)
+take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
+
+# close is not supported on Future
 
 close_ref(rid) = (close(lookup_ref(rid).c); nothing)
-close(rr::RemoteRef) = call_on_owner(close_ref, rr)
+close(rr::RemoteChannel) = call_on_owner(close_ref, rr)
 
 
 function deliver_result(sock::IO, msg, oid, value)
@@ -1081,7 +1179,7 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     cluster_manager = manager
     disable_threaded_libs()
 
-    # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
+    # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
     assert(nprocs() <= 1)
     assert(isempty(PGRP.refs))
     assert(isempty(client_refs))
@@ -1338,7 +1436,7 @@ let nextidx = 0
                 if isa(v,Box)
                     v = v.contents
                 end
-                if isa(v,RemoteRef)
+                if isa(v,AbstractRemoteRef)
                     p = v.where; break
                 end
             end
@@ -1602,7 +1700,7 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
-    done = RemoteRef()
+    done = Channel(1)
     timercb(aw) = begin
         try
             if testcb()
@@ -1692,10 +1790,14 @@ function terminate_all_workers()
     end
 end
 
-getindex(r::RemoteRef) = fetch(r)
-function getindex(r::RemoteRef, args...)
+getindex(r::RemoteChannel) = fetch(r)
+getindex(r::Future) = fetch(r)
+
+getindex(r::Future, args...) = getindex(fetch(r), args...)
+function getindex(r::RemoteChannel, args...)
     if r.where == myid()
         return getindex(fetch(r), args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
