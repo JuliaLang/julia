@@ -3197,6 +3197,7 @@ void jl_init_types(void)
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
+    jl_datatype_type->ditype = NULL;
     jl_datatype_type->abstract = 0;
     jl_datatype_type->pointerfree = 0;
     // NOTE: types should not really be mutable, but the instance and
@@ -3218,6 +3219,7 @@ void jl_init_types(void)
     jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->instance = NULL;
     jl_typename_type->struct_decl = NULL;
+    jl_typename_type->ditype = NULL;
     jl_typename_type->abstract = 0;
     jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
@@ -3232,6 +3234,7 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
     jl_sym_type->struct_decl = NULL;
+    jl_sym_type->ditype = NULL; 
     jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
     jl_sym_type->pointerfree = 0;
@@ -3247,6 +3250,7 @@ void jl_init_types(void)
     jl_simplevector_type->uid = jl_assign_type_uid();
     jl_simplevector_type->instance = NULL;
     jl_simplevector_type->struct_decl = NULL;
+    jl_simplevector_type->ditype = NULL;
     jl_simplevector_type->abstract = 0;
     jl_simplevector_type->pointerfree = 0;
     jl_simplevector_type->mutabl = 1;
