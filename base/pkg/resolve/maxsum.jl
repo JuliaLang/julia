@@ -65,7 +65,7 @@ type Graph
     gdir::Vector{Vector{Int}}
 
     # adjacency dict:
-    #   allows to retrieve the indices in gadj, so that
+    #   allows one to retrieve the indices in gadj, so that
     #   gadj[p0][adjdict[p1][p0]] = p1
     adjdict::Vector{Dict{Int,Int}}
 

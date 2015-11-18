@@ -90,7 +90,7 @@ function gen_rand(r::MersenneTwister)
 end
 
 @inline reserve_1(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
-# `reserve` allows to call `rand_inbounds` n times
+# `reserve` allows one to call `rand_inbounds` n times
 # precondition: n <= MTCacheLength
 @inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
 

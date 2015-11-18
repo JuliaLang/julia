@@ -371,7 +371,7 @@ stripmd(x::Markdown.Table) =
 """
     apropos(string)
 
-Search through all documention for a string, ignoring case.
+Search through all documentation for a string, ignoring case.
 """
 apropos(string) = apropos(STDOUT, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
