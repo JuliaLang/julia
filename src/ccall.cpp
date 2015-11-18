@@ -1312,8 +1312,13 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (needStackRestore) {
         stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
                                                                Intrinsic::stacksave));
-        if (savespot)
-            instList.insertAfter((Instruction*)savespot, (Instruction*)stacksave);
+        if (savespot) {
+#ifdef LLVM38
+                instList.insertAfter(savespot->getIterator(), (Instruction*)stacksave);
+#else
+                instList.insertAfter((Instruction*)savespot, (Instruction*)stacksave);
+#endif
+        }
         else
             instList.push_front((Instruction*)stacksave);
     }
