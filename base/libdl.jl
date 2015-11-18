@@ -68,7 +68,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=ASCIIString[]) =
     find_library([string(libname)], extrapaths)
 
 function dlpath(handle::Ptr{Void})
-    p = ccall(:jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle)
+    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
     s = bytestring(p)
     @windows_only Libc.free(p)
     return s
@@ -130,7 +130,7 @@ function dllist()
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1
-            name = bytestring(ccall(:_dyld_get_image_name, Ptr{UInt8}, (UInt32,), i))
+            name = bytestring(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
     end

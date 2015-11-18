@@ -103,7 +103,7 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    return write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
 end
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
