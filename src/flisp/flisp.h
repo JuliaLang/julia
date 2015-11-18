@@ -38,7 +38,7 @@ typedef struct _symbol_t {
     // below fields are private
     struct _symbol_t *left;
     struct _symbol_t *right;
-    char name[] __attribute__((aligned(sizeof(void*))));
+    JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } symbol_t;
 
 typedef struct {
