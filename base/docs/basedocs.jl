@@ -455,7 +455,7 @@ keywords[symbol(";")] = doc"""
   `;` has a similar role in Julia as in many C-like languages,
   and is used to delimit the end of the previous statement.
   `;` is not necessary after new lines, but can be used to
-  seperate statements on a single line or to join statements into
+  separate statements on a single line or to join statements into
   a single expression:
 
       function foo()
@@ -539,7 +539,7 @@ keywords[:type] = doc"""
           y
       end
 
-  Fields can have type restrictions, which may be parametised:
+  Fields can have type restrictions, which may be parametrised:
 
       type Point{X}
           x::X

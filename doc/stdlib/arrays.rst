@@ -378,7 +378,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Concatenate the input arrays along the specified dimensions in the iterable ``dims``\ . For dimensions not in ``dims``\ , all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``\ , the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``\ , ``matrices[2]``\ , ... as diagonal blocks and matching zero blocks away from the diagonal.
+   Concatenate the input arrays along the specified dimensions in the iterable ``dims``\ . For dimensions not in ``dims``\ , all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``\ , the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows one to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``\ , ``matrices[2]``\ , ... as diagonal blocks and matching zero blocks away from the diagonal.
 
 .. function:: vcat(A...)
 
@@ -1031,7 +1031,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    .. Docstring generated from Julia source
 
-   Return a vector of the row indices of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See ``nonzeros(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the row indices of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. Given the internal storage format of sparse matrices, providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See ``nonzeros(A)`` and ``nzrange(A, col)``\ .
 
 .. function:: nzrange(A, col)
 
