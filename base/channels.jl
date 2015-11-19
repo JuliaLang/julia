@@ -40,6 +40,7 @@ end
 
 function put!(c::Channel, v)
     !isopen(c) && throw(closed_exception())
+    @label check
     d = c.take_pos - c.put_pos
     if (d == 1) || (d == -(c.szp1-1))
         # grow the channel if possible
@@ -63,6 +64,7 @@ function put!(c::Channel, v)
             c.data = newdata
         else
             wait(c.cond_put)
+            @goto check
         end
     end
 
