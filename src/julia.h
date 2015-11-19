@@ -92,7 +92,7 @@ DLLEXPORT void jl_threading_profile(void);
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       _InterlockedCompareExchange64((volatile LONG64 *)&(a), (c), (b))
+       _InterlockedCompareExchange64(&(a), (c), (b))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        _InterlockedExchange64(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
@@ -104,15 +104,15 @@ DLLEXPORT void jl_threading_profile(void);
 #ifdef JULIA_ENABLE_THREADING
 #define FORCE_ELF
 #define JL_DEFINE_MUTEX(m)                                                \
-    uint64_t volatile m ## _mutex = 0;                                    \
+    int64_t volatile m ## _mutex = 0;                                     \
     int32_t m ## _lock_count = 0;
 
 #define JL_DEFINE_MUTEX_EXT(m)                                            \
-    extern uint64_t volatile m ## _mutex;                                 \
+    extern int64_t volatile m ## _mutex;                                  \
     extern int32_t m ## _lock_count;
 
 #define JL_LOCK(m)                                                        \
-    if (m ## _mutex == uv_thread_self())                                  \
+    if ((uv_thread_t) m ## _mutex == uv_thread_self())                    \
         ++m ## _lock_count;                                               \
     else {                                                                \
         for (; ;) {                                                       \
@@ -127,7 +127,7 @@ DLLEXPORT void jl_threading_profile(void);
     }
 
 #define JL_UNLOCK(m)                                                      \
-    if (m ## _mutex == uv_thread_self()) {                                \
+    if ((uv_thread_t) m ## _mutex == uv_thread_self()) {                  \
         --m ## _lock_count;                                               \
         if (m ## _lock_count == 0)                                        \
             JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
