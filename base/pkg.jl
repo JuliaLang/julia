@@ -56,6 +56,11 @@ test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractStri
 
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
 
+doc"""
+    setprotocol!(proto)
+
+Set the protocol used to access GitHub-hosted packages.  Defaults to 'https', with a blank `proto` delegating the choice to the package developer.
+"""
 setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
 
 
