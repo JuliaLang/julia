@@ -233,9 +233,11 @@ public:
             // as codegen may make decisions based on the presence of certain attributes
             NewF->copyAttributesFrom(F);
 
+            #ifdef LLVM37
             // Declarations are not allowed to have personality routines, but
             // copyAttributesFrom sets them anyway, so clear them again manually
             NewF->setPersonalityFn(nullptr);
+            #endif
 
             AttributeSet OldAttrs = F->getAttributes();
             // Clone any argument attributes that are present in the VMap.
