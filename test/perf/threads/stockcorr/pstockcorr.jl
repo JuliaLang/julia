@@ -45,7 +45,7 @@ end
 # Run paths in parallel
 # NOTE: this has to be in its own function due to #10718
 function runpath!(n, Wiener, CorrWiener, SA, SB, T, UpperTriangle, k11, k12, k21, k22, rngs)
-    @threads all for i = 1:n
+    @threads for i = 1:n
     #for i = 1:n
         randn!(rngs[threadid()], Wiener)
         #randn!(rngs[1], Wiener)
@@ -89,7 +89,7 @@ function pstockcorr(n)
     CorrWiener = Array(Float64, T-1, 2)
 
     # Runtime requirement: need per-thread RNG since it stores state
-    rngs = [MersenneTwister(777+x) for x in 1:nthreads()]
+    rngs = [MersenneTwister(777+x) for x in 1:maxthreads()]
 
     # Optimization: pre-computable factors
     # NOTE: this should be automatically hoisted out of the loop
