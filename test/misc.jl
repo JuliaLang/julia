@@ -198,3 +198,10 @@ end
 @test Base.is_unix(:FreeBSD)
 @test_throws ArgumentError Base.is_unix(:BeOS)
 @unix_only @test Base.windows_version() == (0,0)
+
+@test !isreadable(DevNull)
+@test iswritable(DevNull)
+@test isopen(DevNull)
+@test copy(DevNull) == DevNull
+@test flush(DevNull) == nothing
+@test eof(DevNull)
