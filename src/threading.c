@@ -111,8 +111,9 @@ void ti_threadfun(void *arg)
 
     // set up tasking
     jl_init_root_task(0,0);
-    jl_set_stackbase((char*)&arg);
+#ifdef COPY_STACKS
     jl_set_base_ctx((char*)&arg);
+#endif
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
@@ -165,7 +166,7 @@ void ti_threadfun(void *arg)
 }
 
 #if PROFILE_JL_THREADING
-void ti_reset_timings();
+void ti_reset_timings(void);
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
@@ -184,9 +185,9 @@ void jl_init_threading(void)
         jl_n_threads = jl_max_threads;
 
     // set up space for per-thread heaps
-    jl_all_heaps = malloc(jl_n_threads * sizeof(void*));
-    jl_all_pgcstacks = malloc(jl_n_threads * sizeof(void*));
-    jl_all_task_states = malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
+    jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
+    jl_all_pgcstacks = (jl_gcframe_t ***)malloc(jl_n_threads * sizeof(void*));
+    jl_all_task_states = (jl_thread_task_state_t *)malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
 
 #if PROFILE_JL_THREADING
     // estimate CPU speed
@@ -229,7 +230,7 @@ void jl_start_threads(void)
     }
 
     // create threads
-    targs = malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
+    targs = (ti_threadarg_t **)malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
     for (i = 0;  i < jl_n_threads - 1;  ++i) {
         targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
         targs[i]->state = TI_THREAD_INIT;
@@ -285,10 +286,10 @@ void jl_shutdown_threading(void)
 }
 
 // return thread's thread group
-void *jl_threadgroup() { return (void *)tgworld; }
+void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // utility
-void jl_cpu_pause() { cpu_pause(); }
+void jl_cpu_pause(void) { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads

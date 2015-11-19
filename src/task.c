@@ -260,16 +260,15 @@ static void NOINLINE NORETURN start_task(void)
 }
 
 #ifdef COPY_STACKS
-#ifndef ASM_COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
 {
+    jl_stackbase = (char*)(((uptrint_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
+#ifndef ASM_COPY_STACKS
     if (jl_setjmp(jl_base_ctx, 1)) {
         start_task();
     }
-}
-#else
-void jl_set_base_ctx(char *__stk) { }
 #endif
+}
 #endif
 
 DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
@@ -278,7 +277,6 @@ DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
-    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
 }
