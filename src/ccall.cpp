@@ -621,12 +621,12 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             while (std::getline(declarations, declstr, '\n')) {
                 u_int64_t declhash = memhash(declstr.c_str(), declstr.length());
                 if (llvmcallDecls.count(declhash) == 0) {
-                    // Findi  name of declaration by searching for '@'
+                    // Find the declaration name, starting right after '@'
+                    // - functions/intrinsics: declare @foo(...)
+                    // - global variables: @bar = ...
                     std::string::size_type atpos = declstr.find('@') + 1;
-                    // Find end of declaration by searching for '('
-                    std::string::size_type bracepos = declstr.find('(');
-                    // Declaration name is the string between @ and (
-                    std::string declname = declstr.substr(atpos, bracepos - atpos);
+                    std::string::size_type endpos = declstr.find_first_of("( =", atpos);
+                    std::string declname = declstr.substr(atpos, endpos - atpos);
 
                     // Check if declaration already present in module
                     if(jl_Module->getNamedValue(declname) == NULL) {

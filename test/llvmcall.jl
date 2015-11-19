@@ -72,8 +72,8 @@ end
 # Test whether declarations work properly
 # This test only work properly for llvm 3.5+
 # On llvm <3.5+ even though the the compilation fails on the first try,
-# llvm still adds the intrinsice declaration to the module and subsequent calls
-# are succesfull.
+# llvm still adds the intrinsic declaration to the module and subsequent calls
+# are successful.
 if convert(VersionNumber, Base.libllvm_version) > v"3.5-"
 
 function undeclared_ceil(x::Float64)
@@ -140,3 +140,32 @@ function ceilfloor(x::Float64)
 end
 
 @test_approx_eq ceilfloor(7.4) 8.0
+
+# Test for global variables
+function gvar_set(x::Int)
+    llvmcall(
+        ("""@gvar = common global i64 0""",
+         """store i64 %0, i64* @gvar
+            ret void"""),
+    Void, Tuple{Int64}, x)
+end
+if convert(VersionNumber, Base.libllvm_version) >= v"3.7-"
+    function gvar_get()
+        llvmcall(
+            ("""@gvar = common global i64 0""",
+             """%1 = load i64, i64* @gvar
+                ret i64 %1"""),
+        Int64, Tuple{})
+    end
+else
+    function gvar_get()
+        llvmcall(
+            ("""@gvar = common global i64 0""",
+             """%1 = load i64* @gvar
+                ret i64 %1"""),
+        Int64, Tuple{})
+    end
+end
+
+gvar_set(42)
+@test gvar_get() == 42
