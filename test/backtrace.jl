@@ -76,7 +76,7 @@ loc = functionloc(f12977)
 @test loc[2] == linenum
 
 # issue #922: SimplifyCFG pass merges throws
-code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p, skipC)
+code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p-1, skipC)
 
 @noinline function test_throw_commoning(x)
     if x==1; throw(AssertionError()); end
@@ -99,5 +99,5 @@ let
     ind2 = find(:test_throw_commoning .== map(b->code_loc(b)[1], b2))
     @test !isempty(ind1)
     @test !isempty(ind2)
-    @test code_loc(b1[ind1])[3] != code_loc(b2[ind2])[3]
+    @test code_loc(b1[ind1[1]])[3] != code_loc(b2[ind2[1]])[3]
 end
