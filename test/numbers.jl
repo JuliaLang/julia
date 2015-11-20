@@ -585,15 +585,6 @@ end
 @test isinf(copysign(1/0,1))
 @test isinf(copysign(1/0,-1))
 
-# test y = NaN (BUG Julia 0.4.1 20/11/2015)
-#@test isnan(copysign(1,0.0))
-#@test isnan(copysign(-1,0.0))
-
-# test y = Inf (BUG Julia 0.4.1 20/11/2015)
-#@test isinf(copysign(1,1/0))
-#@test isinf(copysign(-1,1/0))
-
-
 @test isnan(1)     == false
 @test isnan(1.0)   == false
 @test isnan(-1.0)  == false
