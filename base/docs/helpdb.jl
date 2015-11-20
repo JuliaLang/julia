@@ -5752,13 +5752,6 @@ Compute a type that contains both `T` and `S`.
 typejoin
 
 doc"""
-    summary(x)
-
-Return a string giving a brief description of a value. By default returns `string(typeof(x))`. For arrays, returns strings like "2x2 Float64 Array".
-"""
-summary
-
-doc"""
     Base64DecodePipe(istream)
 
 Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
@@ -8389,18 +8382,6 @@ Compute $e^x$.
 exp
 
 doc"""
-    setprecision(f::Function, precision::Integer)
-
-Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
-
-    old = precision(BigFloat)
-    setprecision(BigFloat, precision)
-    f()
-    setprecision(BigFloat, old)
-"""
-setprecision
-
-doc"""
     searchindex(string, substring, [start])
 
 Similar to `search`, but return only the start index at which the substring is found, or `0` if it is not.
@@ -9473,13 +9454,6 @@ doc"""
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what order is considered to be sorted just as they do for `sort`.
 """
 issorted
-
-doc"""
-    setprecision(x::Int64)
-
-Set the precision (in bits) to be used to `BigFloat` arithmetic.
-"""
-setprecision
 
 doc"""
     isbits(T)
