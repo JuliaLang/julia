@@ -392,7 +392,7 @@ function Base.getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::Abstract
             if rowvalA[ptrA] <= rowI
                 ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
                 if ptrA <= stopA && rowvalA[ptrA] == rowI
-                    push!(nzinds, ptrI)
+                    push!(nzinds, j)
                     push!(nzvals, nzvalA[ptrA])
                 end
             end

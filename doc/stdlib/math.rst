@@ -1308,11 +1308,7 @@ Mathematical Functions
 
    Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`\ , :math:`p_2`\ , etc.
 
-.. function:: prevprod([k_1,k_2,...], n)
-
-   .. Docstring generated from Julia source
-
-   Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`\ , :math:`p_2`\ , etc.
+   For a list of integers i1, i2, i3, find the smallest     i1^n1 * i2^n2 * i3^n3 >= x for integer n1, n2, n3
 
 .. function:: invmod(x,m)
 

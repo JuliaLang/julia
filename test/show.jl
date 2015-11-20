@@ -78,6 +78,8 @@ end
 #@test_repr "w = (x = y) = z" # Doesn't pass, but it's an invalid assignment loc
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
+@test_repr "(a => b) in c"
+@test_repr "a => b in c"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"

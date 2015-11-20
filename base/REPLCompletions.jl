@@ -161,7 +161,18 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
                 continue
             end
 
-            local filesinpath = readdir(pathdir)
+            local filesinpath
+            try
+                filesinpath = readdir(pathdir)
+            catch e
+                # Bash allows dirs in PATH that can't be read, so we should as well.
+                if isa(e, SystemError)
+                    continue
+                else
+                    # We only handle SystemErrors here
+                    rethrow(e)
+                end
+            end
 
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
@@ -473,8 +484,17 @@ function shell_completions(string, pos)
     arg = args.args[end].args[end]
     if all(s -> isa(s, AbstractString), args.args[end].args)
         # Treat this as a path
+
+        # As Base.shell_parse throws away trailing spaces (unless they are escaped),
+        # we need to special case here.
+        # If the last char was a space, but shell_parse ignored it search on "".
+        ignore_last_word = arg != " " && scs[end] == ' '
+        prefix = ignore_last_word ? "" : join(args.args[end].args)
+
         # Also try looking into the env path if the user wants to complete the first argument
-        return complete_path(join(args.args[end].args), pos, use_envpath=length(args.args) < 2)
+        use_envpath = !ignore_last_word && length(args.args) < 2
+
+        return complete_path(prefix, pos, use_envpath=use_envpath)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]

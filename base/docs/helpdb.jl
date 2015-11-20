@@ -1155,18 +1155,43 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of t
 findnz
 
 doc"""
-    RemoteRef()
+    Future()
 
-Make an uninitialized remote reference on the local machine.
+Create a `Future` on the local machine.
 """
-RemoteRef()
+Future()
 
 doc"""
-    RemoteRef(n)
+    Future(n)
 
-Make an uninitialized remote reference on process `n`.
+Create a `Future` on process `n`.
 """
-RemoteRef(::Integer)
+Future(::Integer)
+
+doc"""
+    RemoteChannel()
+
+Make an reference to a `Channel{Any}(1)` on the local machine.
+"""
+RemoteChannel()
+
+doc"""
+    RemoteChannel(n)
+
+Make an reference to a `Channel{Any}(1)` on process `n`.
+"""
+RemoteChannel(::Integer)
+
+doc"""
+    RemoteChannel(f::Function, pid)
+
+Create references to remote channels of a specific size and type. `f()` is a function that when
+executed on `pid` must return an implementation of an `AbstractChannel`.
+
+For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a channel of type `Int`
+and size 10 on `pid`.
+"""
+RemoteChannel(f::Function, pid)
 
 doc"""
 ```rst
@@ -1710,7 +1735,7 @@ If no ``type`` argument is specified, the default is ``Vector{UInt8}``.
 
 Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
 
-The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
+The ``grow`` keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
 
 The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
 
@@ -2468,7 +2493,7 @@ display
 doc"""
     @spawnat
 
-Accepts two arguments, `p` and an expression. A closure is created around the expression and run asynchronously on process `p`. Returns a `RemoteRef` to the result.
+Accepts two arguments, `p` and an expression. A closure is created around the expression and run asynchronously on process `p`. Returns a `Future` to the result.
 """
 :@spawnat
 
@@ -4840,11 +4865,11 @@ Optional argument `msg` is a descriptive error string.
 DimensionMismatch
 
 doc"""
-    take!(RemoteRef)
+    take!(RemoteChannel)
 
-Fetch the value of a remote reference, removing it so that the reference is empty again.
+Fetch a value from a remote channel, also removing it in the processs.
 """
-take!(::RemoteRef)
+take!(::RemoteChannel)
 
 doc"""
     take!(Channel)
@@ -5725,13 +5750,6 @@ doc"""
 Compute a type that contains both `T` and `S`.
 """
 typejoin
-
-doc"""
-    summary(x)
-
-Return a string giving a brief description of a value. By default returns `string(typeof(x))`. For arrays, returns strings like "2x2 Float64 Array".
-"""
-summary
 
 doc"""
     Base64DecodePipe(istream)
@@ -6639,7 +6657,8 @@ doc"""
 Block the current task until some event occurs, depending on the type
 of the argument:
 
-* `RemoteRef`: Wait for a value to become available for the specified remote reference.
+* `RemoteChannel` : Wait for a value to become available on the specified remote channel.
+* `Future` : Wait for a value to become available for the specified future.
 * `Channel`: Wait for a value to be appended to the channel.
 * `Condition`: Wait for `notify` on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process can be used to determine success or failure.
@@ -7029,17 +7048,25 @@ Return the minimum of the arguments. Operates elementwise over arrays.
 min
 
 doc"""
-    isready(r::RemoteRef)
+    isready(r::RemoteChannel)
 
-Determine whether a `RemoteRef` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. It is recommended that this function only be used on a `RemoteRef` that is assigned once.
-
-If the argument `RemoteRef` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for `r` in a separate task instead, or to use a local `RemoteRef` as a proxy:
-
-    rr = RemoteRef()
-    @async put!(rr, remotecall_fetch(long_computation, p))
-    isready(rr)  # will not block
+Determine whether a `RemoteChannel` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true.
+However, it can be safely used on a `Future` since they are assigned only once.
 """
 isready
+
+doc"""
+    isready(r::Future)
+
+Determine whether a `Future` has a value stored to it.
+
+If the argument `Future` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for `r` in a separate task instead, or to use a local `Channel` as a proxy:
+
+    c = Channel(1)
+    @async put!(c, remotecall_fetch(long_computation, p))
+    isready(c)  # will not block
+"""
+    isready(r::Future)
 
 doc"""
     InexactError()
@@ -7841,7 +7868,7 @@ MethodError
 doc"""
     cat(dims, A...)
 
-Concatenate the input arrays along the specified dimensions in the iterable `dims`. For dimensions not in `dims`, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in `dims`, the size of the output array is the sum of the sizes of the input arrays along that dimension. If `dims` is a single number, the different arrays are tightly stacked along that dimension. If `dims` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
+Concatenate the input arrays along the specified dimensions in the iterable `dims`. For dimensions not in `dims`, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in `dims`, the size of the output array is the sum of the sizes of the input arrays along that dimension. If `dims` is a single number, the different arrays are tightly stacked along that dimension. If `dims` is an iterable containing several dimensions, this allows one to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
 """
 cat
 
@@ -8109,11 +8136,19 @@ An iterator that cycles through `iter` forever.
 cycle
 
 doc"""
-    put!(RemoteRef, value)
+    put!(RemoteChannel, value)
 
-Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with `take!`. Returns its first argument.
+Store a value to the remote channel. If the channel is full, blocks until space is available. Returns its first argument.
 """
-put!(::RemoteRef, value)
+put!(::RemoteChannel, value)
+
+doc"""
+    put!(Future, value)
+
+Store a value to a future. Future's are write-once remote references. A `put!` on an already set `Future` throws an Exception.
+All asynchronous remote calls return `Future`s and set the value to the return value of the call upon completion.
+"""
+put!(::Future, value)
 
 doc"""
     put!(Channel, value)
@@ -8345,18 +8380,6 @@ doc"""
 Compute $e^x$.
 """
 exp
-
-doc"""
-    setprecision(f::Function, precision::Integer)
-
-Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
-
-    old = precision(BigFloat)
-    setprecision(BigFloat, precision)
-    f()
-    setprecision(BigFloat, old)
-"""
-setprecision
 
 doc"""
     searchindex(string, substring, [start])
@@ -8860,7 +8883,7 @@ Base.(:(!=))
 doc"""
     @spawn
 
-Creates a closure around an expression and runs it on an automatically-chosen process, returning a `RemoteRef` to the result.
+Creates a closure around an expression and runs it on an automatically-chosen process, returning a `Future` to the result.
 """
 :@spawn
 
@@ -9114,7 +9137,7 @@ readavailable
 doc"""
     remotecall(func, id, args...)
 
-Call a function asynchronously on the given arguments on the specified process. Returns a `RemoteRef`.
+Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
 """
 remotecall
 
@@ -9433,13 +9456,6 @@ Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modi
 issorted
 
 doc"""
-    setprecision(x::Int64)
-
-Set the precision (in bits) to be used to `BigFloat` arithmetic.
-"""
-setprecision
-
-doc"""
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and
@@ -9510,7 +9526,10 @@ doc"""
 
 Waits and fetches a value from `x` depending on the type of `x`. Does not remove the item fetched:
 
-* `RemoteRef`: Wait for and get the value of a remote reference. If the remote value is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
+* `Future`: Wait for and get the value of a Future. The fetched value is cached locally. Further calls to `fetch` on the same reference
+return the cached value.
+If the remote value is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
+* `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are same as for a `Future` .
 * `Channel` : Wait for and get the first available item from the channel.
 """
 fetch

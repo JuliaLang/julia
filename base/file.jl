@@ -404,7 +404,7 @@ function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @windows_only if err < 0
+    @windows_only if err < 0 && !isdir(p)
         Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
     end
     uv_error("symlink",err)

@@ -46,7 +46,7 @@ function dlclose(p::Ptr)
     0 == ccall(:jl_dlclose, Cint, (Ptr{Void},), p)
 end
 
-function find_library(libnames::Vector, extrapaths::Vector=ASCIIString[])
+function find_library(libnames, extrapaths=ASCIIString[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
@@ -64,6 +64,8 @@ function find_library(libnames::Vector, extrapaths::Vector=ASCIIString[])
     end
     return ""
 end
+find_library(libname::Union{Symbol,AbstractString}, extrapaths=ASCIIString[]) =
+    find_library([string(libname)], extrapaths)
 
 function dlpath(handle::Ptr{Void})
     p = ccall(:jl_pathname_for_handle, Ptr{UInt8}, (Ptr{Void},), handle)

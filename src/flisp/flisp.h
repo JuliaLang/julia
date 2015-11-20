@@ -38,10 +38,7 @@ typedef struct _symbol_t {
     // below fields are private
     struct _symbol_t *left;
     struct _symbol_t *right;
-    union {
-        char name[1];
-        void *_pad;    // ensure field aligned to pointer size
-    };
+    JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } symbol_t;
 
 typedef struct {

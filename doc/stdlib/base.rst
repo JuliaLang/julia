@@ -166,7 +166,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Search through all documention for a string, ignoring case.
+   Search through all documentation for a string, ignoring case.
 
 .. function:: which(f, types)
 

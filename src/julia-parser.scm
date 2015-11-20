@@ -59,6 +59,7 @@
                              (pushprec (cdr L) (+ prec 1)))))
                      (pushprec (map eval prec-names) 1)
                      t))
+(put! prec-table 'in (get prec-table '== 0)) ; add `in` to the prec-table
 (define (operator-precedence op) (get prec-table op 0))
 
 (define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
@@ -1831,6 +1832,14 @@
                (open-output-string)
                (list* ex (tostr custom b) e)
                0)))
+
+      ; convert literal \r and \r\n in strings to \n (issue #11988)
+      ((eqv? c #\return) ; \r
+       (begin
+         (if (eqv? (peek-char p) #\linefeed) ; \r\n
+             (read-char p))
+         (write-char #\newline b)
+         (loop (read-char p) b e 0)))
 
       (else
        (write-char (not-eof-3 c) b)

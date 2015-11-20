@@ -91,8 +91,8 @@ const DevNull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
-read{T<:DevNullStream}(::T, args...) = throw(EOFErorr())
-write{T<:DevNullStream}(::T, args...) = 0
+read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
+write(::DevNullStream, ::UInt8) = 1
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 copy(::DevNullStream) = DevNull
@@ -462,7 +462,7 @@ spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{Process
 
 function eachline(cmd::AbstractCmd, stdin)
     stdout = Pipe()
-    processes = spawn(cmd, (stdin,stdout,DevNull))
+    processes = spawn(cmd, (stdin,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
@@ -475,12 +475,12 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=D
     if mode == "r"
         in = other
         out = io = Pipe()
-        processes = spawn(cmds, (in,out,DevNull))
+        processes = spawn(cmds, (in,out,STDERR))
         close(out.in)
     elseif mode == "w"
         in = io = Pipe()
         out = other
-        processes = spawn(cmds, (in,out,DevNull))
+        processes = spawn(cmds, (in,out,STDERR))
         close(in.out)
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))

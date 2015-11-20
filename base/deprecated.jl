@@ -444,7 +444,7 @@ end
 to_index_nodep(i::Real) = convert(Int,i)::Int
 
 @noinline function to_index(i::Real)
-    depwarn("indexing with non Integer Reals is deprecated", :to_index)
+    depwarn("Indexing with non-Integer Reals is deprecated.  It may be that your index arose from an integer division of the form i/j, in which case you should consider using i÷j or div(i,j) instead.", :to_index)
     to_index_nodep(i)
 end
 
