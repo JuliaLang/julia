@@ -57,6 +57,8 @@ end
 # Basic functions for working with permutations
 
 """
+    isperm(v) -> Bool
+
 Returns `true` if `v` is a valid permutation.
 """
 function isperm(A)
@@ -90,9 +92,13 @@ function permute!!{T<:Integer}(a, p::AbstractVector{T})
 end
 
 """
-Permute vector `v` in-place, according to permutation `p`. No checking is done to verify that `p` is a permutation.
+    permute!(v, p)
 
-To return a new permutation, use `v[p]`. Note that this is generally faster than `permute!(v,p)` for large vectors.
+Permute vector `v` in-place, according to permutation `p`. No checking is done
+to verify that `p` is a permutation.
+
+To return a new permutation, use `v[p]`. Note that this is generally faster than
+`permute!(v,p)` for large vectors.
 """
 permute!(a, p::AbstractVector) = permute!!(a, copy!(similar(p), p))
 
@@ -119,10 +125,18 @@ function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-"Like permute!, but the inverse of the given permutation is applied."
+"""
+    ipermute!(v, p)
+
+Like `permute!`, but the inverse of the given permutation is applied.
+"""
 ipermute!(a, p::AbstractVector) = ipermute!!(a, copy!(similar(p), p))
 
-"Return the inverse permutation of v"
+"""
+    invperm(v)
+
+Return the inverse permutation of `v`
+"""
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
@@ -137,6 +151,8 @@ end
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 doc"""
+    nextprod([k_1,k_2,...], n)
+
 Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
 
 For a list of integers i1, i2, i3, find the smallest

@@ -378,7 +378,9 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ . For arrays, returns strings like "2x2 Float64 Array".
+   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ , e.g. ``Int64``\ .
+
+   For arrays, returns a string of size and type info, e.g. ``10-element Array{Int64,1}``\ .
 
 .. function:: print(x)
 
