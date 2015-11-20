@@ -1481,9 +1481,9 @@ typedef struct {
 } jl_thread_task_state_t;
 
 extern JL_THREAD_EXPORT jl_task_t * volatile jl_current_task;
-extern JL_THREAD_EXPORT jl_task_t *jl_root_task;
+extern JL_THREAD jl_task_t *jl_root_task;
 extern JL_THREAD_EXPORT jl_value_t *jl_exception_in_transit;
-extern JL_THREAD_EXPORT jl_value_t * volatile jl_task_arg_in_transit;
+extern JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
