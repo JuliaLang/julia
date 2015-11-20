@@ -1191,7 +1191,15 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     end
 end
 
-"`summary(x)` a string of type information, e.g. `Int64`"
+doc"""
+    summary(x)
+
+Return a string giving a brief description of a value. By default returns
+`string(typeof(x))`, e.g. `Int64`.
+
+For arrays, returns a string of size and type info,
+e.g. `10-element Array{Int64,1}`.
+"""
 summary(x) = string(typeof(x)) # e.g. Int64
 
 # sizes such as 0-dimensional, 4-dimensional, 2x3
@@ -1200,7 +1208,6 @@ dims2string(d) = isempty(d) ? "0-dimensional" :
                  join(map(string,d), 'x')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-"`summary(A)` for array is a string of size and type info, e.g. `10-element Array{Int64,1}`"
 summary(a::AbstractArray) =
     string(dims2string(size(a)), " ", typeof(a))
 

@@ -723,24 +723,6 @@ Array functions
 Combinatorics
 -------------
 
-.. function:: nthperm(v, k)
-
-   .. Docstring generated from Julia source
-
-   Compute the kth lexicographic permutation of a vector.
-
-.. function:: nthperm(p)
-
-   .. Docstring generated from Julia source
-
-   Return the ``k`` that generated permutation ``p``\ . Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``\ .
-
-.. function:: nthperm!(v, k)
-
-   .. Docstring generated from Julia source
-
-   In-place version of :func:`nthperm`.
-
 .. function:: randperm([rng,] n)
 
    .. Docstring generated from Julia source
@@ -752,7 +734,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return the inverse permutation of v.
+   Return the inverse permutation of ``v``
 
 .. function:: isperm(v) -> Bool
 
@@ -772,7 +754,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Like permute!, but the inverse of the given permutation is applied.
+   Like ``permute!``\ , but the inverse of the given permutation is applied.
 
 .. function:: randcycle([rng,] n)
 
@@ -813,42 +795,6 @@ Combinatorics
    .. Docstring generated from Julia source
 
    In-place version of :func:`reverse`.
-
-.. function:: combinations(array, n)
-
-   .. Docstring generated from Julia source
-
-   Generate all combinations of ``n`` elements from an indexable object. Because the number of combinations can be very large, this function returns an iterator object. Use ``collect(combinations(array,n))`` to get an array of all combinations.
-
-.. function:: permutations(array)
-
-   .. Docstring generated from Julia source
-
-   Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use ``collect(permutations(array))`` to get an array of all permutations.
-
-.. function:: partitions(n)
-
-   .. Docstring generated from Julia source
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-.. function:: partitions(n, m)
-
-   .. Docstring generated from Julia source
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-.. function:: partitions(array)
-
-   .. Docstring generated from Julia source
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
-
-.. function:: partitions(array, m)
-
-   .. Docstring generated from Julia source
-
-   Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
 
 BitArrays
 ---------
