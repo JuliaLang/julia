@@ -56,7 +56,8 @@ function pfd_tst_timeout(idx, intvl)
     @test !evt.writable
     t_elapsed = toq()
 
-    @unix_only @test (intvl <= t_elapsed) # TODO: enable this test on windows when the libuv version is bumped
+    # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
+    # @unix_only @test (intvl <= t_elapsed) # TODO: enable this test on windows when the libuv version is bumped
     @test (t_elapsed <= (intvl + 1))
 end
 
