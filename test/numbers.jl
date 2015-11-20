@@ -477,31 +477,31 @@ end
 @test copysign(big(1.0),big(-2.0)) == big(-1.0)
 
 #copysign
-@test copysign(-1,1) == 1                  
+@test copysign(-1,1) == 1
 @test copysign(1,-1) == -1
 
-@test copysign(-1,1.0) == 1                  
+@test copysign(-1,1.0) == 1
 @test copysign(1,-1.0) == -1
 
-@test copysign(-1,1//2) == 1                 
+@test copysign(-1,1//2) == 1
 @test copysign(1,-1//2) == -1
 
-@test copysign(1.0,-1) == -1.0              
+@test copysign(1.0,-1) == -1.0
 @test copysign(-1.0,1) == 1.0
 
-@test copysign(1.0,-1.0) == -1.0            
+@test copysign(1.0,-1.0) == -1.0
 @test copysign(-1.0,1.0) == 1.0
 
-@test copysign(1.0,-1//2) == -1.0            
+@test copysign(1.0,-1//2) == -1.0
 @test copysign(-1.0,1//2) == 1.0
- 
-@test copysign(1//2,-1) == -1//2              
+
+@test copysign(1//2,-1) == -1//2
 @test copysign(-1//2,1) == 1//2
 
-@test copysign(1//2,-1//2) == -1//2          
+@test copysign(1//2,-1//2) == -1//2
 @test copysign(-1//2,1//2) == 1//2
 
-@test copysign(1//2,-1.0) == -1//2          
+@test copysign(1//2,-1.0) == -1//2
 @test copysign(-1//2,1.0) == 1//2
 
 # verify type stability with integer (x is negative)
@@ -581,19 +581,19 @@ end
 @test eltype(copysign(-1//2,-1//2)) <: Rational
 
 # test x = NaN
-@test isnan(copysign(0/0,1)) 
+@test isnan(copysign(0/0,1))
 @test isnan(copysign(0/0,-1))
 
 # test x = Inf
-@test isinf(copysign(1/0,1)) 
-@test isinf(copysign(1/0,-1)) 
+@test isinf(copysign(1/0,1))
+@test isinf(copysign(1/0,-1))
 
 # test y = NaN (BUG Julia 0.4.1 20/11/2015)
-#@test isnan(copysign(1,0.0)) 
+#@test isnan(copysign(1,0.0))
 #@test isnan(copysign(-1,0.0))
 
 # test y = Inf (BUG Julia 0.4.1 20/11/2015)
-#@test isinf(copysign(1,1/0)) 
+#@test isinf(copysign(1,1/0))
 #@test isinf(copysign(-1,1/0))
 
 
