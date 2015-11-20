@@ -685,9 +685,9 @@ end
 precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
 
 doc"""
-    setprecision(T, precision)
+    setprecision([T=BigFloat,] precision::Int)
 
-Set precision of type `T`.
+Set the precision (in bits) to be used for `T` arithmetic.
 """
 function setprecision(::Type{BigFloat}, precision::Int)
     if precision < 2
@@ -696,11 +696,6 @@ function setprecision(::Type{BigFloat}, precision::Int)
     DEFAULT_PRECISION[end] = precision
 end
 
-doc"""
-    setprecision(precision)
-
-Set the precision of `BigFloat`
-"""
 setprecision(precision::Int) = setprecision(BigFloat, precision)
 
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
@@ -825,9 +820,16 @@ realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
 doc"""
-    setprecision(f::Function, T, precision)
+    setprecision(f::Function, [T=BigFloat,] precision::Integer)
 
-Set the precision of the type `T` for the duration of the function `f`.
+Change the `T` arithmetic precision (in bits) for the duration of `f`.
+It is logically equivalent to:
+
+    old = precision(BigFloat)
+    setprecision(BigFloat, precision)
+    f()
+    setprecision(BigFloat, old)
+
 Often used as `setprecision(T, precision) do ... end`
 """
 function setprecision{T}(f::Function, ::Type{T}, prec::Integer)
@@ -840,12 +842,6 @@ function setprecision{T}(f::Function, ::Type{T}, prec::Integer)
     end
 end
 
-doc"""
-    setprecision(f::Function, precision::Integer)
-
-Set the `BigFloat` precision for the duration of the function `f`.
-Often used as `setprecision(precision) do ... end`
-"""
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)

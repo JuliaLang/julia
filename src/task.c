@@ -240,6 +240,7 @@ static void NOINLINE NORETURN start_task(void)
     // this runs the first time we switch to a task
     jl_task_t *t = jl_current_task;
     jl_value_t *res;
+    t->started = 1;
     if (t->exception != NULL && t->exception != jl_nothing) {
         record_backtrace();
         res = t->exception;
@@ -259,16 +260,15 @@ static void NOINLINE NORETURN start_task(void)
 }
 
 #ifdef COPY_STACKS
-#ifndef ASM_COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
 {
+    jl_stackbase = (char*)(((uptrint_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
+#ifndef ASM_COPY_STACKS
     if (jl_setjmp(jl_base_ctx, 1)) {
         start_task();
     }
-}
-#else
-void jl_set_base_ctx(char *__stk) { }
 #endif
+}
 #endif
 
 DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
@@ -277,7 +277,6 @@ DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
-    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
 }
@@ -863,6 +862,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->gcstack = NULL;
     t->stkbuf = NULL;
     t->tid = 0;
+    t->started = 0;
 
 #ifdef COPY_STACKS
     t->bufsz = 0;
@@ -952,6 +952,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->ssize = ssize;
     jl_current_task->stkbuf = stack;
 #endif
+    jl_current_task->started = 1;
     jl_current_task->parent = jl_current_task;
     jl_current_task->current_module = jl_current_module;
     jl_current_task->tls = jl_nothing;
@@ -970,6 +971,11 @@ void jl_init_root_task(void *stack, size_t ssize)
 
     jl_exception_in_transit = (jl_value_t*)jl_nothing;
     jl_task_arg_in_transit = (jl_value_t*)jl_nothing;
+}
+
+DLLEXPORT int jl_is_task_started(jl_task_t *t)
+{
+    return t->started;
 }
 
 #ifdef __cplusplus

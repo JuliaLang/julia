@@ -103,7 +103,7 @@ function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
 end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
-# http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
+# http://dl.acm.org/citation.cfm?id=355796
 
 (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
 

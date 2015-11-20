@@ -690,7 +690,7 @@ You can extract the following info from a :obj:`RegexMatch` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples::
+a string is invalid). Here is a pair of somewhat contrived examples::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -935,7 +935,7 @@ would only run with stable ``0.2`` versions, and exclude such versions as
 ``0.2`` versions, the lower bound check should be modified like this: ``v"0.2-"
 <= VERSION``.
 
-Another non-standard version specification extension allows to use a trailing
+Another non-standard version specification extension allows one to use a trailing
 ``+`` to express an upper limit on build versions, e.g.  ``VERSION >
 "v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
 builds: it will return ``false`` for version ``v"0.2-rc1+win64"`` and ``true``

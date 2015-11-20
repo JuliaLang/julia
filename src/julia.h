@@ -49,18 +49,6 @@ extern "C" {
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
-#ifdef _MSC_VER
-#if _WIN64
-#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
-#else
-#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
-#endif
-#elif __GNUC__
-#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
-#else
-#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
-#endif
-
 // threading ------------------------------------------------------------------
 
 // WARNING: Threading support is incomplete and experimental (and only works with llvm-svn)
@@ -1465,7 +1453,8 @@ typedef struct _jl_task_t {
     jl_jmp_buf ctx;
     size_t bufsz;
     void *stkbuf;
-    size_t ssize;
+    size_t ssize:31;
+    size_t started:1;
 
     // current exception handler
     jl_handler_t *eh;

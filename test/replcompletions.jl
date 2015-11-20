@@ -431,6 +431,28 @@ c, r, res = test_scomplete(s)
     @test r == 6:7
     @test s[r] == "Pk"
 
+    # Pressing tab after having entered "/tmp " should not
+    # attempt to complete "/tmp" but rather work on the current
+    # working directory again.
+
+    let
+        file = joinpath(path, "repl completions")
+        s = "/tmp "
+        c,r = test_scomplete(s)
+        @test r == 6:5
+    end
+
+    # Test completing paths with an escaped trailing space
+    let
+        file = joinpath(tempdir(), "repl completions")
+        touch(file)
+        s = string(tempdir(), "/repl\\ ")
+        c,r = test_scomplete(s)
+        @test ["repl\\ completions"] == c
+        @test s[r] == "repl\\ "
+        rm(file)
+    end
+
     # Tests homedir expansion
     let
         path = homedir()
@@ -451,16 +473,24 @@ c, r, res = test_scomplete(s)
     let
         oldpath = ENV["PATH"]
         path = tempdir()
-        ENV["PATH"] = path
+        # PATH can also contain folders which we aren't actually allowed to read.
+        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+        ENV["PATH"] = string(path, ":", unreadable)
+
         file = joinpath(path, "tmp-executable")
         touch(file)
         chmod(file, 0o755)
+        mkdir(unreadable)
+        chmod(unreadable, 0o000)
+
         s = "tmp-execu"
         c,r = test_scomplete(s)
         @test "tmp-executable" in c
         @test r == 1:9
         @test s[r] == "tmp-execu"
+
         rm(file)
+        rm(unreadable)
         ENV["PATH"] = oldpath
     end
 

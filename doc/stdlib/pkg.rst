@@ -63,6 +63,12 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    If ``pkg`` has a URL registered in ``Pkg.dir("METADATA")``\ , clone it from that URL on the default branch. The package does not need to have any registered versions.
 
+.. function:: setprotocol!(proto)
+
+   .. Docstring generated from Julia source
+
+   Set the protocol used to access GitHub-hosted packages.  Defaults to 'https', with a blank ``proto`` delegating the choice to the package developer.
+
 .. function:: available() -> Vector{ASCIIString}
 
    .. Docstring generated from Julia source

@@ -378,7 +378,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Concatenate the input arrays along the specified dimensions in the iterable ``dims``\ . For dimensions not in ``dims``\ , all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``\ , the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``\ , ``matrices[2]``\ , ... as diagonal blocks and matching zero blocks away from the diagonal.
+   Concatenate the input arrays along the specified dimensions in the iterable ``dims``\ . For dimensions not in ``dims``\ , all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``\ , the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows one to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, ``cat([1,2], matrices...)`` builds a block diagonal matrix, i.e. a block matrix with ``matrices[1]``\ , ``matrices[2]``\ , ... as diagonal blocks and matching zero blocks away from the diagonal.
 
 .. function:: vcat(A...)
 
@@ -723,24 +723,6 @@ Array functions
 Combinatorics
 -------------
 
-.. function:: nthperm(v, k)
-
-   .. Docstring generated from Julia source
-
-   Compute the kth lexicographic permutation of a vector.
-
-.. function:: nthperm(p)
-
-   .. Docstring generated from Julia source
-
-   Return the ``k`` that generated permutation ``p``\ . Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``\ .
-
-.. function:: nthperm!(v, k)
-
-   .. Docstring generated from Julia source
-
-   In-place version of :func:`nthperm`.
-
 .. function:: randperm([rng,] n)
 
    .. Docstring generated from Julia source
@@ -752,7 +734,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return the inverse permutation of v.
+   Return the inverse permutation of ``v``
 
 .. function:: isperm(v) -> Bool
 
@@ -772,7 +754,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Like permute!, but the inverse of the given permutation is applied.
+   Like ``permute!``\ , but the inverse of the given permutation is applied.
 
 .. function:: randcycle([rng,] n)
 
@@ -813,42 +795,6 @@ Combinatorics
    .. Docstring generated from Julia source
 
    In-place version of :func:`reverse`.
-
-.. function:: combinations(array, n)
-
-   .. Docstring generated from Julia source
-
-   Generate all combinations of ``n`` elements from an indexable object. Because the number of combinations can be very large, this function returns an iterator object. Use ``collect(combinations(array,n))`` to get an array of all combinations.
-
-.. function:: permutations(array)
-
-   .. Docstring generated from Julia source
-
-   Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use ``collect(permutations(array))`` to get an array of all permutations.
-
-.. function:: partitions(n)
-
-   .. Docstring generated from Julia source
-
-   Generate all integer arrays that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n))``\ .
-
-.. function:: partitions(n, m)
-
-   .. Docstring generated from Julia source
-
-   Generate all arrays of ``m`` integers that sum to ``n``\ . Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(n,m))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(n,m))``\ .
-
-.. function:: partitions(array)
-
-   .. Docstring generated from Julia source
-
-   Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array))`` to get an array of all partitions. The number of partitions to generate can be efficiently computed using ``length(partitions(array))``\ .
-
-.. function:: partitions(array, m)
-
-   .. Docstring generated from Julia source
-
-   Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use ``collect(partitions(array,m))`` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using ``length(partitions(array,m))``\ .
 
 BitArrays
 ---------
@@ -1033,7 +979,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjuction with iterating over structural nonzero values. See also ``nonzeros(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also ``nonzeros(A)`` and ``nzrange(A, col)``\ .
 
 .. function:: nzrange(A::SparseMatrixCSC, col)
 
