@@ -543,17 +543,26 @@ The ``BigFloat`` type implements arbitrary-precision floating-point arithmetic u
 
    Get the precision (in bits) currently used for ``BigFloat`` arithmetic.
 
-.. function:: setprecision(x::Int64)
+.. function:: setprecision([T=BigFloat,] precision::Int)
 
    .. Docstring generated from Julia source
 
-   Set the precision (in bits) to be used to ``BigFloat`` arithmetic.
+   Set the precision (in bits) to be used for ``T`` arithmetic.
 
-.. function:: setprecision(f::Function, precision::Integer)
+.. function:: setprecision(f::Function, [T=BigFloat,] precision::Integer)
 
    .. Docstring generated from Julia source
 
-   Set the ``BigFloat`` precision for the duration of the function ``f``\ . Often used as ``setprecision(precision) do ... end``
+   Change the ``T`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
+
+   .. code-block:: julia
+
+       old = precision(BigFloat)
+       setprecision(BigFloat, precision)
+       f()
+       setprecision(BigFloat, old)
+
+   Often used as ``setprecision(T, precision) do ... end``
 
 .. _random-numbers:
 
