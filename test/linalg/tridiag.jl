@@ -86,7 +86,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         Fs = full(Ts)
         invFsv = Fs\v
         Tldlt = factorize(Ts)
-        x = Tldlt\v
+        x = Ts\v
         @test_approx_eq x invFsv
         @test_approx_eq full(full(Tldlt)) Fs
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
