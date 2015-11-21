@@ -146,7 +146,7 @@ void jl_init_serializer(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
-extern JL_THREAD void *jl_stackbase;
+#define jl_stackbase (jl_get_ptls_states()->stackbase)
 #endif
 
 void jl_set_stackbase(char *__stk);

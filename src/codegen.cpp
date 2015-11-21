@@ -447,8 +447,6 @@ static GlobalVariable *jlemptytuple_var;
 #ifdef JL_NEED_FLOATTEMP_VAR
 static GlobalVariable *jlfloattemp_var;
 #endif
-static GlobalVariable *jlpgcstack_var;
-static GlobalVariable *jlexc_var;
 static GlobalVariable *jldiverr_var;
 static GlobalVariable *jlundeferr_var;
 static GlobalVariable *jldomerr_var;
@@ -465,6 +463,12 @@ extern JITMemoryManager* createJITMemoryManagerWin();
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
 #define CUSTOM_MEMORY_MANAGER 1
 extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
+#endif
+
+#ifndef JULIA_ENABLE_THREADING
+static GlobalVariable *jltls_states_var;
+#else
+static Function *jltls_states_func;
 #endif
 
 // important functions
@@ -5574,23 +5578,6 @@ static void init_julia_llvm_env(Module *m)
                            "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
 
-#ifdef JULIA_ENABLE_THREADING
-#define JL_THREAD_MODEL ,GlobalValue::GeneralDynamicTLSModel
-#else
-#define JL_THREAD_MODEL
-#endif
-    jlpgcstack_var =
-        new GlobalVariable(*m, T_ppjlvalue,
-                           false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack", NULL JL_THREAD_MODEL);
-    add_named_global(jlpgcstack_var, jl_dlsym(jl_dl_handle, "jl_pgcstack"));
-
-    jlexc_var =
-        new GlobalVariable(*m, T_pjlvalue,
-                           false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_exception_in_transit", NULL JL_THREAD_MODEL);
-    add_named_global(jlexc_var, jl_dlsym(jl_dl_handle, "jl_exception_in_transit"));
-
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
         Function::Create(FunctionType::get(T_void, false),
@@ -5638,6 +5625,27 @@ static void init_julia_llvm_env(Module *m)
                                      false, GlobalVariable::ExternalLinkage,
                                      ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
                                      "jl_float_temp"));
+#endif
+
+#ifndef JULIA_ENABLE_THREADING
+    size_t tls_states_size = LLT_ALIGN(sizeof(jl_tls_states_t),
+                                       sizeof(void*)) / sizeof(void*);
+    jltls_states_var =
+        new GlobalVariable(*m, ArrayType::get(T_pint8, tls_states_size),
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_tls_states");
+    add_named_global(jltls_states_var, (void*)&jl_tls_states);
+#else
+    jltls_states_func = Function::Create(FunctionType::get(T_ppint8, false),
+                                         Function::ExternalLinkage,
+                                         "jl_get_ptls_states", m);
+    jltls_states_func->setAttributes(
+        jltls_states_func->getAttributes()
+        .addAttribute(jltls_states_func->getContext(),
+                      AttributeSet::FunctionIndex, Attribute::ReadNone)
+        .addAttribute(jltls_states_func->getContext(),
+                      AttributeSet::FunctionIndex, Attribute::NoUnwind));
+    add_named_global(jltls_states_func, (void*)&jl_get_ptls_states);
 #endif
 
     std::vector<Type*> args1(0);

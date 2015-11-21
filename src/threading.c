@@ -34,8 +34,25 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
+#ifdef JULIA_ENABLE_THREADING
+#  if !defined(_COMPILER_MICROSOFT_)
+// Definition for compiling Julia on platforms with GCC __thread.
+#    define JL_THREAD __thread
+#  else
+// Definition for compiling Julia on Windows
+#    define JL_THREAD __declspec(thread)
+#  endif
+JL_THREAD jl_tls_states_t jl_tls_states;
+#else
+DLLEXPORT jl_tls_states_t jl_tls_states;
+#endif
+
+DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return &jl_tls_states;
+}
+
 // thread ID
-JL_THREAD int16_t ti_tid = 0;
 DLLEXPORT int jl_n_threads;     // # threads we're actually using
 DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;

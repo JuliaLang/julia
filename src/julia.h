@@ -57,23 +57,12 @@ extern "C" {
 
 // threading ------------------------------------------------------------------
 
-// WARNING: Threading support is incomplete and experimental (and only works with llvm-svn)
-// Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
-// of what eventual threading support will change.
+// WARNING: Threading support is incomplete and experimental
+// Nonetheless, we define JL_THREAD and use it to give advanced notice to
+// maintainers of what eventual threading support will change.
 
 // JULIA_ENABLE_THREADING is switched on in Make.inc if JULIA_THREADS is
 // set (in Make.user)
-
-#ifndef JULIA_ENABLE_THREADING
-// Definition for compiling non-thread-safe Julia.
-#  define JL_THREAD
-#elif !defined(_OS_WINDOWS_)
-// Definition for compiling Julia on platforms with GCC __thread.
-#  define JL_THREAD __thread
-#else
-// Definition for compiling Julia on Windows
-#  define JL_THREAD __declspec(thread)
-#endif
 
 DLLEXPORT int16_t jl_threadid(void);
 DLLEXPORT void *jl_threadgroup(void);
@@ -585,7 +574,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH2(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
+#define jl_pgcstack (jl_get_ptls_states()->pgcstack)
 
 #define JL_GC_PUSH1(arg1)                                                 \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
@@ -1485,16 +1474,34 @@ typedef struct {
     jl_value_t * volatile *ptask_arg_in_transit;
 } jl_thread_task_state_t;
 
-extern DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
-extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
-extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-extern DLLEXPORT JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
+#define jl_current_task (jl_get_ptls_states()->current_task)
+#define jl_root_task (jl_get_ptls_states()->root_task)
+#define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
+#define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
 DLLEXPORT void NORETURN jl_rethrow(void);
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
+
+typedef struct _jl_tls_states_t {
+    jl_gcframe_t *pgcstack;
+    jl_value_t *exception_in_transit;
+    struct _jl_thread_heap_t *heap;
+    jl_task_t *volatile current_task;
+    jl_task_t *root_task;
+    jl_value_t *volatile task_arg_in_transit;
+    void *stackbase;
+    jl_jmp_buf *volatile jmp_target;
+    jl_jmp_buf base_ctx; // base context of stack
+    int16_t tid;
+} jl_tls_states_t;
+DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
+#ifndef JULIA_ENABLE_THREADING
+extern DLLEXPORT jl_tls_states_t jl_tls_states;
+#define jl_get_ptls_states() (&jl_tls_states)
+#endif
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
