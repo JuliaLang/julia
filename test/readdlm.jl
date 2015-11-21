@@ -121,6 +121,13 @@ end
 @test isequaldlm(readcsv(IOBuffer("1,2,\"#3\"\n4,5,6")), [1. 2. "#3";4. 5. 6.], Any)
 @test isequaldlm(readcsv(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6")), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 
+# test header string
+let x = [1 0; 0 1], io = IOBuffer()
+writedlm(io, x, header_string="# 2x2 identity matrix\n# nothing special")
+seek(io, 0)
+@test x == readdlm(io, skipstart=2)
+end
+
 # test skipstart
 let x = ["a" "b" "c"; "d" "e" "f"; "g" "h" "i"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9], io = IOBuffer()
     writedlm(io, x, quotes=false)
