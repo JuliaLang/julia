@@ -423,7 +423,7 @@ int jl_in_inference = 0;
 JL_DEFINE_MUTEX_EXT(codegen)
 void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_info_t *def)
 {
-    JL_LOCK(codegen)
+    JL_LOCK(codegen);
     int last_ii = jl_in_inference;
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
@@ -451,7 +451,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
         li->inInference = 0;
     }
     jl_in_inference = last_ii;
-    JL_UNLOCK(codegen)
+    JL_UNLOCK(codegen);
 }
 
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
@@ -489,7 +489,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                    jl_function_t *method, jl_tupletype_t *decl,
                                    jl_svec_t *sparams, int8_t isstaged)
 {
-    JL_LOCK(codegen)
+    JL_LOCK(codegen);
     size_t i;
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;
@@ -800,7 +800,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         newmeth = jl_reinstantiate_method(method, li);
         (void)jl_method_cache_insert(mt, type, newmeth);
         JL_GC_POP();
-        JL_UNLOCK(codegen)
+        JL_UNLOCK(codegen);
         return newmeth;
     }
     else {
@@ -865,7 +865,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
-    JL_UNLOCK(codegen)
+    JL_UNLOCK(codegen);
     return newmeth;
 }
 

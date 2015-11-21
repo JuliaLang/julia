@@ -106,32 +106,36 @@ DLLEXPORT void jl_threading_profile(void);
     extern uint64_t volatile m ## _mutex;                                 \
     extern int32_t m ## _lock_count;
 
-#define JL_LOCK(m)                                                        \
-    if (m ## _mutex == uv_thread_self())                                  \
-        ++m ## _lock_count;                                               \
-    else {                                                                \
-        for (; ;) {                                                       \
-            if (m ## _mutex == 0 &&                                       \
-                    JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, 0,            \
-                                               uv_thread_self())) {       \
-                m ## _lock_count = 1;                                     \
-                break;                                                    \
-            }                                                             \
-            jl_cpu_pause();                                               \
-        }                                                                 \
-    }
+#define JL_LOCK(m) do {                                                 \
+        if (m ## _mutex == uv_thread_self()) {                          \
+            ++m ## _lock_count;                                         \
+        }                                                               \
+        else {                                                          \
+            for (;;) {                                                  \
+                if (m ## _mutex == 0 &&                                 \
+                    JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, 0,          \
+                                               uv_thread_self())) {     \
+                    m ## _lock_count = 1;                               \
+                    break;                                              \
+                }                                                       \
+                jl_cpu_pause();                                         \
+            }                                                           \
+        }                                                               \
+    } while (0)
 
-#define JL_UNLOCK(m)                                                      \
-    if (m ## _mutex == uv_thread_self()) {                                \
-        --m ## _lock_count;                                               \
-        if (m ## _lock_count == 0)                                        \
-            JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
-    }
+#define JL_UNLOCK(m) do {                                               \
+        if (m ## _mutex == uv_thread_self()) {                          \
+            --m ## _lock_count;                                         \
+            if (m ## _lock_count == 0) {                                \
+                JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
+            }                                                           \
+        }                                                               \
+    } while (0)
 #else
 #define JL_DEFINE_MUTEX(m)
 #define JL_DEFINE_MUTEX_EXT(m)
-#define JL_LOCK(m)
-#define JL_UNLOCK(m)
+#define JL_LOCK(m) do {} while (0)
+#define JL_UNLOCK(m) do {} while (0)
 #endif
 
 

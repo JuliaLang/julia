@@ -140,7 +140,7 @@ static void clear_mark(int bits)
         }
     }
     bigval_t *v;
-    FOR_EACH_HEAP
+    FOR_EACH_HEAP () {
         v = big_objects;
         while (v != NULL) {
             void* gcv = &v->header;
@@ -148,7 +148,7 @@ static void clear_mark(int bits)
             gc_bits(gcv) = bits;
             v = v->next;
         }
-    END
+    }
 
     v = big_objects_marked;
     while (v != NULL) {
@@ -168,9 +168,8 @@ static void clear_mark(int bits)
                     if (!((line >> j) & 1)) {
                         gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
                         pool_t *pool;
-                        FOR_HEAP(pg->thread_n)
+                        FOR_HEAP (pg->thread_n)
                             pool = &pools[pg->pool_n];
-                        END
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
