@@ -231,7 +231,7 @@ sleep(1)
 import Base.zzzInvalidIdentifier
 """
 try
-    (in,p) = open(`$exename -f`, "w")
+    (in,p) = open(pipeline(`$exename -f`, stderr=STDERR), "w")
     write(in,cmd)
     close(in)
     wait(p)

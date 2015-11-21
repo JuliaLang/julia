@@ -92,8 +92,8 @@ might be better to force the caller to decide how non-integers should
 be converted (e.g. floor or ceiling). Another issue is that declaring
 more specific types leaves more "space" for future method definitions.
 
-Append `!` to names of functions that modify their arguments
-------------------------------------------------------------
+Append ``!`` to names of functions that modify their arguments
+--------------------------------------------------------------
 
 Instead of::
 

@@ -10,7 +10,7 @@ export
     atomic_xchg!,
     atomic_add!, atomic_sub!,
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
-    atomic_max!, atomic_min!, atomic_umax!, atomic_umin!
+    atomic_max!, atomic_min!
 
 type Atomic{T<:Integer}
     value::T
@@ -47,9 +47,13 @@ for (typ, lt) in atomicintsmap
                 %bv = extractvalue { $lt, i1 } %rv, 1
                 ret i1 %bv
             """, Bool, Tuple{Ptr{$typ},$typ,$typ}, unsafe_convert(Ptr{$typ}, x), cmp, new)
-    for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min, :umax, :umin]
+    for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = symbol("atomic_", rmw, "!")
+        if (rmw == "max" || rmw == "min") && super(typ) == Unsigned
+            # LLVM distinguishes signedness in the operation, not the integer type.
+            rmw = "u" * rmw
+        end
         @eval $fn(x::Atomic{$typ}, v::$typ) =
             llvmcall($"""
                     %rv = atomicrmw volatile $rmw $lt* %0, $lt %1 acquire

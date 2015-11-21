@@ -4,10 +4,7 @@ module MPFR
 
 export
     BigFloat,
-    get_bigfloat_precision,
-    set_bigfloat_precision,
-    with_bigfloat_precision,
-    bigfloat_str,
+    setprecision,
     big_str
 
 import
@@ -20,10 +17,10 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, get_rounding,
-        set_rounding, maxintfloat, widen, significand, frexp, tryparse
+        cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
+        setrounding, maxintfloat, widen, significand, frexp, tryparse
 
-import Base.Rounding: get_rounding_raw, set_rounding_raw
+import Base.Rounding: rounding_raw, setrounding_raw
 
 import Base.GMP: ClongMax, CulongMax, CdoubleMax
 
@@ -51,7 +48,7 @@ type BigFloat <: AbstractFloat
     exp::Clong
     d::Ptr{Culong}
     function BigFloat()
-        N = get_bigfloat_precision()
+        N = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
         finalizer(z, Base.GMP._mpfr_clear_func)
@@ -681,20 +678,28 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 
-function precision(x::BigFloat)
+function precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{BigFloat},), &x)
 end
 
-get_bigfloat_precision() = DEFAULT_PRECISION[end]
-function set_bigfloat_precision(x::Int)
-    if x < 2
+precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
+
+doc"""
+    setprecision([T=BigFloat,] precision::Int)
+
+Set the precision (in bits) to be used for `T` arithmetic.
+"""
+function setprecision(::Type{BigFloat}, precision::Int)
+    if precision < 2
         throw(DomainError())
     end
-    DEFAULT_PRECISION[end] = x
+    DEFAULT_PRECISION[end] = precision
 end
 
+setprecision(precision::Int) = setprecision(BigFloat, precision)
+
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
-maxintfloat(::Type{BigFloat}) = BigFloat(2)^get_bigfloat_precision()
+maxintfloat(::Type{BigFloat}) = BigFloat(2)^precision(BigFloat)
 
 to_mpfr(::RoundingMode{:Nearest}) = Cint(0)
 to_mpfr(::RoundingMode{:ToZero}) = Cint(1)
@@ -719,10 +724,11 @@ function from_mpfr(c::Integer)
     RoundingMode(c)
 end
 
-get_rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[end]
-set_rounding_raw(::Type{BigFloat},i::Integer) = ROUNDING_MODE[end] = i
-get_rounding(::Type{BigFloat}) = from_mpfr(get_rounding_raw(BigFloat))
-set_rounding(::Type{BigFloat},r::RoundingMode) = set_rounding_raw(BigFloat,to_mpfr(r))
+rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[end]
+setrounding_raw(::Type{BigFloat},i::Integer) = ROUNDING_MODE[end] = i
+
+rounding(::Type{BigFloat}) = from_mpfr(rounding_raw(BigFloat))
+setrounding(::Type{BigFloat},r::RoundingMode) = setrounding_raw(BigFloat,to_mpfr(r))
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -813,15 +819,30 @@ eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
-function with_bigfloat_precision(f::Function, precision::Integer)
-    old_precision = get_bigfloat_precision()
-    set_bigfloat_precision(precision)
+doc"""
+    setprecision(f::Function, [T=BigFloat,] precision::Integer)
+
+Change the `T` arithmetic precision (in bits) for the duration of `f`.
+It is logically equivalent to:
+
+    old = precision(BigFloat)
+    setprecision(BigFloat, precision)
+    f()
+    setprecision(BigFloat, old)
+
+Often used as `setprecision(T, precision) do ... end`
+"""
+function setprecision{T}(f::Function, ::Type{T}, prec::Integer)
+    old_prec = precision(T)
+    setprecision(T, prec)
     try
         return f()
     finally
-        set_bigfloat_precision(old_precision)
+        setprecision(T, old_prec)
     end
 end
+
+setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
     # In general, the number of decimal places needed to read back the number exactly

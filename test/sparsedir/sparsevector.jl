@@ -220,6 +220,9 @@ let x = spv_x1
 end
 
 let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
+    # vec
+    @test vec(a) == a
+
     # reinterpret
     au = reinterpret(UInt32, a)
     @test isa(au, SparseVector{UInt32,Int})
@@ -227,13 +230,17 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
 
     # float
     af = float(a)
+    @test float(af) == af
     @test isa(af, SparseVector{Float64,Int})
     @test exact_equal(af, SparseVector(8, [2, 5, 6], [12., 35., 72.]))
+    @test sparsevec(transpose(transpose(af))) == af
 
     # complex
     acp = complex(af)
+    @test complex(acp) == acp
     @test isa(acp, SparseVector{Complex128,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
+    @test sparsevec(ctranspose(ctranspose(acp))) == acp
 end
 
 ### Type conversion
@@ -574,7 +581,9 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     # scale
     let sx = SparseVector(x.n, x.nzind, x.nzval * 2.5)
         @test exact_equal(scale(x, 2.5), sx)
+        @test exact_equal(scale(x, 2.5 + 0.0*im), complex(sx))
         @test exact_equal(scale(2.5, x), sx)
+        @test exact_equal(scale(2.5 + 0.0*im, x), complex(sx))
         @test exact_equal(x * 2.5, sx)
         @test exact_equal(2.5 * x, sx)
         @test exact_equal(x .* 2.5, sx)
@@ -740,3 +749,11 @@ let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10
     @test S[[1 3 5; 2 4 6]] == x[[1 3 5; 2 4 6]]
     @test nnz(S[[1 3 5; 2 4 6]]) == nnz(x[[1 3 5; 2 4 6]])
 end
+
+# Issue 14013
+s14013 = sparse([10.0 0.0 30.0; 0.0 1.0 0.0])
+a14013 = [10.0 0.0 30.0; 0.0 1.0 0.0]
+@test s14013 == a14013
+@test vec(s14013) == s14013[:] == a14013[:]
+@test full(s14013)[1,:] == s14013[1,:] == a14013[1,:] == [10.0, 0.0, 30.0]
+@test full(s14013)[2,:] == s14013[2,:] == a14013[2,:] == [0.0, 1.0, 0.0]

@@ -42,7 +42,7 @@ jl_thread_task_state_t *jl_all_task_states;
 jl_gcframe_t ***jl_all_pgcstacks;
 
 // return calling thread's ID
-DLLEXPORT int16_t jl_threadid() { return ti_tid; }
+DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 // must be called by each thread at startup
@@ -99,39 +99,6 @@ uint64_t *user_ticks;
 uint64_t *join_ticks;
 #endif
 
-// create a thread and affinitize it if proc_num is specified
-int ti_threadcreate(uv_thread_t *thread_id, int proc_num,
-                    void (*thread_fun)(void *), void *thread_arg)
-{
-#ifdef _OS_LINUX_
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-
-    cpu_set_t cset;
-    if (proc_num >= 0) {
-        CPU_ZERO(&cset);
-        CPU_SET(proc_num, &cset);
-        pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cset);
-    }
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    return pthread_create(thread_id, &attr, thread_fun, thread_arg);
-#else
-    return uv_thread_create(thread_id, thread_fun, thread_arg);
-#endif
-}
-
-// set thread affinity
-void ti_threadsetaffinity(uint64_t thread_id, int proc_num)
-{
-#ifdef _OS_LINUX_
-    cpu_set_t cset;
-
-    CPU_ZERO(&cset);
-    CPU_SET(proc_num, &cset);
-    pthread_setaffinity_np(thread_id, sizeof(cpu_set_t), &cset);
-#endif
-}
-
 // thread function: used by all except the main thread
 void ti_threadfun(void *arg)
 {
@@ -144,8 +111,9 @@ void ti_threadfun(void *arg)
 
     // set up tasking
     jl_init_root_task(0,0);
-    jl_set_stackbase((char*)&arg);
+#ifdef COPY_STACKS
     jl_set_base_ctx((char*)&arg);
+#endif
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
@@ -198,7 +166,7 @@ void ti_threadfun(void *arg)
 }
 
 #if PROFILE_JL_THREADING
-void ti_reset_timings();
+void ti_reset_timings(void);
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
@@ -217,9 +185,9 @@ void jl_init_threading(void)
         jl_n_threads = jl_max_threads;
 
     // set up space for per-thread heaps
-    jl_all_heaps = malloc(jl_n_threads * sizeof(void*));
-    jl_all_pgcstacks = malloc(jl_n_threads * sizeof(void*));
-    jl_all_task_states = malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
+    jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
+    jl_all_pgcstacks = (jl_gcframe_t ***)malloc(jl_n_threads * sizeof(void*));
+    jl_all_task_states = (jl_thread_task_state_t *)malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
 
 #if PROFILE_JL_THREADING
     // estimate CPU speed
@@ -240,9 +208,9 @@ void jl_init_threading(void)
 
 void jl_start_threads(void)
 {
-    char *cp;
+    char *cp, mask[UV_CPU_SETSIZE];
     int i, exclusive;
-    uv_thread_t ptid;
+    uv_thread_t uvtid;
     ti_threadarg_t **targs;
 
     // do we have exclusive use of the machine? default is no
@@ -254,16 +222,26 @@ void jl_start_threads(void)
     // exclusive use: affinitize threads, master thread on proc 0, rest
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
-    if (exclusive)
-        ti_threadsetaffinity(uv_thread_self(), 0);
+    if (exclusive) {
+        memset(mask, 0, UV_CPU_SETSIZE);
+        mask[0] = 1;
+        uvtid = (uv_thread_t)uv_thread_self();
+        uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+    }
 
     // create threads
-    targs = malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
+    targs = (ti_threadarg_t **)malloc((jl_n_threads - 1) * sizeof (ti_threadarg_t *));
     for (i = 0;  i < jl_n_threads - 1;  ++i) {
         targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
         targs[i]->state = TI_THREAD_INIT;
         targs[i]->tid = i + 1;
-        ti_threadcreate(&ptid, exclusive ? i+1 : -1, ti_threadfun, targs[i]);
+        uv_thread_create(&uvtid, ti_threadfun, targs[i]);
+        if (exclusive) {
+            memset(mask, 0, UV_CPU_SETSIZE);
+            mask[i+1] = 1;
+            uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
+        }
+        uv_thread_detach(&uvtid);
     }
 
     // set up the world thread group
@@ -308,10 +286,10 @@ void jl_shutdown_threading(void)
 }
 
 // return thread's thread group
-void *jl_threadgroup() { return (void *)tgworld; }
+void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // utility
-void jl_cpu_pause() { cpu_pause(); }
+void jl_cpu_pause(void) { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
@@ -380,7 +358,7 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 
 #if PROFILE_JL_THREADING
 
-void ti_reset_timings()
+void ti_reset_timings(void)
 {
     int i;
     prep_ticks = 0;
@@ -405,7 +383,7 @@ void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
 
 #define TICKS_TO_SECS(t)        (((double)(t)) / (cpu_ghz * 1e9))
 
-void jl_threading_profile()
+void jl_threading_profile(void)
 {
     if (!fork_ticks) return;
 
@@ -426,7 +404,7 @@ void jl_threading_profile()
 
 #else //!PROFILE_JL_THREADING
 
-void jl_threading_profile()
+void jl_threading_profile(void)
 {
 }
 

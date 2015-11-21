@@ -67,6 +67,36 @@ end
 
 test_threaded_atomic_add()
 
+# Helper for test_threaded_atomic_minmax that verifies sequential consistency.
+function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Ordering)
+    for v in old
+        if v != start
+            # Check that atomic op that installed v reported consistent old value.
+            @test Base.lt(o, old[v-m+1], v)
+        end
+    end
+end
+
+function test_threaded_atomic_minmax{T}(m::T,n::T)
+    mid = m + (n-m)>>1
+    x = Atomic{T}(mid)
+    y = Atomic{T}(mid)
+    oldx = Array(T,n-m+1)
+    oldy = Array(T,n-m+1)
+    @threads all for i = m:n
+        oldx[i-m+1] = atomic_min!(x, T(i))
+        oldy[i-m+1] = atomic_max!(y, T(i))
+    end
+    @test x[] == m
+    @test y[] == n
+    check_minmax_consistency(oldy,m,mid,Base.Forward)
+    check_minmax_consistency(oldx,m,mid,Base.Reverse)
+end
+
+# The ranges below verify that the correct signed/unsigned comparison is used.
+test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
+test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
+
 # spin locks
 function threaded_add_using_spinlock(s, x, n)
     @threads all for i = 1:n

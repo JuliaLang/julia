@@ -212,7 +212,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)
 
-    hdr = i18n_arr[1, :]
+    hdr = i18n_arr[1:1, :]
     data = i18n_arr[2:end, :]
     writedlm(i18n_buff, i18n_arr, ',')
     @test (data, hdr) == readcsv(i18n_buff, header=true)
@@ -243,4 +243,20 @@ end
 
 # test writemime
 @test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+
+for writefunc in ((io,x) -> writemime(io, "text/csv", x),
+                  (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
+    # iterable collections of iterable rows:
+    let x = [(1,2), (3,4)], io = IOBuffer()
+        writefunc(io, x)
+        seek(io, 0)
+        @test readcsv(io) == [1 2; 3 4]
+    end
+    # vectors of strings:
+    let x = ["foo", "bar"], io = IOBuffer()
+        writefunc(io, x)
+        seek(io, 0)
+        @test collect(readcsv(io)) == x
+    end
+end
 

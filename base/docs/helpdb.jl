@@ -1044,13 +1044,6 @@ Compute the minimum absolute values over the singleton dimensions of `r`, and wr
 minabs!
 
 doc"""
-    prevprod([k_1,k_2,...], n)
-
-Previous integer not greater than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-prevprod
-
-doc"""
     @evalpoly(z, c...)
 
 Evaluate the polynomial $\sum_k c[k] z^{k-1}$ for the
@@ -1148,34 +1141,6 @@ Get the precision of a floating point number, as defined by the effective number
 precision
 
 doc"""
-    partitions(n)
-
-Generate all integer arrays that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n))`.
-"""
-partitions(n::Integer)
-
-doc"""
-    partitions(n, m)
-
-Generate all arrays of `m` integers that sum to `n`. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(n,m))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(n,m))`.
-"""
-partitions(n::Integer, m::Integer)
-
-doc"""
-    partitions(array)
-
-Generate all set partitions of the elements of an array, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array))` to get an array of all partitions. The number of partitions to generate can be efficiently computed using `length(partitions(array))`.
-"""
-partitions(array)
-
-doc"""
-    partitions(array, m)
-
-Generate all set partitions of the elements of an array into exactly m subsets, represented as arrays of arrays. Because the number of partitions can be very large, this function returns an iterator object. Use `collect(partitions(array,m))` to get an array of all partitions. The number of partitions into m subsets is equal to the Stirling number of the second kind and can be efficiently computed using `length(partitions(array,m))`.
-"""
-partitions(array, m::Integer)
-
-doc"""
     readlines(stream)
 
 Read all lines as an array.
@@ -1190,18 +1155,43 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of t
 findnz
 
 doc"""
-    RemoteRef()
+    Future()
 
-Make an uninitialized remote reference on the local machine.
+Create a `Future` on the local machine.
 """
-RemoteRef()
+Future()
 
 doc"""
-    RemoteRef(n)
+    Future(n)
 
-Make an uninitialized remote reference on process `n`.
+Create a `Future` on process `n`.
 """
-RemoteRef(::Integer)
+Future(::Integer)
+
+doc"""
+    RemoteChannel()
+
+Make an reference to a `Channel{Any}(1)` on the local machine.
+"""
+RemoteChannel()
+
+doc"""
+    RemoteChannel(n)
+
+Make an reference to a `Channel{Any}(1)` on process `n`.
+"""
+RemoteChannel(::Integer)
+
+doc"""
+    RemoteChannel(f::Function, pid)
+
+Create references to remote channels of a specific size and type. `f()` is a function that when
+executed on `pid` must return an implementation of an `AbstractChannel`.
+
+For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a channel of type `Int`
+and size 10 on `pid`.
+"""
+RemoteChannel(f::Function, pid)
 
 doc"""
 ```rst
@@ -1238,20 +1228,6 @@ For matrices or vectors $A$ and $B$, calculates $Aᴴ / B$
 """
 Ac_rdiv_B
 
-doc"""
-```rst
-..  set_rounding(T, mode)
-
-Set the rounding mode of floating point type ``T``, controlling the
-rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
-:func:`/` and :func:`sqrt`) and type conversion.
-
-Note that this may affect other types, for instance changing the rounding
-mode of ``Float64`` will change the rounding mode of ``Float32``. See
-``get_rounding`` for available modes
-```
-"""
-set_rounding
 
 doc"""
     linspace(start, stop, n=100)
@@ -1700,7 +1676,7 @@ julia> Float32(1/3, RoundUp)
 0.33333334f0
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float32
 
@@ -1759,7 +1735,7 @@ If no ``type`` argument is specified, the default is ``Vector{UInt8}``.
 
 Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
 
-The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
+The ``grow`` keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
 
 The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
 
@@ -2023,13 +1999,6 @@ Compute hyperbolic sine of `x`
 sinh
 
 doc"""
-    permutations(array)
-
-Generate all permutations of an indexable object. Because the number of permutations can be very large, this function returns an iterator object. Use `collect(permutations(array))` to get an array of all permutations.
-"""
-permutations
-
-doc"""
 ```rst
 ..  ceil([T,] x, [digits, [base]])
 
@@ -2078,13 +2047,6 @@ doc"""
 Reseed the random number generator. If a `seed` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For `MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers or a filename, in which case the seed is read from a file. `RandomDevice` does not support seeding.
 """
 srand
-
-doc"""
-    isexecutable(path) -> Bool
-
-Returns `true` if the current user has permission to execute `path`, `false` otherwise.
-"""
-isexecutable
 
 doc"""
     acot(x)
@@ -2531,7 +2493,7 @@ display
 doc"""
     @spawnat
 
-Accepts two arguments, `p` and an expression. A closure is created around the expression and run asynchronously on process `p`. Returns a `RemoteRef` to the result.
+Accepts two arguments, `p` and an expression. A closure is created around the expression and run asynchronously on process `p`. Returns a `Future` to the result.
 """
 :@spawnat
 
@@ -3122,7 +3084,7 @@ doc"""
 ..  round([T,] x, [digits, [base]], [r::RoundingMode])
 
 ``round(x)`` rounds ``x`` to an integer value according to the default
-rounding mode (see :func:`get_rounding`), returning a value of the same type as
+rounding mode (see :func:`rounding`), returning a value of the same type as
 ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
 integer, with ties (fractional values of 0.5) being rounded to the even
 integer.
@@ -3854,7 +3816,7 @@ julia> Float64(pi, RoundUp)
 3.1415926535897936
 ```
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
 Float64
 
@@ -3881,7 +3843,7 @@ doc"""
 
 Equivalent to ``addprocs(CPU_CORES)``
 
-Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global state
+Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 ```
 """
@@ -4766,15 +4728,6 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 sizehint!
 
 doc"""
-    permute!(v, p)
-
-Permute vector `v` in-place, according to permutation `p`. No checking is done to verify that `p` is a permutation.
-
-To return a new permutation, use `v[p]`. Note that this is generally faster than `permute!(v,p)` for large vectors.
-"""
-permute!
-
-doc"""
     ifelse(condition::Bool, x, y)
 
 Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in that it is an ordinary function, so all the arguments are evaluated first. In some cases, using `ifelse` instead of an `if` statement can eliminate the branch in generated code and provide higher performance in tight loops.
@@ -4912,11 +4865,11 @@ Optional argument `msg` is a descriptive error string.
 DimensionMismatch
 
 doc"""
-    take!(RemoteRef)
+    take!(RemoteChannel)
 
-Fetch the value of a remote reference, removing it so that the reference is empty again.
+Fetch a value from a remote channel, also removing it in the processs.
 """
-take!(::RemoteRef)
+take!(::RemoteChannel)
 
 doc"""
     take!(Channel)
@@ -5692,9 +5645,9 @@ Get the fully-qualified name of a module as a tuple of symbols. For example, `fu
 fullname
 
 doc"""
-    isreadable(path) -> Bool
+    isreadable(io) -> Bool
 
-Returns `true` if the current user has permission to read `path`, `false` otherwise.
+Returns `true` if the specified IO object is readable (if that can be determined).
 """
 isreadable
 
@@ -5797,13 +5750,6 @@ doc"""
 Compute a type that contains both `T` and `S`.
 """
 typejoin
-
-doc"""
-    summary(x)
-
-Return a string giving a brief description of a value. By default returns `string(typeof(x))`. For arrays, returns strings like "2x2 Float64 Array".
-"""
-summary
 
 doc"""
     Base64DecodePipe(istream)
@@ -5947,20 +5893,6 @@ doc"""
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
 code_lowered
-
-doc"""
-    nthperm(v, k)
-
-Compute the kth lexicographic permutation of a vector.
-"""
-nthperm(v,k)
-
-doc"""
-    nthperm(p)
-
-Return the `k` that generated permutation `p`. Note that `nthperm(nthperm([1:n], k)) == k` for `1 <= k <= factorial(n)`.
-"""
-nthperm(p)
 
 doc"""
     values(collection)
@@ -6222,7 +6154,7 @@ isreadonly
 
 doc"""
 ```rst
-..  get_rounding(T)
+..  rounding(T)
 
 Get the current floating point rounding mode for type ``T``, controlling
 the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
@@ -6232,7 +6164,7 @@ Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
 ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
 ```
 """
-get_rounding
+rounding
 
 doc"""
 ```rst
@@ -6447,18 +6379,33 @@ Like `broadcast_function`, but for `broadcast!`.
 broadcast!_function
 
 doc"""
-    with_rounding(f::Function, T, mode)
+```rst
+..  setrounding(T, mode)
+
+Set the rounding mode of floating point type ``T``, controlling the
+rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
+:func:`/` and :func:`sqrt`) and type conversion.
+
+Note that this may affect other types, for instance changing the rounding
+mode of ``Float64`` will change the rounding mode of ``Float32``. See
+``rounding`` for available modes
+```
+"""
+setrounding(T, mode)
+
+doc"""
+    setrounding(f::Function, T, mode)
 
 Change the rounding mode of floating point type `T` for the duration of `f`. It is logically equivalent to:
 
-    old = get_rounding(T)
-    set_rounding(T, mode)
+    old = rounding(T)
+    setrounding(T, mode)
     f()
-    set_rounding(T, old)
+    setrounding(T, old)
 
-See `get_rounding` for available rounding modes.
+See `rounding` for available rounding modes.
 """
-with_rounding
+setrounding(f::Function, T, mode)
 
 doc"""
     sleep(seconds)
@@ -6710,17 +6657,16 @@ doc"""
 Block the current task until some event occurs, depending on the type
 of the argument:
 
-* `RemoteRef`: Wait for a value to become available for the specified remote reference.
+* `RemoteChannel` : Wait for a value to become available on the specified remote channel.
+* `Future` : Wait for a value to become available for the specified future.
 * `Channel`: Wait for a value to be appended to the channel.
 * `Condition`: Wait for `notify` on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process can be used to determine success or failure.
 * `Task`: Wait for a `Task` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called `wait`).
 * `RawFD`: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
-If no argument is passed, the task blocks for an undefined period. If the task's
-state is set to `:waiting`, it can only be restarted by an explicit call to
-`schedule` or `yieldto`. If the task's state is `:runnable`, it might be
-restarted unpredictably.
+If no argument is passed, the task blocks for an undefined period.
+A task can only be restarted by an explicit call to `schedule` or `yieldto`.
 
 Often `wait` is called within a `while` loop to ensure a waited-for condition
 is met before proceeding.
@@ -7102,17 +7048,25 @@ Return the minimum of the arguments. Operates elementwise over arrays.
 min
 
 doc"""
-    isready(r::RemoteRef)
+    isready(r::RemoteChannel)
 
-Determine whether a `RemoteRef` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. It is recommended that this function only be used on a `RemoteRef` that is assigned once.
-
-If the argument `RemoteRef` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for `r` in a separate task instead, or to use a local `RemoteRef` as a proxy:
-
-    rr = RemoteRef()
-    @async put!(rr, remotecall_fetch(long_computation, p))
-    isready(rr)  # will not block
+Determine whether a `RemoteChannel` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true.
+However, it can be safely used on a `Future` since they are assigned only once.
 """
 isready
+
+doc"""
+    isready(r::Future)
+
+Determine whether a `Future` has a value stored to it.
+
+If the argument `Future` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for `r` in a separate task instead, or to use a local `Channel` as a proxy:
+
+    c = Channel(1)
+    @async put!(c, remotecall_fetch(long_computation, p))
+    isready(c)  # will not block
+"""
+    isready(r::Future)
 
 doc"""
     InexactError()
@@ -7293,13 +7247,6 @@ Set environment variables to use when running the given `command`. `env` is eith
 The `dir` keyword argument can be used to specify a working directory for the command.
 """
 setenv
-
-doc"""
-    invperm(v)
-
-Return the inverse permutation of v.
-"""
-invperm
 
 doc"""
     lowercase(string)
@@ -7766,13 +7713,6 @@ The inverse of `ind2sub`, returns the linear index corresponding to the provided
 sub2ind
 
 doc"""
-    isperm(v) -> Bool
-
-Returns `true` if `v` is a valid permutation.
-"""
-isperm
-
-doc"""
     super(T::DataType)
 
 Return the supertype of DataType `T`.
@@ -7808,11 +7748,11 @@ Join path components into a full path. If some argument is an absolute path, the
 joinpath
 
 doc"""
-    get_bigfloat_precision()
+    precision(BigFloat)
 
 Get the precision (in bits) currently used for `BigFloat` arithmetic.
 """
-get_bigfloat_precision
+precision(::Type{BigFloat})
 
 doc"""
     homedir() -> AbstractString
@@ -7928,7 +7868,7 @@ MethodError
 doc"""
     cat(dims, A...)
 
-Concatenate the input arrays along the specified dimensions in the iterable `dims`. For dimensions not in `dims`, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in `dims`, the size of the output array is the sum of the sizes of the input arrays along that dimension. If `dims` is a single number, the different arrays are tightly stacked along that dimension. If `dims` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
+Concatenate the input arrays along the specified dimensions in the iterable `dims`. For dimensions not in `dims`, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in `dims`, the size of the output array is the sum of the sizes of the input arrays along that dimension. If `dims` is a single number, the different arrays are tightly stacked along that dimension. If `dims` is an iterable containing several dimensions, this allows one to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
 """
 cat
 
@@ -8070,13 +8010,6 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 finalizer
 
 doc"""
-    nextprod([k_1,k_2,...], n)
-
-Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
-"""
-nextprod
-
-doc"""
     <<(x, n)
 
 Left bit shift operator.
@@ -8203,11 +8136,19 @@ An iterator that cycles through `iter` forever.
 cycle
 
 doc"""
-    put!(RemoteRef, value)
+    put!(RemoteChannel, value)
 
-Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with `take!`. Returns its first argument.
+Store a value to the remote channel. If the channel is full, blocks until space is available. Returns its first argument.
 """
-put!(::RemoteRef, value)
+put!(::RemoteChannel, value)
+
+doc"""
+    put!(Future, value)
+
+Store a value to a future. Future's are write-once remote references. A `put!` on an already set `Future` throws an Exception.
+All asynchronous remote calls return `Future`s and set the value to the return value of the call upon completion.
+"""
+put!(::Future, value)
 
 doc"""
     put!(Channel, value)
@@ -8439,18 +8380,6 @@ doc"""
 Compute $e^x$.
 """
 exp
-
-doc"""
-    with_bigfloat_precision(f::Function,precision::Integer)
-
-Change the `BigFloat` arithmetic precision (in bits) for the duration of `f`. It is logically equivalent to:
-
-    old = get_bigfloat_precision()
-    set_bigfloat_precision(precision)
-    f()
-    set_bigfloat_precision(old)
-"""
-with_bigfloat_precision
 
 doc"""
     searchindex(string, substring, [start])
@@ -8954,7 +8883,7 @@ Base.(:(!=))
 doc"""
     @spawn
 
-Creates a closure around an expression and runs it on an automatically-chosen process, returning a `RemoteRef` to the result.
+Creates a closure around an expression and runs it on an automatically-chosen process, returning a `Future` to the result.
 """
 :@spawn
 
@@ -9208,7 +9137,7 @@ readavailable
 doc"""
     remotecall(func, id, args...)
 
-Call a function asynchronously on the given arguments on the specified process. Returns a `RemoteRef`.
+Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
 """
 remotecall
 
@@ -9527,13 +9456,6 @@ Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modi
 issorted
 
 doc"""
-    set_bigfloat_precision(x::Int64)
-
-Set the precision (in bits) to be used to `BigFloat` arithmetic.
-"""
-set_bigfloat_precision
-
-doc"""
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and
@@ -9604,7 +9526,10 @@ doc"""
 
 Waits and fetches a value from `x` depending on the type of `x`. Does not remove the item fetched:
 
-* `RemoteRef`: Wait for and get the value of a remote reference. If the remote value is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
+* `Future`: Wait for and get the value of a Future. The fetched value is cached locally. Further calls to `fetch` on the same reference
+return the cached value.
+If the remote value is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
+* `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are same as for a `Future` .
 * `Channel` : Wait for and get the first available item from the channel.
 """
 fetch
@@ -9816,13 +9741,6 @@ doc"""
 The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns `-nextpow2(-n)` for negative arguments.
 """
 nextpow2
-
-doc"""
-    ipermute!(v, p)
-
-Like permute!, but the inverse of the given permutation is applied.
-"""
-ipermute!
 
 doc"""
 ```rst
@@ -10191,13 +10109,6 @@ An iterator that generates at most the first `n` elements of `iter`.
 take
 
 doc"""
-    combinations(array, n)
-
-Generate all combinations of `n` elements from an indexable object. Because the number of combinations can be very large, this function returns an iterator object. Use `collect(combinations(array,n))` to get an array of all combinations.
-"""
-combinations
-
-doc"""
     frexp(val)
 
 Return `(x,exp)` such that `x` has a magnitude in the interval $[1/2, 1)$ or 0,
@@ -10440,15 +10351,6 @@ Tests whether a character is a lowercase letter, or whether this is true for all
 islower
 
 doc"""
-```rst
-..  nthperm!(v, k)
-
-In-place version of :func:`nthperm`.
-```
-"""
-nthperm!
-
-doc"""
     cell(dims)
 
 Construct an uninitialized cell array (heterogeneous array). `dims` can be either a tuple or a series of integer arguments.
@@ -10520,13 +10422,6 @@ doc"""
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-doc"""
-    istaskstarted(task) -> Bool
-
-Tell whether a task has started executing.
-"""
-istaskstarted
 
 doc"""
     clamp(x, lo, hi)
@@ -10745,9 +10640,9 @@ Create a "value type" out of `c`, which must be an `isbits` value. The intent of
 Val
 
 doc"""
-    iswritable(path) -> Bool
+    iswritable(io) -> Bool
 
-Returns `true` if the current user has permission to write to `path`, `false` otherwise.
+Returns `true` if the specified IO object is writable (if that can be determined).
 """
 iswritable
 
@@ -11648,3 +11543,29 @@ doc"""
 Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 """
 getsockname
+
+doc"""
+    Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
+
+A low-level API which returns the unique identifying tuple for a remote reference. A reference id is a tuple of two
+elements - pid where the reference was created from and a one-up number from that node.
+"""
+Base.remoteref_id
+
+doc"""
+    Base.channel_from_id(refid) -> c
+
+A low-level API which returns the backing AbstractChannel for an id returned by `remoteref_id`. The call is valid only on the node where the backing channel exists.
+"""
+Base.channel_from_id
+
+doc"""
+    Base.worker_id_from_socket(s::IO) -> pid
+
+A low-level API which given a `IO` connection, returns the pid of the worker it is connected to. This is useful when writing custom `serialize` methods for a type, which
+optimizes the data written out depending on the receiving process id.
+"""
+Base.worker_id_from_socket
+
+
+

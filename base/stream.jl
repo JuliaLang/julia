@@ -301,9 +301,6 @@ function reinit_stdio()
     global uv_jl_recvcb        = cfunction(uv_recvcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint))
     global uv_jl_sendcb        = cfunction(uv_sendcb, Void, (Ptr{Void}, Cint))
     global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, (Ptr{Void}, Int64, Int32))
-    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, (Ptr{Void}, Cint, Cint))
-    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}))
-    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, (Ptr{Void}, Ptr{Int8}, Int32, Int32))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
@@ -940,7 +937,6 @@ function uv_write(s::LibuvStream, p::Ptr, n::UInt)
     end
     ct = current_task()
     uv_req_set_data(uvw,ct)
-    ct.state = :waiting
     stream_wait(ct)
     return Int(n)
 end

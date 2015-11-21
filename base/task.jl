@@ -66,7 +66,13 @@ end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
-istaskstarted(t::Task) = isdefined(t, :last)
+
+"""
+    istaskstarted(task) -> Bool
+
+Tell whether a task has started executing.
+"""
+istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
 
@@ -119,61 +125,52 @@ suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tl
 function task_done_hook(t::Task)
     err = (t.state == :failed)
     result = t.result
-    nexttask = t.last
-    handled = true
+    handled = false
     if err
         t.backtrace = catch_backtrace()
     end
 
     q = t.consumers
+    t.consumers = nothing
+
+    if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
+        handled = true
+        notify(t.donenotify, result, error=err)
+    end
 
     #### un-optimized version
     #isa(q,Condition) && notify(q, result, error=err)
     if isa(q,Task)
+        handled = true
         nexttask = q
         nexttask.state = :runnable
-    elseif isa(q,Condition) && !isempty(q.waitq)
-        notify(q, result, error=err)
-    else
-        handled = false
-    end
-
-    t.consumers = nothing
-
-    if isa(t.donenotify,Condition)
-        handled |= !isempty(t.donenotify.waitq)
-        notify(t.donenotify, result, error=err)
-    end
-
-    if nexttask.state == :runnable
         if err
             nexttask.exception = result
         end
-        yieldto(nexttask, result)
-    else
-        if err && !handled
-            if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
-                active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) &&
-                active_repl_backend.in_eval
-                throwto(active_repl_backend.backend_task, result)
-            end
-            if !suppress_excp_printing(t)
-                let bt = t.backtrace
-                    # run a new task to print the error for us
-                    @schedule with_output_color(:red, STDERR) do io
-                        print(io, "ERROR (unhandled task failure): ")
-                        showerror(io, result, bt)
-                        println(io)
-                    end
+        yieldto(nexttask, result) # this terminates the task
+    elseif isa(q,Condition) && !isempty(q.waitq)
+        handled = true
+        notify(q, result, error=err)
+    end
+
+    if err && !handled
+        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, result)
+        end
+        if !suppress_excp_printing(t)
+            let bt = t.backtrace
+                # run a new task to print the error for us
+                @schedule with_output_color(:red, STDERR) do io
+                    print(io, "ERROR (unhandled task failure): ")
+                    showerror(io, result, bt)
+                    println(io)
                 end
             end
         end
-        # if a finished task accidentally gets into the queue, wait()
-        # could return. in that case just take the next task off the queue.
-        while true
-            wait()
-        end
     end
+    wait()
 end
 
 
@@ -201,13 +198,9 @@ function produce(v)
         wait()
     end
 
-    t.state = :runnable
+    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
     if empty
-        if isempty(Workqueue)
-            yieldto(t, v)
-        else
-            schedule_and_wait(t, v)
-        end
+        schedule_and_wait(t, v)
         while true
             # wait until there are more consumers
             q = ct.consumers
@@ -254,9 +247,8 @@ function consume(P::Task, values...)
         end
         push!(P.consumers.waitq, ct)
     end
-    ct.state = :waiting
 
-    schedule_and_wait(P)
+    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
 end
 
 start(t::Task) = nothing
@@ -279,16 +271,12 @@ end
 function wait(c::Condition)
     ct = current_task()
 
-    ct.state = :waiting
     push!(c.waitq, ct)
 
     try
         return wait()
     catch
         filter!(x->x!==ct, c.waitq)
-        if ct.state == :waiting
-            ct.state = :runnable
-        end
         rethrow()
     end
 end
@@ -318,7 +306,8 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 global const Workqueue = Any[]
 
 function enq_work(t::Task)
-    ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
+    t.state == :runnable || error("schedule: Task not runnable")
+    ccall(:uv_stop, Void, (Ptr{Void},), eventloop())
     push!(Workqueue, t)
     t.state = :queued
     t
@@ -338,16 +327,13 @@ end
 
 # fast version of schedule(t,v);wait()
 function schedule_and_wait(t, v=nothing)
+    t.state == :runnable || error("schedule: Task not runnable")
     if isempty(Workqueue)
-        if t.state == :runnable
-            return yieldto(t, v)
-        end
+        return yieldto(t, v)
     else
-        if t.state == :runnable
-            t.result = v
-            push!(Workqueue, t)
-            t.state = :queued
-        end
+        t.result = v
+        push!(Workqueue, t)
+        t.state = :queued
     end
     wait()
 end
@@ -365,10 +351,12 @@ function wait()
             end
         else
             t = shift!(Workqueue)
+            t.state == :queued || throw(AssertionError("shift!(Workqueue).state == :queued"))
             arg = t.result
             t.result = nothing
             t.state = :runnable
             result = yieldto(t, arg)
+            current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
             process_events(false)
             # return when we come out of the queue
             return result

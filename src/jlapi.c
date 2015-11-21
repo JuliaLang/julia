@@ -82,7 +82,7 @@ DLLEXPORT const char *jl_typename_str(jl_value_t *v)
 {
     if (!jl_is_datatype(v))
         return NULL;
-    return ((jl_datatype_t*)v)->name->name->name;
+    return jl_symbol_name(((jl_datatype_t*)v)->name->name);
 }
 
 // get the name of typeof(v) as a string
@@ -194,7 +194,7 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
     return v;
 }
 
-DLLEXPORT void jl_yield()
+DLLEXPORT void jl_yield(void)
 {
     static jl_function_t *yieldfunc = NULL;
     if (yieldfunc == NULL)
@@ -289,14 +289,14 @@ static const char *git_info_string(const char *fld) {
     return jl_string_data(f);
 }
 
-DLLEXPORT const char *jl_git_branch()
+DLLEXPORT const char *jl_git_branch(void)
 {
     static const char *branch = NULL;
     if (!branch) branch = git_info_string("branch");
     return branch;
 }
 
-DLLEXPORT const char *jl_git_commit()
+DLLEXPORT const char *jl_git_commit(void)
 {
     static const char *commit = NULL;
     if (!commit) commit = git_info_string("commit");
@@ -304,16 +304,19 @@ DLLEXPORT const char *jl_git_commit()
 }
 
 // Create function versions of some useful macros
-#undef jl_astaggedvalue
-DLLEXPORT jl_taggedvalue_t *jl_astaggedvalue(jl_value_t *v)
+DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
-    return jl_astaggedvalue__MACRO(v);
+    return jl_astaggedvalue(v);
 }
 
-#undef jl_typeof
-DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v)
+DLLEXPORT jl_value_t *(jl_valueof)(jl_taggedvalue_t *v)
 {
-    return jl_typeof__MACRO(v);
+    return jl_valueof(v);
+}
+
+DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
+{
+    return jl_typeof(v);
 }
 
 #ifdef __cplusplus

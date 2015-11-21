@@ -47,8 +47,8 @@ let inet = Base.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.port == 1024
 end
 # test InetAddr invalid port
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), -1)
-@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
+@test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), -1)
+@test_throws InexactError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
 
 # isless and comparisons
 @test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
@@ -86,22 +86,22 @@ wait(port)
 @test readall(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
 wait(tsk)
 
-socketname = (@windows ? "\\\\.\\pipe\\uv-test" : "testsocket") * "-" * randstring(6)
-@unix_only isfile(socketname) && Base.FS.unlink(socketname)
-
-c=Base.Condition()
-for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
-    tsk = @async begin
-        s = listen(T(socketname))
-        Base.notify(c)
-        sock = accept(s)
-        write(sock,"Hello World\n")
-        close(s)
-        close(sock)
+mktempdir() do tmpdir
+    socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    c = Base.Condition()
+    for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
+        tsk = @async begin
+            s = listen(T(socketname))
+            Base.notify(c)
+            sock = accept(s)
+            write(sock,"Hello World\n")
+            close(s)
+            close(sock)
+        end
+        wait(c)
+        @test readall(connect(socketname)) == "Hello World\n"
+        wait(tsk)
     end
-    wait(c)
-    @test readall(connect(socketname)) == "Hello World\n"
-    wait(tsk)
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")

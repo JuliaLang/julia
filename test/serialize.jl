@@ -252,7 +252,7 @@ end
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    yieldto(t)
+    wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
@@ -262,14 +262,15 @@ create_serialization_stream() do s # user-defined type array
     @test r.exception == nothing
 end
 
+immutable MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
-    t = Task(()->error("Test"))
-    @test_throws ErrorException yieldto(t)
+    t = Task(()->throw(MyErrorTypeTest()))
+    @test_throws MyErrorTypeTest wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, ErrorException)
+    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable type

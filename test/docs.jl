@@ -471,6 +471,9 @@ end
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Float64}), doc"foo from B")
 @test Docs.doc(I13068.A.foo, Tuple{Char}) === nothing
 
+# Issue #13905.
+@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(symbol("@x")))
+
 # Undocumented DataType Summaries.
 
 module Undocumented

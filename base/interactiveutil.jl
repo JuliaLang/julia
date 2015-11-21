@@ -12,7 +12,7 @@ EDITOR as an environmental variable.
 function editor()
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
-    elseif isreadable("/etc/alternatives/editor")
+    elseif isfile("/etc/alternatives/editor")
         default_editor = "/etc/alternatives/editor"
     else
         default_editor = "emacs"

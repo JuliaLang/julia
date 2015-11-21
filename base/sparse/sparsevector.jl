@@ -345,6 +345,7 @@ sprandbool(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, trueb
 
 ## Indexing into Matrices can return SparseVectors
 
+# Column slices
 function getindex(x::SparseMatrixCSC, ::Colon, j::Integer)
     checkbounds(x, :, j)
     r1 = convert(Int, x.colptr[j])
@@ -367,6 +368,38 @@ end
 @inline function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Integer)
     M = A[I, [J]]
     SparseVector(M.m, M.rowval, M.nzval)
+end
+
+# Row slices
+getindex(A::SparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
+getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector{Bool}) = A[i, find(J)]
+function Base.getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
+    checkbounds(A, i, J)
+    nJ = length(J)
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+
+    nzinds = Array(Ti, 0)
+    nzvals = Array(Tv, 0)
+
+    # adapted from SparseMatrixCSC's sorted_bsearch_A
+    ptrI = 1
+    @inbounds for j = 1:nJ
+        col = J[j]
+        rowI = i
+        ptrA = colptrA[col]
+        stopA = colptrA[col+1]-1
+        if ptrA <= stopA
+            if rowvalA[ptrA] <= rowI
+                ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
+                if ptrA <= stopA && rowvalA[ptrA] == rowI
+                    push!(nzinds, j)
+                    push!(nzvals, nzvalA[ptrA])
+                end
+            end
+            ptrI += 1
+        end
+    end
+    return SparseVector(nJ, nzinds, nzvals)
 end
 
 

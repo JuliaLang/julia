@@ -92,7 +92,16 @@ macro enum(T,syms...)
                 end
             end
         end
-        Base.show(io::IO,x::$(esc(typename))) = print(io, x, "::", $(esc(typename)))
+        function Base.show(io::IO,x::$(esc(typename)))
+            print(io, x, "::", $(esc(typename)), " = ", Int(x))
+        end
+        Base.showcompact(io::IO,x::$(esc(typename))) = print(io, x)
+        function Base.writemime(io::IO,::MIME"text/plain",::Type{$(esc(typename))})
+            print(io, "Enum ", $(esc(typename)), ":")
+            for (sym, i) in $vals
+                print(io, "\n", sym, " = ", i)
+            end
+        end
     end
     if isa(T,Symbol)
         for (sym,i) in vals

@@ -477,7 +477,7 @@ DLLEXPORT void jl_exit(int exitcode)
     exit(exitcode);
 }
 
-DLLEXPORT int jl_getpid()
+DLLEXPORT int jl_getpid(void)
 {
 #ifdef _OS_WINDOWS_
     return GetCurrentProcessId();
@@ -601,7 +601,7 @@ DLLEXPORT int jl_udp_send6(uv_udp_t *handle, uint16_t port, void *host, void *da
     return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, cb);
 }
 
-DLLEXPORT int jl_uv_sizeof_interface_address()
+DLLEXPORT int jl_uv_sizeof_interface_address(void)
 {
     return sizeof(uv_interface_address_t);
 }

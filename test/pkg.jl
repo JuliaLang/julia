@@ -23,6 +23,27 @@ temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
+
+    # Check that setprotocol! works.
+    begin
+        try
+            Pkg.setprotocol!("notarealprotocol")
+            Pkg.add("Example")
+            error("unexpected")
+        catch ex
+            if isa(ex, CompositeException)
+                ex = ex.exceptions[1]
+
+                if isa(ex, CapturedException)
+                    ex = ex.ex
+                end
+            end
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git. Unsupported URL protocol"
+        end
+    end
+
+    Pkg.setprotocol!("https")
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
     iob = IOBuffer()

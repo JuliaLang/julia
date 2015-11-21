@@ -121,7 +121,10 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
         if d == zero(T)
             throw(SingularException(i))
         end
-        V[i,:] *= inv(d)
+        d⁻¹ = inv(d)
+        for j=1:size(V,2)
+            @inbounds V[i,j] *= d⁻¹
+        end
     end
     V
 end

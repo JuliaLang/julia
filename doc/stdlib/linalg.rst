@@ -173,22 +173,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the polar decomposition of a vector.
 
-   Input
-   *****
-
+   Input:
 
    * ``v::AbstractVector`` - vector to normalize
 
-   Outputs
-   *******
-
+   Outputs:
 
    * ``w`` - A unit vector in the direction of ``v``
    * ``r`` - The norm of ``v``
 
-   See also
-   ********
-
+   See also:
 
    ``normalize``\ , ``normalize!``\ , ``LinAlg.qr!``
 
@@ -198,22 +192,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the polar decomposition of a vector. Instead of returning a new vector as ``qr(v::AbstractVector)``\ , this function mutates the input vector ``v`` in place.
 
-   Input
-   *****
-
+   Input:
 
    * ``v::AbstractVector`` - vector to normalize
 
-   Outputs
-   *******
-
+   Outputs:
 
    * ``w`` - A unit vector in the direction of ``v`` (This is a mutation of ``v``\ ).
    * ``r`` - The norm of ``v``
 
-   See also
-   ********
-
+   See also:
 
    ``normalize``\ , ``normalize!``\ , ``qr``
 
@@ -728,22 +716,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Normalize the vector ``v`` in-place with respect to the ``p``\ -norm.
 
-   Inputs
-   ******
-
+   Inputs:
 
    * ``v::AbstractVector`` - vector to be normalized
    * ``p::Real`` - The ``p``\ -norm to normalize with respect to. Default: 2
 
-   Output
-   ******
-
+   Output:
 
    * ``v`` - A unit vector being the input vector, rescaled to have norm 1.         The input vector is modified in-place.
 
-   See also
-   ********
-
+   See also:
 
    ``normalize``\ , ``qr``
 
@@ -753,22 +735,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Normalize the vector ``v`` with respect to the ``p``\ -norm.
 
-   Inputs
-   ******
-
+   Inputs:
 
    * ``v::AbstractVector`` - vector to be normalized
    * ``p::Real`` - The ``p``\ -norm to normalize with respect to. Default: 2
 
-   Output
-   ******
-
+   Output:
 
    * ``v`` - A unit vector being a copy of the input vector, scaled to have norm 1
 
-   See also
-   ********
-
+   See also:
 
    ``normalize!``\ , ``qr``
 

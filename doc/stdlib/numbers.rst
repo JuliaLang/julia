@@ -293,7 +293,7 @@ General Number Functions and Constants
        julia> Float32(1/3, RoundUp)
        0.33333334f0
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: Float64(x [, mode::RoundingMode])
 
@@ -309,7 +309,7 @@ General Number Functions and Constants
        julia> Float64(pi, RoundUp)
        3.1415926535897936
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: BigInt(x)
 
@@ -344,7 +344,7 @@ General Number Functions and Constants
       julia> big"2.1"
       2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
-.. function:: get_rounding(T)
+.. function:: rounding(T)
 
    .. Docstring generated from Julia source
 
@@ -355,7 +355,7 @@ General Number Functions and Constants
    Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
    ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
 
-.. function:: set_rounding(T, mode)
+.. function:: setrounding(T, mode)
 
    .. Docstring generated from Julia source
 
@@ -365,9 +365,9 @@ General Number Functions and Constants
 
    Note that this may affect other types, for instance changing the rounding
    mode of ``Float64`` will change the rounding mode of ``Float32``. See
-   ``get_rounding`` for available modes
+   ``rounding`` for available modes
 
-.. function:: with_rounding(f::Function, T, mode)
+.. function:: setrounding(f::Function, T, mode)
 
    .. Docstring generated from Julia source
 
@@ -375,12 +375,12 @@ General Number Functions and Constants
 
    .. code-block:: julia
 
-       old = get_rounding(T)
-       set_rounding(T, mode)
+       old = rounding(T)
+       setrounding(T, mode)
        f()
-       set_rounding(T, old)
+       setrounding(T, old)
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: get_zero_subnormals() -> Bool
 
@@ -537,30 +537,32 @@ The ``BigFloat`` type implements arbitrary-precision floating-point arithmetic u
 
    Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
 
-.. function:: get_bigfloat_precision()
+.. function:: precision(BigFloat)
 
    .. Docstring generated from Julia source
 
    Get the precision (in bits) currently used for ``BigFloat`` arithmetic.
 
-.. function:: set_bigfloat_precision(x::Int64)
+.. function:: setprecision([T=BigFloat,] precision::Int)
 
    .. Docstring generated from Julia source
 
-   Set the precision (in bits) to be used to ``BigFloat`` arithmetic.
+   Set the precision (in bits) to be used for ``T`` arithmetic.
 
-.. function:: with_bigfloat_precision(f::Function,precision::Integer)
+.. function:: setprecision(f::Function, [T=BigFloat,] precision::Integer)
 
    .. Docstring generated from Julia source
 
-   Change the ``BigFloat`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
+   Change the ``T`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
 
    .. code-block:: julia
 
-       old = get_bigfloat_precision()
-       set_bigfloat_precision(precision)
+       old = precision(BigFloat)
+       setprecision(BigFloat, precision)
        f()
-       set_bigfloat_precision(old)
+       setprecision(BigFloat, old)
+
+   Often used as ``setprecision(T, precision) do ... end``
 
 .. _random-numbers:
 

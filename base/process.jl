@@ -91,8 +91,8 @@ const DevNull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
-read{T<:DevNullStream}(::T, args...) = throw(EOFErorr())
-write{T<:DevNullStream}(::T, args...) = 0
+read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
+write(::DevNullStream, ::UInt8) = 1
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 copy(::DevNullStream) = DevNull
@@ -360,7 +360,7 @@ function setup_stdio(stdio::Pipe, readable::Bool)
 end
 
 function setup_stdio(stdio::IOStream, readable::Bool)
-    io = FS.File(RawFD(fd(stdio)))
+    io = Filesystem.File(RawFD(fd(stdio)))
     return (io, false)
 end
 
@@ -373,7 +373,7 @@ function setup_stdio(stdio::FileRedirect, readable::Bool)
         attr |= stdio.append ? JL_O_APPEND : JL_O_TRUNC
         perm = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
     end
-    io = FS.open(stdio.filename, attr, perm)
+    io = Filesystem.open(stdio.filename, attr, perm)
     return (io, true)
 end
 
@@ -440,7 +440,7 @@ end
 # \ A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
-#   | - An FS.File object to redirect the output to
+#   | - An Filesystem.File object to redirect the output to
 #   \ - An ASCIIString specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
@@ -462,7 +462,7 @@ spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{Process
 
 function eachline(cmd::AbstractCmd, stdin)
     stdout = Pipe()
-    processes = spawn(cmd, (stdin,stdout,DevNull))
+    processes = spawn(cmd, (stdin,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
@@ -475,12 +475,12 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=D
     if mode == "r"
         in = other
         out = io = Pipe()
-        processes = spawn(cmds, (in,out,DevNull))
+        processes = spawn(cmds, (in,out,STDERR))
         close(out.in)
     elseif mode == "w"
         in = io = Pipe()
         out = other
-        processes = spawn(cmds, (in,out,DevNull))
+        processes = spawn(cmds, (in,out,STDERR))
         close(in.out)
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))

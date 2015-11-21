@@ -93,7 +93,7 @@ a = rand(1, 1, 8, 8, 1)
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 @test A[2:6] == [2:6;]
-@test A[1:3,2,2:4] == cat(3,46:48,86:88,126:128)
+@test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
 @test A[:,3:9] == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
@@ -111,7 +111,7 @@ tmp = cat([1,3],blk,blk)
 
 x = rand(2,2)
 b = x[1,:]
-@test isequal(size(b), (1, 2))
+@test isequal(size(b), (2,))
 b = x[:,1]
 @test isequal(size(b), (2,))
 
@@ -129,7 +129,7 @@ B[[3,1],[2,4]] = [21 22; 23 24]
 B[4,[2,3]] = 7
 @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
+@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
 a = [3, 5, -7, 6]
 b = [4, 6, 2, -7, 1]
@@ -575,12 +575,12 @@ let
 
     @test isequal(c[:,1], cv)
     @test isequal(c[:,3], cv2)
-    @test isequal(c[4,:], [2.0 2.0 2.0 2.0]*1000)
+    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
 
     c = cumsum_kbn(A, 2)
 
-    @test isequal(c[1,:], cv2')
-    @test isequal(c[3,:], cv')
+    @test isequal(c[1,:], cv2)
+    @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
 end
@@ -1290,6 +1290,7 @@ Base.setindex!(A::LinSlowMatrix, v, i::Integer, j::Integer) = A.data[i,j] = v
 
 A = rand(3,5)
 B = LinSlowMatrix(A)
+S = sub(A, :, :)
 
 @test A == B
 @test B == A
@@ -1299,51 +1300,61 @@ B = LinSlowMatrix(A)
 for (a,b) in zip(A, B)
     @test a == b
 end
+for (a,s) in zip(A, S)
+    @test a == s
+end
 
 C = copy(B)
 @test A == C
 @test B == C
 
-@test vec(A) == vec(B)
-@test minimum(A) == minimum(B)
-@test maximum(A) == maximum(B)
+@test vec(A) == vec(B) == vec(S)
+@test minimum(A) == minimum(B) == minimum(S)
+@test maximum(A) == maximum(B) == maximum(S)
 
 a, ai = findmin(A)
 b, bi = findmin(B)
-@test a == b
-@test ai == bi
+s, si = findmin(S)
+@test a == b == s
+@test ai == bi == si
 
 a, ai = findmax(A)
 b, bi = findmax(B)
-@test a == b
-@test ai == bi
+s, si = findmax(S)
+@test a == b == s
+@test ai == bi == si
 
 fill!(B, 2)
 @test all(x->x==2, B)
 
-i,j = findn(B)
 iall = (1:size(A,1)).*ones(Int,size(A,2))'
 jall = ones(Int,size(A,1)).*(1:size(A,2))'
+i,j = findn(B)
+@test vec(i) == vec(iall)
+@test vec(j) == vec(jall)
+fill!(S, 2)
+i,j = findn(S)
 @test vec(i) == vec(iall)
 @test vec(j) == vec(jall)
 
 copy!(B, A)
+copy!(S, A)
 
-@test cat(1, A, B) == cat(1, A, A)
-@test cat(2, A, B) == cat(2, A, A)
+@test cat(1, A, B, S) == cat(1, A, A, A)
+@test cat(2, A, B, S) == cat(2, A, A, A)
 
-@test cumsum(A, 1) == cumsum(B, 1)
-@test cumsum(A, 2) == cumsum(B, 2)
+@test cumsum(A, 1) == cumsum(B, 1) == cumsum(S, 1)
+@test cumsum(A, 2) == cumsum(B, 2) == cumsum(S, 2)
 
-@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1)
-@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2)
+@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1) == mapslices(v->sort(v), S, 1)
+@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2) == mapslices(v->sort(v), S, 2)
 
-@test flipdim(A, 1) == flipdim(B, 1)
-@test flipdim(A, 2) == flipdim(B, 2)
+@test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
+@test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
 
-@test A + 1 == B + 1
-@test 2*A == 2*B
-@test A/3 == B/3
+@test A + 1 == B + 1 == S + 1
+@test 2*A == 2*B == 2*S
+@test A/3 == B/3 == S/3
 
 # issue #13250
 x13250 = zeros(3)

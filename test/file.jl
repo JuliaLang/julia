@@ -13,6 +13,16 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
+@test_throws SystemError mkdir(file)
+let err = nothing
+    try
+        mkdir(file)
+    catch err
+        io = IOBuffer()
+        showerror(io, err)
+        @test takebuf_string(io) == "SystemError (with $file): mkdir: File exists"
+    end
+end
 
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     dirlink = joinpath(dir, "dirlink")
@@ -46,12 +56,12 @@ end
 @test !isdir(file)
 @test isfile(file)
 @test !islink(file)
-@test isreadable(file)
-@test iswritable(file)
+@test filemode(file) & 0o444 > 0 # readable
+@test filemode(file) & 0o222 > 0 # writable
 chmod(file, filemode(file) & 0o7555)
-@test !iswritable(file)
+@test filemode(file) & 0o222 == 0
 chmod(file, filemode(file) | 0o222)
-@test !isexecutable(file)
+@test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
@@ -835,12 +845,12 @@ close(f)
 f = open(file, "r")
 test_LibcFILE(convert(Libc.FILE, f))
 close(f)
-@unix_only f = RawFD(ccall(:open, Cint, (Ptr{UInt8}, Cint), file, Base.FS.JL_O_RDONLY))
-@windows_only f = RawFD(ccall(:_open, Cint, (Ptr{UInt8}, Cint), file, Base.FS.JL_O_RDONLY))
+@unix_only f = RawFD(ccall(:open, Cint, (Ptr{UInt8}, Cint), file, Base.Filesystem.JL_O_RDONLY))
+@windows_only f = RawFD(ccall(:_open, Cint, (Ptr{UInt8}, Cint), file, Base.Filesystem.JL_O_RDONLY))
 test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
 # issue #10994: pathnames cannot contain embedded NUL chars
-for f in (mkdir, cd, Base.FS.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isexecutable, isfifo, isfile, islink, ispath, isreadable, issetgid, issetuid, issocket, issticky, iswritable, realpath, watch_file, poll_file)
+for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid, issetuid, issocket, issticky, realpath, watch_file, poll_file)
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
@@ -1031,7 +1041,7 @@ function test_13559()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
     writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
-    open(`$(Base.julia_cmd()) -e $writer_cmds`)
+    open(pipeline(`$(Base.julia_cmd()) -e $writer_cmds`, stderr=STDERR))
     #quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
@@ -1091,3 +1101,16 @@ function test_read_nbyte()
     rm(fn)
 end
 test_read_nbyte()
+
+# DevNull
+@test !isreadable(DevNull)
+@test iswritable(DevNull)
+@test isopen(DevNull)
+@test write(DevNull, 0xff) === 1
+@test write(DevNull, Int32(1234)) === 4
+@test_throws EOFError read(DevNull, UInt8)
+@test close(DevNull) === nothing
+@test flush(DevNull) === nothing
+@test copy(DevNull) === DevNull
+@test eof(DevNull)
+@test print(DevNull, "go to /dev/null") === nothing

@@ -11,7 +11,7 @@ elseif OS_NAME == :Windows
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
         isfile(path) || return false  # Fail fast
-        longpath(path) == path
+        Filesystem.longpath(path) == path
     end
 elseif OS_NAME == :Darwin
     # HFS+ filesystem is case-preserving. The getattrlist API returns

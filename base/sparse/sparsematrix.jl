@@ -50,7 +50,7 @@ nonzeros(S::SparseMatrixCSC) = S.nzval
 
 Return a vector of the row indices of `A`. Any modifications to the returned
 vector will mutate `A` as well. Providing access to how the row indices are
-stored internally can be useful in conjuction with iterating over structural
+stored internally can be useful in conjunction with iterating over structural
 nonzero values. See also `nonzeros(A)` and `nzrange(A, col)`.
 """
 rowvals(S::SparseMatrixCSC) = S.rowval
@@ -1351,8 +1351,6 @@ function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
     ((r1 > r2) || (A.rowval[r1] != i0)) ? zero(T) : A.nzval[r1]
 end
-
-getindex{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = getindex(A,[i],J)
 
 # Colon translation
 getindex(A::SparseMatrixCSC, ::Colon, ::Colon) = copy(A)

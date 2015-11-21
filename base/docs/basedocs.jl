@@ -455,7 +455,7 @@ keywords[symbol(";")] = doc"""
   `;` has a similar role in Julia as in many C-like languages,
   and is used to delimit the end of the previous statement.
   `;` is not necessary after new lines, but can be used to
-  seperate statements on a single line or to join statements into
+  separate statements on a single line or to join statements into
   a single expression:
 
       function foo()
@@ -503,9 +503,12 @@ keywords[:ccall] = doc"""
 
 keywords[:llvmcall] = doc"""
       llvmcall(IR::String, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+      llvmcall((declarations::String, IR::String), ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
   Call LLVM IR string in the first argument. Similar to an LLVM function `define`
   block, arguments are available as consecutive unnamed SSA variables (%0, %1, etc.).
+
+  The optional declarations string contains external functions declarations that are necessary for llvm to compile the IR string. Multiple declarations can be passed in by separating them with line breaks.
 
   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
@@ -539,7 +542,7 @@ keywords[:type] = doc"""
           y
       end
 
-  Fields can have type restrictions, which may be parametised:
+  Fields can have type restrictions, which may be parametrised:
 
       type Point{X}
           x::X

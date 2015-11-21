@@ -2,28 +2,163 @@
 
 using Base.Test
 
-addprocs(3; exeflags=`--check-bounds=yes --depwarn=error`)
+inline_flag = Base.JLOptions().can_inline == 1 ? `` : `--inline=no`
+cov_flag = ``
+if Base.JLOptions().code_coverage == 1
+    cov_flag = `--code-coverage=user`
+elseif Base.JLOptions().code_coverage == 2
+    cov_flag = `--code-coverage=all`
+end
+addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
+
+# Test Futures
+function testf(id)
+    f=Future(id)
+    @test isready(f) == false
+    @test isnull(f.v) == true
+    put!(f, :OK)
+    @test isready(f) == true
+    @test isnull(f.v) == false
+
+    @test_throws ErrorException put!(f, :OK) # Cannot put! to a already set future
+    @test_throws MethodError take!(f) # take! is unsupported on a Future
+
+    @test fetch(f) == :OK
+end
+
+testf(id_me)
+testf(id_other)
+
+# Distributed GC tests for Futures
+function test_futures_dgc(id)
+    f = remotecall(myid, id)
+    fid = Base.remoteref_id(f)
+
+    # remote value should be deleted after a fetch
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == true
+    @test isnull(f.v) == true
+    @test fetch(f) == id
+    @test isnull(f.v) == false
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == false
+
+
+    # if unfetched, it should be deleted after a finalize
+    f = remotecall(myid, id)
+    fid = Base.remoteref_id(f)
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == true
+    @test isnull(f.v) == true
+    finalize(f)
+    Base.flush_gc_msgs()
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == false
+end
+
+test_futures_dgc(id_me)
+test_futures_dgc(id_other)
+
+# if sent to another worker, it should not be deleted till the other worker has fetched.
+wid1 = workers()[1]
+wid2 = workers()[2]
+f = remotecall(myid, wid1)
+fid = Base.remoteref_id(f)
+
+fstore = RemoteChannel(wid2)
+put!(fstore, f)
+
+@test fetch(f) == wid1
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+remotecall_fetch(r->fetch(fetch(r)), wid2, fstore)
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+
+# put! should release remote reference since it would have been cached locally
+f = Future(wid1)
+fid = Base.remoteref_id(f)
+
+# should not be created remotely till accessed
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+# create it remotely
+isready(f)
+
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+put!(f, :OK)
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+@test fetch(f) == :OK
+
+# RemoteException should be thrown on a put! when another process has set the value
+f = Future(wid1)
+fid = Base.remoteref_id(f)
+
+fstore = RemoteChannel(wid2)
+put!(fstore, f) # send f to wid2
+put!(f, :OK) # set value from master
+
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+
+testval = remotecall_fetch(wid2, fstore) do x
+    try
+        put!(fetch(x), :OK)
+        return 0
+    catch e
+        if isa(e, RemoteException)
+            return 1
+        else
+            return 2
+        end
+    end
+end
+@test testval == 1
+
+# Distributed GC tests for RemoteChannels
+function test_remoteref_dgc(id)
+    rr = RemoteChannel(id)
+    put!(rr, :OK)
+    rrid = Base.remoteref_id(rr)
+
+    # remote value should be deleted after finalizing the ref
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == true
+    @test fetch(rr) == :OK
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == true
+    finalize(rr)
+    Base.flush_gc_msgs()
+    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == false
+end
+test_remoteref_dgc(id_me)
+test_remoteref_dgc(id_other)
+
+# if sent to another worker, it should not be deleted till the other worker has also finalized.
+wid1 = workers()[1]
+wid2 = workers()[2]
+rr = RemoteChannel(wid1)
+rrid = Base.remoteref_id(rr)
+
+fstore = RemoteChannel(wid2)
+put!(fstore, rr)
+
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == true
+finalize(rr); Base.flush_gc_msgs() # finalize locally
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == true
+remotecall_fetch(r->(finalize(take!(r)); Base.flush_gc_msgs(); nothing), wid2, fstore) # finalize remotely
+sleep(0.5) # to ensure that wid2 messages have been executed on wid1
+@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == false
 
 @test fetch(@spawnat id_other myid()) == id_other
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-rr=RemoteRef()
-@test typeof(rr) == RemoteRef{Channel{Any}}
-a = rand(5,5)
-put!(rr, a)
-@test rr[2,3] == a[2,3]
-@test rr[] == a
+# test getindex on Futures and RemoteChannels
+function test_indexing(rr)
+    a = rand(5,5)
+    put!(rr, a)
+    @test rr[2,3] == a[2,3]
+    @test rr[] == a
+end
 
-rr=RemoteRef(workers()[1])
-@test typeof(rr) == RemoteRef{Channel{Any}}
-a = rand(5,5)
-put!(rr, a)
-@test rr[1,5] == a[1,5]
-@test rr[] == a
+test_indexing(Future())
+test_indexing(Future(id_other))
+test_indexing(RemoteChannel())
+test_indexing(RemoteChannel(id_other))
 
 dims = (20,20,20)
 
@@ -242,7 +377,7 @@ map!(x->1, d)
 @test fill!(d, 2.) == fill(2, 10, 10)
 @test d[:] == fill(2, 100)
 @test d[:,1] == fill(2, 10)
-@test d[1,:] == fill(2, 1, 10)
+@test d[1,:] == fill(2, 10)
 
 # Boundary cases where length(S) <= length(pids)
 @test 2.0 == remotecall_fetch(D->D[2], id_other, Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
@@ -280,6 +415,20 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
     end
     @test isready(rr1)
 end
+
+# Test multiple concurrent put!/take! on a channel
+function testcpt()
+    c = Channel()
+    size = 0
+    inc() = size += 1
+    dec() = size -= 1
+    @sync for i = 1:10^4
+        @async (sleep(rand()); put!(c, i); inc())
+        @async (sleep(rand()); take!(c); dec())
+    end
+    @test size == 0
+end
+testcpt()
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
@@ -337,33 +486,10 @@ function test_channel(c)
 end
 
 test_channel(Channel(10))
-test_channel(RemoteRef(()->Channel(10)))
+test_channel(RemoteChannel(()->Channel(10)))
 
 c=Channel{Int}(1)
 @test_throws MethodError put!(c, "Hello")
-
-c=Channel(256)
-# Test growth of channel
-@test c.szp1 <= 33
-for x in 1:40
-  put!(c, x)
-end
-@test c.szp1 <= 65
-for x in 1:39
-  take!(c)
-end
-for x in 1:64
-  put!(c, x)
-end
-@test (c.szp1 > 65) && (c.szp1 <= 129)
-for x in 1:39
-  take!(c)
-end
-@test fetch(c) == 39
-for x in 1:26
-  take!(c)
-end
-@test isready(c) == false
 
 # test channel iterations
 function test_iteration(in_c, out_c)
@@ -465,7 +591,7 @@ if DoFullTest
     script = joinpath(dirname(@__FILE__), "topology.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
 
-    (strm, proc) = open(cmd)
+    (strm, proc) = open(pipeline(cmd, stderr=STDERR))
     wait(proc)
     if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         println(readall(strm))
@@ -574,7 +700,12 @@ function f13168(n)
     val
 end
 let t = schedule(@task f13168(100))
-    @test schedule(t) === t
+    @test t.state == :queued
+    @test_throws ErrorException schedule(t)
+    yield()
+    @test t.state == :done
+    @test_throws ErrorException schedule(t)
+    @test isa(wait(t),Float64)
 end
 
 # issue #13122
