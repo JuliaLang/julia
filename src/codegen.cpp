@@ -517,7 +517,6 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
-static Function *wbfunc;
 static Function *queuerootfun;
 static Function *expect_func;
 static Function *jldlsym_func;
@@ -539,11 +538,6 @@ static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
 
 static std::map<jl_fptr_t, Function*> builtin_func_map;
-
-extern "C" DLLEXPORT void jl_gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
-{
-    jl_gc_wb(parent, ptr);
-}
 
 // --- code generation ---
 
@@ -3775,7 +3769,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         return mark_julia_type(val, true, ty);
     }
     else if (head == exc_sym) { // *jl_exception_in_transit
-        return mark_julia_type(builder.CreateLoad(prepare_global(jlexc_var), /*isvolatile*/true), true, jl_any_type);
+        return mark_julia_type(builder.CreateLoad(emit_exc_in_transit(),
+                                                  /*isvolatile*/true),
+                               true, jl_any_type);
     }
     else if (head == leave_sym) {
         assert(jl_is_long(args[0]));
@@ -3811,7 +3807,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         builder.SetInsertPoint(cond_resetstkoflw_blk);
         builder.CreateCondBr(builder.CreateICmpEQ(
                     literal_pointer_val(jl_stackovf_exception),
-                    builder.CreateLoad(prepare_global(jlexc_var), true)),
+                    builder.CreateLoad(emit_exc_in_transit(), true)),
                 resetstkoflw_blk, handlr);
         builder.SetInsertPoint(resetstkoflw_blk);
         builder.CreateCall(prepare_call(resetstkoflw_func)
@@ -3954,7 +3950,7 @@ emit_gcpops(jl_codectx_t *ctx)
                 (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
             builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
                                                       T_ppjlvalue),
-                                prepare_global(jlpgcstack_var));
+                                emit_pgcstack());
         }
     }
 }
@@ -3976,9 +3972,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     gc->tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + gc->argSpaceSize)); // fix up the offset to the temp slot space
     builder.CreateStore(ConstantInt::get(T_size, (gc->argSpaceSize + gc->maxDepth) << 1),
                         builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
-    builder.CreateStore(builder.CreateLoad(prepare_global(jlpgcstack_var)),
+    builder.CreateStore(builder.CreateLoad(emit_pgcstack()),
                         builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
-    builder.CreateStore(newgcframe, prepare_global(jlpgcstack_var));
+    builder.CreateStore(newgcframe, emit_pgcstack());
     // Initialize the slots for temporary variables to NULL
     for (int i = 0; i < gc->argSpaceSize; i++) {
         Value *argTempi = emit_local_slot(i, ctx);
@@ -5808,14 +5804,6 @@ static void init_julia_llvm_env(Module *m)
                                     Function::ExternalLinkage,
                                     "jl_gc_queue_root", m);
     add_named_global(queuerootfun, (void*)&jl_gc_queue_root);
-
-    std::vector<Type *> wbargs(0);
-    wbargs.push_back(T_pjlvalue);
-    wbargs.push_back(T_pjlvalue);
-    wbfunc = Function::Create(FunctionType::get(T_void, wbargs, false),
-                              Function::ExternalLinkage,
-                              "jl_gc_wb_slow", m);
-    add_named_global(wbfunc, (void*)&jl_gc_wb_slow);
 
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);

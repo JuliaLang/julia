@@ -53,10 +53,13 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
             return ModuleF;
         }
         else {
-            return Function::Create(F->getFunctionType(),
-                                    Function::ExternalLinkage,
-                                    F->getName(),
-                                    jl_Module);
+            Function *func = Function::Create(F->getFunctionType(),
+                                              Function::ExternalLinkage,
+                                              F->getName(),
+                                              jl_Module);
+            func->setAttributes(AttributeSet());
+            func->copyAttributesFrom(F);
+            return func;
         }
     }
 #endif
@@ -2119,4 +2122,14 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         assert(sty->instance != NULL);
         return mark_julia_const(sty->instance);
     }
+}
+
+static Value *emit_pgcstack()
+{
+    return prepare_global(jlpgcstack_var);
+}
+
+static Value *emit_exc_in_transit()
+{
+    return prepare_global(jlexc_var);
 }
