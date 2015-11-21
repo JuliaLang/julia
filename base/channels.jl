@@ -38,10 +38,14 @@ type InvalidStateException <: Exception
     state::Symbol
 end
 
+function canput(c::Channel)
+    d = c.take_pos - c.put_pos
+    !(d == 1 || d == -(c.szp1-1))
+end
+
 function put!(c::Channel, v)
     !isopen(c) && throw(closed_exception())
-    d = c.take_pos - c.put_pos
-    if (d == 1) || (d == -(c.szp1-1))
+    while !canput(c)
         # grow the channel if possible
         if (c.szp1 - 1) < c.sz_max
             if ((c.szp1-1) * 2) > c.sz_max
@@ -61,6 +65,7 @@ function put!(c::Channel, v)
             end
             c.take_pos = 1
             c.data = newdata
+            break
         else
             wait(c.cond_put)
         end
