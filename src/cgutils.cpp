@@ -53,10 +53,13 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
             return ModuleF;
         }
         else {
-            return Function::Create(F->getFunctionType(),
-                                    Function::ExternalLinkage,
-                                    F->getName(),
-                                    jl_Module);
+            Function *func = Function::Create(F->getFunctionType(),
+                                              Function::ExternalLinkage,
+                                              F->getName(),
+                                              jl_Module);
+            func->setAttributes(AttributeSet());
+            func->copyAttributesFrom(F);
+            return func;
         }
     }
 #endif
