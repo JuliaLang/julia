@@ -251,7 +251,7 @@ typedef struct {
 // In the single-threaded version, they are essentially noops, but nonetheless
 // serve to check that the thread context macros are being used.
 #ifdef JULIA_ENABLE_THREADING
-static JL_THREAD jl_thread_heap_t *jl_thread_heap;
+#define jl_thread_heap (jl_get_ptls_states()->heap)
 #define FOR_EACH_HEAP()                                                 \
     for (jl_each_heap_index_t __current_heap_idx = {jl_n_threads, NULL}; \
          --current_heap_index >= 0 &&                                   \

@@ -275,12 +275,6 @@ else
 DISABLE_ASSERTIONS := -DNDEBUG
 endif
 
-# Threads
-ifeq ($(JULIA_THREADS), 1)
-LLVM_VER := svn
-LLVM_GIT_URL_LLVM := https://github.com/JuliaLang/llvm.git -b jn/tls37
-endif
-
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)

@@ -138,21 +138,17 @@ static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
-JL_THREAD jl_task_t *jl_root_task;
-DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
+#define jl_root_task (jl_get_ptls_states()->root_task)
 
 #ifdef COPY_STACKS
-static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
+#define jl_jmp_target (jl_get_ptls_states()->jmp_target)
 
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
-JL_THREAD void *jl_stackbase;
 
 #ifndef ASM_COPY_STACKS
-static JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
+#define jl_base_ctx (jl_get_ptls_states()->base_ctx)
 #endif
 
 static void NOINLINE save_stack(jl_task_t *t)
@@ -359,7 +355,6 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
-JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 extern int jl_in_gc;
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
