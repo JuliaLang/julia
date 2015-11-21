@@ -1862,7 +1862,6 @@ static void visit_mark_stack(int mark_mode)
 
 void jl_mark_box_caches(void);
 
-extern JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
 double clock_now(void);
 #endif
