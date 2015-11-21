@@ -1310,6 +1310,7 @@ DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
 const char *jl_dlfind_win32(const char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
+DLLEXPORT char *jl_get_libjulia_path();
 
 #if defined(__linux__) || defined(__FreeBSD__)
 DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);

@@ -269,6 +269,39 @@ const char *jl_dlfind_win32(const char *f_name)
 }
 #endif
 
+static char *libjulia_path = NULL;
+DLLEXPORT char *jl_get_libjulia_path()
+{
+    if (libjulia_path != NULL) {
+        int max_path = 512;
+        libjulia_path = malloc(max_path);
+
+#ifdef _OS_WINDOWS_
+        HMODULE hm = NULL;
+
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR) &jl_get_libjulia_path,
+                                &hm)) {
+            int ret = GetLastError();
+            fprintf(stderr, "GetModuleHandle returned %d\n", ret);
+        }
+        GetModuleFileNameA(hm, libjulia_path, max_path);
+#else
+        Dl_info dl_info;
+        dladdr((void*)jl_get_libjulia_path, &dl_info);
+        strncpy(libjulia_path, dl_info.dli_fname, max_path);
+#endif
+
+        // remove libjulia.so/dll/dylib from full path
+        char *pos = strrchr(libjulia_path, PATHSEP);
+        if (pos) { // terminate string
+            pos[1] = '\0';
+        }
+    }
+    return libjulia_path;
+}
+
 #ifdef __cplusplus
 }
 #endif
