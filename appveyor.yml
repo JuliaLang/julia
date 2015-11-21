@@ -47,8 +47,7 @@ build_script:
 # Unable to find Digest::SHA or Digest::SHA::PurePerl
   - set PATH=%PATH:C:\Perl\bin;=%
 #  - '"%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64'
-# Since the AppVeyor VMs have Git installed, they have MSYS1
-  - sh --login /c/projects/julia/contrib/windows/msys_build.sh
+  - C:\MinGW\msys\1.0\bin\sh --login /c/projects/julia/contrib/windows/msys_build.sh
 
 test_script:
   - usr\bin\julia -e "versioninfo()"
