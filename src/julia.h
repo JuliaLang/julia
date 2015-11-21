@@ -61,12 +61,17 @@ extern "C" {
 #ifndef JULIA_ENABLE_THREADING
 // Definition for compiling non-thread-safe Julia.
 #  define JL_THREAD
-#elif !defined(_OS_WINDOWS_)
+#elif !defined(_COMPILER_MICROSOFT_)
 // Definition for compiling Julia on platforms with GCC __thread.
 #  define JL_THREAD __thread
 #else
 // Definition for compiling Julia on Windows
 #  define JL_THREAD __declspec(thread)
+#endif
+#ifdef _COMPILER_MICROSOFT_
+#define JL_THREAD_EXPORT JL_THREAD
+#else
+#define JL_THREAD_EXPORT DLLEXPORT JL_THREAD
 #endif
 
 DLLEXPORT int16_t jl_threadid(void);
@@ -99,15 +104,15 @@ DLLEXPORT void jl_threading_profile(void);
 #ifdef JULIA_ENABLE_THREADING
 #define FORCE_ELF
 #define JL_DEFINE_MUTEX(m)                                                \
-    uint64_t volatile m ## _mutex = 0;                                    \
+    int64_t volatile m ## _mutex = 0;                                     \
     int32_t m ## _lock_count = 0;
 
 #define JL_DEFINE_MUTEX_EXT(m)                                            \
-    extern uint64_t volatile m ## _mutex;                                 \
+    extern int64_t volatile m ## _mutex;                                  \
     extern int32_t m ## _lock_count;
 
 #define JL_LOCK(m)                                                        \
-    if (m ## _mutex == uv_thread_self())                                  \
+    if ((uv_thread_t) m ## _mutex == uv_thread_self())                    \
         ++m ## _lock_count;                                               \
     else {                                                                \
         for (; ;) {                                                       \
@@ -122,7 +127,7 @@ DLLEXPORT void jl_threading_profile(void);
     }
 
 #define JL_UNLOCK(m)                                                      \
-    if (m ## _mutex == uv_thread_self()) {                                \
+    if ((uv_thread_t) m ## _mutex == uv_thread_self()) {                  \
         --m ## _lock_count;                                               \
         if (m ## _lock_count == 0)                                        \
             JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
@@ -575,7 +580,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH2(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
+extern JL_THREAD_EXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH1(arg1)                                                 \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
@@ -1475,10 +1480,10 @@ typedef struct {
     jl_value_t * volatile *ptask_arg_in_transit;
 } jl_thread_task_state_t;
 
-extern DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
-extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
-extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-extern DLLEXPORT JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
+extern JL_THREAD_EXPORT jl_task_t * volatile jl_current_task;
+extern JL_THREAD jl_task_t *jl_root_task;
+extern JL_THREAD_EXPORT jl_value_t *jl_exception_in_transit;
+extern JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
