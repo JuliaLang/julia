@@ -40,10 +40,16 @@ extern "C" {
 #define NWORDS(sz) (((sz)+3)>>2)
 #endif
 
-#if __GNUC__
-#define NORETURN __attribute__ ((noreturn))
+#if defined(__GNUC__)
+#  define NORETURN __attribute__ ((noreturn))
+#  define JL_CONST_FUNC __attribute__((const))
+#elif defined(_COMPILER_MICROSOFT_)
+#  define NORETURN __declspec(noreturn)
+// This is the closest I can find for __attribute__((const))
+#  define JL_CONST_FUNC __declspec(noalias)
 #else
-#define NORETURN
+#  define NORETURN
+#  define JL_CONST_FUNC
 #endif
 
 #define container_of(ptr, type, member) \
