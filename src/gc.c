@@ -2443,10 +2443,11 @@ void jl_print_gc_stats(JL_STREAM *s)
 #endif
 
 // Per-thread initialization (when threading is fully implemented)
-struct _jl_thread_heap_t *jl_mk_thread_heap(void)
+jl_thread_heap_t *jl_mk_thread_heap(void)
 {
 #ifdef JULIA_ENABLE_THREADING
-    jl_thread_heap = malloc(sizeof(jl_thread_heap_t)); // FIXME - should be cache-aligned malloc
+    // FIXME - should be cache-aligned malloc
+    jl_thread_heap = (jl_thread_heap_t*)malloc(sizeof(jl_thread_heap_t));
 #endif
     FOR_CURRENT_HEAP () {
         const int* szc = sizeclasses;
