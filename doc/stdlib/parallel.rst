@@ -471,6 +471,24 @@ General Parallel Computing Support
 
    Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown.
 
+.. function:: Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
+
+   .. Docstring generated from Julia source
+
+   A low-level API which returns the unique identifying tuple for a remote reference. A reference id is a tuple of two elements - pid where the reference was created from and a one-up number from that node.
+
+.. function:: Base.channel_from_id(refid) -> c
+
+   .. Docstring generated from Julia source
+
+   A low-level API which returns the backing AbstractChannel for an id returned by ``remoteref_id``\ . The call is valid only on the node where the backing channel exists.
+
+.. function:: Base.worker_id_from_socket(s::IO) -> pid
+
+   .. Docstring generated from Julia source
+
+   A low-level API which given a ``IO`` connection, returns the pid of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
+
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
 
