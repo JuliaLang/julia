@@ -941,7 +941,7 @@ static void jl_finalize_module(Module *m);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
-    JL_LOCK(codegen)
+    JL_LOCK(codegen);
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -966,7 +966,7 @@ static Function *to_function(jl_lambda_info_t *li)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
-        JL_UNLOCK(codegen)
+        JL_UNLOCK(codegen);
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->name));
     }
     assert(f != NULL);
@@ -1005,7 +1005,7 @@ static Function *to_function(jl_lambda_info_t *li)
     }
     nested_compile = last_n_c;
     jl_gc_inhibit_finalizers(nested_compile);
-    JL_UNLOCK(codegen)
+    JL_UNLOCK(codegen);
     JL_SIGATOMIC_END();
     if (dump_compiles_stream != NULL) {
         uint64_t this_time = jl_hrtime();
@@ -1062,7 +1062,7 @@ static void jl_finalize_module(Module *m)
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
-    JL_LOCK(codegen)
+    JL_LOCK(codegen);
     // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
@@ -1131,7 +1131,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         JL_SIGATOMIC_END();
     }
     f->fptr = li->fptr;
-    JL_UNLOCK(codegen)
+    JL_UNLOCK(codegen);
 }
 
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li)

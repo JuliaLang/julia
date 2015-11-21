@@ -416,6 +416,20 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
     @test isready(rr1)
 end
 
+# Test multiple concurrent put!/take! on a channel
+function testcpt()
+    c = Channel()
+    size = 0
+    inc() = size += 1
+    dec() = size -= 1
+    @sync for i = 1:10^4
+        @async (sleep(rand()); put!(c, i); inc())
+        @async (sleep(rand()); take!(c); dec())
+    end
+    @test size == 0
+end
+testcpt()
+
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
@@ -476,29 +490,6 @@ test_channel(RemoteChannel(()->Channel(10)))
 
 c=Channel{Int}(1)
 @test_throws MethodError put!(c, "Hello")
-
-c=Channel(256)
-# Test growth of channel
-@test c.szp1 <= 33
-for x in 1:40
-  put!(c, x)
-end
-@test c.szp1 <= 65
-for x in 1:39
-  take!(c)
-end
-for x in 1:64
-  put!(c, x)
-end
-@test (c.szp1 > 65) && (c.szp1 <= 129)
-for x in 1:39
-  take!(c)
-end
-@test fetch(c) == 39
-for x in 1:26
-  take!(c)
-end
-@test isready(c) == false
 
 # test channel iterations
 function test_iteration(in_c, out_c)
