@@ -69,7 +69,7 @@ DLLEXPORT void *jl_threadgroup(void);
 DLLEXPORT void jl_cpu_pause(void);
 DLLEXPORT void jl_threading_profile(void);
 
-#if __GNUC__
+#if defined(__GNUC__)
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        __sync_fetch_and_add(&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
@@ -82,7 +82,7 @@ DLLEXPORT void jl_threading_profile(void);
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       _InterlockedCompareExchange64(&(a), (c), (b))
+       _InterlockedCompareExchange64((volatile LONG64 *)&(a), (c), (b))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        _InterlockedExchange64(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
