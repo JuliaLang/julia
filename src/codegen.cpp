@@ -517,7 +517,6 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
-static Function *wbfunc;
 static Function *queuerootfun;
 static Function *expect_func;
 static Function *jldlsym_func;
@@ -539,11 +538,6 @@ static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
 
 static std::map<jl_fptr_t, Function*> builtin_func_map;
-
-extern "C" DLLEXPORT void jl_gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
-{
-    jl_gc_wb(parent, ptr);
-}
 
 // --- code generation ---
 
@@ -5808,14 +5802,6 @@ static void init_julia_llvm_env(Module *m)
                                     Function::ExternalLinkage,
                                     "jl_gc_queue_root", m);
     add_named_global(queuerootfun, (void*)&jl_gc_queue_root);
-
-    std::vector<Type *> wbargs(0);
-    wbargs.push_back(T_pjlvalue);
-    wbargs.push_back(T_pjlvalue);
-    wbfunc = Function::Create(FunctionType::get(T_void, wbargs, false),
-                              Function::ExternalLinkage,
-                              "jl_gc_wb_slow", m);
-    add_named_global(wbfunc, (void*)&jl_gc_wb_slow);
 
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);
