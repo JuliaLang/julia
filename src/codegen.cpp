@@ -921,8 +921,6 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
     }
 }
 
-JL_DEFINE_MUTEX_EXT(codegen)
-
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 uint64_t last_time = 0;
