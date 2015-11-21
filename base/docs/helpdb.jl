@@ -715,9 +715,9 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 doc"""
-    writedlm(f, A, delim='\\t')
+    writedlm(f, A, delim='\\t', header_string=nothing)
 
-Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f` (either a filename string or an `IO` stream) using the given delimeter `delim` (which defaults to tab, but can be any printable Julia object, typically a `Char` or `AbstractString`).
+Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f` (either a filename string or an `IO` stream) using the given delimeter `delim` (which defaults to tab, but can be any printable Julia object, typically a `Char` or `AbstractString`). Optionally write a `header_string` to the file.
 
 For example, two vectors `x` and `y` of the same length can be written as two columns of tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
 """
