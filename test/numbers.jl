@@ -2561,6 +2561,21 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
 end
 
+#getindex(x::Number,-1) throws BoundsError
+#getindex(x::Number,0) throws BoundsError
+#getindex(x::Number,2) throws BoundsError
+#getindex(x::Array,-1) throws BoundsError
+#getindex(x::Array,0 throws BoundsError
+#getindex(x::Array,length(x::Array)+1) throws BoundsError
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+    @test_throws BoundsError getindex(x,-1)
+    @test_throws BoundsError getindex(x,0)
+    @test_throws BoundsError getindex(x,2)
+    @test_throws BoundsError getindex([x x],-1)
+    @test_throws BoundsError getindex([x x],0)
+    @test_throws BoundsError getindex([x x],length([x,x])+1)
+end
+
 #copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 #same sign
 for x in [1.23, 7, e, 4//5]
