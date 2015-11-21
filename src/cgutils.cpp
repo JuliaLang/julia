@@ -2120,3 +2120,13 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         return mark_julia_const(sty->instance);
     }
 }
+
+static Value *emit_pgcstack()
+{
+    return prepare_global(jlpgcstack_var);
+}
+
+static Value *emit_exc_in_transit()
+{
+    return prepare_global(jlexc_var);
+}
