@@ -335,6 +335,8 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 #ifdef __cplusplus
 }
 #endif
