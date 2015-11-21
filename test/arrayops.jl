@@ -306,7 +306,7 @@ for i = 1:3
 end
 @test isequal(a,findn(z))
 
-#argmin argmax
+#findmin findmax indmin indmax
 @test indmax([10,12,9,11]) == 2
 @test indmin([10,12,9,11]) == 3
 @test findmin([NaN,3.2,1.8]) == (1.8,3)
@@ -315,6 +315,16 @@ end
 @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
 @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
 @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+
+# #14085
+@test findmax(4:9) == (9,6)
+@test indmax(4:9) == 6
+@test findmin(4:9) == (4,1)
+@test indmin(4:9) == 1
+@test findmax(5:-2:1) == (5,1)
+@test indmax(5:-2:1) == 1
+@test findmin(5:-2:1) == (1,3)
+@test indmin(5:-2:1) == 3
 
 ## permutedims ##
 
