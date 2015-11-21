@@ -275,7 +275,7 @@ Force reloading of a package, even if it has been loaded before. This is intende
 during package development as code is modified.
 """
 function reload(name::AbstractString)
-    if isfile(name) || contains(name,path_separator)
+    if isfile(name) || contains(name,Filesystem.path_separator)
         # for reload("path/file.jl") just ask for include instead
         error("use `include` instead of `reload` to load source files")
     else
