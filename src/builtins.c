@@ -980,7 +980,7 @@ static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
 
 void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer)
 {
-    JL_LOCK(codegen)
+    JL_LOCK(codegen);
     assert(linfo);
     assert(linfo->specTypes);
     // to run inference on all thunks. slows down loading files.
@@ -1009,7 +1009,7 @@ void jl_trampoline_compile_linfo(jl_lambda_info_t *linfo, int always_infer)
         linfo->ast = jl_compress_ast(linfo, linfo->ast);
         jl_gc_wb(linfo, linfo->ast);
     }
-    JL_UNLOCK(codegen)
+    JL_UNLOCK(codegen);
 }
 
 JL_CALLABLE(jl_trampoline)
