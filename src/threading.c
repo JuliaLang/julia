@@ -37,22 +37,35 @@ extern "C" {
 #include "threading.h"
 
 #ifdef JULIA_ENABLE_THREADING
+// fallback provided for embedding
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
+{
 #  if !defined(_COMPILER_MICROSOFT_)
-// Definition for compiling Julia on platforms with GCC __thread.
-#    define JL_THREAD __thread
+    static __thread jl_tls_states_t tls_states;
 #  else
-// Definition for compiling Julia on Windows
-#    define JL_THREAD __declspec(thread)
+    static __declspec(thread) jl_tls_states_t tls_states;
 #  endif
-JL_THREAD jl_tls_states_t jl_tls_states;
+    return &tls_states;
+}
+static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_fallback;
+DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return (*jl_tls_states_cb)();
+}
+DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
+{
+    // only allow setting this once
+    if (f && jl_tls_states_cb == jl_get_ptls_states_fallback) {
+        jl_tls_states_cb = f;
+    }
+}
 #else
 DLLEXPORT jl_tls_states_t jl_tls_states;
-#endif
-
 DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
     return &jl_tls_states;
 }
+#endif
 
 // thread ID
 DLLEXPORT int jl_n_threads;     // # threads we're actually using
