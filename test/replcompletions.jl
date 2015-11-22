@@ -199,7 +199,7 @@ end
 
 # Test method completions
 s = "max("
-for (s, delta) in multiline(s):
+for (s, delta) in multiline(s)
     c, r, res = test_complete(s)
     @test !res
     @test c[1] == string(start(methods(max)))
@@ -209,12 +209,14 @@ end
 
 # Test completion of methods with input args
 s = "CompletionFoo.test(1,1, "
+for (s, delta) in multiline(s)
     c, r, res = test_complete(s)
     @test !res
     @test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
     @test length(c) == 3
-    @test r == 1:18
+    @test r == 1+delta:18+delta
     @test s[r] == "CompletionFoo.test"
+end
 
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
@@ -440,32 +442,26 @@ let #test that it can auto complete with spaces in file/path
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
             s = @windows? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            for (s, delta) in multiline(s):
-                c,r = test_scomplete(s)
-                @test r == endof(s)-4+delta:endof(s)_delta
-                @test "space\\ .file" in c
-            end
+            c,r = test_scomplete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file" in c
 
             s = @windows? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            for (s, delta) in multiline(s):
-                c,r = test_complete(s)
-                @test r == endof(s)-4+delta:endof(s)+delta
-                @test "space\\ .file\"" in c
-            end
+            c,r = test_complete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file\"" in c
         end
         # Test for issue #10324
-        for (s, delta) in multiline(s):
-            s = "cd(\"$dir_space"
-            c,r = test_complete(s)
-            @test r == 5+delta:15+delta
-            @test s[r+delta] ==  dir_space
-        end
+        s = "cd(\"$dir_space"
+        c,r = test_complete(s)
+        @test r == 5:15
+        @test s[r] ==  dir_space
     end
     rm(dir, recursive=true)
 end
 
 # Test the completion returns nothing when the folder do not exist
-for (s, delta) in multiline("cd(\"folder_do_not_exist_77/file"):
+for (s, delta) in multiline("cd(\"folder_do_not_exist_77/file")
     c,r = test_complete(s)
     @test length(c) == 0
 end
@@ -477,28 +473,28 @@ end
     temp_name = basename(path)
     cd(path) do
         s = "cd ..\\\\"
-        for (s,delta) in multiline(s):
+        for (s,delta) in multiline(s)
             c,r = test_scomplete(s)
             @test r == length(s)+1:length(s)
             @test temp_name * "\\\\" in c
         end
 
         s = "ls $(file[1:2])"
-        for (s,delta) in multiline(s):
+        for (s,delta) in multiline(s)
             c,r = test_scomplete(s)
             @test r == length(s)-1:length(s)
             @test file in c
         end
 
         s = "cd(\"..\\"
-        for (s,delta) in multiline(s):
+        for (s,delta) in multiline(s)
             c,r = test_complete(s)
             @test r == length(s)+1:length(s)
             @test temp_name * "\\\\" in c
         end
 
         s = "cd(\"$(file[1:2])"
-        for (s,delta) in multiline(s):
+        for (s,delta) in multiline(s)
             c,r = test_complete(s)
             @test r == length(s) - 1:length(s)
             @test file  in c
