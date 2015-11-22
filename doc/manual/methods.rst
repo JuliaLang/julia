@@ -54,7 +54,7 @@ for structuring and organizing programs.
 
 .. [#] In C++ or Java, for example, in a method call like
   ``obj.meth(arg1,arg2)``, the object obj "receives" the method call and is
-  implicitly passed to the method via the ``this`` keyword, rather then as an
+  implicitly passed to the method via the ``this`` keyword, rather than as an
   explicit method argument. When the current ``this`` object is the receiver of a
   method call, it can be omitted altogether, writing just ``meth(arg1,arg2)``,
   with ``this`` implied as the receiving object.
