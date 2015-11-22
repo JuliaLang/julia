@@ -47,7 +47,16 @@ static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
 #  endif
     return &tls_states;
 }
-static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_fallback;
+static jl_tls_states_t *jl_get_ptls_states_init(void);
+static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
+static jl_tls_states_t *jl_get_ptls_states_init(void)
+{
+    // This is clearly not thread safe but should be fine since we
+    // make sure the tls states callback is finalized before adding
+    // multiple threads
+    jl_tls_states_cb = jl_get_ptls_states_fallback;
+    return jl_get_ptls_states_fallback();
+}
 DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
     return (*jl_tls_states_cb)();
@@ -55,12 +64,15 @@ DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
 {
     // only allow setting this once
-    if (f && jl_tls_states_cb == jl_get_ptls_states_fallback) {
+    if (f && f != jl_get_ptls_states_init &&
+        jl_tls_states_cb == jl_get_ptls_states_init) {
         jl_tls_states_cb = f;
     }
 }
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
+    if (jl_tls_states_cb == jl_get_ptls_states_init)
+        jl_get_ptls_states_init();
     // for codegen
     return jl_tls_states_cb;
 }
