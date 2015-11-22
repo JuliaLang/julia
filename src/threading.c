@@ -59,6 +59,11 @@ DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
         jl_tls_states_cb = f;
     }
 }
+jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+{
+    // for codegen
+    return jl_tls_states_cb;
+}
 #else
 DLLEXPORT jl_tls_states_t jl_tls_states;
 DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
