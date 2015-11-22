@@ -1339,7 +1339,7 @@ Note the core distinction between these two ways of constructing a :obj:`Nullabl
 object: in one style, you provide a type, ``T``, as a function parameter; in
 the other style, you provide a single value of type ``T`` as an argument.
 
-Checking if an :obj:`Nullable` object has a value
+Checking if a :obj:`Nullable` object has a value
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can check if a :obj:`Nullable` object has any value using :func:`isnull`:
