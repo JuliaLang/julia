@@ -40,6 +40,7 @@ DLLEXPORT int jl_n_threads;     // # threads we're actually using
 DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;
 jl_gcframe_t ***jl_all_pgcstacks;
+static uv_barrier_t jl_init_blocker;
 
 // return calling thread's ID
 DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
@@ -114,6 +115,7 @@ void ti_threadfun(void *arg)
 #ifdef COPY_STACKS
     jl_set_base_ctx((char*)&arg);
 #endif
+    uv_barrier_wait(&jl_init_blocker);
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
@@ -183,6 +185,7 @@ void jl_init_threading(void)
     }
     if (jl_n_threads > jl_max_threads)
         jl_n_threads = jl_max_threads;
+    uv_barrier_init(&jl_init_blocker, jl_n_threads);
 
     // set up space for per-thread heaps
     jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
@@ -256,6 +259,8 @@ void jl_start_threads(void)
         cpu_sfence();
         targs[i]->state = TI_THREAD_WORK;
     }
+    uv_barrier_wait(&jl_init_blocker);
+    uv_barrier_destroy(&jl_init_blocker);
 
     // free the argument array; the threads will free their arguments
     free(targs);
