@@ -1298,7 +1298,7 @@ minimal interface designed to ensure that interactions with missing values
 are safe. At present, the interface consists of four possible interactions:
 
 - Construct a :obj:`Nullable` object.
-- Check if an :obj:`Nullable` object has a missing value.
+- Check if a :obj:`Nullable` object has a missing value.
 - Access the value of a :obj:`Nullable` object with a guarantee that a
   :exc:`NullException` will be thrown if the object's value is missing.
 - Access the value of a :obj:`Nullable` object with a guarantee that a default
@@ -1352,10 +1352,10 @@ You can check if a :obj:`Nullable` object has any value using :func:`isnull`:
     julia> isnull(Nullable(0.0))
     false
 
-Safely accessing the value of an :obj:`Nullable` object
+Safely accessing the value of a :obj:`Nullable` object
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can safely access the value of an :obj:`Nullable` object using :func:`get`:
+You can safely access the value of a :obj:`Nullable` object using :func:`get`:
 
 .. doctest::
 
