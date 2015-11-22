@@ -155,6 +155,9 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
+#ifdef JULIA_ENABLE_THREADING
+jl_get_ptls_states_func jl_get_ptls_states_getter(void);
+#endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);

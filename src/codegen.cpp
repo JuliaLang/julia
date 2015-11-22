@@ -5643,7 +5643,7 @@ static void init_julia_llvm_env(Module *m)
                       AttributeSet::FunctionIndex, Attribute::ReadNone)
         .addAttribute(jltls_states_func->getContext(),
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
-    add_named_global(jltls_states_func, (void*)&jl_get_ptls_states);
+    add_named_global(jltls_states_func, (void*)jl_get_ptls_states_getter());
 #endif
 
     std::vector<Type*> args1(0);
