@@ -293,7 +293,7 @@ General Number Functions and Constants
        julia> Float32(1/3, RoundUp)
        0.33333334f0
 
-   See ``rounding`` for available rounding modes.
+   See ``get_rounding`` for available rounding modes.
 
 .. function:: Float64(x [, mode::RoundingMode])
 
@@ -309,7 +309,7 @@ General Number Functions and Constants
        julia> Float64(pi, RoundUp)
        3.1415926535897936
 
-   See ``rounding`` for available rounding modes.
+   See ``get_rounding`` for available rounding modes.
 
 .. function:: BigInt(x)
 

@@ -281,11 +281,11 @@ function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::
     return readdlm_string(sbuff, dlm, T, eol, auto, optsd)
 end
 
-const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
-const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
+const valid_opts = [:header, :has_header, :header_string, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
+const valid_opt_types = [Bool, Bool, AbstractString, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
-    d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
+    d = Dict{Symbol,Union{Bool,AbstractString,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
         !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
@@ -566,6 +566,8 @@ writedlm_cell(io::IO, elt, dlm, quotes) = print(io, elt)
 function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
+    header_string = get(optsd, :header_string, nothing)
+    header_string ≠ nothing && print_unescaped(io, string(header_string,"\n"))
     pb = PipeBuffer()
     nr = size(a, 1)
     nc = size(a, 2)
@@ -605,6 +607,8 @@ end
 function writedlm(io::IO, itr, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
+    header_string = get(optsd, :header_string, nothing)
+    header_string ≠ nothing && print_unescaped(io, string(header_string,"\n"))
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)

@@ -378,9 +378,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ , e.g. ``Int64``\ .
-
-   For arrays, returns a string of size and type info, e.g. ``10-element Array{Int64,1}``\ .
+   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ . For arrays, returns strings like "2x2 Float64 Array".
 
 .. function:: print(x)
 
@@ -541,11 +539,11 @@ Text I/O
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``n``\ . If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
-.. function:: writedlm(f, A, delim='\\t')
+.. function:: writedlm(f, A, delim='\\t', header_string=nothing)
 
    .. Docstring generated from Julia source
 
-   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
+   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ). Optionally write a ``header_string`` to the file.
 
    For example, two vectors ``x`` and ``y`` of the same length can be written as two columns of tab-delimited text to ``f`` by either ``writedlm(f, [x y])`` or by ``writedlm(f, zip(x, y))``\ .
 
@@ -741,7 +739,7 @@ Memory-mapped I/O
 
    Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
 
-   The ``grow`` keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
+   The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
 
    The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
 
