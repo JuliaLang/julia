@@ -1501,6 +1501,9 @@ DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
 #ifndef JULIA_ENABLE_THREADING
 extern DLLEXPORT jl_tls_states_t jl_tls_states;
 #define jl_get_ptls_states() (&jl_tls_states)
+#else
+typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
+DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 #endif
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
