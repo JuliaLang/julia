@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # Special comments:
 #
 # all targets in here should follow the same structure,
-# and provide a get-a, configure-a, compile-a, check-a, and install-a
+# and provide a get-a, configure-a, compile-a, check-a, fastcheck-a, and install-a
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
@@ -27,6 +27,8 @@ include $(JULIAHOME)/Make.inc
 # this is some magic Makefile trick that tells make
 # that all targets with a % in them on that line will
 # be rebuilt in a single invocation
+#
+# to debug 'define' rules, replace eval at the usage site with info or error
 #
 
 ## Some shared configuration options ##
@@ -196,13 +198,17 @@ endif
 ## Common build target prefixes
 
 DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
+DEP_LIBS_STAGED := $(filter-out osxunwind suitesparse suitesparse-wrapper virtualenv,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
 configure: $(addprefix configure-, $(DEP_LIBS))
 compile: $(addprefix compile-, $(DEP_LIBS))
 check: $(addprefix check-, $(DEP_LIBS))
+fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
+stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
 install: $(addprefix install-, $(DEP_LIBS))
+uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
@@ -217,22 +223,53 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): | $(DIRS)
 $(eval $(call dir_target,$(SRCDIR)/srccache))
 
+upper = $(shell echo $1 | tr a-z A-Z)
+
 ## A rule for calling `make install` ##
-#	rule: dependencies
-#   	$(call make-install,rel-build-directory,add-args)
-#   	touch -c $@
+# example usage:
+#   $(call staged-install, \
+#       1 target, \               # name
+#       2 rel-build-directory, \  # BUILDDIR-relative path to binaries
+#       3 MAKE_INSTALL, \         # will be called with args SRCDIR,DESTDIR,$4
+#       4 add-args, \             # extra args for $3
+#       5 target-file, \          # installation-target file
+#       6 post-install)           # post-install commands
+#
 # this rule ensures that make install is more nearly atomic
 # so it's harder to get half-installed (or half-reinstalled) dependencies
-MAKE_DESTDIR = "$(build_staging)/$1"
-define staged-install
-	rm -rf $(build_staging)/$1
-	$2
-	mkdir -p $(build_prefix)
-	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
+# and enables sharing deps compiles, uninstall, and fast reinstall
+MAKE_INSTALL = +$$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+define LIBFILE_INSTALL
+	mkdir -p $2/$$(build_libdir)
+	cp $3 $2/$$(build_libdir)
 endef
-
-define make-install
-	$(call staged-install,$1,+$(MAKE) -C $(BUILDDIR)/$1 install $(MAKE_COMMON) $2 DESTDIR=$(call MAKE_DESTDIR,$1))
+define BINFILE_INSTALL
+	mkdir -p $2/$$(build_bindir)
+	cp $3 $2/$$(build_bindir)
+endef
+define staged-install
+get-$(strip $1): $$($(call upper,$1)_SRC_FILE)
+stage-$(strip $1): $$(build_staging)/$2.tgz
+install-$(strip $1): $5
+uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+	-cd $$(build_prefix) && rm -dv -- $$$$(tar -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+reinstall-$(strip $1):
+	+$$(MAKE) uninstall-$(strip $1)
+	-rm $$(build_staging)/$2.tgz
+	+$$(MAKE) stage-$(strip $1)
+	+$$(MAKE) install-$(strip $1)
+$$(build_staging)/$2.tgz: $$($(call upper,$1)_SRC_FILE)
+	+$$(MAKE) compile-$(strip $1)
+	+$$(MAKE) fastcheck-$(strip $1)
+	rm -rf $$(build_staging)/$2
+	mkdir -p $$(build_staging)/$2$$(build_prefix)
+	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
+	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@ .
+$5: $$(build_staging)/$2.tgz
+	mkdir -p $$(build_prefix)
+	tar -xUzf $$< -C $$(build_prefix)
+	$6
+	touch -c $$@
 endef
 
 ## A rule for making a git-external dependency ##
@@ -252,7 +289,7 @@ endef
 #
 # this defines rules for:
 #   VARNAME_SRC_DIR = source directory for the output, relative to $(SRCDIR)/srccache or $(BUILDDIR)
-#   VARNAME_SRC_FILE = target file for make get-VARNAME target
+#   VARNAME_SRC_FILE = target files for make get-VARNAME target
 #   dirname:
 #   dirname/file_from_download:
 #   distclean-dirname:
@@ -262,13 +299,14 @@ include $(SRCDIR)/$1.version
 
 ifneq ($(NO_GIT),1)
 $2_SRC_DIR := $1
-$2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
-$$($2_SRC_FILE)/HEAD: | $$(SRCDIR)/srccache
+$2_SRC_FOLDER := $$(SRCDIR)/srccache/$1.git
+$2_SRC_FILE1 := $5/$1/.git/HEAD
+$$($2_SRC_FOLDER)/HEAD: | $$(SRCDIR)/srccache
 	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$(dir $$@)
-$5/$1/.git/HEAD: | $$($2_SRC_FILE)/HEAD
+$$($2_SRC_FILE1): | $$($2_SRC_FOLDER)/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
-	-cd $$($2_SRC_FILE) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	git clone -q --depth=10 --branch $$($2_BRANCH) $$($2_SRC_FILE) $5/$1
+	-cd $$($2_SRC_FOLDER) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	git clone -q --depth=10 --branch $$($2_BRANCH) $$($2_SRC_FOLDER) $5/$1
 	cd $5/$1 && git remote set-url origin $$($2_GIT_URL)
 	touch -c $5/$1/$3
 ifneq ($5,$$(BUILDDIR))
@@ -276,7 +314,7 @@ $$(BUILDDIR)/$1:
 	mkdir -p $$@
 $5/$1/$3: | $$(BUILDDIR)/$1
 endif
-$5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
+$5/$1/$3: $$(SRCDIR)/$1.version | $$($2_SRC_FILE1)
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCDIR)/srccache/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git fetch -q $$(SRCDIR)/srccache/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
@@ -284,24 +322,23 @@ $5/$1/$3: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	touch -c $$@
 $5/$1/$4: $5/$1/.git/HEAD
-$$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
-	touch -c $$@
 
 else # NO_GIT
 
 $2_SRC_DIR := $1-$$($2_SHA1)
-$2_SRC_FILE := $$(SRCDIR)/srccache/$$($2_SRC_DIR).tar.gz
-$$($2_SRC_FILE): | $$(SRCDIR)/srccache
+$2_SRC_FILE1 := $$(SRCDIR)/srccache/$$($2_SRC_DIR).tar.gz
+$$($2_SRC_FILE1): | $$(SRCDIR)/srccache
 	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
-$5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE)
+$5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE1)
 	$$(JLCHECKSUM) $$<
 	mkdir -p $$(dir $$@) && \
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	touch -c $$@
 endif # NO_GIT
 
+$2_SRC_FILE := $$($2_SRC_FILE1) $$(SRCDIR)/$1.version
 distclean-$1:
-	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1
+	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE1) $$(BUILDDIR)/$1
 endef
 
 
@@ -524,6 +561,12 @@ $(LLVM_SRC_DIR)/tools/lldb:
 $(LLVM_SRC_DIR)/configure: $(LLVM_SRC_DIR)/tools/lldb
 endif
 
+ifeq ($(LLVM_VER),svn)
+LLVM_SRC_FILE := $(LLVM_SRC_DIR)/configure
+else
+LLVM_SRC_FILE := $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+endif
+
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 llvm_python_workaround=$(SRCDIR)/srccache/python2_path
 $(llvm_python_workaround):
@@ -717,17 +760,19 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
+CMAKE_INSTALL_LLVM = \
+	cd $1 && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$2" -P cmake_install.cmake)
+$(eval $(call staged-install,llvm,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE), \
+	CMAKE_INSTALL_LLVM,, \
+	$(LLVM_OBJ_TARGET),)))
 else
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
+$(eval $(call staged-install, \
+	llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	MAKE_INSTALL,$$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH", \
+	$$(LLVM_OBJ_TARGET),))
+stage-llvm: | $(llvm_python_workaround)
 endif # LLVM_USE_CMAKE
-	touch -c $@
-
-reinstall-llvm:
-	-rm $(LLVM_OBJ_TARGET)
-	$(MAKE) -f $(SRCDIR)/Makefile -s install-llvm
 
 clean-llvm:
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
@@ -737,15 +782,10 @@ distclean-llvm:
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
 		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
 
-ifneq ($(LLVM_VER),svn)
-get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
-else
-get-llvm: $(LLVM_SRC_DIR)/configure
-endif
 configure-llvm: $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/checked
-install-llvm: $(LLVM_OBJ_TARGET)
+fastcheck-llvm: #none
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 ifeq ($(LLVM_VER),svn)
@@ -801,24 +841,25 @@ ifeq ($(OS),$(BUILD_OS))
 	-$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(UV_OBJ_TARGET): $(UV_SRC_TARGET)
-	$(call make-install,$(LIBUV_SRC_DIR),)
-	$(INSTALL_NAME_CMD)libuv.$(SHLIB_EXT) $(build_shlibdir)/libuv.$(SHLIB_EXT)
-	touch -c $@
+
+$(eval $(call staged-install, \
+	libuv,$$(LIBUV_SRC_DIR), \
+	MAKE_INSTALL,, \
+	$$(UV_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libuv.$$(SHLIB_EXT) $$(build_shlibdir)/libuv.$$(SHLIB_EXT)))
 
 clean-libuv:
 	-$(MAKE) -C $(BUILDDIR)/$(LIBUV_SRC_DIR) clean
 	-rm -rf $(build_libdir)/libuv.a $(build_libdir)/libuv.la $(build_includedir)/libuv.h $(build_includedir)/libuv-private
 
-get-libuv: $(LIBUV_SRC_FILE)
 configure-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/config.status
 compile-libuv: $(UV_SRC_TARGET)
 check-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/checked
-install-libuv: $(UV_OBJ_TARGET)
-
+fastcheck-libuv: #none
 
 ## PCRE ##
 
+PCRE_SRC_FILE := $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 PCRE_SRC_TARGET := $(BUILDDIR)/pcre2-$(PCRE_VER)/.libs/libpcre2-8.$(SHLIB_EXT)
 PCRE_OBJ_TARGET := $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
@@ -828,9 +869,9 @@ ifneq ($(OS),WINNT)
 PCRE_LDFLAGS := "-Wl,-rpath,'$(build_libdir)'"
 endif
 
-$(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2: | $(SRCDIR)/srccache
+$(PCRE_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
-$(SRCDIR)/srccache/pcre2-$(PCRE_VER)/configure: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
+$(SRCDIR)/srccache/pcre2-$(PCRE_VER)/configure: $(PCRE_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	touch -c $@
@@ -849,10 +890,12 @@ ifneq ($(OS),WINNT)
 endif
 endif
 	echo 1 > $@
-$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) $(BUILDDIR)/pcre2-$(PCRE_VER)/checked
-	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
-	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $@
-	touch -c $@
+
+$(eval $(call staged-install, \
+	pcre,pcre2-$$(PCRE_VER), \
+	MAKE_INSTALL,$$$$(LIBTOOL_CCLD), \
+	$$(PCRE_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$@))
 
 clean-pcre:
 	-$(MAKE) -C pcre2-$(PCRE_VER) clean
@@ -860,11 +903,10 @@ clean-pcre:
 distclean-pcre:
 	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
-get-pcre: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 configure-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/config.status
 compile-pcre: $(PCRE_SRC_TARGET)
 check-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/checked
-install-pcre: $(PCRE_OBJ_TARGET)
+fastcheck-pcre: check-pcre
 
 
 ## openlibm ##
@@ -872,31 +914,33 @@ OPENLIBM_GIT_URL := git://github.com/JuliaLang/openlibm.git
 OPENLIBM_TAR_URL = https://api.github.com/repos/JuliaLang/openlibm/tarball/$1
 $(eval $(call git-external,openlibm,OPENLIBM,Makefile,libopenlibm.$(SHLIB_EXT),$(BUILDDIR)))
 
-OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE := $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 $(OPENLIBM_OBJ_SOURCE): $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a: $(OPENLIBM_OBJ_SOURCE)
-	$(call make-install,$(OPENLIBM_SRC_DIR),$(OPENLIBM_FLAGS))
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
-	touch -c $(OPENLIBM_OBJ_TARGET)
+
+$(eval $(call staged-install, \
+	openlibm,$$(OPENLIBM_SRC_DIR), \
+	MAKE_INSTALL,$$(OPENLIBM_FLAGS), \
+	$$(OPENLIBM_OBJ_TARGET), \
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)))
 
 clean-openlibm:
 	-$(MAKE) -C $(BUILDDIR)/$(OPENLIBM_SRC_DIR) distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 	-rm $(build_libdir)/libopenlibm.a
 
-get-openlibm: $(OPENLIBM_SRC_FILE)
 configure-openlibm: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
-install-openlibm: $(OPENLIBM_OBJ_TARGET)
+fastcheck-openlibm: check-openlibm
 
 
 ## openspecfun ##
+
 OPENSPECFUN_GIT_URL := git://github.com/JuliaLang/openspecfun.git
 OPENSPECFUN_TAR_URL = https://api.github.com/repos/JuliaLang/openspecfun/tarball/$1
 $(eval $(call git-external,openspecfun,OPENSPECFUN,Makefile,libopenspecfun.$(SHLIB_EXT),$(BUILDDIR)))
@@ -912,33 +956,34 @@ OPENSPECFUN_OBJ_SOURCE := $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/libopenspecfun.$(SH
 OPENSPECFUN_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" CFLAGS="$(CFLAGS) $(OPENSPECFUN_CFLAGS)"
 
 ifeq ($(USE_SYSTEM_LIBM),0)
-	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
-$(OPENSPECFUN_OBJ_SOURCE): $(OPENLIBM_OBJ_TARGET)
+OPENSPECFUN_FLAGS += USE_OPENLIBM=1
+$(OPENSPECFUN_OBJ_SOURCE) $(build_staging)/$(OPENSPECFUN_SRC_DIR).tgz: | $(OPENLIBM_OBJ_TARGET)
 endif
 
 $(OPENSPECFUN_OBJ_SOURCE): $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
-	$(call make-install,$(OPENSPECFUN_SRC_DIR),$(OPENSPECFUN_FLAGS))
-	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
-	touch -c $@
+
+$(eval $(call staged-install, \
+	openspecfun,$$(OPENSPECFUN_SRC_DIR), \
+	MAKE_INSTALL,$$(OPENSPECFUN_FLAGS), \
+	$$(OPENSPECFUN_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libopenspecfun.$$(SHLIB_EXT) $$@))
 
 clean-openspecfun:
 	-$(MAKE) -C $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR) distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 	-rm $(build_libdir)/libopenspecfun.a
 
-get-openspecfun: $(OPENSPECFUN_SRC_FILE)
 configure-openspecfun: $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/Makefile
 compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
-install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
-
+fastcheck-openspecfun: check-openspecfun
 
 ## DSFMT ##
 
-DSFMT_OBJ_TARGET := $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) $(build_includedir)/dSFMT.h
+DSFMT_SRC_FILE := $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
+DSFMT_OBJ_TARGET := $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE := $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
@@ -952,10 +997,10 @@ ifeq ($(ARCH), x86_64)
 DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
-$(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCDIR)/srccache
+$(DSFMT_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
 	touch -c $@
-$(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
+$(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status: $(DSFMT_SRC_FILE)
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $< && \
@@ -965,25 +1010,32 @@ $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status: $(SRCDIR)/srccache/dsfmt-$(DSFMT_V
 $(DSFMT_OBJ_SOURCE): $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
 	cd $(dir $<) && \
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT)
-$(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
-	cp $(dir $<)/dSFMT.h $(build_includedir)
-	cp $< $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
+
+define DSFMT_INSTALL
+	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
+	cp $1/dSFMT.h $2/$$(build_includedir)
+	cp $$(DSFMT_OBJ_SOURCE) $2/$$(build_libdir)
+endef
+$(eval $(call staged-install, \
+	dsfmt,dsfmt-$(DSFMT_VER), \
+	DSFMT_INSTALL,, \
+	$$(DSFMT_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libdSFMT.$$(SHLIB_EXT) $$(build_shlibdir)/libdSFMT.$$(SHLIB_EXT)))
 
 clean-dsfmt:
 	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 distclean-dsfmt:
 	-rm -rf $(SRCDIR)/srccache/dsfmt*.tar.gz $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
 
-get-dsfmt: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
 configure-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 check-dsfmt: compile-dsfmt
-install-dsfmt: $(DSFMT_OBJ_TARGET)
+fastcheck-dsfmt: check-dsfmt
 
 
 ## Rmath-julia ##
 
+RMATH_JULIA_SRC_FILE := $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz
 RMATH_JULIA_OBJ_TARGET := $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
 RMATH_JULIA_OBJ_SOURCE := $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/src/libRmath-julia.$(SHLIB_EXT)
 
@@ -996,9 +1048,9 @@ RMATH_JULIA_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
 			   DSFMT_includedir="$(build_includedir)"
 
-$(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz: | $(SRCDIR)/srccache
+$(RMATH_JULIA_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://api.github.com/repos/JuliaLang/Rmath-julia/tarball/v$(RMATH_JULIA_VER)
-$(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile: $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz | $(SRCDIR)/srccache
+$(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile: $(RMATH_JULIA_SRC_FILE) | $(SRCDIR)/srccache
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)
 	$(TAR) -C $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER) --strip-components 1 -xf $<
@@ -1006,59 +1058,65 @@ $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile: $(SRCDIR)/srccache/Rmath-ju
 $(RMATH_JULIA_OBJ_SOURCE): $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile
 	$(MAKE) -C $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/src $(RMATH_JULIA_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
-	cp $< $@
-	$(INSTALL_NAME_CMD)libRmath-julia.$(SHLIB_EXT) $@
+
+$(eval $(call staged-install, \
+	Rmath-julia,Rmath-julia-$(RMATH_JULIA_VER), \
+	LIBFILE_INSTALL,$$(RMATH_JULIA_OBJ_SOURCE), \
+	$$(RMATH_JULIA_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libRmath-julia.$$(SHLIB_EXT) $$@))
+
 
 clean-Rmath-julia:
 	-$(MAKE) -C $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER) clean
 distclean-Rmath-julia: clean-Rmath-julia
 	-rm -rf $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER) $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)
 
-get-Rmath-julia: $(SRCDIR)/srccache/Rmath-julia-$(RMATH_JULIA_VER).tar.gz
 configure-Rmath-julia: $(BUILDDIR)/Rmath-julia-$(RMATH_JULIA_VER)/Makefile
 compile-Rmath-julia: $(RMATH_JULIA_OBJ_SOURCE)
 check-Rmath-julia: compile-Rmath-julia
-install-Rmath-julia: $(RMATH_JULIA_OBJ_TARGET)
+fastcheck-Rmath-julia: check-Rmath-julia
 
 
 ## objconv ##
 
+OBJCONV_SRC_FILE := $(SRCDIR)/srccache/objconv.zip
 OBJCONV_SOURCE := $(BUILDDIR)/objconv/objconv
 OBJCONV_TARGET := $(build_bindir)/objconv
 
-$(SRCDIR)/srccache/objconv.zip: | $(SRCDIR)/srccache
+$(OBJCONV_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
-$(BUILDDIR)/objconv/config.status: $(SRCDIR)/srccache/objconv.zip
+$(BUILDDIR)/objconv/config.status: $(OBJCONV_SRC_FILE)
 	-rm -r $(dir $@)
 	unzip -d $(dir $@) $<
 	cd $(dir $@) && unzip source.zip
 	echo 1 > $@
 $(OBJCONV_SOURCE): $(BUILDDIR)/objconv/config.status
 	cd $(dir $<) && $(CXX) -o objconv -O2 *.cpp
-$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
-	cp -f $< $@
+
+$(eval $(call staged-install, \
+	objconv,objconv, \
+	BINFILE_INSTALL,$$(OBJCONV_SOURCE), \
+	$$(OBJCONV_TARGET),))
 
 clean-objconv:
 	-rm -f $(OBJCONV_TARGET)
 distclean-objconv:
 	-rm -rf $(SRCDIR)/srccache/objconv.zip $(BUILDDIR)/objconv
 
-get-objconv: $(SRCDIR)/srccache/objconv.zip
 configure-objconv: $(BUILDDIR)/objconv/config.status
 compile-objconv: $(OBJCONV_SOURCE)
 check-objconv: compile-objconv
-install-objconv: $(OBJCONV_TARGET)
+fastcheck-objconv: check-objconv
 
 
 ## OpenBLAS ##
 # LAPACK is built into OpenBLAS by default
 OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
-$(eval $(call git-external,openblas,OPENBLAS,Makefile,$(LIBBLASNAME).$(SHLIB_EXT),$(BUILDDIR)))
+$(eval $(call git-external,openblas,OPENBLAS,Makefile,libopenblas$(OPENBLAS_LIBNAMESUFFIX).$(SHLIB_EXT),$(BUILDDIR)))
 
-OPENBLAS_OBJ_SOURCE := $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT)
-OPENBLAS_OBJ_TARGET := $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT)
+OPENBLAS_OBJ_SOURCE := $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/libopenblas$(OPENBLAS_LIBNAMESUFFIX).$(SHLIB_EXT)
+OPENBLAS_OBJ_TARGET := $(build_shlibdir)/libopenblas$(OPENBLAS_LIBNAMESUFFIX).$(SHLIB_EXT)
 OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
@@ -1094,7 +1152,7 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="$(LIBBLASNAME)"
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
 OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(BUILDDIR)/objconv/objconv)
 $(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
@@ -1131,24 +1189,26 @@ $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
 	echo $(MAKE) -C $(dir $<) $(OPENBLAS_BUILD_OPTS) # echo first, so we only print the error message below in a failure case
 	@$(MAKE) -C $(dir $<) $(OPENBLAS_BUILD_OPTS) || (echo $(WARNCOLOR)"*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0' if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"$(ENDCOLOR) && false)
 	touch -c $@
-ifneq ($(USE_SYSTEM_BLAS),1)
-$(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
-	cp -f $< $@
-ifeq ($(OS), Linux)
-	cd $(dir $@) && \
-	ln -sf $(LIBBLASNAME).$(SHLIB_EXT) $(LIBBLASNAME).$(SHLIB_EXT).0
+
+define OPENBLAS_INSTALL
+    $(call LIBFILE_INSTALL,$1,$2,$3)
+ifeq ($$(OS), Linux)
+	ln -sf libopenblas$(OPENBLAS_LIBNAMESUFFIX).$(SHLIB_EXT) $2/$$(build_libdir)/libopenblas$(OPENBLAS_LIBNAMESUFFIX).$(SHLIB_EXT).0
 endif
-	$(INSTALL_NAME_CMD)$(LIBBLASNAME).$(SHLIB_EXT) $@
-endif
+endef
+$(eval $(call staged-install, \
+	openblas,$(OPENBLAS_SRC_DIR), \
+	OPENBLAS_INSTALL,$(OPENBLAS_OBJ_SOURCE), \
+	$$(OPENBLAS_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$@))
 
 clean-openblas:
 	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
 
-get-openblas: $(OPENBLAS_SRC_FILE)
 configure-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 check-openblas: compile-openblas
-install-openblas: $(OPENBLAS_OBJ_TARGET)
+fastcheck-openblas: check-openblas
 
 
 ## ATLAS (currently 3.10.0) ##
@@ -1157,6 +1217,7 @@ install-openblas: $(OPENBLAS_OBJ_TARGET)
 # should always be compiled with (a real) gcc, it's
 # configure script will search for the best match
 # (gcc 4.7, gcc, clang,ICC/microsoft/others)
+ATLAS_SRC_FILE := $(SRCDIR)/srccache/atlas/configure
 ATLAS_OBJ_SOURCE := $(BUILDDIR)/atlas/build/lib/libsatlas.$(SHLIB_EXT)
 ATLAS_OBJ_TARGET := $(build_shlibdir)/libsatlas.$(SHLIB_EXT)
 ATLAS_FLAGS := --shared --prefix=$(build_prefix) --cc=gcc -t 0 \
@@ -1171,12 +1232,12 @@ endif
 #ATLAS_FLAGS += -V -1 -A 11 # any x87 (PentiumPro or Athlon & later)
 #ATLAS_FLAGS += -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
 
-$(SRCDIR)/srccache/atlas/configure:
+$(ATLAS_SRC_FILE):
 	git clone git://github.com/vtjnash/atlas-3.10.0.git $(SRCDIR)/srccache/atlas
 ifeq "$(MAKECMDGOALS)" "compile-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
-$(BUILDDIR)/atlas/Make.top: $(SRCDIR)/srccache/atlas/configure $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+$(BUILDDIR)/atlas/Make.top: $(ATLAS_SRC_FILE) $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$< $(ATLAS_FLAGS)
@@ -1189,21 +1250,23 @@ $(ATLAS_OBJ_SOURCE):
 	$(error cannot build atlas in parallel with anything else)
 endif
 
-$(ATLAS_OBJ_TARGET): $(ATLAS_OBJ_SOURCE)
-	cp -f $(ATLAS_OBJ_SOURCE) $@
-	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $@
-	touch -c $@
+$(eval $(call staged-install, \
+	atlas,atlas-3.10.0, \
+	ATLAS_INSTALL,, \
+	LIBFILE_INSTALL,$(ATLAS_OBJ_SOURCE), \
+	$$(ATLAS_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libsatlas.$$(SHLIB_EXT) $$@))
 
 clean-atlas:
 	rm -rf $(BUILDDIR)/atlas/build
 distclean-atlas:
 	rm -rf $(BUILDDIR)/atlas
 
-get-atlas: $(SRCDIR)/srccache/atlas/configure $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+get-atlas: get-lapack
 configure-atlas: $(BUILDDIR)/atlas/Make.top
 compile-atlas: $(ATLAS_OBJ_SOURCE)
 check-atlas: compile-atlas
-install-atlas: $(ATLAS_OBJ_TARGET)
+fastcheck-atlas: check-atlas
 
 ## Mac gfortran BLAS wrapper ##
 GFORTBLAS_FFLAGS :=
@@ -1235,30 +1298,26 @@ endif
 
 ## LAPACK ##
 
-ifeq ($(USE_SYSTEM_LAPACK), 0)
-LAPACK_OBJ_TARGET := $(build_shlibdir)/liblapack.$(SHLIB_EXT)
+LAPACK_SRC_FILE := $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 LAPACK_OBJ_SOURCE := $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
-else
-LAPACK_OBJ_TARGET :=
-LAPACK_OBJ_SOURCE :=
-endif
+LAPACK_OBJ_TARGET := $(build_shlibdir)/liblapack.$(SHLIB_EXT)
 
 LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS) -O0" OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
 ifneq ($(OS),WINNT)
 LAPACK_MFLAGS += BLASLIB="-Wl,-rpath,'$(build_libdir)' $(LIBBLAS)"
 endif
 
-$(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
+$(LAPACK_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+$(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc: $(LAPACK_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(BUILDDIR) && $(TAR) zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)
+$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a $(build_staging)/lapack-$(LAPACK_VER).tgz: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(OS),Darwin)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
+$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a $(build_staging)/lapack-$(LAPACK_VER).tgz: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
 endif
 $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a: $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc
 	$(MAKE) -C $(dir $@) lapacklib $(LAPACK_MFLAGS)
@@ -1270,9 +1329,13 @@ endif
 	touch $@
 $(LAPACK_OBJ_SOURCE): $(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.a
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) $(dir $<)/SRC/*.o $(dir $<)/INSTALL/dlamch.o $(dir $<)/INSTALL/dsecnd_INT_ETIME.o $(dir $<)/INSTALL/ilaver.o $(dir $<)/INSTALL/slamch.o $(LIBBLAS) -o $@
-$(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
-	cp $< $@
-	$(INSTALL_NAME_CMD)liblapack.$(SHLIB_EXT) $@
+
+$(eval $(call staged-install, \
+	lapack,lapack-$(LAPACK_VER), \
+	LIBFILE_INSTALL,$(LAPACK_OBJ_SOURCE), \
+	$$(LAPACK_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$@))
+
 
 clean-lapack:
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
@@ -1280,14 +1343,14 @@ clean-lapack:
 distclean-lapack:
 	-rm -rf $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
-get-lapack: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 configure-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc
 compile-lapack: $(LAPACK_OBJ_SOURCE)
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/checked
-install-lapack: $(LAPACK_OBJ_TARGET)
+fastcheck-lapack: check-lapack
 
 
 ## ARPACK ##
+
 ARPACK_FFLAGS := $(GFORTBLAS_FFLAGS)
 ARPACK_CFLAGS :=
 
@@ -1315,6 +1378,7 @@ endif
 endif
 endif
 
+ARPACK_SRC_FILE := $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
 ifeq ($(OS),WINNT)
 ARPACK_OBJ_SOURCE := $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/.libs/libarpack-2.$(SHLIB_EXT)
 else
@@ -1330,13 +1394,13 @@ ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
+$(ARPACK_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
 	touch -c $@
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
 	touch -c $@
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
+$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure: $(ARPACK_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
@@ -1346,9 +1410,9 @@ $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status $(build_staging)/arpack-ng-$(ARPACK_VER).tgz: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status $(build_staging)/arpack-ng-$(ARPACK_VER).tgz: | $(LAPACK_OBJ_TARGET)
 endif
 
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
@@ -1369,23 +1433,28 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
 endif
 	echo 1 > $@
-# XXX: bug_1315 ARPACK tests fail stochastically
-#$(ARPACK_OBJ_TARGET): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
-	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
-ifeq ($(OS), WINNT)
-	mv $(build_shlibdir)/libarpack-2.dll $@
+
+ifneq ($(PATCHELF),patchelf)
+# actually required by the stage-arpack target, but there's no easy way to hook into that
+$(ARPACK_OBJ_SOURCE): $(PATCHELF)
 endif
-	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(build_shlibdir)/libarpack.$(SHLIB_EXT)
+
+define ARPACK_INSTALL
+	$(call MAKE_INSTALL,$1,$2,$3)
+ifeq ($(OS), WINNT)
+	mv $2/$$(build_shlibdir)/libarpack-2.dll $2/$$(ARPACK_OBJ_TARGET)
+endif
 ifeq ($(OS), Linux)
-	for filename in $(build_shlibdir)/libarpack.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
+	for filename in $2/$$(build_shlibdir)/libarpack.so* ; do \
+		[ -L $$$$filename ] || $$(PATCHELF) --set-rpath '$$$$ORIGIN' $$$$filename ;\
 	done
 endif
-	touch -c $@
-ifneq ($(PATCHELF),patchelf)
-$(ARPACK_OBJ_TARGET): $(PATCHELF)
-endif
+endef
+$(eval $(call staged-install, \
+	arpack,arpack-ng-$(ARPACK_VER), \
+	ARPACK_INSTALL,$(ARPACK_MFLAGS), \
+	$$(ARPACK_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libarpack.$$(SHLIB_EXT) $$@))
 
 clean-arpack:
 	-$(MAKE) -C $(BUILDDIR)/arpack-ng-$(ARPACK_VER) clean
@@ -1396,14 +1465,19 @@ distclean-arpack:
 		$(SRCDIR)/srccache/arpack-ng-3.2.0-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
-get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
+get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
 configure-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 check-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
-install-arpack: $(ARPACK_OBJ_TARGET)
+# XXX: bug_1315 ARPACK tests fail stochastically
+fastcheck-arpack: #check-arpack
 
 
 ## FFTW ##
+
+FFTW_SRC_FILE := $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
+FFTW_SINGLE_SRC_FILE := $(FFTW_SRC_FILE)
+FFTW_DOUBLE_SRC_FILE := $(FFTW_SRC_FILE)
 ifeq ($(OS),WINNT)
 FFTW_SINGLE_SRC_TARGET := $(BUILDDIR)/fftw-$(FFTW_VER)-single/.libs/libfftw3f-3.$(SHLIB_EXT)
 FFTW_DOUBLE_SRC_TARGET := $(BUILDDIR)/fftw-$(FFTW_VER)-double/.libs/libfftw3-3.$(SHLIB_EXT)
@@ -1431,9 +1505,9 @@ endif
 FFTW_ENABLE_single := --enable-single
 FFTW_ENABLE_double :=
 
-$(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz: | $(SRCDIR)/srccache
+$(FFTW_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.fftw.org/$(notdir $@)
-$(SRCDIR)/srccache/fftw-$(FFTW_VER)/configure: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
+$(SRCDIR)/srccache/fftw-$(FFTW_VER)/configure: $(FFTW_SRC_FILE)
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
@@ -1455,20 +1529,6 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) $(BUILDDIR)/fftw-$(FFTW_VER)-single/checked
-	$(call make-install,fftw-$(FFTW_VER)-single,)
-ifeq ($(OS), Darwin)
-	$(INSTALL_NAME_CMD)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3f.3.$(SHLIB_EXT) $(INSTALL_NAME_ID_DIR)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
-else ifeq ($(OS), WINNT)
-	mv -f $(build_shlibdir)/libfftw3f-3.dll $@
-else ifeq ($(OS), Linux)
-	for filename in $(build_shlibdir)/libfftw3f_threads.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
-	done
-endif
-	touch -c $@
 
 $(FFTW_DOUBLE_SRC_TARGET): $(BUILDDIR)/fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C $(dir $<)
@@ -1478,24 +1538,37 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) $(BUILDDIR)/fftw-$(FFTW_VER)-double/checked
-	$(call make-install,fftw-$(FFTW_VER)-double,)
-ifeq ($(OS), Darwin)
-	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3.3.$(SHLIB_EXT) $(INSTALL_NAME_ID_DIR)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
-else ifeq ($(OS), WINNT)
-	mv -f $(build_shlibdir)/libfftw3-3.dll $@
-else ifeq ($(OS), Linux)
-	for filename in $(build_shlibdir)/libfftw3_threads.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
+
+define FFTW_INSTALL
+	$(call MAKE_INSTALL,$1,$2,)
+ifeq ($$(OS), WINNT)
+	mv $2/$$(build_shlibdir)/$3-3.dll $2/$$(build_shlibdir)/$3.dll
+endif
+ifeq ($$(OS), Linux)
+	for filename in $$(build_shlibdir)/$3_threads.so* ; do \
+		[ -L $$$$filename ] || $$(PATCHELF) --set-rpath '$$$$ORIGIN' $$$$filename ;\
 	done
 endif
-	touch -c $@
+endef
+$(eval $(call staged-install, \
+	fftw-single,fftw-$(FFTW_VER)-single, \
+	FFTW_INSTALL,libfftw3f, \
+	$$(FFTW_SINGLE_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libfftw3f.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3f.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CMD)libfftw3f_threads.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3f_threads.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) $$(build_shlibdir)/libfftw3f.3.$$(SHLIB_EXT) $$(INSTALL_NAME_ID_DIR)libfftw3f.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3f_threads.$$(SHLIB_EXT)))
+$(eval $(call staged-install, \
+	fftw-double,fftw-$(FFTW_VER)-double, \
+	FFTW_INSTALL,libfftw3, \
+	$$(FFTW_DOUBLE_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libfftw3.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CMD)libfftw3_threads.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3_threads.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) $$(build_shlibdir)/libfftw3.3.$$(SHLIB_EXT) $$(INSTALL_NAME_ID_DIR)libfftw3.$$(SHLIB_EXT) $$(build_shlibdir)/libfftw3_threads.$$(SHLIB_EXT)))
 
 ifneq ($(PATCHELF),patchelf)
-$(FFTW_DOUBLE_OBJ_TARGET): $(PATCHELF)
-$(FFTW_SINGLE_OBJ_TARGET): $(PATCHELF)
+# actually required by the stage-fftw target, but there's no easy way to hook into that
+$(FFTW_DOUBLE_OBJ_SOURCE): $(PATCHELF)
+$(FFTW_SINGLE_OBJ_SOURCE): $(PATCHELF)
 endif
 
 clean-fftw: clean-fftw-single clean-fftw-double
@@ -1516,21 +1589,21 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: check-fftw-single check-fftw-double # do these serially, to prevent write conflicts
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-single
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-double
+stage-fftw: stage-fftw-single stage-fftw-double
+fastcheck-fftw: fastcheck-fftw-single fastcheck-fftw-double
+install-fftw: install-fftw-single install-fftw-double
+uninstall-fftw: uninstall-fftw-single uninstall-fftw-double
+reinstall-fftw: reinstall-fftw-single reinstall-fftw-double
 
-get-fftw-single: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
 compile-fftw-single: $(FFTW_SINGLE_SRC_TARGET)
 check-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/checked
-install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
+fastcheck-fftw-single: #none
 
-get-fftw-double: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
 configure-fftw-double: $(BUILDDIR)/fftw-$(FFTW_VER)-double/config.status
 compile-fftw-double: $(FFTW_DOUBLE_SRC_TARGET)
 check-fftw-double: $(BUILDDIR)/fftw-$(FFTW_VER)-double/checked
-install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
+fastcheck-fftw-double: #none
 
 ## UTF8PROC ##
 UTF8PROC_GIT_URL := git://github.com/JuliaLang/utf8proc.git
@@ -1540,7 +1613,7 @@ $(eval $(call git-external,utf8proc,UTF8PROC,Makefile,libutf8proc.a,$(BUILDDIR))
 UTF8PROC_SRC_TARGET := $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/libutf8proc.a
 UTF8PROC_OBJ_LIB    := $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER := $(build_includedir)/utf8proc.h
-UTF8PROC_OBJ_TARGET := $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+UTF8PROC_OBJ_TARGET := $(UTF8PROC_OBJ_LIB)
 UTF8PROC_CFLAGS     := -O2
 UTF8PROC_MFLAGS     := CC="$(CC) $(DEPS_CFLAGS)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
 
@@ -1553,24 +1626,30 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(UTF8PROC_MFLAGS) check
 endif
 	echo 1 > $@
-$(UTF8PROC_OBJ_LIB): $(UTF8PROC_SRC_TARGET)
-	cp -f $< $@
-$(UTF8PROC_OBJ_HEADER): $(UTF8PROC_SRC_TARGET)
-	cp -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/utf8proc.h $@
+
+define UTF8PROC_INSTALL
+	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
+	cp $1/utf8proc.h $2/$$(build_includedir)
+	cp $1/libutf8proc.a $2/$$(build_libdir)
+endef
+$(eval $(call staged-install, \
+	utf8proc,$(UTF8PROC_SRC_DIR), \
+	UTF8PROC_INSTALL,, \
+	$$(UTF8PROC_OBJ_TARGET),))
 
 clean-utf8proc:
 	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
 	-rm -rf $(build_libdir)/libutf8proc.a $(build_includedir)/utf8proc.h
 
-get-utf8proc: $(UTF8PROC_SRC_FILE)
 configure-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/Makefile
 compile-utf8proc: $(UTF8PROC_SRC_TARGET)
 check-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/checked
-install-utf8proc: $(UTF8PROC_OBJ_TARGET)
-
+fastcheck-utf8proc: #check-utf8proc
+# utf8proc tests disabled since they require a download
 
 ## SUITESPARSE ##
 
+SUITESPARSE_SRC_FILE := $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 SUITESPARSE_OBJ_SOURCE := $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET := $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
@@ -1600,9 +1679,9 @@ SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(R
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 
-$(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCDIR)/srccache
+$(SUITESPARSE_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile: $(SUITESPARSE_SRC_FILE)
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
 	$(TAR) -C $(dir $@) --strip-components 1 -zxf $<
@@ -1653,10 +1732,11 @@ distclean-suitesparse:
 	-rm -rf $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)
 
-get-suitesparse: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+get-suitesparse: $(SUITESPARSE_SRC_FILE)
 configure-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 check-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/checked
+fastcheck-suitesparse: #none
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) install-suitesparse-wrapper
 
 # SUITESPARSE WRAPPER
@@ -1683,19 +1763,21 @@ get-suitesparse-wrapper:
 configure-suitesparse-wrapper:
 compile-suitesparse-wrapper:
 check-suitesparse-wrapper:
+fastcheck-suitesparse-wrapper: #none
 install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 
 ## UNWIND ##
 
+LIBUNWIND_SRC_FILE := $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 LIBUNWIND_TARGET_OBJ := $(build_libdir)/libunwind.a
 LIBUNWIND_TARGET_SOURCE := $(BUILDDIR)/libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
+$(LIBUNWIND_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$(notdir $@)
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(LIBUNWIND_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) xfz $<
 	cd $(dir $<)/libunwind-$(UNWIND_VER) && patch -p1 < $(SRCDIR)/libunwind.patch
@@ -1713,14 +1795,18 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-#todo: libunwind tests are known to fail, so they aren't run
-$(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	$(call make-install,libunwind-$(UNWIND_VER),)
-ifeq ($(ARCH), ppc64)
+
+define LIBUNWIND_INSTALL
+	$(call MAKE_INSTALL,$1,$2,$3)
+ifeq ($$(ARCH), ppc64)
 	@# workaround for configure script bug
-	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
+	mv $2/$$(build_prefix)/lib64/libunwind*.a $2/$$(build_libdir)
 endif
-	touch $@
+endef
+$(eval $(call staged-install, \
+	libunwind,libunwind-$(UNWIND_VER), \
+	LIBUNWIND_INSTALL,, \
+	$$(LIBUNWIND_TARGET_OBJ),))
 
 clean-unwind:
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
@@ -1730,23 +1816,24 @@ distclean-unwind:
 		$(SRCDIR)/srccache/libunwind-$(UNWIND_VER) \
 		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
-get-unwind: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 configure-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/checked
-install-unwind: $(LIBUNWIND_TARGET_OBJ)
+#todo: libunwind tests are known to fail, so they aren't run
+fastcheck-unwind: #none
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="$(CFLAGS) -ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="$(LDFLAGS) -Wl,-macosx_version_min,10.7"
-
+OSXUNWIND_SRC_FILE := $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
 OSXUNWIND_OBJ_TARGET := $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE := $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
 
-$(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz: | $(SRCDIR)/srccache
+OSXUNWIND_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="$(CFLAGS) -ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="$(LDFLAGS) -Wl,-macosx_version_min,10.7"
+
+$(OSXUNWIND_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
 
-$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile: $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
+$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile: $(OSXUNWIND_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(BUILDDIR) && $(TAR) xfz $<
 	touch -c $@
@@ -1768,14 +1855,16 @@ distclean-osxunwind:
 		$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)
 
 
-get-osxunwind: $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
+get-osxunwind: $(OSXUNWIND_SRC_FILE)
 configure-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile
 compile-osxunwind: $(OSXUNWIND_OBJ_SOURCE)
 check-osxunwind: compile-osxunwind
+fastcheck-osxunwind: check-osxunwind
 install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
 
 ## GMP ##
 
+GMP_SRC_FILE := $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
 GMP_SRC_TARGET := $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET := $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
@@ -1783,9 +1872,9 @@ ifeq ($(SANITIZE),1)
 GMP_CONFIGURE_OPTS += --disable-assembly
 endif
 
-$(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2: | $(SRCDIR)/srccache
+$(GMP_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
-$(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
+$(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(GMP_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
@@ -1804,11 +1893,17 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) $(BUILDDIR)/gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
-	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
-	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
-	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
-	touch -c $@
+
+define GMP_INSTALL
+	mkdir -p $2/$(build_shlibdir) $2/$(build_includedir)
+	$(INSTALL_M) $1/.libs/libgmp.*$(SHLIB_EXT)* $2/$(build_shlibdir)
+	$(INSTALL_F) $1/gmp.h $2/$(build_includedir)
+endef
+$(eval $(call staged-install, \
+	gmp,gmp-$(GMP_VER), \
+	GMP_INSTALL,, \
+	$$(GMP_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$@))
 
 clean-gmp:
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
@@ -1818,11 +1913,10 @@ distclean-gmp:
 		$(SRCDIR)/srccache/gmp-$(GMP_VER) \
 		$(BUILDDIR)/gmp-$(GMP_VER)
 
-get-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
 configure-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/config.status
 compile-gmp: $(GMP_SRC_TARGET)
 check-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/checked
-install-gmp: $(GMP_OBJ_TARGET)
+fastcheck-gmp: check-gmp
 
 ifeq ($(USE_SYSTEM_GMP), 0)
 MPFR_DEPS := $(GMP_OBJ_TARGET)
@@ -1841,7 +1935,7 @@ MPFR_OPTS += --disable-thread-safe CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DN
 endif
 endif
 
-
+MPFR_SRC_FILE := $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 MPFR_SRC_TARGET := $(BUILDDIR)/mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET := $(build_shlibdir)/libmpfr.$(SHLIB_EXT)
 ifeq ($(OS),Darwin)
@@ -1853,12 +1947,13 @@ ifeq ($(SANITIZE),1)
 MPFR_OPTS += --host=none-unknown-linux
 endif
 
-$(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2: | $(SRCDIR)/srccache
+$(MPFR_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
-$(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
+$(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure: $(MPFR_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
+$(build_staging)/mpfr-$(MPFR_VER).tgz: | $(MPFR_DEPS)
 $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure | $(MPFR_DEPS)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
@@ -1872,10 +1967,12 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
-$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) $(BUILDDIR)/mpfr-$(MPFR_VER)/checked
-	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
-	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
-	touch -c $@
+
+$(eval $(call staged-install, \
+	mpfr,mpfr-$(MPFR_VER), \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD), \
+	$$(MPFR_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$@))
 
 clean-mpfr:
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
@@ -1885,20 +1982,21 @@ distclean-mpfr:
 		$(SRCDIR)/srccache/mpfr-$(MPFR_VER) \
 		$(BUILDDIR)/mpfr-$(MPFR_VER)
 
-get-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/config.status
 compile-mpfr: $(MPFR_SRC_TARGET)
 check-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/checked
-install-mpfr: $(MPFR_OBJ_TARGET)
+fastcheck-mpfr: check-mpfr
+
 
 ## patchelf ##
 
+PATCHELF_SRC_FILE := $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
 PATCHELF_SOURCE := $(BUILDDIR)/patchelf-$(PATCHELF_VER)/src/patchelf
 PATCHELF_TARGET := $(build_bindir)/patchelf
 
-$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCDIR)/srccache
+$(PATCHELF_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
-$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
+$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure: $(PATCHELF_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
@@ -1916,9 +2014,11 @@ ifeq ($(OS),$(BUILD_OS))
 	#$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(PATCHELF_TARGET): $(PATCHELF_SOURCE) $(BUILDDIR)/patchelf-$(PATCHELF_VER)/checked
-	$(call make-install,patchelf-$(PATCHELF_VER),)
-	touch -c $@
+
+$(eval $(call staged-install, \
+	patchelf,patchelf-$(PATCHELF_VER), \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD), \
+	$$(PATCHELF_TARGET),))
 
 clean-patchelf:
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
@@ -1928,21 +2028,21 @@ distclean-patchelf:
 		$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
-get-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status
 compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/checked
-install-patchelf: $(PATCHELF_TARGET)
+fastcheck-patchelf: check-patchelf
 
 ## Git
 # only used for the mac binaries in contrib/mac/app/Makefile
 
+GIT_SRC_FILE := $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz
 GIT_SOURCE := $(BUILDDIR)/git-$(GIT_VER)/git
 GIT_TARGET := $(build_libexecdir)/git
 
-$(SRCDIR)/srccache/git-$(GIT_VER).tar.gz: | $(SRCDIR)/srccache
+$(GIT_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://www.kernel.org/pub/software/scm/git/git-$(GIT_VER).tar.gz
-$(BUILDDIR)/git-$(GIT_VER)/configure: $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz
+$(BUILDDIR)/git-$(GIT_VER)/configure: $(GIT_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(BUILDDIR) && $(TAR) zxf $<
 	touch -c $@
@@ -1956,7 +2056,7 @@ $(GIT_SOURCE): $(BUILDDIR)/git-$(GIT_VER)/config.status
 $(BUILDDIR)/git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) $(BUILDDIR)/git-$(GIT_VER)/checked
-	$(call make-install,git-$(GIT_VER),NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)")
+	make install -C $(BUILDDIR)/git-$(GIT_VER) $(MAKE_COMMON) NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)"
 	touch -c $@
 
 clean-git:
@@ -1966,20 +2066,22 @@ distclean-git:
 	-rm -rf $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz \
 		$(BUILDDIR)/git-$(GIT_VER)
 
-get-git: $(SRCDIR)/srccache/git-$(GIT_VER).tar.gz
+get-git: $(GIT_SRC_FILE)
 configure-git: $(BUILDDIR)/git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: $(BUILDDIR)/git-$(GIT_VER)/checked
+fastcheck-git: check-git
 install-git: $(GIT_TARGET)
 
 ## virtualenv
 
+VIRTUALENV_SRC_FILE := $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 VIRTUALENV_SOURCE := $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER)/virtualenv.py
 VIRTUALENV_TARGET := $(BUILDDIR)/julia-env
 
-$(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz: | $(SRCDIR)/srccache
+$(VIRTUALENV_SRC_FILE): | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$(notdir $@)
-$(VIRTUALENV_SOURCE): $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
+$(VIRTUALENV_SOURCE): $(VIRTUALENV_SRC_FILE)
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
@@ -1996,10 +2098,11 @@ distclean-virtualenv: clean-virtualenv
 	-rm -rf $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz \
 		$(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER)
 
-get-virtualenv: $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
+get-virtualenv: $(VIRTUALENV_SRC_FILE)
 configure-virtualenv: get-virtualenv
 compile-virtualenv: $(VIRTUALENV_SOURCE)
 check-virtualenv: compile-virtualenv
+fastcheck-virtualenv: check-virtualenv
 install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## libgit2
@@ -2039,32 +2142,38 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
-$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
-	cp $< $@
-	@#$$(call make-install,$(LIBGIT2_SRC_DIR),) # currently don't need the full install
-ifeq ($(OS),Linux)
+
+define LIBGIT2_INSTALL
+	mkdir -p $2/$$(build_shlibdir)
+	cp $$(LIBGIT2_OBJ_SOURCE) $2/$$(LIBGIT2_OBJ_TARGET)
+	@#$(call MAKE_INSTALL,$1,$2,$3) # currently don't need the full install
+ifeq ($$(OS),Linux)
 	@# If we're on linux, copy over libssl and libcrypto for libgit2
-	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
+	-LIBGIT_LIBS=$$$$(ldd "$$@" | tail -n +2 | awk '{print $$$$(NF-1)}'); \
 	for LIB in libssl libcrypto; do \
-		LIB_PATH=$$(echo "$$LIBGIT_LIBS" | grep "$$LIB"); \
-		echo "LIB_PATH for $$LIB: $$LIB_PATH"; \
-		[ ! -z "$$LIB_PATH" ] && cp -v "$$LIB_PATH" $(build_shlibdir); \
+		LIB_PATH=$$$$(echo "$$$$LIBGIT_LIBS" | grep "$$$$LIB"); \
+		echo "LIB_PATH for $$$$LIB: $$$$LIB_PATH"; \
+		[ ! -z "$$$$LIB_PATH" ] && cp -v "$$$$LIB_PATH" $$(build_shlibdir); \
 	done
 endif
-	touch -c $@
+endef
+$(eval $(call staged-install, \
+	libgit2,$(LIBGIT2_SRC_DIR), \
+	LIBGIT2_INSTALL,, \
+	$$(LIBGIT2_OBJ_TARGET),))
 
 clean-libgit2:
 	-rm -rf $(BUILDDIR)/$(LIBGIT2_SRC_DIR)
 	-rm -f $(LIBGIT2_OBJ_TARGET)
 
-get-libgit2: $(LIBGIT2_SRC_FILE)
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
 check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/checked
+fastcheck-libgit2: #none
 install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##
 
 .PHONY: default compile install cleanall distcleanall \
-	get-* configure-* compile-* check-* install-* \
+	get-* configure-* compile-* check-* install-* uninstall-* \
 	clean-* distclean-* reinstall-* update-llvm
