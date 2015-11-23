@@ -77,7 +77,7 @@ endif
 
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
-	@sh $< > $@
+	sh $< $(SRCDIR) > $@
 	@# This to avoid touching git_version.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
@@ -94,7 +94,7 @@ ifeq ($(shell [ -f $(BUILDDIR)/version_git.jl ] && echo "true"), true)
 	fi
 else
 	$(warning "WARNING: Generating boilerplate git version info")
-	@sh $(SRCDIR)/version_git.sh NO_GIT > $(BUILDDIR)/version_git.jl
+	@sh $(SRCDIR)/version_git.sh $(SRCDIR) NO_GIT > $(BUILDDIR)/version_git.jl
 endif
 endif
 

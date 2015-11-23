@@ -111,6 +111,7 @@ else
 PATCHELF:=patchelf
 endif
 endif
+PATCHELF_BIN := $(CUSTOM_LD_LIBRARY_PATH) $(PATCHELF)
 
 ## USE_SYSTEM_LIBS options
 
@@ -451,6 +452,7 @@ LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
+LLVM_FLAGS += --disable-terminfo
 else
 LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=address"
 LLVM_LDFLAGS += -fsanitize=address
@@ -556,7 +558,7 @@ $(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLV
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
-$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi llvm-$(LLVM_VER)/projects/libcxx
+$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
         $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
@@ -1465,7 +1467,7 @@ else ifeq ($(OS), WINNT)
 	mv -f $(build_shlibdir)/libfftw3f-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(build_shlibdir)/libfftw3f_threads.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF_BIN) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -1488,7 +1490,7 @@ else ifeq ($(OS), WINNT)
 	mv -f $(build_shlibdir)/libfftw3-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(build_shlibdir)/libfftw3_threads.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF_BIN) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
@@ -1902,10 +1904,10 @@ $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure: $(SRCDIR)/srccache/patche
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
-$(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure | $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$< $(CONFIGURE_COMMON)
+	$< $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
 	touch -c $@
 $(PATCHELF_SOURCE): $(BUILDDIR)/patchelf-$(PATCHELF_VER)/config.status
 	$(MAKE) -C $(dir $<)
