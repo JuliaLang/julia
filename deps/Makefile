@@ -1381,7 +1381,7 @@ endif
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(build_shlibdir)/libarpack.so* ; do \
-		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
+		[ -L $$filename ] || $(PATCHELF_BIN) --set-rpath '$$ORIGIN' $$filename ;\
 	done
 endif
 	touch -c $@
