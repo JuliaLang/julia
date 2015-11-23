@@ -21,6 +21,8 @@ TODO:
 #ifndef _MSC_VER
 #include <unistd.h>
 #include <sched.h>
+#else
+#define sleep(x) Sleep(1000*x)
 #endif
 
 #include "julia.h"
@@ -34,8 +36,55 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
+#ifdef JULIA_ENABLE_THREADING
+// fallback provided for embedding
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
+{
+#  if !defined(_COMPILER_MICROSOFT_)
+    static __thread jl_tls_states_t tls_states;
+#  else
+    static __declspec(thread) jl_tls_states_t tls_states;
+#  endif
+    return &tls_states;
+}
+static jl_tls_states_t *jl_get_ptls_states_init(void);
+static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
+static jl_tls_states_t *jl_get_ptls_states_init(void)
+{
+    // This is clearly not thread safe but should be fine since we
+    // make sure the tls states callback is finalized before adding
+    // multiple threads
+    jl_tls_states_cb = jl_get_ptls_states_fallback;
+    return jl_get_ptls_states_fallback();
+}
+DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return (*jl_tls_states_cb)();
+}
+DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
+{
+    // only allow setting this once
+    if (f && f != jl_get_ptls_states_init &&
+        jl_tls_states_cb == jl_get_ptls_states_init) {
+        jl_tls_states_cb = f;
+    }
+}
+jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+{
+    if (jl_tls_states_cb == jl_get_ptls_states_init)
+        jl_get_ptls_states_init();
+    // for codegen
+    return jl_tls_states_cb;
+}
+#else
+DLLEXPORT jl_tls_states_t jl_tls_states;
+DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return &jl_tls_states;
+}
+#endif
+
 // thread ID
-JL_THREAD int16_t ti_tid = 0;
 DLLEXPORT int jl_n_threads;     // # threads we're actually using
 DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;

@@ -2124,12 +2124,29 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
     }
 }
 
+static Value *emit_ptls_states()
+{
+#ifndef JULIA_ENABLE_THREADING
+    return prepare_global(jltls_states_var);
+#else
+    return builder.CreateCall(prepare_call(jltls_states_func));
+#endif
+}
+
 static Value *emit_pgcstack()
 {
-    return prepare_global(jlpgcstack_var);
+    Value * addr = emit_nthptr_addr(
+        emit_ptls_states(),
+        (ssize_t)(offsetof(jl_tls_states_t, pgcstack) / sizeof(void*)));
+    return builder.CreateBitCast(addr, PointerType::get(T_ppjlvalue, 0),
+                                 "jl_pgcstack");
 }
 
 static Value *emit_exc_in_transit()
 {
-    return prepare_global(jlexc_var);
+    Value * addr = emit_nthptr_addr(
+        emit_ptls_states(),
+        (ssize_t)(offsetof(jl_tls_states_t,
+                           exception_in_transit) / sizeof(void*)));
+    return builder.CreateBitCast(addr, T_ppjlvalue, "jl_exception_in_transit");
 }
