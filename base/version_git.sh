@@ -15,8 +15,10 @@ echo "    fork_master_timestamp::Float64"
 echo "end"
 echo ""
 
+cd $1
+
 # If the script didn't ask not to use git info
-if [  "$#" = "1"  -a "$1" = "NO_GIT" ]; then
+if [  "$#" = "2"  -a "$2" = "NO_GIT" ]; then
     # this comment is used in base/Makefile to distinguish boilerplate
     echo "# Default output if git is not available."
     echo "const GIT_VERSION_INFO = GitVersionInfo(\"\" ,\"\" ,\"\" ,0 ,\"\" ,true ,0 ,0.)"
