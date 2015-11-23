@@ -605,6 +605,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
         return 0;
     }
 #endif
+    assert(find_region(o,1) == NULL);
     bigval_t* hdr = bigval_header(o);
     int bits = gc_bits(o);
     if (bits == GC_QUEUED || bits == GC_MARKED)
@@ -1087,6 +1088,9 @@ static NOINLINE void add_page(pool_t *p)
 
 static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 {
+#ifdef MEMDEBUG
+    assert(0 && "Should not be using pools in MEMDEBUG mode");
+#endif
     gcval_t *v, *end;
     // FIXME - need JL_ATOMIC_FETCH_AND_ADD here
     if (__unlikely((allocd_bytes += osize) >= 0) || gc_debug_check_pool()) {
@@ -2370,9 +2374,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2382,9 +2387,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2394,9 +2400,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2406,9 +2413,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
