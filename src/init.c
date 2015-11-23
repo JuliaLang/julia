@@ -571,9 +571,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         jl_current_module = jl_core_module;
-        int t;
-        for(t=0; t < jl_n_threads; t++) {
-            (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+        for (int t = 0;t < jl_n_threads;t++) {
+            jl_all_task_states[t].ptls->root_task->current_module =
+                jl_current_module;
         }
 
         jl_load("boot.jl", sizeof("boot.jl"));
@@ -614,9 +614,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     jl_current_module = jl_main_module;
-    int t;
-    for(t=0; t < jl_n_threads; t++) {
-        (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+    for(int t = 0;t < jl_n_threads;t++) {
+        jl_all_task_states[t].ptls->root_task->current_module =
+            jl_current_module;
     }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
@@ -729,11 +729,11 @@ void jl_get_builtin_hooks(void)
 {
     int t;
     for(t=0; t < jl_n_threads; t++) {
-        (*jl_all_task_states[t].proot_task)->tls = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->consumers = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->donenotify = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->exception = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->result = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->tls = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->consumers = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->donenotify = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->exception = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->result = jl_nothing;
     }
 
     jl_char_type    = (jl_datatype_t*)core("Char");
