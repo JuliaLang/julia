@@ -106,10 +106,7 @@ void ti_initthread(int16_t tid)
     jl_mk_thread_heap();
 #endif
 
-    jl_all_task_states[tid].pcurrent_task = &jl_current_task;
-    jl_all_task_states[tid].proot_task = &jl_root_task;
-    jl_all_task_states[tid].pexception_in_transit = &jl_exception_in_transit;
-    jl_all_task_states[tid].ptask_arg_in_transit = &jl_task_arg_in_transit;
+    jl_all_task_states[tid].ptls = jl_get_ptls_states();
 }
 
 // all threads call this function to run user code
