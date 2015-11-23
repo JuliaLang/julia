@@ -96,9 +96,9 @@ static void jl_find_stack_bottom(void)
 #ifndef _OS_WINDOWS_
     struct rlimit rl;
 
-    // When using memory sanitizer, increase stack size because msan bloats stack usage
+    // When using the sanitizers, increase stack size because they bloat stack usage
 #if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
+#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
     const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
     int result;
 
