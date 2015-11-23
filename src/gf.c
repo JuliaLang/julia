@@ -420,7 +420,6 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
   can be equal to "li" if not applicable.
 */
 int jl_in_inference = 0;
-JL_DEFINE_MUTEX_EXT(codegen)
 void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_info_t *def)
 {
     JL_LOCK(codegen);

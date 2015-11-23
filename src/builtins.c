@@ -955,8 +955,6 @@ extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m);
 
-JL_DEFINE_MUTEX_EXT(codegen)
-
 static int jl_eval_inner_with_compiler(jl_expr_t *e, jl_module_t *m)
 {
     int i;

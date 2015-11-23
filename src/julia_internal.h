@@ -146,7 +146,7 @@ void jl_init_serializer(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
-extern JL_THREAD void *jl_stackbase;
+#define jl_stackbase (jl_get_ptls_states()->stackbase)
 #endif
 
 void jl_set_stackbase(char *__stk);
@@ -155,6 +155,9 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
+#ifdef JULIA_ENABLE_THREADING
+jl_get_ptls_states_func jl_get_ptls_states_getter(void);
+#endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
@@ -334,6 +337,8 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
+
+JL_DEFINE_MUTEX_EXT(codegen)
 
 #ifdef __cplusplus
 }
