@@ -853,7 +853,8 @@ function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_l
 
     return o
 end
-function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_long})
+
+function convert{Tv<:VTypes,Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,Ti})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -861,13 +862,14 @@ function convert{Tv<:VTypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,SuiteSparse_l
     end
     o
 end
-
+convert{Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Float32,Ti}) = convert(Sparse, convert(SparseMatrixCSC{Float64,SuiteSparse_long}, A))
+convert{Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},Ti}) = convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
 convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-function convert{T}(::Type{Sparse},
-    A::Union{SparseMatrixCSC{T,SuiteSparse_long},
-             Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-             Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}},
+function convert{T,Ti<:ITypes}(::Type{Sparse},
+    A::Union{SparseMatrixCSC{T,Ti},
+             Symmetric{T,SparseMatrixCSC{T,Ti}},
+             Hermitian{T,SparseMatrixCSC{T,Ti}}},
     args...)
     return Sparse(float(A), args...)
 end

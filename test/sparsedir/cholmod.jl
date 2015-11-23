@@ -597,3 +597,7 @@ Base.writemime(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1
 # Element promotion and type inference
 @inferred cholfact(As)\ones(Int, size(As, 1))
 @inferred ldltfact(As)\ones(Int, size(As, 1))
+
+# Issue 14076
+@test cholfact(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == ones(4)
+
