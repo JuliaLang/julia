@@ -17,7 +17,7 @@ fi
 common_part=$source # for now
 result="" # for now
 
-while [[ "${target#$common_part/}" == "${target}" ]] && [[ $common_part != "/" ]]; do
+while [[ "${target#$common_part/}" == "${target}" ]] && [[ "$common_part" != "/" ]]; do
     # no match, means that candidate common part is not correct
     # go up one level (reduce common part)
     common_part="$(dirname $common_part)"
@@ -29,7 +29,7 @@ while [[ "${target#$common_part/}" == "${target}" ]] && [[ $common_part != "/" ]
     fi
 done
 
-if [[ $common_part == "/" ]]; then
+if [[ "$common_part" == "/" ]]; then
     # special case for root (no common path)
     result="$result/"
 fi
