@@ -223,6 +223,13 @@ function bytestring(io::AbstractIOBuffer)
     return isvalid(ASCIIString, b) ? ASCIIString(b) : UTF8String(b)
 end
 
+function print(io::IO, buf::IOBuffer)
+    buf.readable || throw(ArgumentError("IOBuffer read failed, IOBuffer is not readable"))
+    buf.seekable || throw(ArgumentError("IOBuffer read failed, IOBuffer is not seekable"))
+    write(io, sub(io.data, 1:io.size))
+    nothing
+end
+
 function takebuf_array(io::AbstractIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable

@@ -338,35 +338,58 @@ function with_formatter(io::IO, fmt::Symbol)
     return buf, fmt === :plain || fmt === :para
 end
 function finalize_formatter(io::IO, fmt_io::IO)
-    print(io, takebuf_string(fmt_io))
+    print(io, fmt_io)
 end
 
 # ANSI text formatter (or pass-through)
+const ansi_reset = "\e[0m"
+const ansi_colors = Dict{Symbol,ASCIIString}(
+    :black   => "\e[30m",
+    :red     => "\e[31m",
+    :green   => "\e[32m",
+    :yellow  => "\e[33m",
+    :blue    => "\e[34m",
+    :magenta => "\e[35m",
+    :cyan    => "\e[36m",
+    :white   => "\e[37m")
+const ansi_formats = Dict{Symbol,ASCIIString}(
+    :bold    => "\e[1m",
+    :underline => "\e[4m",
+    :blink     => "\e[5m",
+    :negative  => "\e[7m")
 ansi_formatted(io::IOContext) = get(io, :ansi, false) === true
 function with_formatter(io::IOContext, fmt::Symbol)
     # try the formatter for io.io
     buf, known = with_formatter(io.io, fmt)
     buf = IOContext(buf, io)
     if ansi_formatted(io)
-        if known
-            # skip ansi formatting if it was handled by the inner formatter
-            fmt = ""
-        else
-            fmt = get(text_colors, fmt, "")
-            # non-existent format
-            isempty(fmt) && return buf, false
-            print(buf, fmt)
+        csi = get(ansi_colors, fmt, "")
+        if !isempty(fmt)
+            print(buf, csi)
+            return IOContext(buf, :ansi_color => fmt), true
         end
-        # record current format string
-        return IOContext(buf, :ansi_previous => fmt), true
+        csi = get(ansi_colors, fmt, "")
+        if !isempty(csi)
+            print(buf, csi)
+            # record current format string
+            return IOContext(buf, :ansi_format => fmt), true
+        end
+        # unknown format
     end
     return buf, known
 end
 function finalize_formatter(io::IOContext, fmt_io::IO)
     if ansi_formatted(io)
-        # if ansi formatting was enabled, restore the previous ansi state
-        prev = get(io, :ansi_previous, color_normal)
-        isempty(prev) || print(fmt_io, prev)
+        # if ansi formatting was enabled, recreate the previous terminal state
+        # from the recorded set of properties
+        print(fmt_io, ansi_reset)
+        csi = get(io, :ansi_color, "")
+        isempty(csi) || print(buf, csi)
+        for (style, cmd) in keys(ansi_formats)
+            if (:ansi_format => style) in io
+                print(fmt_io, cmd)
+            end
+        end
     end
     # commit and finalize the result
     finalize_formatter(io.io, fmt_io)
@@ -395,33 +418,38 @@ type HTMLBuilder <: AbstractPipe
 end
 pipe_writer(io::HTMLBuilder) = io.buf
 pipe_reader(io::HTMLBuilder) = error("HTMLBuffer not byte-readable")
-takebuf_string(io::HTMLBuilder) = io
 function with_formatter(io::HTMLBuilder, fmt::Symbol)
     return HTMLBuilder(fmt), fmt in keys(html_tags)
 end
 function finalize_formatter(io::HTMLBuilder, fmt_io::IO)
-    print(io, takebuf_string(fmt_io))
+    print(io, fmt_io)
 end
-html_escape(str::ByteString) = replace(replace(replace(str, "<", "&lt;"), ">", "&gt;"), "\n", "<br>") # TODO
-function flush!(io::HTMLBuilder)
+html_escape(str::ByteString) = replace(replace(replace(str, '&', "&amp;"), '<', "&lt;"), '>', "&gt;") # TODO
+function flush(io::HTMLBuilder)
     nb_available(io.buf) > 0 && push!(io.children, html_escape(takebuf_string(io.buf)))
     nothing
 end
 function print(io::HTMLBuilder, html::HTMLBuilder)
-    flush!(io)
+    flush(io)
     push!(io.children, html)
 end
 function print(io::HTMLBuilder, html::ByteString)
-    flush!(io)
-    push!(io.children, html_escape(html))
+    html = html_escape(html)
+    if sizeof(html) > 512
+        # use no-copy IO for large strings
+        flush(io)
+        push!(io.children, html)
+    else
+        print(io.buf, html)
+    end
 end
 function print(io::IO, html::HTMLBuilder)
+    flush(html)
     tags = get(html_tags, html.tag, ("", ""))
     print(io, tags[1])
     for child in html.children
         print(io, child)
     end
-    print(io, html_escape(takebuf_string(html.buf)))
     print(io, tags[2])
 end
 
