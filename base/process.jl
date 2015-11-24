@@ -19,9 +19,9 @@ immutable Cmd <: AbstractCmd
         new(cmd.exec, ignorestatus, flags, env,
             dir === cmd.dir ? dir : cstr(dir))
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
-                 detach::Bool=Bool(cmd.flags & UV_PROCESS_DETACHED),
-                 windows_verbatim::Bool=Bool(cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS),
-                 windows_hide::Bool=Bool(cmd.flags & UV_PROCESS_WINDOWS_HIDE))
+                 detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
+                 windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
+                 windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
         flags = detach*UV_PROCESS_DETACHED |
                 windows_verbatim*UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide*UV_PROCESS_WINDOWS_HIDE

@@ -337,3 +337,6 @@ end
 
 # make sure windows_verbatim strips quotes
 @windows_only readall(`cmd.exe /c dir /b spawn.jl`) == readall(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+
+# make sure Cmd is nestable
+@test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
