@@ -51,19 +51,22 @@ argument to the julia command::
 
 As the example implies, the following command-line arguments to julia
 are taken as command-line arguments to the program ``script.jl``, passed
-in the global constant ``ARGS``. ``ARGS`` is also set when script code
-is given using the ``-e`` option on the command line (see the ``julia``
-help output below). For example, to just print the arguments given to a
-script, you could do this::
+in the global constant ``ARGS``. The name of the script itself is passed
+in as the global ``PROGRAM_FILE``. Note that ``ARGS`` is also set when script
+code is given using the ``-e`` option on the command line (see the ``julia``
+help output below) but ``PROGRAM_FILE`` will be empty. For example, to just
+print the arguments given to a script, you could do this::
 
-    $ julia -e 'for x in ARGS; println(x); end' foo bar
+    $ julia -e 'println(PROGRAM_FILE); for x in ARGS; println(x); end' foo bar
+
     foo
     bar
 
 Or you could put that code into a script and run it::
 
-    $ echo 'for x in ARGS; println(x); end' > script.jl
+    $ echo 'println(PROGRAM_FILE); for x in ARGS; println(x); end' > script.jl
     $ julia script.jl foo bar
+    script.jl
     foo
     bar
 

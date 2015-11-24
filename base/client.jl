@@ -177,10 +177,9 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::AbstractString) = isfile(path) && include(path)
 
-function process_options(opts::JLOptions, args::Vector{UTF8String})
-    if !isempty(args)
-        arg = first(args)
-        idxs = find(x -> x == "--", args)
+function process_options(opts::JLOptions)
+    if !isempty(ARGS)
+        idxs = find(x -> x == "--", ARGS)
         if length(idxs) > 1
             println(STDERR, "julia: redundant option terminator `--`")
             exit(1)
@@ -234,15 +233,15 @@ function process_options(opts::JLOptions, args::Vector{UTF8String})
             eval(Main, parse_input_line(bytestring(opts.postboot)))
         end
         # load file
-        if !isempty(args) && !isempty(args[1])
+        if !isempty(ARGS) && !isempty(ARGS[1])
             # program
             repl = false
             # remove filename from ARGS
-            shift!(ARGS)
+            global PROGRAM_FILE = UTF8String(shift!(ARGS))
             if !is_interactive
                 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             end
-            include(args[1])
+            include(PROGRAM_FILE)
         end
         break
     end
@@ -298,7 +297,7 @@ function _start()
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
     try
-        (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
+        (quiet,repl,startup,color_set,history_file) = process_options(opts)
 
         local term
         global active_repl

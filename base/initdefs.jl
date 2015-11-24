@@ -2,6 +2,7 @@
 
 ## initdefs.jl - initialization and runtime management definitions
 
+PROGRAM_FILE = UTF8String("")
 const ARGS = UTF8String[]
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
