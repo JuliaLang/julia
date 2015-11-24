@@ -50,7 +50,7 @@ If you run into issues building LLVM, see these notes:
 # Raspberry Pi
 
 The Raspberry Pi ARM CPU type is not detected by LLVM.
-Before starting the build, it is recommended to do `export JULIA_CPU_ARCH=arm1176jzf-s`
+Before starting the build, it is recommended to do `export JULIA_CPU_TARGET=arm1176jzf-s`
 at the shell to tune the generated code for your CPU architecture.
 
 # Raspberry Pi 2
