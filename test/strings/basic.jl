@@ -11,6 +11,8 @@
 @test endswith("abcd", "cd")
 @test !endswith("abcd", "dc")
 @test !endswith("cd", "abcd")
+@test startswith("ab\0cd", "ab\0c")
+@test !startswith("ab\0cd", "ab\0d")
 
 @test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
 
