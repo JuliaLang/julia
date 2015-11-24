@@ -245,9 +245,9 @@ void jl_init_threading(void)
     cpu_ghz = ((double)(rdtsc() - cpu_tim)) / 1e9;
 
     // set up space for profiling information
-    fork_ticks = (uint64_t *)_mm_malloc(jl_n_threads * sizeof (uint64_t), 64);
-    user_ticks = (uint64_t *)_mm_malloc(jl_n_threads * sizeof (uint64_t), 64);
-    join_ticks = (uint64_t *)_mm_malloc(jl_n_threads * sizeof (uint64_t), 64);
+    fork_ticks = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
+    user_ticks = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
+    join_ticks = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
     ti_reset_timings();
 #endif
 
@@ -327,9 +327,9 @@ void jl_shutdown_threading(void)
     // TODO: clean up and free the per-thread heaps
 
 #if PROFILE_JL_THREADING
-    _mm_free(join_ticks);
-    _mm_free(user_ticks);
-    _mm_free(fork_ticks);
+    jl_free_aligned(join_ticks);
+    jl_free_aligned(user_ticks);
+    jl_free_aligned(fork_ticks);
     fork_ticks = user_ticks = join_ticks = NULL;
 #endif
 }
