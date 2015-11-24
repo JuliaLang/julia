@@ -36,6 +36,36 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
+#if !defined(_CPU_X86_64_) && !defined(_CPU_X86_) && defined(__linux__)
+
+static int _get_perf_fd(void)
+{
+    static int fd = -1;
+    if (fd < 0) {
+        static struct perf_event_attr attr;
+        attr.type = PERF_TYPE_HARDWARE;
+        attr.config = PERF_COUNT_HW_CPU_CYCLES;
+        fd = syscall(__NR_perf_event_open, &attr, 0, -1, -1, 0);
+    }
+    return fd;
+}
+
+__attribute__((destructor)) static void
+_close_perf_fd(void)
+{
+    close(_get_perf_fd());
+}
+
+long long
+rdtsc(void)
+{
+    long long result = 0;
+    if (read(_get_perf_fd(), &result, sizeof(result)) < sizeof(result))
+        return 0;
+    return result;
+}
+#endif
+
 #ifdef JULIA_ENABLE_THREADING
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
