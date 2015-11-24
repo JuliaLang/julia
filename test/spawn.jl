@@ -23,8 +23,8 @@ yes = `perl -le 'while (1) {print STDOUT "y"}'`
 @test length(spawn(pipeline(`echo hello`, `sort`)).processes) == 2
 
 out = readall(`echo hello` & `echo world`)
-@test search(out,"world") != (0,0)
-@test search(out,"hello") != (0,0)
+@test search(out,"world") != 0:-1
+@test search(out,"hello") != 0:-1
 @test readall(pipeline(`echo hello` & `echo world`, `sort`)) == "hello\nworld\n"
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
