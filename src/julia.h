@@ -1424,7 +1424,6 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
     } while(0)
 
 DLLEXPORT void jl_sigint_action(void);
-DLLEXPORT void restore_signals(void);
 DLLEXPORT void jl_install_sigint_handler(void);
 DLLEXPORT void jl_sigatomic_begin(void);
 DLLEXPORT void jl_sigatomic_end(void);
@@ -1467,11 +1466,26 @@ typedef struct _jl_task_t {
     int16_t tid;
 } jl_task_t;
 
+#define JL_MAX_BT_SIZE 80000
+typedef struct _jl_tls_states_t {
+    jl_gcframe_t *pgcstack;
+    jl_value_t *exception_in_transit;
+    struct _jl_thread_heap_t *heap;
+    jl_task_t *volatile current_task;
+    jl_task_t *root_task;
+    jl_value_t *volatile task_arg_in_transit;
+    void *stackbase;
+    jl_jmp_buf *volatile jmp_target;
+    jl_jmp_buf base_ctx; // base context of stack
+    int16_t tid;
+    size_t bt_size;
+    ptrint_t bt_data[JL_MAX_BT_SIZE + 1];
+} jl_tls_states_t;
+
 typedef struct {
-    jl_task_t * volatile *pcurrent_task;
-    jl_task_t **proot_task;
-    jl_value_t **pexception_in_transit;
-    jl_value_t * volatile *ptask_arg_in_transit;
+    jl_tls_states_t *ptls;
+    uv_thread_t system_id;
+    void *signal_stack;
 } jl_thread_task_state_t;
 
 #define jl_current_task (jl_get_ptls_states()->current_task)
@@ -1485,18 +1499,6 @@ DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
 DLLEXPORT void NORETURN jl_rethrow(void);
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 
-typedef struct _jl_tls_states_t {
-    jl_gcframe_t *pgcstack;
-    jl_value_t *exception_in_transit;
-    struct _jl_thread_heap_t *heap;
-    jl_task_t *volatile current_task;
-    jl_task_t *root_task;
-    jl_value_t *volatile task_arg_in_transit;
-    void *stackbase;
-    jl_jmp_buf *volatile jmp_target;
-    jl_jmp_buf base_ctx; // base context of stack
-    int16_t tid;
-} jl_tls_states_t;
 DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
 #ifndef JULIA_ENABLE_THREADING
 extern DLLEXPORT jl_tls_states_t jl_tls_states;

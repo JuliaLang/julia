@@ -541,8 +541,6 @@ JL_CALLABLE(jl_f_kwcall)
 
 // eval -----------------------------------------------------------------------
 
-extern int jl_lineno;
-
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     return jl_toplevel_eval_in_warn(m, ex, 0);

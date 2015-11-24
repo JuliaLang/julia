@@ -571,8 +571,6 @@ int jl_parse_deperror(int err)
     return prev == FL_T ? 1 : 0;
 }
 
-extern int jl_lineno;
-
 jl_value_t *jl_parse_next(void)
 {
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
