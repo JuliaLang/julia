@@ -14,6 +14,11 @@ Constants
    A symbol representing the name of the operating system. Possible values
    are ``:Linux``, ``:Darwin`` (OS X), or ``:Windows``.
 
+.. data:: PROGRAM_FILE
+
+   A string containing the script name passed to Julia from the command line. Note that the
+   script name remains unchanged from within included files. Alternatively see :data:`@__FILE__`.
+
 .. data:: ARGS
 
    An array of the command line arguments passed to Julia, as strings.

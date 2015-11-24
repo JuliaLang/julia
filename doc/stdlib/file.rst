@@ -337,7 +337,7 @@
 
    .. Docstring generated from Julia source
 
-   ``@__FILE__`` expands to a string with the absolute path and file name of the script being run. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ .
+   ``@__FILE__`` expands to a string with the absolute file path of the file containing the macro. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``. Alternatively see :data:`PROGRAM_FILE`.
 
 .. function:: @__LINE__ -> Int
 
