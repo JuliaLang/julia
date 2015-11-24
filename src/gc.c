@@ -322,30 +322,10 @@ static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #1
 #define malloc_a16(sz) malloc(sz)
 #define realloc_a16(p, sz, oldsz) realloc((p), (sz))
 #define free_a16(p) free(p)
-
-#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
-#define malloc_a16(sz) _aligned_malloc((sz)?(sz):1, 16)
-#define realloc_a16(p, sz, oldsz) _aligned_realloc((p), (sz)?(sz):1, 16)
-#define free_a16(p) _aligned_free(p)
-
 #else
-static inline void *malloc_a16(size_t sz)
-{
-    void *ptr;
-    if (posix_memalign(&ptr, 16, sz))
-        return NULL;
-    return ptr;
-}
-static inline void *realloc_a16(void *d, size_t sz, size_t oldsz)
-{
-    void *b = malloc_a16(sz);
-    if (b != NULL) {
-        memcpy(b, d, oldsz);
-        free(d);
-    }
-    return b;
-}
-#define free_a16(p) free(p)
+#define malloc_a16(sz) jl_malloc_aligned(sz, 16)
+#define realloc_a16(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, 16)
+#define free_a16(p) jl_free_aligned(p)
 #endif
 
 static void schedule_finalization(void *o, void *f)

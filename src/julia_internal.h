@@ -340,6 +340,54 @@ DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 
 JL_DEFINE_MUTEX_EXT(codegen)
 
+#if defined(_OS_WINDOWS_)
+STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+{
+    return _aligned_malloc(sz ? sz : 1, align);
+}
+STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
+                                       size_t align)
+{
+    (void)oldsz;
+    return _aligned_realloc(p, sz ? sz : 1, align);
+}
+STATIC_INLINE void jl_free_aligned(void *p)
+{
+    _aligned_free(p);
+}
+#else
+STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+{
+#if defined(_P64) || defined(__APPLE__)
+    if (align <= 16)
+        return malloc(sz);
+#endif
+    void *ptr;
+    if (posix_memalign(&ptr, align, sz))
+        return NULL;
+    return ptr;
+}
+STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
+                                       size_t align)
+{
+#if defined(_P64) || defined(__APPLE__)
+    if (align <= 16)
+        return realloc(d, sz);
+#endif
+    void *b = jl_malloc_aligned(sz, align);
+    if (b != NULL) {
+        memcpy(b, d, oldsz > sz ? sz : oldsz);
+        free(d);
+    }
+    return b;
+}
+STATIC_INLINE void jl_free_aligned(void *p)
+{
+    free(p);
+}
+#endif
+
+
 #ifdef __cplusplus
 }
 #endif
