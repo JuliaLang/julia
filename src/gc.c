@@ -1618,7 +1618,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
     // FIXME - we need to mark stacks on other threads
-    int curtask = (ta == *jl_all_task_states[0].pcurrent_task);
+    int curtask = (ta == jl_all_task_states[0].ptls->current_task);
     if (stkbuf) {
 #ifndef COPY_STACKS
         if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
@@ -1887,11 +1887,11 @@ static void pre_mark(void)
 
     size_t i;
     for(i=0; i < jl_n_threads; i++) {
-        jl_thread_task_state_t *ts = &jl_all_task_states[i];
-        gc_push_root(*ts->pcurrent_task, 0);
-        gc_push_root(*ts->proot_task, 0);
-        gc_push_root(*ts->pexception_in_transit, 0);
-        gc_push_root(*ts->ptask_arg_in_transit, 0);
+        jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
+        gc_push_root(ptls->current_task, 0);
+        gc_push_root(ptls->root_task, 0);
+        gc_push_root(ptls->exception_in_transit, 0);
+        gc_push_root(ptls->task_arg_in_transit, 0);
     }
 
     // invisible builtin values
