@@ -25,6 +25,9 @@ let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
     @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
 end
 
+# Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
+@test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
+
 # Common Parsing Patterns
 #'1996-January-15'
 dt = Dates.DateTime(1996,1,15)
