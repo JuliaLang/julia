@@ -92,7 +92,7 @@ temp_pkg_dir() do
             "need to update METADATA by running `Pkg.update()`"
     end
 
-    # trying to add, check availability, or pin a nonexistent package errors
+    # trying to add, clone, check availability, or pin a nonexistent package errors
     try
         Pkg.add("NonexistentPackage")
         error("unexpected")
@@ -113,6 +113,20 @@ temp_pkg_dir() do
     catch err
         @test isa(err, PkgError)
         @test err.msg == "NonexistentPackage is not a git repo"
+    end
+    try
+        Pkg.clone("NonexistentPackage")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "package NonexistentPackage at NonexistentPackage doesn't appear to exist"
+    end
+    try
+        Pkg.clone("ThisUrlIsFake","NonexistentPackage")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "package NonexistentPackage at ThisUrlIsFake doesn't appear to exist"
     end
 
     # trying to pin a git repo under Pkg.dir that is not an installed package errors

@@ -190,6 +190,9 @@ end
 
 function clone(url::AbstractString, pkg::AbstractString)
     info("Cloning $pkg from $url")
+    if !(':' in url) && !isfile(joinpath("METADATA",pkg,"url"))
+        throw(PkgError("package $pkg at $url doesn't appear to exist"))
+    end
     ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
