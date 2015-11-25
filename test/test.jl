@@ -64,25 +64,25 @@ try
     end
 
     @testset "loop with desc" begin
-        @testloop "loop1 $T" for T in (Float32, Float64)
+        @testset "loop1 $T" for T in (Float32, Float64)
             @test 1 == T(1)
         end
     end
     @testset "loops without desc" begin
-        @testloop for T in (Float32, Float64)
+        @testset for T in (Float32, Float64)
             @test 1 == T(1)
         end
-        @testloop for T in (Float32, Float64), S in (Int32,Int64)
+        @testset for T in (Float32, Float64), S in (Int32,Int64)
             @test S(1) == T(1)
         end
     end
     srand(123)
     @testset "some loops fail" begin
-        @testloop for i in 1:5
+        @testset for i in 1:5
             @test i <= rand(1:10)
         end
         # should add 3 errors and 3 passing tests
-        @testloop for i in 1:6
+        @testset for i in 1:6
             iseven(i) || error("error outside of test")
             @test true # only gets run if the above passed
         end
@@ -116,7 +116,7 @@ end
 @test typeof(ts) == Base.Test.DefaultTestSet
 @test typeof(ts.results[1]) == Base.Test.Pass
 
-tss = @testloop "@testloop should return an array of testsets: $i" for i in 1:3
+tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
     @test true
 end
 @test length(tss) == 3
@@ -194,12 +194,12 @@ end
 @test typeof(ts.results[2].results[2]) == CustomTestSet
 @test ts.results[2].results[2].foo == 3
 
-# test custom testset types on testloops
-tss = @testloop CustomTestSet foo=3 "custom testloop $i" for i in 1:6
-    @testloop "inner testloop $i-$j" for j in 1:3
+# test custom testset types on testset/for
+tss = @testset CustomTestSet foo=3 "custom testset $i" for i in 1:6
+    @testset "inner testset $i-$j" for j in 1:3
         @test iseven(i + j)
     end
-    # make sure a testset within a testloop works
+    # make sure a testset within a testset/for works
     @testset "inner testset $i" begin
         @test iseven(i)
     end
