@@ -232,13 +232,19 @@ end
 @test cospi(1) == -1
 @test cospi(2) == 1
 
+@test sinc(1) == 0
+@test sinc(complex(1,0)) == 0
+@test sinc(0) == 1
+@test cosc(1) == -1
+@test cosc(0) == 0
+@test cosc(complex(1,0)) == -1
+
 # check type stability
 for T = (Float32,Float64,BigFloat)
     for f = (sind,cosd,sinpi,cospi)
         @test Base.return_types(f,Tuple{T}) == [T]
     end
 end
-
 
 # error functions
 @test_approx_eq erf(1) 0.84270079294971486934
@@ -451,6 +457,8 @@ end
 for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
     @test factorial(x) == gamma(1+x)
 end
+@test lfact(1) == 0
+@test lfact(2) == lgamma(3)
 
 # digamma
 for elty in (Float32, Float64)
@@ -495,14 +503,18 @@ for elty in (Float32, Float64)
         @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
+@test abs(invdigamma(2)) == abs(invdigamma(2.))
 
 @test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
 
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12
+@test_approx_eq eta(Float32(2)) eta(2)
+@test_approx_eq eta(Complex64(2)) eta(2)
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
+@test_approx_eq zeta(Complex64(2)) zeta(2)
 @test_approx_eq zeta(4) pi^4/90
 @test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
 @test isnan(zeta(NaN))
@@ -562,6 +574,9 @@ end
 @test polygamma(4, -0.0) == Inf == -polygamma(4, +0.0)
 @test zeta(4, +0.0) == Inf == zeta(4, -0.0)
 @test zeta(5, +0.0) == Inf == -zeta(5, -0.0)
+@test zeta(Inf, 1.) == 1
+@test zeta(Inf, 2.) == 0
+@test isnan(zeta(NaN, 1.))
 @test isa([digamma(x) for x in [1.0]], Vector{Float64})
 @test isa([trigamma(x) for x in [1.0]], Vector{Float64})
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
