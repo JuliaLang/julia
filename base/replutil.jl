@@ -168,16 +168,26 @@ function showerror(io::IO, ex::MethodError)
         f = ex.f
     end
     name = isgeneric(f) ? f.env.name : :anonymous
-    if isa(f, DataType)
-        print(io, "`$(f)` has no method matching $(f)(")
+    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+        # See #13033
+        T = striptype(ex.args[1])
+        if T == nothing
+            print(io, "First argument to `convert` must be a Type, got $(ex.args[1])")
+        else
+            print(io, "Cannot `convert` an object of type $(arg_types_param[2]) to an object of type $T")
+        end
     else
-        print(io, "`$(name)` has no method matching $(name)(")
+        if isa(f, DataType)
+            print(io, "`$(f)` has no method matching $(f)(")
+        else
+            print(io, "`$(name)` has no method matching $(name)(")
+        end
+        for (i, typ) in enumerate(arg_types_param)
+            print(io, "::$typ")
+            i == length(arg_types_param) || print(io, ", ")
+        end
+        print(io, ")")
     end
-    for (i, typ) in enumerate(arg_types_param)
-        print(io, "::$typ")
-        i == length(arg_types_param) || print(io, ", ")
-    end
-    print(io, ")")
     # Check for local functions that shadow methods in Base
     if isdefined(Base, name)
         basef = eval(Base, name)
@@ -217,6 +227,9 @@ function showerror(io::IO, ex::MethodError)
         warn(io, "Error showing method candidates, aborted")
     end
 end
+
+striptype{T}(::Type{T}) = T
+striptype(::Any) = nothing
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.
