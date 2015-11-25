@@ -790,6 +790,7 @@ endif
 $(BUILDDIR)/$(LIBUV_SRC_DIR)/config.status: $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/configure
 	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
 	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/Makefile.in
+	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/configure
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$< --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
