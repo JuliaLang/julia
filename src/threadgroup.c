@@ -6,10 +6,11 @@
   . fork/join/barrier
 */
 
-
-#include <immintrin.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,8 +29,8 @@ int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
     int num_threads = num_sockets * num_cores * num_threads_per_core;
     char *cp;
 
-    tg = (ti_threadgroup_t *)_mm_malloc(sizeof (ti_threadgroup_t), 64);
-    tg->tid_map = (int16_t *)_mm_malloc(num_threads * sizeof (int16_t), 64);
+    tg = (ti_threadgroup_t*)jl_malloc_aligned(sizeof(ti_threadgroup_t), 64);
+    tg->tid_map = (int16_t*)jl_malloc_aligned(num_threads * sizeof(int16_t), 64);
     for (i = 0;  i < num_threads;  ++i)
         tg->tid_map[i] = -1;
     tg->num_sockets = num_sockets;
@@ -37,8 +38,8 @@ int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
     tg->num_threads_per_core = num_threads_per_core;
     tg->num_threads = num_threads;
     tg->added_threads = 0;
-    tg->thread_sense = (ti_thread_sense_t **)
-            _mm_malloc(num_threads * sizeof (ti_thread_sense_t *), 64);
+    tg->thread_sense = (ti_thread_sense_t**)
+        jl_malloc_aligned(num_threads * sizeof(ti_thread_sense_t*), 64);
     for (i = 0;  i < num_threads;  i++)
         tg->thread_sense[i] = NULL;
     tg->group_sense = 0;
@@ -89,7 +90,7 @@ int ti_threadgroup_initthread(ti_threadgroup_t *tg, int16_t ext_tid)
     if (tg->num_threads == 0)
         return -3;
 
-    ts = (ti_thread_sense_t *)_mm_malloc(sizeof (ti_thread_sense_t), 64);
+    ts = (ti_thread_sense_t*)jl_malloc_aligned(sizeof(ti_thread_sense_t), 64);
     ts->sense = 1;
     tg->thread_sense[tg->tid_map[ext_tid]] = ts;
 
@@ -204,10 +205,10 @@ int ti_threadgroup_destroy(ti_threadgroup_t *tg)
     uv_cond_destroy(&tg->alarm);
 
     for (i = 0;  i < tg->num_threads;  i++)
-        _mm_free(tg->thread_sense[i]);
-    _mm_free(tg->thread_sense);
-    _mm_free(tg->tid_map);
-    _mm_free(tg);
+        jl_free_aligned(tg->thread_sense[i]);
+    jl_free_aligned(tg->thread_sense);
+    jl_free_aligned(tg->tid_map);
+    jl_free_aligned(tg);
 
     return 0;
 }
