@@ -2,66 +2,39 @@
 
 # update! takes in variable-length data, buffering it into blocklen()-sized pieces,
 # calling transform!() when necessary to update the internal hash state.
-function update!{T<:SHA_CTX}(context::T, data::Array{UInt8,1})
-    if length(data) == 0
-        return
-    end
+function update!{T<:Union{SHA1_CTX,SHA2_CTX,SHA3_CTX}}(context::T, data::Array{UInt8,1})
+    # We need to do all our arithmetic in the proper bitwidth
+    UIntXXX = typeof(context.bytecount)
 
-    data_idx = 0
-    len = convert(typeof(context.bytecount), length(data))
+    # Process as many complete blocks as possible
+    len = UIntXXX(length(data))
+    data_idx = UIntXXX(0)
     usedspace = context.bytecount % blocklen(T)
-    if usedspace > 0
-        # Calculate how much free space is available in the buffer
-        freespace = blocklen(T) - usedspace
-
-        if len >= freespace
-            # Fill the buffer completely and process it
-            for i in 1:freespace
-                context.buffer[usedspace + i] = data[data_idx + i]
-            end
-
-            # Round bytecount up to the nearest blocklen
-            context.bytecount += freespace
-            data_idx += freespace
-            len -= freespace
-            transform!(context)
-        else
-            # The buffer is not yet full
-            for i = 1:len
-                context.buffer[usedspace + i] = data[data_idx + i]
-            end
-            context.bytecount += len
-            return
+    while len - data_idx + usedspace >= blocklen(T)
+        # Fill up as much of the buffer as we can with the data given us
+        for i in 1:(blocklen(T) - usedspace)
+            context.buffer[usedspace + i] = data[data_idx + i]
         end
-    end
 
-
-    # Process as many complete blocks as possible, now that the buffer is full
-    data_idx = one(len)
-    while len - (data_idx - 1) >= blocklen(T)
-        for i in 1:blocklen(T)
-            context.buffer[i] = data[data_idx + i - 1]
-        end
         transform!(context)
-        data_idx += blocklen(T)
+        context.bytecount += blocklen(T) - usedspace
+        data_idx += blocklen(T) - usedspace
+        usedspace = UIntXXX(0)
     end
-    context.bytecount += (data_idx - 1)
 
-    # If there are leftovers, save them in buffer until next update!() or digest!()
-    if data_idx < len
-        # There's left-overs, so save 'em
-        for i = 1:(len - data_idx + 1)
-            context.buffer[i] = data[data_idx + i - 1]
+    # There is less than a complete block left, but we need to save the leftovers into context.buffer:
+    if len > data_idx
+        for i = 1:(len - data_idx)
+            context.buffer[usedspace + i] = data[data_idx + i]
         end
-        context.bytecount += (len - data_idx + 1)
+        context.bytecount += len - data_idx
     end
 end
 
 
 # Clear out any saved data in the buffer, append total bitlength, and return our precious hash!
-function digest!{T<:SHA_CTX}(context::T)
+function digest!{T<:Union{SHA1_CTX,SHA2_CTX}}(context::T)
     usedspace = context.bytecount % blocklen(T)
-
     # If we have anything in the buffer still, pad and transform that data
     if usedspace > 0
         # Begin padding with a 1 bit:
