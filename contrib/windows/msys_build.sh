@@ -127,8 +127,8 @@ else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
   echo "override XC_HOST = " >> Make.user
-  export CC="$PWD/deps/libuv/compile cl -nologo -MD -Z7"
-  export AR="$PWD/deps/libuv/ar-lib lib"
+  export CC="$PWD/deps/srccache/libuv/compile cl -nologo -MD -Z7"
+  export AR="$PWD/deps/srccache/libuv/ar-lib lib"
   export LD="$PWD/linkld link"
   echo "override CC = $CC" >> Make.user
   echo 'override CXX = $(CC) -EHsc' >> Make.user
@@ -176,12 +176,6 @@ echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
-  make -C deps get-libuv
-  # Create a modified version of compile for wrapping link
-  sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
-    -e 's|$dir/$lib|$dir/lib$lib|g' deps/libuv/compile > linkld
-  chmod +x linkld
-
   # Openlibm doesn't build well with MSVC right now
   echo 'USE_SYSTEM_OPENLIBM = 1' >> Make.user
   # Since we don't have a static library for openlibm
@@ -192,6 +186,11 @@ if [ -n "$USEMSVC" ]; then
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
   echo 'override STAGE1_DEPS += dsfmt' >> Make.user
+
+  # Create a modified version of compile for wrapping link
+  sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
+    -e 's|$dir/$lib|$dir/lib$lib|g' deps/srccache/libuv/compile > linkld
+  chmod +x linkld
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
   make check-whitespace
