@@ -184,3 +184,21 @@ end
 let io = IOBuffer(0)
    write(io, ones(UInt8, 1048577))
 end
+
+let bstream = BufferStream()
+    @test isopen(bstream)
+    @test isreadable(bstream)
+    @test iswritable(bstream)
+    @test sprint(io -> show(io,bstream)) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    a = rand(UInt8,10)
+    write(bstream,a)
+    flush(bstream)
+    b = read(bstream,UInt8)
+    @test a[1] == b
+    b = read(bstream,UInt8)
+    @test a[2] == b
+    c = zeros(UInt8,8)
+    read!(bstream,c)
+    @test c == a[3:10]
+    close(bstream)
+end
