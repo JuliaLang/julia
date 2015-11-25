@@ -1040,8 +1040,8 @@ julia> ib
             end
         end
 
-        C = @nref $N A d->d == dim ? sort!(uniquerows) : (1:size(A, d)) 
-        
+        C = @nref $N A d->d == dim ? sort!(uniquerows) : (1:size(A, d))
+
         ib = Array(Vector{Int},length(ia))
         for k = 1:length(ia)
             ib[k] = Int[]
