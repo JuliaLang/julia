@@ -415,14 +415,15 @@ end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
-    isfile(output) && rm(output)
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
         end
         """
+    outdir, _ = splitdir(output)
+    tmpoutput, _ = mktemp(outdir)
     io, pobj = open(pipeline(detach(`$(julia_cmd())
-                                    --output-ji $output --output-incremental=yes
+                                    --output-ji $tmpoutput --output-incremental=yes
                                     --startup-file=no --history-file=no
                                     --color=$(have_color ? "yes" : "no")
                                     --eval $code_object`), stderr=STDERR),
@@ -449,10 +450,12 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
         end
         close(io)
         wait(pobj)
+        mv(tmpoutput, output)
         return pobj
     catch
         kill(pobj)
         close(io)
+        rm(tmpoutput)
         rethrow()
     end
 end
