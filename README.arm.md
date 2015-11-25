@@ -36,7 +36,9 @@ override USE_SYSTEM_ARPACK=1
 The following command will install all the necessary libraries on Ubuntu.
 
 ````
-sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 g++-4.8 gfortran libgfortran3 m4 libedit-dev
+sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev \
+                     libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.8 \
+                     g++-4.8 gfortran libgfortran3 m4 libedit-dev libarpack2
 ````
 
 Note that OpenBLAS only supports ARMv7. For older ARM variants, using the reference BLAS
