@@ -231,9 +231,7 @@ function repeat{T}(A::Array{T};
             # "Project" outer repetitions into inner repetitions
             indices_in[t] = mod1(indices_out[t], inner_size_out[t])
             # Find inner repetitions using flooring division
-            if inner[t] != 1
-                indices_in[t] = fld1(indices_in[t], inner[t])
-            end
+            indices_in[t] = fld1(indices_in[t], inner[t])
         end
         index_in = sub2ind(size_in, indices_in...)
         R[index_out] = A[index_in]

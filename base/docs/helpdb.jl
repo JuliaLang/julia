@@ -3265,7 +3265,7 @@ tril!(M, k)
 doc"""
     divrem(x, y)
 
-The quotient and remainder from Euclidean division. Equivalent to `(x÷y, x%y)`.
+The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or `(x÷y, x%y)`.
 """
 divrem
 
@@ -5266,6 +5266,8 @@ doc"""
     %(x, y)
 
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in magnitude than `y`. This value is always exact.
+
+    x == div(x,y)*y + rem(x,y)
 """
 rem
 
@@ -5666,9 +5668,9 @@ The distance between `x` and the next larger representable floating-point value 
 eps(::AbstractFloat)
 
 doc"""
-    rem1(x,m)
+    rem1(x, y)
 
-Remainder after division, returning in the range (0,m\]
+(Deprecated.) Remainder after division, returning in the range `(0,y\]`
 """
 rem1
 
@@ -8304,7 +8306,9 @@ procs(::SharedArray)
 doc"""
     mod(x, y)
 
-Modulus after division, returning in the range \[0,`y`), if `y` is positive, or (`y`,0\] if `y` is negative.
+Modulus after flooring division, returning in the range \[0,`y`), if `y` is positive, or (`y`,0\] if `y` is negative.
+
+    x == fld(x,y)*y + mod(x,y)
 """
 mod
 
@@ -8461,11 +8465,29 @@ Matrix inverse
 inv
 
 doc"""
-    mod1(x,m)
+    fld1(x, y)
 
-Modulus after division, returning in the range (0,m\]
+Flooring division, returning a value consistent with `mod1(x,y)`
+
+    x == fld(x,y)*y + mod(x,y)
+
+    x == (fld1(x,y)-1)*y + mod1(x,y)
+"""
+fld1
+
+doc"""
+    mod1(x, y)
+
+Modulus after flooring division, returning a value in the range `(0,y\]`
 """
 mod1
+
+doc"""
+    fldmod1(x, y)
+
+Return `(fld1(x,y), mod1(x,y))`
+"""
+fldmod1
 
 doc"""
     @assert cond [text]

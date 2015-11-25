@@ -135,7 +135,11 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Modulus after division, returning in the range [0,``y``\ ), if ``y`` is positive, or (``y``\ ,0] if ``y`` is negative.
+   Modulus after flooring division, returning in the range [0,``y``\ ), if ``y`` is positive, or (``y``\ ,0] if ``y`` is negative.
+
+   .. code-block:: julia
+
+       x == fld(x,y)*y + mod(x,y)
 
 .. function:: mod2pi(x)
 
@@ -152,11 +156,15 @@ Mathematical Operators
 
    Remainder from Euclidean division, returning a value of the same sign as ``x``\ , and smaller in magnitude than ``y``\ . This value is always exact.
 
+   .. code-block:: julia
+
+       x == div(x,y)*y + rem(x,y)
+
 .. function:: divrem(x, y)
 
    .. Docstring generated from Julia source
 
-   The quotient and remainder from Euclidean division. Equivalent to ``(x÷y, x%y)``\ .
+   The quotient and remainder from Euclidean division. Equivalent to ``(div(x,y), rem(x,y))`` or ``(x÷y, x%y)``\ .
 
 .. function:: fldmod(x, y)
 
@@ -164,17 +172,35 @@ Mathematical Operators
 
    The floored quotient and modulus after division. Equivalent to ``(fld(x,y), mod(x,y))``\ .
 
-.. function:: mod1(x,m)
+.. function:: fld1(x, y)
 
    .. Docstring generated from Julia source
 
-   Modulus after division, returning in the range (0,m]
+   Flooring division, returning a value consistent with ``mod1(x,y)``
 
-.. function:: rem1(x,m)
+   .. code-block:: julia
+
+       x == fld(x,y)*y + mod(x,y)
+
+       x == (fld1(x,y)-1)*y + mod1(x,y)
+
+.. function:: mod1(x, y)
 
    .. Docstring generated from Julia source
 
-   Remainder after division, returning in the range (0,m]
+   Modulus after flooring division, returning a value in the range ``(0,y\]``
+
+.. function:: fldmod1(x, y)
+
+   .. Docstring generated from Julia source
+
+   Return ``(fld1(x,y), mod1(x,y))``
+
+.. function:: rem1(x, y)
+
+   .. Docstring generated from Julia source
+
+   (Deprecated.) Remainder after division, returning in the range ``(0,y\]``
 
 .. _//:
 .. function:: //(num, den)
