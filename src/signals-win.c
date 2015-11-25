@@ -106,23 +106,36 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(excpt != NULL);
 #if defined(_CPU_X86_64_)
-    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
+    uintptr_t pc = ctxThread->Rip;
+    if (excpt == jl_undefref_exception && !pc) {
+        uintptr_t sp = ctxThread->Rsp;
+        ctxThread->Rip = *(uintptr_t*)sp;
+        sp += sizeof(void*);
+        ctxThread->Rsp = sp;
+    }
+    uintptr_t sp = (ctxThread->Rsp & (uintptr_t)-16) - sizeof(void*);
 #elif defined(_CPU_X86_)
-    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
+    uintptr_t pc = ctxThread->Eip;
+    if (excpt == jl_undefref_exception && !pc) {
+        uintptr_t sp = ctxThread->Esp;
+        ctxThread->Eip = *(uintptr_t*)sp;
+        sp += sizeof(void*);
+        ctxThread->Esp = sp;
+    }
+    uintptr_t sp = (ctxThread->Esp & (uintptr_t)-16) - sizeof(void*);
 #else
 #error WIN16 not supported :P
 #endif
     ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                            ctxThread) : 0;
     ptls->exception_in_transit = excpt;
+    *(uintptr_t*)sp = 0;
 #if defined(_CPU_X86_64_)
-    *(DWORD64*)Rsp = 0;
-    ctxThread->Rsp = Rsp;
-    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rsp = sp;
+    ctxThread->Rip = (uintptr_t)&jl_rethrow;
 #elif defined(_CPU_X86_)
-    *(DWORD32*)Esp = 0;
-    ctxThread->Esp = Esp;
-    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Esp = sp;
+    ctxThread->Eip = (uintptr_t)&jl_rethrow;
 #endif
 }
 
@@ -221,6 +234,11 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception,
                         ExceptionInfo->ContextRecord,in_ctx);
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+                else if (!ExceptionInfo->ExceptionRecord->ExceptionInformation[1]) {
+                    jl_throw_in_ctx(jl_undefref_exception,
+                                    ExceptionInfo->ContextRecord, in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
         }

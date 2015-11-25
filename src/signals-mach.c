@@ -140,6 +140,14 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     x86_thread_state64_t state;
     kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
+
+    if (exception == jl_undefref_exception && !state.__rip) {
+        uintptr_t rsp = state.__rsp;
+        state.__rip = *(uintptr_t*)rsp;
+        rsp += sizeof(void*);
+        state.__rsp = rsp;
+    }
+
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
 
     ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
@@ -212,6 +220,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
             jl_clear_force_sigint();
             jl_throw_in_thread(tid, thread, jl_interrupt_exception);
         }
+        return KERN_SUCCESS;
+    }
+    if (!fault_addr) {
+        jl_throw_in_thread(tid, thread, jl_undefref_exception);
         return KERN_SUCCESS;
     }
 #ifdef SEGV_EXCEPTION

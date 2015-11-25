@@ -644,11 +644,16 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 static void raise_exception(Value *exc, jl_codectx_t *ctx,
                             BasicBlock *contBB=nullptr)
 {
+    if (exc) {
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlthrow_func), { exc });
+        builder.CreateCall(prepare_call(jlthrow_func), { exc });
 #else
-    builder.CreateCall(prepare_call(jlthrow_func), exc);
+        builder.CreateCall(prepare_call(jlthrow_func), exc);
 #endif
+    }
+    else {
+        builder.CreateLoad(Constant::getNullValue(T_ppint8), true);
+    }
     builder.CreateUnreachable();
     if (!contBB) {
         contBB = BasicBlock::Create(jl_LLVMContext, "after_throw", ctx->f);
@@ -678,8 +683,8 @@ static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
 
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
-    raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
-                           literal_pointer_val(jl_undefref_exception), ctx);
+    raise_exception_unless(builder.CreateICmpNE(v, Constant::getNullValue(v->getType())),
+                           (Value*)NULL, ctx);
 }
 
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
@@ -1049,7 +1054,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
     if (jfty == jl_bottom_type) {
-        raise_exception(literal_pointer_val(jl_undefref_exception), ctx);
+        raise_exception((Value*)NULL, ctx);
         return jl_cgval_t(); // unreachable
     }
     if (type_is_ghost(elty))

@@ -1728,7 +1728,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     FunctionType *functype = FunctionType::get(sret ? T_void : prt, fargt_sig, isVa);
 
     if (jl_ptr != NULL) {
-        null_pointer_check(jl_ptr,ctx);
+        // null_pointer_check(jl_ptr, ctx);
+        // We throw a UndefRefError in the SegFault handler if the pointer is
+        // NULL.
         Type *funcptype = PointerType::get(functype,0);
         llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
     }

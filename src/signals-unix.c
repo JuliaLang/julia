@@ -236,6 +236,38 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_unblock_signal(sig);
         jl_throw_in_ctx(ptls, jl_readonlymemory_exception, context);
     }
+    else if (!info->si_addr) {
+        jl_unblock_signal(sig);
+#ifdef _OS_LINUX_
+        ucontext_t *ctx = (ucontext_t*)context;
+#  if defined(_CPU_X86_64_)
+        uintptr_t pc = ctx->uc_mcontext.gregs[REG_RIP];
+        if (!pc) {
+            uintptr_t rsp = ctx->uc_mcontext.gregs[REG_RSP];
+            ctx->uc_mcontext.gregs[REG_RIP] = *(uintptr_t*)rsp;
+            rsp += sizeof(void*);
+            ctx->uc_mcontext.gregs[REG_RSP] = rsp;
+        }
+#  elif defined(_CPU_X86_)
+        uintptr_t pc = ctx->uc_mcontext.gregs[REG_EIP];
+        if (!pc) {
+            uintptr_t rsp = ctx->uc_mcontext.gregs[REG_ESP];
+            ctx->uc_mcontext.gregs[REG_EIP] = *(uintptr_t*)rsp;
+            rsp += sizeof(void*);
+            ctx->uc_mcontext.gregs[REG_ESP] = rsp;
+        }
+#  elif defined(_CPU_AARCH64_)
+        uintptr_t pc = ctx->uc_mcontext.pc;
+        if (!pc)
+            ctx->uc_mcontext.pc = ctx->uc_mcontext.regs[29]; // link register
+#  elif defined(_CPU_ARM_)
+        uintptr_t pc = ctx->uc_mcontext.arm_pc;
+        if (!pc)
+            ctx->uc_mcontext.arm_pc = ctx->uc_mcontext.arm_lr;
+#  endif
+#endif
+        jl_throw_in_ctx(ptls, jl_undefref_exception, context);
+    }
     else {
 #ifdef SEGV_EXCEPTION
         jl_unblock_signal(sig);
