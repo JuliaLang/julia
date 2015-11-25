@@ -153,14 +153,19 @@ function parse(x::AbstractString,df::DateFormat)
         throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
     end
     periods = Period[]
-    extra = []
+    extra = Any[]  # Supports custom slot types such as TimeZone
     cursor = 1
     for slot in df.slots
         cursor, pe = getslot(x,slot,df.locale,cursor)
         pe != nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
         cursor > endof(x) && break
     end
-    return vcat(sort!(periods,rev=true,lt=periodisless), extra)
+    sort!(periods,rev=true,lt=periodisless)
+    if isempty(extra)
+        return periods
+    else
+        return vcat(periods, extra)
+    end
 end
 
 slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
