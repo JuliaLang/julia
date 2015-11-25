@@ -400,3 +400,11 @@ SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 #test convert for SymTridiagonal
 @test convert(SymTridiagonal{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
 @test convert(AbstractMatrix{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
+
+# Test constructors from matrix
+@test SymTridiagonal([1 2 3; 2 5 6; 0 6 9]) == [1 2 0; 2 5 6; 0 6 9]
+@test Tridiagonal([1 2 3; 4 5 6; 7 8 9]) == [1 2 0; 4 5 6; 0 8 9]
+
+# Test constructors with range and other abstract vectors
+@test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
+@test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
