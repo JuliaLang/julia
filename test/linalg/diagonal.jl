@@ -214,3 +214,6 @@ let d = randn(n), D = Diagonal(d)
     @test inv(D) ≈ inv(full(D))
 end
 @test_throws SingularException inv(Diagonal(zeros(n)))
+
+# allow construct from range
+@test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])

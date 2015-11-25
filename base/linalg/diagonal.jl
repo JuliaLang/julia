@@ -6,6 +6,7 @@ immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
