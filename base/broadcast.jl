@@ -5,7 +5,7 @@ module Broadcast
 using ..Cartesian
 using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
 using Base: AddFun, SubFun, MulFun, LDivFun, RDivFun, PowFun
-import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .%, .<<, .>>, .^
+import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
 
@@ -303,6 +303,7 @@ end
 
 ## elementwise operators ##
 
+.÷(A::AbstractArray, B::AbstractArray) = broadcast(÷, A, B)
 .%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
 .<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
 .>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
