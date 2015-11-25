@@ -13,6 +13,7 @@
 @test clamp(4.0, 1, 3) == 3.0
 
 @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+@test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
 
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
@@ -167,6 +168,7 @@ for T in (Float32, Float64)
     @test_throws DomainError log1p(convert(T,-2.0))
 end
 @test_approx_eq exp10(5) exp10(5.0)
+@test_approx_eq exp2(Float16(2.)) exp2(2.)
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
@@ -247,8 +249,10 @@ for T = (Float32,Float64,BigFloat)
 end
 
 # error functions
+@test_approx_eq erf(Float16(1)) 0.84270079294971486934
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
+@test_approx_eq erfc(Float16(1)) 0.15729920705028513066
 @test_approx_eq erfcx(1) 0.42758357615580700442
 @test_approx_eq erfcx(Float32(1)) 0.42758357615580700442
 @test_approx_eq erfcx(Complex64(1)) 0.42758357615580700442
@@ -506,6 +510,7 @@ end
 @test abs(invdigamma(2)) == abs(invdigamma(2.))
 
 @test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
+@test_approx_eq polygamma(20, Float16(7.)) -4.644616027240543262561198814998587152547
 
 # eta, zeta
 @test_approx_eq eta(1) log(2)
@@ -517,6 +522,9 @@ end
 @test_approx_eq zeta(Complex64(2)) zeta(2)
 @test_approx_eq zeta(4) pi^4/90
 @test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
+@test_approx_eq zeta(1,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(1.,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(Float16(1.),Float16(2.)) zeta(1,2.)
 @test isnan(zeta(NaN))
 @test isnan(zeta(complex(0,Inf)))
 @test isnan(zeta(complex(-Inf,0)))
@@ -617,7 +625,7 @@ for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
 end
 
 # modf
-for elty in (Float32, Float64)
+for elty in (Float16, Float32, Float64)
     @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
     @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
     @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
