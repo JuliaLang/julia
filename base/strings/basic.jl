@@ -138,7 +138,7 @@ function nextind(s::AbstractString, i::Integer)
         return 1
     end
     if i > e
-        return i+1
+        return sizeof(s)+1
     end
     for j = i+1:e
         if isvalid(s,j)
