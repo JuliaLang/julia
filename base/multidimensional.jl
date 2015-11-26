@@ -867,7 +867,7 @@ end
 """
     C, ia, ib, ic = uniqueind(itr, dim)
 
-A function that operates similiarly to `unique(itr,dim)` but returns multiple 
+A function that operates similiarly to `unique(itr,dim)` but returns multiple
 output arguments having the following properties:
 
 C - the unique elements of the array `itr` along the selected dimension `dim`
