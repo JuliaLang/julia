@@ -5,6 +5,7 @@ using Base.Test
 using Base.SparseArrays.SPQR
 using Base.SparseArrays.CHOLMOD
 
+let
 m, n = 100, 10
 nn = 100
 
@@ -49,4 +50,13 @@ for eltyA in (Float64, Complex{Float64})
             @test_throws DimensionMismatch SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B[1:m-1,:]))
         end
     end
+end
+
+# Issue 14134
+F = qrfact(sprandn(10,5,0.5))
+b = IOBuffer()
+serialize(b, F)
+seekstart(b)
+@test_throws ArgumentError deserialize(b)\ones(10)
+
 end
