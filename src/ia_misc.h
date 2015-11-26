@@ -94,7 +94,7 @@ STATIC_INLINE void cpu_lfence(void)
     _mm_lfence();
 }
 
-#elif defined(_CPU_ARM_)
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
 
 STATIC_INLINE void cpu_pause(void)
 {
