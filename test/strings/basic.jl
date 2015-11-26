@@ -192,6 +192,16 @@ gstr = GenericString("12");
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
 @test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
+let s = "🛀🛀" #a bath codepoint is 4 bytes long
+    @test nextind(s,1) == 5
+    @test nextind(s,2) == 5
+    @test nextind(s,3) == 5
+    @test nextind(s,4) == 5
+    @test nextind(s,5) > sizeof(s)
+    @test nextind(s,6) > sizeof(s)
+    @test nextind(s,7) > sizeof(s)
+    @test nextind(s,8) > sizeof(s)
+end
 
 @test ind2chr(gstr,2)==2
 
