@@ -1057,7 +1057,6 @@ function accept(server::LibuvServer, client::LibuvStream)
         end
         stream_wait(server,server.connectnotify)
     end
-    uv_error("accept", UV_ECONNABORTED)
 end
 
 const BACKLOG_DEFAULT = 511
