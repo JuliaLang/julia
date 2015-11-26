@@ -885,7 +885,7 @@ ic - A Vector{Int} of indices such that:
      `C[:,ic] == itr` returns `true` if `itr` is a two-dimensional array and `dim == 2`
      `C[:,:,ic] == itr` returns `true if `itr` is a three-dimensional array and `dim == 3`
      and so forth for higher dimensional arrays.
-     
+
 Examples:
 
 julia> itr = [1;2;3;2;3;5;6;5;7;1];
@@ -898,12 +898,12 @@ true
 julia> ib
 6-element Array{Array{Int64,1},1}:
  [1,10]
- [2,4] 
- [3,5] 
- [6,8] 
- [7]   
- [9] 
- 
+ [2,4]
+ [3,5]
+ [6,8]
+ [7]
+ [9]
+
 julia> D = rand(Int,2,3,1);
 julia> E = rand(Int,2,3,1);
 julia> F = rand(Int,2,3,1);
@@ -928,7 +928,7 @@ julia> A = cat(3, D, F, E, E, D)
 [:, :, 5] =
    2  -95  -25
  -94  -60  -74
- 
+
 julia> C, ia, ib, ic = uniqueind(A,3)
 (
 2x3x3 Array{Int8,3}:
@@ -953,7 +953,7 @@ true
 julia> ib
 3-element Array{Array{Int64,1},1}:
  [1,5]
- [2]  
+ [2]
  [3,4]
 
 """
