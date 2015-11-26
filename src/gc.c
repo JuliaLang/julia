@@ -137,7 +137,7 @@ typedef struct _pool_t {
 // layout for small (<2k) objects
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
-#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+#define GC_PAGE_SZ ((size_t)1 << GC_PAGE_LG2) // 16k
 #define GC_PAGE_OFFSET (16 - (sizeof_jl_taggedvalue_t % 16))
 
 // pool page metadata
@@ -162,14 +162,9 @@ typedef struct _gcpage_t {
 // round an address inside a gcpage's data to its beginning
 #define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
 
-// A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
+// A region is contiguous storage naturally aligned GC_PAGE_SZ pages
 // It uses a very naive allocator (see malloc_page & free_page)
-#if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
-#define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
-#else
-#define REGION_PG_COUNT 8*4096 // 512M
-#endif
-#define REGION_COUNT 8
+#define REGION_COUNT 1024
 
 typedef struct {
     // Page layout:
@@ -177,20 +172,17 @@ typedef struct {
     //  Blocks: osize * n
     //    Tag: sizeof_jl_taggedvalue_t
     //    Data: <= osize - sizeof_jl_taggedvalue_t
-    char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
-    uint32_t freemap[REGION_PG_COUNT/32];
-    gcpage_t meta[REGION_PG_COUNT];
-} region_t
-#ifndef _COMPILER_MICROSOFT_
-__attribute__((aligned(GC_PAGE_SZ)))
-#endif
-;
+    char *pages;
+    uint32_t *freemap;
+    gcpage_t *meta;
+    int n_pages;
+} region_t;
 
-static region_t *regions[REGION_COUNT] = {NULL};
+static region_t regions[REGION_COUNT] = {{0}};
 // store a lower bound of the first free page in each region
 static int regions_lb[REGION_COUNT] = {0};
 // an upper bound of the last non-free page
-static int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
+static int regions_ub[REGION_COUNT] = {0};
 
 // Variables that become fields of a thread-local struct in the thread-safe version.
 typedef struct _jl_thread_heap_t {
@@ -301,7 +293,7 @@ static region_t *find_region(void *ptr, int maybe);
 
 #define PAGE_INDEX(region, data)              \
     ((GC_PAGE_DATA((data) - GC_PAGE_OFFSET) - \
-      &(region)->pages[0][0])/GC_PAGE_SZ)
+      (region)->pages)/GC_PAGE_SZ)
 
 NOINLINE static uintptr_t gc_get_stack_ptr(void)
 {
@@ -434,11 +426,11 @@ void jl_finalize(jl_value_t *o)
 static region_t *find_region(void *ptr, int maybe)
 {
     // on 64bit systems we could probably use a single region and remove this loop
-    for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        char *begin = &regions[i]->pages[0][0];
-        char *end = begin + sizeof(regions[i]->pages);
+    for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
+        char *begin = regions[i].pages;
+        char *end = begin + GC_PAGE_SZ*regions[i].n_pages;
         if ((char*)ptr >= begin && (char*)ptr <= end)
-            return regions[i];
+            return &regions[i];
     }
     (void)maybe;
     assert(maybe && "find_region failed");
@@ -471,6 +463,8 @@ static size_t max_collect_interval = 1250000000UL;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
 #endif
+
+DLLEXPORT size_t jl_gc_max_pages_per_region = ((size_t)512*1024*1024)/GC_PAGE_SZ;
 
 // global variables for GC stats
 
@@ -681,41 +675,44 @@ static NOINLINE void *malloc_page(void)
     int region_i = 0;
     JL_LOCK(pagealloc);
     while(region_i < REGION_COUNT) {
-        region = regions[region_i];
-        if (region == NULL) {
-            size_t alloc_size = sizeof(region_t);
+        region = &regions[region_i];
+        if (region->pages == NULL) {
+            int n_pages = jl_gc_max_pages_per_region;
+            // try to mmap n_pages. if it does not work, half the request until it does or it becomes less than a few MB
+            size_t alloc_size;
+        try_mmap:
+            alloc_size = n_pages*GC_PAGE_SZ;
 #ifdef _OS_WINDOWS_
-            char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
+            char* mem = (char*)VirtualAlloc(NULL, alloc_size + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
             if (GC_PAGE_SZ > jl_page_size)
                 alloc_size += GC_PAGE_SZ;
             char* mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
 #endif
-            if (mem == NULL) {
-                jl_printf(JL_STDERR, "could not allocate pools\n");
-                abort();
+            if (!mem) {
+                if (n_pages <= 128) {
+                    jl_throw(jl_memory_exception);
+                } else {
+                    n_pages /= 2;
+                    goto try_mmap;
+                }
             }
             if (GC_PAGE_SZ > jl_page_size) {
                 // round data pointer up to the nearest GC_PAGE_DATA-aligned boundary
                 // if mmap didn't already do so
-                alloc_size += GC_PAGE_SZ;
-                region = (region_t*)((char*)GC_PAGE_DATA(mem + GC_PAGE_SZ - 1));
+                mem = ((char*)GC_PAGE_DATA(mem + GC_PAGE_SZ - 1));
             }
-            else {
-                region = (region_t*)mem;
-            }
-#ifdef _OS_WINDOWS_
-            VirtualAlloc(region->freemap, REGION_PG_COUNT/8, MEM_COMMIT, PAGE_READWRITE);
-            VirtualAlloc(region->meta, REGION_PG_COUNT*sizeof(gcpage_t), MEM_COMMIT, PAGE_READWRITE);
-#endif
-            memset(region->freemap, 0xff, REGION_PG_COUNT/8);
-            regions[region_i] = region;
+            region->pages = mem;
+            region->freemap = (uint32_t*)calloc(2, (n_pages+15)/16); // one bit per page
+            region->meta = (gcpage_t*)malloc(sizeof(gcpage_t)*n_pages);
+            region->n_pages = n_pages;
+            regions_ub[region_i] = (n_pages+31)/32-1;
         }
-        for(i = regions_lb[region_i]; i < REGION_PG_COUNT/32; i++) {
-            if (region->freemap[i]) break;
+        for(i = regions_lb[region_i]; i < region->n_pages/32; i++) {
+            if (~region->freemap[i]) break;
         }
-        if (i == REGION_PG_COUNT/32) {
+        if (i == region->n_pages/32) {
             // region full
             region_i++;
             continue;
@@ -732,16 +729,16 @@ static NOINLINE void *malloc_page(void)
         regions_ub[region_i] = i;
 
 #if defined(_COMPILER_MINGW_)
-    int j = __builtin_ffs(region->freemap[i]) - 1;
+    int j = __builtin_ffs(~region->freemap[i]) - 1;
 #elif defined(_COMPILER_MICROSOFT_)
     unsigned long j;
-    _BitScanForward(&j, region->freemap[i]);
+    _BitScanForward(&j, ~region->freemap[i]);
 #else
-    int j = ffs(region->freemap[i]) - 1;
+    int j = ffs(~region->freemap[i]) - 1;
 #endif
 
-    region->freemap[i] &= ~(uint32_t)(1 << j);
-    ptr = region->pages[i*32 + j];
+    region->freemap[i] |= (uint32_t)(1 << j);
+    ptr = &region->pages[GC_PAGE_SZ*(i*32 + j)];
 #ifdef _OS_WINDOWS_
     VirtualAlloc(ptr, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
@@ -755,14 +752,14 @@ static void free_page(void *p)
 {
     int pg_idx = -1;
     int i;
-    for(i = 0; i < REGION_COUNT && regions[i] != NULL; i++) {
-        pg_idx = PAGE_INDEX(regions[i], (char*)p+GC_PAGE_OFFSET);
-        if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
+    for(i = 0; i < REGION_COUNT && regions[i].pages != NULL; i++) {
+        pg_idx = PAGE_INDEX(&regions[i], (char*)p+GC_PAGE_OFFSET);
+        if (pg_idx >= 0 && pg_idx < regions[i].n_pages) break;
     }
-    assert(i < REGION_COUNT && regions[i] != NULL);
-    region_t *region = regions[i];
+    assert(i < REGION_COUNT && regions[i].pages != NULL);
+    region_t *region = &regions[i];
     uint32_t msk = (uint32_t)(1 << (pg_idx % 32));
-    assert(!(region->freemap[pg_idx/32] & msk));
+    assert(!(~region->freemap[pg_idx/32] & msk));
     region->freemap[pg_idx/32] ^= msk;
     free(region->meta[pg_idx].ages);
     // tell the OS we don't need these pages right now
@@ -771,12 +768,12 @@ static void free_page(void *p)
         // ensure so we don't release more memory than intended
         size_t n_pages = (GC_PAGE_SZ + jl_page_size - 1) / GC_PAGE_SZ;
         decommit_size = jl_page_size;
-        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(jl_page_size - 1)); // round down to the nearest page
+        p = (void*)((uintptr_t)&region->pages[GC_PAGE_SZ*pg_idx] & ~(jl_page_size - 1)); // round down to the nearest page
         pg_idx = PAGE_INDEX(region, (char*)p+GC_PAGE_OFFSET);
-        if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
+        if (pg_idx + n_pages > region->n_pages) goto no_decommit;
         for (; n_pages--; pg_idx++) {
             msk = (uint32_t)(1 << ((pg_idx % 32)));
-            if (!(region->freemap[pg_idx/32] & msk)) goto no_decommit;
+            if (!(~region->freemap[pg_idx/32] & msk)) goto no_decommit;
         }
     }
 #ifdef _OS_WINDOWS_
@@ -1196,17 +1193,17 @@ static int page_done = 0;
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
 static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 {
-    region_t* region = regions[region_i];
+    region_t* region = &regions[region_i];
 
     // the actual sweeping
     int ub = 0;
     int lb = regions_lb[region_i];
     for (int pg_i = 0; pg_i <= regions_ub[region_i]; pg_i++) {
         uint32_t line = region->freemap[pg_i];
-        if (!!~line) {
+        if (line) {
             ub = pg_i;
             for (int j = 0; j < 32; j++) {
-                if (!((line >> j) & 1)) {
+                if ((line >> j) & 1) {
                     gcpage_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
@@ -1413,7 +1410,7 @@ static int gc_sweep_inc(int sweep_mask)
     }
 
     for (int i = 0; i < REGION_COUNT; i++) {
-        if (regions[i])
+        if (regions[i].pages)
             /*finished &= */sweep_pool_region(pfl, i, sweep_mask);
     }
 
@@ -2420,7 +2417,7 @@ void jl_print_gc_stats(JL_STREAM *s)
                   (int)(total_fin_time * 100 / total_gc_time));
     }
     int i = 0;
-    while (i < REGION_COUNT && regions[i]) i++;
+    while (i < REGION_COUNT && regions[i].pages) i++;
     jl_printf(s, "max allocated regions : %d\n", i);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
@@ -2475,6 +2472,10 @@ void jl_gc_init(void)
     last_long_collect_interval = default_collect_interval;
     allocd_bytes = -default_collect_interval;
 
+    char *max_pages_str = getenv("JULIA_GC_MAX_PAGES");
+    if (max_pages_str) {
+        jl_gc_max_pages_per_region = atoi(max_pages_str);
+    }
 #ifdef GC_VERIFY
     for(int i = 0; i < 4; i++)
         arraylist_new(&bits_save[i], 0);
