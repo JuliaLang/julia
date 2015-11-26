@@ -712,3 +712,8 @@ end
 let A = [1 2; 3 4]; B = [5 6; 7 8]; C = [9 10; 11 12]
     @test muladd(A,B,C) == A*B + C
 end
+
+@test binomial(2.,1) == 2
+@test binomial(-2.,1) == -2
+@test typeof(binomial(-2.,1)) == Float64
+@test_approx_eq binomial(-2.1,1.1) -4.21013511374008

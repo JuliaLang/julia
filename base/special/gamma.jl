@@ -482,3 +482,7 @@ eta(x::Integer) = eta(Float64(x))
 eta(x::Real)    = oftype(float(x),eta(Float64(x)))
 eta(z::Complex) = oftype(float(z),eta(Complex128(z)))
 @vectorize_1arg Number eta
+
+Base.binomial{S<:Number,T<:Number}(n::S, k::T) = ( (isinteger(n) && isinteger(k))
+                                ? convert(promote_type(T,S), binomial(round(Int64, n), round(Int64, k)))
+                                : gamma(1+n) / (gamma(1+n-k) * gamma(1+k)) )
