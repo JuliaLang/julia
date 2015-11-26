@@ -363,7 +363,7 @@
 
    .. Docstring generated from Julia source
 
-   Get the next valid string index after ``i``\ . Returns a value greater than ``endof(str)`` at or after the end of the string.
+   Get the next valid string index after ``i``\ . Returns a value greater than ``sizeof(str)`` at or after the end of the string.
 
 .. function:: prevind(str, i)
 
