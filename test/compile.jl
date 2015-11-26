@@ -133,3 +133,17 @@ let dir = mktempdir(),
         rm(dir, recursive=true)
     end
 end
+
+let module_name = string("a",randstring())
+    insert!(LOAD_PATH, 1, pwd())
+    file_name = string(module_name, ".jl")
+    touch(file_name)
+    code = """module $(module_name)\nend\n"""
+    open(file_name, "w") do file
+        write(file, code)
+    end
+    reload(module_name)
+    @test typeof(eval(symbol(module_name))) == Module
+    deleteat!(LOAD_PATH,1)
+    rm(file_name)
+end
