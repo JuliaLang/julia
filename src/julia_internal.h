@@ -14,6 +14,9 @@ extern size_t jl_page_size;
 extern char *jl_stack_lo;
 extern char *jl_stack_hi;
 extern jl_function_t *jl_typeinf_func;
+#if defined(JL_USE_INTEL_JITEVENTS)
+extern unsigned sig_stack_size;
+#endif
 
 DLLEXPORT extern int jl_lineno;
 DLLEXPORT extern const char *jl_filename;
