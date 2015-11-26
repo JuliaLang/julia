@@ -9,6 +9,10 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
+#showcompact
+@test sprint(io -> showcompact(io,complex(1,0))) == "1+0im"
+@test sprint(io -> show(io,complex(true,true))) == "Complex(true,true)"
+
 # Basic arithmetic
 for T in (Float16, Float32, Float64, BigFloat)
     t = true
@@ -61,6 +65,9 @@ for T in (Float32, Float64)
     # Test random values
     @test_approx_eq x^y big(x)^big(y)
     @test_approx_eq x^yi big(x)^yi
+    @test_approx_eq x^true big(x)^true
+    @test_approx_eq x^false big(x)^false
+    @test_approx_eq x^1 big(x)^1
     @test_approx_eq abs(x) abs(big(x))
     @test_approx_eq abs2(x) abs2(big(x))
     @test_approx_eq acos(x) acos(big(x))
@@ -118,6 +125,15 @@ for T in (Float32, Float64)
     @test_approx_eq tan(x) sin(x)/cos(x)
     @test_approx_eq tanh(x) sinh(x)/cosh(x)
 end
+
+#isimag and isinf
+@test isimag(complex(0.0,1.0))
+@test !isimag(complex(1.0,1.0))
+@test isinf(complex(Inf,0))
+@test isinf(complex(-Inf,0))
+@test isinf(complex(0,Inf))
+@test isinf(complex(0,-Inf))
+@test !isinf(complex(0,0))
 
 # sqrt:
 # tests special values from csqrt man page
@@ -486,6 +502,7 @@ end
 # tanh
 #  tanh(conj(z)) = conj(tanh(z))
 #  tanh(-z) = -tanh(z)
+@test isequal(tanh(complex( 0, 0)),complex(0.0,0.0)) #integer fallback
 @test isequal(tanh(complex( 0.0, 0.0)),complex(0.0,0.0))
 @test isequal(tanh(complex( 0.0,-0.0)),complex(0.0,-0.0))
 @test_throws DomainError  tanh(complex( 0.0, Inf))
@@ -585,6 +602,7 @@ end
 ## acos
 ##  acos(conj(z)) = conj(acos(z))
 
+@test isequal(acos(complex( 0, 0)),complex(pi/2,-0.0)) #integer fallback
 @test isequal(acos(complex( 0.0, 0.0)),complex(pi/2,-0.0))
 @test isequal(acos(complex( 0.0,-0.0)),complex(pi/2, 0.0))
 @test isequal(acos(complex( 0.0, Inf)),complex(pi/2,-Inf))
@@ -694,6 +712,7 @@ end
 #  atanh(conj(z)) = conj(atanh(z))
 #  atanh(-z) = -atanh(z)
 
+@test isequal(atanh(complex( 0, 0)),complex( 0.0, 0.0)) #integer fallback
 @test isequal(atanh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
 @test isequal(atanh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
 @test isequal(atanh(complex( 0.0, NaN)),complex( 0.0, NaN))
