@@ -219,7 +219,7 @@ function banner(io::IO = STDOUT)
     elseif GIT_VERSION_INFO.commit == ""
         commit_string = ""
     else
-        days = Int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
         days = max(0, days)
         unit = days == 1 ? "day" : "days"
         distance = GIT_VERSION_INFO.fork_master_distance
