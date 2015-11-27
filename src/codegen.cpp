@@ -469,6 +469,9 @@ extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
 static GlobalVariable *jltls_states_var;
 #else
 static Function *jltls_states_func;
+// Imaging mode only
+static GlobalVariable *jltls_states_func_ptr = NULL;
+static size_t jltls_states_func_idx = 0;
 #endif
 
 // important functions
@@ -664,6 +667,7 @@ typedef struct {
 struct jl_gcinfo_t {
     AllocaInst *gcframe;
     Value *argSlot;
+    Value *ptlsStates;
     GetElementPtrInst *tempSlot;
     int argDepth;
     int maxDepth;
@@ -3771,7 +3775,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         return mark_julia_type(val, true, ty);
     }
     else if (head == exc_sym) { // *jl_exception_in_transit
-        return mark_julia_type(builder.CreateLoad(emit_exc_in_transit(),
+        return mark_julia_type(builder.CreateLoad(emit_exc_in_transit(ctx),
                                                   /*isvolatile*/true),
                                true, jl_any_type);
     }
@@ -3809,7 +3813,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         builder.SetInsertPoint(cond_resetstkoflw_blk);
         builder.CreateCondBr(builder.CreateICmpEQ(
                     literal_pointer_val(jl_stackovf_exception),
-                    builder.CreateLoad(emit_exc_in_transit(), true)),
+                    builder.CreateLoad(emit_exc_in_transit(ctx), true)),
                 resetstkoflw_blk, handlr);
         builder.SetInsertPoint(resetstkoflw_blk);
         builder.CreateCall(prepare_call(resetstkoflw_func)
@@ -3905,6 +3909,25 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     gc->argDepth = 0;
     gc->maxDepth = 0;
 
+#ifdef JULIA_ENABLE_THREADING
+    CallInst *calltls;
+    if (imaging_mode) {
+        Value *getter = tbaa_decorate(tbaa_const,
+                                      builder.CreateLoad(jltls_states_func_ptr));
+        FunctionType *functype = jltls_states_func->getFunctionType();
+        Value *func = builder.CreateBitCast(getter,
+                                            PointerType::get(functype, 0));
+        calltls = builder.CreateCall(func);
+    }
+    else {
+        calltls = builder.CreateCall(prepare_call(jltls_states_func));
+    }
+    calltls->setAttributes(jltls_states_func->getAttributes());
+    gc->ptlsStates = calltls;
+#else
+    gc->ptlsStates = prepare_global(jltls_states_var);
+#endif
+
     gc->gcframe = builder.CreateAlloca(T_pjlvalue, ConstantInt::get(T_int32, 0));
 #ifdef JL_DEBUG_BUILD
     gc->gcframe->setName("gcrootframe");
@@ -3952,7 +3975,7 @@ emit_gcpops(jl_codectx_t *ctx)
                 (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
             builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
                                                       T_ppjlvalue),
-                                emit_pgcstack());
+                                emit_pgcstack(ctx));
         }
     }
 }
@@ -3974,9 +3997,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     gc->tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + gc->argSpaceSize)); // fix up the offset to the temp slot space
     builder.CreateStore(ConstantInt::get(T_size, (gc->argSpaceSize + gc->maxDepth) << 1),
                         builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
-    builder.CreateStore(builder.CreateLoad(emit_pgcstack()),
+    builder.CreateStore(builder.CreateLoad(emit_pgcstack(ctx)),
                         builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
-    builder.CreateStore(newgcframe, emit_pgcstack());
+    builder.CreateStore(newgcframe, emit_pgcstack(ctx));
     // Initialize the slots for temporary variables to NULL
     for (int i = 0; i < gc->argSpaceSize; i++) {
         Value *argTempi = emit_local_slot(i, ctx);
@@ -5626,6 +5649,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
 
 #ifndef JULIA_ENABLE_THREADING
+    // For non-threading, we use the address of the global variable directly
     size_t tls_states_size = LLT_ALIGN(sizeof(jl_tls_states_t),
                                        sizeof(void*)) / sizeof(void*);
     jltls_states_var =
@@ -5634,6 +5658,14 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_tls_states");
     add_named_global(jltls_states_var, (void*)&jl_tls_states);
 #else
+    // For threading, we emit a call to the getter function.
+    // In non-imaging mode, (i.e. the code will not be safed to disk), we
+    // use the address of the actual getter function directly
+    // (`jl_tls_states_cb` returned by `jl_get_ptls_states_getter()`)
+    // In imaging mode, we emit the function address as a load of a static
+    // variable to be filled (in `dump.c`) at initialization time of the sysimg.
+    // This way we can by pass the extra indirection in `jl_get_ptls_states`
+    // since we don't know which getter function to use ahead of time.
     jltls_states_func = Function::Create(FunctionType::get(T_ppint8, false),
                                          Function::ExternalLinkage,
                                          "jl_get_ptls_states", m);
@@ -5644,6 +5676,25 @@ static void init_julia_llvm_env(Module *m)
         .addAttribute(jltls_states_func->getContext(),
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
     add_named_global(jltls_states_func, (void*)jl_get_ptls_states_getter());
+    if (imaging_mode) {
+        jltls_states_func_ptr =
+            new GlobalVariable(*m, T_ppint8,
+                               false, GlobalVariable::InternalLinkage,
+                               ConstantPointerNull::get((PointerType*)T_ppint8),
+                               "jl_get_ptls_states.ptr");
+        addComdat(jltls_states_func_ptr);
+#ifdef USE_MCJIT
+        jl_llvm_to_jl_value[jltls_states_func_ptr] =
+            (void*)jl_get_ptls_states_getter();
+#else
+        void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(jltls_states_func_ptr);
+        *p = (void*)jl_get_ptls_states_getter();
+#endif
+        jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(jltls_states_func_ptr,
+                                                           T_psize));
+        jltls_states_func_idx = jl_sysimg_gvars.size();
+    }
+
 #endif
 
     std::vector<Type*> args1(0);
