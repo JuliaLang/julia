@@ -307,7 +307,7 @@ static value_t fl_time_now(value_t *args, u_int32_t nargs)
 {
     argcount("time.now", nargs, 0);
     (void)args;
-    return mk_double(clock_now());
+    return mk_double(jl_clock_now());
 }
 
 static value_t fl_path_cwd(value_t *args, uint32_t nargs)

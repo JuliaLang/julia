@@ -4,7 +4,6 @@
     __stack_chk_guard;
     asprintf;
     bitvector_*;
-    clock_now;
     ev_break;
     get_exename;
     getlocalip;
