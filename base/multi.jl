@@ -559,11 +559,7 @@ end
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
-    else
-        if in(rr.where, map_del_wrkr)
-            # for a removed worker, don't bother
-            return
-        end
+    elseif rr.where in procs() # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
@@ -572,7 +568,6 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
-    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -587,12 +582,11 @@ end
 function send_add_client(rr::RemoteRef, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
-    elseif i != rr.where
+    elseif (i != rr.where) && (rr.where in procs())
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
         notify(any_gc_flag)
