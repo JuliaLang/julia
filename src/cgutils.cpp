@@ -456,6 +456,14 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, c
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size,globalUnique+1),
                                  "jl_globalUnique"));
+#ifdef JULIA_ENABLE_THREADING
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, jltls_states_func_idx),
+                                 "jl_ptls_states_getter_idx"));
+#endif
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
     addComdat(new GlobalVariable(*mod,
@@ -2126,28 +2134,19 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
     }
 }
 
-static Value *emit_ptls_states()
-{
-#ifndef JULIA_ENABLE_THREADING
-    return prepare_global(jltls_states_var);
-#else
-    return builder.CreateCall(prepare_call(jltls_states_func));
-#endif
-}
-
-static Value *emit_pgcstack()
+static Value *emit_pgcstack(jl_codectx_t *ctx)
 {
     Value * addr = emit_nthptr_addr(
-        emit_ptls_states(),
+        ctx->gc.ptlsStates,
         (ssize_t)(offsetof(jl_tls_states_t, pgcstack) / sizeof(void*)));
     return builder.CreateBitCast(addr, PointerType::get(T_ppjlvalue, 0),
                                  "jl_pgcstack");
 }
 
-static Value *emit_exc_in_transit()
+static Value *emit_exc_in_transit(jl_codectx_t *ctx)
 {
     Value * addr = emit_nthptr_addr(
-        emit_ptls_states(),
+        ctx->gc.ptlsStates,
         (ssize_t)(offsetof(jl_tls_states_t,
                            exception_in_transit) / sizeof(void*)));
     return builder.CreateBitCast(addr, T_ppjlvalue, "jl_exception_in_transit");
