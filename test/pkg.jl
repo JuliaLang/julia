@@ -16,11 +16,14 @@ function temp_pkg_dir(fn::Function)
 end
 
 # Test basic operations: adding or removing a package, status, free
-#Also test for the existence of REQUIRE and META_Branch
+# Also test for the existence of REQUIRE and META_Branch
 temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
+    @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
+    @test !isempty(Pkg.available())
+
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
     iob = IOBuffer()
@@ -57,6 +60,7 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
+    @test isempty(Pkg.dependents("Example"))
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
