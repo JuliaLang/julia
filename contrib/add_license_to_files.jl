@@ -48,7 +48,9 @@ const skipfiles = [
    "../src/support/MurmurHash3.c",
    "../src/support/MurmurHash3.h",
    "../src/support/asprintf.c",
+   "../src/support/strptime.c",
    "../src/support/strtod.c",
+   "../src/support/tzfile.h",
    "../src/support/utf8.c",
 ]
 

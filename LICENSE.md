@@ -30,7 +30,7 @@ for exceptions.
 Julia includes code from the following projects, which have their own licenses:
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementations on Windows) [MIT]
-- [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp/longjmp implementations on Windows) [BSD-3]
+- [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 
 The Julia language links to the following external libraries, which have their
 own licenses:
