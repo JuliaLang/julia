@@ -336,7 +336,7 @@ end
 @test_throws ErrorException collect(eachline(`cat _doesnt_exist__111_`))
 
 # make sure windows_verbatim strips quotes
-@windows_only readall(`cmd.exe /c dir /b spawn.jl`) == readall(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+@windows_only readall(`$(ENV["COMSPEC"]) /c dir /b spawn.jl`) == readall(Cmd(`$(ENV["COMSPEC"]) /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
