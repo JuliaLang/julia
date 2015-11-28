@@ -43,16 +43,16 @@ end
 function Base.show(io::IO, t::Pass)
     print_with_color(:green, io, "Test Passed\n")
     print(io, "  Expression: ", t.orig_expr)
-    if !isa(t.expr, Expr)
+    if t.test_type == :test_throws
+        # The correct type of exception was thrown
+        print(io, "\n      Thrown: ", typeof(t.value))
+    elseif !isa(t.expr, Expr)
         # Maybe just a constant, like true
         print(io, "\n   Evaluated: ", t.expr)
     elseif t.test_type == :test && t.expr.head == :comparison
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.expr)
-    elseif t.test_type == :test_throws
-        # The correct type of exception was thrown
-        print(io, "\n      Thrown: ", typeof(t.value))
     end
 end
 
@@ -288,7 +288,6 @@ record(ts::FallbackTestSet, t::Pass) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
     error("There was an error during testing")
-    t
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
