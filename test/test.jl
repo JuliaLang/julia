@@ -18,17 +18,40 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-sprint(show, @test true)
-sprint(show, @test 10 == 2*5)
-sprint(show, @test !false)
+# Test printing of result types
+# Pass - constant
+@test contains(sprint(show, @test true), "Expression: true")
+# Pass - expression
+@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
+@test contains(sprint(show, @test !false), "Expression: !false")
+# Pass - exception
+@test contains(sprint(show, @test_throws ErrorException error()),
+                "Thrown: ErrorException")
+
+# Test printing of a TestSetException
+tse_str = sprint(show, Test.TestSetException(1,2,3))
+@test contains(tse_str, "1 passed")
+@test contains(tse_str, "2 failed")
+@test contains(tse_str, "3 errored")
+
+@test Test.finish(Test.FallbackTestSet()) != nothing
 
 OLD_STDOUT = STDOUT
 catch_out = IOStream("")
 rd, wr = redirect_stdout()
 
+# Check that the fallback test set throws immediately
+@test_throws ErrorException (@test 1 == 2)
+
 @testset "no errors" begin
     @test true
     @test 1 == 1
+end
+
+# Test entirely empty test set
+@testset "outer" begin
+    @testset "inner" begin
+    end
 end
 
 try
@@ -54,6 +77,7 @@ try
         @test 4 == 4
         @test_throws ErrorException 1+1
         @test_throws ErrorException error()
+        @test_throws RemoteException error()
         @testset "errrrr" begin
             @test "not bool"
             @test error()
@@ -95,7 +119,7 @@ catch ex
 
     @test isa(ex, Test.TestSetException)
     @test ex.pass  == 24
-    @test ex.fail  == 5
+    @test ex.fail  == 6
     @test ex.error == 6
 end
 
