@@ -11,7 +11,7 @@ numbers, and supports all :ref:`standard mathematical operations
 <man-mathematical-operations>` on them. :ref:`man-conversion-and-promotion`
 are defined so that operations on any combination of
 predefined numeric types, whether primitive or composite, behave as
-expected.
+defined by corresponding IEEE standards.
 
 .. _man-complex-numbers:
 
