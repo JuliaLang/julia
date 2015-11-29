@@ -23,7 +23,8 @@ temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
-
+    @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
+    @test !isempty(Pkg.available())
     # Check that setprotocol! works.
     begin
         try
@@ -80,6 +81,7 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
+    @test isempty(Pkg.dependents("Example"))
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
