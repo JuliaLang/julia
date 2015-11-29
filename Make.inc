@@ -932,6 +932,7 @@ VERBOSE = 0
 endif
 
 WARNCOLOR="\033[33;1m"
+ENDCOLOR="\033[0m"
 
 ifeq ($(VERBOSE), 0)
 
@@ -946,7 +947,6 @@ JULIACOLOR="\033[32;1m"
 SRCCOLOR="\033[33m"
 BINCOLOR="\033[37;1m"
 JULCOLOR="\033[34;1m"
-ENDCOLOR="\033[0m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
