@@ -889,8 +889,8 @@ if they haven't already been, and then opens a pull request to ``METADATA``::
 
 .. _man-manual-publish:
 
-Publishing METADATA manually
-============================
+Publishing METADATA Manually
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If :func:`Pkg.publish` fails you can follow these instructions to
 manually publish your package.
