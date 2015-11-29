@@ -21,6 +21,7 @@ extern unsigned sig_stack_size;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
+#define jl_in_gc (jl_get_ptls_states()->in_gc)
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
@@ -246,6 +247,8 @@ void jl_start_threads(void);
 void jl_shutdown_threading(void);
 #ifdef JULIA_ENABLE_THREADING
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
+void jl_gc_signal_init(void);
+void jl_gc_signal_wait(void);
 #endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);

@@ -424,7 +424,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
 int jl_in_inference = 0;
 void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_info_t *def)
 {
-    JL_LOCK(codegen);
+    JL_LOCK(codegen); // Might GC
     int last_ii = jl_in_inference;
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
@@ -490,7 +490,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                    jl_function_t *method, jl_tupletype_t *decl,
                                    jl_svec_t *sparams, int8_t isstaged)
 {
-    JL_LOCK(codegen);
+    JL_LOCK(codegen); // Might GC
     size_t i;
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;

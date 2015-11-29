@@ -528,6 +528,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
+    jl_gc_signal_init();
 #endif
     libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
