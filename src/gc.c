@@ -348,38 +348,60 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
 }
 
-static void finalize_object(arraylist_t *list, jl_value_t *o)
+static void finalize_object(arraylist_t *list, jl_value_t *o,
+                            arraylist_t *copied_list)
 {
-    /* int success = 0; */
-    jl_value_t *f = NULL;
-    JL_GC_PUSH1(&f);
     for(int i = 0; i < list->len; i+=2) {
         if (o == (jl_value_t*)list->items[i]) {
-            f = (jl_value_t*)list->items[i+1];
+            void *f = list->items[i+1];
             if (i < list->len - 2) {
                 list->items[i] = list->items[list->len-2];
                 list->items[i+1] = list->items[list->len-1];
                 i -= 2;
             }
             list->len -= 2;
-            run_finalizer(o, f);
-            /* success = 1; */
+            arraylist_push(copied_list, o);
+            arraylist_push(copied_list, f);
         }
     }
+}
+
+// The first two entries are assumed to be empty and the rest are assumed to
+// be pointers to `jl_value_t` objects
+static void jl_gc_push_arraylist(arraylist_t *list)
+{
+    list->items[0] = (void*)(((uintptr_t)list->len - 2) << 1);
+    list->items[1] = jl_pgcstack;
+    jl_pgcstack = (jl_gcframe_t*)list->items;
+}
+
+// Same assumption as `jl_gc_push_arraylist`
+static void jl_gc_run_finalizers_in_list(arraylist_t *list)
+{
+    size_t len = list->len;
+    jl_value_t **items = (jl_value_t**)list->items;
+    jl_gc_push_arraylist(list);
+    for (size_t i = 2;i < len;i += 2) {
+        run_finalizer(items[i], items[i + 1]);
+    }
     JL_GC_POP();
-    /* return success; */
 }
 
 static void run_finalizers(void)
 {
-    void *o = NULL, *f = NULL;
-    JL_GC_PUSH2(&o, &f);
-    while (to_finalize.len > 0) {
-        f = arraylist_pop(&to_finalize);
-        o = arraylist_pop(&to_finalize);
-        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
+    if (to_finalize.len == 0)
+        return;
+    arraylist_t copied_list;
+    memcpy(&copied_list, &to_finalize, sizeof(copied_list));
+    if (to_finalize.items == to_finalize._space) {
+        copied_list.items = copied_list._space;
     }
-    JL_GC_POP();
+    arraylist_new(&to_finalize, 0);
+    // empty out the first two entries for the GC frame
+    arraylist_push(&copied_list, copied_list.items[0]);
+    arraylist_push(&copied_list, copied_list.items[1]);
+    jl_gc_run_finalizers_in_list(&copied_list);
+    arraylist_free(&copied_list);
 }
 
 void jl_gc_inhibit_finalizers(int state)
@@ -424,11 +446,22 @@ JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 {
     JL_LOCK(finalizers);
+    // Copy the finalizers into a temporary list so that code in the finalizer
+    // won't change the list as we loop through them.
+    // This list is also used as the GC frame when we are running the finalizers
+    arraylist_t copied_list;
+    arraylist_new(&copied_list, 0);
+    arraylist_push(&copied_list, NULL); // GC frame size to be filled later
+    arraylist_push(&copied_list, NULL); // pgcstack to be filled later
     // No need to check the to_finalize list since the user is apparently
     // still holding a reference to the object
-    finalize_object(&finalizer_list, o);
-    finalize_object(&finalizer_list_marked, o);
+    finalize_object(&finalizer_list, o, &copied_list);
+    finalize_object(&finalizer_list_marked, o, &copied_list);
     JL_UNLOCK(finalizers);
+    if (copied_list.len > 2) {
+        jl_gc_run_finalizers_in_list(&copied_list);
+    }
+    arraylist_free(&copied_list);
 }
 
 static region_t *find_region(void *ptr, int maybe)
