@@ -121,6 +121,7 @@ Now ``OrderedPair`` objects can only be constructed such that
 
     julia> OrderedPair(2,1)
     ERROR: out of order
+     [inlined code] from error.jl:21
      in call at none:5
 
 You can still reach in and directly change the field values to violate
@@ -339,6 +340,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
+     [inlined code] from int.jl:209
      in call at none:2
 
     julia> Point{Float64}(1.0,2.5)

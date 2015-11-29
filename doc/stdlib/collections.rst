@@ -1161,6 +1161,7 @@ Dequeues
 
        julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
        ERROR: ArgumentError: indices must be unique and sorted
+        [inlined code] from essentials.jl:59
         in deleteat! at array.jl:546
 
 .. function:: splice!(collection, index, [replacement]) -> item

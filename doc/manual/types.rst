@@ -401,6 +401,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
+     [inlined code] from float.jl:24
      in call at none:2
 
 You may find a list of field names using the ``fieldnames`` function.

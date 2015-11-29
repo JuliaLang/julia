@@ -359,15 +359,19 @@ type:
    julia> MyType.name.cache
    svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
    ERROR: UndefRefError: access to undefined reference
+    [inlined code] from ./essentials.jl:30
     in getindex at ./essentials.jl:211
+    [inlined code] from essentials.jl:218
     in show_delim_array at show.jl:229
+    [inlined code] from int.jl:360
     in show at show.jl:257
     in anonymous at show.jl:1294
     in with_output_limit at ./show.jl:1271
     in showlimited at show.jl:1293
+    [inlined code] from replutil.jl:4
     in display at multimedia.jl:120
-    [inlined code] from multimedia.jl:151
-    in display at multimedia.jl:162
+    [inlined code] from operators.jl:313
+    in display at multimedia.jl:163
 
 (The error is triggered because the cache is pre-allocated to have
 length 8, but only the first two entries are populated.)

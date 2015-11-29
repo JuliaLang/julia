@@ -146,7 +146,8 @@ to one and zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     [inlined code] from essentials.jl:25
+     in convert at complex.jl:38
 
     julia> convert(Bool, 0im)
     false
@@ -159,9 +160,12 @@ This is the actual implementation in julia::
     convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                                throw(InexactError()))
 
+.. doctest::
+
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     [inlined code] from essentials.jl:25
+     in convert at complex.jl:38
 
 
 Case Study: Rational Conversions
