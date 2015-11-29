@@ -415,7 +415,7 @@ end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
-    isfile(output) && rm(output)
+    try rm(output) end          # Remove file if it exists
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
