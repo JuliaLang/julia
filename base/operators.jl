@@ -196,6 +196,8 @@ copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
 
 # function pipelining
 |>(x, f) = f(x)
+|>(x, y, f) = f(x, y)
+|>(args...) = args[end](args[1:end-1]...)
 
 # array shape rules
 
