@@ -68,7 +68,6 @@ $(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(BUILDDIR)/$(LIBTARGET)-debug.a: $(DOBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(DOBJS))
-	ln -sf $@ $(LIBTARGET).a
 
 $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
