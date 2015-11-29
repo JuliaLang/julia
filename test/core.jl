@@ -3503,3 +3503,27 @@ let
     finalize(obj)
     @test finalized == 1
 end
+
+# check if finalizers for the old gen can be triggered manually
+# PR #14181
+let
+    # The following three `gc(false)` clears the `finalizer_list`. It is
+    # not strictly necessary to make the test pass but should make the failure
+    # more repeatable if something breaks.
+    gc(false)
+    # At least: GC_CLEAN; age = 1
+    gc(false)
+    # At least: GC_QUEUED; age = 1
+    gc(false)
+    # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
+
+    obj1 = Ref(1)
+    obj2 = Ref(1)
+    finalized = 0
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalize(obj2)
+    @test finalized == 4
+end
