@@ -181,7 +181,7 @@ typedef struct {
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
 } region_t
-#ifndef _COMPILER_MICROSOFT_
+#if !defined(_COMPILER_MICROSOFT_) && !(defined(_COMPILER_MINGW_) && defined(_COMPILER_CLANG_))
 __attribute__((aligned(GC_PAGE_SZ)))
 #endif
 ;
