@@ -228,6 +228,12 @@ void ti_threadfun(void *arg)
     while (ta->state == TI_THREAD_INIT)
         cpu_pause();
     cpu_lfence();
+
+    // Assuming the functions called below doesn't contain unprotected GC
+    // critical region. In general, the following part of this function
+    // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
+    // first.
+    jl_gc_state_set(JL_GC_STATE_SAFE, 0);
     uv_barrier_wait(&thread_init_done);
     // initialize this thread in the thread group
     tg = ta->tg;
@@ -250,11 +256,19 @@ void ti_threadfun(void *arg)
 #endif
 
         if (work) {
-            if (work->command == TI_THREADWORK_DONE)
+            if (work->command == TI_THREADWORK_DONE) {
                 break;
-            else if (work->command == TI_THREADWORK_RUN)
+            }
+            else if (work->command == TI_THREADWORK_RUN) {
                 // TODO: return value? reduction?
+                // TODO: before we support getting return value from
+                //       the work, and after we have proper GC transition
+                //       support in the codegen and runtime we don't need to
+                //       enter GC unsafe region when starting the work.
+                int8_t gc_state = jl_gc_unsafe_enter();
                 ti_run_fun(work->fun, work->args);
+                jl_gc_unsafe_leave(gc_state);
+            }
         }
 
 #if PROFILE_JL_THREADING

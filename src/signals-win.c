@@ -169,6 +169,13 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
+#ifdef JULIA_ENABLE_THREADING
+                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] ==
+                    (intptr_t)jl_gc_signal_page) {
+                    jl_gc_signal_wait();
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+#endif
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
