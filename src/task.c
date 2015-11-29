@@ -355,7 +355,6 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
-extern int jl_in_gc;
 JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     if (t == jl_current_task) {
@@ -884,8 +883,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    JL_GC_POP();
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    JL_GC_POP();
 #endif
 
     return t;

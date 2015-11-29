@@ -318,6 +318,26 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
     return jl_typeof(v);
 }
 
+JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
+{
+    return jl_gc_unsafe_enter();
+}
+
+JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
+{
+    jl_gc_unsafe_leave(state);
+}
+
+JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
+{
+    return jl_gc_safe_enter();
+}
+
+JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
+{
+    jl_gc_safe_leave(state);
+}
+
 #ifdef __cplusplus
 }
 #endif
