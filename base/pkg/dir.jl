@@ -43,7 +43,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Git.set_remote_url(meta, dir=metadata_dir)
         return
     end
-    local temp_dir
+    local temp_dir = ""
     try
         mkpath(dir)
         temp_dir = mktempdir(dir)
