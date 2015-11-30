@@ -208,9 +208,32 @@ end
 # Issue 13332
 @test replace("abc", 'b', 2.1) == "a2.1c"
 
-# chomp/chop
-@test chomp("foo\n") == "foo"
+# chomp/chop for ASCII/UTF8
+for lineend in ["\n","\r\n"]
+    for str in ["foo", "foø", "føo", "fø", "ø", "\n", ""]
+        @test chomp(str*lineend) == str
+    end
+end
+@test chomp("\r\r\n") == "\r" # || "\r\r" ?
+
+import Base.chomp!
+for lineend in ("\n","\r\n")
+    for str in ("foo", "foø", "føo", "fø", "ø", "\n", "")
+        s = str*lineend
+        chomp!(s)
+        @test s == str
+    end
+end
+
+let s = "\r\r\n"
+    chomp!(s)
+    @test s == "\r" # || "\r\r" ?
+end
+
 @test chop("foob") == "foo"
+@test chop("fooƀ") == "foo"
+@test chop("fooƀä") == "fooƀ"
+@test chop("fooƀa") == "fooƀ"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"

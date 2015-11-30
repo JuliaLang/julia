@@ -26,6 +26,22 @@ let str = UTF8String(b"this is a test\xed\x80")
     @test convert(UTF8String, b"this is a test\xed\x80\x80") == "this is a test\ud000"
 end
 
+let s = UTF8String("🐨🐨")
+    #each koala is 4 bytes
+    @test s[1:4] == "🐨"
+    @test s[1:1] == "🐨"
+    @test s[1] == '🐨'
+    @test s[5:8] == "🐨"
+    @test s[5:5] == "🐨"
+    @test s[5] == '🐨'
+    @test_throws UnicodeError s[1:2]
+    @test_throws UnicodeError s[1:3]
+    @test_throws UnicodeError s[1:6]
+    @test_throws UnicodeError s[1:7]
+    @test_throws UnicodeError s[5:6]
+    @test_throws UnicodeError s[5:7]
+end
+
 ## Reverse of UTF8String
 @test reverse(UTF8String("")) == ""
 @test reverse(UTF8String("a")) == "a"
