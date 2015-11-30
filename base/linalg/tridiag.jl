@@ -16,7 +16,7 @@ end
 
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
 
-function SymTridiagonal{Td,Te}(dv::Vector{Td}, ev::Vector{Te})
+function SymTridiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te})
     T = promote_type(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
@@ -271,6 +271,8 @@ immutable Tridiagonal{T} <: AbstractMatrix{T}
     du::Vector{T}    # sup-diagonal
     du2::Vector{T}   # supsup-diagonal for pivoting
 end
+
+# Basic constructor takes in three dense vectors of same type
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     n = length(d)
     if (length(dl) != n-1 || length(du) != n-1)
@@ -278,8 +280,21 @@ function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     end
     Tridiagonal(dl, d, du, zeros(T,n-2))
 end
-function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
+
+# Construct from diagonals of any abstract vector, any eltype
+function Tridiagonal{Tl, Td, Tu}(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu})
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
+end
+
+# Provide a constructor Tridiagonal(A) similar to the triangulars, diagonal, symmetric
+"""
+    Tridiagonal(A)
+
+returns a `Tridiagonal` array based on (abstract) matrix `A`, using its lower diagonal,
+diagonal, and upper diagonal.
+"""
+function Tridiagonal(A::AbstractMatrix)
+    return Tridiagonal(diag(A,-1), diag(A), diag(A,+1))
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))

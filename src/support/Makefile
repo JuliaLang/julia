@@ -10,7 +10,7 @@ SRCS := hashing timefuncs ptrhash operators \
 	utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-SRCS += asprintf wsasocketpair
+SRCS += asprintf wsasocketpair strptime
 ifeq ($(ARCH),i686)
 SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),i386)
@@ -37,7 +37,7 @@ SHIPFLAGS += $(FLAGS)
 default: release
 
 $(BUILDDIR):
-	mkdir $(BUILDDIR)
+	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)

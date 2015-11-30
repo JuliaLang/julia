@@ -85,7 +85,7 @@ all: debug release
 release debug: %: libjulia-%
 
 $(BUILDDIR):
-	mkdir $(BUILDDIR)
+	mkdir -p $(BUILDDIR)
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
 

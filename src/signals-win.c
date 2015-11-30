@@ -1,9 +1,11 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
-
 // Windows
-//
+
+#define sig_stack_size 131072 // 128k reserved for SEGV handling
+static BOOL (*pSetThreadStackGuarantee)(PULONG);
+
 DLLEXPORT void gdblookup(ptrint_t ip);
-#define WIN32_LEAN_AND_MEAN
+
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
@@ -42,6 +44,7 @@ static char *strsignal(int sig)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
+    CONTEXT Context;
     switch (sig) {
     case SIGFPE:
         fpreset();
@@ -69,18 +72,19 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
-        ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
-        bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
-        jlbacktrace();
-        gc_debug_print_status();
+        memset(&Context, 0, sizeof(Context));
+        RtlCaptureContext(&Context);
+        jl_critical_error(sig, &Context, jl_bt_data, &jl_bt_size);
         raise(sig);
     }
 }
 
-BOOL (*pSetThreadStackGuarantee)(PULONG);
 void restore_signals(void)
 {
-    SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
+    // turn on ctrl-c handler
+    SetConsoleCtrlHandler(NULL, 0);
+    // see if SetThreadStackGuarantee exists
+    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
 }
 
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
@@ -93,7 +97,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #else
 #error WIN16 not supported :P
 #endif
-    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_bt_size = bt ? rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
@@ -106,7 +110,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #endif
 }
 
-volatile HANDLE hMainThread = NULL;
+HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -217,8 +221,8 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
-        jlbacktrace();
+
+        jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -334,10 +338,6 @@ DLLEXPORT void jl_profile_stop_timer(void)
 
 void jl_install_default_signal_handlers(void)
 {
-    ULONG StackSizeInBytes = sig_stack_size;
-    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
-    if (!pSetThreadStackGuarantee || !pSetThreadStackGuarantee(&StackSizeInBytes))
-        pSetThreadStackGuarantee = NULL;
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGFPE");
     }
@@ -354,4 +354,16 @@ void jl_install_default_signal_handlers(void)
         jl_error("fatal error: Couldn't set SIGTERM");
     }
     SetUnhandledExceptionFilter(exception_handler);
+}
+
+void *jl_install_thread_signal_handler(void)
+{
+    // Ensure the stack overflow handler has enough space to collect the backtrace
+    ULONG StackSizeInBytes = sig_stack_size;
+    if (pSetThreadStackGuarantee) {
+        if (!pSetThreadStackGuarantee(&StackSizeInBytes)) {
+            pSetThreadStackGuarantee = NULL;
+        }
+    }
+    return NULL;
 }

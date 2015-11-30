@@ -96,9 +96,9 @@ static void jl_find_stack_bottom(void)
 #ifndef _OS_WINDOWS_
     struct rlimit rl;
 
-    // When using memory sanitizer, increase stack size because msan bloats stack usage
+    // When using the sanitizers, increase stack size because they bloat stack usage
 #if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
+#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
     const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
     int result;
 
@@ -463,6 +463,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
+#ifdef JULIA_ENABLE_THREADING
+    // Make sure we finalize the tls callback before starting any threads.
+    jl_get_ptls_states_getter();
+#endif
     libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -496,11 +500,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
-    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
-                         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-                         TRUE, DUPLICATE_SAME_ACCESS)) {
-        jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
-    }
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
@@ -567,9 +566,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         jl_current_module = jl_core_module;
-        int t;
-        for(t=0; t < jl_n_threads; t++) {
-            (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+        for (int t = 0;t < jl_n_threads;t++) {
+            jl_all_task_states[t].ptls->root_task->current_module =
+                jl_current_module;
         }
 
         jl_load("boot.jl", sizeof("boot.jl"));
@@ -610,9 +609,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     jl_current_module = jl_main_module;
-    int t;
-    for(t=0; t < jl_n_threads; t++) {
-        (*jl_all_task_states[t].proot_task)->current_module = jl_current_module;
+    for(int t = 0;t < jl_n_threads;t++) {
+        jl_all_task_states[t].ptls->root_task->current_module =
+            jl_current_module;
     }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
@@ -725,11 +724,11 @@ void jl_get_builtin_hooks(void)
 {
     int t;
     for(t=0; t < jl_n_threads; t++) {
-        (*jl_all_task_states[t].proot_task)->tls = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->consumers = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->donenotify = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->exception = jl_nothing;
-        (*jl_all_task_states[t].proot_task)->result = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->tls = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->consumers = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->donenotify = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->exception = jl_nothing;
+        jl_all_task_states[t].ptls->root_task->result = jl_nothing;
     }
 
     jl_char_type    = (jl_datatype_t*)core("Char");

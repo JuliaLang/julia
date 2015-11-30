@@ -18,17 +18,40 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-sprint(show, @test true)
-sprint(show, @test 10 == 2*5)
-sprint(show, @test !false)
+# Test printing of result types
+# Pass - constant
+@test contains(sprint(show, @test true), "Expression: true")
+# Pass - expression
+@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
+@test contains(sprint(show, @test !false), "Expression: !false")
+# Pass - exception
+@test contains(sprint(show, @test_throws ErrorException error()),
+                "Thrown: ErrorException")
+
+# Test printing of a TestSetException
+tse_str = sprint(show, Test.TestSetException(1,2,3))
+@test contains(tse_str, "1 passed")
+@test contains(tse_str, "2 failed")
+@test contains(tse_str, "3 errored")
+
+@test Test.finish(Test.FallbackTestSet()) != nothing
 
 OLD_STDOUT = STDOUT
 catch_out = IOStream("")
 rd, wr = redirect_stdout()
 
+# Check that the fallback test set throws immediately
+@test_throws ErrorException (@test 1 == 2)
+
 @testset "no errors" begin
     @test true
     @test 1 == 1
+end
+
+# Test entirely empty test set
+@testset "outer" begin
+    @testset "inner" begin
+    end
 end
 
 try
@@ -54,6 +77,7 @@ try
         @test 4 == 4
         @test_throws ErrorException 1+1
         @test_throws ErrorException error()
+        @test_throws RemoteException error()
         @testset "errrrr" begin
             @test "not bool"
             @test error()
@@ -64,25 +88,25 @@ try
     end
 
     @testset "loop with desc" begin
-        @testloop "loop1 $T" for T in (Float32, Float64)
+        @testset "loop1 $T" for T in (Float32, Float64)
             @test 1 == T(1)
         end
     end
     @testset "loops without desc" begin
-        @testloop for T in (Float32, Float64)
+        @testset for T in (Float32, Float64)
             @test 1 == T(1)
         end
-        @testloop for T in (Float32, Float64), S in (Int32,Int64)
+        @testset for T in (Float32, Float64), S in (Int32,Int64)
             @test S(1) == T(1)
         end
     end
     srand(123)
     @testset "some loops fail" begin
-        @testloop for i in 1:5
+        @testset for i in 1:5
             @test i <= rand(1:10)
         end
         # should add 3 errors and 3 passing tests
-        @testloop for i in 1:6
+        @testset for i in 1:6
             iseven(i) || error("error outside of test")
             @test true # only gets run if the above passed
         end
@@ -95,7 +119,7 @@ catch ex
 
     @test isa(ex, Test.TestSetException)
     @test ex.pass  == 24
-    @test ex.fail  == 5
+    @test ex.fail  == 6
     @test ex.error == 6
 end
 
@@ -116,7 +140,7 @@ end
 @test typeof(ts) == Base.Test.DefaultTestSet
 @test typeof(ts.results[1]) == Base.Test.Pass
 
-tss = @testloop "@testloop should return an array of testsets: $i" for i in 1:3
+tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
     @test true
 end
 @test length(tss) == 3
@@ -194,12 +218,12 @@ end
 @test typeof(ts.results[2].results[2]) == CustomTestSet
 @test ts.results[2].results[2].foo == 3
 
-# test custom testset types on testloops
-tss = @testloop CustomTestSet foo=3 "custom testloop $i" for i in 1:6
-    @testloop "inner testloop $i-$j" for j in 1:3
+# test custom testset types on testset/for
+tss = @testset CustomTestSet foo=3 "custom testset $i" for i in 1:6
+    @testset "inner testset $i-$j" for j in 1:3
         @test iseven(i + j)
     end
-    # make sure a testset within a testloop works
+    # make sure a testset within a testset/for works
     @testset "inner testset $i" begin
         @test iseven(i)
     end

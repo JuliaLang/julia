@@ -23,6 +23,8 @@ temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
+    @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
+    @test !isempty(Pkg.available())
 
     # Check that setprotocol! works.
     begin
@@ -80,6 +82,7 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
+    @test isempty(Pkg.dependents("Example"))
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
@@ -143,6 +146,7 @@ temp_pkg_dir() do
     begin
         try
             Pkg.test("IDoNotExist")
+            error("unexpected")
         catch ex
             @test isa(ex,Pkg.PkgError)
             @test ex.msg == "IDoNotExist is not an installed package"
@@ -150,6 +154,7 @@ temp_pkg_dir() do
 
         try
             Pkg.test("IDoNotExist1", "IDoNotExist2")
+            error("unexpected")
         catch ex
             @test isa(ex,Pkg.PkgError)
             @test ex.msg == "IDoNotExist1 and IDoNotExist2 are not installed packages"
@@ -181,5 +186,43 @@ temp_pkg_dir() do
         @test repo.ptr != C_NULL
         finalize(repo)
         Pkg.update()
+    end
+
+    #test PkgDev redirects
+    begin
+        try
+            Pkg.register("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.register(pkg,[url]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.tag("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.tag(pkg, [ver, [commit]]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.generate("IDoNotExist","MIT")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.generate(pkg, license) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.publish()
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.publish() has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.license()
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.license([lic]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
     end
 end

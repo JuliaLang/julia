@@ -32,7 +32,7 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in char
 
 startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
-    (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
+    (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
 
