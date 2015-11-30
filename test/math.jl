@@ -15,6 +15,16 @@
 @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
 @test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
 
+@test !(pi == e)
+@test !(e == 1//2)
+@test 1//2 <= e
+@test big(1//2) < e
+@test e < big(20//6)
+@test e^pi == exp(pi)
+@test e^2 == exp(2)
+@test e^2.4 == exp(2.4)
+@test e^(2//3) == exp(2//3)
+
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
     clamp!(x, 1, 3)
@@ -109,6 +119,7 @@ for T in (Float32, Float64)
     @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
     @test isequal(hypot(T(3),T(4)), T(5))
     @test isequal(log(T(1)), T(0))
+    @test isequal(log(e,T(1)), T(0))
     @test_approx_eq_eps log(T(e)) T(1) eps(T)
     @test isequal(log10(T(1)), T(0))
     @test isequal(log10(T(10)), T(1))
@@ -169,6 +180,7 @@ for T in (Float32, Float64)
 end
 @test_approx_eq exp10(5) exp10(5.0)
 @test_approx_eq exp2(Float16(2.)) exp2(2.)
+@test log(e) == 1
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi

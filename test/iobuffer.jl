@@ -6,6 +6,9 @@ let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
 @test write(io,"abc") == 3
+@test isreadable(io)
+@test iswritable(io)
+@test isopen(io)
 @test ioslength(io) == 3
 @test position(io) == 3
 @test eof(io)
