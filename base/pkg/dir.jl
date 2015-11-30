@@ -40,7 +40,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         LibGit2.set_remote_url(metadata_dir, meta)
         return
     end
-    local temp_dir
+    local temp_dir = ""
     try
         mkpath(dir)
         temp_dir = mktempdir(dir)
