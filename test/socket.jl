@@ -239,19 +239,29 @@ begin
     close(sock)
 end
 
-# Local-machine multicast
-
+# Local-machine broadcast
 let
+    # (Mac OS X's loopback interface doesn't support broadcasts)
+    bcastdst = @osx ? ip"255.255.255.255" : ip"127.255.255.255"
+
     function create_socket()
         s = UDPSocket()
         bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
         s
     end
     a, b, c = [create_socket() for i = 1:3]
-    @sync begin
-        recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
-        send(c, ip"255.255.255.255", 2000, "hello")
-        map(wait, recvs)
+    try
+        @sync begin
+            send(c, bcastdst, 2000, "hello")
+            recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
+            map(wait, recvs)
+        end
+    catch e
+        if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
+            warn("UDP broadcast test skipped (permission denied upon send, restrictive firewall?)")
+        else
+            rethrow()
+        end
     end
     [close(s) for s in [a, b, c]]
 end
