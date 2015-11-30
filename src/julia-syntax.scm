@@ -1181,7 +1181,7 @@
                    (symbol? (cadr (cadr e))))
               `(macro ,(symbol (string #\@ (cadr (cadr e))))
                  ,(expand-binding-forms
-                   `(-> (tuple ,@(cddr (cadr e)))
+                   `(-> (tuple &meta ,@(cddr (cadr e)))
                         ,(caddr e)))))
              ((symbol? (cadr e))  ;; already expanded
               e)
@@ -3364,7 +3364,11 @@ So far only the second case can actually occur.
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'macrocall)
          ;; expand macro
-         (let ((form (apply invoke-julia-macro (cadr e) (cddr e))))
+         (let* ((args (if (atom? (cddr e)) `(line 0 || ||)
+                          (if (not (and (pair? (caddr e)) (eq? (caaddr e) 'line)))
+                              `((line 0 || ||) . ,(cddr e))
+                              (cddr e))))
+               (form (apply invoke-julia-macro (cadr e) args)))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
@@ -3430,8 +3434,9 @@ So far only the second case can actually occur.
            ((jlgensym) e)
            ((escape) (cadr e))
            ((using import importall export meta) (map unescape e))
+           ((line) e)
            ((macrocall)
-        (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
+            (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
             `(macrocall ,.(map (lambda (x)
                                  (resolve-expansion-vars- x env m inarg))
                                (cdr e)))))

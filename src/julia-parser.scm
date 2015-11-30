@@ -2045,17 +2045,17 @@
            (take-token s)
            (with-space-sensitive
             (let* ((head (parse-unary-prefix s))
-                   (t    (peek-token s)))
+                   (t    (peek-token s))
+                   (loc  (line-number-node s)))
               (cond
-                 ((eqv? head '__LINE__) (input-port-line (ts:port s)))
                  ((ts:space? s)
-                  `(macrocall ,(macroify-name head)
+                  `(macrocall ,(macroify-name head) ,loc
                               ,@(parse-space-separated-exprs s)))
                  (else
                    (let ((call (parse-call-chain s head #t)))
                       (if (and (pair? call) (eq? (car call) 'call))
-                        `(macrocall ,(macroify-name (cadr call)) ,@(cddr call))
-                        `(macrocall ,(macroify-name call)
+                        `(macrocall ,(macroify-name (cadr call)) ,loc ,@(cddr call))
+                        `(macrocall ,(macroify-name call) ,loc
                                     ,@(parse-space-separated-exprs s)))))))))
 
           ;; command syntax
@@ -2084,6 +2084,9 @@
       (and (pair? e) (eq? 'string (car e))) ; string interpolation
       (and (length= e 3) (eq? (car e) 'macrocall)
            (simple-string-literal? (caddr e))
+           (eq? (cadr e) '@doc_str))
+      (and (length= e 4) (eq? (car e) 'macrocall)
+           (simple-string-literal? (cadddr e))
            (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
