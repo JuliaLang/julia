@@ -865,35 +865,35 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
 end
 
 """
-    C, ia, ib, ic = uniqueind(itr, dim)
+    C, ia, ib, ic = uniqueind(A, dim)
 
-A function that operates similiarly to `unique(itr,dim)` but returns multiple
+A function that operates similiarly to `unique(A,dim)` but returns multiple
 output arguments having the following properties:
 
-C - the unique elements of the array `itr` along the selected dimension `dim`
+C - the unique elements of the array `A` along the selected dimension `dim`
 ia - a Vector{Int} of indices such that:
-     `itr[ia] == C` returns `true` if `itr` is a one-dimensional array and `dim == 1`
-     `itr[ia,:] == C` returns `true` if `itr` is a two-dimensional array and `dim == 1`
-     `itr[:,ia] == C` returns `true` if `itr` is a two-dimensional array and `dim == 2`
-     `itr[:,:,ia] == C` returns `true if `itr` is a three-dimensional array and `dim == 3`
+     `A[ia] == C` if `A` is a one-dimensional array and `dim == 1`
+     `A[ia,:] == C` if `A` is a two-dimensional array and `dim == 1`
+     `A[:,ia] == C` if `A` is a two-dimensional array and `dim == 2`
+     `A[:,:,ia] == C` if `A` is a three-dimensional array and `dim == 3`
      and so forth for higher dimensional arrays.
 ib - a Vector{Vector{Int}} where each Vector{Int} contains the indices associated with the
      individual entries of `C` along the dimension `dim`
 ic - A Vector{Int} of indices such that:
-     `C[ic] == itr` returns `true` if `itr` is a one-dimensional array and `dim == 1`
-     `C[ic,:] == itr` returns `true` if `itr` is a two-dimensional array and `dim == 1`
-     `C[:,ic] == itr` returns `true` if `itr` is a two-dimensional array and `dim == 2`
-     `C[:,:,ic] == itr` returns `true if `itr` is a three-dimensional array and `dim == 3`
+     `C[ic] == A` if `A` is a one-dimensional array and `dim == 1`
+     `C[ic,:] == A` if `A` is a two-dimensional array and `dim == 1`
+     `C[:,ic] == A` if `A` is a two-dimensional array and `dim == 2`
+     `C[:,:,ic] == A` if `A` is a three-dimensional array and `dim == 3`
      and so forth for higher dimensional arrays.
 
 Examples:
 
-julia> itr = [1;2;3;2;3;5;6;5;7;1];
+julia> A = [1;2;3;2;3;5;6;5;7;1];
 julia> C, ia, ib, ic = uniqueind(itr,1)
 ([1,2,3,5,6,7],[1,2,3,6,7,9],[[1,10],[2,4],[3,5],[6,8],[7],[9]],[1,2,3,2,3,4,5,4,6,1])
-julia> C[ic] == itr
+julia> C[ic] == A
 true
-julia> itr[ia] == C
+julia> A[ia] == C
 true
 julia> ib
 6-element Array{Array{Int64,1},1}:
@@ -904,45 +904,45 @@ julia> ib
  [7]
  [9]
 
-julia> D = rand(Int,2,3,1);
-julia> E = rand(Int,2,3,1);
-julia> F = rand(Int,2,3,1);
+julia> D = [1 2 3 ; 4 5 6];
+julia> E = [11 12 13; 14 15 16];
+julia> F = [21 22 23; 24 25 26];
 julia> A = cat(3, D, F, E, E, D)
-2x3x5 Array{Int8,3}:
+2x3x5 Array{Int64,3}:
 [:, :, 1] =
-   2  -95  -25
- -94  -60  -74
-
+ 1  2  3
+ 4  5  6
+ 
 [:, :, 2] =
- -125   71  -58
-   31  -71   -1
+ 21  22  23
+ 24  25  26
 
 [:, :, 3] =
- -79  -33  -46
-  80   76  -85
+ 11  12  13
+ 14  15  16
 
 [:, :, 4] =
- -79  -33  -46
-  80   76  -85
+ 11  12  13
+ 14  15  16
 
 [:, :, 5] =
-   2  -95  -25
- -94  -60  -74
+ 1  2  3
+ 4  5  6
 
 julia> C, ia, ib, ic = uniqueind(A,3)
 (
-2x3x3 Array{Int8,3}:
+2x3x3 Array{Int64,3}:
 [:, :, 1] =
-   2  -95  -25
- -94  -60  -74
+ 1  2  3
+ 4  5  6
 
 [:, :, 2] =
- -125   71  -58
-   31  -71   -1
+ 21  22  23
+ 24  25  26
 
 [:, :, 3] =
- -79  -33  -46
-  80   76  -85,
+ 11  12  13
+ 14  15  16,
 
 [1,2,3],[[1,5],[2],[3,4]],[1,2,3,3,1])
 
