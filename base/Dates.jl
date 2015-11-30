@@ -14,6 +14,10 @@ include("dates/ranges.jl")
 include("dates/adjusters.jl")
 include("dates/io.jl")
 
+function __init__()
+    settzoffset()
+end
+
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        TimeZone, UTC, TimeType, DateTime, Date,
@@ -30,7 +34,7 @@ export Period, DatePeriod, TimePeriod,
        July, August, September, October, November, December,
        Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec,
        # conversions.jl
-       unix2datetime, datetime2unix, now, today,
+       unix2datetime, datetime2unix, now, today, tzoffset, settzoffset,
        rata2datetime, datetime2rata, julian2datetime, datetime2julian,
        # adjusters.jl
        firstdayofweek, lastdayofweek,

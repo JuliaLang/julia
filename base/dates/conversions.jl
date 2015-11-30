@@ -19,9 +19,20 @@ function unix2datetime(x)
 end
 # Returns unix seconds since 1970-01-01T00:00:00
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
+
+const _tzoffset = Ref(0)
+function settzoffset()
+    t = floor(time())
+    tm = Libc.TmStruct(t)
+    dtutc = unix2datetime(t)
+    dtlocal = DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec)
+    _tzoffset.x = Second(dtlocal - dtutc).value
+end
+tzoffset() = _tzoffset.x
+
 function now()
-    tm = Libc.TmStruct(time())
-    return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec)
+    t = time() + _tzoffset.x
+    return unix2datetime(t)
 end
 today() = Date(now())
 now(::Type{UTC}) = unix2datetime(time())
