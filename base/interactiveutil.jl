@@ -450,8 +450,6 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
                     @printf(head, "%6d KB     ", bytes ÷ (1024))
                 end
                 print(head, summary(value))
-                print(head, " : ")
-                show(head, value)
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end
