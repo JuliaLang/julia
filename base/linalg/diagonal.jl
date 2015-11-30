@@ -6,6 +6,7 @@ immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
@@ -37,6 +38,8 @@ full(D::Diagonal) = diagm(D.diag)
 
 getindex(D::Diagonal, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_getindex(D, i, j))
 unsafe_getindex{T}(D::Diagonal{T}, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(T)
+unsafe_getindex{T}(D::Diagonal{Matrix{T}}, i::Int, j::Int) = i == j ? D.diag[i] : zeros(T, size(D.diag[i
+], 1), size(D.diag[j], 2))
 
 setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
 function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)

@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#include <threading.h>
+
 // Profiler control variables //
 static volatile ptrint_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
@@ -36,31 +38,28 @@ DLLEXPORT void jl_sigint_action(void)
     jl_throw(jl_interrupt_exception);
 }
 
+static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size);
+
 #if defined(_WIN32)
-#define sig_stack_size 131072 // 128k reserved for SEGV handling
-#include <signals-win.c>
+#include "signals-win.c"
 #else
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <pthread.h>
-#if defined(JL_USE_INTEL_JITEVENTS)
-unsigned sig_stack_size = SIGSTKSZ;
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
-static void *signal_stack;
-static int is_addr_on_stack(void *addr);
-#ifdef __APPLE__
-#include "signals-apple.c"
-#elif defined(__FreeBSD__)
-#include "signals-bsd.c"
-#else
-#include "signals-linux.c"
-#endif
 #include "signals-unix.c"
 #endif
+
+// what to do on a critical error
+static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size)
+{
+    size_t n = *bt_size;
+    if (sig)
+        jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+    jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
+    if (context)
+        *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
+    for(size_t i=0; i < n; i++)
+        gdblookup(bt_data[i]);
+    gc_debug_print_status();
+}
+
 
 ///////////////////////
 // Utility functions //

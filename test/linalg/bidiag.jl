@@ -184,6 +184,9 @@ let A = Bidiagonal([1,2,3], [0,0], true)
     @test isdiag(A)
 end
 
+# test construct from range
+@test Bidiagonal(1:3, 1:2, true) == [1 1 0; 0 2 2; 0 0 3]
+
 #test promote_rule
 A = Bidiagonal(ones(Float32,10),ones(Float32,9),true)
 B = rand(Float64,10,10)

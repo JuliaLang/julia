@@ -384,6 +384,7 @@ export
     isprime,
     isqrt,
     isreal,
+    isimag,
     issubnormal,
     lcm,
     ldexp,

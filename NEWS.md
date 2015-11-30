@@ -70,6 +70,10 @@ Library improvements
   * New `foreach` function for calling a function on every element of a collection when
     the results are not needed.
 
+  * `Cmd(cmd; ...)` now accepts new Windows-specific options `windows_verbatim`
+    (to alter Windows command-line generation) and `windows_hide` (to
+    suppress creation of new console windows) ([#13780]).
+
 Deprecated or removed
 ---------------------
 

@@ -27,8 +27,7 @@ typedef struct {
     // to let threads sleep
     uv_mutex_t  alarm_lock;
     uv_cond_t   alarm;
-    uint64_t            sleep_threshold;
-
+    uint64_t    sleep_threshold;
 } ti_threadgroup_t;
 
 

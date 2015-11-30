@@ -231,6 +231,12 @@ static int jl_load_sysimg_so(void)
     if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
+#ifdef JULIA_ENABLE_THREADING
+        size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
+                                                   "jl_ptls_states_getter_idx");
+        *sysimg_gvars[tls_getter_idx - 1] =
+            (jl_value_t*)jl_get_ptls_states_getter();
+#endif
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"

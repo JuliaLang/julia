@@ -744,7 +744,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # transpose
     elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1
-        show_unquoted(io, args[1])
+        if isa(args[1], Symbol)
+            show_unquoted(io, args[1])
+        else
+            print(io, "(")
+            show_unquoted(io, args[1])
+            print(io, ")")
+        end
         print(io, head)
 
     elseif is(head, :import) || is(head, :importall) || is(head, :using)

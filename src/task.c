@@ -138,21 +138,17 @@ static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
-JL_THREAD jl_task_t *jl_root_task;
-DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
+#define jl_root_task (jl_get_ptls_states()->root_task)
 
 #ifdef COPY_STACKS
-static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
+#define jl_jmp_target (jl_get_ptls_states()->jmp_target)
 
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
-JL_THREAD void *jl_stackbase;
 
 #ifndef ASM_COPY_STACKS
-static JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
+#define jl_base_ctx (jl_get_ptls_states()->base_ctx)
 #endif
 
 static void NOINLINE save_stack(jl_task_t *t)
@@ -299,7 +295,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     */
     //JL_SIGATOMIC_BEGIN();
     if (!jl_setjmp(jl_current_task->ctx, 0)) {
-        bt_size = 0;  // backtraces don't survive task switches, see e.g. issue #12485
+        jl_bt_size = 0;  // backtraces don't survive task switches, see e.g. issue #12485
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
@@ -359,7 +355,6 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
-JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 extern int jl_in_gc;
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
@@ -479,9 +474,6 @@ static void init_task(jl_task_t *t, char* stack)
 }
 
 #endif /* !COPY_STACKS */
-
-ptrint_t bt_data[MAX_BT_SIZE+1];
-size_t bt_size = 0;
 
 // Always Set *func_name and *file_name to malloc'd pointers (non-NULL)
 static int frame_info_from_ip(char **func_name,
@@ -700,7 +692,7 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc
 
 static void record_backtrace(void)
 {
-    bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
+    jl_bt_size = rec_backtrace(jl_bt_data, JL_MAX_BT_SIZE);
 }
 
 static jl_value_t *array_ptr_void_type = NULL;
@@ -713,10 +705,10 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
         tp = jl_svec2(jl_voidpointer_type, jl_box_long(1));
         array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
-    size_t n = rec_backtrace((ptrint_t*)jl_array_data(bt), MAX_BT_SIZE);
-    if (n < MAX_BT_SIZE)
-        jl_array_del_end(bt, MAX_BT_SIZE-n);
+    bt = jl_alloc_array_1d(array_ptr_void_type, JL_MAX_BT_SIZE);
+    size_t n = rec_backtrace((ptrint_t*)jl_array_data(bt), JL_MAX_BT_SIZE);
+    if (n < JL_MAX_BT_SIZE)
+        jl_array_del_end(bt, JL_MAX_BT_SIZE-n);
     JL_GC_POP();
     return (jl_value_t*)bt;
 }
@@ -755,8 +747,8 @@ DLLEXPORT jl_value_t *jl_get_backtrace(void)
         tp = jl_svec2(jl_voidpointer_type, jl_box_long(1));
         array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
-    memcpy(bt->data, bt_data, bt_size*sizeof(void*));
+    bt = jl_alloc_array_1d(array_ptr_void_type, jl_bt_size);
+    memcpy(bt->data, jl_bt_data, jl_bt_size*sizeof(void*));
     JL_GC_POP();
     return (jl_value_t*)bt;
 }
@@ -788,9 +780,9 @@ DLLEXPORT void gdblookup(ptrint_t ip)
 
 DLLEXPORT void jlbacktrace(void)
 {
-    size_t n = bt_size; //bt_size > 40 ? 40 : bt_size;
+    size_t n = jl_bt_size; // jl_bt_size > 40 ? 40 : jl_bt_size;
     for(size_t i=0; i < n; i++)
-        gdblookup(bt_data[i]);
+        gdblookup(jl_bt_data[i]);
 }
 
 DLLEXPORT void gdbbacktrace(void)

@@ -275,12 +275,6 @@ else
 DISABLE_ASSERTIONS := -DNDEBUG
 endif
 
-# Threads
-ifeq ($(JULIA_THREADS), 1)
-LLVM_VER := svn
-LLVM_GIT_URL_LLVM := https://github.com/JuliaLang/llvm.git -b jn/tls37
-endif
-
 # Compiler specific stuff
 
 ifeq ($(USEMSVC), 1)
@@ -938,7 +932,7 @@ endif
 
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LDFLAGS += -L$(build_libdir) -lc++abi
+LDFLAGS += -L$(build_libdir)
 CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
 CPPFLAGS += -I$(build_includedir)/c++/v1
 CUSTOM_LD_LIBRARY_PATH := LD_LIBRARY_PATH="$(build_libdir)"
@@ -1024,6 +1018,7 @@ VERBOSE := 0
 endif
 
 WARNCOLOR:="\033[33;1m"
+ENDCOLOR:="\033[0m"
 
 ifeq ($(VERBOSE), 0)
 
@@ -1038,7 +1033,6 @@ JULIACOLOR:="\033[32;1m"
 SRCCOLOR:="\033[33m"
 BINCOLOR:="\033[37;1m"
 JULCOLOR:="\033[34;1m"
-ENDCOLOR:="\033[0m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 

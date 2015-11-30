@@ -34,6 +34,18 @@
 extern "C" {
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
+{
+#  if !defined(_COMPILER_MICROSOFT_)
+    static __thread jl_tls_states_t tls_states;
+#  else
+    static __declspec(thread) jl_tls_states_t tls_states;
+#  endif
+    return &tls_states;
+}
+#endif
+
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
@@ -595,6 +607,9 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
+#endif
+#ifdef JULIA_ENABLE_THREADING
+    jl_set_ptls_states_getter(jl_get_ptls_states_static);
 #endif
     libsupport_init();
     parse_opts(&argc, (char***)&argv);

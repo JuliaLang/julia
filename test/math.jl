@@ -13,6 +13,17 @@
 @test clamp(4.0, 1, 3) == 3.0
 
 @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+@test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+@test !(pi == e)
+@test !(e == 1//2)
+@test 1//2 <= e
+@test big(1//2) < e
+@test e < big(20//6)
+@test e^pi == exp(pi)
+@test e^2 == exp(2)
+@test e^2.4 == exp(2.4)
+@test e^(2//3) == exp(2//3)
 
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
@@ -108,6 +119,7 @@ for T in (Float32, Float64)
     @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
     @test isequal(hypot(T(3),T(4)), T(5))
     @test isequal(log(T(1)), T(0))
+    @test isequal(log(e,T(1)), T(0))
     @test_approx_eq_eps log(T(e)) T(1) eps(T)
     @test isequal(log10(T(1)), T(0))
     @test isequal(log10(T(10)), T(1))
@@ -167,6 +179,8 @@ for T in (Float32, Float64)
     @test_throws DomainError log1p(convert(T,-2.0))
 end
 @test_approx_eq exp10(5) exp10(5.0)
+@test_approx_eq exp2(Float16(2.)) exp2(2.)
+@test log(e) == 1
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
@@ -232,6 +246,13 @@ end
 @test cospi(1) == -1
 @test cospi(2) == 1
 
+@test sinc(1) == 0
+@test sinc(complex(1,0)) == 0
+@test sinc(0) == 1
+@test cosc(1) == -1
+@test cosc(0) == 0
+@test cosc(complex(1,0)) == -1
+
 # check type stability
 for T = (Float32,Float64,BigFloat)
     for f = (sind,cosd,sinpi,cospi)
@@ -239,10 +260,11 @@ for T = (Float32,Float64,BigFloat)
     end
 end
 
-
 # error functions
+@test_approx_eq erf(Float16(1)) 0.84270079294971486934
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
+@test_approx_eq erfc(Float16(1)) 0.15729920705028513066
 @test_approx_eq erfcx(1) 0.42758357615580700442
 @test_approx_eq erfcx(Float32(1)) 0.42758357615580700442
 @test_approx_eq erfcx(Complex64(1)) 0.42758357615580700442
@@ -451,6 +473,8 @@ end
 for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
     @test factorial(x) == gamma(1+x)
 end
+@test lfact(1) == 0
+@test lfact(2) == lgamma(3)
 
 # digamma
 for elty in (Float32, Float64)
@@ -495,16 +519,24 @@ for elty in (Float32, Float64)
         @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
+@test abs(invdigamma(2)) == abs(invdigamma(2.))
 
 @test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
+@test_approx_eq polygamma(20, Float16(7.)) -4.644616027240543262561198814998587152547
 
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12
+@test_approx_eq eta(Float32(2)) eta(2)
+@test_approx_eq eta(Complex64(2)) eta(2)
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
+@test_approx_eq zeta(Complex64(2)) zeta(2)
 @test_approx_eq zeta(4) pi^4/90
 @test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
+@test_approx_eq zeta(1,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(1.,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(Float16(1.),Float16(2.)) zeta(1,2.)
 @test isnan(zeta(NaN))
 @test isnan(zeta(complex(0,Inf)))
 @test isnan(zeta(complex(-Inf,0)))
@@ -562,6 +594,9 @@ end
 @test polygamma(4, -0.0) == Inf == -polygamma(4, +0.0)
 @test zeta(4, +0.0) == Inf == zeta(4, -0.0)
 @test zeta(5, +0.0) == Inf == -zeta(5, -0.0)
+@test zeta(Inf, 1.) == 1
+@test zeta(Inf, 2.) == 0
+@test isnan(zeta(NaN, 1.))
 @test isa([digamma(x) for x in [1.0]], Vector{Float64})
 @test isa([trigamma(x) for x in [1.0]], Vector{Float64})
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
@@ -602,7 +637,7 @@ for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
 end
 
 # modf
-for elty in (Float32, Float64)
+for elty in (Float16, Float32, Float64)
     @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
     @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
     @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)

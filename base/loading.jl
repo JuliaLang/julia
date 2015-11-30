@@ -275,7 +275,7 @@ Force reloading of a package, even if it has been loaded before. This is intende
 during package development as code is modified.
 """
 function reload(name::AbstractString)
-    if isfile(name) || contains(name,path_separator)
+    if isfile(name) || contains(name,Filesystem.path_separator)
         # for reload("path/file.jl") just ask for include instead
         error("use `include` instead of `reload` to load source files")
     else
@@ -415,7 +415,7 @@ end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
-    isfile(output) && rm(output)
+    try rm(output) end          # Remove file if it exists
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))

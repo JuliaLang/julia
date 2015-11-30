@@ -1332,13 +1332,6 @@ Get a backtrace object for the current program point.
 backtrace
 
 doc"""
-    ignorestatus(command)
-
-Mark a command object so that running it will not throw an error if the result code is non-zero.
-"""
-ignorestatus
-
-doc"""
     reducedim(f, A, dims[, initial])
 
 Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the dimensions to reduce, and `initial` is the initial value to use in the reductions. For `+`, `*`, `max` and `min` the `initial` argument is optional.
@@ -5986,13 +5979,6 @@ doc"""
 Commit all currently buffered writes to the given stream.
 """
 flush
-
-doc"""
-    detach(command)
-
-Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
-"""
-detach
 
 doc"""
     precompile(f,args::Tuple{Vararg{Any}})

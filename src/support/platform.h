@@ -45,6 +45,10 @@
  */
 #if defined(__clang__)
 #define _COMPILER_CLANG_
+// Clang can also be used as a MinGW compiler
+#if defined(__MINGW32__)
+#define _COMPILER_MINGW_
+#endif
 #elif defined(__INTEL_COMPILER) || defined(__ICC)
 #define _COMPILER_INTEL_
 #elif defined(__MINGW32__)

@@ -14,6 +14,12 @@ extern size_t jl_page_size;
 extern char *jl_stack_lo;
 extern char *jl_stack_hi;
 extern jl_function_t *jl_typeinf_func;
+#if defined(JL_USE_INTEL_JITEVENTS)
+extern unsigned sig_stack_size;
+#endif
+
+DLLEXPORT extern int jl_lineno;
+DLLEXPORT extern const char *jl_filename;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
@@ -80,6 +86,8 @@ JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 void jl_install_default_signal_handlers(void);
+void restore_signals(void);
+void *jl_install_thread_signal_handler(void);
 
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;
@@ -146,7 +154,7 @@ void jl_init_serializer(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
-extern JL_THREAD void *jl_stackbase;
+#define jl_stackbase (jl_get_ptls_states()->stackbase)
 #endif
 
 void jl_set_stackbase(char *__stk);
@@ -155,6 +163,9 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
+#ifdef JULIA_ENABLE_THREADING
+jl_get_ptls_states_func jl_get_ptls_states_getter(void);
+#endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
@@ -173,7 +184,7 @@ int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
 #ifdef _OS_WINDOWS_
-extern volatile HANDLE hMainThread;
+extern HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
 DWORD64 jl_getUnwindInfo(ULONG64 dwBase);
 extern volatile int jl_in_stackwalk;
@@ -182,9 +193,8 @@ extern volatile int jl_in_stackwalk;
 #include <libunwind.h>
 typedef unw_context_t *bt_context_t;
 #endif
-#define MAX_BT_SIZE 80000
-extern ptrint_t bt_data[MAX_BT_SIZE+1];
-extern size_t bt_size;
+#define jl_bt_data (jl_get_ptls_states()->bt_data)
+#define jl_bt_size (jl_get_ptls_states()->bt_size)
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #ifdef LIBOSXUNWIND
@@ -198,6 +208,7 @@ DLLEXPORT void attach_exception_port(void);
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
+DLLEXPORT void gdblookup(ptrint_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)
@@ -334,6 +345,56 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
+
+JL_DEFINE_MUTEX_EXT(codegen)
+
+#if defined(_OS_WINDOWS_)
+STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+{
+    return _aligned_malloc(sz ? sz : 1, align);
+}
+STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
+                                       size_t align)
+{
+    (void)oldsz;
+    return _aligned_realloc(p, sz ? sz : 1, align);
+}
+STATIC_INLINE void jl_free_aligned(void *p)
+{
+    _aligned_free(p);
+}
+#else
+STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
+{
+#if defined(_P64) || defined(__APPLE__)
+    if (align <= 16)
+        return malloc(sz);
+#endif
+    void *ptr;
+    if (posix_memalign(&ptr, align, sz))
+        return NULL;
+    return ptr;
+}
+STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
+                                       size_t align)
+{
+#if defined(_P64) || defined(__APPLE__)
+    if (align <= 16)
+        return realloc(d, sz);
+#endif
+    void *b = jl_malloc_aligned(sz, align);
+    if (b != NULL) {
+        memcpy(b, d, oldsz > sz ? sz : oldsz);
+        free(d);
+    }
+    return b;
+}
+STATIC_INLINE void jl_free_aligned(void *p)
+{
+    free(p);
+}
+#endif
+
 
 #ifdef __cplusplus
 }

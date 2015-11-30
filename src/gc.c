@@ -181,7 +181,7 @@ typedef struct {
     uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
 } region_t
-#ifndef _COMPILER_MICROSOFT_
+#if !defined(_COMPILER_MICROSOFT_) && !(defined(_COMPILER_MINGW_) && defined(_COMPILER_CLANG_))
 __attribute__((aligned(GC_PAGE_SZ)))
 #endif
 ;
@@ -251,7 +251,7 @@ typedef struct {
 // In the single-threaded version, they are essentially noops, but nonetheless
 // serve to check that the thread context macros are being used.
 #ifdef JULIA_ENABLE_THREADING
-static JL_THREAD jl_thread_heap_t *jl_thread_heap;
+#define jl_thread_heap (jl_get_ptls_states()->heap)
 #define FOR_EACH_HEAP()                                                 \
     for (jl_each_heap_index_t __current_heap_idx = {jl_n_threads, NULL}; \
          --current_heap_index >= 0 &&                                   \
@@ -322,30 +322,10 @@ static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #1
 #define malloc_a16(sz) malloc(sz)
 #define realloc_a16(p, sz, oldsz) realloc((p), (sz))
 #define free_a16(p) free(p)
-
-#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
-#define malloc_a16(sz) _aligned_malloc((sz)?(sz):1, 16)
-#define realloc_a16(p, sz, oldsz) _aligned_realloc((p), (sz)?(sz):1, 16)
-#define free_a16(p) _aligned_free(p)
-
 #else
-static inline void *malloc_a16(size_t sz)
-{
-    void *ptr;
-    if (posix_memalign(&ptr, 16, sz))
-        return NULL;
-    return ptr;
-}
-static inline void *realloc_a16(void *d, size_t sz, size_t oldsz)
-{
-    void *b = malloc_a16(sz);
-    if (b != NULL) {
-        memcpy(b, d, oldsz);
-        free(d);
-    }
-    return b;
-}
-#define free_a16(p) free(p)
+#define malloc_a16(sz) jl_malloc_aligned(sz, 16)
+#define realloc_a16(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, 16)
+#define free_a16(p) jl_free_aligned(p)
 #endif
 
 static void schedule_finalization(void *o, void *f)
@@ -605,6 +585,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
         return 0;
     }
 #endif
+    assert(find_region(o,1) == NULL);
     bigval_t* hdr = bigval_header(o);
     int bits = gc_bits(o);
     if (bits == GC_QUEUED || bits == GC_MARKED)
@@ -1087,6 +1068,9 @@ static NOINLINE void add_page(pool_t *p)
 
 static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 {
+#ifdef MEMDEBUG
+    assert(0 && "Should not be using pools in MEMDEBUG mode");
+#endif
     gcval_t *v, *end;
     // FIXME - need JL_ATOMIC_FETCH_AND_ADD here
     if (__unlikely((allocd_bytes += osize) >= 0) || gc_debug_check_pool()) {
@@ -1614,7 +1598,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
     // FIXME - we need to mark stacks on other threads
-    int curtask = (ta == *jl_all_task_states[0].pcurrent_task);
+    int curtask = (ta == jl_all_task_states[0].ptls->current_task);
     if (stkbuf) {
 #ifndef COPY_STACKS
         if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
@@ -1883,11 +1867,11 @@ static void pre_mark(void)
 
     size_t i;
     for(i=0; i < jl_n_threads; i++) {
-        jl_thread_task_state_t *ts = &jl_all_task_states[i];
-        gc_push_root(*ts->pcurrent_task, 0);
-        gc_push_root(*ts->proot_task, 0);
-        gc_push_root(*ts->pexception_in_transit, 0);
-        gc_push_root(*ts->ptask_arg_in_transit, 0);
+        jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
+        gc_push_root(ptls->current_task, 0);
+        gc_push_root(ptls->root_task, 0);
+        gc_push_root(ptls->exception_in_transit, 0);
+        gc_push_root(ptls->task_arg_in_transit, 0);
     }
 
     // invisible builtin values
@@ -2370,9 +2354,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2382,9 +2367,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2394,9 +2380,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 
@@ -2406,9 +2393,10 @@ DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
-#endif
+#else
     FOR_CURRENT_HEAP ()
         tag = _pool_alloc(&pools[szclass(sz)], sz);
+#endif
     return jl_valueof(tag);
 }
 

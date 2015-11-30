@@ -555,3 +555,11 @@ c,r = test_complete("cd(\"folder_do_not_exist_77/file")
     end
     rm(tmp)
 end
+
+# auto completions of true and false... issue #14101
+s = "tru"
+c, r, res = test_complete(s)
+@test "true" in c
+s = "fals"
+c, r, res = test_complete(s)
+@test "false" in c
