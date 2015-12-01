@@ -706,6 +706,9 @@ end
 
 get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), map(length, I)...), A, I, default)
 
+## structured matrix methods ##
+replace_in_print_matrix(A::AbstractMatrix,i::Integer,j::Integer,s::AbstractString) = s
+replace_in_print_matrix(A::AbstractVector,i::Integer,j::Integer,s::AbstractString) = s
 
 ## Concatenation ##
 
