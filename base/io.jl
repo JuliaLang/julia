@@ -1,10 +1,31 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## core stream types ##
+# Generic IO stubs
 
-# the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
+lock(::IO) = nothing
+unlock(::IO) = nothing
+reseteof(x::IO) = nothing
 
-# Generic IO functions
+const SZ_UNBUFFERED_IO = 65536
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+
+function isopen end
+function close end
+function flush end
+function wait_connected end
+function wait_readnb end
+function wait_readbyte end
+function wait_close end
+function nb_available end
+function readavailable end
+function isreadable end
+function iswritable end
+function copy end
+function eof end
+
+# all subtypes should implement this
+read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 ## byte-order mark, ntoh & hton ##
 
@@ -313,30 +334,3 @@ function reset{T<:IO}(io::T)
 end
 
 ismarked(io::IO) = io.mark >= 0
-
-# Generic IO stubs
-
-lock(::IO) = nothing
-unlock(::IO) = nothing
-reseteof(x::IO) = nothing
-
-const SZ_UNBUFFERED_IO = 65536
-buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
-
-function isopen end
-function close end
-function flush end
-function wait_connected end
-function wait_readnb end
-function wait_readbyte end
-function wait_close end
-function nb_available end
-function readavailable end
-function isreadable end
-function iswritable end
-function copy end
-function eof end
-
-# all subtypes should implement this
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
