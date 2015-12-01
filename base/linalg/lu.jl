@@ -164,11 +164,11 @@ function det{T,S}(A::LU{T,S})
     return P * s
 end
 
-function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     c = 0
-    P = one(T)
-    abs_det = zero(T)
+    P = one(real(T))
+    abs_det = zero(real(T))
     @inbounds for i = 1:n
         dg_ii = A.factors[i,i]
         P *= sign(dg_ii)
@@ -177,7 +177,7 @@ function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
         end
         abs_det += log(abs(dg_ii))
     end
-    s = (isodd(c) ? -one(T) : one(T)) * P
+    s = (isodd(c) ? -one(real(T)) : one(real(T))) * P
     abs_det, s
 end
 

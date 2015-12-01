@@ -39,15 +39,13 @@ const RTX_EQUALS_ETB = Int32(3) # solve R'*X=E'*B  or X = R'\(E'*B)
 
 
 using ..SparseArrays: SparseMatrixCSC
-using ..SparseArrays.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, VTypes, common
+using ..SparseArrays.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, SuiteSparseStruct, VTypes, common
 
 import Base: size
 import Base.LinAlg: qrfact
 import ..SparseArrays.CHOLMOD: convert, free!
 
-
-
-immutable C_Factorization{Tv<:VTypes}
+immutable C_Factorization{Tv<:VTypes} <: SuiteSparseStruct
     xtype::Cint
     factors::Ptr{Tv}
 end
@@ -91,7 +89,7 @@ function backslash{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv}, B::D
     end
     d = Dense(ccall((:SuiteSparseQR_C_backslash, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Cdouble, Ptr{C_Sparse{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            ordering, tol, A.p, B.p, common()))
+            ordering, tol, get(A.p), get(B.p), common()))
     finalizer(d, free!)
     d
 end
@@ -103,7 +101,7 @@ function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     end
     f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv}},
         (Cint, Cdouble, Ptr{Sparse{Tv}}, Ptr{Void}),
-            ordering, tol, A.p, common()))
+            ordering, tol, get(A.p), common()))
     finalizer(f, free!)
     f
 end
@@ -118,7 +116,7 @@ function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
     end
     d = Dense(ccall((:SuiteSparseQR_C_solve, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            system, QR.p, B.p, common()))
+            system, get(QR.p), get(B.p), common()))
     finalizer(d, free!)
     d
 end
@@ -133,7 +131,7 @@ function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     end
     d = Dense(ccall((:SuiteSparseQR_C_qmult, :libspqr), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-                method, QR.p, X.p, common()))
+                method, get(QR.p), get(X.p), common()))
     finalizer(d, free!)
     d
 end

@@ -1454,14 +1454,22 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #else
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #endif
-                          formatted_raw_ostream &stream);
+#ifdef LLVM37
+                          raw_ostream &rstream
+#else
+                          formatted_raw_ostream &stream
+#endif
+                          );
 
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
+#ifdef LLVM37
+#else
     llvm::formatted_raw_ostream fstream(stream);
+#endif
 
     Function *llvmf = dyn_cast<Function>((Function*)f);
     if (!llvmf)
@@ -1480,12 +1488,19 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
         if (raw_mc)
             return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
+#ifdef LLVM37
+        jl_dump_asm_internal(fptr, symsize, slide, object, stream);
+#else
         jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
+#endif
     }
     else {
         jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
     }
+#ifdef LLVM37
+#else
     fstream.flush();
+#endif
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
