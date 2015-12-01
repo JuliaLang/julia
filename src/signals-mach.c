@@ -153,7 +153,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     }
 }
 
-void attach_exception_port()
+DLLEXPORT void attach_exception_port(void)
 {
     kern_return_t ret;
     // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html

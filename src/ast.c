@@ -115,7 +115,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-extern int jl_parse_depwarn(int warn);
 extern int jl_parse_deperror(int err);
 
 void jl_init_frontend(void)
@@ -592,8 +591,8 @@ jl_value_t *jl_parse_next(void)
     return scm_to_julia(c,0);
 }
 
-jl_value_t *jl_load_file_string(const char *text, size_t len,
-                                char *filename, size_t namelen)
+DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                          char *filename, size_t namelen)
 {
     value_t t, f;
     t = cvalue_static_cstrn(text, len);
@@ -605,7 +604,7 @@ jl_value_t *jl_load_file_string(const char *text, size_t len,
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_expand(jl_value_t *expr)
+DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     int np = jl_gc_n_preserved_values();
     value_t arg = julia_to_scm(expr);
@@ -769,7 +768,7 @@ jl_sym_t *jl_decl_var(jl_value_t *ex)
     return (jl_sym_t*)jl_exprarg(ex, 0);
 }
 
-int jl_is_rest_arg(jl_value_t *ex)
+DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
 {
     if (!jl_is_expr(ex)) return 0;
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;

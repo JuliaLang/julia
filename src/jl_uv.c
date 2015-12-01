@@ -419,7 +419,7 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
 
-int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
+DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
     char *str=NULL;
     int c;
@@ -440,7 +440,7 @@ int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
     return c;
 }
 
-int jl_printf(uv_stream_t *s, const char *format, ...)
+DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
 {
     va_list args;
     int c;
@@ -485,7 +485,8 @@ DLLEXPORT int jl_getpid(void)
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
-DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host, unsigned int flags)
+DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
+                          unsigned int flags)
 {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));

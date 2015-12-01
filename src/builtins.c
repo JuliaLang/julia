@@ -82,18 +82,18 @@ DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *exception_type, const char 
     va_end(args);
 }
 
-void NORETURN jl_too_few_args(const char *fname, int min)
+DLLEXPORT void NORETURN jl_too_few_args(const char *fname, int min)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too few arguments (expected %d)", fname, min);
 }
 
-void NORETURN jl_too_many_args(const char *fname, int max)
+DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
-void NORETURN jl_type_error_rt(const char *fname, const char *context,
-                               jl_value_t *ty, jl_value_t *got)
+DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
+                                         jl_value_t *ty, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
     JL_GC_PUSH2(&ctxt, &got);
@@ -103,7 +103,8 @@ void NORETURN jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
-void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
+DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected,
+                                      jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
@@ -179,7 +180,7 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
-void jl_enter_handler(jl_handler_t *eh)
+DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     eh->prev = jl_current_task->eh;
@@ -190,7 +191,7 @@ void jl_enter_handler(jl_handler_t *eh)
     JL_SIGATOMIC_END();
 }
 
-void jl_pop_handler(int n)
+DLLEXPORT void jl_pop_handler(int n)
 {
     while (n > 0) {
         jl_eh_restore_state(jl_current_task->eh);
@@ -274,8 +275,9 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-int jl_egal(jl_value_t *a, jl_value_t *b) // warning: a,b may NOT have been gc-rooted by the caller
+DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 {
+    // warning: a,b may NOT have been gc-rooted by the caller
     if (a == b)
         return 1;
     jl_value_t *ta = (jl_value_t*)jl_typeof(a);
@@ -907,13 +909,13 @@ DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 
 // showing --------------------------------------------------------------------
 
-void jl_flush_cstdio(void)
+DLLEXPORT void jl_flush_cstdio(void)
 {
     fflush(stdout);
     fflush(stderr);
 }
 
-jl_value_t *jl_stdout_obj(void)
+DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
@@ -921,7 +923,7 @@ jl_value_t *jl_stdout_obj(void)
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
-jl_value_t *jl_stderr_obj(void)
+DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
@@ -931,7 +933,7 @@ jl_value_t *jl_stderr_obj(void)
 
 static jl_function_t *jl_show_gf=NULL;
 
-void jl_show(jl_value_t *stream, jl_value_t *v)
+DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 {
     if (jl_base_module) {
         if (jl_show_gf == NULL) {

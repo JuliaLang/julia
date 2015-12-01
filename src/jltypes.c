@@ -146,7 +146,7 @@ DLLEXPORT int jl_has_typevars(jl_value_t *v)
     return jl_has_typevars__(v, 0, NULL, 0);
 }
 
-int jl_is_leaf_type(jl_value_t *v)
+DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->abstract) {
@@ -177,7 +177,7 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b);
 
 // Return true for any type (Integer or Unsigned) that can fit in a
 // size_t and pass back value, else return false
-int jl_get_size(jl_value_t *val, size_t *pnt)
+DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt)
 {
     if (jl_is_long(val)) {
         ssize_t slen = jl_unbox_long(val);
@@ -303,7 +303,7 @@ jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
     return (jl_value_t*)tu;
 }
 
-jl_value_t *jl_type_union(jl_svec_t *types)
+DLLEXPORT jl_value_t *jl_type_union(jl_svec_t *types)
 {
     return jl_type_union_v(jl_svec_data(types), jl_svec_len(types));
 }
@@ -1082,7 +1082,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     return result;
 }
 
-jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
+DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
 {
     jl_svec_t *env = jl_emptysvec;
     JL_GC_PUSH1(&env);
@@ -1637,7 +1637,7 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
     return type_eqv__(a, b, 0);
 }
 
-int jl_types_equal(jl_value_t *a, jl_value_t *b)
+DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
     return type_eqv_(a, b);
 }
@@ -1776,7 +1776,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     return (jl_value_t*)result;
 }
 
-jl_value_t *jl_apply_type(jl_value_t *tc, jl_svec_t *params)
+DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_svec_t *params)
 {
     // NOTE: callers are supposed to root these arguments, but there are
     // several uses that don't, so root here just to be safe.
@@ -2568,7 +2568,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     return jl_egal(a, b);
 }
 
-int jl_subtype(jl_value_t *a, jl_value_t *b, int ta)
+DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta)
 {
     return jl_subtype_le(a, b, ta, 0);
 }
@@ -3144,7 +3144,8 @@ DLLEXPORT jl_tvar_t *jl_new_typevar_(jl_sym_t *name, jl_value_t *lb, jl_value_t 
     return tv;
 }
 
-jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
+DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb,
+                                    jl_value_t *ub)
 {
     return jl_new_typevar_(name, lb, ub, jl_false);
 }

@@ -52,6 +52,30 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 // empty structs are a GNU extension
 #define sizeof_jl_taggedvalue_t (sizeof(void*))
 void jl_gc_inhibit_finalizers(int state);
+void jl_gc_setmark(jl_value_t *v);
+void jl_gc_sync_total_bytes(void);
+void jl_gc_track_malloced_array(jl_array_t *a);
+void jl_gc_count_allocd(size_t sz);
+void jl_gc_run_all_finalizers(void);
+void *allocb(size_t sz);
+
+void gc_queue_binding(jl_binding_t *bnd);
+void gc_setmark_buf(void *buf, int);
+
+static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
+{
+    if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
+                   (jl_astaggedvalue(val)->gc_bits & 1) == 0))
+        gc_queue_binding(bnd);
+}
+
+static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
+{
+    // if parent is marked and buf is not
+    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
+        //            (jl_astaggedvalue(bufptr)->gc_bits) != 1))
+        gc_setmark_buf(bufptr, jl_astaggedvalue(parent)->gc_bits);
+}
 
 #ifdef GC_DEBUG_ENV
 void gc_debug_print_status(void);
@@ -74,7 +98,7 @@ void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
 void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
-#define JL_CALLABLE(name) \
+#define JL_CALLABLE(name)                                               \
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_trampoline);
@@ -104,7 +128,8 @@ ssize_t jl_max_jlgensym_in(jl_value_t *v);
 
 extern uv_loop_t *jl_io_loop;
 
-DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data);
+DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
+                                            jl_value_t *data);
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 
 
@@ -122,6 +147,58 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_function_t *method, jl_svec_t *tvars,
                                       int8_t isstaged);
+int jl_is_type(jl_value_t *v);
+jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
+                                          jl_svec_t **penv, jl_svec_t *tvars);
+jl_typector_t *jl_new_type_ctor(jl_svec_t *params, jl_value_t *body);
+jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
+jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
+jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
+                                   jl_svec_t *parameters);
+jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+jl_datatype_t *jl_wrap_vararg(jl_value_t *t);
+void jl_assign_bits(void *dest, jl_value_t *bits);
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
+jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
+void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_function_t *meth,
+                   jl_svec_t *tvars, int8_t isstaged);
+jl_function_t *jl_module_call_func(jl_module_t *m);
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
+int jl_start_parsing_file(const char *fname);
+void jl_stop_parsing(void);
+jl_value_t *jl_parse_next(void);
+jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
+void jl_compile_linfo(jl_lambda_info_t *li);
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len);
+jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
+jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
+                                             jl_value_t **loc, size_t nl);
+jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
+jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
+                           jl_value_t *sp, jl_expr_t *ast, int sparams,
+                           int allow_alloc);
+int jl_is_toplevel_only_expr(jl_value_t *e);
+void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes,
+                   jl_lambda_info_t *def);
+
+jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
+                                        int cache, int inexact);
+jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
+jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
+                         jl_value_t **args, size_t nargs);
+jl_sym_t *jl_decl_var(jl_value_t *ex);
+
+jl_array_t *jl_lam_args(jl_expr_t *l);
+jl_array_t *jl_lam_vinfo(jl_expr_t *l);
+jl_array_t *jl_lam_capt(jl_expr_t *l);
+jl_value_t *jl_lam_gensyms(jl_expr_t *l);
+jl_array_t *jl_lam_staticparams(jl_expr_t *l);
+jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
+int jl_lam_vars_captured(jl_expr_t *ast);
+jl_expr_t *jl_lam_body(jl_expr_t *l);
+int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v);
+int jl_local_in_ast(jl_expr_t *ast, jl_sym_t *sym);
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 void jl_add_constructors(jl_datatype_t *t);
@@ -151,6 +228,8 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
+void jl_gc_init(void);
+void jl_init_restored_modules(jl_array_t *init_order);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
@@ -240,7 +319,9 @@ extern void *jl_winsock_handle;
 #endif
 
 void *jl_get_library(const char *f_lib);
-DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd);
+DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
+                                   void **hnd);
+const char *jl_dlfind_win32(const char *name);
 
 
 // libuv wrappers:
@@ -345,6 +426,8 @@ DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
+int jl_array_store_unboxed(jl_value_t *el_type);
+int jl_array_isdefined(jl_value_t **args, int nargs);
 
 JL_DEFINE_MUTEX_EXT(codegen)
 

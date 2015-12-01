@@ -421,7 +421,7 @@ DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     JL_UNLOCK(finalizers);
 }
 
-void jl_finalize(jl_value_t *o)
+DLLEXPORT void jl_finalize(jl_value_t *o)
 {
     JL_LOCK(finalizers);
     // No need to check the to_finalize list since the user is apparently
@@ -2027,7 +2027,7 @@ void prepare_sweep(void)
 {
 }
 
-void jl_gc_collect(int full)
+DLLEXPORT void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;

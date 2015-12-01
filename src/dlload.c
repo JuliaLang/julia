@@ -203,17 +203,17 @@ done:
     return handle;
 }
 
-void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
+DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
 {
     return jl_load_dynamic_library_(modname, flags, 0);
 }
 
-void *jl_load_dynamic_library(const char *modname, unsigned flags)
+DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
 {
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
-void *jl_dlsym_e(void *handle, const char *symbol)
+DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
 {
 #ifdef _OS_WINDOWS_
     void *ptr = GetProcAddress((HMODULE) handle, symbol);
@@ -224,7 +224,7 @@ void *jl_dlsym_e(void *handle, const char *symbol)
     return ptr;
 }
 
-void *jl_dlsym(void *handle, const char *symbol)
+DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 {
     void *ptr = jl_dlsym_e(handle, symbol);
     if (!ptr)

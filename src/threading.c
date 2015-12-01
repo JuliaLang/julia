@@ -388,10 +388,10 @@ void jl_shutdown_threading(void)
 }
 
 // return thread's thread group
-void *jl_threadgroup(void) { return (void *)tgworld; }
+DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // utility
-void jl_cpu_pause(void) { cpu_pause(); }
+DLLEXPORT void jl_cpu_pause(void) { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
@@ -485,7 +485,7 @@ void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
 
 #define TICKS_TO_SECS(t)        (((double)(t)) / (cpu_ghz * 1e9))
 
-void jl_threading_profile(void)
+DLLEXPORT void jl_threading_profile(void)
 {
     if (!fork_ticks) return;
 
@@ -506,7 +506,7 @@ void jl_threading_profile(void)
 
 #else //!PROFILE_JL_THREADING
 
-void jl_threading_profile(void)
+DLLEXPORT void jl_threading_profile(void)
 {
 }
 
