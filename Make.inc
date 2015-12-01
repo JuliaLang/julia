@@ -604,6 +604,7 @@ LLVM_VER:=3.7.0
 override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=ARMV7
+override USE_SYSTEM_LIBM:=1
 
 endif
 
