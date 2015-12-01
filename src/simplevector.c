@@ -7,7 +7,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
+JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
@@ -20,7 +20,7 @@ DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
     return jv;
 }
 
-DLLEXPORT jl_svec_t *jl_svec1(void *a)
+JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_2w();
     jl_set_typeof(v, jl_simplevector_type);
@@ -29,7 +29,7 @@ DLLEXPORT jl_svec_t *jl_svec1(void *a)
     return v;
 }
 
-DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
+JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 {
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_3w();
     jl_set_typeof(v, jl_simplevector_type);
@@ -39,7 +39,7 @@ DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
     return v;
 }
 
-DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
+JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
     if (n == 0) return jl_emptysvec;
     jl_svec_t *jv = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, n+1);
@@ -47,7 +47,7 @@ DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
     return jv;
 }
 
-DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
+JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
 {
     if (n == 0) return jl_emptysvec;
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
@@ -57,7 +57,7 @@ DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
     return jv;
 }
 
-DLLEXPORT jl_svec_t *jl_svec_append(jl_svec_t *a, jl_svec_t *b)
+JL_DLLEXPORT jl_svec_t *jl_svec_append(jl_svec_t *a, jl_svec_t *b)
 {
     jl_svec_t *c = jl_alloc_svec_uninit(jl_svec_len(a) + jl_svec_len(b));
     size_t i=0, j;
@@ -72,12 +72,12 @@ DLLEXPORT jl_svec_t *jl_svec_append(jl_svec_t *a, jl_svec_t *b)
     return c;
 }
 
-DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
+JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
     return jl_svec_append(a, jl_emptysvec);
 }
 
-DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
+JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 {
     if (n==0) return jl_emptysvec;
     jl_svec_t *v = jl_alloc_svec_uninit(n);

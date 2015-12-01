@@ -189,7 +189,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
 #if defined(HAVE_SIGTIMEDWAIT)
 
 static struct timespec timeoutprof;
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     timeoutprof.tv_sec = nsecprof/GIGA;
     timeoutprof.tv_nsec = nsecprof%GIGA;
@@ -197,7 +197,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     pthread_kill(signals_thread, SIGUSR2);
 }
@@ -210,7 +210,7 @@ DLLEXPORT void jl_profile_stop_timer(void)
 static timer_t timerprof;
 static struct itimerspec itsprof;
 
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -236,7 +236,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running)
         timer_delete(timerprof);
@@ -249,7 +249,7 @@ DLLEXPORT void jl_profile_stop_timer(void)
 #include <sys/time.h>
 struct itimerval timerprof;
 
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = nsecprof/GIGA;
     timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
@@ -263,7 +263,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
         memset(&timerprof, 0, sizeof(timerprof));
@@ -509,7 +509,7 @@ void jl_install_default_signal_handlers(void)
 #endif
 }
 
-DLLEXPORT void jl_install_sigint_handler(void)
+JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     // TODO: ?
 }

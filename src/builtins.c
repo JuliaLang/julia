@@ -31,7 +31,7 @@ extern "C" {
 
 // exceptions -----------------------------------------------------------------
 
-DLLEXPORT void NORETURN jl_error(const char *str)
+JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
 {
     if (jl_errorexception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: %s\n", str);
@@ -44,7 +44,8 @@ DLLEXPORT void NORETURN jl_error(const char *str)
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
 
-static void NORETURN jl_vexceptionf(jl_datatype_t *exception_type, const char *fmt, va_list args)
+static void JL_NORETURN jl_vexceptionf(jl_datatype_t *exception_type,
+                                       const char *fmt, va_list args)
 {
     if (exception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: ");
@@ -66,7 +67,7 @@ static void NORETURN jl_vexceptionf(jl_datatype_t *exception_type, const char *f
     jl_throw(jl_new_struct(exception_type, msg));
 }
 
-DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
+JL_DLLEXPORT void JL_NORETURN jl_errorf(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -74,7 +75,8 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
     va_end(args);
 }
 
-DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...)
+JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *exception_type,
+                                            const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -82,18 +84,19 @@ DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *exception_type, const char 
     va_end(args);
 }
 
-DLLEXPORT void NORETURN jl_too_few_args(const char *fname, int min)
+JL_DLLEXPORT void JL_NORETURN jl_too_few_args(const char *fname, int min)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too few arguments (expected %d)", fname, min);
 }
 
-DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max)
+JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
-DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
-                                         jl_value_t *ty, jl_value_t *got)
+JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
+                                               const char *context,
+                                               jl_value_t *ty, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
     JL_GC_PUSH2(&ctxt, &got);
@@ -103,13 +106,14 @@ DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
-DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected,
-                                      jl_value_t *got)
+JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
+                                            jl_value_t *expected,
+                                            jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
 
-DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     if (jl_symbol_name(var)[0] == '#') {
         // convention for renamed variables: #...#original_name
@@ -120,13 +124,14 @@ DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var)
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
-DLLEXPORT void NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v,
+                                                jl_value_t **idxs, size_t nidxs)
 {
     jl_value_t *t = NULL;
     // items in idxs are assumed to already be rooted
@@ -135,13 +140,16 @@ DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-DLLEXPORT void NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
+                                                        size_t nv, size_t i)
 {
     // values in v are expected to already be gc-rooted
     jl_bounds_error_int(jl_f_tuple(NULL, v, nv), i);
 }
 
-DLLEXPORT void NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data,
+                                                          jl_value_t *vt,
+                                                          size_t i)
 {
     jl_value_t *t = NULL, *v = NULL;
     // data is expected to be gc-safe (either gc-rooted, or alloca)
@@ -152,7 +160,7 @@ DLLEXPORT void NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, 
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-DLLEXPORT void NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
 {
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -160,7 +168,8 @@ DLLEXPORT void NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-DLLEXPORT void NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs,
+                                                   size_t nidxs)
 {
     size_t i;
     jl_value_t *t = NULL;
@@ -180,7 +189,7 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
-DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
+JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     eh->prev = jl_current_task->eh;
@@ -191,7 +200,7 @@ DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_pop_handler(int n)
+JL_DLLEXPORT void jl_pop_handler(int n)
 {
     while (n > 0) {
         jl_eh_restore_state(jl_current_task->eh);
@@ -275,7 +284,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 {
     // warning: a,b may NOT have been gc-rooted by the caller
     if (a == b)
@@ -366,7 +375,7 @@ JL_CALLABLE(jl_f_isa)
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
 }
 
-DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
+JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 {
     if (!jl_subtype(x,t,1))
         jl_type_error("typeassert", t, x);
@@ -543,12 +552,14 @@ JL_CALLABLE(jl_f_kwcall)
 
 // eval -----------------------------------------------------------------------
 
-DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
     return jl_toplevel_eval_in_warn(m, ex, 0);
 }
 
-DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m,
+                                                  jl_value_t *ex,
+                                                  int delay_warn)
 {
     static int jl_warn_on_eval = 0;
     int last_delay_warn = jl_warn_on_eval;
@@ -765,17 +776,17 @@ JL_CALLABLE(jl_f_nfields)
 
 // conversion -----------------------------------------------------------------
 
-DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
+JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
 {
     return jl_symbol_name(s);
 }
 
 //WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
-DLLEXPORT void *jl_array_ptr(jl_array_t *a)
+JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
 }
-DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
 }
@@ -804,7 +815,8 @@ int str_isspace(char *p)
     return 1;
 }
 
-DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, size_t len)
+JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset,
+                                                    size_t len)
 {
     char *p;
     char *bstr = str+offset;
@@ -841,7 +853,7 @@ DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, size_
     return ret;
 }
 
-DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
+JL_DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 {
     jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
     if (0 == nd.isnull) {
@@ -856,7 +868,8 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 #define HUGE_VALF (1e25f * 1e25f)
 #endif
 
-DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, size_t len)
+JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset,
+                                                    size_t len)
 {
     char *p;
     char *bstr = str+offset;
@@ -897,7 +910,7 @@ DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, size_
     return ret;
 }
 
-DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
+JL_DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 {
     jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
     if (0 == nf.isnull) {
@@ -909,13 +922,13 @@ DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 
 // showing --------------------------------------------------------------------
 
-DLLEXPORT void jl_flush_cstdio(void)
+JL_DLLEXPORT void jl_flush_cstdio(void)
 {
     fflush(stdout);
     fflush(stderr);
 }
 
-DLLEXPORT jl_value_t *jl_stdout_obj(void)
+JL_DLLEXPORT jl_value_t *jl_stdout_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
@@ -923,7 +936,7 @@ DLLEXPORT jl_value_t *jl_stdout_obj(void)
     return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
-DLLEXPORT jl_value_t *jl_stderr_obj(void)
+JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
@@ -933,7 +946,7 @@ DLLEXPORT jl_value_t *jl_stderr_obj(void)
 
 static jl_function_t *jl_show_gf=NULL;
 
-DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
+JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 {
     if (jl_base_module) {
         if (jl_show_gf == NULL) {
@@ -1029,7 +1042,7 @@ JL_CALLABLE(jl_f_instantiate_type)
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
-DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *t)
+JL_DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *t)
 {
     jl_value_t *tc = (jl_value_t*)jl_new_type_ctor(p, t);
     int i;
@@ -1168,7 +1181,7 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     return h;
 }
 
-DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
+JL_DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
 {
     return jl_object_id_(jl_typeof(v), v);
 }
@@ -1596,12 +1609,12 @@ static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), depth);
 }
 
-DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
+JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
 {
     return jl_static_show_x(out, v, 0);
 }
 
-DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
+JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
     if (!jl_is_tuple_type(type))
         return jl_static_show(s, type);
@@ -1630,7 +1643,7 @@ DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 }
 
 int in_jl_ = 0;
-DLLEXPORT void jl_(void *jl_value)
+JL_DLLEXPORT void jl_(void *jl_value)
 {
     in_jl_++;
     JL_TRY {
@@ -1643,7 +1656,7 @@ DLLEXPORT void jl_(void *jl_value)
     in_jl_--;
 }
 
-DLLEXPORT void jl_breakpoint(jl_value_t *v)
+JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in you debugger here
 }

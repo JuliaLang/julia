@@ -4,7 +4,7 @@
 #include <assert.h>
 
 #include "utf8proc.h"
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 
 #include "flisp.h"
 
@@ -104,7 +104,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
 }
 
-DLLEXPORT int jl_id_start_char(uint32_t wc)
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_')
         return 1;
@@ -114,7 +114,7 @@ DLLEXPORT int jl_id_start_char(uint32_t wc)
     return is_wc_cat_id_start(wc, prop->category);
 }
 
-DLLEXPORT int jl_id_char(uint32_t wc)
+JL_DLLEXPORT int jl_id_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_' ||
         (wc >= '0' && wc <= '9') || wc == '!')

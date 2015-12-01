@@ -79,7 +79,7 @@ static void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
+extern "C" JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
@@ -117,7 +117,7 @@ void *jl_get_library(const char *f_lib)
     return hnd;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 {
     void *handle = *hnd;
@@ -127,7 +127,7 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 }
 
 // miscellany
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_cpu_name(void)
 {
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR < 5

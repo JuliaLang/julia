@@ -25,8 +25,10 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
     return eval(e, NULL, 0, 0);
 }
 
-DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                                    jl_value_t **locals, size_t nl)
+JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
+                                                       jl_value_t *e,
+                                                       jl_value_t **locals,
+                                                       size_t nl)
 {
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
