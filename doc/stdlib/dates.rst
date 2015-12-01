@@ -164,6 +164,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    Returns a ``DateTime`` corresponding to the user's system time as UTC/GMT.
 
+.. function:: Dates.tzoffset() -> Int
+
+      Returns the number of seconds the user's system timezone is ahead of UTC/GMT. Will be negative for system timezones of the prime meridian, positive if east. Note: after changing the system timezone, ``settzoffset()`` needs to be called once to ensure the result of this function reflects the system's timezone.
+
+.. function:: Dates.settzoffset() -> Int
+
+      Call this function after updating your system's timezone to ensure that tzoffset() returns correct results
+
 .. function:: eps(::DateTime) -> Millisecond
               eps(::Date) -> Day
 
@@ -504,4 +512,3 @@ Variable        Abbr.     Value (Int)
 ``November``    ``Nov``   11
 ``December``    ``Dec``   12
 =============== ========= =============
-
