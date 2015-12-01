@@ -22,11 +22,13 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
     debug && println("element type: $elty")
 
     @test_approx_eq logdet(A) log(det(A))
+    @test_approx_eq logabsdet(A)[1] log(abs(det(A)))
+    @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
     if elty <: Real
-        @test_approx_eq logabsdet(A)[1] log(abs(det(A)))
-        @test logabsdet(A)[2] == sign(abs(det(A)))
+        @test logabsdet(A)[2] == sign(det(A))
         @test_throws DomainError logdet(convert(Matrix{elty}, -eye(n)))
-        @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
+    else
+        @test logabsdet(A)[2] ≈ sign(det(A))
     end
 end
 
