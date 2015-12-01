@@ -7,7 +7,7 @@
 
 extern "C" {
 #include "APInt-C.h"
-DLLEXPORT void jl_error(const char *str);
+JL_DLLEXPORT void jl_error(const char *str);
 }
 
 using namespace llvm;
@@ -41,7 +41,7 @@ using namespace llvm;
     else \
         memcpy(p##r, a.getRawData(), RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMNeg(unsigned numbits, integerPart *pa, integerPart *pr) {
     APInt z(numbits, 0);
     CREATE(a)
@@ -49,7 +49,7 @@ void LLVMNeg(unsigned numbits, integerPart *pa, integerPart *pr) {
     ASSIGN(r, z)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMAdd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -57,7 +57,7 @@ void LLVMAdd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMSub(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -65,7 +65,7 @@ void LLVMSub(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMMul(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -73,7 +73,7 @@ void LLVMMul(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMSDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -81,7 +81,7 @@ void LLVMSDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *p
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMUDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -89,7 +89,7 @@ void LLVMUDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *p
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMSRem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -97,7 +97,7 @@ void LLVMSRem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *p
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMURem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -105,49 +105,49 @@ void LLVMURem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *p
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpEQ(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.eq(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpNE(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.ne(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpSLT(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.slt(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpULT(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.ult(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpSLE(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.sle(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMICmpULE(unsigned numbits, integerPart *pa, integerPart *pb) {
     CREATE(a)
     CREATE(b)
     return a.ule(b);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMAnd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -155,7 +155,7 @@ void LLVMAnd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMOr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -163,7 +163,7 @@ void LLVMOr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr)
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMXor(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -171,7 +171,7 @@ void LLVMXor(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMShl(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -179,14 +179,14 @@ void LLVMShl(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMLShr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
     a = a.lshr(b);
     ASSIGN(r, a)
 }
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMAShr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -194,14 +194,14 @@ void LLVMAShr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *p
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMFlipAllBits(unsigned numbits, integerPart *pa, integerPart *pr) {
     CREATE(a)
     a.flipAllBits();
     ASSIGN(r, a)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMAdd_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -211,7 +211,7 @@ int LLVMAdd_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMAdd_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -221,7 +221,7 @@ int LLVMAdd_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMSub_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -231,7 +231,7 @@ int LLVMSub_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMSub_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -241,7 +241,7 @@ int LLVMSub_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMMul_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -251,7 +251,7 @@ int LLVMMul_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMMul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -261,7 +261,7 @@ int LLVMMul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
     return Overflow;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     CREATE(a)
     a = a.byteSwap();
@@ -312,31 +312,31 @@ void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPa
     }
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMFPtoSI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     LLVMFPtoInt(numbits, pa, onumbits, pr, true, NULL);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMFPtoUI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     LLVMFPtoInt(numbits, pa, onumbits, pr, false, NULL);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMFPtoSI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     bool isExact;
     LLVMFPtoInt(numbits, pa, onumbits, pr, true, &isExact);
     return isExact;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 int LLVMFPtoUI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     bool isExact;
     LLVMFPtoInt(numbits, pa, onumbits, pr, false, &isExact);
     return isExact;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     CREATE(a)
     double val = a.roundToDouble(true);
@@ -348,7 +348,7 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     CREATE(a)
     double val = a.roundToDouble(false);
@@ -360,7 +360,7 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         jl_error("UItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     assert(inumbits < onumbits);
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
@@ -378,7 +378,7 @@ void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
     memset((char*)pr + inumbytes, sign, onumbytes - inumbytes);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     assert(inumbits < onumbits);
     unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
@@ -394,14 +394,14 @@ void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
     memset((char*)pr + inumbytes, 0, onumbytes - inumbytes);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
     assert(inumbits > onumbits);
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     memcpy(pr, pa, onumbytes);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_8(uint8_t Val) {
 #ifdef LLVM35
     return countTrailingZeros(Val);
@@ -410,7 +410,7 @@ unsigned countTrailingZeros_8(uint8_t Val) {
 #endif
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_16(uint16_t Val) {
 #ifdef LLVM35
     return countTrailingZeros(Val);
@@ -419,7 +419,7 @@ unsigned countTrailingZeros_16(uint16_t Val) {
 #endif
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_32(uint32_t Val) {
 #ifdef LLVM35
     return countTrailingZeros(Val);
@@ -428,7 +428,7 @@ unsigned countTrailingZeros_32(uint32_t Val) {
 #endif
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_64(uint64_t Val) {
 #ifdef LLVM35
     return countTrailingZeros(Val);
@@ -437,7 +437,7 @@ unsigned countTrailingZeros_64(uint64_t Val) {
 #endif
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     CREATE(a)
     CREATE(b)
@@ -448,7 +448,7 @@ void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart
     ASSIGN(r, r)
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
     unsigned numbytes = RoundUpToAlignment(numbits, host_char_bit) / host_char_bit;
     int signbit = (numbits - 1) % host_char_bit;
@@ -459,31 +459,31 @@ void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integer
         memcpy(pr, pa,  numbytes);
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countPopulation();
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countTrailingOnes();
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countTrailingZeros();
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countLeadingOnes();
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countLeadingZeros();

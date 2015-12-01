@@ -45,7 +45,7 @@ extern char *julia_home;
 #   endif
 #endif
 
-static void NORETURN jl_dlerror(const char *fmt, const char *sym) {
+static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym) {
 #ifdef _OS_WINDOWS_
     CHAR reason[256];
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -58,7 +58,7 @@ static void NORETURN jl_dlerror(const char *fmt, const char *sym) {
     jl_errorf(fmt, sym, reason);
 }
 
-DLLEXPORT void* jl_dlopen(const char *filename, unsigned flags)
+JL_DLLEXPORT void* jl_dlopen(const char *filename, unsigned flags)
 {
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
@@ -89,7 +89,7 @@ DLLEXPORT void* jl_dlopen(const char *filename, unsigned flags)
 #endif
 }
 
-DLLEXPORT int jl_dlclose(void *handle)
+JL_DLLEXPORT int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
@@ -203,17 +203,17 @@ done:
     return handle;
 }
 
-DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
+JL_DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
 {
     return jl_load_dynamic_library_(modname, flags, 0);
 }
 
-DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
 {
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
-DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
+JL_DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
 {
 #ifdef _OS_WINDOWS_
     void *ptr = GetProcAddress((HMODULE) handle, symbol);
@@ -224,7 +224,7 @@ DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
     return ptr;
 }
 
-DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
+JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 {
     void *ptr = jl_dlsym_e(handle, symbol);
     if (!ptr)

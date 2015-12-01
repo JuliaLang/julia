@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #ifdef _MSC_VER
-DLLEXPORT char * dirname(char *);
+JL_DLLEXPORT char * dirname(char *);
 #else
 #include <libgen.h>
 #endif
@@ -154,7 +154,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-DLLEXPORT void jl_atexit_hook(int exitcode)
+JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     if (exitcode == 0) julia_save();
     jl_print_gc_stats(JL_STDERR);
@@ -250,10 +250,10 @@ DLLEXPORT void jl_atexit_hook(int exitcode)
 
 void jl_get_builtin_hooks(void);
 
-DLLEXPORT void *jl_dl_handle;
+JL_DLLEXPORT void *jl_dl_handle;
 void *jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
-DLLEXPORT void *jl_exe_handle;
+JL_DLLEXPORT void *jl_exe_handle;
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
@@ -633,7 +633,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
 extern int asprintf(char **str, const char *fmt, ...);
 
-DLLEXPORT int jl_generating_output(void)
+JL_DLLEXPORT int jl_generating_output(void)
 {
     return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
 }
@@ -702,7 +702,7 @@ static void julia_save(void)
 
 jl_function_t *jl_typeinf_func=NULL;
 
-DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
+JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
 {
     if (!jl_is_function(f))
         jl_error("jl_set_typeinf_func must set a jl_function_t*");
@@ -771,7 +771,7 @@ void jl_get_builtin_hooks(void)
                                         jl_svec2(jl_uint8_type, jl_box_long(1)));
 }
 
-DLLEXPORT void jl_get_system_hooks(void)
+JL_DLLEXPORT void jl_get_system_hooks(void)
 {
     if (jl_errorexception_type) return; // only do this once
 

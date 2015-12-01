@@ -100,7 +100,7 @@ void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
 }
 
 //exc_server uses dlsym to find symbol
-DLLEXPORT
+JL_DLLEXPORT
 kern_return_t catch_exception_raise(mach_port_t            exception_port,
                                     mach_port_t            thread,
                                     mach_port_t            task,
@@ -153,7 +153,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     }
 }
 
-DLLEXPORT void attach_exception_port(void)
+JL_DLLEXPORT void attach_exception_port(void)
 {
     kern_return_t ret;
     // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
@@ -327,7 +327,7 @@ void *mach_profile_listener(void *arg)
     }
 }
 
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     kern_return_t ret;
     if (!profile_started) {
@@ -363,8 +363,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
-

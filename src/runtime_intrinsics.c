@@ -14,7 +14,7 @@
 const unsigned int host_char_bit = 8;
 
 // run time version of box/unbox intrinsic
-DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
+JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(reinterpret, datatype, ty);
     if (!jl_is_leaf_type(ty) || !jl_is_bitstype(ty))
@@ -31,7 +31,7 @@ DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
 }
 
 // run time version of pointerref intrinsic (warning: i is not rooted)
-DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
+JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 {
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i);
@@ -50,7 +50,7 @@ DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 }
 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
-DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
+JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
@@ -221,7 +221,7 @@ static void jl_##name##nbits(unsigned runtime_nbits, void *pa, void *pb, void *p
 typedef void (*intrinsic_1_t)(unsigned, void*, void*);
 SELECTOR_FUNC(intrinsic_1)
 #define un_iintrinsic(name, u) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
     return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
 }
@@ -247,7 +247,7 @@ un_iintrinsic(name, u)
 typedef unsigned (*intrinsic_u1_t)(unsigned, void*);
 SELECTOR_FUNC(intrinsic_u1)
 #define uu_iintrinsic(name, u) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
     return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
 }
@@ -329,7 +329,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 typedef void (*intrinsic_cvt_t)(unsigned, void*, unsigned, void*);
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*);
 #define cvt_iintrinsic_checked(LLVMOP, check_op, name) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 { \
     return jl_intrinsic_cvt(ty, a, #name, LLVMOP, check_op); \
 }
@@ -361,14 +361,14 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
 #define un_fintrinsic_withtype(OP, name) \
 un_fintrinsic_ctype(OP, jl_##name##32, float) \
 un_fintrinsic_ctype(OP, jl_##name##64, double) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 { \
     return jl_fintrinsic_1(ty, a, #name, jl_##name##32, jl_##name##64); \
 }
 
 #define un_fintrinsic(OP, name) \
 un_fintrinsic_withtype(OP, name##_withtype) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
     return jl_##name##_withtype(jl_typeof(a), a); \
 }
@@ -406,7 +406,7 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
 typedef void (*intrinsic_2_t)(unsigned, void*, void*, void*);
 SELECTOR_FUNC(intrinsic_2)
 #define bi_iintrinsic(name, u, cvtb) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_2, name##_list, cvtb); \
 }
@@ -429,7 +429,7 @@ bi_iintrinsic(name, u, cvtb)
 typedef int (*intrinsic_cmp_t)(unsigned, void*, void*);
 SELECTOR_FUNC(intrinsic_cmp)
 #define cmp_iintrinsic(name, u) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_cmp, name##_list, 0); \
 }
@@ -450,7 +450,7 @@ cmp_iintrinsic(name, u)
 typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*);
 SELECTOR_FUNC(intrinsic_checked)
 #define checked_iintrinsic(name, u) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, jl_intrinsiclambda_checked, name##_list, 0); \
 }
@@ -543,7 +543,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
 #define bi_fintrinsic(OP, name) \
     bi_intrinsic_ctype(OP, name, 32, float) \
     bi_intrinsic_ctype(OP, name, 64, double) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
@@ -570,7 +570,7 @@ DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 #define bool_fintrinsic(OP, name) \
     bool_intrinsic_ctype(OP, name, 32, float) \
     bool_intrinsic_ctype(OP, name, 64, double) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
@@ -597,7 +597,7 @@ DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 #define ter_fintrinsic(OP, name) \
     ter_intrinsic_ctype(OP, name, 32, float) \
     ter_intrinsic_ctype(OP, name, 64, double) \
-DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
 { \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
@@ -767,7 +767,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 un_fintrinsic_withtype(fpcvt,fptrunc)
 un_fintrinsic_withtype(fpcvt,fpext)
 
-DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a)
 {
     jl_datatype_t *ty;
     switch (jl_datatype_size(jl_typeof(a))) {
@@ -782,7 +782,7 @@ DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a)
     }
     return jl_fptoui((jl_value_t*)ty, a);
 }
-DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a)
 {
     jl_datatype_t *ty;
     switch (jl_datatype_size(jl_typeof(a))) {
@@ -827,7 +827,7 @@ un_fintrinsic_withtype(checked_fptosi, checked_fptosi)
             jl_throw(jl_inexact_exception);
 un_fintrinsic_withtype(checked_fptoui, checked_fptoui)
 
-DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 {
     jl_value_t *ty = jl_typeof(a);
     if (!jl_is_bitstype(ty))
@@ -856,7 +856,7 @@ checked_iintrinsic_fast(LLVMSub_uov, check_usub, sub, checked_usub, u)
 checked_iintrinsic_slow(LLVMMul_sov, checked_smul,  )
 checked_iintrinsic_slow(LLVMMul_uov, checked_umul, u)
 
-DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *ty = jl_typeof(a);
     if (jl_typeof(b) != ty)
@@ -902,7 +902,7 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 
-DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *ty = jl_typeof(a);
     if (!jl_is_bitstype(ty))
@@ -926,13 +926,13 @@ DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
     return newv;
 }
 
-DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
 {
     JL_TYPECHK(isfalse, bool, isfalse);
     return (isfalse == jl_false ? b : a);
 }
 
-DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
     return jl_box_long(jl_array_len((jl_array_t*)a));
 }

@@ -145,8 +145,8 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
-                                       jl_value_t *dims)
+JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
+                                          jl_value_t *dims)
 {
     size_t i;
     jl_array_t *a;
@@ -215,8 +215,8 @@ DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
 }
 
 // own_buffer != 0 iff GC should call free() on this pointer eventually
-DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
-                                         size_t nel, int own_buffer)
+JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
+                                            size_t nel, int own_buffer)
 {
     size_t elsz;
     jl_array_t *a;
@@ -257,8 +257,8 @@ DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     return a;
 }
 
-DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
-                                      jl_value_t *dims, int own_buffer)
+JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
+                                         jl_value_t *dims, int own_buffer)
 {
     size_t i, elsz, nel=1;
     jl_array_t *a;
@@ -319,7 +319,7 @@ DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     return a;
 }
 
-DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
+JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
 {
     size_t ndims = jl_nfields(dims);
     size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
@@ -329,32 +329,33 @@ DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
     return _new_array(atype, ndims, adims);
 }
 
-DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr)
+JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr)
 {
     return _new_array(atype, 1, &nr);
 }
 
-DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
+JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr,
+                                           size_t nc)
 {
     size_t d[2] = {nr, nc};
     return _new_array(atype, 2, &d[0]);
 }
 
-DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr,
-                                        size_t nc, size_t z)
+JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr,
+                                           size_t nc, size_t z)
 {
     size_t d[3] = {nr, nc, z};
     return _new_array(atype, 3, &d[0]);
 }
 
-DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
+JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);
     memcpy(a->data, str, len);
     return a;
 }
 
-DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
+JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     if (!jl_typeis(a, jl_array_uint8_type))
         jl_type_error("jl_array_to_string", (jl_value_t*)jl_array_uint8_type, (jl_value_t*)a);
@@ -366,7 +367,7 @@ DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     return s;
 }
 
-DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
     jl_array_t *a = jl_pchar_to_array(str, len);
     JL_GC_PUSH1(&a);
@@ -375,12 +376,12 @@ DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
     return s;
 }
 
-DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str)
+JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str)
 {
     return jl_pchar_to_string(str, strlen(str));
 }
 
-DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n)
+JL_DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n)
 {
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
@@ -397,7 +398,7 @@ jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
 // array primitives -----------------------------------------------------------
 
 #ifndef STORE_ARRAY_LEN
-DLLEXPORT size_t jl_array_len_(jl_array_t *a)
+JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 {
     size_t l = 1;
     for(size_t i=0; i < jl_array_ndims(a); i++)
@@ -421,7 +422,7 @@ JL_CALLABLE(jl_f_arraysize)
     return jl_box_long((&a->nrows)[dno-1]);
 }
 
-DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     assert(i < jl_array_len(a));
     jl_value_t *elt;
@@ -470,7 +471,7 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
-DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
+JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
@@ -506,7 +507,7 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
     return 1;
 }
 
-DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
+JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     assert(i < jl_array_len(a));
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
@@ -537,7 +538,7 @@ JL_CALLABLE(jl_f_arrayset)
     return args[0];
 }
 
-DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
+JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i+1);
@@ -623,7 +624,7 @@ static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, si
     return newlen;
 }
 
-DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
+JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
 {
     if (a->isshared && a->how!=3) jl_error("cannot resize array with shared data");
     // optimized for the case of only growing and shrinking at the end
@@ -642,7 +643,7 @@ DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     a->nrows += inc;
 }
 
-DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
+JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
@@ -662,7 +663,7 @@ DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     a->nrows -= dec;
 }
 
-DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
+JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
 {
     if (sz <= jl_array_len(a))
         return;
@@ -674,7 +675,7 @@ DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
     a->nrows -= inc;
 }
 
-DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
+JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
 {
     if (inc == 0) return;
     // designed to handle the case of growing and shrinking at both ends
@@ -717,7 +718,7 @@ DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
     a->nrows += inc;
 }
 
-DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
+JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
@@ -754,14 +755,14 @@ DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
     a->offset = newoffs;
 }
 
-DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
+JL_DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
     jl_cellset(a, jl_array_dim(a,0)-1, item);
 }
 
-DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
+JL_DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 2);

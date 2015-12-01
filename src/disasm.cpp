@@ -83,7 +83,7 @@
 
 using namespace llvm;
 
-extern DLLEXPORT LLVMContext &jl_LLVMContext;
+extern JL_DLLEXPORT LLVMContext &jl_LLVMContext;
 
 namespace {
 #ifdef LLVM36

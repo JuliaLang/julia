@@ -413,7 +413,7 @@ void jl_gc_run_all_finalizers(void)
     run_finalizers();
 }
 
-DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
     JL_LOCK(finalizers);
     arraylist_push(&finalizer_list, (void*)v);
@@ -421,7 +421,7 @@ DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     JL_UNLOCK(finalizers);
 }
 
-DLLEXPORT void jl_finalize(jl_value_t *o)
+JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 {
     JL_LOCK(finalizers);
     // No need to check the to_finalize list since the user is apparently
@@ -486,7 +486,7 @@ static htable_t obj_counts[3];
 static htable_t obj_sizes[3];
 #endif
 
-DLLEXPORT size_t jl_gc_total_freed_bytes=0;
+JL_DLLEXPORT size_t jl_gc_total_freed_bytes=0;
 #ifdef GC_FINAL_STATS
 static uint64_t max_pause = 0;
 static uint64_t total_sweep_time = 0;
@@ -803,7 +803,7 @@ static inline int maybe_collect(void)
 
 // preserved values
 
-DLLEXPORT int jl_gc_n_preserved_values(void)
+JL_DLLEXPORT int jl_gc_n_preserved_values(void)
 {
     int len = 0;
     FOR_CURRENT_HEAP ()
@@ -811,14 +811,14 @@ DLLEXPORT int jl_gc_n_preserved_values(void)
     return len;
 }
 
-DLLEXPORT void jl_gc_preserve(jl_value_t *v)
+JL_DLLEXPORT void jl_gc_preserve(jl_value_t *v)
 {
     FOR_CURRENT_HEAP () {
         arraylist_push(&preserved_values, (void*)v);
     }
 }
 
-DLLEXPORT void jl_gc_unpreserve(void)
+JL_DLLEXPORT void jl_gc_unpreserve(void)
 {
     FOR_CURRENT_HEAP () {
         (void)arraylist_pop(&preserved_values);
@@ -827,7 +827,7 @@ DLLEXPORT void jl_gc_unpreserve(void)
 
 // weak references
 
-DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
     jl_set_typeof(wr, jl_weakref_type);
@@ -1472,7 +1472,7 @@ static void reset_remset(void)
     }
 }
 
-DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
+JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
     FOR_CURRENT_HEAP () {
         jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
@@ -1636,7 +1636,7 @@ NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 // for chasing down unwanted references
 /*
 static jl_value_t *lookforme = NULL;
-DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
+JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
 #define MAX_MARK_DEPTH 400
@@ -1952,19 +1952,19 @@ static void post_mark(arraylist_t *list, int dryrun)
 // collector entry point and control
 
 static int is_gc_enabled = 1;
-DLLEXPORT int jl_gc_enable(int on)
+JL_DLLEXPORT int jl_gc_enable(int on)
 {
     int prev = is_gc_enabled;
     is_gc_enabled = (on!=0);
     return prev;
 }
-DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
+JL_DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
-DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }
-DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
-DLLEXPORT GC_Num jl_gc_num(void) { return gc_num; }
+JL_DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }
+JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
+JL_DLLEXPORT GC_Num jl_gc_num(void) { return gc_num; }
 
-DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void)
 {
     int64_t oldtb = last_gc_total_bytes;
     int64_t newtb = jl_gc_total_bytes();
@@ -2027,7 +2027,7 @@ void prepare_sweep(void)
 {
 }
 
-DLLEXPORT void jl_gc_collect(int full)
+JL_DLLEXPORT void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;
@@ -2332,7 +2332,7 @@ void *reallocb(void *b, size_t sz)
 }
 */
 
-DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
+JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     size_t allocsz = sz + sizeof_jl_taggedvalue_t;
     if (allocsz < sz) // overflow in adding offs, size was "negative"
@@ -2348,7 +2348,7 @@ DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
     return jl_valueof(alloc_big(allocsz));
 }
 
-DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
     const int sz = sizeof_jl_taggedvalue_t;
     void *tag = NULL;
@@ -2361,7 +2361,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
     return jl_valueof(tag);
 }
 
-DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*), 16);
     void *tag = NULL;
@@ -2374,7 +2374,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
     return jl_valueof(tag);
 }
 
-DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 2, 16);
     void *tag = NULL;
@@ -2387,7 +2387,7 @@ DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
     return jl_valueof(tag);
 }
 
-DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 3, 16);
     void *tag = NULL;
@@ -2603,7 +2603,7 @@ static void big_obj_stats(void)
 }
 #endif //MEMPROFILE
 
-DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     maybe_collect();
     allocd_bytes += sz;
@@ -2614,7 +2614,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     return b;
 }
 
-DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     maybe_collect();
     allocd_bytes += nm*sz;
@@ -2625,14 +2625,15 @@ DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     return b;
 }
 
-DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
+JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
     freed_bytes += sz;
     gc_num.freecall++;
 }
 
-DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old,
+                                                       size_t sz)
 {
     maybe_collect();
 
@@ -2647,14 +2648,14 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
     return b;
 }
 
-DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
     int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + 16);
     p[0] = sz;
     return (void *)(p + 2);
 }
 
-DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
     int64_t *p;
     size_t nmsz = nm*sz;
@@ -2663,14 +2664,14 @@ DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
     return (void *)(p + 2);
 }
 
-DLLEXPORT void jl_free(void *p)
+JL_DLLEXPORT void jl_free(void *p)
 {
     int64_t *pp = (int64_t *)p - 2;
     size_t sz = pp[0];
     jl_gc_counted_free(pp, sz + 16);
 }
 
-DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 {
     int64_t *pp = (int64_t *)p - 2;
     size_t szold = pp[0];
@@ -2679,7 +2680,7 @@ DLLEXPORT void *jl_realloc(void *p, size_t sz)
     return (void *)(pnew + 2);
 }
 
-DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     maybe_collect();
     size_t allocsz = LLT_ALIGN(sz, 16);
@@ -2693,7 +2694,8 @@ DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     return b;
 }
 
-DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner)
+JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
+                                         int isaligned, jl_value_t* owner)
 {
     maybe_collect();
 

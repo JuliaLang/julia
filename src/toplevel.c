@@ -25,9 +25,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-DLLEXPORT int jl_lineno = 0;
+JL_DLLEXPORT int jl_lineno = 0;
 // current file name
-DLLEXPORT const char *jl_filename = "no file";
+JL_DLLEXPORT const char *jl_filename = "no file";
 
 jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
@@ -35,7 +35,7 @@ jl_module_t *jl_internal_main_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
-DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
+JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     assert(jl_base_module != NULL);
     // using Base
@@ -45,7 +45,7 @@ DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
     m->std_imports = 1;
 }
 
-DLLEXPORT jl_module_t *jl_new_main_module(void)
+JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 {
     if (jl_generating_output() && jl_options.incremental)
         jl_error("cannot call workspace() in incremental compile mode");
@@ -228,7 +228,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base
-DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
+JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
     while (m != m->parent) {
         if (m->istopmod)
@@ -549,7 +549,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     return result;
 }
 
-DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
     return jl_toplevel_eval_flex(v, 1);
 }
@@ -602,7 +602,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     return result;
 }
 
-DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
+JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
@@ -624,7 +624,7 @@ DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 }
 
 // load from filename given as a ByteString object
-DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
+JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
     return jl_load(jl_string_data(str), jl_string_len(str));
 }
@@ -683,8 +683,9 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 // empty generic function def
 // TODO: maybe have jl_method_def call this
-DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
-                                              jl_binding_t *bnd)
+JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
+                                                 jl_value_t *bp_owner,
+                                                 jl_binding_t *bnd)
 {
     jl_value_t *gf=NULL;
 
@@ -708,10 +709,11 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     return gf;
 }
 
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
-                                    jl_binding_t *bnd,
-                                    jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
-                                    jl_value_t *call_func, int iskw)
+JL_DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                                       jl_value_t *bp_owner, jl_binding_t *bnd,
+                                       jl_svec_t *argdata, jl_function_t *f,
+                                       jl_value_t *isstaged,
+                                       jl_value_t *call_func, int iskw)
 {
     jl_module_t *module = (bnd ? bnd->owner : NULL);
     // argdata is svec({types...}, svec(typevars...))

@@ -87,11 +87,11 @@ static jl_tls_states_t *jl_get_ptls_states_init(void)
     jl_tls_states_cb = jl_get_ptls_states_fallback;
     return jl_get_ptls_states_fallback();
 }
-DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
     return (*jl_tls_states_cb)();
 }
-DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
 {
     // only allow setting this once
     if (f && f != jl_get_ptls_states_init &&
@@ -107,21 +107,21 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     return jl_tls_states_cb;
 }
 #else
-DLLEXPORT jl_tls_states_t jl_tls_states;
-DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+JL_DLLEXPORT jl_tls_states_t jl_tls_states;
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
     return &jl_tls_states;
 }
 #endif
 
 // thread ID
-DLLEXPORT int jl_n_threads;     // # threads we're actually using
-DLLEXPORT int jl_max_threads;   // # threads possible
+JL_DLLEXPORT int jl_n_threads;     // # threads we're actually using
+JL_DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;
 jl_gcframe_t ***jl_all_pgcstacks;
 
 // return calling thread's ID
-DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
+JL_DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 // must be called by each thread at startup
@@ -388,14 +388,14 @@ void jl_shutdown_threading(void)
 }
 
 // return thread's thread group
-DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
+JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // utility
-DLLEXPORT void jl_cpu_pause(void) { cpu_pause(); }
+JL_DLLEXPORT void jl_cpu_pause(void) { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
-DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 {
 #if PROFILE_JL_THREADING
     uint64_t tstart = rdtsc();
@@ -485,7 +485,7 @@ void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
 
 #define TICKS_TO_SECS(t)        (((double)(t)) / (cpu_ghz * 1e9))
 
-DLLEXPORT void jl_threading_profile(void)
+JL_DLLEXPORT void jl_threading_profile(void)
 {
     if (!fork_ticks) return;
 
@@ -506,7 +506,7 @@ DLLEXPORT void jl_threading_profile(void)
 
 #else //!PROFILE_JL_THREADING
 
-DLLEXPORT void jl_threading_profile(void)
+JL_DLLEXPORT void jl_threading_profile(void)
 {
 }
 
@@ -514,7 +514,7 @@ DLLEXPORT void jl_threading_profile(void)
 
 #else // !JULIA_ENABLE_THREADING
 
-DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 {
     if ((jl_value_t*)args == jl_emptytuple)
         args = jl_emptysvec;
