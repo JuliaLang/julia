@@ -147,7 +147,7 @@ to one and zero:
     julia> convert(Bool, 1im)
     ERROR: InexactError()
      [inlined code] from essentials.jl:25
-     in convert at complex.jl:38
+     in convert at complex.jl:31
 
     julia> convert(Bool, 0im)
     false
@@ -165,7 +165,7 @@ This is the actual implementation in julia::
     julia> convert(Bool, 1im)
     ERROR: InexactError()
      [inlined code] from essentials.jl:25
-     in convert at complex.jl:38
+     in convert at complex.jl:31
 
 
 Case Study: Rational Conversions

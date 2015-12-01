@@ -363,7 +363,7 @@ type:
     in getindex at ./essentials.jl:211
     [inlined code] from essentials.jl:218
     in show_delim_array at show.jl:229
-    [inlined code] from int.jl:360
+    [inlined code] from int.jl:358
     in show at show.jl:257
     in anonymous at show.jl:1294
     in with_output_limit at ./show.jl:1271
