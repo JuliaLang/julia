@@ -35,33 +35,19 @@ a shorthand (e.g., `1:3`), or (2) as full constructor (e.g., `LinSpace{Int64}(..
 `rangelist` [`true`] selects whether the contents should be shown.
 If the range is empty, then at minimum the shorthand definition is shown.
 """
-function writemime(io::IO, ::MIME"text/plain", r::Range;
-    rangeverbose = true, rangeinfo = 1, rangelist = true)
-    if rangeverbose                      # at minimum show type, e.g.
-        print(io, summary(r))            #   5-element LinSpace{Float64}
-        if rangeinfo == 1 ||             # default is to print shorthand, e.g.
-          (rangeinfo == 0 && isempty(r))
-            print(io, " ")               #   1:3
-            if typeof(r) <: LinSpace
-                show(io, r)
-            else # FloatRange or OrdinalRange should be wrapped in parens
-                print(io, "(")
-                show(io,r)
-                print(io, ")")
-            end
-        elseif rangeinfo == 2           # or print constructor info,
-            print(io, "(")              #   (1,3)
-            for i in 1:nfields(r)-1
-                print(io, getfield(r, i), ",")
-            end
-            print(io, getfield(r, nfields(r)), ")")
-        end
-        if rangelist && !isempty(r)     # list contents if there are any
-            println(io, ":")
-            with_output_limit(()->print_range(io,r))
-        end
-    else                                # terse behavior (like v0.4 and earlier)
-        show(io,r)                      # e.g., linspace(1.0, 3.0, 5)
+function writemime(io::IO, ::MIME"text/plain", r::Range)
+    print(io, summary(r))            # e.g., 5-element LinSpace{Float64}
+    print(io, " ")               #   1:3
+    if typeof(r) <: LinSpace
+        show(io, r)
+    else # FloatRange or OrdinalRange should be wrapped in parens
+        print(io, "(")
+        show(io,r)
+        print(io, ")")
+    end
+    if !isempty(r)     # list contents if there are any
+        println(io, ":")
+        with_output_limit(()->print_range(io,r))
     end
 end
 # Note that for above, one can select different options by overwriting, e.g.
