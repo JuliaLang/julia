@@ -600,3 +600,23 @@ Base.writemime(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1
 # Issue 14076
 @test cholfact(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == ones(4)
 
+# Issue 14134
+A = SparseArrays.CHOLMOD.Sparse(sprandn(10,5,0.1) + I |> t -> t't)
+b = IOBuffer()
+serialize(b, A)
+seekstart(b)
+Anew = deserialize(b)
+@test_throws ArgumentError show(Anew)
+@test_throws ArgumentError size(Anew)
+@test_throws ArgumentError Anew[1]
+@test_throws ArgumentError Anew[2,1]
+F = cholfact(A)
+serialize(b, F)
+seekstart(b)
+Fnew = deserialize(b)
+@test_throws ArgumentError Fnew\ones(5)
+@test_throws ArgumentError show(Fnew)
+@test_throws ArgumentError size(Fnew)
+@test_throws ArgumentError diag(Fnew)
+@test_throws ArgumentError logdet(Fnew)
+
