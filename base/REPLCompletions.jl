@@ -133,12 +133,12 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         return UTF8String[], 0:-1, false
     end
 
-    matches = UTF8String[]
+    matches = Dict{UTF8String,Bool}()
     for file in files
         if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
-            push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
+            matches[id ? file * (@windows? "\\\\" : "/") : file] = true
         end
     end
 
@@ -178,18 +178,18 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
                 if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                    push!(matches, file)
+                    matches[file] = true
                 end
             end
         end
     end
 
-    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
+    matchList = UTF8String[replace(s, r"\s", "\\ ") for s in keys(matches)]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
-    return matches, startpos:pos, !isempty(matches)
+    return matchList, startpos:pos, !isempty(matchList)
 end
 
 # Determines whether method_complete should be tried. It should only be done if
