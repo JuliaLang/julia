@@ -434,7 +434,6 @@ c, r, res = test_scomplete(s)
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current
     # working directory again.
-
     let
         file = joinpath(path, "repl completions")
         s = "/tmp "
@@ -494,6 +493,31 @@ c, r, res = test_scomplete(s)
         ENV["PATH"] = oldpath
     end
 
+    # Make sure completion results are unique in case things are in the env path twice.
+    let
+        file0 = joinpath(tempdir(), "repl-completion")
+        dir = joinpath(tempdir(), "repl-completion-subdir")
+        file1 = joinpath(dir, "repl-completion")
+
+        try
+            # Create /tmp/repl-completion and /tmp/repl-completion-subdir/repl-completion
+            mkdir(dir)
+            touch(file0)
+            touch(file1)
+
+            withenv("PATH" => string(tempdir(), ":", dir)) do
+                s = string("repl-completio")
+                c,r = test_scomplete(s)
+                @test [utf8("repl-completion")] == c
+                @test s[r] == "repl-completio"
+            end
+
+        finally
+            rm(file0)
+            rm(file1)
+            rm(dir)
+        end
+    end
 end
 
 let #test that it can auto complete with spaces in file/path
