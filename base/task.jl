@@ -66,6 +66,7 @@ end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 """
     istaskstarted(task) -> Bool
@@ -154,11 +155,6 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled
-        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
-            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
-        end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
