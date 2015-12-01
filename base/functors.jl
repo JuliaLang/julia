@@ -120,10 +120,6 @@ EqX{T}(x::T) = EqX{T}(x)
 
 call(f::EqX, y) = f.x == y
 
-# More promote_op rules
-
-promote_op{T<:Integer}(::PowFun, ::Type{Bool}, ::Type{T}) = Bool
-
 #### Bitwise operators ####
 
 # BitFunctors are functions that behave in the same bit-wise manner when applied

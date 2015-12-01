@@ -340,8 +340,6 @@ promote_rule(::Type{UInt128}, ::Type{Int32} ) = UInt128
 promote_rule(::Type{UInt128}, ::Type{Int64} ) = UInt128
 promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
-promote_op{R<:Integer,S<:Integer}(op, ::Type{R}, ::Type{S}) = typeof(op(one(R), one(S)))
-
 ## traits ##
 
 typemin(::Type{Int8  }) = Int8(-128)

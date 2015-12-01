@@ -1243,7 +1243,7 @@ b = rand(6,7)
 # return type declarations (promote_op)
 module RetTypeDecl
     using Base.Test
-    import Base: +, *, .*, zero
+    import Base: +, *, .*
 
     immutable MeterUnits{T,P} <: Number
         val::T
@@ -1253,11 +1253,9 @@ module RetTypeDecl
     m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
     m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
 
-    (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
-    (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
+    (+){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,1}(x.val+y.val)
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    zero{T,pow}(x::MeterUnits{T,pow}) = MeterUnits{T,pow}(zero(T))
 
     Base.promote_op{R,S}(::Base.AddFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
     Base.promote_op{R,S}(::Base.MulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
@@ -1267,8 +1265,6 @@ module RetTypeDecl
     @test @inferred([m,m]+m) == [m+m,m+m]
     @test @inferred(m.*[m,m]) == [m2,m2]
     @test @inferred([m,m].*m) == [m2,m2]
-    @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
-    @test @inferred([m m].*[m,m]) == [m2 m2; m2 m2]
 end
 
 # range, range ops

@@ -203,10 +203,7 @@ checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
 # as needed. For example, if you need to provide a custom result type
 # for the multiplication of two types,
 #   promote_op{R<:MyType,S<:MyType}(::MulFun, ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
-promote_op(::Any)    = Bottom
-promote_op(::Any, T) = T
 promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = promote_type(R, S)
-promote_op(op, T, S, U, V...) = promote_op(op, T, promote_op(op, S, U, V...))
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

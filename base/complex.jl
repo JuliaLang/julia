@@ -26,13 +26,6 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
 
-promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{Complex{S}}) =
-    Complex{promote_op(op,T,S)}
-promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{S}) =
-    Complex{promote_op(op,T,S)}
-promote_op{T<:Real,S<:Real}(op, ::Type{T}, ::Type{Complex{S}}) =
-    Complex{promote_op(op,T,S)}
-
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
 real(z::Complex) = z.re
