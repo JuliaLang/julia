@@ -6053,6 +6053,10 @@ static void init_julia_llvm_env(Module *m)
 
 #ifdef __has_feature
 #   if __has_feature(address_sanitizer)
+#   if defined(LLVM37) && !defined(LLVM38)
+    // LLVM 3.7 BUG: ASAN pass doesn't properly initialize its dependencies
+    initializeTargetLibraryInfoWrapperPassPass(*PassRegistry::getPassRegistry());
+#   endif
     FPM->add(createAddressSanitizerFunctionPass());
 #   endif
 #   if __has_feature(memory_sanitizer)
