@@ -17,7 +17,7 @@ jl_module_t *jl_base_module=NULL;
 jl_module_t *jl_top_module=NULL;
 jl_module_t *jl_current_module=NULL;
 
-jl_module_t *jl_new_module(jl_sym_t *name)
+DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)jl_gc_allocobj(sizeof(jl_module_t));
     jl_set_typeof(m, jl_module_type);
@@ -273,7 +273,7 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 }
 
 // does module m explicitly import s?
-int jl_is_imported(jl_module_t *m, jl_sym_t *s)
+DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
     jl_binding_t *bto = *bp;
@@ -345,17 +345,17 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     }
 }
 
-void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
     module_import_(to, from, s, 1);
 }
 
-void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
     module_import_(to, from, s, 0);
 }
 
-void jl_module_importall(jl_module_t *to, jl_module_t *from)
+DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from)
 {
     void **table = from->bindings.table;
     for(size_t i=1; i < from->bindings.size; i+=2) {
@@ -367,7 +367,7 @@ void jl_module_importall(jl_module_t *to, jl_module_t *from)
     }
 }
 
-void jl_module_using(jl_module_t *to, jl_module_t *from)
+DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
@@ -402,7 +402,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
     arraylist_push(&to->usings, from);
 }
 
-void jl_module_export(jl_module_t *from, jl_sym_t *s)
+DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
     if (*bp == HT_NOTFOUND) {
@@ -416,13 +416,13 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
     (*bp)->exportp = 1;
 }
 
-int jl_boundp(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     return b && (b->value != NULL);
 }
 
-int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     if (*bp == HT_NOTFOUND) return 0;
@@ -436,14 +436,14 @@ DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
     return (*bp)->exportp;
 }
 
-int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     if (*bp == HT_NOTFOUND) return 0;
     return (*bp)->owner != NULL;
 }
 
-jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
+DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL) return NULL;
@@ -451,7 +451,7 @@ jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return b->value;
 }
 
-void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
@@ -460,7 +460,7 @@ void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     }
 }
 
-void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
+DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
@@ -615,7 +615,7 @@ jl_function_t *jl_module_get_initializer(jl_module_t *m)
     return (jl_function_t*)f;
 }
 
-void jl_module_run_initializer(jl_module_t *m)
+DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
 {
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)

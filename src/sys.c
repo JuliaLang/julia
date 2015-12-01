@@ -231,7 +231,7 @@ DLLEXPORT double jl_stat_ctime(char *statbuf)
 
 // --- buffer manipulation ---
 
-jl_array_t *jl_takebuf_array(ios_t *s)
+DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
 {
     size_t n;
     jl_array_t *a;
@@ -248,7 +248,7 @@ jl_array_t *jl_takebuf_array(ios_t *s)
     return a;
 }
 
-jl_value_t *jl_takebuf_string(ios_t *s)
+DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s)
 {
     jl_array_t *a = jl_takebuf_array(s);
     JL_GC_PUSH1(&a);
@@ -259,14 +259,14 @@ jl_value_t *jl_takebuf_string(ios_t *s)
 
 // the returned buffer must be manually freed. To determine the size,
 // call position(s) before using this function.
-void *jl_takebuf_raw(ios_t *s)
+DLLEXPORT void *jl_takebuf_raw(ios_t *s)
 {
     size_t sz;
     void *buf = ios_takebuf(s, &sz);
     return buf;
 }
 
-jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
+DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
     jl_array_t *a;
     // manually inlined common case
@@ -338,8 +338,8 @@ DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 
 // -- syscall utilities --
 
-int jl_errno(void) { return errno; }
-void jl_set_errno(int e) { errno = e; }
+DLLEXPORT int jl_errno(void) { return errno; }
+DLLEXPORT void jl_set_errno(int e) { errno = e; }
 
 // -- get the number of CPU cores --
 
@@ -402,7 +402,7 @@ extern char **environ;
 #endif
 #endif
 
-jl_value_t *jl_environ(int i)
+DLLEXPORT jl_value_t *jl_environ(int i)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
@@ -441,9 +441,9 @@ JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
 JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
 JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 
-JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
+DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
+DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
 // CPUID
 
@@ -575,7 +575,7 @@ DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 
 #ifdef _OS_WINDOWS_
 static long cachedPagesize = 0;
-long jl_getpagesize(void)
+DLLEXPORT long jl_getpagesize(void)
 {
     if (!cachedPagesize) {
         SYSTEM_INFO systemInfo;
@@ -585,7 +585,7 @@ long jl_getpagesize(void)
     return cachedPagesize;
 }
 #else
-long jl_getpagesize(void)
+DLLEXPORT long jl_getpagesize(void)
 {
     return sysconf(_SC_PAGESIZE);
 }
@@ -593,7 +593,7 @@ long jl_getpagesize(void)
 
 #ifdef _OS_WINDOWS_
 static long cachedAllocationGranularity = 0;
-long jl_getallocationgranularity(void)
+DLLEXPORT long jl_getallocationgranularity(void)
 {
     if (!cachedAllocationGranularity) {
         SYSTEM_INFO systemInfo;
@@ -603,7 +603,7 @@ long jl_getallocationgranularity(void)
     return cachedAllocationGranularity;
 }
 #else
-long jl_getallocationgranularity(void)
+DLLEXPORT long jl_getallocationgranularity(void)
 {
     return jl_getpagesize();
 }

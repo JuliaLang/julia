@@ -23,9 +23,7 @@ DLLEXPORT char * __cdecl dirname(char *);
 #include <libgen.h>
 #endif
 
-DLLEXPORT void *jl_eval_string(const char *str);
-
-int jl_is_initialized(void) { return jl_main_module!=NULL; }
+DLLEXPORT int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
 // First argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
@@ -105,8 +103,6 @@ DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
 {
     return jl_array_dim(a, d);
 }
-
-DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 
 DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
 {

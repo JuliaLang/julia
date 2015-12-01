@@ -35,7 +35,7 @@ jl_module_t *jl_internal_main_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
-void jl_add_standard_imports(jl_module_t *m)
+DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     assert(jl_base_module != NULL);
     // using Base
@@ -45,7 +45,7 @@ void jl_add_standard_imports(jl_module_t *m)
     m->std_imports = 1;
 }
 
-jl_module_t *jl_new_main_module(void)
+DLLEXPORT jl_module_t *jl_new_main_module(void)
 {
     if (jl_generating_output() && jl_options.incremental)
         jl_error("cannot call workspace() in incremental compile mode");
@@ -549,7 +549,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     return result;
 }
 
-jl_value_t *jl_toplevel_eval(jl_value_t *v)
+DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
     return jl_toplevel_eval_flex(v, 1);
 }
@@ -602,7 +602,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     return result;
 }
 
-jl_value_t *jl_load(const char *fname, size_t len)
+DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);

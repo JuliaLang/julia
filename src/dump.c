@@ -1168,8 +1168,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     return (jl_value_t*)dt;
 }
 
-jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
-
 static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t **loc);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
 {
