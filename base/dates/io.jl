@@ -94,7 +94,7 @@ function DateFormat(f::AbstractString,locale::AbstractString="english")
         typ = SLOT_RULE[letter]
 
         width = length(m.match)
-        tran = f[last_offset:m.offset-1]
+        tran = f[last_offset:prevind(f, m.offset)]
 
         if isempty(params)
             prefix = tran

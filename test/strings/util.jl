@@ -231,9 +231,13 @@ let s = "\r\r\n"
 end
 
 @test chop("foob") == "foo"
-@test chop("fooƀ") == "foo"
-@test chop("fooƀä") == "fooƀ"
-@test chop("fooƀa") == "fooƀ"
+for StrT in (UTF8String, UTF16String, UTF32String)
+    for str in ("foo", "fooƀ")
+        for lastchr in ("ƀ", "🐨", "b")
+            @test chop(StrT(str*lastchr)) == StrT(str)
+        end
+    end
+end
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"

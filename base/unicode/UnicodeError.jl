@@ -18,7 +18,7 @@ const UTF_ERR_ODD_BYTES_32      = "UTF32String must have multiple of 4 bytes <<1
 const UTF_ERR_INVALID_CHAR      = "invalid Unicode character (0x<<2>> > 0x10ffff)"
 const UTF_ERR_INVALID_8         = "invalid UTF-8 data"
 const UTF_ERR_INVALID_16        = "invalid UTF-16 data"
-const UTF_ERR_INVALID_INDEX     = "invalid character index"
+const UTF_ERR_INVALID_INDEX     = "invalid character index <<1>> (0x<<2>>) the index must be at the start of a character (code point)"
 const UTF_ERR_MAP_CHAR          = "map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead"
 
 type UnicodeError <: Exception

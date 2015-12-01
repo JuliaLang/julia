@@ -36,7 +36,8 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 
 # TODO: fast endswith
 
-chop(s::AbstractString) = s[1:end-1]
+chop(s::DirectIndexString) = s[1:end-1]
+chop(s::AbstractString) = s[1:prevind(s,endof(s))]
 
 function chomp(s::AbstractString)
     i = endof(s)
@@ -45,9 +46,9 @@ function chomp(s::AbstractString)
     if (j < 1 || s[j] != '\r') return s[1:i-1] end
     return s[1:j-1]
 end
-chomp(s::ByteString) =
-    (endof(s) < 1 || s.data[end]   != 0x0a) ? s :
-    (endof(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
+chomp{T<:ByteString}(s::T) =
+   (endof(s) < 1 || s.data[end]   != 0x0a) ? s :
+   (endof(s) < 2 || s.data[end-1] != 0x0d) ? T(s.data[1:end-1]) : T(s.data[1:end-2])
 
 # NOTE: use with caution -- breaks the immutable string convention!
 function chomp!(s::ByteString)

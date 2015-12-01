@@ -101,10 +101,8 @@ sizeof(s::UTF8String) = sizeof(s.data)
 
 lastidx(s::UTF8String) = length(s.data)
 
-isfirstbyte(c::UInt8) = (c & 0xc0) != 0x80 # == !is_valid_continuation(c)
-
 isvalid(s::UTF8String, i::Integer) =
-    (1 <= i <= endof(s.data)) && isfirstbyte(s.data[i])
+    (1 <= i <= endof(s.data)) && !is_valid_continuation(s.data[i])
 
 const empty_utf8 = UTF8String(UInt8[])
 function getindex(s::UTF8String, r::UnitRange{Int})
@@ -114,20 +112,16 @@ function getindex(s::UTF8String, r::UnitRange{Int})
     if i < 1 || i > length(d)
         throw(BoundsError(s, i))
     end
+    if j > length(d)
+        throw(BoundsError(s, j))
+    end
     if is_valid_continuation(d[i])
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
     end
-    if j < 1 || j > length(d)
-        throw(BoundsError(s, i))
-    end
-    #ensure j is the first or last byte of a character
-    if isfirstbyte(d[j])
-        UTF8String(d[i:j + utf8_trailing[d[j]+1]])
-    elseif j == length(d) || isfirstbyte(s.data[j+1])
-        UTF8String(d[i:j])
-    else
+    if is_valid_continuation(d[j])
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, d[j]))
     end
+    UTF8String(d[i:j + utf8_trailing[d[j]+1]]) # +1 since utf_trailing is 1-based
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
