@@ -227,8 +227,6 @@ cstring = Cstring(ptr)
 
 # convenient NULL string creation from Ptr{Void}
 nullstr = Cstring(C_NULL)
-# but make sure other un/mistyped pointers are rejected
-@test_throws ArgumentError Cstring(Ptr{Void}(ptr))
 
 # Comparisons against NULL strings
 @test ptr != nullstr
