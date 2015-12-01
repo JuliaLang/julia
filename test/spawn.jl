@@ -11,6 +11,8 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+@windows_only oldpath = ENV["PATH"]
+@windows_only ENV["PATH"] = joinpath(JULIA_HOME,"..","Git","usr","bin")*";"*oldpath
 
 valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
 
@@ -329,3 +331,5 @@ let cmd = AbstractString[]
     cmd = ["foo bar", "baz"]
     @test string(`$cmd`) == "`'foo bar' baz`"
 end
+
+@windows_only ENV["PATH"] = oldpath
