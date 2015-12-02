@@ -457,7 +457,7 @@ points: in this case, when :func:`remotecall_fetch` is called.
 Channels
 --------
 Channels provide for a fast means of inter-task communication. A
-``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
+``Channel{T}(n::Int)`` is a shared queue of maximum length ``n``
 holding objects of type ``T``. Multiple readers can read off the channel
 via ``fetch`` and ``take!``. Multiple writers can add to the channel via
 ``put!``. ``isready`` tests for the presence of any object in
