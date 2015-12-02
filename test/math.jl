@@ -451,9 +451,13 @@ end
 @test_approx_eq beta(3,5) 1/105
 @test_approx_eq lbeta(5,4) log(beta(5,4))
 @test_approx_eq beta(5,4) beta(4,5)
-@test_approx_eq beta(-1/2, 3) -16/3
+@test beta(-1/2, 3) ≈ beta(-1/2 + 0im, 3 + 0im) ≈ -16/3
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 @test beta(Float32(5),Float32(4)) == beta(Float32(4),Float32(5))
+@test beta(3,5) ≈ beta(3+0im,5+0im)
+@test(beta(3.2+0.1im,5.3+0.3im) ≈ exp(lbeta(3.2+0.1im,5.3+0.3im)) ≈
+      0.00634645247782269506319336871208405439180447035257028310080 -
+      0.00169495384841964531409376316336552555952269360134349446910im)
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
