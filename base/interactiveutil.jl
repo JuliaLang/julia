@@ -35,7 +35,7 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
-    elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+    elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
