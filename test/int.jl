@@ -125,7 +125,121 @@ end
 
 # checked operations
 
-import Base: checked_add, checked_sub, checked_mul, checked_abs
+import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul
+for T in (Int8, Int16, Int32, Int64, Int128)
+    # regular cases
+    for s in (-1, +1)
+        @test checked_abs(T(3s)) === T(abs(3s))
+        @test checked_neg(T(3s)) === T(-(3s))
+        @test checked_abs(T(s*typemax(T))) === typemax(T)
+        @test checked_neg(T(s*typemax(T))) === T(-s*typemax(T))
+    end
+    # corner cases
+    @test_throws OverflowError checked_abs(typemin(T))
+    @test_throws OverflowError checked_neg(typemin(T))
+    # regular cases
+    for s1 in (-1, +1), s2 in (-1,+1)
+        @test checked_add(T(4s1), T(3s2)) === T(4s1 + 3s2)
+        @test checked_sub(T(4s1), T(3s2)) === T(4s1 - 3s2)
+        @test checked_mul(T(4s1), T(3s2)) === T(4s1 * 3s2)
+    end
+    # corner cases
+    max2 = T(typemax(T)÷2)
+    max21 = T(max2+1)
+    min2 = T(typemin(T)÷2)
+    min21 = T(min2-1)
+    sqrt2 = T(1) << T(sizeof(T)*4)
+
+    @test checked_add(typemax(T), T(-1)) === T(typemax(T) - 1)
+    @test_throws OverflowError checked_add(typemin(T), T(-1))
+    @test checked_add(typemax(T), T(0)) === typemax(T)
+    @test checked_add(typemin(T), T(0)) === typemin(T)
+    @test_throws OverflowError checked_add(typemax(T), T(1))
+    @test checked_add(typemin(T), T(1)) === T(typemin(T) + 1)
+    @test checked_add(T(-1), typemax(T)) === T(typemax(T) - 1)
+    @test_throws OverflowError checked_add(T(-1), typemin(T))
+    @test checked_add(T(0), typemax(T)) === typemax(T)
+    @test checked_add(T(0), typemin(T)) === typemin(T)
+    @test_throws OverflowError checked_add(T(1), typemax(T))
+    @test checked_add(T(1), typemin(T)) === T(typemin(T) + 1)
+    @test checked_add(typemax(T), typemin(T)) === T(-1)
+    @test checked_add(typemin(T), typemax(T)) === T(-1)
+    @test_throws OverflowError checked_add(max21, max21)
+    @test_throws OverflowError checked_add(min2, min21)
+
+    @test_throws OverflowError checked_sub(typemax(T), T(-1))
+    @test checked_sub(typemax(T), T(0)) === typemax(T)
+    @test checked_sub(typemax(T), T(1)) === T(typemax(T) - 1)
+    @test checked_sub(typemin(T), T(-1)) === T(typemin(T) + 1)
+    @test checked_sub(typemin(T), T(0)) === typemin(T)
+    @test_throws OverflowError checked_sub(typemin(T), T(1))
+    @test checked_sub(T(0), typemax(T)) === T(typemin(T) + 1)
+    @test checked_sub(T(1), typemax(T)) === T(typemin(T) + 2)
+    @test checked_sub(T(-1), typemin(T)) === typemax(T)
+    @test_throws OverflowError checked_sub(T(0), typemin(T))
+    @test checked_sub(typemax(T), typemax(T)) === T(0)
+    @test checked_sub(typemin(T), typemin(T)) === T(0)
+    @test checked_sub(max2, T(-min2)) === T(-1)
+    @test_throws OverflowError checked_sub(min2, T(-min21))
+
+    @test checked_mul(typemax(T), T(0)) === T(0)
+    @test checked_mul(typemin(T), T(0)) === T(0)
+    @test checked_mul(typemax(T), T(1)) === typemax(T)
+    @test checked_mul(typemin(T), T(1)) === typemin(T)
+    @test_throws OverflowError checked_mul(sqrt2, sqrt2)
+    @test_throws OverflowError checked_mul(sqrt2, -sqrt2)
+    @test_throws OverflowError checked_mul(-sqrt2, sqrt2)
+    @test_throws OverflowError checked_mul(-sqrt2, -sqrt2)
+end
+
+for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+    # regular cases
+    @test checked_abs(T(3)) === T(3)
+    @test_throws OverflowError checked_neg(T(3))
+    # regular cases
+    @test checked_add(T(4), T(3)) === T(7)
+    @test checked_sub(T(4), T(3)) === T(1)
+    @test checked_mul(T(4), T(3)) === T(12)
+    # corner cases
+    max2 = T(typemax(T)÷2)
+    max21 = T(max2+1)
+    sqrt2 = T(1) << T(sizeof(T)*4)
+
+    @test checked_add(typemax(T), T(0)) === typemax(T)
+    @test checked_add(T(0), T(0)) === T(0)
+    @test_throws OverflowError checked_add(typemax(T), T(1))
+    @test checked_add(T(0), T(1)) === T(T(0) + 1)
+    @test checked_add(T(0), typemax(T)) === typemax(T)
+    @test checked_add(T(0), T(0)) === T(0)
+    @test_throws OverflowError checked_add(T(1), typemax(T))
+    @test checked_add(T(1), T(0)) === T(T(0) + 1)
+    @test checked_add(typemax(T), T(0)) === typemax(T)
+    @test checked_add(T(0), typemax(T)) === typemax(T)
+    @test_throws OverflowError checked_add(max21, max21)
+
+    @test checked_sub(typemax(T), T(0)) === typemax(T)
+    @test checked_sub(typemax(T), T(1)) === T(typemax(T) - 1)
+    @test checked_sub(T(0), T(0)) === T(0)
+    @test_throws OverflowError checked_sub(T(0), T(1))
+    @test_throws OverflowError checked_sub(T(0), typemax(T))
+    @test_throws OverflowError checked_sub(T(1), typemax(T))
+    @test checked_sub(T(0), T(0)) === T(0)
+    @test checked_sub(typemax(T), typemax(T)) === T(0)
+
+    @test checked_mul(typemax(T), T(0)) === T(0)
+    @test checked_mul(T(0), T(0)) === T(0)
+    @test checked_mul(typemax(T), T(1)) === typemax(T)
+    @test checked_mul(T(0), T(1)) === T(0)
+    @test_throws OverflowError checked_mul(sqrt2, sqrt2)
+end
+
+@test checked_abs(BigInt(-1)) == BigInt(1)
+@test checked_abs(BigInt(1)) == BigInt(1)
+@test checked_neg(BigInt(-1)) == BigInt(1)
+@test checked_neg(BigInt(1)) == BigInt(-1)
+
+# Additional tests
+
 @test checked_sub(UInt(4), UInt(3)) === UInt(1)
 @test_throws OverflowError checked_sub(UInt(5), UInt(6))
 @test checked_mul(UInt(4), UInt(3)) === UInt(12)
@@ -138,29 +252,14 @@ else
     @test_throws OverflowError checked_mul(UInt(2)^62, UInt(2)^2)
 end
 
-for T in SItypes
-    @test checked_abs(-one(T)) == one(T)
-    @test_throws OverflowError checked_abs(typemin(T))
-end
-
-for T in UItypes
-    @test checked_abs(one(T)) == one(T)
-end
-
-@test checked_abs(BigInt(-1)) == BigInt(1)
-
 # Checked operations on UInt128 are currently broken
 # FIXME: #4905
 
 @test checked_add(UInt128(1), UInt128(2)) === UInt128(3)
-#@test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)
-@test checked_add(UInt128(2)^127, UInt128(2)^127) === UInt128(0)  # broken
+@test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)
 
 @test checked_sub(UInt128(2), UInt128(1)) === UInt128(1)
-#@test_throws OverflowError checked_sub(UInt128(3), UInt128(4))
-@test checked_sub(UInt128(3), UInt128(4)) === UInt128(0) - 1  # broken
+@test_throws OverflowError checked_sub(UInt128(3), UInt128(4))
 
 @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
-#@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
-@test checked_mul(UInt128(2)^127, UInt128(2)) === UInt128(0)
-# broken
+@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))

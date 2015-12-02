@@ -549,6 +549,7 @@ prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << 
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
 Base.checked_abs(x::BigInt) = abs(x)
+Base.checked_neg(x::BigInt) = -x
 Base.checked_add(a::BigInt, b::BigInt) = a + b
 Base.checked_sub(a::BigInt, b::BigInt) = a - b
 Base.checked_mul(a::BigInt, b::BigInt) = a * b

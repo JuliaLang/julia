@@ -43,41 +43,55 @@ copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
 copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
 
-abs(x::Unsigned) = x
-
 """
     abs(x)
 
-The absolute value of `x`.  When `abs` is applied to signed integers,
-overflow may occur, resulting in the return of a negative value.  This
-overflow occurs only when `abs` is applied to the minimum
-representable value of a signed integer.  That is when `x ==
-typemin(typeof(x))`, `abs(x) == x`, not `-x` as might be expected.
+The absolute value of `x`.
+
+When `abs` is applied to signed integers, overflow may occur,
+resulting in the return of a negative value. This overflow occurs only
+when `abs` is applied to the minimum representable value of a signed
+integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
+not `-x` as might be expected.
 """
+function abs end
+
+abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
 """
     Base.checked_abs(x)
 
-The absolute value of `x`, with overflow error trapping where applicable.
-For types for which no overflow can happen during `abs`, this is equivalent
-to `abs(x)`.
+Calculates `abs(x)`, checking for overflow errors where applicable.
+For example, standard two's complement signed integers (e.g. `Int`)
+cannot represent `abs(typemin(Int))`, thus leading to an overflow.
+
+The overflow protection may impose a perceptible performance penalty.
 """
 function checked_abs end
 
-"""
-    Base.checked_abs(x::Signed)
-
-For signed integers, throws an `OverflowError` when `x == typemin(typeof(x))`.
-Otherwise, behaves as `abs`, though the overflow protection may impose a perceptible
-performance penalty.
-"""
-function checked_abs{T<:Signed}(x::T)
+checked_abs(x::Unsigned) = abs(x)
+function checked_abs{T<:Union{Int8,Int16,Int32,Int64,Int128}}(x::T)
     x == typemin(T) && throw(OverflowError())
     abs(x)
 end
 
-checked_abs(x::Unsigned) = abs(x)
+"""
+    Base.checked_neg(x)
+
+Calculates `-x`, checking for overflow errors where applicable. For
+example, standard two's complement signed integers (e.g. `Int`) cannot
+represent `-typemin(Int)`, thus leading to an overflow.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_neg end
+
+checked_neg(x::Unsigned) = throw(OverflowError())
+function checked_neg{T<:Union{Int8,Int16,Int32,Int64,Int128}}(x::T)
+    x == typemin(T) && throw(OverflowError())
+    -x
+end
 
 ~(n::Integer) = -n-1
 
@@ -502,6 +516,33 @@ end
 
 ## checked +, - and *
 
+"""
+    Base.checked_add(x, y)
+
+Calculates `x+y`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_add end
+
+"""
+    Base.checked_sub(x, y)
+
+Calculates `x-y`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_sub end
+
+"""
+    Base.checked_mul(x, y)
+
+Calculates `x*y`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_mul end
+
 # requires int arithmetic defined, for the loops to work
 
 for T in (Int8,Int16,Int32,Int64)#,Int128) ## FIXME: #4905
@@ -552,10 +593,62 @@ end
 
 # checked ops are broken for 128-bit types (LLVM bug) ## FIXME: #4905
 
-checked_add(x::Int128, y::Int128) = x + y
-checked_sub(x::Int128, y::Int128) = x - y
-checked_mul(x::Int128, y::Int128) = x * y
+function checked_add(x::Int128, y::Int128)
+    # # x + y > typemax(Int128)
+    # y >= 0 && x > typemax(Int128) - y && throw(OverflowError())
+    # # x + y < typemin(Int128)
+    # y < 0 && x < typemin(Int128) - y && throw(OverflowError())
+    # x + y
+    r = x + y
+    # x and y have the same sign, and the result has a different sign
+    (x$y >= 0) & (x$r < 0) && throw(OverflowError())
+    r
+end
 
-checked_add(x::UInt128, y::UInt128) = x + y
-checked_sub(x::UInt128, y::UInt128) = x - y
-checked_mul(x::UInt128, y::UInt128) = x * y
+function checked_sub(x::Int128, y::Int128)
+    # # x - y > typemax(Int128)
+    # y < 0 && x > typemax(Int128) + y && throw(OverflowError())
+    # # x - y < typemin(Int128)
+    # y >= 0 && x < typemin(Int128) + y && throw(OverflowError())
+    # x - y
+    r = x - y
+    # x and y have different signs, and the result has a different sign than x
+    (x$y < 0) & (x$r < 0) && throw(OverflowError())
+    r
+end
+
+function checked_mul(x::Int128, y::Int128)
+    if y > 0
+        # x * y > typemax(Int128)
+        # x * y < typemin(Int128)
+        x > fld(typemax(Int128), y) && throw(OverflowError())
+        x < cld(typemin(Int128), y) && throw(OverflowError())
+    elseif y < 0
+        # x * y > typemax(Int128)
+        # x * y < typemin(Int128)
+        x < cld(typemax(Int128), y) && throw(OverflowError())
+        # y == -1 can overflow fld
+        y != -1 && x > fld(typemin(Int128), y) && throw(OverflowError())
+    end
+    x * y
+end
+
+function checked_add(x::UInt128, y::UInt128)
+    # x + y > typemax(UInt128)
+    # x > typemax(UInt128) - y && throw(OverflowError())
+    # Note: ~x = -x-1
+    x > ~y && throw(OverflowError())
+    x + y
+end
+
+function checked_sub(x::UInt128, y::UInt128)
+    # x - y < 0
+    x < y && throw(OverflowError())
+    x - y
+end
+
+function checked_mul(x::UInt128, y::UInt128)
+    # x * y > typemax(UInt128)
+    y > 0 && x > fld(typemax(UInt128), y) && throw(OverflowError())
+    x * y
+end
