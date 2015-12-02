@@ -81,6 +81,11 @@ static jl_tls_states_t *jl_get_ptls_states_init(void);
 static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
 static jl_tls_states_t *jl_get_ptls_states_init(void)
 {
+    // This 2-step initialization is used to detect calling
+    // `jl_set_ptls_states_getter` after the address of the TLS variables
+    // are used. Since the address of TLS variables should be constant,
+    // changing the getter address can result in wierd crashes.
+
     // This is clearly not thread safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
@@ -97,6 +102,10 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     if (f && f != jl_get_ptls_states_init &&
         jl_tls_states_cb == jl_get_ptls_states_init) {
         jl_tls_states_cb = f;
+    }
+    else {
+        jl_safe_printf("ERROR: Attempt to change TLS address.\n");
+        exit(1);
     }
 }
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
