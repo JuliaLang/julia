@@ -489,8 +489,8 @@ General Parallel Computing Support
 
    A low-level API which given a ``IO`` connection, returns the pid of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
 
-Shared Arrays (Experimental, UNIX-only feature)
------------------------------------------------
+Shared Arrays
+-------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
