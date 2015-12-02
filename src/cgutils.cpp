@@ -1059,9 +1059,11 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlthrow_func), { exc });
+    builder.CreateCall(prepare_call(jlthrow_line_func), { exc,
+                        ConstantInt::get(T_int32, ctx->lineno) });
 #else
-    builder.CreateCall(prepare_call(jlthrow_func), exc);
+    builder.CreateCall2(prepare_call(jlthrow_line_func), exc,
+                        ConstantInt::get(T_int32, ctx->lineno));
 #endif
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -1105,11 +1107,13 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
                         { fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx)});
+                        literal_pointer_val(type), boxed(x,ctx),
+                        ConstantInt::get(T_int32, ctx->lineno) });
 #else
-    builder.CreateCall4(prepare_call(jltypeerror_func),
+    builder.CreateCall5(prepare_call(jltypeerror_func),
                     fname_val, msg_val,
-                    literal_pointer_val(type), boxed(x,ctx));
+                    literal_pointer_val(type), boxed(x,ctx),
+                    ConstantInt::get(T_int32, ctx->lineno));
 #endif
 }
 

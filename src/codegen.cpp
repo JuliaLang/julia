@@ -298,6 +298,7 @@ extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
 // important functions
 static Function *jlnew_func;
 static Function *jlthrow_func;
+static Function *jlthrow_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlundefvarerror_func;
@@ -467,6 +468,7 @@ typedef struct {
     bool vaStack;      // varargs stack-allocated
     bool sret;
     int nReqArgs;
+    int lineno;
     std::vector<bool> boundsCheck;
 
     jl_gcinfo_t gc;
@@ -1270,7 +1272,7 @@ extern "C" void jl_write_malloc_log(void)
 static void show_source_loc(JL_STREAM *out, jl_codectx_t *ctx)
 {
     if (ctx == NULL) return;
-    jl_printf(out, "in %s at %s", ctx->linfo->name->name, ctx->linfo->file->name);
+    jl_printf(out, "in %s at %s:%d", ctx->linfo->name->name, ctx->linfo->file->name, ctx->lineno);
 }
 
 extern "C" void jl_binding_deprecation_warning(jl_binding_t *b);
@@ -4183,6 +4185,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
         }
     }
+    ctx.lineno = lno;
     int toplineno = lno;
 
     DIBuilder dbuilder(*m);
@@ -4194,7 +4197,6 @@ static Function *emit_function(jl_lambda_info_t *lam)
     DIFile topfile;
     DISubprogram SP;
 #endif
-    DebugLoc inlineLoc;
 
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
@@ -4275,8 +4277,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                                     f);             // Function
         #endif
         // set initial line number
-        inlineLoc = DebugLoc::get(lno, 0, (MDNode*)SP, NULL);
-        builder.SetCurrentDebugLocation(inlineLoc);
+        builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
         #ifdef LLVM38
         f->setSubprogram(SP);
         #endif
@@ -4296,7 +4297,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 argname->name,                      // Variable name
                 ctx.sret + i + 1,                                // Argument number (1-based)
                 topfile,                            // File
-                toplineno == -1 ? 0 : toplineno,  // Line
+                ctx.lineno == -1 ? 0 : ctx.lineno,  // Line
                 // Variable type
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig));
 #else
@@ -4305,7 +4306,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SP,         // Scope (current function will be fill in later)
                 argname->name,    // Variable name
                 topfile,                    // File
-                toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
@@ -4319,7 +4320,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 ctx.vaName->name,       // Variable name
                 ctx.sret + nreq + 1,               // Argument number (1-based)
                 topfile,                    // File
-                toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false));
 #else
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
@@ -4327,7 +4328,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SP,                                 // Scope (current function will be fill in later)
                 ctx.vaName->name,                   // Variable name
                 topfile,                             // File
-                toplineno == -1 ? 0 : toplineno,  // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno,  // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false),      // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
@@ -4348,7 +4349,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SP,                     // Scope (current function will be fill in later)
                 s->name,                // Variable name
                 topfile,                 // File
-                toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
                 0                       // Flags (TODO: Do we need any)
@@ -4372,7 +4373,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 SP,                     // Scope (current function will be filled in later)
                 vname->name,            // Variable name
                 topfile,                 // File
-                toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
                 0                       // Flags (TODO: Do we need any)
@@ -4738,6 +4739,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
             DebugLoc loc;
             if (ctx.debug_enabled) {
+                MDNode *funcscope = (MDNode*)dbuilder.createLexicalBlockFile(SP, topfile);
                 MDNode *scope;
                 if ((dfil == topfile || dfil == NULL) &&
                     lno >= toplineno)
@@ -4745,17 +4747,19 @@ static Function *emit_function(jl_lambda_info_t *lam)
                     // for sequentially-defined code,
                     // set location to line in top file.
                     // TODO: improve handling of nested inlines
-                    loc = inlineLoc = DebugLoc::get(lno, 1, SP, NULL);
+                    loc = DebugLoc::get(lno, 1, SP, NULL);
                 } else {
                     // otherwise, we are compiling inlined code,
                     // so set the DebugLoc "inlinedAt" parameter
                     // to the current line, then use source loc.
 #ifdef LLVM37
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,dfil);
-                    MDNode *inlineLocMd = inlineLoc.getAsMDNode();
+                    MDNode *inlineLocMd = DebugLoc::get(toplineno, 1, funcscope, NULL).
+                                                    getAsMDNode();
 #else
                     scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
-                    MDNode *inlineLocMd = inlineLoc.getAsMDNode(jl_LLVMContext);
+                    MDNode *inlineLocMd = DebugLoc::get(toplineno, 1, funcscope, NULL).
+                                                    getAsMDNode(jl_LLVMContext);
 #endif
                     loc = DebugLoc::get(lno, 1, scope, inlineLocMd);
                 }
@@ -4763,6 +4767,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
             }
             if (do_coverage)
                 coverageVisitLine(filename, lno);
+            ctx.lineno = lno; // NOO TOUCHIE; NO TOUCH! See #922
         }
         if (jl_is_labelnode(stmt)) {
             if (prevlabel) continue;
@@ -5201,6 +5206,15 @@ static void init_julia_llvm_env(Module *m)
     jluboundserror_func->setDoesNotReturn();
     add_named_global(jluboundserror_func, (void*)&jl_bounds_error_unboxed_int);
 
+    std::vector<Type*> args2_throw(0);
+    args2_throw.push_back(jl_pvalue_llvmt);
+    args2_throw.push_back(T_int32);
+    jlthrow_line_func =
+        (Function*)m->getOrInsertFunction("jl_throw_with_superfluous_argument",
+                                          FunctionType::get(T_void, args2_throw, false));
+    jlthrow_line_func->setDoesNotReturn();
+    add_named_global(jlthrow_line_func, (void*)&jl_throw_with_superfluous_argument);
+
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,
                          "jl_new_structv", m);
@@ -5231,12 +5245,13 @@ static void init_julia_llvm_env(Module *m)
     te_args.push_back(T_pint8);
     te_args.push_back(jl_pvalue_llvmt);
     te_args.push_back(jl_pvalue_llvmt);
+    te_args.push_back(T_int32);
     jltypeerror_func =
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
-                         "jl_type_error_rt", m);
+                         "jl_type_error_rt_line", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func, (void*)&jl_type_error_rt);
+    add_named_global(jltypeerror_func, (void*)&jl_type_error_rt_line);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(jl_pvalue_llvmt);
@@ -5678,16 +5693,13 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
 
 extern "C" void jl_init_codegen(void)
 {
-    const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
-    cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
-    cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
+    const char *const argv[] = {"", "-disable-copyprop"}; // llvm bug 21743
+    cl::ParseCommandLineOptions(sizeof(argv)/sizeof(argv[0]), argv, "disable-copyprop\n");
 #endif
 #ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
-
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
     imaging_mode = true; // LLVM seems to JIT bad TOC tables for the optimizations we attempt in non-imaging_mode
 #else
