@@ -1326,10 +1326,13 @@ export
     pointer_to_array,
     pointer_to_string,
     reenable_sigint,
+    threadcall,
     unsafe_copy!,
     unsafe_load,
     unsafe_pointer_to_objref,
     unsafe_store!,
+    # ccall in threadpool
+    @wrapper,
 
 # nullable types
     isnull,
