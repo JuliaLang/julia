@@ -489,7 +489,7 @@ static void print_profile(void)
 }
 #endif
 
-static int true_main(int argc, char *argv[])
+static NOINLINE int true_main(int argc, char *argv[])
 {
     if (jl_core_module != NULL) {
         jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
@@ -609,6 +609,11 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
 #endif
 #ifdef JULIA_ENABLE_THREADING
+    // We need to make sure this function is called before any reference to
+    // TLS variables. Since the compiler is free to move calls to
+    // `jl_get_ptls_states()` around, we should avoid referencing TLS
+    // variables in this function. (Mark `true_main` as noinline for this
+    // reason).
     jl_set_ptls_states_getter(jl_get_ptls_states_static);
 #endif
     libsupport_init();
