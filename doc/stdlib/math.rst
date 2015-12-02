@@ -1070,13 +1070,49 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   The absolute value of ``x``\ .  When ``abs`` is applied to signed integers, overflow may occur, resulting in the return of a negative value.  This overflow occurs only when ``abs`` is applied to the minimum representable value of a signed integer.  That is when ``x == typemin(typeof(x))``\ , ``abs(x) == x``\ , not ``-x`` as might be expected.
+   The absolute value of ``x``\ .
 
-.. function:: Base.checked_abs(x::Signed)
+   When ``abs`` is applied to signed integers, overflow may occur, resulting in the return of a negative value. This overflow occurs only when ``abs`` is applied to the minimum representable value of a signed integer. That is, when ``x == typemin(typeof(x))``\ , ``abs(x) == x < 0``\ , not ``-x`` as might be expected.
+
+.. function:: Base.checked_abs(x)
 
    .. Docstring generated from Julia source
 
-   For signed integers, throws an ``OverflowError`` when ``x == typemin(typeof(x))``\ . Otherwise, behaves as ``abs``\ , though the overflow protection may impose a perceptible performance penalty.
+   Calculates ``abs(x)``\ , checking for overflow errors where applicable. For example, standard two's complement signed integers (e.g. ``Int``\ ) cannot represent ``abs(typemin(Int))``\ , thus leading to an overflow.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_neg(x)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``-x``\ , checking for overflow errors where applicable. For example, standard two's complement signed integers (e.g. ``Int``\ ) cannot represent ``-typemin(Int)``\ , thus leading to an overflow.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_add(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``x+y``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_sub(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``x-y``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_mul(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``x*y``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
 
 .. function:: abs2(x)
 
