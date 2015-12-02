@@ -146,3 +146,13 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
     @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
+
+# Test up- and downdates
+let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
+    for uplo in (:U, :L)
+        AcA = A'A
+        F = cholfact(AcA, uplo)
+        @test LinAlg.update(F, v)[uplo] ≈ cholfact(AcA + v*v')[uplo]
+        @test LinAlg.downdate(F, v)[uplo] ≈ cholfact(AcA - v*v')[uplo]
+    end
+end
