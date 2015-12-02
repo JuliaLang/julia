@@ -16,8 +16,8 @@ region_t *jl_gc_find_region(void *ptr, int maybe)
 // singleton object), this usually returns the same pointer which points to
 // the next object but it can also return NULL if the pointer is pointing to
 // the end of the page.
-DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
-                                                        size_t *osize_p)
+JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
+                                                           size_t *osize_p)
 {
     region_t *r = find_region(p, 1);
     // Not in the pool
@@ -291,7 +291,7 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
+JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     GC_MARKED_NOESC,
     {0, 0, 0, 0},
     {0, 0, 0, 0},

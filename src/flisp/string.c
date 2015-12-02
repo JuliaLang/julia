@@ -19,7 +19,7 @@
 #include <sys/time.h>
 #endif /* !_OS_WINDOWS_ */
 
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 #include "utf8proc.h"
 
 #ifdef __cplusplus

@@ -135,8 +135,8 @@ extern "C" {
 extern uintptr_t __stack_chk_guard;
 extern void __stack_chk_fail();
 #else
-DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
-DLLEXPORT void __stack_chk_fail()
+JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+JL_DLLEXPORT void __stack_chk_fail()
 {
     /* put your panic function or similar in here */
     fprintf(stderr, "fatal error: stack corruption detected\n");
@@ -172,7 +172,7 @@ extern void _chkstk(void);
 #define DISABLE_FLOAT16
 
 // llvm state
-DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
+JL_DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile = false;
 static TargetMachine *jl_TargetMachine;
@@ -319,9 +319,9 @@ private:
         JuliaOJIT &JIT;
     };
 };
-DLLEXPORT JuliaOJIT *jl_ExecutionEngine;
+JL_DLLEXPORT JuliaOJIT *jl_ExecutionEngine;
 #else
-DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
+JL_DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 #endif
 
 #ifdef USE_MCJIT
@@ -429,7 +429,7 @@ static Value *V_null;
 static Type *NoopType;
 static Value *literal_pointer_val(jl_value_t *p);
 extern "C" {
-DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed=NULL);
+JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed=NULL);
 }
 static bool type_is_ghost(Type *ty)
 {
@@ -928,7 +928,7 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 uint64_t last_time = 0;
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void jl_dump_compiles(void *s)
 {
     dump_compiles_stream = (JL_STREAM*)s;
@@ -1223,7 +1223,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
 }
 
 // get the address of a C-callable entry point for a function
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
     JL_GC_PUSH1(&argt);
@@ -1256,7 +1256,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 }
 
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void *jl_function_ptr_by_llvm_name(char* name) {
 #ifdef __has_feature
 #if __has_feature(memory_sanitizer)
@@ -1267,7 +1267,7 @@ void *jl_function_ptr_by_llvm_name(char* name) {
 }
 
 // export a C-callable entry point for a function, with a given name
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
     assert(jl_is_tuple_type(argt));
@@ -1298,7 +1298,7 @@ extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 
 
 // Get pointer to llvm::Function instance, compiling if necessary
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
 {
     if (!jl_is_function(f)) {
@@ -1390,7 +1390,7 @@ Function* CloneFunctionToModule(Function *F, Module *destModule)
     return NewF;
 }
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
 {
     std::string code;
@@ -1461,7 +1461,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
                           );
 
-extern "C" DLLEXPORT
+extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
     std::string code;
@@ -1629,7 +1629,7 @@ static void mallocVisitLine(std::string filename, int line)
 
 // Resets the malloc counts. Needed to avoid including memory usage
 // from JITting.
-extern "C" DLLEXPORT void jl_clear_malloc_data(void)
+extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
 {
     logdata_t::iterator it = mallocData.begin();
     for (; it != mallocData.end(); it++) {

@@ -4,7 +4,7 @@
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 static BOOL (*pSetThreadStackGuarantee)(PULONG);
 
-DLLEXPORT void gdblookup(ptrint_t ip);
+JL_DLLEXPORT void gdblookup(ptrint_t ip);
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
@@ -260,7 +260,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 }
 #endif
 
-DLLEXPORT void jl_install_sigint_handler(void)
+JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
@@ -310,7 +310,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
@@ -331,7 +331,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
