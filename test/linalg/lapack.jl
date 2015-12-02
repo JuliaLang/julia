@@ -529,3 +529,13 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         @test_approx_eq FJulia.τ FLAPACK[2]
     end
 end
+
+# Issue 13976
+let A = [NaN 0.0 NaN; 0 0 0; NaN 0 NaN]
+    @test_throws ArgumentError expm(A)
+end
+
+# Issue 14065 (and 14220)
+let A = [NaN NaN; NaN NaN]
+    @test_throws ArgumentError eigfact(A)
+end
