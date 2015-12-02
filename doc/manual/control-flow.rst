@@ -162,7 +162,6 @@ the above function results in a runtime error
 
     julia> test(2,1)
     ERROR: UndefVarError: relation not defined
-     [inlined code] from strings/io.jl:28
      in test at none:7
 
 ``if`` blocks also return a value, which may seem unintuitive to users
@@ -366,7 +365,6 @@ For example, a recursive factorial routine could be defined like this:
 
     julia> factorial(-1)
     ERROR: n must be non-negative
-     [inlined code] from error.jl:21
      in factorial at none:2
 
 
@@ -663,7 +661,6 @@ negative real value:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     [inlined code] from math.jl:144
      in sqrt at math.jl:146
 
 You may define your own exceptions in the following way:
@@ -689,7 +686,6 @@ if the argument is negative:
 
     julia> f(-1)
     ERROR: DomainError:
-     [inlined code] from essentials.jl:23
      in f at none:1
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
@@ -741,7 +737,6 @@ the :func:`sqrt` function that raises an error if its argument is negative:
 
     julia> fussy_sqrt(-1)
     ERROR: negative x not allowed
-     [inlined code] from error.jl:21
      in fussy_sqrt at none:1
 
 If ``fussy_sqrt`` is called with a negative value from another function,
@@ -767,7 +762,6 @@ session:
     julia> verbose_fussy_sqrt(-1)
     before fussy_sqrt
     ERROR: negative x not allowed
-     [inlined code] from error.jl:21
      in verbose_fussy_sqrt at none:3
 
 Warnings and informational messages
@@ -848,7 +842,6 @@ assumes ``x`` is a real number and returns its square root:
 
     julia> sqrt_second(-9)
     ERROR: DomainError:
-     [inlined code] from math.jl:144
      in sqrt_second at none:7
 
 Note that the symbol following ``catch`` will always be interpreted as a

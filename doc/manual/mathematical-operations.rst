@@ -380,7 +380,6 @@ The following examples show the different forms.
 
     julia> Int8(128)
     ERROR: InexactError()
-     [inlined code] from int.jl:172
      in call at essentials.jl:56
 
     julia> Int8(127.0)
@@ -388,12 +387,10 @@ The following examples show the different forms.
 
     julia> Int8(3.14)
     ERROR: InexactError()
-     [inlined code] from int.jl:209
      in call at essentials.jl:56
 
     julia> Int8(128.0)
     ERROR: InexactError()
-     [inlined code] from int.jl:209
      in call at essentials.jl:56
 
     julia> 127 % Int8
@@ -407,9 +404,8 @@ The following examples show the different forms.
 
     julia> round(Int8,127.6)
     ERROR: InexactError()
-     [inlined code] from essentials.jl:25
      in trunc at float.jl:357
-     in round at float.jl:188
+     in round at float.jl:177
 
 See :ref:`man-conversion-and-promotion` for how to define your own
 conversions and promotions.
