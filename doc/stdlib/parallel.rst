@@ -437,8 +437,8 @@ General Parallel Computing Support
 
    Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown.
 
-Shared Arrays (Experimental, UNIX-only feature)
------------------------------------------------
+Shared Arrays
+-------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
