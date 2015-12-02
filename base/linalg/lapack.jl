@@ -25,28 +25,36 @@ macro assertposdef()
     :(info[1]>0 && throw(PosDefException(info[1])))
 end
 
-#Check that upper/lower (for special matrices) is correctly specified
+"Check that upper/lower (for special matrices) is correctly specified"
 function chkuplo(uplo::Char)
-    (uplo=='U' || uplo=='L') ||
-      throw(ArgumentError(string("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo")))
+    if !(uplo == 'U' || uplo == 'L')
+        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+    end
+    uplo
 end
 
-#Check that {c}transpose is correctly specified
+"Check that {c}transpose is correctly specified"
 function chktrans(trans::Char)
-    (trans=='N' || trans=='C' || trans=='T') ||
-      throw(ArgumentError(string("trans argument must be 'N' (no transpose), 'T' (transpose), or 'C' (conjugate transpose), got $trans")))
+    if !(trans == 'N' || trans == 'C' || trans == 'T')
+        throw(ArgumentError("trans argument must be 'N' (no transpose), 'T' (transpose), or 'C' (conjugate transpose), got $trans"))
+    end
+    trans
 end
 
-#Check that left/right hand side multiply is correctly specified
+"Check that left/right hand side multiply is correctly specified"
 function chkside(side::Char)
-    (side=='L' || side=='R') ||
-      throw(ArgumentError(string("side argument must be 'L' (left hand multiply) or 'R' (right hand multiply), got $side")))
+    if !(side == 'L' || side == 'R')
+        throw(ArgumentError("side argument must be 'L' (left hand multiply) or 'R' (right hand multiply), got $side"))
+    end
+    side
 end
 
-#Check that unit diagonal flag is correctly specified
+"Check that unit diagonal flag is correctly specified"
 function chkdiag(diag::Char)
-    (diag=='U' || diag=='N') ||
-      throw(ArgumentError(string("diag argument must be 'U' (unit diagonal) or 'N' (non-unit diagonal), got $diag")))
+    if !(diag == 'U' || diag =='N')
+        throw(ArgumentError("diag argument must be 'U' (unit diagonal) or 'N' (non-unit diagonal), got $diag"))
+    end
+    diag
 end
 
 subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
