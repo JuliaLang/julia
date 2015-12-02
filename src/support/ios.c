@@ -39,7 +39,7 @@ extern "C" {
 /* OS-level primitive wrappers */
 
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
-DLLEXPORT void *memrchr(const void *s, int c, size_t n)
+JL_DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = (unsigned char*)s + n;
     unsigned char uc = c;
@@ -357,7 +357,7 @@ static void _write_update_pos(ios_t *s)
 }
 
 // directly copy a buffer to a descriptor
-DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
+JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
 {
     char *data = src->buf;
     size_t n = src->size;

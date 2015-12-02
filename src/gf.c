@@ -923,7 +923,9 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
     return ti;
 }
 
-DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tupletype_t *tt, jl_svec_t *env)
+JL_DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m,
+                                                  jl_tupletype_t *tt,
+                                                  jl_svec_t *env)
 {
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
@@ -1083,7 +1085,7 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
-DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
     int msp = jl_type_morespecific(a,b);
     int btv = jl_has_typevars(b);
@@ -1370,7 +1372,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     return ml;
 }
 
-void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
+void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
 {
     jl_value_t *fargs[3] = {
         (jl_value_t*)jl_methoderror_type,
@@ -1381,7 +1383,8 @@ void NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
     // not reached
 }
 
-void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
+void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args,
+                                    size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na);
     JL_GC_PUSH1(&argtup);
@@ -1433,7 +1436,7 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *type
     return sf;
 }
 
-DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
+JL_DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
 {
     return jl_method_lookup_by_type(mt, types, 0, 0) != jl_bottom_func;
 }
@@ -1450,7 +1453,8 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     return sf;
 }
 
-DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf,
+                                             jl_value_t *type, int lim);
 
 // compile-time method lookup
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
@@ -1830,7 +1834,7 @@ void jl_compile_all(void)
     htable_free(&h);
 }
 
-DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tupletype_t *types)
+JL_DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tupletype_t *types)
 {
     (void)jl_get_specialization(f, types);
 }
@@ -1922,7 +1926,8 @@ JL_CALLABLE(jl_apply_generic)
     return res;
 }
 
-DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_datatype_t *types)
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf,
+                                             jl_datatype_t *types)
 {
     assert(jl_is_gf(gf));
     jl_methtable_t *mt = jl_gf_mtable(gf);
@@ -2050,7 +2055,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
     return f;
 }
 
-DLLEXPORT jl_function_t *jl_new_gf_internal(jl_value_t *env)
+JL_DLLEXPORT jl_function_t *jl_new_gf_internal(jl_value_t *env)
 {
     return jl_new_closure(jl_apply_generic, env, NULL);
 }
@@ -2082,7 +2087,8 @@ void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_function_t *meth
     JL_GC_POP();
 }
 
-DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig, jl_svec_t *tvars)
+JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
+                                        jl_svec_t *tvars)
 {
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti=NULL;
@@ -2226,7 +2232,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 //
 // lim is the max # of methods to return. if there are more return jl_false.
 // -1 for no limit.
-DLLEXPORT
+JL_DLLEXPORT
 jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
 {
     assert(jl_is_func(gf));

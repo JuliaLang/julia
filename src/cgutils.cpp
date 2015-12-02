@@ -83,7 +83,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr, bool dllimport 
 #endif
 
 #ifdef _OS_WINDOWS_
-    // setting DLLEXPORT correctly only matters when building a binary
+    // setting JL_DLLEXPORT correctly only matters when building a binary
     if (dllimport && imaging_mode) {
         assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
 #ifdef LLVM35
@@ -156,7 +156,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
-DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
+JL_DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 
 // In imaging mode, cache a fast mapping of Function * to code address
 // because this is queried in the hot path
@@ -758,7 +758,7 @@ static Value *julia_binding_gv(jl_binding_t *b)
 static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed);
 
 extern "C" {
-DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
+JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;

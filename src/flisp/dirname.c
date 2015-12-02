@@ -39,7 +39,7 @@
 extern "C" {
 #endif
 
-DLLEXPORT char *dirname( char *path )
+JL_DLLEXPORT char *dirname( char *path )
 {
     size_t len;
     static char *retfail = NULL;

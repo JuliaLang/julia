@@ -71,65 +71,65 @@ typedef struct {
 } ios_t;
 
 /* low-level interface functions */
-DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
-DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
-DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n);
-DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
-DLLEXPORT off_t ios_seek_end(ios_t *s);
-DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
-DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
-DLLEXPORT int ios_trunc(ios_t *s, size_t size);
-DLLEXPORT int ios_eof(ios_t *s);
-DLLEXPORT int ios_eof_blocking(ios_t *s);
-DLLEXPORT int ios_flush(ios_t *s);
-DLLEXPORT void ios_close(ios_t *s);
-DLLEXPORT int ios_isopen(ios_t *s);
-DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
+JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
+JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
+JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n);
+JL_DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
+JL_DLLEXPORT off_t ios_seek_end(ios_t *s);
+JL_DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
+JL_DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
+JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size);
+JL_DLLEXPORT int ios_eof(ios_t *s);
+JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
+JL_DLLEXPORT int ios_flush(ios_t *s);
+JL_DLLEXPORT void ios_close(ios_t *s);
+JL_DLLEXPORT int ios_isopen(ios_t *s);
+JL_DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
-DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
-DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
-DLLEXPORT int ios_get_readable(ios_t *s);
-DLLEXPORT int ios_get_writable(ios_t *s);
-DLLEXPORT void ios_set_readonly(ios_t *s);
-DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
-DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
-DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
+JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
+JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
+JL_DLLEXPORT int ios_get_readable(ios_t *s);
+JL_DLLEXPORT int ios_get_writable(ios_t *s);
+JL_DLLEXPORT void ios_set_readonly(ios_t *s);
+JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
+JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
+JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
-DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
+JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 
 /* stream creation */
-DLLEXPORT
+JL_DLLEXPORT
 ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc);
-DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
-DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
+JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
+JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
-DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
+JL_DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
 // todo: ios_socket
-extern DLLEXPORT ios_t *ios_stdin;
-extern DLLEXPORT ios_t *ios_stdout;
-extern DLLEXPORT ios_t *ios_stderr;
+extern JL_DLLEXPORT ios_t *ios_stdin;
+extern JL_DLLEXPORT ios_t *ios_stdout;
+extern JL_DLLEXPORT ios_t *ios_stderr;
 void ios_init_stdstreams(void);
 
 /* high-level functions - output */
-DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
-DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
-DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
+JL_DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
+JL_DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
+JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 
 /* high-level stream functions - input */
-DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
-DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
-DLLEXPORT char *ios_readline(ios_t *s);
+JL_DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
+JL_DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
+JL_DLLEXPORT char *ios_readline(ios_t *s);
 
 // discard data buffered for reading
-DLLEXPORT void ios_purge(ios_t *s);
+JL_DLLEXPORT void ios_purge(ios_t *s);
 
 /* stdio-style functions */
 #define IOS_EOF (-1)
-DLLEXPORT int ios_putc(int c, ios_t *s);
+JL_DLLEXPORT int ios_putc(int c, ios_t *s);
 //wint_t ios_putwc(ios_t *s, wchar_t wc);
-DLLEXPORT int ios_getc(ios_t *s);
-DLLEXPORT int ios_peekc(ios_t *s);
+JL_DLLEXPORT int ios_getc(ios_t *s);
+JL_DLLEXPORT int ios_peekc(ios_t *s);
 //wint_t ios_getwc(ios_t *s);
 int ios_ungetc(int c, ios_t *s);
 //wint_t ios_ungetwc(ios_t *s, wint_t wc);

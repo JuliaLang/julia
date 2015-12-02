@@ -194,7 +194,7 @@ static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-DLLEXPORT Pass* createLowerSimdLoopPass() {
+JL_DLLEXPORT Pass* createLowerSimdLoopPass() {
     return new LowerSIMDLoop();
 }
 

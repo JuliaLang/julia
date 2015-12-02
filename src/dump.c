@@ -212,7 +212,7 @@ uint64_t jl_sysimage_base = 0;
 #include <dbghelp.h>
 #endif
 
-DLLEXPORT int jl_running_on_valgrind(void)
+JL_DLLEXPORT int jl_running_on_valgrind(void)
 {
     return RUNNING_ON_VALGRIND;
 }
@@ -1168,8 +1168,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     return (jl_value_t*)dt;
 }
 
-jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
-
 static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t **loc);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
 {
@@ -1652,7 +1650,7 @@ static int readstr_verify(ios_t *s, const char *str)
     return 1;
 }
 
-DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
+JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
 {
     uint16_t bom;
     return (readstr_verify(s, JI_MAGIC) &&
@@ -1804,7 +1802,7 @@ void jl_save_system_image_to_stream(ios_t *f)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_save_system_image(const char *fname)
+JL_DLLEXPORT void jl_save_system_image(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
@@ -1816,7 +1814,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT ios_t *jl_create_system_image(void)
+JL_DLLEXPORT ios_t *jl_create_system_image(void)
 {
     ios_t *f; f = (ios_t*)malloc(sizeof(ios_t));
     ios_mem(f, 1000000);
@@ -1830,7 +1828,7 @@ extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 
 // Takes in a path of the form "usr/lib/julia/sys.{ji,so}", as passed to jl_restore_system_image()
-DLLEXPORT void jl_preload_sysimg_so(const char *fname)
+JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
     // If passed NULL, don't even bother
     if (!fname)
@@ -1913,7 +1911,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_restore_system_image(const char *fname)
+JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 {
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
@@ -1937,7 +1935,7 @@ DLLEXPORT void jl_restore_system_image(const char *fname)
     }
 }
 
-DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
+JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 {
     ios_t f;
     JL_SIGATOMIC_BEGIN();
@@ -1947,7 +1945,7 @@ DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
+JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
     if (jl_is_expr(ast))
         return jl_lam_body((jl_expr_t*)ast)->etype;
@@ -1974,7 +1972,7 @@ DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     return rt;
 }
 
-DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
+JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     JL_SIGATOMIC_BEGIN();
     DUMP_MODES last_mode = mode;
@@ -2012,7 +2010,7 @@ DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     return v;
 }
 
-DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
+JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
     JL_SIGATOMIC_BEGIN();
     assert(jl_is_array(data));
@@ -2036,7 +2034,7 @@ DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
     return v;
 }
 
-DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
+JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
@@ -2272,7 +2270,8 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     return restored;
 }
 
-DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf,
+                                                         size_t sz)
 {
     ios_t f;
     jl_array_t *modules;
@@ -2281,7 +2280,7 @@ DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz
     return modules ? (jl_value_t*) modules : jl_nothing;
 }
 
-DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 {
     ios_t f;
     jl_array_t *modules;

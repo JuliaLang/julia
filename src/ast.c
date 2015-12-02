@@ -115,7 +115,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-extern int jl_parse_depwarn(int warn);
 extern int jl_parse_deperror(int err);
 
 void jl_init_frontend(void)
@@ -149,7 +148,7 @@ void jl_init_frontend(void)
         jl_parse_depwarn((int)jl_options.depwarn);
 }
 
-DLLEXPORT void jl_lisp_prompt(void)
+JL_DLLEXPORT void jl_lisp_prompt(void)
 {
     if (jvtype==NULL) jl_init_frontend();
     fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
@@ -512,7 +511,7 @@ static value_t julia_to_scm_(jl_value_t *v)
 }
 
 // this is used to parse a line of repl input
-DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
 {
     value_t s = cvalue_static_cstrn(str, len);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
@@ -523,8 +522,8 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
 
 // this is for parsing one expression out of a string, keeping track of
 // the current position.
-DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
-                                      int pos0, int greedy)
+JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
+                                         int pos0, int greedy)
 {
     value_t s = cvalue_static_cstrn(str, len);
     value_t p = fl_applyn(3, symbol_value(symbol("jl-parse-one-string")),
@@ -557,7 +556,7 @@ void jl_stop_parsing(void)
     fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
 }
 
-DLLEXPORT int jl_parse_depwarn(int warn)
+JL_DLLEXPORT int jl_parse_depwarn(int warn)
 {
     value_t prev = fl_applyn(1, symbol_value(symbol("jl-parser-depwarn")),
                              warn ? FL_T : FL_F);
@@ -592,8 +591,8 @@ jl_value_t *jl_parse_next(void)
     return scm_to_julia(c,0);
 }
 
-jl_value_t *jl_load_file_string(const char *text, size_t len,
-                                char *filename, size_t namelen)
+JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                             char *filename, size_t namelen)
 {
     value_t t, f;
     t = cvalue_static_cstrn(text, len);
@@ -605,7 +604,7 @@ jl_value_t *jl_load_file_string(const char *text, size_t len,
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_expand(jl_value_t *expr)
+JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     int np = jl_gc_n_preserved_values();
     value_t arg = julia_to_scm(expr);
@@ -617,7 +616,7 @@ jl_value_t *jl_expand(jl_value_t *expr)
     return result;
 }
 
-DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
+JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
     int np = jl_gc_n_preserved_values();
     value_t arg = julia_to_scm(expr);
@@ -769,7 +768,7 @@ jl_sym_t *jl_decl_var(jl_value_t *ex)
     return (jl_sym_t*)jl_exprarg(ex, 0);
 }
 
-int jl_is_rest_arg(jl_value_t *ex)
+JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
 {
     if (!jl_is_expr(ex)) return 0;
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
@@ -860,7 +859,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
     return expr;
 }
 
-DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
+JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {
     if (expr == NULL) {
         return NULL;
@@ -968,7 +967,7 @@ jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t)
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
 // this tree can then be further mutated by optimization passes.
-DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
+JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
 {
     jl_svec_t *spenv = NULL;
     jl_value_t *ast = li->ast;
@@ -997,12 +996,12 @@ DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
     return ast;
 }
 
-DLLEXPORT int jl_is_operator(char *sym)
+JL_DLLEXPORT int jl_is_operator(char *sym)
 {
     return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym)) == FL_T;
 }
 
-DLLEXPORT int jl_operator_precedence(char *sym)
+JL_DLLEXPORT int jl_operator_precedence(char *sym)
 {
     return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")), symbol(sym)));
 }
