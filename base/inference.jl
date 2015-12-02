@@ -2245,7 +2245,8 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     end
 
     body = Expr(:block)
-    body.args = ast.args[3].args::Array{Any,1}
+    body.args = filter(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)),
+                       ast.args[3].args::Array{Any,1})
     cost::Int = 1000
     if incompletematch
         cost *= 4
