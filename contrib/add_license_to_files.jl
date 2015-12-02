@@ -30,28 +30,29 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
+    "../contrib/windows/juliarc.jl",
     # files to check - already copyright
-   # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
-   "../base/special/trig.jl",
-   "../base/sparse/csparse.jl",
-   "../base/linalg/givens.jl",
-   #
-   "../src/abi_llvm.cpp",
-   "../src/abi_win32.cpp",
-   "../src/abi_win64.cpp",
-   "../src/abi_x86.cpp",
-   "../src/abi_x86_64.cpp",
-   "../src/disasm.cpp",
-   "../src/support/END.h",
-   "../src/support/ENTRY.amd64.h",
-   "../src/support/ENTRY.i387.h",
-   "../src/support/MurmurHash3.c",
-   "../src/support/MurmurHash3.h",
-   "../src/support/asprintf.c",
-   "../src/support/strptime.c",
-   "../src/support/strtod.c",
-   "../src/support/tzfile.h",
-   "../src/support/utf8.c",
+    # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
+    "../base/special/trig.jl",
+    "../base/sparse/csparse.jl",
+    "../base/linalg/givens.jl",
+    #
+    "../src/abi_llvm.cpp",
+    "../src/abi_win32.cpp",
+    "../src/abi_win64.cpp",
+    "../src/abi_x86.cpp",
+    "../src/abi_x86_64.cpp",
+    "../src/disasm.cpp",
+    "../src/support/END.h",
+    "../src/support/ENTRY.amd64.h",
+    "../src/support/ENTRY.i387.h",
+    "../src/support/MurmurHash3.c",
+    "../src/support/MurmurHash3.h",
+    "../src/support/asprintf.c",
+    "../src/support/strptime.c",
+    "../src/support/strtod.c",
+    "../src/support/tzfile.h",
+    "../src/support/utf8.c",
 ]
 
 const ext_prefix = Dict([
