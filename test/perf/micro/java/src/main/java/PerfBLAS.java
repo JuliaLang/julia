@@ -1,24 +1,22 @@
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 import org.jblas.DoubleMatrix;
 
 public class PerfBLAS {
-	private static final int NITER = 5;
+	private static final int NITER = 50;
 	private static Random rand = new Random(0);
 
 	public static void main(String[] args) {
 
 		    long t, tmin;
-		    assert(fib(20) == 6765);
+		    assert(PerfPure.fib(20) == 6765);
 		    int f = 0;
 		    tmin = Long.MAX_VALUE;
 		    for (int i=0; i<NITER; ++i) {
 		        t = System.nanoTime();
-		        f += fib(20);
+		        f += PerfPure.fib(20);
 		        t = (System.nanoTime())-t;
 		        if (t < tmin) tmin = t;
 		    }
@@ -31,7 +29,7 @@ public class PerfBLAS {
 		        for (int k=0; k<1000; ++k) {
 		        	int n = rand.nextInt(Integer.MAX_VALUE);
 		        	String str = Integer.toHexString(n);
-		        	int m = Integer.valueOf(str, 16);
+		        	int m = Integer.parseUnsignedInt(str, 16);
 		            assert(m == n);
 		        }
 		        t = System.nanoTime()-t;
@@ -60,7 +58,7 @@ public class PerfBLAS {
 		        while (--j>=0) {
 		        	d[j] = rand.nextDouble();
 		        }
-		        quicksort(d, 0, 5000-1);
+		        Arrays.sort(d);
 		        t = System.nanoTime()-t;
 		        if (t < tmin) tmin = t;
 		    }
@@ -113,25 +111,11 @@ public class PerfBLAS {
 		    tmin = Long.MAX_VALUE;
 		    for (int i=0; i<NITER; ++i) {
 		        t = System.nanoTime();
-		        printfd(100000);
+		        PerfPure.printfd(100000);
 		        t = System.nanoTime()-t;
 		        if (t < tmin) tmin = t;
 		    }
 		    print_perf("printfd", tmin);
-	}
-
-	static void printfd(int n) {
-		try {
-			FileOutputStream f = new FileOutputStream("/dev/null");
-		    PrintStream ps = new PrintStream(f);
-		    long i = 0;
-		    for (i = 0; i < n; i++) {
-		        ps.println(i+" "+i);
-		    }
-		    ps.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
 	}
 
 
@@ -203,37 +187,6 @@ public class PerfBLAS {
 	    return total/elements.size();
 	}
 
-	private static void quicksort(double[] a, int lo, int hi) {
-	    int i = lo;
-	    int j = hi;
-	    while (i < hi) {
-	        double pivot = a[(lo+hi)/2];
-	        // Partition
-	        while (i <= j) {
-	            while (a[i] < pivot) {
-	                i = i + 1;
-	            }
-	            while (a[j] > pivot) {
-	                j = j - 1;
-	            }
-	            if (i <= j) {
-	                double t = a[i];
-	                a[i] = a[j];
-	                a[j] = t;
-	                i = i + 1;
-	                j = j - 1;
-	            }
-	        }
-
-	        // Recursion for quicksort
-	        if (lo < j) {
-	            quicksort(a, lo, j);
-	        }
-	        lo = i;
-	        j = hi;
-	    }
-	}
-
 	private static double pisum() {
 	    double sum = 0.0;
 	    for (int j=0; j<500; ++j) {
@@ -274,10 +227,6 @@ public class PerfBLAS {
 
 	private static void print_perf(String name, long t) {
 		System.out.printf("java,%s,%.6f\n", name, t/(double)1E6);
-	}
-
-	private static int fib(int n) {
-		return n < 2 ? n : fib(n-1) + fib(n-2);
 	}
 
 }

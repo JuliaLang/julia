@@ -1,13 +1,14 @@
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 import org.ejml.simple.SimpleMatrix;
 
 public class PerfPure {
-	private static final int NITER = 5;
+	private static final int NITER = 50;
 	private static Random rand = new Random(0);
 
 	public static void main(String[] args) {
@@ -61,7 +62,7 @@ public class PerfPure {
 		        while (--j>=0) {
 		        	d[j] = rand.nextDouble();
 		        }
-		        quicksort(d, 0, 5000-1);
+		        Arrays.sort(d);
 		        t = System.nanoTime()-t;
 		        if (t < tmin) tmin = t;
 		    }
@@ -124,11 +125,11 @@ public class PerfPure {
 
 	static void printfd(int n) {
 		try {
-			FileOutputStream f = new FileOutputStream("/dev/null");
-		    PrintStream ps = new PrintStream(f);
-		    long i = 0;
-		    for (i = 0; i < n; i++) {
-		        ps.println(i+" "+i);
+			String nul = System.getProperty("os.name").toLowerCase().contains("win") ? "nul" : "/dev/null";
+			FileOutputStream f = new FileOutputStream(nul);
+		    PrintStream ps = new PrintStream(f, false);
+		    for (int i = 0; i < n; i++) {
+		        ps.printf("%d %d", i, i+1);
 		    }
 		    ps.close();
 		} catch (FileNotFoundException e) {
@@ -229,37 +230,6 @@ public class PerfPure {
         return total/sm.getNumElements();
     }
 
-	private static void quicksort(double[] a, int lo, int hi) {
-	    int i = lo;
-	    int j = hi;
-	    while (i < hi) {
-	        double pivot = a[(lo+hi)/2];
-	        // Partition
-	        while (i <= j) {
-	            while (a[i] < pivot) {
-	                i = i + 1;
-	            }
-	            while (a[j] > pivot) {
-	                j = j - 1;
-	            }
-	            if (i <= j) {
-	                double t = a[i];
-	                a[i] = a[j];
-	                a[j] = t;
-	                i = i + 1;
-	                j = j - 1;
-	            }
-	        }
-
-	        // Recursion for quicksort
-	        if (lo < j) {
-	            quicksort(a, lo, j);
-	        }
-	        lo = i;
-	        j = hi;
-	    }
-	}
-
 	private static double pisum() {
 	    double sum = 0.0;
 	    for (int j=0; j<500; ++j) {
@@ -312,8 +282,16 @@ public class PerfPure {
 		System.out.printf("javaPure,%s,%.6f\n", name, t/(double)1E6);
 	}
 
-	private static int fib(int n) {
-		return n < 2 ? n : fib(n-1) + fib(n-2);
+	static int fib(int n) {
+		if(n < 2) return n;
+		int prev = 1; 
+		int next = 1;
+		for(int i=2; i<n; i++) {
+			n = prev+next;
+			prev = next;
+			next = n;
+		}
+		return n;
 	}
 
 }
