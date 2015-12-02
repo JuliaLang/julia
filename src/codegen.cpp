@@ -5955,7 +5955,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlenter_func, (void*)&jl_enter_handler);
 
 #ifdef _OS_WINDOWS_
-    resetstkoflw_func = Function::Create(FunctionType::get(T_void, false),
+    resetstkoflw_func = Function::Create(FunctionType::get(T_int32, false),
             Function::ExternalLinkage, "_resetstkoflw", m);
     add_named_global(resetstkoflw_func, (void*)&_resetstkoflw);
 #ifndef FORCE_ELF
@@ -5963,21 +5963,21 @@ static void init_julia_llvm_env(Module *m)
 #if defined(_COMPILER_MINGW_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "___chkstk_ms", m);
-    add_named_global(chkstk_func, (void*)&___chkstk_ms);
+    add_named_global(chkstk_func, (void*)&___chkstk_ms, /*dllimport*/false);
 #else
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "__chkstk", m);
-    add_named_global(chkstk_func, (void*)&__chkstk);
+    add_named_global(chkstk_func, (void*)&__chkstk, /*dllimport*/false);
 #endif
 #else
 #if defined(_COMPILER_MINGW_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_alloca", m);
-    add_named_global(chkstk_func, (void*)&_alloca);
+    add_named_global(chkstk_func, (void*)&_alloca, /*dllimport*/false);
 #else
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_chkstk", m);
-    add_named_global(chkstk_func, (void*)&_chkstk);
+    add_named_global(chkstk_func, (void*)&_chkstk, /*dllimport*/false);
 #endif
 #endif
 #endif
@@ -6084,7 +6084,7 @@ static void init_julia_llvm_env(Module *m)
     jlpowf_func = Function::Create(FunctionType::get(T_float32, powf_type, false),
                                    Function::ExternalLinkage,
                                    "powf", m);
-    add_named_global(jlpowf_func, (void*)&powf);
+    add_named_global(jlpowf_func, (void*)&powf, false);
 
     Type *pow_type[2] = { T_float64, T_float64 };
     jlpow_func = Function::Create(FunctionType::get(T_float64, pow_type, false),
@@ -6092,10 +6092,11 @@ static void init_julia_llvm_env(Module *m)
                                   "pow", m);
     add_named_global(jlpow_func,
 #ifdef _COMPILER_MICROSOFT_
-        static_cast<double (*)(double, double)>(&pow));
+        static_cast<double (*)(double, double)>(&pow),
 #else
-        (void*)&pow);
+        (void*)&pow,
 #endif
+        false);
 #endif
 
     // set up optimization passes
