@@ -1524,13 +1524,14 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
     jl_array_t *vi=NULL;
     JL_GC_PUSH1(&vi);
     for(i=0; i < tvarslen; i++) {
-        jl_sym_t *sp = ((jl_tvar_t*)tvs[i])->name;
+        jl_tvar_t *tv = (jl_tvar_t*)tvs[i];
+        jl_sym_t *sp = tv->name;
         int found = 0;
         // add this item to closed
         assert(!jl_in_vinfo_array(closed, sp));
         vi = jl_alloc_cell_1d(3);
         jl_cellset(vi, 0, sp);
-        jl_cellset(vi, 1, jl_any_type);
+        jl_cellset(vi, 1, tv->ub == jl_any_type ? jl_any_type : jl_wrap_Type((jl_value_t*)tv));
         jl_cellset(vi, 2, jl_box_long(1));
         jl_cell_1d_push(closed, (jl_value_t*)vi);
         // delete this item from the list of static parameters
