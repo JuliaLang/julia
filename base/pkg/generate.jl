@@ -4,7 +4,7 @@ module Generate
 
 import ..Git, ..Read
 
-copyright_year() = readchomp(`date +%Y`)
+copyright_year() = string(Dates.year(Dates.today()))
 copyright_name(dir::AbstractString) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
