@@ -224,5 +224,17 @@ temp_pkg_dir() do
         catch ex
             @test ex.msg == "Pkg.license([lic]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
         end
+        try
+            Pkg.submit("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+        try
+            Pkg.submit("IDoNotExist", "nonexistentcommit")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
     end
 end
