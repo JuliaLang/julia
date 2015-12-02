@@ -195,16 +195,15 @@ function chksquare(A...)
     return sizes
 end
 
-# Check that upper/lower (for special matrices) is correctly specified
-macro chkuplo()
-   :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-
-Valid choices are 'U' (upper) or 'L' (lower).""")))
+function char_uplo(uplo::Symbol)
+    if uplo == :U
+        'U'
+    elseif uplo == :L
+        'L'
+    else
+        throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+    end
 end
-
-const CHARU = 'U'
-const CHARL = 'L'
-char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
 copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
