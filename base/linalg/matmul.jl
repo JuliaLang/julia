@@ -202,7 +202,6 @@ Ac_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_m
 
 function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
     n = chksquare(A)
-    @chkuplo
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
             A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
@@ -211,6 +210,8 @@ function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
         for i = 1:(n-1), j = (i+1):n
             A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
         end
+    else
+        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
     A
 end
