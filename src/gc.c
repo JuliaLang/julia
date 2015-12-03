@@ -1528,31 +1528,6 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
     //    perm_scanned_bytes = s;
 }
 
-static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int d)
-{
-    while (s != NULL) {
-        s = (jl_gcframe_t*)((char*)s + offset);
-        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
-        size_t nr = s->nroots>>1;
-        if (s->nroots & 1) {
-            for(size_t i=0; i < nr; i++) {
-                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
-                if (*ptr != NULL)
-                    gc_push_root(*ptr, d);
-            }
-        }
-        else {
-            for(size_t i=0; i < nr; i++) {
-                if (rts[i] != NULL) {
-                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
-                    gc_push_root(rts[i], d);
-                }
-            }
-        }
-        s = s->prev;
-    }
-}
-
 NOINLINE static int gc_mark_module(jl_module_t *m, int d)
 {
     size_t i;
@@ -1594,21 +1569,48 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     return refyoung;
 }
 
+static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int d)
+{
+    while (s != NULL) {
+        s = (jl_gcframe_t*)((char*)s + offset);
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t nr = s->nroots>>1;
+        if (s->nroots & 1) {
+            for(size_t i=0; i < nr; i++) {
+                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                if (*ptr != NULL)
+                    gc_push_root(*ptr, d);
+            }
+        }
+        else {
+            for(size_t i=0; i < nr; i++) {
+                if (rts[i] != NULL) {
+                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
+                    gc_push_root(rts[i], d);
+                }
+            }
+        }
+        s = s->prev;
+    }
+}
+
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
+    int i;
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
-    // FIXME - we need to mark stacks on other threads
-    int curtask = (ta == jl_all_task_states[0].ptls->current_task);
     if (stkbuf) {
 #ifndef COPY_STACKS
         if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
 #endif
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
-    if (curtask) {
-        gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[0], 0, d);
+    for(i=0; i < jl_n_threads; i++) {
+        if (ta == jl_all_task_states[i].ptls->current_task) {
+            gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[i], 0, d);
+            return;
+        }
     }
-    else if (stkbuf) {
+    if (stkbuf) {
         ptrint_t offset;
 #ifdef COPY_STACKS
         offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
@@ -2038,6 +2040,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 #ifdef JULIA_ENABLE_THREADING
     ti_threadgroup_barrier(tgworld, ti_tid);
     if (ti_tid != 0) {
+        JL_SIGATOMIC_END();
         ti_threadgroup_barrier(tgworld, ti_tid);
         return;
     }

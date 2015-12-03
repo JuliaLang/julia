@@ -720,7 +720,7 @@ JL_DLLEXPORT void jl_raise_debugger(void)
     if (IsDebuggerPresent() == 1)
         DebugBreak();
 #else
-    raise(SIGINT);
+    kill(getpid(), SIGINT);
 #endif // _OS_WINDOWS_
 }
 
