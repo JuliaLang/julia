@@ -93,9 +93,9 @@ end # @windows_only
 
 # core impelementation of mmap
 function mmap{T,N}(io::IO,
-                          ::Type{Array{T,N}}=Vector{UInt8},
-                          dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
-                          offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
+                   ::Type{Array{T,N}}=Vector{UInt8},
+                   dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+                   offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbits(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbits(T) == true"))
