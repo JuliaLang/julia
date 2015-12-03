@@ -1466,8 +1466,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
-#ifdef LLVM37
-#else
+#ifndef LLVM37
     llvm::formatted_raw_ostream fstream(stream);
 #endif
 
@@ -1497,8 +1496,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     else {
         jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
     }
-#ifdef LLVM37
-#else
+#ifndef LLVM37
     fstream.flush();
 #endif
 
