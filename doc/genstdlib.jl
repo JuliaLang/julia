@@ -286,9 +286,11 @@ function translate(file)
 end
 
 for folder in ["stdlib", "manual", "devdocs"]
-    println("\nConverting $folder/\n")
+    println("\nConverting rst files in $folder/\n")
     for file in readdir("$folder")
-        translate("$folder/$file")
+        if endswith(file, ".rst")
+            translate("$folder/$file")
+        end
     end
 end
 
