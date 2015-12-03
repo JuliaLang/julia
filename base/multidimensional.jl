@@ -865,7 +865,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
 end
 
 """
-    C, ia, ib, ic = uniqueind(A, dim)
+    C, ia, ib, ic = uniqueslices(A, dim)
 
 A function that operates similiarly to `unique(A,dim)` but returns multiple
 output arguments having the following properties:
@@ -957,7 +957,7 @@ julia> ib
  [3,4]
 
 """
-@generated function uniqueind{T,N}(A::AbstractArray{T,N}, dim::Int)
+@generated function uniqueslices{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         1 <= dim <= $N || return copy(A)
         hashes = zeros(UInt, size(A, dim))
