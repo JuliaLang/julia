@@ -136,7 +136,7 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 """
 macro test(ex)
     # If the test is a comparison
-    if typeof(ex) == Expr && ex.head == :comparison
+    if isa(ex, Expr) && ex.head == :comparison
         # Generate a temporary for every term in the expression
         n = length(ex.args)
         terms = [gensym() for i in 1:n]
@@ -315,7 +315,9 @@ record(ts::DefaultTestSet, t::Pass) = (push!(ts.results, t); t)
 function record(ts::DefaultTestSet, t::Union{Fail,Error})
     print_with_color(:white, ts.description, ": ")
     print(t)
-    Base.show_backtrace(STDOUT, backtrace())
+    # don't print the backtrace for Errors because it gets printed in the show
+    # method
+    isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
     println()
     push!(ts.results, t)
     t
