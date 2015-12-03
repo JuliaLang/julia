@@ -845,7 +845,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                 if (eqc->data[i] == lenvar) {
                     jl_value_t *v = eqc->data[i+1];
                     // N is already known in NTuple{N,...}
-                    if (jl_get_size(v, (size_t *)&alen)) break;
+                    if (jl_get_size(v, &alen)) break;
                 }
             }
             b = (jl_value_t*)jl_tupletype_fill(alen, elty);
