@@ -1355,21 +1355,21 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
 static void gc_sweep_once(int sweep_mask)
 {
 #ifdef GC_TIME
-    double t0 = clock_now();
+    double t0 = jl_clock_now();
     mallocd_array_total = 0;
     mallocd_array_freed = 0;
 #endif
     sweep_malloced_arrays();
 #ifdef GC_TIME
-    jl_printf(JL_STDOUT, "GC sweep arrays %.2f (freed %d/%d)\n", (clock_now() - t0)*1000, mallocd_array_freed, mallocd_array_total);
-    t0 = clock_now();
+    jl_printf(JL_STDOUT, "GC sweep arrays %.2f (freed %d/%d)\n", (jl_clock_now() - t0)*1000, mallocd_array_freed, mallocd_array_total);
+    t0 = jl_clock_now();
     big_total = 0;
     big_freed = 0;
     big_reset = 0;
 #endif
     sweep_big(sweep_mask);
 #ifdef GC_TIME
-    jl_printf(JL_STDOUT, "GC sweep big %.2f (freed %d/%d with %d rst)\n", (clock_now() - t0)*1000, big_freed, big_total, big_reset);
+    jl_printf(JL_STDOUT, "GC sweep big %.2f (freed %d/%d with %d rst)\n", (jl_clock_now() - t0)*1000, big_freed, big_total, big_reset);
 #endif
 }
 
@@ -1377,7 +1377,7 @@ static void gc_sweep_once(int sweep_mask)
 static int gc_sweep_inc(int sweep_mask)
 {
 #ifdef GC_TIME
-    double t0 = clock_now();
+    double t0 = jl_clock_now();
 #endif
     skipped_pages = 0;
     total_pages = 0;
@@ -1430,7 +1430,7 @@ static int gc_sweep_inc(int sweep_mask)
     }
 
 #ifdef GC_TIME
-    double sweep_pool_sec = clock_now() - t0;
+    double sweep_pool_sec = jl_clock_now() - t0;
     double sweep_speed = ((((double)total_pages)*GC_PAGE_SZ)/(1024*1024*1024))/sweep_pool_sec;
     jl_printf(JL_STDOUT, "GC sweep pools %s %.2f at %.1f GB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", finished ? "end" : "inc", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
 #endif
@@ -1847,7 +1847,7 @@ static void visit_mark_stack(int mark_mode)
 void jl_mark_box_caches(void);
 
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
-double clock_now(void);
+double jl_clock_now(void);
 #endif
 
 extern jl_module_t *jl_old_base_module;
@@ -2407,7 +2407,7 @@ void jl_print_gc_stats(JL_STREAM *s)
 {
     double gct = total_gc_time/1e9;
     malloc_stats();
-    double ptime = clock_now()-process_t0;
+    double ptime = jl_clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
     if (n_pause > 0) {
         jl_printf(s, "gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
@@ -2489,7 +2489,7 @@ void jl_gc_init(void)
     }
 #endif
 #ifdef GC_FINAL_STATS
-    process_t0 = clock_now();
+    process_t0 = jl_clock_now();
 #endif
 
 #ifdef _P64
