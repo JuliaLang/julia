@@ -125,9 +125,9 @@ function lbm3d(n)
     const omega = 1.0
     const density = 1.0
 
-    # Implementation note: setting nchunk to maxthreads() is a hack
+    # Implementation note: setting nchunk to nthreads() is a hack
     # to simulate the previous implementation's use of parallel regions.
-    nchunk = maxthreads()
+    nchunk = nthreads()
 
     tprop = 0
     trelax = 0

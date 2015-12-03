@@ -1,13 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-export threadid, maxthreads, @threads
+export threadid, nthreads, @threads
 
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 # Inclusive upper bound on threadid()
-maxthreads() = Int(unsafe_load(cglobal(:jl_max_threads, Cint)))
-
-# Do not export - it will go away in work-stealing implementation
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function _threadsfor(iter,lbody)
