@@ -85,4 +85,8 @@ license(lic=nothing) =
     error("Pkg.license([lic]) has been moved to the package PkgDev.jl.\n",
           "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
 
+submit(pkg, commit=nothing) =
+    error("Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\n",
+          "Run Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-")
+
 end # module
