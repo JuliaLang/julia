@@ -1596,7 +1596,6 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
-    int i;
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
     if (stkbuf) {
 #ifndef COPY_STACKS
@@ -1604,13 +1603,10 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 #endif
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
-    for(i=0; i < jl_n_threads; i++) {
-        if (ta == jl_all_task_states[i].ptls->current_task) {
-            gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[i], 0, d);
-            return;
-        }
+    if (ta == jl_all_task_states[ta->tid].ptls->current_task) {
+        gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[ta->tid], 0, d);
     }
-    if (stkbuf) {
+    else if (stkbuf) {
         ptrint_t offset;
 #ifdef COPY_STACKS
         offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
