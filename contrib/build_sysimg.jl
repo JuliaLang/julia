@@ -5,9 +5,20 @@
 # next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
 # Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
 # don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-@unix_only const default_sysimg_path = joinpath(dirname(Libdl.dlpath("libjulia")),"sys")
-@windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
-function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
+@unix_only function default_sysimg_path(debug=false)
+    joinpath(dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia")),
+             "julia", debug ? "sys-debug" : "sys")
+end
+
+@windows_only function default_sysimg_path(debug=false)
+    joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+end
+
+function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=nothing; force=false, debug=false)
+    if sysimg_path == nothing
+        sysimg_path = default_sysimg_path(debug)
+    end
+
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
@@ -25,7 +36,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Enter base/ and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
-        julia = joinpath(JULIA_HOME, "julia")
+        julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
         cc = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to
@@ -39,8 +50,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
         # Copy in userimg.jl if it exists...
         if userimg_path != nothing
-            if !isreadable(userimg_path)
-                error("$userimg_path is not readable, ensure it is an absolute path!")
+            if !isfile(userimg_path)
+                error("$userimg_path is not found, ensure it is an absolute path!")
             end
             if isfile("userimg.jl")
                 error("$base_dir/userimg.jl already exists, delete manually to continue.")
@@ -66,7 +77,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
             if cc != nothing
-                link_sysimg(sysimg_path, cc)
+                link_sysimg(sysimg_path, cc, debug)
             else
                 info("System image successfully built at $sysimg_path.ji")
             end
@@ -124,13 +135,16 @@ function find_system_compiler()
 end
 
 # Link sys.o into sys.$(dlext)
-function link_sysimg(sysimg_path=default_sysimg_path, cc=find_system_compiler())
-    julia_libdir = dirname(Libdl.dlpath("libjulia"))
+function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false)
+    if sysimg_path == nothing
+        sysimg_path = default_sysimg_path(debug)
+    end
+    julia_libdir = dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia"))
 
     FLAGS = ["-L$julia_libdir"]
 
     push!(FLAGS, "-shared")
-    push!(FLAGS, "-ljulia")
+    push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
     @windows_only push!(FLAGS, "-lssp")
 
     info("Linking sys.$(Libdl.dlext)")
@@ -149,11 +163,12 @@ end
 # When running this file as a script, try to do so with default values.  If arguments are passed
 # in, use them as the arguments to build_sysimg above
 if !isinteractive()
-    if length(ARGS) > 4 || ("--help" in ARGS || "-h" in ARGS)
-        println("Usage: build_sysimg.jl <sysimg_path> <cpu_target> <usrimg_path.jl> [--force] [--help]")
+    if length(ARGS) > 5 || ("--help" in ARGS || "-h" in ARGS)
+        println("Usage: build_sysimg.jl <sysimg_path> <cpu_target> <usrimg_path.jl> [--force] [--debug] [--help]")
         println("   <sysimg_path>    is an absolute, extensionless path to store the system image at")
         println("   <cpu_target>     is an LLVM cpu target to build the system image against")
         println("   <usrimg_path.jl> is the path to a user image to be baked into the system image")
+        println("   --debug          Using julia-debug instead of julia to build the system image")
         println("   --force          Set if you wish to overwrite the default system image")
         println("   --help           Print out this help text and exit")
         println()
@@ -165,7 +180,9 @@ if !isinteractive()
         return 0
     end
 
+    debug_flag = "--debug" in ARGS
+    filter!(x -> x != "--debug", ARGS)
     force_flag = "--force" in ARGS
     filter!(x -> x != "--force", ARGS)
-    build_sysimg(ARGS..., force=force_flag)
+    build_sysimg(ARGS...; force=force_flag, debug=debug_flag)
 end
