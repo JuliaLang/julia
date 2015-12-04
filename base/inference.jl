@@ -2013,6 +2013,14 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
             return SymbolNode(e2, e.typ)
         end
     end
+    if isa(e,NewvarNode)
+        e2 = _sym_repl(e.name::Symbol, from1, from2, to1, to2, e)
+        if isa(e2, NewvarNode) || !isa(e2, Symbol)
+             return e2
+        else
+            return NewvarNode(e2)
+        end
+    end
     if !isa(e,Expr)
         return e
     end
