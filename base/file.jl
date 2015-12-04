@@ -88,19 +88,26 @@ end
 mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
-function rm(path::AbstractString; recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
-        @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
-        unlink(path)
+        try
+            @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
+            unlink(path)
+        catch err
+            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+                return
+            end
+            rethrow()
+        end
     else
         if recursive
             for p in readdir(path)
-                rm(joinpath(path, p), recursive=true)
+                rm(joinpath(path, p), force=force, recursive=true)
             end
         end
         @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
         @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
-        systemerror(:rmdir, ret != 0)
+        systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
 
