@@ -29,7 +29,7 @@ We start with a simple C program that initializes Julia and calls some Julia cod
            julia time to cleanup pending write requests
            and run all finalizers
       */
-      jl_atexit_hook();
+      jl_atexit_hook(0);
       return 0;
   }
 
@@ -73,7 +73,7 @@ now **JULIA_INIT_DIR** which is defined by *julia-config.jl*.::
   {
      jl_init(JULIA_INIT_DIR);
      (void)jl_eval_string("println(sqrt(2.0))");
-     jl_atexit_hook();
+     jl_atexit_hook(0);
      return 0;
   }
 
