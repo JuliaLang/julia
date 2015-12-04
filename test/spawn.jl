@@ -11,6 +11,8 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+@windows_only oldpath = ENV["PATH"]
+@windows_only ENV["PATH"] = joinpath(JULIA_HOME,"..","Git","usr","bin")*";"*oldpath
 
 valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
 
@@ -340,3 +342,5 @@ end
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
+
+@windows_only ENV["PATH"] = oldpath
