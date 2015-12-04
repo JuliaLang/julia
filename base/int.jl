@@ -135,10 +135,8 @@ for T in Unsigned64Types
     @eval rem(x::$T, y::$T) = box($T,checked_urem(unbox($T,x),unbox($T,y)))
 end
 
-# mod(x,y) == rem(x,y) + ((x>0) != (y>0) ? y : 0)
+# x == fld(x,y)*y + mod(x,y)
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
-# TODO: do this only for signed 2's complement
-#mod{T<:Integer}(x::T, y::T) = rem(x,y) + (-T((x!=0) & ((x>=0) != (y>=0))) & y)
 function mod{T<:Integer}(x::T, y::T)
     y == -1 && return T(0)   # avoid potential overflow in fld
     x - fld(x,y)*y
@@ -148,7 +146,7 @@ function mod{T<:Integer}(x::T, y::T)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 function fld{T<:Integer}(x::T, y::T)
     d = div(x,y)
-    d - (((x>=0) != (y>=0)) & (d*y!=x))
+    d - (signbit(x$y) & (d*y!=x))
 end
 
 # cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
@@ -732,7 +730,10 @@ const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
     @eval begin
         fast_div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
-        fast_rem(x::$T, y::$T) = box($T,srem_int(unbox($T,x),unbox($T,y)))
+        function fast_rem(x::$T, y::$T)
+            y == -1 && return $T(0)   # avoid overflow
+            box($T,srem_int(unbox($T,x),unbox($T,y)))
+        end
     end
 end
 function fast_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
@@ -740,7 +741,8 @@ function fast_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
     d - (signbit(x$y) & (d*y!=x))
 end
 function fast_mod{T<:Union{SignedIntTypes...}}(x::T, y::T)
-    fast_rem(x,y) + (-T((x>0) != (y>0)) & y)
+    y == -1 && return T(0)   # avoid potential overflow in fld
+    x - fast_fld(x,y)*y
 end
 function fast_cld{T<:Union{SignedIntTypes...}}(x::T, y::T)
     d = fast_div(x,y)
