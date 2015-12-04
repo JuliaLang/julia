@@ -1127,6 +1127,7 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/openblas-win64.patch
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $<.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
