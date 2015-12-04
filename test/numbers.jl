@@ -1593,6 +1593,51 @@ end
 @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
 @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
+# Test return types
+for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
+    z, o = T(0), T(1)
+    @test typeof(+z) === T
+    @test typeof(-z) === T
+    @test typeof(abs(z)) === T
+    @test typeof(sign(z)) === T
+    @test typeof(copysign(z,z)) === T
+    # @test typeof(flipsign(z,z)) === T
+    @test typeof(z+z) === T
+    @test typeof(z-z) === T
+    @test typeof(z*z) === T
+    @test typeof(z÷o) === T
+    @test typeof(z%o) === T
+    @test typeof(fld(z,o)) === T
+    @test typeof(mod(z,o)) === T
+    @test typeof(cld(z,o)) === T
+
+    @test typeof(Base.checked_add(z)) === T
+    @test typeof(Base.checked_neg(z)) === T
+    @test typeof(Base.checked_abs(z)) === T
+    @test typeof(Base.checked_mul(z)) === T
+    @test typeof(Base.checked_add(z,z)) === T
+    @test typeof(Base.checked_sub(z,z)) === T
+    @test typeof(Base.checked_mul(z,z)) === T
+    @test typeof(Base.checked_div(z,o)) === T
+    @test typeof(Base.checked_rem(z,o)) === T
+    @test typeof(Base.checked_fld(z,o)) === T
+    @test typeof(Base.checked_mod(z,o)) === T
+    @test typeof(Base.checked_cld(z,o)) === T
+
+    @test typeof(Base.fast_add(z)) === T
+    @test typeof(Base.fast_neg(z)) === T
+    @test typeof(Base.fast_abs(z)) === T
+    @test typeof(Base.fast_mul(z)) === T
+    @test typeof(Base.fast_add(z,z)) === T
+    @test typeof(Base.fast_sub(z,z)) === T
+    @test typeof(Base.fast_mul(z,z)) === T
+    @test typeof(Base.fast_div(z,o)) === T
+    @test typeof(Base.fast_rem(z,o)) === T
+    @test typeof(Base.fast_fld(z,o)) === T
+    @test typeof(Base.fast_mod(z,o)) === T
+    @test typeof(Base.fast_cld(z,o)) === T
+end
+
 # issue #4156
 @test fld(1.4,0.35667494393873234) == 3.0
 @test div(1.4,0.35667494393873234) == 3.0

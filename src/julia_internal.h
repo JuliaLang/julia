@@ -413,6 +413,10 @@ JL_DLLEXPORT jl_value_t *jl_checked_ssub(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_usub(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_smul(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_umul(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_sdiv(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_udiv(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_srem(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_urem(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_ceil_llvm(jl_value_t *a);

@@ -123,22 +123,37 @@ const Unsigned64Types = (UInt8,UInt16,UInt32,UInt64)
 typealias Integer64 Union{Signed64Types...,Unsigned64Types...}
 
 for T in Signed64Types
-    @eval div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
-    @eval rem(x::$T, y::$T) = box($T,srem_int(unbox($T,x),unbox($T,y)))
-    @eval mod(x::$T, y::$T) = box($T,smod_int(unbox($T,x),unbox($T,y)))
+    @eval div(x::$T, y::$T) = box($T,checked_sdiv(unbox($T,x),unbox($T,y)))
+    @eval rem(x::$T, y::$T) = box($T,checked_srem(unbox($T,x),unbox($T,y)))
+    # @eval mod(x::$T, y::$T) = box($T,checked_smod_int(unbox($T,x),unbox($T,y)))
 end
 for T in Unsigned64Types
-    @eval div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
-    @eval rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
+    @eval div(x::$T, y::$T) = box($T,checked_udiv(unbox($T,x),unbox($T,y)))
+    @eval rem(x::$T, y::$T) = box($T,checked_urem(unbox($T,x),unbox($T,y)))
 end
 
+# mod(x,y) == rem(x,y) + ((x>0) != (y>0) ? y : 0)
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
+# TODO: do this only for signed 2's complement
+#mod{T<:Integer}(x::T, y::T) = rem(x,y) + (-T((x!=0) & ((x>=0) != (y>=0))) & y)
+mod{T<:Integer}(x::T, y::T) = x - fld(x,y)*y
 
+# fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
-fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
+function fld{T<:Integer}(x::T, y::T)
+    d = div(x,y)
+    d - (((x>=0) != (y>=0)) & (d*y!=x))
+end
 
-cld{T<:Unsigned}(x::T, y::T) = div(x,y)+(rem(x,y)!=0)
-cld{T<:Integer }(x::T, y::T) = div(x,y)+(!signbit(x$y)&(rem(x,y)!=0))
+# cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
+function cld{T<:Unsigned}(x::T, y::T)
+    d = div(x,y)
+    d + (d*y!=x)
+end
+function cld{T<:Integer}(x::T, y::T)
+    d = div(x,y)
+    d + (((x>0) == (y>0)) & (d*y!=x))
+end
 
 ## integer bitwise operations ##
 
@@ -505,16 +520,16 @@ else
     *(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
     *(x::UInt128, y::UInt128) = box(UInt128,mul_int(unbox(UInt128,x),unbox(UInt128,y)))
 
-    div(x::Int128,  y::Int128)  = box(Int128,sdiv_int(unbox(Int128,x),unbox(Int128,y)))
-    div(x::UInt128, y::UInt128) = box(UInt128,udiv_int(unbox(UInt128,x),unbox(UInt128,y)))
+    div(x::Int128,  y::Int128)  = box(Int128,checked_sdiv(unbox(Int128,x),unbox(Int128,y)))
+    div(x::UInt128, y::UInt128) = box(UInt128,checked_udiv(unbox(UInt128,x),unbox(UInt128,y)))
 
-    rem(x::Int128,  y::Int128)  = box(Int128,srem_int(unbox(Int128,x),unbox(Int128,y)))
-    rem(x::UInt128, y::UInt128) = box(UInt128,urem_int(unbox(UInt128,x),unbox(UInt128,y)))
+    rem(x::Int128,  y::Int128)  = box(Int128,checked_srem(unbox(Int128,x),unbox(Int128,y)))
+    rem(x::UInt128, y::UInt128) = box(UInt128,checked_urem(unbox(UInt128,x),unbox(UInt128,y)))
 
-    mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
+    # mod(x::Int128, y::Int128) = box(Int128,checked_smod_int(unbox(Int128,x),unbox(Int128,y)))
 end
 
-## checked +, - and *
+## checked +, -, *, div, rem, fld, mod
 
 """
     Base.checked_add(x, y)
@@ -542,6 +557,42 @@ Calculates `x*y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_mul end
+
+"""
+    Base.checked_div(x, y)
+
+Calculates `div(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_div end
+
+"""
+    Base.checked_rem(x, y)
+
+Calculates `x%y`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_rem end
+
+"""
+    Base.checked_fld(x, y)
+
+Calculates `fld(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_fld end
+
+"""
+    Base.checked_mod(x, y)
+
+Calculates `mod(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_mod end
 
 # requires int arithmetic defined, for the loops to work
 
@@ -651,4 +702,55 @@ function checked_mul(x::UInt128, y::UInt128)
     # x * y > typemax(UInt128)
     y > 0 && x > fld(typemax(UInt128), y) && throw(OverflowError())
     x * y
+end
+
+# These implementations check by default
+checked_add(x::Union{IntTypes...}) = +x
+checked_mul(x::Union{IntTypes...}) = *(x)
+checked_div{T<:Union{IntTypes...}}(x::T, y::T) = div(x,y)
+checked_rem{T<:Union{IntTypes...}}(x::T, y::T) = rem(x,y)
+checked_fld{T<:Union{IntTypes...}}(x::T, y::T) = fld(x,y)
+checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
+checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
+
+# These implementations are fast (i.e. don't check) by default
+fast_add(x::Union{IntTypes...}) = +x
+fast_neg(x::Union{IntTypes...}) = -x
+fast_abs(x::Union{IntTypes...}) = abs(x)
+fast_mul(x::Union{IntTypes...}) = *(x)
+fast_add{T<:Union{IntTypes...}}(x::T, y::T) = x+y
+fast_sub{T<:Union{IntTypes...}}(x::T, y::T) = x-y
+fast_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
+
+const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
+for T in SignedIntTypes
+    @eval begin
+        fast_div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
+        fast_rem(x::$T, y::$T) = box($T,srem_int(unbox($T,x),unbox($T,y)))
+    end
+end
+function fast_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
+    d = fast_div(x,y)
+    d - (signbit(x$y) & (d*y!=x))
+end
+function fast_mod{T<:Union{SignedIntTypes...}}(x::T, y::T)
+    fast_rem(x,y) + (-T((x>0) != (y>0)) & y)
+end
+function fast_cld{T<:Union{SignedIntTypes...}}(x::T, y::T)
+    d = fast_div(x,y)
+    d + (((x>0) == (y>0)) & (d*y!=x))
+end
+
+const UnsignedIntTypes = (UInt8,UInt16,UInt32,UInt64,UInt128)
+for T in UnsignedIntTypes
+    @eval begin
+        fast_div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
+        fast_rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
+    end
+end
+fast_fld{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = fast_div(x,y)
+fast_mod{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = fast_rem(x,y)
+function fast_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
+    d = fast_div(x,y)
+    d + (d*y!=x)
 end

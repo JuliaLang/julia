@@ -262,6 +262,34 @@ int LLVMMul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart 
 }
 
 extern "C" JL_DLLEXPORT
+int LLVMDiv_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
+    CREATE(a)
+    CREATE(b)
+    bool Overflow;
+    a = a.sdiv_ov(b, Overflow);
+    ASSIGN(r, a)
+    return Overflow;
+}
+
+extern "C" JL_DLLEXPORT
+int LLVMDiv_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
+    // unsigned division cannot overflow
+    return false;
+}
+
+extern "C" JL_DLLEXPORT
+int LLVMRem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
+    // signed remainder cannot overflow
+    return false;
+}
+
+extern "C" JL_DLLEXPORT
+int LLVMRem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
+    // unsigned remainder cannot overflow
+    return false;
+}
+
+extern "C" JL_DLLEXPORT
 void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     CREATE(a)
     a = a.byteSwap();
