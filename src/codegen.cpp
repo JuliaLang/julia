@@ -6345,7 +6345,7 @@ extern "C" void jl_init_codegen(void)
 #endif
 
 #ifdef LLVM36
-    EngineBuilder eb(std::move(std::unique_ptr<Module>(engine_module)));
+    EngineBuilder eb((std::unique_ptr<Module>(engine_module)));
 #else
     EngineBuilder eb(engine_module);
 #endif
