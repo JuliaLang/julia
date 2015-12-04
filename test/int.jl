@@ -130,6 +130,8 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
 for T in (Int8, Int16, Int32, Int64, Int128)
     # regular cases
     for s in (-1, +1)
+        @test checked_abs(T(0s)) === T(abs(0s))
+        @test checked_neg(T(0s)) === T(-(0s))
         @test checked_abs(T(3s)) === T(abs(3s))
         @test checked_neg(T(3s)) === T(-(3s))
         @test checked_abs(T(s*typemax(T))) === typemax(T)
@@ -217,6 +219,8 @@ end
 
 for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     # regular cases
+    @test checked_abs(T(0)) === T(0)
+    @test checked_neg(T(0)) === T(0)
     @test checked_abs(T(3)) === T(3)
     @test_throws OverflowError checked_neg(T(3))
     # regular cases

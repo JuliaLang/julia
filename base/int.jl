@@ -87,7 +87,10 @@ The overflow protection may impose a perceptible performance penalty.
 """
 function checked_neg end
 
-checked_neg(x::Unsigned) = throw(OverflowError())
+function checked_neg(x::Unsigned)
+    x != 0 && throw(OverflowError())
+    x
+end
 function checked_neg{T<:Union{Int8,Int16,Int32,Int64,Int128}}(x::T)
     x == typemin(T) && throw(OverflowError())
     -x
