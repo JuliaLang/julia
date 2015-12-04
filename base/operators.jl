@@ -149,10 +149,15 @@ const % = rem
 .%(x::Real, y::Real) = x%y
 const ÷ = div
 
-# mod returns in [0,y) whereas mod1 returns in (0,y]
+# mod returns in [0,y) or (y,0] (for negative y),
+# whereas mod1 returns in (0,y] or [y,0)
 mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
-rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
-fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
+fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+# efficient version for integers
+mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
 transpose(x) = x
