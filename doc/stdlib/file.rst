@@ -178,11 +178,11 @@
 
    Move the file, link, or directory from ``src`` to ``dst``\ . ``remove_destination=true`` will first remove an existing ``dst``\ .
 
-.. function:: rm(path::AbstractString; recursive=false)
+.. function:: rm(path::AbstractString; force=false, recursive=false)
 
    .. Docstring generated from Julia source
 
-   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is passed and the path is a directory, then all contents are removed recursively.
+   Delete the file, link, or empty directory at the given path. If ``force=true`` is passed, a non-existing path is not treated as error. If ``recursive=true`` is passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::AbstractString)
 

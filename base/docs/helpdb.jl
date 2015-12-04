@@ -8590,9 +8590,9 @@ As a special case, if `x` is an `AbstractString` (for textual MIME types) or a `
 reprmime
 
 doc"""
-    rm(path::AbstractString; recursive=false)
+    rm(path::AbstractString; force=false, recursive=false)
 
-Delete the file, link, or empty directory at the given path. If `recursive=true` is passed and the path is a directory, then all contents are removed recursively.
+Delete the file, link, or empty directory at the given path. If `force=true` is passed, a non-existing path is not treated as error. If `recursive=true` is passed and the path is a directory, then all contents are removed recursively.
 """
 rm
 
