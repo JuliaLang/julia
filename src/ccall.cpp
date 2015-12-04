@@ -17,8 +17,6 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
     //   }
     //   return (*llvmgv)
-    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pint8);
-
     void *libsym = NULL;
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
@@ -43,7 +41,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         if (libptrgv == NULL) {
             libptrgv = new GlobalVariable(*jl_Module, T_pint8,
                false, GlobalVariable::PrivateLinkage,
-               initnul, f_lib);
+               ConstantPointerNull::get((PointerType*)T_pint8), f_lib);
             libMapGV[f_lib] = libptrgv;
             libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
@@ -65,12 +63,13 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     assert(libsym != NULL);
 
     GlobalVariable *llvmgv = symMapGV[f_name];
+    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     if (llvmgv == NULL) {
         // MCJIT forces this to have external linkage eventually, so we would clobber
         // the symbol of the actual function.
         std::string name = f_name;
         name = "ccall_" + name;
-        llvmgv = new GlobalVariable(*jl_Module, T_pint8,
+        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc,
            false, GlobalVariable::PrivateLinkage,
            initnul, name);
         symMapGV[f_name] = llvmgv;
