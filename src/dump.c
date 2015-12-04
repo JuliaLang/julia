@@ -200,6 +200,7 @@ static void write_float64(ios_t *s, double x)
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc);
 jl_value_t ***sysimg_gvars = NULL;
+void **sysimg_fvars = NULL;
 
 #ifdef HAVE_CPUID
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
@@ -230,6 +231,7 @@ static int jl_load_sysimg_so(void)
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
+        sysimg_fvars = (void**)jl_dlsym(jl_sysimg_handle, "jl_sysimg_fvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
 #ifdef JULIA_ENABLE_THREADING
         size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
@@ -412,21 +414,22 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
 static void jl_update_all_fptrs(void)
 {
     //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
-    jl_value_t ***gvars = sysimg_gvars;
-    if (gvars == 0) return;
+    void **fvars = sysimg_fvars;
+    if (fvars == 0) return;
     // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
     // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
     sysimg_gvars = NULL;
+    sysimg_fvars = NULL;
     size_t i;
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_lambda_info_t *li = delayed_fptrs[i].li;
         int32_t func = delayed_fptrs[i].func-1;
         if (func >= 0) {
-            jl_fptr_to_llvm((void*)gvars[func], li, 0);
+            jl_fptr_to_llvm(fvars[func], li, 0);
         }
         int32_t cfunc = delayed_fptrs[i].cfunc-1;
         if (cfunc >= 0) {
-            jl_fptr_to_llvm((void*)gvars[cfunc], li, 1);
+            jl_fptr_to_llvm(fvars[cfunc], li, 1);
         }
     }
     delayed_fptrs_n = 0;

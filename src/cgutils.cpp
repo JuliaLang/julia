@@ -427,6 +427,7 @@ static Value *literal_static_pointer_val(const void *p, Type *t)
 }
 
 static std::vector<Constant*> jl_sysimg_gvars;
+static std::vector<Constant*> jl_sysimg_fvars;
 
 extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
 {
@@ -446,13 +447,20 @@ extern "C" {
 
 static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, const char *sysimg_data, size_t sysimg_len)
 {
-    ArrayType *atype = ArrayType::get(T_psize, jl_sysimg_gvars.size());
+    ArrayType *gvars_type = ArrayType::get(T_psize, jl_sysimg_gvars.size());
     addComdat(new GlobalVariable(*mod,
-                                 atype,
+                                 gvars_type,
                                  true,
                                  GlobalVariable::ExternalLinkage,
-                                 MapValue(ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)), VMap),
+                                 MapValue(ConstantArray::get(gvars_type, ArrayRef<Constant*>(jl_sysimg_gvars)), VMap),
                                  "jl_sysimg_gvars"));
+    ArrayType *fvars_type = ArrayType::get(T_pvoidfunc, jl_sysimg_fvars.size());
+    addComdat(new GlobalVariable(*mod,
+                                 fvars_type,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 MapValue(ConstantArray::get(fvars_type, ArrayRef<Constant*>(jl_sysimg_fvars)), VMap),
+                                 "jl_sysimg_fvars"));
     addComdat(new GlobalVariable(*mod,
                                  T_size,
                                  true,
@@ -614,8 +622,8 @@ static int32_t jl_assign_functionID(Function *functionObject)
     // give the function an index in the constant lookup table
     if (!imaging_mode)
         return 0;
-    jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(functionObject,T_psize));
-    return jl_sysimg_gvars.size();
+    jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(functionObject, T_pvoidfunc));
+    return jl_sysimg_fvars.size();
 }
 
 static Value *julia_gv(const char *cname, void *addr)
