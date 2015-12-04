@@ -218,3 +218,14 @@ ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
 foo13031(x,y,z) = z
 foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
+
+# @threadcall functionality
+threadcall_test_func(x) =
+    @threadcall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
+
+@test threadcall_test_func(3) == 1
+@test threadcall_test_func(259) == 1
+
+@test 1.5 > @elapsed @sync for i = 1:4
+    @async @threadcall(:sleep, Cuint, (Cuint,), 1)
+end

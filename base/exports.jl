@@ -1394,6 +1394,7 @@ export
     @sync,
     @async,
     @task,
+    @threadcall,
 
     # multiprocessing
     @spawn,
