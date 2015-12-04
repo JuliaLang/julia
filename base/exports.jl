@@ -1217,6 +1217,7 @@ export
     remotecall_fetch,
     remotecall_wait,
     rmprocs,
+    select,
     take!,
     timedwait,
     wait,
@@ -1396,6 +1397,7 @@ export
     @task,
 
     # multiprocessing
+    @select,
     @spawn,
     @spawnat,
     @fetch,
