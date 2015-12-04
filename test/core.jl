@@ -3503,3 +3503,10 @@ let
     finalize(obj)
     @test finalized == 1
 end
+
+# non-terminating inference, issue #14009
+type A14009{T}
+end
+A14009{T}(a::T) = A14009{T}()
+f14009(a) = ? ? f14009(A14009(a)) : a
+code_typed(f14009, (Int,))

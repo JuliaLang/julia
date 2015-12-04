@@ -1078,7 +1078,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:new)
         t = abstract_eval(e.args[1], vtypes, sv)
         if isType(t)
-            t = t.parameters[1]
+            t = limit_type_depth(t.parameters[1], 0, true, Any[])
         else
             t = Any
         end
