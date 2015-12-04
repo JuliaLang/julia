@@ -148,10 +148,35 @@ void jl_init_frontend(void)
         jl_parse_depwarn((int)jl_options.depwarn);
 }
 
-JL_DLLEXPORT void jl_lisp_prompt(void)
+JL_DLLEXPORT int jl_lisp_prompt(int argc, char *argv[])
 {
     if (jvtype==NULL) jl_init_frontend();
-    fl_applyn(1, symbol_value(symbol("__start")), fl_cons(FL_NIL,FL_NIL));
+
+    value_t fl_argv = FL_NIL, arg;
+    fl_gc_handle(&fl_argv);
+    fl_gc_handle(&arg);
+
+    if (argc > 0) {
+        for(int i = argc - 1; i >= 0; i--) {
+            if (strcmp(argv[i], "--") == 0)
+                continue;
+            arg = cvalue_static_cstring(argv[i]);
+            fl_argv = fl_cons(arg, fl_argv);
+        }
+    }
+    fl_argv = fl_cons(FL_NIL, fl_argv);
+    fl_free_gc_handles(2);
+
+    FL_TRY_EXTERN {
+        (void)fl_applyn(1, symbol_value(symbol("__start")), fl_argv);
+    }
+    FL_CATCH_EXTERN {
+        ios_puts("fatal error:\n", ios_stderr);
+        fl_print(ios_stderr, fl_lasterror);
+        ios_putc('\n', ios_stderr);
+        return 1;
+    }
+    return 0;
 }
 
 static jl_sym_t *scmsym_to_julia(value_t s)
