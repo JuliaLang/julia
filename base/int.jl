@@ -717,48 +717,48 @@ checked_fld{T<:Union{IntTypes...}}(x::T, y::T) = fld(x,y)
 checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
 checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
 
-# These implementations are fast (i.e. don't check) by default
-fast_add(x::Union{IntTypes...}) = +x
-fast_neg(x::Union{IntTypes...}) = -x
-fast_abs(x::Union{IntTypes...}) = abs(x)
-fast_mul(x::Union{IntTypes...}) = *(x)
-fast_add{T<:Union{IntTypes...}}(x::T, y::T) = x+y
-fast_sub{T<:Union{IntTypes...}}(x::T, y::T) = x-y
-fast_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
+# These implementations are unchecked by default
+unchecked_add(x::Union{IntTypes...}) = +x
+unchecked_neg(x::Union{IntTypes...}) = -x
+unchecked_abs(x::Union{IntTypes...}) = abs(x)
+unchecked_mul(x::Union{IntTypes...}) = *(x)
+unchecked_add{T<:Union{IntTypes...}}(x::T, y::T) = x+y
+unchecked_sub{T<:Union{IntTypes...}}(x::T, y::T) = x-y
+unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
 
 const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
     @eval begin
-        fast_div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
-        function fast_rem(x::$T, y::$T)
+        unchecked_div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
+        function unchecked_rem(x::$T, y::$T)
             y == -1 && return $T(0)   # avoid overflow
             box($T,srem_int(unbox($T,x),unbox($T,y)))
         end
     end
 end
-function fast_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
-    d = fast_div(x,y)
+function unchecked_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
+    d = unchecked_div(x,y)
     d - (signbit(x$y) & (d*y!=x))
 end
-function fast_mod{T<:Union{SignedIntTypes...}}(x::T, y::T)
+function unchecked_mod{T<:Union{SignedIntTypes...}}(x::T, y::T)
     y == -1 && return T(0)   # avoid potential overflow in fld
-    x - fast_fld(x,y)*y
+    x - unchecked_fld(x,y)*y
 end
-function fast_cld{T<:Union{SignedIntTypes...}}(x::T, y::T)
-    d = fast_div(x,y)
+function unchecked_cld{T<:Union{SignedIntTypes...}}(x::T, y::T)
+    d = unchecked_div(x,y)
     d + (((x>0) == (y>0)) & (d*y!=x))
 end
 
 const UnsignedIntTypes = (UInt8,UInt16,UInt32,UInt64,UInt128)
 for T in UnsignedIntTypes
     @eval begin
-        fast_div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
-        fast_rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
+        unchecked_div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
+        unchecked_rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
     end
 end
-fast_fld{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = fast_div(x,y)
-fast_mod{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = fast_rem(x,y)
-function fast_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
-    d = fast_div(x,y)
+unchecked_fld{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = unchecked_div(x,y)
+unchecked_mod{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = unchecked_rem(x,y)
+function unchecked_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
+    d = unchecked_div(x,y)
     d + (d*y!=x)
 end
