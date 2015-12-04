@@ -139,7 +139,10 @@ end
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 # TODO: do this only for signed 2's complement
 #mod{T<:Integer}(x::T, y::T) = rem(x,y) + (-T((x!=0) & ((x>=0) != (y>=0))) & y)
-mod{T<:Integer}(x::T, y::T) = x - fld(x,y)*y
+function mod{T<:Integer}(x::T, y::T)
+    y == -1 && return T(0)   # avoid potential overflow in fld
+    x - fld(x,y)*y
+ end
 
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
