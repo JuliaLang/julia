@@ -2530,6 +2530,9 @@ end
 # test second branch, after all small primes in list have been searched
 @test factor(10009 * Int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
 
+@test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
+@test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
+@test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
 

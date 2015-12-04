@@ -873,6 +873,15 @@ end
 @deprecate chol(A::Number, ::Type{Val{:L}})         ctranspose(chol(A))
 @deprecate chol(A::AbstractMatrix, ::Type{Val{:L}}) ctranspose(chol(A))
 
+# Number updates
+
+# rem1 is inconsistent for x==0: The result should both have the same
+# sign as x, and should be non-zero.
+function rem1{T<:Real}(x::T, y::T)
+    depwarn("`rem1(x,y)` is discontinued, as it cannot be defined consistently for `x==0`. Rewrite the expression using `mod1` instead.", :rem1)
+    rem(x-1,y)+1
+end
+
 # Filesystem module updates
 
 @deprecate_binding FS Filesystem
