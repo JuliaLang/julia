@@ -99,6 +99,7 @@ cp(newfile, c_file)
 @test isdir(c_subdir)
 @test isfile(c_file)
 @test_throws SystemError rm(c_tmpdir)
+@test_throws SystemError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
@@ -113,6 +114,10 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
+@test_throws Base.UVError rm(c_tmpdir)
+@test rm(c_tmpdir, force=true) === nothing
+@test_throws Base.UVError rm(c_tmpdir, recursive=true)
+@test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 
 #######################################################################
