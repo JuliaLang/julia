@@ -199,7 +199,7 @@ end
 @test_throws ArgumentError Base.is_unix(:BeOS)
 @unix_only @test Base.windows_version() == (0,0)
 
-# Issue 14173
+# issue 14173
 module Tmp14173
     export A
     A = randn(2000, 2000)
@@ -207,3 +207,6 @@ end
 whos(IOBuffer(), Tmp14173) # warm up
 @test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
 
+# issue 14245
+f14245() = (v = []; push!(v, length(v)))
+@test f14245() == Any[0]
