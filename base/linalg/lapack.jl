@@ -52,6 +52,15 @@ end
 subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
 subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
 
+function checkfinite(A::StridedMatrix)
+    for i = eachindex(A)
+        if !isfinite(A[i])
+            throw(ArgumentError("matrix contains NaNs"))
+        end
+    end
+    return true
+end
+
 # (GB) general banded matrices, LU decomposition and solver
 for (gbtrf, gbtrs, elty) in
     ((:dgbtrf_,:dgbtrs_,:Float64),
@@ -146,6 +155,7 @@ for (gebal, gebak, elty, relty) in
         #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
         function gebal!(job::Char, A::StridedMatrix{$elty})
             chkstride1(A)
+            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
             info    = Array(BlasInt, 1)
             ihi     = Array(BlasInt, 1)
@@ -169,6 +179,7 @@ for (gebal, gebak, elty, relty) in
                         ilo::BlasInt, ihi::BlasInt, scale::Vector{$relty},
                         V::StridedMatrix{$elty})
             chkstride1(V)
+            checkfinite(V) # balancing routines don't support NaNs and Infs
             chkside(side)
             n = chksquare(V)
             info    = Array(BlasInt, 1)
@@ -1382,6 +1393,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #      $                   WI( * ), WORK( * ), WR( * )
         function geev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty})
             chkstride1(A)
+            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
             lvecs = jobvl == 'V'
             rvecs = jobvr == 'V'
@@ -1679,6 +1691,7 @@ for (geevx, ggev, elty) in
    #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
    #      $                   WI( * ), WORK( * ), WR( * )
         function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
             lda = max(1,stride(A,2))
             wr = similar(A, $elty, n)
@@ -1825,6 +1838,7 @@ for (geevx, ggev, elty, relty) in
   #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
   #      $                   W( * ), WORK( * )
     function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+        checkfinite(A) # balancing routines don't support NaNs and Infs
         n = chksquare(A)
         lda = max(1,stride(A,2))
         w = similar(A, $elty, n)
@@ -4654,6 +4668,7 @@ for (gehrd, elty) in
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
             chkstride1(A)
+            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
             tau = similar(A, $elty, max(0,n - 1))
             work = Array($elty, 1)
