@@ -371,8 +371,6 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
-	# Copy in standalone executable build script
-	$(INSTALL_M) $(JULIAHOME)/contrib/build_executable.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in standalone julia-config script
 	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
