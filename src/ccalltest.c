@@ -12,8 +12,10 @@ int verbose = 1;
 
 #ifdef _P64
 #define jint int64_t
+#define PRIjint PRId64
 #else
 #define jint int32_t
+#define PRIjint PRId32
 #endif
 
 //////////////////////////////////
@@ -82,7 +84,7 @@ JL_DLLEXPORT complex float *cfptest(complex float *a) {
 
 JL_DLLEXPORT complex_t *cptest(complex_t *a) {
     //Unpack a ComplexPair{Int} struct pointer
-    if (verbose) fprintf(stderr,"%lld + %lld i\n", (long long)a->real, (long long)a->imag);
+    if (verbose) fprintf(stderr,"%" PRIjint " + %" PRIjint " i\n", a->real, a->imag);
     a->real += 1;
     a->imag -= 2;
     return a;
@@ -346,7 +348,7 @@ JL_DLLEXPORT int128_t test_128(int128_t a) {
 
 JL_DLLEXPORT struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
-    if (verbose) fprintf(stderr,"%lld %lld %c\n", (long long)a.x, (long long)a.y, a.z);
+    if (verbose) fprintf(stderr,"%" PRIjint " %" PRIjint " %c\n", a.x, a.y, a.z);
     a.x += 1;
     a.y -= 2;
     a.z -= 'A';
