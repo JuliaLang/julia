@@ -11455,9 +11455,9 @@ If `pkg` has a URL registered in `Pkg.dir("METADATA")`, clone it from that URL o
 Pkg.clone(pkg)
 
 doc"""
-    checkout(pkg, [branch="master"])
+    checkout(pkg, [branch="master"]; merge=true, pull=true)
 
-Checkout the `Pkg.dir(pkg)` repo to the branch `branch`. Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use `Pkg.free(pkg)`
+Checkout the `Pkg.dir(pkg)` repo to the branch `branch`. Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use `Pkg.free(pkg)`. Changes are merged (fast-forward only) if the keyword argument `merge == true`, and the latest version is pulled from the upsream repo if `pull == true`.
 """
 Pkg.checkout(pkg)
 
