@@ -125,7 +125,6 @@ end
 
 # checked operations
 
-#=
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod
 for T in (Int8, Int16, Int32, Int64, Int128)
@@ -199,6 +198,7 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test_throws OverflowError checked_mul(-sqrt2, sqrt2)
     @test_throws OverflowError checked_mul(-sqrt2, -sqrt2)
 
+    #=
     @test checked_div(typemax(T), T(1)) === typemax(T)
     @test_throws DivideError checked_div(typemax(T), T(0))
     @test checked_div(typemax(T), T(-1)) === T(-typemax(T))
@@ -223,6 +223,7 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test checked_mod(typemin(T), T(1)) === T(0)
     @test_throws DivideError checked_mod(typemin(T), T(0))
     @test checked_mod(typemin(T), T(-1)) === T(0)
+    =#
 end
 
 for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -267,6 +268,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test checked_mul(T(0), T(1)) === T(0)
     @test_throws OverflowError checked_mul(sqrt2, sqrt2)
 
+    #=
     @test checked_div(typemax(T), T(1)) === typemax(T)
     @test_throws DivideError checked_div(typemax(T), T(0))
     @test checked_rem(typemax(T), T(1)) === T(0)
@@ -275,6 +277,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test_throws DivideError checked_fld(typemax(T), T(0))
     @test checked_mod(typemax(T), T(1)) === T(0)
     @test_throws DivideError checked_mod(typemax(T), T(0))
+    =#
 end
 
 @test checked_abs(BigInt(-1)) == BigInt(1)
@@ -307,7 +310,6 @@ end
 
 @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
 @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
-=#
 
 # unchecked operations
 
