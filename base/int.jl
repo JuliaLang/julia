@@ -744,11 +744,19 @@ unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
 
 const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
-    @eval begin
-        unchecked_div(x::$T, y::$T) = box($T,sdiv_int(unbox($T,x),unbox($T,y)))
-        function unchecked_rem(x::$T, y::$T)
-            y == -1 && return $T(0)   # avoid overflow
-            box($T,srem_int(unbox($T,x),unbox($T,y)))
+    if WORD_SIZE == 32 && T === Int128
+        # There is a code generation bug on 32-bit Linux with LLVM 3.3
+        unchecked_div(x::$T, y::$T) = div(x, y)
+        unchecked_rem(x::$T, y::$T) = rem(x, y)
+    else
+        @eval begin
+            function unchecked_div(x::$T, y::$T)
+                box($T,sdiv_int(unbox($T,x),unbox($T,y)))
+            end
+            function unchecked_rem(x::$T, y::$T)
+                y == -1 && return $T(0)   # avoid overflow
+                box($T,srem_int(unbox($T,x),unbox($T,y)))
+            end
         end
     end
 end
