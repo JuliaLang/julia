@@ -205,5 +205,5 @@ module Tmp14173
     A = randn(2000, 2000)
 end
 whos(IOBuffer(), Tmp14173) # warm up
-@test @allocated(whos(IOBuffer(), Tmp14173)) < 7000
+@test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
 
