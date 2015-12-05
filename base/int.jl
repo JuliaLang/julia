@@ -746,8 +746,10 @@ const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
     if WORD_SIZE == 32 && T === Int128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
-        unchecked_div(x::$T, y::$T) = div(x, y)
-        unchecked_rem(x::$T, y::$T) = rem(x, y)
+        @eval begin
+            unchecked_div(x::$T, y::$T) = div(x, y)
+            unchecked_rem(x::$T, y::$T) = rem(x, y)
+        end
     else
         @eval begin
             function unchecked_div(x::$T, y::$T)
