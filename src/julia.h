@@ -1414,6 +1414,7 @@ typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
+    int8_t gc_state;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1535,6 +1536,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
+    jl_gc_state_save_and_set(eh->gc_state);
     JL_SIGATOMIC_END();
 }
 
