@@ -1535,7 +1535,8 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
         assert(!jl_in_vinfo_array(closed, sp));
         vi = jl_alloc_cell_1d(3);
         jl_cellset(vi, 0, sp);
-        jl_cellset(vi, 1, tv->ub == jl_any_type ? jl_any_type : jl_wrap_Type((jl_value_t*)tv));
+        jl_cellset(vi, 1, (tv->ub == (jl_value_t*)jl_any_type ? jl_any_type :
+                           jl_wrap_Type((jl_value_t*)tv)));
         jl_cellset(vi, 2, jl_box_long(1));
         jl_cell_1d_push(closed, (jl_value_t*)vi);
         // delete this item from the list of static parameters
