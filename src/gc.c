@@ -1028,7 +1028,7 @@ static size_t array_nbytes(jl_array_t *a)
     return sz;
 }
 
-void jl_gc_free_array(jl_array_t *a)
+static void jl_gc_free_array(jl_array_t *a)
 {
     if (a->how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
@@ -1630,19 +1630,21 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
+    int16_t tid = ta->tid;
+    jl_tls_states_t *ptls = jl_all_task_states[tid].ptls;
     if (stkbuf) {
 #ifndef COPY_STACKS
-        if (ta != jl_root_task) // stkbuf isn't owned by julia for the root task
+        if (ta != ptls->root_task) // stkbuf isn't owned by julia for the root task
 #endif
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
-    if (ta == jl_all_task_states[ta->tid].ptls->current_task) {
-        gc_mark_stack((jl_value_t*)ta, *jl_all_pgcstacks[ta->tid], 0, d);
+    if (ta == ptls->current_task) {
+        gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d);
     }
     else if (stkbuf) {
         ptrint_t offset;
 #ifdef COPY_STACKS
-        offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
+        offset = (char *)ta->stkbuf - ((char *)ptls->stackbase - ta->ssize);
 #else
         offset = 0;
 #endif
@@ -1907,8 +1909,6 @@ static void pre_mark(void)
 
     // invisible builtin values
     if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell, 0);
-    gc_push_root(jl_exception_in_transit, 0);
-    gc_push_root(jl_task_arg_in_transit, 0);
     if (jl_module_init_order != NULL)
         gc_push_root(jl_module_init_order, 0);
 
@@ -2037,7 +2037,7 @@ static void print_obj_profile(htable_t nums, htable_t sizes)
     }
 }
 
-void print_obj_profiles(void)
+static void print_obj_profiles(void)
 {
     jl_printf(JL_STDERR, "Transient mark :\n");
     print_obj_profile(obj_counts[0], obj_sizes[0]);
@@ -2053,10 +2053,6 @@ static int saved_mark_sp = 0;
 #endif
 static int sweep_mask = GC_MARKED;
 #define MIN_SCAN_BYTES 1024*1024
-
-void prepare_sweep(void)
-{
-}
 
 JL_DLLEXPORT void jl_gc_collect(int full)
 {
