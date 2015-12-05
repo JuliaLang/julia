@@ -716,19 +716,21 @@ checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
 checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
 
 # Handle multiple arguments
+checked_add(x::Integer) = +x
+checked_mul(x::Integer) = *(x)
 for f in (:checked_add, :checked_mul)
     @eval begin
-        ($f){T}(x1::T, x2::T, x3::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
@@ -778,19 +780,21 @@ function unchecked_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
 end
 
 # Handle multiple arguments
+unchecked_add(x::Integer) = +x
+unchecked_mul(x::Integer) = *(x)
 for f in (:unchecked_add, :unchecked_mul)
     @eval begin
-        ($f){T}(x1::T, x2::T, x3::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
