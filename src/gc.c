@@ -2462,8 +2462,9 @@ void jl_print_gc_stats(JL_STREAM *s)
 jl_thread_heap_t *jl_mk_thread_heap(void)
 {
 #ifdef JULIA_ENABLE_THREADING
-    // FIXME - should be cache-aligned malloc
-    jl_thread_heap = (jl_thread_heap_t*)malloc(sizeof(jl_thread_heap_t));
+    // Cache-aligned malloc
+    jl_thread_heap =
+        (jl_thread_heap_t*)jl_malloc_aligned(sizeof(jl_thread_heap_t), 64);
 #endif
     FOR_CURRENT_HEAP () {
         const int* szc = sizeclasses;
