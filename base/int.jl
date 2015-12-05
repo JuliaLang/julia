@@ -60,7 +60,7 @@ abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
 """
-    Base.checked_abs(x)
+    Base.checked_abs(x::Integer)
 
 Calculates `abs(x)`, checking for overflow errors where applicable.
 For example, standard two's complement signed integers (e.g. `Int`)
@@ -77,7 +77,7 @@ function checked_abs{T<:Union{Int8,Int16,Int32,Int64,Int128}}(x::T)
 end
 
 """
-    Base.checked_neg(x)
+    Base.checked_neg(x::Integer)
 
 Calculates `-x`, checking for overflow errors where applicable. For
 example, standard two's complement signed integers (e.g. `Int`) cannot
@@ -536,7 +536,7 @@ end
 ## checked +, -, *, div, rem, fld, mod
 
 """
-    Base.checked_add(x, y)
+    Base.checked_add(x::Integer, y::Integer)
 
 Calculates `x+y`, checking for overflow errors where applicable.
 
@@ -545,7 +545,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_add end
 
 """
-    Base.checked_sub(x, y)
+    Base.checked_sub(x::Integer, y::Integer)
 
 Calculates `x-y`, checking for overflow errors where applicable.
 
@@ -554,7 +554,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_sub end
 
 """
-    Base.checked_mul(x, y)
+    Base.checked_mul(x::Integer, y::Integer)
 
 Calculates `x*y`, checking for overflow errors where applicable.
 
@@ -563,7 +563,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_mul end
 
 """
-    Base.checked_div(x, y)
+    Base.checked_div(x::Integer, y::Integer)
 
 Calculates `div(x,y)`, checking for overflow errors where applicable.
 
@@ -572,7 +572,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_div end
 
 """
-    Base.checked_rem(x, y)
+    Base.checked_rem(x::Integer, y::Integer)
 
 Calculates `x%y`, checking for overflow errors where applicable.
 
@@ -581,7 +581,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_rem end
 
 """
-    Base.checked_fld(x, y)
+    Base.checked_fld(x::Integer, y::Integer)
 
 Calculates `fld(x,y)`, checking for overflow errors where applicable.
 
@@ -590,13 +590,22 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_fld end
 
 """
-    Base.checked_mod(x, y)
+    Base.checked_mod(x::Integer, y::Integer)
 
 Calculates `mod(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_mod end
+
+"""
+    Base.checked_cld(x::Integer, y::Integer)
+
+Calculates `cld(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+function checked_cld end
 
 # requires int arithmetic defined, for the loops to work
 
@@ -734,6 +743,96 @@ for f in (:checked_add, :checked_mul)
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
+
+"""
+    Base.unchecked_abs(x::Integer)
+
+Calculates `abs(x)` without any overflow checking. It is the caller's
+responsiblity to ensure that there is no overflow, and the compiler is free to
+optimize the code assuming there is no overflow.
+"""
+function unchecked_abs end
+
+"""
+    Base.unchecked_neg(x::Integer)
+
+Calculates `-x` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_neg end
+
+"""
+    Base.unchecked_add(x::Integer, y::Integer)
+
+Calculates `x+y` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_add end
+
+"""
+    Base.unchecked_sub(x::Integer, y::Integer)
+
+Calculates `x-y` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_sub end
+
+"""
+    Base.unchecked_mul(x::Integer, y::Integer)
+
+Calculates `x*y` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_mul end
+
+"""
+    Base.unchecked_div(x::Integer, y::Integer)
+
+Calculates `x÷y` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_div end
+
+"""
+    Base.unchecked_rem(x::Integer, y::Integer)
+
+Calculates `x%y` without any overflow checking. It is the caller's responsiblity
+to ensure that there is no overflow, and the compiler is free to optimize the
+code assuming there is no overflow.
+"""
+function unchecked_rem end
+
+"""
+    Base.unchecked_fld(x::Integer, y::Integer)
+
+Calculates `fld(x,y)` without any overflow checking. It is the caller's
+responsiblity to ensure that there is no overflow, and the compiler is free to
+optimize the code assuming there is no overflow.
+"""
+function unchecked_fld end
+
+"""
+    Base.unchecked_mod(x::Integer, y::Integer)
+
+Calculates `mod(x,y)` without any overflow checking. It is the caller's
+responsiblity to ensure that there is no overflow, and the compiler is free to
+optimize the code assuming there is no overflow.
+"""
+function unchecked_mod end
+
+"""
+    Base.unchecked_cld(x::Integer, y::Integer)
+
+Calculates `cld(x,y)` without any overflow checking. It is the caller's
+responsiblity to ensure that there is no overflow, and the compiler is free to
+optimize the code assuming there is no overflow.
+"""
+function unchecked_cld end
 
 # These implementations are unchecked by default
 unchecked_neg(x::Union{IntTypes...}) = -x
