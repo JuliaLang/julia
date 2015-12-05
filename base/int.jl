@@ -752,9 +752,8 @@ for T in SignedIntTypes
         end
     else
         @eval begin
-            function unchecked_div(x::$T, y::$T)
+            unchecked_div(x::$T, y::$T) =
                 box($T,sdiv_int(unbox($T,x),unbox($T,y)))
-            end
             function unchecked_rem(x::$T, y::$T)
                 y == -1 && return $T(0)   # avoid overflow
                 box($T,srem_int(unbox($T,x),unbox($T,y)))
@@ -777,9 +776,19 @@ end
 
 const UnsignedIntTypes = (UInt8,UInt16,UInt32,UInt64,UInt128)
 for T in UnsignedIntTypes
-    @eval begin
-        unchecked_div(x::$T, y::$T) = box($T,udiv_int(unbox($T,x),unbox($T,y)))
-        unchecked_rem(x::$T, y::$T) = box($T,urem_int(unbox($T,x),unbox($T,y)))
+    if WORD_SIZE == 32 && T === Int128
+        # There is probably a code generation bug on 32-bit Linux with LLVM 3.3
+        @eval begin
+            unchecked_div(x::$T, y::$T) = div(x, y)
+            unchecked_rem(x::$T, y::$T) = rem(x, y)
+        end
+    else
+        @eval begin
+            unchecked_div(x::$T, y::$T) =
+                box($T,udiv_int(unbox($T,x),unbox($T,y)))
+            unchecked_rem(x::$T, y::$T) =
+                box($T,urem_int(unbox($T,x),unbox($T,y)))
+        end
     end
 end
 unchecked_fld{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = unchecked_div(x,y)
