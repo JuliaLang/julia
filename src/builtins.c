@@ -194,6 +194,9 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     JL_SIGATOMIC_BEGIN();
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
+#ifdef JULIA_ENABLE_THREADING
+    eh->gc_state = jl_get_ptls_states()->gc_state;
+#endif
     jl_current_task->eh = eh;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.

@@ -369,11 +369,13 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     }
     if (jl_in_gc)
         jl_error("task switch not allowed from inside gc finalizer");
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_task_arg_in_transit = arg;
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
     jl_task_arg_in_transit = jl_nothing;
     throw_if_exception_set(jl_current_task);
+    jl_gc_unsafe_leave(gc_state);
     return val;
 }
 
@@ -811,6 +813,7 @@ JL_DLLEXPORT void gdbbacktrace(void)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
+    jl_gc_unsafe_enter();
     assert(e != NULL);
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
