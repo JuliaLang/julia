@@ -344,3 +344,15 @@ end
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
 
 @windows_only ENV["PATH"] = oldpath
+
+# equality tests for Cmd
+
+@test Base.Cmd(``) == Base.Cmd(``)
+@test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
+@test Base.Cmd(`echo test`) == Base.Cmd(`echo test`)
+@test Base.Cmd(``) != Base.Cmd(`echo test`)
+@test Base.Cmd(``, ignorestatus=true) != Base.Cmd(``, ignorestatus=false)
+@test Base.Cmd(``, dir="TESTS") != Base.Cmd(``, dir="TEST")
+@test Base.Set([``, ``]) == Base.Set([``])
+@test Set([``, `echo`]) != Set([``, ``])
+@test Set([`echo`, ``, ``, `echo`]) == Set([`echo`, ``])
