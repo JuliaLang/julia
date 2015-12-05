@@ -1577,7 +1577,7 @@ static jl_value_t *all_p2c(jl_value_t *ast, jl_svec_t *tvars)
         jl_gc_wb(unspec->linfo, unspec->linfo->ast);
         parameters_to_closureenv(unspec->linfo->ast, tvars); // move sparams to closure env
         unspec->linfo->ast = all_p2c(unspec->linfo->ast, tvars);
-        jl_gc_wb(unspec, unspec->linfo->ast);
+        jl_gc_wb(unspec->linfo, unspec->linfo->ast);
         if (jl_array_len(jl_lam_staticparams((jl_expr_t*)unspec->linfo->ast)) == 0)
             // mark this as compilable; otherwise, would need to make an unspecialized version of
             // this unspecialized function to handle all of the static parameters
