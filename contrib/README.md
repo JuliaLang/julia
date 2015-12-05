@@ -3,7 +3,6 @@ Installation
 
 | Name                           |  Description                                                |
 |  ----------------------------  |  ---------------------------------------------------------  |
-|[ build_executable.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/build_executable.jl) | Support building standalone executables |
 |[ build_sysimg.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/build_sysimg.jl) | Build a system image binary |
 |[ check-whitespace.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/check-whitespace.sh) | Check for trailing white space |
 |[ commit-name.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/commit-name.sh) | Computes a version name for a commit |
