@@ -843,7 +843,7 @@ unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
 
 const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
-    if WORD_SIZE == 32 && T === Int128
+    if false && WORD_SIZE == 32 && T === Int128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
             unchecked_div(x::$T, y::$T) = div(x, y)
@@ -875,7 +875,7 @@ end
 
 const UnsignedIntTypes = (UInt8,UInt16,UInt32,UInt64,UInt128)
 for T in UnsignedIntTypes
-    if WORD_SIZE == 32 && T === Int128
+    if false && WORD_SIZE == 32 && T === Int128
         # There is probably a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
             unchecked_div(x::$T, y::$T) = div(x, y)

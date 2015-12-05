@@ -125,6 +125,7 @@ end
 
 # checked operations
 
+#=
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod
 for T in (Int8, Int16, Int32, Int64, Int128)
@@ -306,9 +307,11 @@ end
 
 @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
 @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
+=#
 
-# fast (i.e. unchecked) operations
+# unchecked operations
 
+#=
 import Base: unchecked_abs, unchecked_neg,
              unchecked_add, unchecked_sub, unchecked_mul,
              unchecked_div, unchecked_rem, unchecked_fld, unchecked_mod
@@ -421,3 +424,4 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test unchecked_fld(typemax(T), T(1)) === typemax(T)
     @test unchecked_mod(typemax(T), T(1)) === T(0)
 end
+=#
