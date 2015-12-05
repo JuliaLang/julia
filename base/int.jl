@@ -709,19 +709,33 @@ function checked_mul(x::UInt128, y::UInt128)
 end
 
 # These implementations check by default
-checked_add(x::Union{IntTypes...}) = +x
-checked_mul(x::Union{IntTypes...}) = *(x)
 checked_div{T<:Union{IntTypes...}}(x::T, y::T) = div(x,y)
 checked_rem{T<:Union{IntTypes...}}(x::T, y::T) = rem(x,y)
 checked_fld{T<:Union{IntTypes...}}(x::T, y::T) = fld(x,y)
 checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
 checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
 
+# Handle multiple arguments
+for f in (:checked_add, :checked_mul)
+    @eval begin
+        ($f){T}(x1::T, x2::T, x3::T) =
+            ($f)(($f)(x1, x2), x3)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
+            ($f)(($f)(x1, x2), x3, x4)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
+    end
+end
+
 # These implementations are unchecked by default
-unchecked_add(x::Union{IntTypes...}) = +x
 unchecked_neg(x::Union{IntTypes...}) = -x
 unchecked_abs(x::Union{IntTypes...}) = abs(x)
-unchecked_mul(x::Union{IntTypes...}) = *(x)
 unchecked_add{T<:Union{IntTypes...}}(x::T, y::T) = x+y
 unchecked_sub{T<:Union{IntTypes...}}(x::T, y::T) = x-y
 unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
@@ -761,4 +775,22 @@ unchecked_mod{T<:Union{UnsignedIntTypes...}}(x::T, y::T) = unchecked_rem(x,y)
 function unchecked_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
     d = unchecked_div(x,y)
     d + (d*y!=x)
+end
+
+# Handle multiple arguments
+for f in (:unchecked_add, :unchecked_mul)
+    @eval begin
+        ($f){T}(x1::T, x2::T, x3::T) =
+            ($f)(($f)(x1, x2), x3)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
+            ($f)(($f)(x1, x2), x3, x4)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
+    end
 end
