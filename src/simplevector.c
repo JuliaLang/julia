@@ -9,8 +9,11 @@
 
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 {
+    // unmanaged safe
     va_list args;
     if (n == 0) return jl_emptysvec;
+    if (jl_gc_state())
+        return NULL;
     va_start(args, n);
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
     for(size_t i=0; i < n; i++)
@@ -21,6 +24,9 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_2w();
     jl_set_typeof(v, jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 1);
@@ -30,6 +36,9 @@ JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_3w();
     jl_set_typeof(v, jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 2);
@@ -40,7 +49,10 @@ JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
+    // unmanaged safe
     if (n == 0) return jl_emptysvec;
+    if (jl_gc_state())
+        return NULL;
     jl_svec_t *jv = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, n+1);
     jl_svec_set_len_unsafe(jv, n);
     return jv;
@@ -48,7 +60,10 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
 {
+    // unmanaged safe
     if (n == 0) return jl_emptysvec;
+    if (jl_gc_state())
+        return NULL;
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
     for(size_t i=0; i < n; i++)
         jl_svecset(jv, i, NULL);
@@ -57,6 +72,9 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
 
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     size_t i, n=jl_svec_len(a);
     jl_svec_t *c = jl_alloc_svec_uninit(n);
     for(i=0; i < n; i++)
@@ -66,7 +84,10 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 {
+    // unmanaged safe
     if (n==0) return jl_emptysvec;
+    if (jl_gc_state())
+        return NULL;
     jl_svec_t *v = jl_alloc_svec_uninit(n);
     for(size_t i=0; i < n; i++)
         jl_svecset(v, i, x);

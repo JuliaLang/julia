@@ -26,6 +26,7 @@ extern "C" {
 
 static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig, int va)
 {
+    // unmanaged safe
     if (!va && n > jl_datatype_nfields(sig))
         return 0;
     if (jl_datatype_nfields(sig) > n) {
@@ -71,6 +72,7 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig
 static inline int cache_match(jl_value_t **args, size_t n, jl_value_t **sig,
                               int va, size_t lensig)
 {
+    // unmanaged safe
     // NOTE: This function is a huge performance hot spot!!
     for(size_t i=0; i < n; i++) {
         jl_value_t *decl = sig[i];
@@ -115,6 +117,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_value_t **sig,
 static inline
 jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tparam, int8_t offs)
 {
+    // unmanaged safe
     uptrint_t uid = ((jl_datatype_t*)ty)->uid;
     jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
     if (ml && ml!=(void*)jl_nothing) {
@@ -128,6 +131,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tparam,
 
 static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t offs)
 {
+    // managed only
     size_t len = (*pa)->nrows;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
     jl_array_t *n = jl_alloc_cell_1d(len*2);
@@ -150,6 +154,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t offs)
 static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
                                        int8_t tparam, int8_t offs, jl_value_t *parent)
 {
+    // managed only
     uptrint_t uid;
     if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         while (1) {
@@ -216,6 +221,7 @@ static jl_lambda_info_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
 
 static jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t **args, size_t n)
 {
+    // unmanaged safe
     // NOTE: This function is a huge performance hot spot!!
     int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
     jl_methlist_t *ml = (jl_methlist_t*)jl_nothing;
@@ -278,6 +284,7 @@ static jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_valu
 // return a new lambda-info that has some extra static parameters merged in.
 static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, jl_tupletype_t *types)
 {
+    // managed only
     JL_GC_PUSH1(&sp);
     assert(jl_svec_len(l->sparam_syms) == jl_svec_len(sp) || sp == jl_emptysvec);
     assert(l->sparam_vals == jl_emptysvec);
@@ -411,6 +418,7 @@ jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *typ
 int jl_in_inference = 0;
 void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def)
 {
+    // managed only
     JL_LOCK(codegen); // Might GC
     int last_ii = jl_in_inference;
     jl_in_inference = 1;
@@ -448,6 +456,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def)
 
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
 {
+    // unmanaged safe
     size_t len = jl_datatype_nfields(sig);
     if (len == 0)
         return NULL;
@@ -462,6 +471,7 @@ jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
 
 static int very_general_type(jl_value_t *t)
 {
+    // unmanaged safe
     return (t && (t==(jl_value_t*)jl_any_type || t == (jl_value_t*)jl_type_type ||
                   (jl_is_typevar(t) &&
                    ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
@@ -469,6 +479,7 @@ static int very_general_type(jl_value_t *t)
 
 static int is_kind(jl_value_t *v)
 {
+    // unmanaged safe
     return (v==(jl_value_t*)jl_uniontype_type ||
             v==(jl_value_t*)jl_datatype_type ||
             v==(jl_value_t*)jl_typector_type);
@@ -481,6 +492,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_lambda_info_t *method, jl_tupletype_t *decl,
                                       jl_svec_t *sparams, int8_t isstaged)
 {
+    // managed only
     JL_LOCK(codegen); // Might GC
     size_t i;
     int need_guard_entries = 0;
@@ -846,6 +858,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
 static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
                                 jl_svec_t *tvars)
 {
+    // managed only
     jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
@@ -915,6 +928,7 @@ static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_
 
 JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
 {
+    // unmanaged safe
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = NULL;
@@ -968,11 +982,13 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     jl_lambda_info_t *func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
     func->name = generator->name;
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
     return func;
 }
 
 static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact)
 {
+    // managed only
     jl_methlist_t *m = mt->defs;
     size_t nargs = jl_nparams(tt);
     size_t i;
@@ -1074,6 +1090,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t);
 
 static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 {
+    // managed only
     if (jl_has_typevars(a) || jl_has_typevars(b)) {
         return jl_types_equal_generic(a,b,useenv);
     }
@@ -1082,6 +1099,7 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 
 JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
+    // unmanaged safe
     int msp = jl_type_morespecific(a,b);
     int btv = jl_has_typevars(b);
     if (btv) {
@@ -1139,6 +1157,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
                             jl_methlist_t *oldmeth, jl_sym_t *fname,
                             jl_lambda_info_t *linfo)
 {
+    // managed only
     jl_tupletype_t *sig = oldmeth->sig;
     size_t tl = jl_nparams(type);
     size_t sl = jl_nparams(sig);
@@ -1184,6 +1203,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
 
 static int has_unions(jl_tupletype_t *type)
 {
+    // unmanaged safe
     int i;
     for(i=0; i < jl_nparams(type); i++) {
         jl_value_t *t = jl_tparam(type,i);
@@ -1199,6 +1219,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
                                      jl_lambda_info_t *method, jl_svec_t *tvars,
                                      int check_amb, int8_t isstaged, jl_value_t *parent)
 {
+    // managed only
     jl_methlist_t *l, **pl;
 
     assert(jl_is_tuple_type(type));
@@ -1310,6 +1331,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
 
 static void remove_conflicting(jl_methlist_t **pl, jl_value_t *type)
 {
+    // managed only
     jl_methlist_t *l = *pl;
     while (l != (void*)jl_nothing) {
         if (jl_type_intersection(type, (jl_value_t*)l->sig) !=
@@ -1325,6 +1347,7 @@ static void remove_conflicting(jl_methlist_t **pl, jl_value_t *type)
 
 static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
 {
+    // managed only
     size_t na = jl_nparams(type);
     if (jl_is_va_tuple(type))
         na--;
@@ -1336,6 +1359,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_lambda_info_t *method, jl_svec_t *tvars,
                                       int8_t isstaged)
 {
+    // managed only
     if (jl_svec_len(tvars) == 1)
         tvars = (jl_svec_t*)jl_svecref(tvars,0);
     if (isstaged) // staged function definitions will be compiled directly. mark them accordingly.
@@ -1372,6 +1396,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
 
 void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
 {
+    // unmanaged safe
     jl_value_t *fargs[3] = {
         (jl_value_t*)jl_methoderror_type,
         (jl_value_t*)f,
@@ -1391,6 +1416,7 @@ void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
 
 void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
+    // managed only
     jl_value_t *argtup = jl_f_tuple(NULL, args+1, na-1);
     JL_GC_PUSH1(&argtup);
     jl_no_method_error_bare(f, argtup);
@@ -1399,6 +1425,7 @@ void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t 
 
 jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
+    // managed only
     jl_tupletype_t *tt;
     size_t i;
     if (nargs < jl_page_size/sizeof(jl_value_t*)) {
@@ -1433,6 +1460,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                            int cache, int inexact)
 {
+    // managed only
     jl_lambda_info_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == NULL) {
         if (jl_is_leaf_type((jl_value_t*)types)) cache=1;
@@ -1443,11 +1471,16 @@ jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *t
 
 JL_DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
 {
-    return jl_method_lookup_by_type(mt, types, 0, 0) != NULL;
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
+    int res = jl_method_lookup_by_type(mt, types, 0, 0) != NULL;
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)
 {
+    // managed only
     jl_lambda_info_t *sf = jl_method_table_assoc_exact(mt, args, nargs);
     if (sf == NULL) {
         jl_tupletype_t *tt = arg_type_tuple(args, nargs);
@@ -1463,6 +1496,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_value_t *types, int lim);
 // compile-time method lookup
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
 {
+    // managed only
     assert(jl_nparams(types) > 0);
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
@@ -1510,6 +1544,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
 // add type of `f` to front of argument tuple type
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types)
 {
+    // managed only
     size_t l = jl_nparams(types);
     jl_value_t *tt = (jl_value_t*)jl_alloc_svec(1+l);
     size_t i;
@@ -1527,6 +1562,7 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 
 static int tupletype_any_bottom(jl_value_t *sig)
 {
+    // unmanaged safe
     jl_svec_t *types = ((jl_tupletype_t*)sig)->types;
     size_t i, l = jl_svec_len(types);
     for (i = 0; i < l; i++) {
@@ -1696,6 +1732,7 @@ static int _compile_all_union(jl_methlist_t *meth)
 
 static void _compile_all_deq(jl_array_t *found)
 {
+    // managed only
     size_t found_i, found_l = jl_array_len(found);
     jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
     for (found_i = 0; found_i < found_l; found_i++) {
@@ -1811,6 +1848,7 @@ static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
 
 void jl_compile_all(void)
 {
+    // managed only
     // this "found" array will contain
     // LambdaStaticDatas that need to be compiled
     // and (generic-function, method) pairs that may be optimized (and need to be compiled)
@@ -1829,7 +1867,10 @@ void jl_compile_all(void)
 
 JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     (void)jl_get_specialization1(types, NULL);
+    jl_gc_unsafe_leave(gc_state);
 }
 
 #ifdef JL_TRACE
@@ -1865,6 +1906,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     if (traceen)
         show_call(F, &args[1], nargs-1);
 #endif
+    int8_t gc_state = jl_gc_unsafe_enter();
     /*
       search order:
       look at concrete signatures
@@ -1913,6 +1955,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     assert(!mfunc->inInference);
     jl_value_t *res = jl_call_method_internal(mfunc, args, nargs);
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
     return verify_type(res);
 }
 
@@ -1950,6 +1993,7 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types)
 // NOTE: assumes argument type is a subtype of the lookup type.
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs)
 {
+    // managed only
     jl_svec_t *tpenv=jl_emptysvec;
     jl_tupletype_t *newsig=NULL;
     jl_tupletype_t *tt=NULL;
@@ -2032,6 +2076,7 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
 
 JL_DLLEXPORT jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
 {
+    // managed only
     // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
     char *prefixed;
@@ -2077,6 +2122,7 @@ JL_DLLEXPORT jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t 
 void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda_info_t *meth,
                             jl_svec_t *tvars, int8_t isstaged)
 {
+    // managed only
     assert(jl_is_tuple_type(types));
     assert(jl_is_lambda_info(meth));
     assert(jl_is_mtable(mt));
@@ -2102,12 +2148,15 @@ void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_lambda_info_t *m
 JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
                                         jl_svec_t *tvars)
 {
+    // unmanaged safe
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti=NULL;
+    int8_t gc_state = jl_gc_unsafe_enter();
     JL_GC_PUSH2(&env, &ti);
     ti = lookup_match(type, (jl_value_t*)sig, &env, tvars);
     jl_svec_t *result = jl_svec2(ti, env);
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
     return result;
 }
 
@@ -2116,6 +2165,7 @@ JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
 // arguments.
 static int tvar_exists_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int attop)
 {
+    // unmanaged safe
     int i, l=jl_nparams(sig);
     for(i=0; i < l; i++) {
         jl_value_t *a = jl_tparam(sig, i);
@@ -2139,6 +2189,7 @@ static int tvar_exists_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int att
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim)
 {
+    // managed only
     jl_array_t *t = (jl_array_t*)jl_an_empty_cell;
     jl_svec_t *matc=NULL;
     jl_svec_t *env = jl_emptysvec;

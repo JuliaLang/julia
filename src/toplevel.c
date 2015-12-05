@@ -35,6 +35,7 @@ jl_module_t *jl_internal_main_module = NULL;
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
+    // unmanaged safe
     assert(jl_base_module != NULL);
     // using Base
     jl_module_using(m, jl_base_module);
@@ -43,6 +44,7 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 {
+    // unmanaged safe
     if (jl_generating_output() && jl_options.incremental)
         jl_error("cannot call workspace() in incremental compile mode");
 
@@ -50,6 +52,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     if (jl_current_module != jl_main_module && jl_current_module != NULL && jl_main_module != NULL)
         jl_error("Main can only be replaced from the top level");
 
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_module_t *old_main = jl_main_module;
 
     jl_main_module = jl_new_module(jl_symbol("Main"));
@@ -64,6 +67,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     jl_set_global(jl_core_module, jl_symbol("Main"),
                   (jl_value_t*)jl_main_module);
     jl_current_task->current_module = jl_main_module;
+    jl_gc_unsafe_leave(gc_state);
 
     return old_main;
 }
@@ -71,6 +75,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 // load time init procedure: in build mode, only record order
 static void jl_module_load_time_initialize(jl_module_t *m)
 {
+    // managed only
     int build_mode = jl_generating_output();
     if (build_mode) {
         if (jl_module_init_order == NULL)
@@ -93,6 +98,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
 extern void jl_get_system_hooks(void);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
+    // managed only
     static arraylist_t module_stack;
     static int initialized=0;
     static jl_module_t *outermost = NULL;
@@ -232,6 +238,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 // - later, it refers to either old Base or new Base
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
+    // unmanaged safe
     while (m != m->parent) {
         if (m->istopmod)
             return m;
@@ -242,6 +249,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 
 int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 {
+    // managed only
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym) return 1;
@@ -264,6 +272,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 // the compiler or the interpreter.
 static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_expr_t *expr, int compileloops, jl_module_t *m)
 {
+    // managed only
     assert(jl_is_expr(expr));
     if (expr->head==body_sym && compileloops) {
         jl_array_t *body = expr->args;
@@ -316,6 +325,7 @@ static jl_value_t *require_func=NULL;
 
 static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 {
+    // managed only
     // in .A.B.C, first find a binding for A in the chain of module scopes
     // following parent links. then evaluate the rest of the path from there.
     // in A.B, look for A in Main first.
@@ -397,6 +407,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 
 static jl_module_t *eval_import_path(jl_array_t *args)
 {
+    // managed only
     return eval_import_path_(args, 0);
 }
 
@@ -404,6 +415,7 @@ jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts);
 
 int jl_is_toplevel_only_expr(jl_value_t *e)
 {
+    // unmanaged safe
     return jl_is_expr(e) &&
         (((jl_expr_t*)e)->head == module_sym ||
          ((jl_expr_t*)e)->head == importall_sym ||
@@ -416,6 +428,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
+    // managed only
     //jl_show(ex);
     //jl_printf(JL_STDOUT, "\n");
     if (!jl_is_expr(e))
@@ -557,11 +570,16 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
-    return jl_toplevel_eval_flex(v, 1);
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
+    jl_value_t *res = jl_toplevel_eval_flex(v, 1);
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
+    // unmanaged safe
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
@@ -579,6 +597,7 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 // load from filename given as a ByteString object
 JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
+    // unmanaged safe
     return jl_load(jl_string_data(str), jl_string_len(str));
 }
 
@@ -589,6 +608,7 @@ extern int jl_boot_file_loaded;
 static int type_contains(jl_value_t *ty, jl_value_t *x);
 static int svec_contains(jl_svec_t *svec, jl_value_t *x)
 {
+    // unmanaged safe
     assert(jl_is_svec(svec));
     size_t i, l=jl_svec_len(svec);
     for(i=0; i < l; i++) {
@@ -601,6 +621,7 @@ static int svec_contains(jl_svec_t *svec, jl_value_t *x)
 
 static int type_contains(jl_value_t *ty, jl_value_t *x)
 {
+    // unmanaged safe
     if (ty == x) return 1;
     if (jl_is_uniontype(ty))
         return svec_contains((jl_svec_t*)jl_fieldref(ty,0), x);
@@ -642,6 +663,8 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_value_t *gf=NULL;
 
     assert(name && bp);
@@ -660,6 +683,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);
     }
+    jl_gc_unsafe_leave(gc_state);
     return gf;
 }
 

@@ -22,6 +22,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
+    // managed only
     return eval(e, NULL, 0, 0);
 }
 
@@ -30,6 +31,7 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
                                                        jl_svec_t *local_syms,
                                                        jl_svec_t *local_vals)
 {
+    // unmanaged safe
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
@@ -39,6 +41,7 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
         locals[2 * i] = jl_svecref(local_syms, i);
         locals[2 * i + 1] = jl_svec_len(local_vals) > 0 ? jl_svecref(local_vals, i) : NULL;
     }
+    int8_t gc_state = jl_gc_unsafe_enter();
     JL_TRY {
         jl_current_task->current_module = jl_current_module = m;
         v = eval(e, locals, nl, 0);
@@ -50,6 +53,7 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
     }
     jl_current_module = last_m;
     jl_current_task->current_module = task_last_m;
+    jl_gc_unsafe_leave(gc_state);
     assert(v);
     return v;
 }
@@ -57,6 +61,7 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
 static jl_value_t *do_call(jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl, size_t ngensym)
 {
+    // managed only
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs);
     size_t i;
@@ -69,9 +74,12 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs,
 
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
         jl_undefined_var_error(e);
+    jl_gc_unsafe_leave(gc_state);
     return v;
 }
 
@@ -81,6 +89,7 @@ extern int inside_typedef;
 // this is a heuristic for allowing "redefining" a type to something identical
 static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
+    // unmanaged safe
     return (jl_typeof(dta) == jl_typeof(dtb) &&
             // TODO: can't yet handle parametric types due to how constructors work
             dta->parameters == jl_emptysvec &&
@@ -97,6 +106,7 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 
 static void check_can_assign_type(jl_binding_t *b)
 {
+    // unmanaged safe
     if (b->constp && b->value != NULL && !jl_is_datatype(b->value))
         jl_errorf("invalid redefinition of constant %s",
                   jl_symbol_name(b->name));
@@ -121,6 +131,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
+    // managed only
     if (jl_is_symbol(e)) {
         jl_value_t *v;
         size_t i;
@@ -455,6 +466,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
 
 static int label_idx(long ltgt, jl_array_t *stmts)
 {
+    // unmanaged safe
     size_t j;
     for(j=0; j < stmts->nrows; j++) {
         jl_value_t *l = jl_cellref(stmts,j);
@@ -467,6 +479,7 @@ static int label_idx(long ltgt, jl_array_t *stmts)
 
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 {
+    // managed only
     ssize_t ngensym = 0;
     size_t i, l = jl_array_len(stmts);
     for (i = 0; i < l; i++) {
@@ -487,6 +500,7 @@ jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
                              int start, int toplevel)
 {
+    // managed only
     jl_handler_t __eh;
     size_t i=start, ns = jl_array_len(stmts);
 
@@ -558,6 +572,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl)
 {
+    // managed only
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
     jl_array_t *stmts = jl_lam_body(ast)->args;
     size_t nargs = jl_array_len(jl_lam_args(ast));
@@ -585,6 +600,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
 
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
+    // managed only
     return jl_interpret_toplevel_thunk_with(lam, NULL, 0);
 }
 

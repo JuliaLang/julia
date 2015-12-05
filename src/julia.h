@@ -683,6 +683,7 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 {
+    // managed only
     // parent and ptr isa jl_value_t*
     if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1 &&
                    (jl_astaggedvalue(ptr)->gc_bits & 1) == 0))
@@ -691,6 +692,7 @@ STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 
 STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
+    // managed only
     // if ptr is marked
     if (__unlikely((jl_astaggedvalue(ptr)->gc_bits & 1) == 1)) {
         jl_gc_queue_root((jl_value_t*)ptr);
@@ -717,6 +719,7 @@ STATIC_INLINE jl_value_t *jl_svecref(void *t, size_t i)
 }
 STATIC_INLINE jl_value_t *jl_svecset(void *t, size_t i, void *x)
 {
+    // managed only
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
     jl_svec_data(t)[i] = (jl_value_t*)x;
@@ -745,6 +748,7 @@ STATIC_INLINE jl_value_t *jl_cellref(void *a, size_t i)
 }
 STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 {
+    // managed only
     assert(i < jl_array_len(a));
     ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
     if (x) {

@@ -278,6 +278,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
                           )
 {
+    // unmanaged safe
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
     llvm::InitializeNativeTargetAsmParser();

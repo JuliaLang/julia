@@ -244,6 +244,8 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
 
 JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
 {
+    // unmanaged safe
+    // return NULL if unmanaged
     size_t n;
     jl_array_t *a;
     if (s->buf == &s->local[0]) {
@@ -261,7 +263,11 @@ JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
 
 JL_DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s)
 {
+    // unmanaged safe
+    // return NULL if unmanaged
     jl_array_t *a = jl_takebuf_array(s);
+    if (jl_gc_state())
+        return NULL;
     JL_GC_PUSH1(&a);
     jl_value_t *str = jl_array_to_string(a);
     JL_GC_POP();
@@ -279,6 +285,8 @@ JL_DLLEXPORT void *jl_takebuf_raw(ios_t *s)
 
 JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_array_t *a;
     // manually inlined common case
     char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
@@ -305,11 +313,13 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
             ((char*)a->data)[n] = '\0';
         }
     }
+    jl_gc_unsafe_leave(gc_state);
     return (jl_value_t*)a;
 }
 
 JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 {
+    // unmanaged safe
     assert(n <= 8);
     size_t space, ret;
     do {
@@ -356,6 +366,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 
 JL_DLLEXPORT int jl_cpu_cores(void)
 {
+    // unmanaged safe
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
@@ -393,6 +404,7 @@ JL_DLLEXPORT int jl_cpu_cores(void)
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void)
 {
+    // unmanaged safe
     return uv_hrtime();
 }
 
@@ -408,6 +420,7 @@ extern char **environ;
 
 JL_DLLEXPORT jl_value_t *jl_environ(int i)
 {
+    // unmanaged safe
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
 #endif
@@ -629,6 +642,7 @@ JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
+    // unmanaged safe
     if (!handle)
         return NULL;
 
@@ -738,6 +752,7 @@ JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void)
 
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
 {
+    // unmanaged safe
     static jl_sym_t *ARCH = NULL;
     if (!ARCH)
         ARCH = (jl_sym_t*) jl_get_global(jl_base_module, jl_symbol("ARCH"));
@@ -746,6 +761,7 @@ JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
 
 JL_DLLEXPORT size_t jl_maxrss(void)
 {
+    // unmanaged safe
 #if defined(_OS_WINDOWS_)
     PROCESS_MEMORY_COUNTERS counter;
     GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );

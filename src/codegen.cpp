@@ -711,6 +711,7 @@ static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
 
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
+    // managed only
     if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
         char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
         char buf[1024];
@@ -1039,6 +1040,7 @@ static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
 
 extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 {
+    // managed only
     JL_LOCK(codegen);
     // objective: assign li->fptr
     assert(li->functionObjects.functionObject);
@@ -1114,6 +1116,7 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx)
 {
+    // managed only
     if (li->functionObjects.functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
@@ -1128,6 +1131,7 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx)
 static Function *gen_cfun_wrapper(jl_lambda_info_t *ff, jl_function_t *f, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref);
 static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt)
 {
+    // managed only
     if (rt) {
         JL_TYPECHK(cfunction, type, rt);
     }
@@ -1213,6 +1217,8 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
 extern "C" JL_DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     JL_GC_PUSH1(&argt);
     if (jl_is_tuple(argt)) {
         // TODO: maybe deprecation warning, better checking
@@ -1222,6 +1228,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     assert(llvmf);
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
 
 #ifdef USE_MCJIT
     if (uint64_t addr = getAddressForOrCompileFunction(llvmf))
@@ -1245,6 +1252,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 
 extern "C" JL_DLLEXPORT
 void *jl_function_ptr_by_llvm_name(char *name) {
+    // unmanaged safe
 #ifdef __has_feature
 #if __has_feature(memory_sanitizer)
     __msan_unpoison_string(name);
@@ -1257,8 +1265,11 @@ void *jl_function_ptr_by_llvm_name(char *name) {
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
+    // unmanaged safe
     assert(jl_is_tuple_type(argt));
+    int8_t gc_state = jl_gc_unsafe_enter();
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
+    jl_gc_unsafe_leave(gc_state);
     if (llvmf) {
         #ifndef LLVM35
         new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
@@ -1301,6 +1312,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
     }
     if (linfo == NULL) {
         JL_GC_POP();
+        jl_gc_unsafe_leave(gc_state);
         return NULL;
     }
     if (!linfo->specTypes) {
@@ -1378,6 +1390,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         jl_compile_linfo(linfo, NULL);
     }
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
     Function *llvmf;
     if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL)
         llvmf = (Function*)linfo->functionObjects.specFunctionObject;
@@ -1395,13 +1408,16 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
 extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
 {
+    // unmanaged safe
     std::string code;
     llvm::raw_string_ostream stream(code);
 
     Function *llvmf = dyn_cast<Function>((Function*)f);
     if (!llvmf)
         jl_error("jl_dump_function_ir: Expected Function*");
-
+    // Do not use return_null_if_unmanaged since this function and the *_asm
+    // below since they could be useful for debugging
+    int8_t gc_state = jl_gc_unsafe_enter();
     if (llvmf->isDeclaration()) {
         // print the function declaration plain
         llvmf->print(stream);
@@ -1449,7 +1465,9 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
         delete m;
     }
 
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    jl_value_t *res = jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 // Pre-declaration. Definition in disasm.cpp
@@ -1470,6 +1488,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
+    // unmanaged safe
     std::string code;
     llvm::raw_string_ostream stream(code);
 #ifndef LLVM37
@@ -1479,7 +1498,9 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     Function *llvmf = dyn_cast<Function>((Function*)f);
     if (!llvmf)
         jl_error("jl_dump_function_asm: Expected Function*");
-
+    // Do not use return_null_if_unmanaged since this function and the *_ir
+    // above since they could be useful for debugging
+    int8_t gc_state = jl_gc_unsafe_enter();
     // Dump assembly code
     uint64_t symsize, slide;
 #ifdef USE_MCJIT
@@ -1491,8 +1512,11 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
     assert(fptr != 0);
     if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
-        if (raw_mc)
-            return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
+        if (raw_mc) {
+            jl_array_t *res = jl_pchar_to_array((char*)fptr, symsize);
+            jl_gc_unsafe_leave(gc_state);
+            return (jl_value_t*)res;
+        }
 #ifdef LLVM37
         jl_dump_asm_internal(fptr, symsize, slide, object, stream);
 #else
@@ -1506,7 +1530,9 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     fstream.flush();
 #endif
 
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    jl_value_t *res = jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 // Code coverage
@@ -1540,6 +1566,7 @@ extern "C" int isabspath(const char *in);
 
 static void write_log_data(logdata_t logData, const char *extension)
 {
+    // unmanaged safe
     std::string base = std::string(jl_options.julia_home);
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
@@ -1635,6 +1662,7 @@ static void mallocVisitLine(std::string filename, int line)
 // from JITting.
 extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
 {
+    // unmanaged safe
     logdata_t::iterator it = mallocData.begin();
     for (; it != mallocData.end(); it++) {
         std::vector<GlobalVariable*> &bytes = (*it).second;
@@ -1687,6 +1715,7 @@ extern "C"
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *linfo, int sparams, int allow_alloc)
 {
+    // managed only
     jl_codectx_t *ctx = (jl_codectx_t*)ctx_;
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
@@ -2292,6 +2321,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (!arg1.isboxed)
         make_gcroot(varg1, ctx);
     Value *varg2 = boxed(arg2, ctx); // unrooted!
+    // TODO: Make sure to switch to managed mode
 #ifdef LLVM37
     return builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
 #else

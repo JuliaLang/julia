@@ -564,6 +564,7 @@ static std::vector<Constant*> jl_sysimg_fvars;
 
 extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
 {
+    // unmanaged safe
     // map a jl_value_t memory location to a GlobalVariable
     std::map<void*, jl_value_llvm>::iterator it;
     it = jl_value_to_llvm.find(p);
@@ -648,6 +649,7 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len,
                            bool dump_as_bc)
 {
+    // unmanaged safe
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     realize_pending_globals();
 #endif
@@ -905,6 +907,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed);
 extern "C" {
 JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 {
+    // unmanaged safe
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
@@ -951,6 +954,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 
 static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
 {
+    // unmanaged safe
     // this function converts a Julia Type into the equivalent LLVM struct
     // use this where C-compatible (unboxed) structs are desired
     // use julia_type_to_llvm directly when you want to preserve Julia's type semantics

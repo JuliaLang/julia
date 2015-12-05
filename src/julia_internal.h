@@ -25,6 +25,7 @@ JL_DLLEXPORT extern const char *jl_filename;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
+    // managed only
     jl_value_t *jv = NULL;
     switch (nfields) {
     case 0:
@@ -44,6 +45,7 @@ STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 
 STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 {
+    // managed only
     jl_value_t *jv = (jl_value_t*)jl_gc_allocobj(type->size);
     jl_set_typeof(jv, type);
     return jv;
@@ -84,6 +86,7 @@ void gc_setmark_buf(void *buf, int);
 
 static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
+    // managed only
     if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
                    (jl_astaggedvalue(val)->gc_bits & 1) == 0))
         gc_queue_binding(bnd);
@@ -91,6 +94,7 @@ static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_
 
 static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
+    // managed only
     // if parent is marked and buf is not
     if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
         //            (jl_astaggedvalue(bufptr)->gc_bits) != 1))

@@ -61,6 +61,7 @@ static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym)
 
 JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 {
+    // unmanaged safe
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
     size_t len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
@@ -92,6 +93,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 
 JL_DLLEXPORT int jl_dlclose(void *handle)
 {
+    // unmanaged safe
 #ifdef _OS_WINDOWS_
     if (!handle) return -1;
     return FreeLibrary((HMODULE) handle);
@@ -104,6 +106,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 
 static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
 {
+    // unmanaged safe
     char *ext;
     char path[PATHBUF];
     int i;
@@ -206,16 +209,19 @@ done:
 
 JL_DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
 {
+    // unmanaged safe
     return jl_load_dynamic_library_(modname, flags, 0);
 }
 
 JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
 {
+    // unmanaged safe
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
 JL_DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
 {
+    // unmanaged safe
 #ifdef _OS_WINDOWS_
     void *ptr = GetProcAddress((HMODULE) handle, symbol);
 #else
@@ -227,6 +233,7 @@ JL_DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
 
 JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 {
+    // unmanaged safe
     void *ptr = jl_dlsym_e(handle, symbol);
     if (!ptr)
         jl_dlerror("could not load symbol \"%s\":\n%s", symbol);
@@ -237,6 +244,7 @@ JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 //Look for symbols in win32 libraries
 const char *jl_dlfind_win32(const char *f_name)
 {
+    // unmanaged safe
     if (jl_dlsym_e(jl_exe_handle, f_name))
         return (const char*)1;
     if (jl_dlsym_e(jl_dl_handle, f_name))

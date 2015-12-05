@@ -12,6 +12,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
 {
+    // managed only
     size_t sz = jl_array_len(*pa);
     size_t i;
     void **ol = (void**)(*pa)->data;
@@ -32,6 +33,7 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 {
+    // managed only
     uint_t hv;
     jl_array_t *a = *pa;
     size_t orig, index, iter;
@@ -89,6 +91,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 /* if return is non-NULL and *bp == NULL then key was deleted */
 static void **jl_table_peek_bp(jl_array_t *a, void *key)
 {
+    // unmanaged safe
     size_t sz = hash_size(a);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
@@ -116,15 +119,18 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
 JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
+    int8_t gc_state = jl_gc_unsafe_enter();
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
     jl_gc_wb(h, val);
+    jl_gc_unsafe_leave(gc_state);
     return h;
 }
 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 {
+    // unmanaged safe
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
@@ -134,18 +140,22 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
 {
+    // unmanaged safe
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_value_t *val = (jl_value_t*)*bp;
     *(bp-1) = jl_nothing; // clear the key
     *bp = NULL;
+    jl_gc_unsafe_leave(gc_state);
     return val;
 }
 
 JL_DLLEXPORT
 size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 {
+    // unmanaged safe
     if (i&1) i++;
     size_t alen = jl_array_dim0(t);
     while (i < alen && ((void**)t->data)[i+1] == NULL)

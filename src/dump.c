@@ -1708,6 +1708,7 @@ static int readstr_verify(ios_t *s, const char *str)
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
 {
+    // unmanaged safe
     uint16_t bom;
     return (readstr_verify(s, JI_MAGIC) &&
             read_uint16(s) == JI_FORMAT_VERSION &&
@@ -1800,6 +1801,7 @@ static jl_array_t *jl_finalize_deserializer(ios_t *f) {
 
 void jl_init_restored_modules(jl_array_t *init_order)
 {
+    // managed only
     if (!init_order)
         return;
     int i;
@@ -1867,21 +1869,27 @@ static void jl_save_system_image_to_stream(ios_t *f)
 
 JL_DLLEXPORT void jl_save_system_image(const char *fname)
 {
+    // unmanaged safe
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         jl_errorf("cannot open system image file \"%s\" for writing", fname);
     }
+    int8_t gc_state = jl_gc_unsafe_enter();
     JL_SIGATOMIC_BEGIN();
     jl_save_system_image_to_stream(&f);
     ios_close(&f);
     JL_SIGATOMIC_END();
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT ios_t *jl_create_system_image(void)
 {
+    // unmanaged safe
     ios_t *f = (ios_t*)malloc(sizeof(ios_t));
     ios_mem(f, 1000000);
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_save_system_image_to_stream(f);
+    jl_gc_unsafe_leave(gc_state);
     return f;
 }
 
@@ -1894,6 +1902,7 @@ extern void jl_get_system_hooks(void);
 // Takes in a path of the form "usr/lib/julia/sys.{ji,so}", as passed to jl_restore_system_image()
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
+    // unmanaged safe
     // If passed NULL, don't even bother
     if (!fname)
         return;
@@ -1919,6 +1928,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
+    // unmanaged safe (disables GC)
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
     int en = jl_gc_enable(0);
@@ -1984,6 +1994,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 {
+    // unmanaged safe
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
@@ -2008,6 +2019,7 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 {
+    // unmanaged safe
     ios_t f;
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char*)buf, len);
@@ -2018,6 +2030,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
+    // unmanaged safe (disables GC)
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
     DUMP_MODES last_mode = mode;
@@ -2053,6 +2066,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 
 JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
+    // unmanaged safe (disables GC)
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
     assert(jl_is_array(data));
@@ -2078,6 +2092,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *dat
 
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
+    // unmanaged safe (disables GC)
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
     if (ios_mkstemp(&f, tmpfname) == NULL) {
@@ -2237,6 +2252,7 @@ static void jl_recache_types(void)
 
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
+    // unmanaged safe (disables GC)
     if (ios_eof(f)) {
         ios_close(f);
         return NULL;
@@ -2322,6 +2338,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf,
                                                          size_t sz)
 {
+    // unmanaged safe
     ios_t f;
     jl_array_t *modules;
     ios_static_buffer(&f, (char*)buf, sz);
@@ -2331,6 +2348,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf,
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 {
+    // unmanaged safe
     ios_t f;
     jl_array_t *modules;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {

@@ -18,6 +18,9 @@ jl_module_t *jl_top_module=NULL;
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_module_t *m = (jl_module_t*)jl_gc_allocobj(sizeof(jl_module_t));
     jl_set_typeof(m, jl_module_type);
     JL_GC_PUSH1(&m);
@@ -47,6 +50,9 @@ uint32_t jl_module_next_counter(jl_module_t *m)
 
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_module_t *m = jl_new_module(name);
     JL_GC_PUSH1(&m);
     m->parent = jl_main_module;
@@ -58,6 +64,7 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 
 JL_DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
 {
+    // unmanaged safe
     jl_current_module->istopmod = 1;
     if (isprimary)
         jl_top_module = jl_current_module;
@@ -65,11 +72,13 @@ JL_DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
 
 JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
 {
+    // unmanaged safe
     return mod->istopmod;
 }
 
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
+    // managed only
     assert(jl_is_symbol(name));
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
@@ -86,21 +95,25 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    jl_binding_t *b;
+    jl_binding_t *b = *bp;
 
-    if (*bp != HT_NOTFOUND) {
-        if ((*bp)->owner == NULL) {
-            (*bp)->owner = m;
-            return *bp;
+    if (b != HT_NOTFOUND) {
+        if (b->owner == NULL) {
+            b->owner = m;
+            jl_gc_unsafe_leave(gc_state);
+            return b;
         }
-        else if ((*bp)->owner != m) {
+        else if (b->owner != m) {
             // TODO: change this to an error soon
             jl_printf(JL_STDERR,
                       "WARNING: imported binding for %s overwritten in module %s\n", jl_symbol_name(var), jl_symbol_name(m->name));
         }
         else {
-            return *bp;
+            jl_gc_unsafe_leave(gc_state);
+            return b;
         }
     }
 
@@ -108,12 +121,14 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b->owner = m;
     *bp = b;
     jl_gc_wb_buf(m, b);
-    return *bp;
+    jl_gc_unsafe_leave(gc_state);
+    return b;
 }
 
 // return module of binding
 JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
         return NULL;
@@ -125,6 +140,8 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 // and overwriting.
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     if (jl_base_module && m->std_imports && !jl_binding_resolved_p(m,var)) {
         jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
         if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
@@ -160,9 +177,11 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
                 jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", jl_symbol_name(b->owner->name),
                           jl_symbol_name(var));
             }
+            jl_gc_unsafe_leave(gc_state);
             return b2;
         }
         b->owner = m;
+        jl_gc_unsafe_leave(gc_state);
         return b;
     }
 
@@ -170,7 +189,8 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     b->owner = m;
     *bp = b;
     jl_gc_wb_buf(m, b);
-    return *bp;
+    jl_gc_unsafe_leave(gc_state);
+    return b;
 }
 
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
@@ -184,6 +204,7 @@ typedef struct _modstack_t {
 // get binding for reading. might return NULL for unbound.
 static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *st)
 {
+    // managed only
     modstack_t top = { m, st };
     modstack_t *tmp = st;
     while (tmp != NULL) {
@@ -235,36 +256,49 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
-    return jl_get_binding_(m, var, NULL);
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
+    jl_binding_t *res = jl_get_binding_(m, var, NULL);
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 void jl_binding_deprecation_warning(jl_binding_t *b);
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_binding_t *b = jl_get_binding_(m, var, NULL);
     if (b == NULL)
         jl_undefined_var_error(var);
     if (b->deprecated)
         jl_binding_deprecation_warning(b);
+    jl_gc_unsafe_leave(gc_state);
     return b;
 }
 
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
+        jl_gc_unsafe_leave(gc_state);
         return jl_new_struct(jl_globalref_type, m, var);
     }
     if (b->globalref == NULL) {
         b->globalref = jl_new_struct(jl_globalref_type, m, var);
         jl_gc_wb(m, b->globalref);
     }
-    return b->globalref;
+    jl_value_t *res = b->globalref;
+    jl_gc_unsafe_leave(gc_state);
+    return res;
 }
 
 static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 {
+    // unmanaged safe
     if (a==b) return 1;
     if (a->name == b->name && a->owner == b->owner) return 1;
     if (a->constp && a->value && b->constp && b->value == a->value) return 1;
@@ -274,6 +308,7 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 // does module m explicitly import s?
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 {
+    // unmanaged safe
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
     jl_binding_t *bto = *bp;
     return (bto != HT_NOTFOUND && bto->imported);
@@ -283,6 +318,7 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                            int explici)
 {
+    // managed only
     if (to == from)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
@@ -309,12 +345,13 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                 if (bval->constp && bval->value && b->constp && b->value == bval->value) {
                     // equivalent binding
                     bto->imported = (explici!=0);
-                    return;
                 }
-                jl_printf(JL_STDERR,
-                          "WARNING: ignoring conflicting import of %s.%s into %s\n",
-                          jl_symbol_name(from->name), jl_symbol_name(s),
-                          jl_symbol_name(to->name));
+                else {
+                    jl_printf(JL_STDERR,
+                              "WARNING: ignoring conflicting import of %s.%s into %s\n",
+                              jl_symbol_name(from->name), jl_symbol_name(s),
+                              jl_symbol_name(to->name));
+                }
             }
             else if (bto->constp || bto->value) {
                 // conflict with name owned by destination module
@@ -347,16 +384,23 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
                                    jl_sym_t *s)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     module_import_(to, from, s, 1);
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     module_import_(to, from, s, 0);
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from)
 {
+    // unmanaged safe
     void **table = from->bindings.table;
     for(size_t i=1; i < from->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
@@ -369,12 +413,14 @@ JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from)
 
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
+    // unmanaged safe
     if (to == from)
         return;
     for(size_t i=0; i < to->usings.len; i++) {
         if (from == to->usings.items[i])
             return;
     }
+    int8_t gc_state = jl_gc_unsafe_enter();
     // print a warning if something visible via this "using" conflicts with
     // an existing identifier. note that an identifier added later may still
     // silently override a "using" name. see issue #2054.
@@ -400,17 +446,21 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 
     arraylist_push(&to->usings, from);
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
+    // unmanaged safe
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
     if (*bp == HT_NOTFOUND) {
+        int8_t gc_state = jl_gc_unsafe_enter();
         jl_binding_t *b = new_binding(s);
         // don't yet know who the owner is
         b->owner = NULL;
         *bp = b;
         jl_gc_wb_buf(from, b);
+        jl_gc_unsafe_leave(gc_state);
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
@@ -418,12 +468,14 @@ JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t *b = jl_get_binding(m, var);
     return b && (b->value != NULL);
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     if (*bp == HT_NOTFOUND) return 0;
     return (*bp)->exportp || (*bp)->owner==m;
@@ -431,6 +483,7 @@ JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     if (*bp == HT_NOTFOUND) return 0;
     return (*bp)->exportp;
@@ -438,6 +491,7 @@ JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     if (*bp == HT_NOTFOUND) return 0;
     return (*bp)->owner != NULL;
@@ -445,6 +499,7 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL) return NULL;
     if (b->deprecated) jl_binding_deprecation_warning(b);
@@ -453,21 +508,27 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
         bp->value = val;
         jl_gc_wb(m, val);
     }
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
         bp->value = val;
         bp->constp = 1;
         jl_gc_wb(m, val);
     }
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
@@ -479,12 +540,14 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t *b = jl_get_binding(m, var);
     if (b) b->deprecated = 1;
 }
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 {
+    // unmanaged safe
     jl_binding_t *b = jl_get_binding(m, var);
     return b && b->deprecated;
 }
@@ -494,6 +557,7 @@ extern int jl_lineno;
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
+    // unmanaged safe
     if (b->deprecated && jl_options.depwarn) {
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
             jl_printf(JL_STDERR, "WARNING: ");
@@ -534,6 +598,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
+    // unmanaged safe
     if (b->constp && b->value != NULL) {
         if (!jl_egal(rhs, b->value)) {
             if (jl_typeof(rhs) != jl_typeof(b->value) ||
@@ -545,12 +610,15 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
                       jl_symbol_name(b->name));
         }
     }
+    int8_t gc_state = jl_gc_unsafe_enter();
     b->value = rhs;
     jl_gc_wb_binding(b, rhs);
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
 {
+    // unmanaged safe
     if (b->value != NULL && !b->constp) {
         jl_errorf("cannot declare %s constant; it already has a value",
                   jl_symbol_name(b->name));
@@ -560,17 +628,24 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
 
 JL_DLLEXPORT jl_value_t *jl_get_current_module(void)
 {
+    // unmanaged safe
     return (jl_value_t*)jl_current_module;
 }
 
 JL_DLLEXPORT void jl_set_current_module(jl_value_t *m)
 {
+    // unmanaged safe
+    int8_t gc_state = jl_gc_unsafe_enter();
     assert(jl_typeis(m, jl_module_type));
     jl_current_module = (jl_module_t*)m;
+    jl_gc_unsafe_leave(gc_state);
 }
 
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH1(&a);
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
@@ -584,6 +659,9 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 
 JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 {
+    // unmanaged safe
+    if (jl_gc_state())
+        return NULL;
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
     size_t i;
@@ -610,6 +688,7 @@ JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 
 jl_function_t *jl_module_get_initializer(jl_module_t *m)
 {
+    // unmanaged safe
     jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
     if (f == NULL /*|| !jl_is_function(f)*/)
         return NULL;
@@ -618,6 +697,7 @@ jl_function_t *jl_module_get_initializer(jl_module_t *m)
 
 JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
 {
+    // unmanaged safe
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -629,6 +709,7 @@ JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
             jl_rethrow();
         }
         else {
+            jl_gc_unsafe_enter();
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
                                            jl_exception_in_transit));
         }
@@ -637,6 +718,7 @@ JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
 {
+    // unmanaged safe
     while (1) {
         if (parent == child)
             return 1;

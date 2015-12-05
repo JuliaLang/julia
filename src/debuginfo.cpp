@@ -486,6 +486,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 extern "C"
 char *jl_demangle(const char *name)
 {
+    // unmanaged safe
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
     const char *start = name + 6;
@@ -519,6 +520,7 @@ static void lookup_pointer(DIContext *context, char **name, size_t *line,
                            char **inlinedat_file, size_t pointer,
                            int demangle, int *fromC)
 {
+    // unmanaged safe
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
     DILineInfo info, topinfo;
@@ -642,6 +644,7 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
                                     size_t *inlinedat_line, size_t pointer,
                                     int *fromC, int skipC, int skipInline)
 {
+    // unmanaged safe
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
 #ifdef _OS_WINDOWS_
@@ -852,6 +855,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         size_t pointer, int *fromC, int skipC, int skipInline)
 {
+    // unmanaged safe
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
     *name = NULL;
@@ -976,6 +980,7 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #endif
                       )
 {
+    // unmanaged safe
     int found = 0;
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
@@ -1097,6 +1102,7 @@ RTDyldMemoryManager *createRTDyldMemoryManagerOSX()
 extern "C"
 DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 {
+    // unmanaged safe
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     DWORD64 ipstart = 0; // ip of the first instruction in the function (if found)
@@ -1200,6 +1206,7 @@ JITMemoryManager *createJITMemoryManagerWin()
 extern "C"
 DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 {
+    // unmanaged safe
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
     DWORD64 ipstart = 0; // ip of the first instruction in the function (if found)
