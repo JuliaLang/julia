@@ -109,7 +109,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``\ . Changes are merged (fast-forward only) if the keyword argument ``merge == true``, and the latest version is pulled from the upsream repo if ``pull == true``\ .
+   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``\ . Changes are merged (fast-forward only) if the keyword argument ``merge == true``\ , and the latest version is pulled from the upsream repo if ``pull == true``\ .
 
 .. function:: pin(pkg)
 
