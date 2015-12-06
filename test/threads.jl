@@ -61,41 +61,16 @@ end
 test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
 test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
-# spin locks
-function threaded_add_using_spinlock(s, x, n)
+function threaded_add_locked{LockT}(::Type{LockT}, x, n)
+    lock = LockT()
     @threads for i = 1:n
-        lock!(s)
+        lock!(lock)
         x = x + 1
-        unlock!(s)
+        unlock!(lock)
     end
     return x
 end
 
-function test_spinlock()
-    s = SpinLock()
-    x = 0
-    x = threaded_add_using_spinlock(s, x, 10000)
-    @test x == 10000
-end
-
-test_spinlock()
-
-# mutexes
-function threaded_add_using_mutex(m, x, n)
-    @threads for i = 1:n
-        lock!(m)
-        x = x + 1
-        unlock!(m)
-    end
-    return x
-end
-
-function test_mutex()
-    m = Mutex()
-    x = 0
-    x = threaded_add_using_mutex(m, x, 10000)
-    @test x == 10000
-end
-
-test_mutex()
-
+@test threaded_add_locked(SpinLock, 0, 10000) == 10000
+@test threaded_add_locked(Threads.RecursiveSpinLock, 0, 10000) == 10000
+@test threaded_add_locked(Mutex, 0, 10000) == 10000
