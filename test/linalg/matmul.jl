@@ -193,3 +193,20 @@ b = rand(3,3)
 @test_throws ArgumentError A_mul_B!(a, a, b)
 @test_throws ArgumentError A_mul_B!(a, b, a)
 @test_throws ArgumentError A_mul_B!(a, a, a)
+
+# Number types that lack conversion to the destination type (#14293)
+immutable RootInt
+    i::Int
+end
+import Base: *, promote_op
+(*)(x::RootInt, y::RootInt) = x.i*y.i
+promote_op(::Base.MulFun, ::Type{RootInt}, ::Type{RootInt}) = Int
+
+a = [RootInt(3)]
+C = [0]
+A_mul_Bt!(C, a, a)
+@test C[1] == 9
+a = [RootInt(2),RootInt(10)]
+@test a*a' == [4 20; 20 100]
+A = [RootInt(3) RootInt(5)]
+@test A*a == [56]
