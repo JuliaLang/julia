@@ -24,9 +24,8 @@ matrix:
       env: ARCH="x86_64"
 cache:
   directories:
-    - $TRAVIS_BUILD_DIR/deps/srccache
-    - $TRAVIS_BUILD_DIR/deps/build-i686
-    - $TRAVIS_BUILD_DIR/deps/build-x86_64
+    - $TRAVIS_BUILD_DIR/deps-i686
+    - $TRAVIS_BUILD_DIR/deps-x86_64
 notifications:
     email: false
     irc:
@@ -43,6 +42,9 @@ before_install:
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
+        if [ "$ARCH" = "i686" ]; then
+          export BUILDOPTS="$BUILDOPTS MARCH=pentium4";
+        fi;
       elif [ `uname` = "Darwin" ]; then
         brew update;
         brew install -v jq;
@@ -61,7 +63,7 @@ before_install:
       fi
     - git clone -q git://git.kitenet.net/moreutils
 script:
-    - if [ -e deps/build-$ARCH ]; then cp -a deps/build-$ARCH deps/build; fi
+    - if [ -n "`ls deps-$ARCH`" ]; then cp -a deps-$ARCH/* deps; fi
     - make $BUILDOPTS -C base version_git.jl.phony
     - make $BUILDOPTS NO_GIT=1 -C deps > deps.log || cat deps.log
     - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"
@@ -74,11 +76,13 @@ script:
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -f julia/deps/build/julia-env/src/*/*/*.pyc
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -f julia/deps/julia-env/src/*/*/*.pyc
     - case $TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH in
         false-master | false-release*)
-          rm -rf julia/deps/build-$ARCH &&
-          mv julia/deps/build julia/deps/build-$ARCH;;
+          cd julia && rm -rf deps-$ARCH && mkdir -p deps-$ARCH &&
+          for i in $(git ls-files -o --directory deps); do
+            mv $i deps-$ARCH;
+          done;;
       esac
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
