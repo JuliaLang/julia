@@ -439,8 +439,8 @@ function powermod(x::BigInt, p::BigInt, m::BigInt)
           &r, &x, &p, &m)
     return m < 0 && r > 0 ? r + m : r # choose sign conistent with mod(x^p, m)
 end
-powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
-powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
+
+powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
