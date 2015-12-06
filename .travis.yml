@@ -61,7 +61,7 @@ before_install:
       fi
     - git clone -q git://git.kitenet.net/moreutils
 script:
-    - if [ -e deps/build-$ARCH ]; then mv deps/build-$ARCH deps/build; fi
+    - if [ -e deps/build-$ARCH ]; then cp -a deps/build-$ARCH deps/build; fi
     - make $BUILDOPTS -C base version_git.jl.phony
     - make $BUILDOPTS NO_GIT=1 -C deps > deps.log || cat deps.log
     - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"
@@ -74,6 +74,11 @@ script:
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && mv julia/deps/build julia/deps/build-$ARCH
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -f julia/deps/build/julia-env/src/*/*/*.pyc
+    - case $TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH in
+        false-master | false-release*)
+          rm -rf julia/deps/build-$ARCH &&
+          mv julia/deps/build julia/deps/build-$ARCH;;
+      esac
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
