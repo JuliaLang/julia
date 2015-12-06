@@ -2332,25 +2332,32 @@ for T in (Int32,Int64), ii = -20:20, jj = -20:20
     end
 end
 
-# check powermod function against GMP
+# check powermod function against few types (in particular [U]Int128 and BigInt)
 for i = -10:10, p = 0:5, m = -10:10
-    if m != 0
-        @test powermod(i,p,m) == powermod(i,p,big(m)) == powermod(big(i),big(p),big(m))
-        @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
+    m == 0 && continue
+    x = powermod(i, p, m)
+    for T in [Int32, Int64, Int128, UInt128, BigInt]
+        T <: Unsigned && m < 0 && continue
+        let xT = powermod(i, p, T(m))
+            @test x == xT
+            @test isa(xT, T)
+        end
+        T <: Unsigned && i < 0 && continue
+        @test x == mod(T(i)^p, T(m))
     end
 end
 
 # with m==1 should give 0
 @test powermod(1,0,1) == 0
-@test powermod(big(1),0,1) == 0
+@test powermod(1,0,big(1)) == 0
 @test powermod(1,0,-1) == 0
-@test powermod(big(1),0,-1) == 0
+@test powermod(1,0,big(-1)) == 0
 # divide by zero error
 @test_throws DivideError powermod(1,0,0)
-@test_throws DivideError powermod(big(1),0,0)
+@test_throws DivideError powermod(1,0,big(0))
 # negative power domain error
 @test_throws DomainError powermod(1,-2,1)
-@test_throws DomainError powermod(big(1),-2,1)
+@test_throws DomainError powermod(1,-2,big(1))
 
 # other divide-by-zero errors
 @test_throws DivideError div(1,0)
