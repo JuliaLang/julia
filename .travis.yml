@@ -4,6 +4,7 @@ matrix:
   include:
     - os: linux
       env: ARCH="i686"
+      compiler: "g++ -m32"
       addons:
         apt:
           packages:
@@ -16,6 +17,7 @@ matrix:
             - gfortran:i386
     - os: linux
       env: ARCH="x86_64"
+      compiler: "g++ -m64"
       addons:
         apt:
           packages:
@@ -76,7 +78,10 @@ script:
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -f julia/deps/julia-env/src/*/*/*.pyc
+# uncomment the following if failures are suspected to be due to the out-of-memory killer
+#    - dmesg
+before_cache:
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/julia-env julia/deps/pcre2-*
     - case $TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH in
         false-master | false-release*)
           cd julia && rm -rf deps-$ARCH && mkdir -p deps-$ARCH &&
@@ -84,5 +89,3 @@ script:
             mv $i deps-$ARCH;
           done;;
       esac
-# uncomment the following if failures are suspected to be due to the out-of-memory killer
-#    - dmesg
