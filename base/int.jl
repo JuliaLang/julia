@@ -727,8 +727,8 @@ checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
 checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
 
 # Handle multiple arguments
-checked_add(x) = +x
-checked_mul(x) = *(x)
+checked_add(x) = x
+checked_mul(x) = x
 for f in (:checked_add, :checked_mul)
     @eval begin
         ($f){T}(x1::T, x2::T, x3::T) =
@@ -836,23 +836,37 @@ optimize the code assuming there is no overflow.
 """
 function unchecked_cld end
 
-# These implementations are unchecked by default
-unchecked_neg(x::Union{IntTypes...}) = -x
-unchecked_abs(x::Union{IntTypes...}) = abs(x)
-unchecked_add{T<:Union{IntTypes...}}(x::T, y::T) = x+y
-unchecked_sub{T<:Union{IntTypes...}}(x::T, y::T) = x-y
-unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
-
 const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
     if WORD_SIZE == 32 && T === Int128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
-            unchecked_div(x::$T, y::$T) = div(x, y)
-            unchecked_rem(x::$T, y::$T) = rem(x, y)
+            unchecked_neg(x::$T) =
+                box($T,unchecked_sneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_sadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) =
+                box($T,unchecked_smul(unbox($T,x), unbox($T,y)))
+            unchecked_div(x::$T, y::$T) =
+                box($T,unchecked_sdiv(unbox($T,x), unbox($T,y)))
+            function unchecked_rem(x::$T, y::$T)
+                y == -1 && return $T(0)   # avoid overflow
+                box($T,unchecked_srem(unbox($T,x), unbox($T,y)))
+            end
         end
     else
         @eval begin
+            # use checked Int128 operations to avoid codegen bug
+            unchecked_neg(x::$T) =
+                box($T,unchecked_sneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_sadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) =
+                box($T,unchecked_smul(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
                 box($T,sdiv_int(unbox($T,x),unbox($T,y)))
             function unchecked_rem(x::$T, y::$T)
@@ -862,6 +876,7 @@ for T in SignedIntTypes
         end
     end
 end
+unchecked_abs(x::Signed) = x
 function unchecked_fld{T<:Union{SignedIntTypes...}}(x::T, y::T)
     d = unchecked_div(x,y)
     d - (signbit(x$y) & (d*y!=x))
@@ -880,11 +895,30 @@ for T in UnsignedIntTypes
     if WORD_SIZE == 32 && T === UInt128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
-            unchecked_div(x::$T, y::$T) = div(x, y)
-            unchecked_rem(x::$T, y::$T) = rem(x, y)
+            unchecked_neg(x::$T) =
+                box($T,unchecked_uneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_uadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) =
+                box($T,unchecked_umul(unbox($T,x), unbox($T,y)))
+            unchecked_div(x::$T, y::$T) =
+                box($T,unchecked_udiv(unbox($T,x), unbox($T,y)))
+            unchecked_rem(x::$T, y::$T) =
+                box($T,unchecked_urem(unbox($T,x), unbox($T,y)))
         end
     else
         @eval begin
+            # use checked UInt128 operations to avoid codegen bug
+            unchecked_neg(x::$T) =
+                box($T,unchecked_uneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_uadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) =
+                box($T,unchecked_umul(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
                 box($T,udiv_int(unbox($T,x),unbox($T,y)))
             unchecked_rem(x::$T, y::$T) =
@@ -899,17 +933,13 @@ function unchecked_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
     d + (d*y!=x)
 end
 
+# Generic definitions
+unchecked_abs(x) = abs(x)
+
 # Handle multiple arguments
-unchecked_add(x) = +x
-unchecked_mul(x) = *(x)
+unchecked_add(x) = x
+unchecked_mul(x) = x
 for f in (:unchecked_add, :unchecked_mul)
-    if WORD_SIZE == 32 && T === Int128
-        # There is probably a code generation bug on 32-bit Linux with LLVM 3.3
-        @eval begin
-            unchecked_div(x::$T, y::$T) = div(x, y)
-            unchecked_rem(x::$T, y::$T) = rem(x, y)
-        end
-    else
     @eval begin
         ($f){T}(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
@@ -923,6 +953,5 @@ for f in (:unchecked_add, :unchecked_mul)
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
         ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
-    end
     end
 end

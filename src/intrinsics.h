@@ -85,6 +85,19 @@
     ADD_I(checked_srem, 2) \
     ADD_I(checked_urem, 2) \
     /* ADD_I(checked_smod_int, 2)*/ \
+    /*  unchecked arithmetic */ \
+    ADD_I(unchecked_sneg, 1) \
+    ADD_I(unchecked_uneg, 1) \
+    ADD_I(unchecked_sadd, 2) \
+    ADD_I(unchecked_uadd, 2) \
+    ADD_I(unchecked_ssub, 2) \
+    ADD_I(unchecked_usub, 2) \
+    ADD_I(unchecked_smul, 2) \
+    ADD_I(unchecked_umul, 2) \
+    ADD_I(unchecked_sdiv, 2) \
+    ADD_I(unchecked_udiv, 2) \
+    ADD_I(unchecked_srem, 2) \
+    ADD_I(unchecked_urem, 2) \
     ADD_I(nan_dom_err, 2) \
     /*  functions */ \
     ADD_I(abs_float, 1) \
