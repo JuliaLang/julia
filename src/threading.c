@@ -422,6 +422,7 @@ JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 // and run it in all threads
 JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 {
+    // GC safe
 #if PROFILE_JL_THREADING
     uint64_t tstart = rdtsc();
 #endif
@@ -433,6 +434,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
     JL_TYPECHK(jl_threading_run, function, (jl_value_t*)f);
     JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
 
+    int8_t gc_state = jl_gc_unsafe_enter();
     JL_GC_PUSH2(&argtypes, &fun);
     if (jl_svec_len(args) == 0)
         argtypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
@@ -470,8 +472,10 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
     user_ticks[ti_tid] += (trun - tfork);
 #endif
 
+    jl_gc_state_set(JL_GC_STATE_SAFE, 0);
     // wait for completion (TODO: nowait?)
     ti_threadgroup_join(tgworld, ti_tid);
+    jl_gc_state_set(0, JL_GC_STATE_SAFE);
 
 #if PROFILE_JL_THREADING
     uint64_t tjoin = rdtsc();
@@ -479,6 +483,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 #endif
 
     JL_GC_POP();
+    jl_gc_unsafe_leave(gc_state);
 
     return tw->ret;
 }
