@@ -197,6 +197,7 @@ else
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
 fi
+echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
 make VERBOSE=1
