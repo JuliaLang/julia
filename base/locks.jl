@@ -43,7 +43,7 @@ end
 type RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
     handle::Atomic{Int}
-    RecursiveTatasLock() = new(0, Atomic{Int}(0))
+    RecursiveTatasLock() = new(Atomic{Int16}(0), Atomic{Int}(0))
 end
 
 typealias RecursiveSpinLock RecursiveTatasLock
