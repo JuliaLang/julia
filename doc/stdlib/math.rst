@@ -1100,7 +1100,7 @@ Mathematical Functions
 
    When ``abs`` is applied to signed integers, overflow may occur, resulting in the return of a negative value. This overflow occurs only when ``abs`` is applied to the minimum representable value of a signed integer. That is, when ``x == typemin(typeof(x))``\ , ``abs(x) == x < 0``\ , not ``-x`` as might be expected.
 
-.. function:: Base.checked_abs(x::Integer)
+.. function:: Base.checked_abs(x)
 
    .. Docstring generated from Julia source
 
@@ -1108,7 +1108,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_neg(x::Integer)
+.. function:: Base.checked_neg(x)
 
    .. Docstring generated from Julia source
 
@@ -1116,7 +1116,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_add(x::Integer, y::Integer)
+.. function:: Base.checked_add(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1124,7 +1124,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_sub(x::Integer, y::Integer)
+.. function:: Base.checked_sub(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1132,7 +1132,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_mul(x::Integer, y::Integer)
+.. function:: Base.checked_mul(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1140,7 +1140,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_div(x::Integer, y::Integer)
+.. function:: Base.checked_div(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1148,7 +1148,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_rem(x::Integer, y::Integer)
+.. function:: Base.checked_rem(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1156,7 +1156,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_fld(x::Integer, y::Integer)
+.. function:: Base.checked_fld(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1164,7 +1164,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_mod(x::Integer, y::Integer)
+.. function:: Base.checked_mod(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1172,7 +1172,7 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.checked_cld(x::Integer, y::Integer)
+.. function:: Base.checked_cld(x, y)
 
    .. Docstring generated from Julia source
 
@@ -1180,61 +1180,61 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
-.. function:: Base.unchecked_abs(x::Integer)
+.. function:: Base.unchecked_abs(x)
 
    .. Docstring generated from Julia source
 
    Calculates ``abs(x)`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_neg(x::Integer)
+.. function:: Base.unchecked_neg(x)
 
    .. Docstring generated from Julia source
 
    Calculates ``-x`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_add(x::Integer, y::Integer)
+.. function:: Base.unchecked_add(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``x+y`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_sub(x::Integer, y::Integer)
+.. function:: Base.unchecked_sub(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``x-y`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_mul(x::Integer, y::Integer)
+.. function:: Base.unchecked_mul(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``x*y`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_div(x::Integer, y::Integer)
+.. function:: Base.unchecked_div(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``x÷y`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_rem(x::Integer, y::Integer)
+.. function:: Base.unchecked_rem(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``x%y`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_fld(x::Integer, y::Integer)
+.. function:: Base.unchecked_fld(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``fld(x,y)`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_mod(x::Integer, y::Integer)
+.. function:: Base.unchecked_mod(x, y)
 
    .. Docstring generated from Julia source
 
    Calculates ``mod(x,y)`` without any overflow checking. It is the caller's responsiblity to ensure that there is no overflow, and the compiler is free to optimize the code assuming there is no overflow.
 
-.. function:: Base.unchecked_cld(x::Integer, y::Integer)
+.. function:: Base.unchecked_cld(x, y)
 
    .. Docstring generated from Julia source
 
@@ -2319,4 +2319,3 @@ some built-in integration support in Julia.
    These quadrature rules work best for smooth functions within each interval, so if your function has a known discontinuity or other singularity, it is best to subdivide your interval to put the singularity at an endpoint. For example, if ``f`` has a discontinuity at ``x=0.7`` and you want to integrate from 0 to 1, you should use ``quadgk(f, 0,0.7,1)`` to subdivide the interval at the point of discontinuity. The integrand is never evaluated exactly at the endpoints of the intervals, so it is possible to integrate functions that diverge at the endpoints as long as the singularity is integrable (for example, a ``log(x)`` or ``1/sqrt(x)`` singularity).
 
    For real-valued endpoints, the starting and/or ending points may be infinite. (A coordinate transformation is performed internally to map the infinite interval to a finite one.)
-

@@ -60,7 +60,7 @@ abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
 """
-    Base.checked_abs(x::Integer)
+    Base.checked_abs(x)
 
 Calculates `abs(x)`, checking for overflow errors where applicable.
 For example, standard two's complement signed integers (e.g. `Int`)
@@ -77,7 +77,7 @@ function checked_abs{T<:Union{Int8,Int16,Int32,Int64,Int128}}(x::T)
 end
 
 """
-    Base.checked_neg(x::Integer)
+    Base.checked_neg(x)
 
 Calculates `-x`, checking for overflow errors where applicable. For
 example, standard two's complement signed integers (e.g. `Int`) cannot
@@ -536,7 +536,7 @@ end
 ## checked +, -, *, div, rem, fld, mod
 
 """
-    Base.checked_add(x::Integer, y::Integer)
+    Base.checked_add(x, y)
 
 Calculates `x+y`, checking for overflow errors where applicable.
 
@@ -545,7 +545,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_add end
 
 """
-    Base.checked_sub(x::Integer, y::Integer)
+    Base.checked_sub(x, y)
 
 Calculates `x-y`, checking for overflow errors where applicable.
 
@@ -554,7 +554,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_sub end
 
 """
-    Base.checked_mul(x::Integer, y::Integer)
+    Base.checked_mul(x, y)
 
 Calculates `x*y`, checking for overflow errors where applicable.
 
@@ -563,7 +563,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_mul end
 
 """
-    Base.checked_div(x::Integer, y::Integer)
+    Base.checked_div(x, y)
 
 Calculates `div(x,y)`, checking for overflow errors where applicable.
 
@@ -572,7 +572,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_div end
 
 """
-    Base.checked_rem(x::Integer, y::Integer)
+    Base.checked_rem(x, y)
 
 Calculates `x%y`, checking for overflow errors where applicable.
 
@@ -581,7 +581,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_rem end
 
 """
-    Base.checked_fld(x::Integer, y::Integer)
+    Base.checked_fld(x, y)
 
 Calculates `fld(x,y)`, checking for overflow errors where applicable.
 
@@ -590,7 +590,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_fld end
 
 """
-    Base.checked_mod(x::Integer, y::Integer)
+    Base.checked_mod(x, y)
 
 Calculates `mod(x,y)`, checking for overflow errors where applicable.
 
@@ -599,7 +599,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_mod end
 
 """
-    Base.checked_cld(x::Integer, y::Integer)
+    Base.checked_cld(x, y)
 
 Calculates `cld(x,y)`, checking for overflow errors where applicable.
 
@@ -725,27 +725,27 @@ checked_mod{T<:Union{IntTypes...}}(x::T, y::T) = mod(x,y)
 checked_cld{T<:Union{IntTypes...}}(x::T, y::T) = cld(x,y)
 
 # Handle multiple arguments
-checked_add(x::Integer) = +x
-checked_mul(x::Integer) = *(x)
+checked_add(x) = +x
+checked_mul(x) = *(x)
 for f in (:checked_add, :checked_mul)
     @eval begin
-        ($f){T<:Integer}(x1::T, x2::T, x3::T) =
+        ($f)(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
 
 """
-    Base.unchecked_abs(x::Integer)
+    Base.unchecked_abs(x)
 
 Calculates `abs(x)` without any overflow checking. It is the caller's
 responsiblity to ensure that there is no overflow, and the compiler is free to
@@ -754,7 +754,7 @@ optimize the code assuming there is no overflow.
 function unchecked_abs end
 
 """
-    Base.unchecked_neg(x::Integer)
+    Base.unchecked_neg(x)
 
 Calculates `-x` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -763,7 +763,7 @@ code assuming there is no overflow.
 function unchecked_neg end
 
 """
-    Base.unchecked_add(x::Integer, y::Integer)
+    Base.unchecked_add(x, y)
 
 Calculates `x+y` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -772,7 +772,7 @@ code assuming there is no overflow.
 function unchecked_add end
 
 """
-    Base.unchecked_sub(x::Integer, y::Integer)
+    Base.unchecked_sub(x, y)
 
 Calculates `x-y` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -781,7 +781,7 @@ code assuming there is no overflow.
 function unchecked_sub end
 
 """
-    Base.unchecked_mul(x::Integer, y::Integer)
+    Base.unchecked_mul(x, y)
 
 Calculates `x*y` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -790,7 +790,7 @@ code assuming there is no overflow.
 function unchecked_mul end
 
 """
-    Base.unchecked_div(x::Integer, y::Integer)
+    Base.unchecked_div(x, y)
 
 Calculates `x÷y` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -799,7 +799,7 @@ code assuming there is no overflow.
 function unchecked_div end
 
 """
-    Base.unchecked_rem(x::Integer, y::Integer)
+    Base.unchecked_rem(x, y)
 
 Calculates `x%y` without any overflow checking. It is the caller's responsiblity
 to ensure that there is no overflow, and the compiler is free to optimize the
@@ -808,7 +808,7 @@ code assuming there is no overflow.
 function unchecked_rem end
 
 """
-    Base.unchecked_fld(x::Integer, y::Integer)
+    Base.unchecked_fld(x, y)
 
 Calculates `fld(x,y)` without any overflow checking. It is the caller's
 responsiblity to ensure that there is no overflow, and the compiler is free to
@@ -817,7 +817,7 @@ optimize the code assuming there is no overflow.
 function unchecked_fld end
 
 """
-    Base.unchecked_mod(x::Integer, y::Integer)
+    Base.unchecked_mod(x, y)
 
 Calculates `mod(x,y)` without any overflow checking. It is the caller's
 responsiblity to ensure that there is no overflow, and the compiler is free to
@@ -826,7 +826,7 @@ optimize the code assuming there is no overflow.
 function unchecked_mod end
 
 """
-    Base.unchecked_cld(x::Integer, y::Integer)
+    Base.unchecked_cld(x, y)
 
 Calculates `cld(x,y)` without any overflow checking. It is the caller's
 responsiblity to ensure that there is no overflow, and the compiler is free to
@@ -898,21 +898,21 @@ function unchecked_cld{T<:Union{UnsignedIntTypes...}}(x::T, y::T)
 end
 
 # Handle multiple arguments
-unchecked_add(x::Integer) = +x
-unchecked_mul(x::Integer) = *(x)
+unchecked_add(x) = +x
+unchecked_mul(x) = *(x)
 for f in (:unchecked_add, :unchecked_mul)
     @eval begin
-        ($f){T<:Integer}(x1::T, x2::T, x3::T) =
+        ($f)(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f){T<:Integer}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
