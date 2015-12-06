@@ -23,6 +23,11 @@ function lock!(l::TatasLock)
             end
         end
         ccall(:jl_cpu_pause, Void, ())
+        # Temporary solution before we have gc transition support in codegen.
+        # This could mess up gc state when we add codegen support.
+        # Use these as a safe point
+        gc_state = ccall(:jl_gc_safe_enter, Int8, ())
+        ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     end
 end
 
@@ -61,6 +66,11 @@ function lock!(l::RecursiveTatasLock)
             end
         end
         ccall(:jl_cpu_pause, Void, ())
+        # Temporary solution before we have gc transition support in codegen.
+        # This could mess up gc state when we add codegen support.
+        # Use these as a safe point
+        gc_state = ccall(:jl_gc_safe_enter, Int8, ())
+        ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     end
 end
 
@@ -116,7 +126,11 @@ function lock!(m::Mutex)
     if m.ownertid == threadid()
         return 0
     end
+    # Temporary solution before we have gc transition support in codegen.
+    # This could mess up gc state when we add codegen support.
+    gc_state = ccall(:jl_gc_safe_enter, Int8, ())
     ccall(:uv_mutex_lock, Void, (Ptr{Void},), m.handle)
+    ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     m.ownertid = threadid()
     return 0
 end
