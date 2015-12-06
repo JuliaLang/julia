@@ -1463,6 +1463,7 @@ typedef struct _jl_tls_states_t {
     //              execute at the same time with the GC.
     volatile int8_t gc_state;
     volatile int8_t in_gc;
+    int8_t disable_gc;
     struct _jl_thread_heap_t *heap;
     jl_task_t *volatile current_task;
     jl_task_t *root_task;

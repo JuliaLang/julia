@@ -201,7 +201,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
 
 static jl_value_t *scm_to_julia(value_t e, int expronly)
 {
-    int en = jl_gc_enable(0);
+    int en = jl_gc_enable(0); // Might GC
     jl_value_t *v;
     JL_TRY {
         v = scm_to_julia_(e, expronly);
