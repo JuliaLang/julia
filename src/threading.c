@@ -66,6 +66,12 @@ rdtsc(void)
 }
 #endif
 
+// utility
+JL_DLLEXPORT void jl_cpu_pause(void)
+{
+    cpu_pause();
+}
+
 #ifdef JULIA_ENABLE_THREADING
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
@@ -394,9 +400,6 @@ void jl_shutdown_threading(void)
 
 // return thread's thread group
 JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
-
-// utility
-JL_DLLEXPORT void jl_cpu_pause(void) { cpu_pause(); }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads

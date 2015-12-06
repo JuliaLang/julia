@@ -22,7 +22,7 @@ function lock!(l::TatasLock)
                 return 0
             end
         end
-        # TODO: pause
+        ccall(:jl_cpu_pause, Void, ())
     end
 end
 
@@ -60,7 +60,7 @@ function lock!(l::RecursiveTatasLock)
                 return 0
             end
         end
-        # TODO: pause
+        ccall(:jl_cpu_pause, Void, ())
     end
 end
 
