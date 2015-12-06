@@ -1611,7 +1611,6 @@ for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
     @test typeof(mod(z,o)) === T
     @test typeof(cld(z,o)) === T
 
-    #=
     @test typeof(Base.checked_add(z)) === T
     @test typeof(Base.checked_neg(z)) === T
     @test typeof(Base.checked_abs(z)) === T
@@ -1625,6 +1624,7 @@ for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
     @test typeof(Base.checked_mod(z,o)) === T
     @test typeof(Base.checked_cld(z,o)) === T
 
+    #=
     @test typeof(Base.unchecked_add(z)) === T
     @test typeof(Base.unchecked_neg(z)) === T
     @test typeof(Base.unchecked_abs(z)) === T
