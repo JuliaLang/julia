@@ -71,8 +71,10 @@
 	  __script #fn("6000r1c0|q1c1t;" [#fn("6000r0e0~41;" [load])
 					  #fn("6000r1e0|312c1a41;" [top-level-exception-handler
 								    #fn(exit)])] __script)
-	  __start #fn("7000r1e0302|NF6D0|Nk12^k22e3|\x84315E0|k12]k22e4e5312e6302c7`41;" [__init_globals
-  *argv* *interactive* __script princ *banner* repl #fn(exit)] __start)
+	  __start #fn("9000r1e0302|NF6\x8b0|Nk12^k22c3|\x84>17802c4|\x84>6g0e5c6|31b2326J0e7e8|31312e9302c:e;315>0e<c=312c>a31580e?|\x84315E0|k12]k22e<e@312eA302c>`41;" [__init_globals
+  *argv* *interactive* "-e" "--eval" > #fn(length) eval-string caddr newline #fn(io.flush)
+  *output-stream* princ "ERROR: -e/--eval needs an expression\n"
+  #fn(exit) __script *banner* repl] __start)
 	  abs #fn("6000r1|`X650|y;|;" [] abs) any
 	  #fn("7000r2}F16D02|}M3117:02e0|}N42;" [any] any) arg-counts #table(#.equal? 2  #.atom? 1  #.set-cdr! 2  #.symbol? 1  #.car 1  #.eq? 2  #.aref 2  #.boolean? 1  #.not 1  #.null? 1  #.eqv? 2  #.number? 1  #.pair? 1  #.builtin? 1  #.aset! 3  #.div0 2  #.= 2  #.bound? 1  #.compare 2  #.vector? 1  #.cdr 1  #.set-car! 2  #.< 2  #.fixnum? 1  #.cons 2)
 	  argc-error #fn(";000r2e0c1|c2}}aW670c3540c445;" [error "compile error: "
@@ -211,9 +213,13 @@
 								    #fn(get)])
   #fn(io.tostring!)] encode-byte-code)
 	  error #fn("9000s0c0c1|K41;" [#fn(raise) error] error) eval
-	  #fn("7000r1e0e1|313140;" [compile-thunk expand] eval) even? #fn("7000r1c0|a32`W;" [#fn(logand)] even?)
-	  every #fn("7000r2}?17D02|}M3116:02e0|}N42;" [every] every) expand
-	  #fn("F000r1]]]]]]]]]]]\x8c5\x8c6\x8c7\x8c8\x8c9\x8c:\x8c;\x8c<\x8c=\x8c>\x8c?g5c0O2g6c1g6q1O2g7c2L1O2g8c3g5g6g?g7q4O2g9c4g?g9q2O2g:c5g:q1O2g;c6g:g9g8q3O2g<c7g?g:g9g8q4O2g=c8g8g?q2O2g>c9O2g?c:g?g>g;g<g=q5O2g?M|_42;" [#fn("7000r2|E17902c0|}32@;" [#fn(assq)] top?)
+	  #fn("7000r1e0e1|313140;" [compile-thunk expand] eval) eval-string #fn("8000r1c030c1g5|q2c2t;" [#fn(buffer)
+  #fn("7000r0c0~\x7f322c1~`322e2c3~3141;" [#fn(io.write)
+					   #fn(io.seek) eval #fn(read)])
+  #fn("6000r1e0|312c1a41;" [top-level-exception-handler
+			    #fn(exit)])] eval-string)
+	  even? #fn("7000r1c0|a32`W;" [#fn(logand)] even?) every
+	  #fn("7000r2}?17D02|}M3116:02e0|}N42;" [every] every) expand #fn("F000r1]]]]]]]]]]]\x8c5\x8c6\x8c7\x8c8\x8c9\x8c:\x8c;\x8c<\x8c=\x8c>\x8c?g5c0O2g6c1g6q1O2g7c2L1O2g8c3g5g6g?g7q4O2g9c4g?g9q2O2g:c5g:q1O2g;c6g:g9g8q3O2g<c7g?g:g9g8q4O2g=c8g8g?q2O2g>c9O2g?c:g?g>g;g<g=q5O2g?M|_42;" [#fn("7000r2|E17902c0|}32@;" [#fn(assq)] top?)
   #fn("8000r1|?640|;|c0>640|;|MF16;02e1|31c2<6F0c3~Me4|3131~M|N3142;|M~M|N31K;" [((begin))
   caar begin #fn(append) cdar] splice-begin) *expanded* #fn("A000r2|?640|;~Mc0}326:0\x7fM|31530|~Mc1}32g76;0e2g631530_c3c4c5g832}32\x8c9g77A0c4c6i2g9q2g642;]\x8c:g:c7g:i2g9i3q4O2g:M\x8e1g631g:]g;F6c02i3Me8g;31<7C0g;i2Mg;Mg9M32O5;0g;e9g;31O2g;Nm;5\xfb/2g:;" [begin
   define get-defined-vars #fn(nconc) #fn(map) #.list #fn("7000r1~M|\x7fM42;" [])
