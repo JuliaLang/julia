@@ -6,6 +6,9 @@ let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
 @test write(io,"abc") == 3
+@test isreadable(io)
+@test iswritable(io)
+@test isopen(io)
 @test ioslength(io) == 3
 @test position(io) == 3
 @test eof(io)
@@ -183,4 +186,22 @@ end
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
 let io = IOBuffer(0)
    write(io, ones(UInt8, 1048577))
+end
+
+let bstream = BufferStream()
+    @test isopen(bstream)
+    @test isreadable(bstream)
+    @test iswritable(bstream)
+    @test sprint(io -> show(io,bstream)) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    a = rand(UInt8,10)
+    write(bstream,a)
+    flush(bstream)
+    b = read(bstream,UInt8)
+    @test a[1] == b
+    b = read(bstream,UInt8)
+    @test a[2] == b
+    c = zeros(UInt8,8)
+    read!(bstream,c)
+    @test c == a[3:10]
+    close(bstream)
 end

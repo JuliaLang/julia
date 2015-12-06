@@ -89,11 +89,10 @@ m = Mmap.mmap(file, Vector{UInt8}, 1, sz+1)
 @test m[1] == 0x00
 finalize(m); m=nothing; gc()
 
-# Uncomment out once #11351 is resolved
-# s = open(file, "r")
-# m = Mmap.mmap(s)
-# @test_throws ReadOnlyMemoryError m[5] = Vector{UInt8}('x') # tries to setindex! on read-only array
-# finalize(m); m=nothing; gc()
+s = open(file, "r")
+m = Mmap.mmap(s)
+@test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
+finalize(m); m=nothing; gc()
 
 s = open(file, "w") do f
     write(f, "Hello World\n")

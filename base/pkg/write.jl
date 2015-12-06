@@ -32,7 +32,8 @@ function install(pkg::AbstractString, sha1::AbstractString)
     if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
     else
-        Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        fileprefix = @windows? "file://" : ""
+        Git.run(`clone -q $(fileprefix * Cache.path(pkg)) $pkg`)
     end
     fetch(pkg, sha1)
     checkout(pkg, sha1)

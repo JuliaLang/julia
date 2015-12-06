@@ -439,8 +439,8 @@ backslash:
     julia> print("I have \$100 in my account.\n")
     I have $100 in my account.
 
-Triple-Quoted Strings Literals
-------------------------------
+Triple-Quoted String Literals
+-----------------------------
 
 When strings are created using triple-quotes (``"""..."""``) they have some
 special behavior that can be useful for creating longer blocks of text. First,
@@ -481,6 +481,12 @@ defining strings within code that is indented. For example:
 
 In this case the final (empty) line before the closing ``"""`` sets the
 indentation level.
+
+Note that line breaks in literal strings, whether single- or triple-quoted,
+result in a newline (LF) character ``\n`` in the string, even if your
+editor uses a carriage return ``\r`` (CR) or CRLF combination to end lines.
+To include a CR in a string, use an explicit escape ``\r``; for example,
+you can enter the literal string ``"a CRLF line ending\r\n"``.
 
 Common Operations
 -----------------
@@ -690,7 +696,7 @@ You can extract the following info from a :obj:`RegexMatch` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples::
+a string is invalid). Here is a pair of somewhat contrived examples::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")

@@ -13,19 +13,13 @@ function mkcachedir()
         return
     end
 
-    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
-        mkdir(cache)
-        return
-    end
-    if Dir.isversioned(pwd())
+    @unix_only if Dir.isversioned(pwd())
         rootcache = joinpath(realpath(".."), ".cache")
         if !isdir(rootcache)
             mkdir(rootcache)
         end
-        try
-            symlink(rootcache, cache)
-            return
-        end
+        symlink(rootcache, cache)
+        return
     end
     mkdir(cache)
 end

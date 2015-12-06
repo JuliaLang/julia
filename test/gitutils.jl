@@ -72,9 +72,12 @@ function verify_work(d::Dict)
         end
     end
     # check for anything that's not in d
-    for line in eachline(`ls -A`)
-        name = chomp(line)
-        @test name == ".git" || haskey(d,name)
+    extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+    withenv("PATH" => extrapath * ENV["PATH"]) do
+        for line in eachline(`ls -A`)
+            name = chomp(line)
+            @test name == ".git" || haskey(d,name)
+        end
     end
 end
 
@@ -91,9 +94,12 @@ function git_setup(h::Dict, i::Dict, w::Dict, parents::AbstractString...)
     work  = mktree(w)
 
     # clear the repo
-    for line in eachline(`ls -A`)
-        name = chomp(line)
-        name == ".git" || rm(name, recursive=true)
+    extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+    withenv("PATH" => extrapath * ENV["PATH"]) do
+        for line in eachline(`ls -A`)
+            name = chomp(line)
+            name == ".git" || rm(name, recursive=true)
+        end
     end
 
     # create the head commit

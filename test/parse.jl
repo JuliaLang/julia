@@ -304,3 +304,7 @@ let p = parse("try
     @test p.args[2] === false
     @test p.args[3].args[end] == parse("b,c = t")
 end
+
+# issue #11988 -- normalize \r and \r\n in literal strings to \n
+@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
+@test '\r' == first("\r") == first("\r\n") # still allow explicit \r

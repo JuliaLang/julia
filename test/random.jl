@@ -286,6 +286,11 @@ let mt = MersenneTwister()
     end
 end
 
+# make sure reading 128-bit ints from RandomDevice works
+let a = [rand(RandomDevice(), UInt128) for i=1:10]
+    @test reduce(|, a)>>>64 != 0
+end
+
 # test all rand APIs
 for rng in ([], [MersenneTwister()], [RandomDevice()])
     for f in [rand, randn, randexp]

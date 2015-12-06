@@ -1831,6 +1831,14 @@
                (list* ex (tostr custom b) e)
                0)))
 
+      ; convert literal \r and \r\n in strings to \n (issue #11988)
+      ((eqv? c #\return) ; \r
+       (begin
+         (if (eqv? (peek-char p) #\linefeed) ; \r\n
+             (read-char p))
+         (write-char #\newline b)
+         (loop (read-char p) b e 0)))
+
       (else
        (write-char (not-eof-3 c) b)
        (loop (read-char p) b e 0)))))

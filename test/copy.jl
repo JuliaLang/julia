@@ -57,3 +57,6 @@ let a = Any[[1]], q = QuoteNode([1])
     @test dca[1] !== a[1]
     @test deepcopy(q).value !== q.value
 end
+
+# issue #14027
+@test isnull(deepcopy(Nullable{Array}()))

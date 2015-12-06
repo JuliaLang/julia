@@ -336,30 +336,35 @@ function rmprocs(args...; waitfor = 0.0)
         error("only process 1 can add and remove processes")
     end
 
-    rmprocset = []
-    for i in vcat(args...)
-        if i == 1
-            warn("rmprocs: process 1 not removed")
-        else
-            if haskey(map_pid_wrkr, i)
-                w = map_pid_wrkr[i]
-                set_worker_state(w, W_TERMINATING)
-                kill(w.manager, i, w.config)
-                push!(rmprocset, w)
+    lock(worker_lock)
+    try
+        rmprocset = []
+        for i in vcat(args...)
+            if i == 1
+                warn("rmprocs: process 1 not removed")
+            else
+                if haskey(map_pid_wrkr, i)
+                    w = map_pid_wrkr[i]
+                    set_worker_state(w, W_TERMINATING)
+                    kill(w.manager, i, w.config)
+                    push!(rmprocset, w)
+                end
             end
         end
-    end
 
-    start = time()
-    while (time() - start) < waitfor
-        if all(w -> w.state == W_TERMINATED, rmprocset)
-            break;
-        else
-            sleep(0.1)
+        start = time()
+        while (time() - start) < waitfor
+            if all(w -> w.state == W_TERMINATED, rmprocset)
+                break;
+            else
+                sleep(0.1)
+            end
         end
-    end
 
-    ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+        ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+    finally
+        unlock(worker_lock)
+    end
 end
 
 
@@ -554,11 +559,7 @@ end
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
-    else
-        if in(rr.where, map_del_wrkr)
-            # for a removed worker, don't bother
-            return
-        end
+    elseif rr.where in procs() # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
@@ -567,7 +568,6 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
-    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -582,12 +582,11 @@ end
 function send_add_client(rr::RemoteRef, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
-    elseif i != rr.where
+    elseif (i != rr.where) && (rr.where in procs())
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
         notify(any_gc_flag)
@@ -1091,7 +1090,20 @@ end
 # `manager` is of type ClusterManager. The respective managers are responsible
 # for launching the workers. All keyword arguments (plus a few default values)
 # are available as a dictionary to the `launch` methods
+#
+# Only one addprocs can be in progress at any time
+#
+const worker_lock = ReentrantLock()
 function addprocs(manager::ClusterManager; kwargs...)
+    lock(worker_lock)
+    try
+        addprocs_locked(manager::ClusterManager; kwargs...)
+    finally
+        unlock(worker_lock)
+    end
+end
+
+function addprocs_locked(manager::ClusterManager; kwargs...)
 
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(symbol(params[:topology]))

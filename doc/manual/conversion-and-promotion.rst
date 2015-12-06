@@ -159,6 +159,8 @@ This is the actual implementation in julia::
     convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                                throw(InexactError()))
 
+.. doctest::
+
     julia> convert(Bool, 1im)
     ERROR: InexactError()
      in convert at complex.jl:18

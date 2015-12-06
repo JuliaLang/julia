@@ -473,6 +473,118 @@ end
 
 @test copysign(big(1.0),big(-2.0)) == big(-1.0)
 
+#copysign
+@test copysign(-1,1) == 1
+@test copysign(1,-1) == -1
+
+@test copysign(-1,1.0) == 1
+@test copysign(1,-1.0) == -1
+
+@test copysign(-1,1//2) == 1
+@test copysign(1,-1//2) == -1
+
+@test copysign(1.0,-1) == -1.0
+@test copysign(-1.0,1) == 1.0
+
+@test copysign(1.0,-1.0) == -1.0
+@test copysign(-1.0,1.0) == 1.0
+
+@test copysign(1.0,-1//2) == -1.0
+@test copysign(-1.0,1//2) == 1.0
+
+@test copysign(1//2,-1) == -1//2
+@test copysign(-1//2,1) == 1//2
+
+@test copysign(1//2,-1//2) == -1//2
+@test copysign(-1//2,1//2) == 1//2
+
+@test copysign(1//2,-1.0) == -1//2
+@test copysign(-1//2,1.0) == 1//2
+
+# verify type stability with integer (x is negative)
+@test eltype(copysign(-1,1)) <: Integer
+@test eltype(copysign(-1,BigInt(1))) <: Integer
+@test eltype(copysign(-1,1.0)) <: Integer
+@test eltype(copysign(-1,1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),1)) <: Integer
+@test eltype(copysign(-BigInt(1),1.0)) <: Integer
+@test eltype(copysign(-BigInt(1),1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),BigInt(1))) <: Integer
+@test eltype(copysign(-1,-1)) <: Integer
+@test eltype(copysign(-1,-BigInt(1))) <: Integer
+@test eltype(copysign(-1,-1.0)) <: Integer
+@test eltype(copysign(-1,-1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),-1)) <: Integer
+@test eltype(copysign(-BigInt(1),-1.0)) <: Integer
+@test eltype(copysign(-BigInt(1),-1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),-BigInt(1))) <: Integer
+
+# verify type stability with integer (x is positive)
+@test eltype(copysign(1,1)) <: Integer
+@test eltype(copysign(1,BigInt(1))) <: Integer
+@test eltype(copysign(1,1.0)) <: Integer
+@test eltype(copysign(1,1//2)) <: Integer
+@test eltype(copysign(BigInt(1),1)) <: Integer
+@test eltype(copysign(BigInt(1),1.0)) <: Integer
+@test eltype(copysign(BigInt(1),1//2)) <: Integer
+@test eltype(copysign(BigInt(1),BigInt(1))) <: Integer
+@test eltype(copysign(1,-1)) <: Integer
+@test eltype(copysign(1,-BigInt(1))) <: Integer
+@test eltype(copysign(1,-1.0)) <: Integer
+@test eltype(copysign(1,-1//2)) <: Integer
+@test eltype(copysign(BigInt(1),-1)) <: Integer
+@test eltype(copysign(BigInt(1),-1.0)) <: Integer
+@test eltype(copysign(BigInt(1),-1//2)) <: Integer
+@test eltype(copysign(BigInt(1),-BigInt(1))) <: Integer
+
+# verify type stability with real (x is negative)
+@test eltype(copysign(-1.0,1)) <: Real
+@test eltype(copysign(-1.0,BigInt(1))) <: Real
+@test eltype(copysign(-1.0,1.0)) <: Real
+@test eltype(copysign(-1.0,1//2)) <: Real
+@test eltype(copysign(-1.0,-1)) <: Real
+@test eltype(copysign(-1.0,-BigInt(1))) <: Real
+@test eltype(copysign(-1.0,-1.0)) <: Real
+@test eltype(copysign(-1.0,-1//2)) <: Real
+
+# Verify type stability with real (x is positive)
+@test eltype(copysign(1.0,1)) <: Real
+@test eltype(copysign(1.0,BigInt(1))) <: Real
+@test eltype(copysign(1.0,1.0)) <: Real
+@test eltype(copysign(1.0,1//2)) <: Real
+@test eltype(copysign(1.0,-1)) <: Real
+@test eltype(copysign(1.0,-BigInt(1))) <: Real
+@test eltype(copysign(1.0,-1.0)) <: Real
+@test eltype(copysign(1.0,-1//2)) <: Real
+
+# Verify type stability with rational (x is negative)
+@test eltype(copysign(-1//2,1)) <: Rational
+@test eltype(copysign(-1//2,BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,1.0)) <: Rational
+@test eltype(copysign(-1//2,1//2)) <: Rational
+@test eltype(copysign(-1//2,-1)) <: Rational
+@test eltype(copysign(-1//2,-BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,-1.0)) <: Rational
+@test eltype(copysign(-1//2,-1//2)) <: Rational
+
+# Verify type stability with rational (x is positive)
+@test eltype(copysign(-1//2,1)) <: Rational
+@test eltype(copysign(-1//2,BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,1.0)) <: Rational
+@test eltype(copysign(-1//2,1//2)) <: Rational
+@test eltype(copysign(-1//2,-1)) <: Rational
+@test eltype(copysign(-1//2,-BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,-1.0)) <: Rational
+@test eltype(copysign(-1//2,-1//2)) <: Rational
+
+# test x = NaN
+@test isnan(copysign(0/0,1))
+@test isnan(copysign(0/0,-1))
+
+# test x = Inf
+@test isinf(copysign(1/0,1))
+@test isinf(copysign(1/0,-1))
+
 @test isnan(1)     == false
 @test isnan(1.0)   == false
 @test isnan(-1.0)  == false
@@ -2126,6 +2238,11 @@ end
 @test !isprime(0xffffffffffffffc7)
 @test !isprime(0xffffffffffffffc9)
 
+for T in [Int8,UInt8,Int16,UInt16,Int128,UInt128]
+    @test isprime(T(2))
+    @test !isprime(T(4))
+end
+
 # issue #5210
 @test prod([ k^v for (k,v) in factor(typemax(UInt32)) ]) == typemax(UInt32)
 @test prod([ k^v for (k,v) in factor(typemax(Int8)) ]) == typemax(Int8)
@@ -2442,6 +2559,21 @@ end
 #getindex(x::Number) = x
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
+end
+
+#getindex(x::Number,-1) throws BoundsError
+#getindex(x::Number,0) throws BoundsError
+#getindex(x::Number,2) throws BoundsError
+#getindex(x::Array,-1) throws BoundsError
+#getindex(x::Array,0 throws BoundsError
+#getindex(x::Array,length(x::Array)+1) throws BoundsError
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+    @test_throws BoundsError getindex(x,-1)
+    @test_throws BoundsError getindex(x,0)
+    @test_throws BoundsError getindex(x,2)
+    @test_throws BoundsError getindex([x x],-1)
+    @test_throws BoundsError getindex([x x],0)
+    @test_throws BoundsError getindex([x x],length([x,x])+1)
 end
 
 #copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)

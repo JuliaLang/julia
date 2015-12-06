@@ -43,8 +43,8 @@ Dates Functions
 ---------------
 
 All Dates functions are defined in the ``Dates`` module; note that only the ``Date``, ``DateTime``, and ``now`` functions are exported;
-to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.dayofweek(dt)``;
-alternatively, you could call ``using Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
+to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.dayofweek(dt)``.
+Alternatively, you can write ``using Base.Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
 
 
 .. function:: DateTime(y, [m, d, h, mi, s, ms]) -> DateTime

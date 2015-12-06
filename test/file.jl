@@ -922,3 +922,84 @@ test_12992()
 test2_12992()
 test2_12992()
 test2_12992()
+
+# issue 13559
+
+function test_13559()
+    fn = tempname()
+    run(`mkfifo $fn`)
+    # use subprocess to write 127 bytes to FIFO
+    writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
+    open(`$(Base.julia_cmd()) -e $writer_cmds`)
+    #quickly read FIFO, draining it and blocking but not failing with EOFError yet
+    r = open(fn, "r")
+    # 15 proper reads
+    for i=1:15
+        @test read(r, Int64) == -6148914691236517206
+    end
+    # last read should throw EOFError when FIFO closes, since there are only 7 bytes available.
+    @test_throws EOFError read(r, Int64)
+    close(r)
+    rm(fn)
+end
+@unix_only test_13559()
+
+function test_read_nbyte()
+    fn = tempname()
+    # Write one byte. One byte read should work once
+    # but 2-byte read should throw EOFError.
+    f = open(fn, "w+") do f
+        write(f, 0x55)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt8) == 0x55
+        @test_throws EOFError read(f, UInt8)
+        seek(f, 0)
+        @test_throws EOFError read(f, UInt16)
+    end
+    # Write 2 more bytes. Now 2-byte read should work once
+    # but 4-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x4444)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt16) == 0x4455
+        @test_throws EOFError read(f, UInt16)
+        seek(f,0)
+        @test_throws EOFError read(f, UInt32)
+    end
+    # Write 4 more bytes. Now 4-byte read should work once
+    # but 8-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x33333333)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt32) == 0x33444455
+        @test_throws EOFError read(f, UInt32)
+        seek(f,0)
+        @test_throws EOFError read(f, UInt64)
+    end
+    # Writing one more byte should allow an 8-byte
+    # read to proceed.
+    open(fn, "a+") do f
+        write(f, 0x22)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt64) == 0x2233333333444455
+    end
+    rm(fn)
+end
+test_read_nbyte()
+
+# DevNull
+@test !isreadable(DevNull)
+@test iswritable(DevNull)
+@test isopen(DevNull)
+@test write(DevNull, 0xff) === 1
+@test write(DevNull, Int32(1234)) === 4
+@test_throws EOFError read(DevNull, UInt8)
+@test close(DevNull) === nothing
+@test flush(DevNull) === nothing
+@test copy(DevNull) === DevNull
+@test eof(DevNull)
+@test print(DevNull, "go to /dev/null") === nothing
