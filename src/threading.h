@@ -22,7 +22,6 @@ extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
 // GC
 extern struct _jl_thread_heap_t **jl_all_heaps;
 #endif
-extern jl_gcframe_t ***jl_all_pgcstacks;
 
 // thread state
 enum {
