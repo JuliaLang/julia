@@ -2144,15 +2144,29 @@ static void post_mark(arraylist_t *list, int dryrun)
 }
 
 // collector entry point and control
+static volatile uint64_t jl_gc_disable_counter = 0;
 
-static int is_gc_enabled = 1;
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
-    int prev = is_gc_enabled;
-    is_gc_enabled = (on!=0);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, -1);
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint();
+    }
     return prev;
 }
-JL_DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
+JL_DLLEXPORT int jl_gc_is_enabled(void)
+{
+    return !jl_get_ptls_states()->disable_gc;
+}
 
 JL_DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
@@ -2455,7 +2469,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
 
 JL_DLLEXPORT void jl_gc_collect(int full)
 {
-    if (!is_gc_enabled || jl_in_gc)
+    if (jl_gc_disable_counter || jl_in_gc)
         return;
     char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
@@ -2482,7 +2496,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     jl_gc_signal_begin();
 
     jl_in_gc = 1;
-    _jl_gc_collect(full, stack_hi);
+    if (!jl_gc_disable_counter)
+        _jl_gc_collect(full, stack_hi);
     jl_in_gc = 0;
 
     // Need to reset the page protection before resetting the flag since
