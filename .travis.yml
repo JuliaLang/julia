@@ -74,6 +74,11 @@ script:
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && mv julia/deps/build julia/deps/build-$ARCH
+    - case $TRAVIS_PULL_REQUEST-$TRAVIS_BRANCH in
+        false-master | false-release*)
+          cd `dirname $TRAVIS_BUILD_DIR` &&
+          mv julia2 julia &&
+          mv julia/deps/build julia/deps/build-$ARCH;;
+      esac
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
