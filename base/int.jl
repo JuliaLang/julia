@@ -34,11 +34,13 @@ for T in (Int8,Int16,Int32,Int64,Int128)
 end
 
 flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote(x,y)...))
+flipsign(x::Signed, y::Float16) = flipsign(x, reinterpret(Int16,y))
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
 flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 
 copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
+copysign(x::Signed, y::Float16) = copysign(x, reinterpret(Int16,y))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
 copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
@@ -729,17 +731,17 @@ checked_add(x) = +x
 checked_mul(x) = *(x)
 for f in (:checked_add, :checked_mul)
     @eval begin
-        ($f)(x1::T, x2::T, x3::T) =
+        ($f){T}(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f)(x1::T, x2::T, x3::T, x4::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
     end
 end
@@ -843,7 +845,7 @@ unchecked_mul{T<:Union{IntTypes...}}(x::T, y::T) = x*y
 
 const SignedIntTypes = (Int8,Int16,Int32,Int64,Int128)
 for T in SignedIntTypes
-    if false && WORD_SIZE == 32 && T === Int128
+    if WORD_SIZE == 32 && T === Int128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
             unchecked_div(x::$T, y::$T) = div(x, y)
@@ -875,8 +877,8 @@ end
 
 const UnsignedIntTypes = (UInt8,UInt16,UInt32,UInt64,UInt128)
 for T in UnsignedIntTypes
-    if false && WORD_SIZE == 32 && T === Int128
-        # There is probably a code generation bug on 32-bit Linux with LLVM 3.3
+    if WORD_SIZE == 32 && T === UInt128
+        # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
             unchecked_div(x::$T, y::$T) = div(x, y)
             unchecked_rem(x::$T, y::$T) = rem(x, y)
@@ -901,18 +903,26 @@ end
 unchecked_add(x) = +x
 unchecked_mul(x) = *(x)
 for f in (:unchecked_add, :unchecked_mul)
+    if WORD_SIZE == 32 && T === Int128
+        # There is probably a code generation bug on 32-bit Linux with LLVM 3.3
+        @eval begin
+            unchecked_div(x::$T, y::$T) = div(x, y)
+            unchecked_rem(x::$T, y::$T) = rem(x, y)
+        end
+    else
     @eval begin
-        ($f)(x1::T, x2::T, x3::T) =
+        ($f){T}(x1::T, x2::T, x3::T) =
             ($f)(($f)(x1, x2), x3)
-        ($f)(x1::T, x2::T, x3::T, x4::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
             ($f)(($f)(x1, x2), x3, x4)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
             ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f)(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
+        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
             ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
+    end
     end
 end
