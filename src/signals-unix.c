@@ -474,6 +474,9 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGPIPE");
     }
+    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGTRAP");
+    }
 
     allocate_segv_handler();
 
