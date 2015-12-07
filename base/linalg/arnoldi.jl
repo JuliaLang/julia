@@ -3,7 +3,7 @@
 using .ARPACK
 
 ## eigs
-doc"""
+"""
 ```rst
 ..  eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
@@ -62,7 +62,7 @@ function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
     eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
 end
-doc"""
+"""
 ```rst
 ..  eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 

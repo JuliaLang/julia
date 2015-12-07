@@ -149,7 +149,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute an ``LDLt`` factorization of a real symmetric tridiagonal matrix such that ``A = L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector. The main use of an ``LDLt`` factorization ``F = ldltfact(A)`` is to solve the linear system of equations ``Ax = b`` with ``F\b``\ .
+   Compute an ``LDLt`` factorization of a real symmetric tridiagonal matrix such that ``A = L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector. The main use of an ``LDLt`` factorization ``F = ldltfact(A)`` is to solve the linear system of equations ``Ax = b`` with ``F``\ .
 
 .. function:: ldltfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
@@ -904,7 +904,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.
+   If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-pi < Im(lambda) < pi` for all the eigenvalues :math:`lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.
 
    If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if ``A`` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
 
@@ -1034,7 +1034,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
      ========= ======================================================================================================================
 
-   * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+   * ``tol``: tolerance (:math:`tol le 0.0` defaults to ``DLAMCH('EPS')``)
    * ``maxiter``: Maximum number of iterations (default = 300)
    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
@@ -1048,7 +1048,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
       =============== ================================== ==================================
       ``nothing``     ordinary (forward)                 :math:`A`
-      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
+      real or complex inverse with level shift ``sigma`` :math:`(A - sigma I )^{-1}`
       =============== ================================== ==================================
 
 .. function:: eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
@@ -1077,7 +1077,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
      ========= ======================================================================================================================
 
-   * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+   * ``tol``: tolerance (:math:`tol le 0.0` defaults to ``DLAMCH('EPS')``)
    * ``maxiter``: Maximum number of iterations (default = 300)
    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
@@ -1085,13 +1085,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
 
-   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bvlambda`, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
 
       =============== ================================== ==================================
       ``sigma``       iteration mode                     ``which`` refers to the problem
       =============== ================================== ==================================
-      ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
-      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
+      ``nothing``     ordinary (forward)                 :math:`Av = Bvlambda`
+      real or complex inverse with level shift ``sigma`` :math:`(A - sigma B )^{-1}B = v
+   u`
       =============== ================================== ==================================
 
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)

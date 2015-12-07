@@ -78,7 +78,7 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
     return LowerTriangular(A)
 end
 
-doc"""
+"""
     chol(A::AbstractMatrix) -> U
 
 Compute the Cholesky factorization of a positive definite matrix `A` and return the UpperTriangular matrix `U` such that `A = U'U`.
@@ -95,7 +95,7 @@ function chol!(x::Number, uplo)
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
-doc"""
+"""
     chol(x::Number) -> y
 
 Compute the square root of a non-negative number `x`.

@@ -72,12 +72,14 @@ eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vecto
 
 eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
 
-doc"""
+"""
 
     eigvals!(A,[irange,][vl,][vu]) -> values
 
 Same as `eigvals`, but saves space by overwriting the input `A` (and `B`), instead of creating a copy.
 """
+function eigvals! end
+
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issym(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
