@@ -1150,7 +1150,12 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     Value *den;
     Value *typemin;
     switch (f) {
-    case neg_int: return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
+    case neg_int:
+#ifdef LLVM37
+     return builder.CreateNeg(JL_INT(x));
+#else
+     return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
+#endif
     case add_int: return builder.CreateAdd(JL_INT(x), JL_INT(y));
     case sub_int: return builder.CreateSub(JL_INT(x), JL_INT(y));
     case mul_int: return builder.CreateMul(JL_INT(x), JL_INT(y));
