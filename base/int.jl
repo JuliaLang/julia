@@ -866,7 +866,7 @@ for T in SignedIntTypes
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
             unchecked_mul(x::$T, y::$T) =
-                box($T,unchecked_smul(unbox($T,x), unbox($T,y)))
+                box($T,smul_int(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
                 box($T,sdiv_int(unbox($T,x),unbox($T,y)))
             function unchecked_rem(x::$T, y::$T)
@@ -918,7 +918,7 @@ for T in UnsignedIntTypes
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
             unchecked_mul(x::$T, y::$T) =
-                box($T,unchecked_umul(unbox($T,x), unbox($T,y)))
+                box($T,umul_int(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
                 box($T,udiv_int(unbox($T,x),unbox($T,y)))
             unchecked_rem(x::$T, y::$T) =
