@@ -13,7 +13,9 @@ LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,t
 
 # StridedMatrix
 function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
-    pivot==Val{false} && return generic_lufact!(A, pivot)
+    if pivot === Val{false}
+        return generic_lufact!(A, pivot)
+    end
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
@@ -233,7 +235,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -256,7 +258,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         if n > 1
             i = n-1
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
