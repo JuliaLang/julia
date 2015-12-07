@@ -2584,17 +2584,18 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test_throws BoundsError getindex([x x],length([x,x])+1)
 end
 
-#copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
-#same sign
+# copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
+# flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
 for x in [1.23, 7, e, 4//5]
     for y in [1.23, 7, e, 4//5]
-        @test copysign(x,y) == x
-    end
-end
-#different sign
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
+        @test copysign(x, y) == x
         @test copysign(x, -y) == -x
+        @test copysign(-x, y) == x
+        @test copysign(-x, -y) == -x
+        @test flipsign(x, y) == x
+        @test flipsign(x, -y) == -x
+        @test flipsign(-x, y) == -x
+        @test flipsign(-x, -y) == x
     end
 end
 
