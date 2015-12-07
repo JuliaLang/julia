@@ -1140,6 +1140,46 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
+.. function:: Base.checked_div(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``div(x,y)``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_rem(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``x%y``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_fld(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``fld(x,y)``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_mod(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``mod(x,y)``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.checked_cld(x, y)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``cld(x,y)``\ , checking for overflow errors where applicable.
+
+   The overflow protection may impose a perceptible performance penalty.
+
 .. function:: abs2(x)
 
    .. Docstring generated from Julia source

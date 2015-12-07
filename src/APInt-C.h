@@ -46,6 +46,10 @@ JL_DLLEXPORT int LLVMSub_uov(unsigned numbits, integerPart *pa, integerPart *pb,
 JL_DLLEXPORT int LLVMSub_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 JL_DLLEXPORT int LLVMMul_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 JL_DLLEXPORT int LLVMMul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int LLVMDiv_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int LLVMDiv_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int LLVMRem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int LLVMRem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
 JL_DLLEXPORT unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa);

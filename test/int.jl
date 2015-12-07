@@ -125,7 +125,8 @@ end
 
 # checked operations
 
-import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul
+import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
+             checked_div, checked_rem, checked_fld, checked_mod
 for T in (Int8, Int16, Int32, Int64, Int128)
     # regular cases
     for s in (-1, +1)
@@ -144,6 +145,10 @@ for T in (Int8, Int16, Int32, Int64, Int128)
         @test checked_add(T(4s1), T(3s2)) === T(4s1 + 3s2)
         @test checked_sub(T(4s1), T(3s2)) === T(4s1 - 3s2)
         @test checked_mul(T(4s1), T(3s2)) === T(4s1 * 3s2)
+        @test checked_div(T(4s1), T(3s2)) === T(div(4s1, 3s2))
+        @test checked_rem(T(4s1), T(3s2)) === T(rem(4s1, 3s2))
+        @test checked_fld(T(4s1), T(3s2)) === T(fld(4s1, 3s2))
+        @test checked_mod(T(4s1), T(3s2)) === T(mod(4s1, 3s2))
     end
     # corner cases
     max2 = T(typemax(T)÷2)
@@ -192,6 +197,39 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test_throws OverflowError checked_mul(sqrt2, -sqrt2)
     @test_throws OverflowError checked_mul(-sqrt2, sqrt2)
     @test_throws OverflowError checked_mul(-sqrt2, -sqrt2)
+
+    # On 32-bit systems, LLVM (version 3.3?) has a code-generation error for
+    # Int128 and UInt128. Base circumvents this by performing division as
+    # BigInt, and converting the result back to Int128/UInt128. The conversion
+    # from `BigInt(-typemin(Int128))` to `Int128` raises an `InexactError`
+    # instead of a `DivideError`. This could be fixed, or could be changed to an
+    # `OverflowError` (see #14273 for the respectiv discussion). At the moment,
+    # we simply document the current behaviour.
+    diverr = WORD_SIZE == 32 && T === Int128 ? InexactError : DivideError
+    @test checked_div(typemax(T), T(1)) === typemax(T)
+    @test_throws DivideError checked_div(typemax(T), T(0))
+    @test checked_div(typemax(T), T(-1)) === T(-typemax(T))
+    @test checked_div(typemin(T), T(1)) === typemin(T)
+    @test_throws DivideError checked_div(typemin(T), T(0))
+    @test_throws diverr checked_div(typemin(T), T(-1))
+    @test checked_rem(typemax(T), T(1)) === T(0)
+    @test_throws DivideError checked_rem(typemax(T), T(0))
+    @test checked_rem(typemax(T), T(-1)) === T(0)
+    @test checked_rem(typemin(T), T(1)) === T(0)
+    @test_throws DivideError checked_rem(typemin(T), T(0))
+    @test checked_rem(typemin(T), T(-1)) === T(0)
+    @test checked_fld(typemax(T), T(1)) === typemax(T)
+    @test_throws DivideError checked_fld(typemax(T), T(0))
+    @test checked_fld(typemax(T), T(-1)) === T(-typemax(T))
+    @test checked_fld(typemin(T), T(1)) === typemin(T)
+    @test_throws DivideError checked_fld(typemin(T), T(0))
+    @test_throws diverr checked_fld(typemin(T), T(-1))
+    @test checked_mod(typemax(T), T(1)) === T(0)
+    @test_throws DivideError checked_mod(typemax(T), T(0))
+    @test checked_mod(typemax(T), T(-1)) === T(0)
+    @test checked_mod(typemin(T), T(1)) === T(0)
+    @test_throws DivideError checked_mod(typemin(T), T(0))
+    @test checked_mod(typemin(T), T(-1)) === T(0)
 end
 
 for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -235,6 +273,15 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test checked_mul(typemax(T), T(1)) === typemax(T)
     @test checked_mul(T(0), T(1)) === T(0)
     @test_throws OverflowError checked_mul(sqrt2, sqrt2)
+
+    @test checked_div(typemax(T), T(1)) === typemax(T)
+    @test_throws DivideError checked_div(typemax(T), T(0))
+    @test checked_rem(typemax(T), T(1)) === T(0)
+    @test_throws DivideError checked_rem(typemax(T), T(0))
+    @test checked_fld(typemax(T), T(1)) === typemax(T)
+    @test_throws DivideError checked_fld(typemax(T), T(0))
+    @test checked_mod(typemax(T), T(1)) === T(0)
+    @test_throws DivideError checked_mod(typemax(T), T(0))
 end
 
 @test checked_abs(BigInt(-1)) == BigInt(1)

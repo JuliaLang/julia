@@ -351,7 +351,6 @@ JL_DLLEXPORT jl_value_t *jl_sdiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_udiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_srem_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_urem_int(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT jl_value_t *jl_smod_int(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_neg_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
@@ -413,6 +412,10 @@ JL_DLLEXPORT jl_value_t *jl_checked_ssub(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_usub(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_smul(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_umul(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_sdiv(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_udiv(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_srem(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_checked_urem(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_ceil_llvm(jl_value_t *a);
