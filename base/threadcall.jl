@@ -79,6 +79,6 @@ macro threadcall(f, rettype, argtypes, argvals...)
         thread_notifiers[idx] = Nullable{Condition}()
         release(threadcall_restrictor)
 
-        read(IOBuffer(ret_arr), $rettype)
+        unsafe_load(convert(Ptr{$rettype}, pointer(ret_arr)))
     end)
 end
