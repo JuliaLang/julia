@@ -58,10 +58,21 @@ else
     bitstype 32 Cwstring
 end
 
+# construction from typed pointers
 convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
 convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
 convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+
+# construction from untyped pointers
+convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+
+pointer(p::Cstring) = convert(Ptr{UInt8}, p)
+pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
+
+# comparisons against pointers (mainly to support `cstr==C_NULL`)
+==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
+==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
 # here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
 pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)

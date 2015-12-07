@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## SubString, RevString, and RepString tests ##
+## SubString, RevString, RepString and Cstring tests ##
 
 ## SubString tests ##
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -213,3 +213,27 @@ let
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
 end
+
+
+## Cstring tests ##
+
+# issue #13974: comparison against pointers
+
+str = bytestring("foobar")
+ptr = pointer(str)
+cstring = Cstring(ptr)
+@test ptr == cstring
+@test cstring == ptr
+
+# convenient NULL string creation from Ptr{Void}
+nullstr = Cstring(C_NULL)
+
+# Comparisons against NULL strings
+@test ptr != nullstr
+@test nullstr != ptr
+
+# Short-hand comparison against C_NULL
+@test nullstr == C_NULL
+@test C_NULL == nullstr
+@test cstring != C_NULL
+@test C_NULL != cstring
