@@ -866,12 +866,12 @@ for T in SignedIntTypes
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
             unchecked_mul(x::$T, y::$T) =
-                box($T,smul_int(unbox($T,x), unbox($T,y)))
+                box($T,smul(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
-                box($T,sdiv_int(unbox($T,x),unbox($T,y)))
+                box($T,sdiv(unbox($T,x),unbox($T,y)))
             function unchecked_rem(x::$T, y::$T)
                 y == -1 && return $T(0)   # avoid overflow
-                box($T,srem_int(unbox($T,x),unbox($T,y)))
+                box($T,srem(unbox($T,x),unbox($T,y)))
             end
         end
     end
@@ -918,11 +918,11 @@ for T in UnsignedIntTypes
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
             unchecked_mul(x::$T, y::$T) =
-                box($T,umul_int(unbox($T,x), unbox($T,y)))
+                box($T,umul(unbox($T,x), unbox($T,y)))
             unchecked_div(x::$T, y::$T) =
-                box($T,udiv_int(unbox($T,x),unbox($T,y)))
+                box($T,udiv(unbox($T,x),unbox($T,y)))
             unchecked_rem(x::$T, y::$T) =
-                box($T,urem_int(unbox($T,x),unbox($T,y)))
+                box($T,urem(unbox($T,x),unbox($T,y)))
         end
     end
 end
