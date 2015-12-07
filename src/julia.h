@@ -1359,8 +1359,8 @@ JL_DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 #define JL_SIGATOMIC_BEGIN() (JL_ATOMIC_FETCH_AND_ADD(jl_defer_signal,1))
 #define JL_SIGATOMIC_END()                                      \
     do {                                                        \
-	if (JL_ATOMIC_FETCH_AND_ADD(jl_defer_signal,-1) == 1 	    \
-		&& jl_signal_pending != 0) {			                \
+        if (JL_ATOMIC_FETCH_AND_ADD(jl_defer_signal,-1) == 1    \
+                && jl_signal_pending != 0) {                    \
             jl_signal_pending = 0;                              \
             jl_sigint_action();                                 \
         }                                                       \
