@@ -859,12 +859,9 @@ for T in SignedIntTypes
     else
         @eval begin
             # use regular Int128 operations to avoid codegen bug
-            unchecked_neg(x::$T) =
-                box($T,unchecked_sneg(unbox($T,x)))
-            unchecked_add(x::$T, y::$T) =
-                box($T,unchecked_sadd(unbox($T,x), unbox($T,y)))
-            unchecked_sub(x::$T, y::$T) =
-                box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
+            unchecked_neg(x::$T) = -x
+            unchecked_add(x::$T, y::$T) = x + y
+            unchecked_sub(x::$T, y::$T) = x - y
             unchecked_mul(x::$T, y::$T) = x * y
             unchecked_div(x::$T, y::$T) = x ÷ y
             unchecked_rem(x::$T, y::$T) = x % y
@@ -906,12 +903,9 @@ for T in UnsignedIntTypes
     else
         @eval begin
             # use regular UInt128 operations to avoid codegen bug
-            unchecked_neg(x::$T) =
-                box($T,unchecked_uneg(unbox($T,x)))
-            unchecked_add(x::$T, y::$T) =
-                box($T,unchecked_uadd(unbox($T,x), unbox($T,y)))
-            unchecked_sub(x::$T, y::$T) =
-                box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
+            unchecked_neg(x::$T) = -x
+            unchecked_add(x::$T, y::$T) = x + y
+            unchecked_sub(x::$T, y::$T) = x - y
             unchecked_mul(x::$T, y::$T) = x * y
             unchecked_div(x::$T, y::$T) = x ÷ y
             unchecked_rem(x::$T, y::$T) = x % y
