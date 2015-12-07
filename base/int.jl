@@ -858,21 +858,16 @@ for T in SignedIntTypes
         end
     else
         @eval begin
-            # use checked Int128 operations to avoid codegen bug
+            # use regular Int128 operations to avoid codegen bug
             unchecked_neg(x::$T) =
                 box($T,unchecked_sneg(unbox($T,x)))
             unchecked_add(x::$T, y::$T) =
                 box($T,unchecked_sadd(unbox($T,x), unbox($T,y)))
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
-            unchecked_mul(x::$T, y::$T) =
-                box($T,smul(unbox($T,x), unbox($T,y)))
-            unchecked_div(x::$T, y::$T) =
-                box($T,sdiv(unbox($T,x),unbox($T,y)))
-            function unchecked_rem(x::$T, y::$T)
-                y == -1 && return $T(0)   # avoid overflow
-                box($T,srem(unbox($T,x),unbox($T,y)))
-            end
+            unchecked_mul(x::$T, y::$T) = x * y
+            unchecked_div(x::$T, y::$T) = x ÷ y
+            unchecked_rem(x::$T, y::$T) = x % y
         end
     end
 end
@@ -910,19 +905,16 @@ for T in UnsignedIntTypes
         end
     else
         @eval begin
-            # use checked UInt128 operations to avoid codegen bug
+            # use regular UInt128 operations to avoid codegen bug
             unchecked_neg(x::$T) =
                 box($T,unchecked_uneg(unbox($T,x)))
             unchecked_add(x::$T, y::$T) =
                 box($T,unchecked_uadd(unbox($T,x), unbox($T,y)))
             unchecked_sub(x::$T, y::$T) =
                 box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
-            unchecked_mul(x::$T, y::$T) =
-                box($T,umul(unbox($T,x), unbox($T,y)))
-            unchecked_div(x::$T, y::$T) =
-                box($T,udiv(unbox($T,x),unbox($T,y)))
-            unchecked_rem(x::$T, y::$T) =
-                box($T,urem(unbox($T,x),unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) = x * y
+            unchecked_div(x::$T, y::$T) = x ÷ y
+            unchecked_rem(x::$T, y::$T) = x % y
         end
     end
 end
