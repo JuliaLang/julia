@@ -227,5 +227,6 @@ threadcall_test_func(x) =
 @test threadcall_test_func(259) == 1
 
 @test 1.5 > @elapsed @sync for i = 1:4
-    @async @threadcall(:sleep, Cuint, (Cuint,), 1)
+    @unix_only @async @threadcall(:sleep, Cuint, (Cuint,), 1)
+    @windows_only @async @threadcall(:Sleep, Void, (UInt32,), 1000)
 end
