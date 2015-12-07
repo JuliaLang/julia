@@ -3105,6 +3105,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         else {
             theF = literal_pointer_val((jl_value_t*)f);
+            jl_add_linfo_root(ctx->linfo, (jl_value_t*)f);
             result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, ctx);
         }
     }
@@ -3132,6 +3133,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         else {
             theF = literal_pointer_val((jl_value_t*)f);
+            jl_add_linfo_root(ctx->linfo, (jl_value_t*)f);
         }
         result = emit_call_function_object(f, theF, theFptr, specialized, args, nargs, ctx);
     }
