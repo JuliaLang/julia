@@ -18,7 +18,8 @@ local rshift = bit.rshift
 local format = string.format
 local nowutc = time.nowutc
 local rng = prng.std()
-local vec, mat, trace, join = alg.vec, alg.mat, alg.trace, alg.join
+local vec, mat, join = alg.vec, alg.mat, alg.join
+local sum, trace = alg.sum, alg.trace
 local var, mean = stat.var, stat.mean
 
 --------------------------------------------------------------------------------
@@ -80,22 +81,17 @@ local function mandel(z)
     return maxiter
 end
 local function mandelperf()
-    local a = ffi.new('double[?]', 546)
-    for r = -20, 5 do
-        local re = r*0.1
-        for i=-10, 10 do
-            local im = i*0.1
-            a[r*21+i+430] = mandel(re + 1i * im)
+    local a = mat(26, 21)
+    for r=1,26 do -- Lua's for i=l,u,c doesn't match Julia's for i=l:c:u.
+        for c=1,21 do
+            local re, im = (r - 21)*0.1, (c - 11)*0.1
+            a[{r, c}] = mandel(re + im*1i)
         end
     end
     return a
 end
 
-timeit(mandelperf, 'mandel', function(a)
-    local sum = 0
-    for i = 0, 545 do sum = sum + a[i] end
-    assert(sum == 14791)
-end)
+timeit(mandelperf, 'mandel', function(a) assert(sum(a) == 14791) end)
 
 local function qsort(a, lo, hi)
     local i, j = lo, hi
@@ -132,14 +128,14 @@ end
 )
 
 local function pisum()
-    local sum
+    local s
     for j = 1, 500 do
-        sum = 0
+        s = 0
         for k = 1, 10000 do
-            sum = sum + 1 / (k*k)
+            s = s + 1 / (k*k)
         end
     end
-    return sum
+    return s
 end
 
 timeit(pisum, 'pi_sum', function(x) 
