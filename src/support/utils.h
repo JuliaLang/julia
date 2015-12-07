@@ -39,7 +39,7 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
 {
   __asm("xchgb %b0,%h0" :
-        LEGACY_REGS (x)	:
+        LEGACY_REGS (x) :
         "0" (x));
     return x;
 }
@@ -47,7 +47,7 @@ STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
 
 STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
 {
- __asm("bswap	%0":
+ __asm("bswap   %0":
       "=r" (x)     :
       "0" (x));
   return x;
@@ -58,14 +58,14 @@ STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
 STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 {
 #ifdef __x86_64__
-  __asm("bswap	%0":
+  __asm("bswap  %0":
         "=r" (x)     :
         "0" (x));
   return x;
 #else
   register union { __extension__ u_int64_t __ll;
           u_int32_t __l[2]; } __x;
-  asm("xchgl	%0,%1":
+  asm("xchgl    %0,%1":
       "=r"(__x.__l[0]),"=r"(__x.__l[1]):
       "0"(bswap_32((unsigned long)x)),"1"(bswap_32((unsigned long)(x>>32))));
   return __x.__ll;
