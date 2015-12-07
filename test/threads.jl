@@ -3,69 +3,33 @@ using Base.Threads
 
 # threading constructs
 
-# parallel call form
-function threaded_call(A)
-    tid = threadid()
-    A[tid] = tid
-end
-
-function test_threaded_call()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    @threads all threaded_call(arr)
-    @test arr == expected
-end
-
-test_threaded_call()
-
-# parallel loop form
-function threaded_loop(A)
-    @threads all for i = 1:nthreads()
-        tid = threadid()
-        A[i] = tid
+# parallel loop with parallel atomic addition
+function threaded_loop(a, r, x)
+    @threads for i in r
+        a[i] = 1 + atomic_add!(x, 1)
     end
 end
 
-function test_threaded_loop()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    threaded_loop(arr)
-    @test arr == expected
-end
-
-test_threaded_loop()
-
-# parallel block form
-function threaded_block(A)
-    @threads all begin
-        tid = threadid()
-        A[tid] = tid
-    end
-end
-
-function test_threaded_block()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    threaded_block(arr)
-    @test arr == expected
-end
-
-test_threaded_block()
-
-# parallel atomic addition
-function threaded_atomic_add(x, n)
-    @threads all for i = 1:n
-        atomic_add!(x, 1)
-    end
-end
-
-function test_threaded_atomic_add()
+function test_threaded_loop_and_atomic_add()
     x = Atomic()
-    threaded_atomic_add(x, 10000)
+    a = zeros(Int,10000)
+    threaded_loop(a,1:10000,x)
+    found = zeros(Bool,10000)
+    was_inorder = true
+    for i=1:length(a)
+        was_inorder &= a[i]==i
+        found[a[i]] = true
+    end
     @test x[] == 10000
+    # Next test checks that al loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test findfirst(found,false) == 0
+    if was_inorder
+        println(STDERR, "Warning: threaded loop executed in order")
+    end
 end
 
-test_threaded_atomic_add()
+test_threaded_loop_and_atomic_add()
 
 # Helper for test_threaded_atomic_minmax that verifies sequential consistency.
 function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Ordering)
@@ -83,7 +47,7 @@ function test_threaded_atomic_minmax{T}(m::T,n::T)
     y = Atomic{T}(mid)
     oldx = Array(T,n-m+1)
     oldy = Array(T,n-m+1)
-    @threads all for i = m:n
+    @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
     end
@@ -99,7 +63,7 @@ test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
 # spin locks
 function threaded_add_using_spinlock(s, x, n)
-    @threads all for i = 1:n
+    @threads for i = 1:n
         lock!(s)
         x = x + 1
         unlock!(s)
@@ -118,7 +82,7 @@ test_spinlock()
 
 # mutexes
 function threaded_add_using_mutex(m, x, n)
-    @threads all for i = 1:n
+    @threads for i = 1:n
         lock!(m)
         x = x + 1
         unlock!(m)
