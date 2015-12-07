@@ -11,18 +11,43 @@ import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
 #Generic LAPACK error handlers
-macro assertargsok() #Handle only negative info codes - use only if positive info code is useful!
-    :(info[1]<0 && throw(ArgumentError("invalid argument #$(-info[1]) to LAPACK call")))
-end
-macro lapackerror() #Handle all nonzero info codes
-    :(info[1]>0 ? throw(LAPACKException(info[1])) : @assertargsok )
+
+"""
+Handle only negative LAPACK error codes
+
+*NOTE* use only if the positive error code is useful.
+"""
+function chkargsok(info::Vector{BlasInt})
+    if info < 0
+        throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
+    end
+    return info
 end
 
-macro assertnonsingular()
-    :(info[1]>0 && throw(SingularException(info[1])))
+"Handle all nonzero info codes"
+function chklapackerror(info::Vector{BlasInt})
+    ret = info[1]
+    if ret == 0
+        return info
+    elseif ret > 0
+        throw(LAPACKException(info[1]))
+    elseif ret < 0
+        throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
+    end
 end
-macro assertposdef()
-    :(info[1]>0 && throw(PosDefException(info[1])))
+
+function chknonsingular(info::Vector{BlasInt})
+    if info[1] > 0
+        throw(SingularException(info[1]))
+    end
+    info
+end
+
+function chkposdef(info::Vector{BlasInt})
+    if info[1] > 0
+        throw(PosDefException(info[1]))
+    end
+    info
 end
 
 "Check that upper/lower (for special matrices) is correctly specified"
@@ -85,15 +110,15 @@ for (gbtrf, gbtrs, elty) in
         #       DOUBLE PRECISION   AB( LDAB, * )
         function gbtrf!(kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix{$elty})
             chkstride1(AB)
-            info = Array(BlasInt, 1)
             n    = size(AB, 2)
             mnmn = min(m, n)
             ipiv = similar(AB, BlasInt, mnmn)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gbtrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, &kl, &ku, AB, &max(1,stride(AB,2)), ipiv, info)
-            @lapackerror
+            chklapackerror(info)
             AB, ipiv
         end
 
@@ -120,7 +145,7 @@ for (gbtrf, gbtrs, elty) in
                    Ptr{BlasInt}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &max(1,stride(AB,2)), ipiv,
                   B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -165,15 +190,15 @@ for (gebal, gebak, elty, relty) in
             chkstride1(A)
             checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
-            info    = Array(BlasInt, 1)
             ihi     = Array(BlasInt, 1)
             ilo     = Array(BlasInt, 1)
             scale   = similar(A, $relty, n)
+            info    = Array(BlasInt, 1)
             ccall(($(blasfunc(gebal)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                   &job, &n, A, &max(1,stride(A,2)), ilo, ihi, scale, info)
-            @lapackerror
+            chklapackerror(info)
             ilo[1], ihi[1], scale
         end
 
@@ -190,12 +215,12 @@ for (gebal, gebak, elty, relty) in
             checkfinite(V) # balancing routines don't support NaNs and Infs
             chkside(side)
             n = chksquare(V)
-            info    = Array(BlasInt, 1)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gebak)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &max(1,stride(V,2)), info)
-            @lapackerror
+            chklapackerror(info)
             V
         end
     end
@@ -263,7 +288,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      &m, &n, A, &max(1,stride(A,2)),
                      d, e, tauq, taup,
                      work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -293,7 +318,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -323,7 +348,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -374,7 +399,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                           jpvt, tau, work,
                           &lwork, info)
                 end
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
@@ -402,14 +427,16 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      &m, &n, &nb, A,
                      &lda, T, &max(1,stride(T,2)), work,
                      info)
-                @lapackerror
+                chklapackerror(info)
             end
             A, T
         end
 
         function geqrt3!(A::StridedMatrix{$elty}, T::StridedMatrix{$elty})
-            chkstride1(A); chkstride1(T)
-            m, n = size(A); p, q = size(T)
+            chkstride1(A)
+            chkstride1(T)
+            m, n = size(A)
+            p, q = size(T)
             if m < n
                 throw(DimensionMismatch("Input matrix A has dimensions ($m,$n), but should have more rows than columns"))
             end
@@ -423,7 +450,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                      &m, &n, A, &max(1, stride(A, 2)),
                      T, &max(1,stride(T,2)), info)
-                @lapackerror
+                chklapackerror(info)
             end
             A, T
         end
@@ -448,7 +475,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -476,7 +503,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -501,7 +528,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, A, &lda, ipiv, info)
-            @assertargsok
+            chkargsok(info)
             A, ipiv, info[1] #Error code is stored in LU factorization type
         end
     end
@@ -734,7 +761,7 @@ for (tzrzf, ormrz, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             A, tau
         end
    # 21 *       SUBROUTINE ZUNMRZ( SIDE, TRANS, M, N, K, L, A, LDA, TAU, C, LDC,
@@ -773,7 +800,7 @@ for (tzrzf, ormrz, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             C
         end
     end
@@ -829,7 +856,7 @@ for (gels, gesv, getrs, getri, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &(btrn?'T':'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       B, &max(1,stride(B,2)), work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -865,7 +892,7 @@ for (gels, gesv, getrs, getri, elty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B, A, ipiv
         end
         #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -888,7 +915,7 @@ for (gels, gesv, getrs, getri, elty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &trans, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
         #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
@@ -912,7 +939,7 @@ for (gels, gesv, getrs, getri, elty) in
                       (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &n, A, &lda, ipiv, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
@@ -1010,9 +1037,12 @@ for (gesvx, elty) in
                Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
+            chklapackerror(info)
             @lapackerror
-            if info[1] == n+1 warn("Matrix is singular to working precision.")
-            else @assertnonsingular
+            if info[1] == n+1
+                warn("Matrix is singular to working precision.")
+            else
+                chknonsingular(info)
             end
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, work[1]
@@ -1068,9 +1098,12 @@ for (gesvx, elty, relty) in
                Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
-            @lapackerror
-            if info[1] == n+1 warn("Matrix is singular to working precision.")
-            else @assertnonsingular end
+            chklapackerror(info)
+            if info[1] == n+1
+                warn("Matrix is singular to working precision.")
+            else
+                chknonsingular(info)
+            end
             #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
         end
@@ -1152,7 +1185,7 @@ for (gelsd, gelsy, elty) in
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1202,7 +1235,7 @@ for (gelsd, gelsy, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             subsetrows(B, newB, n), rnk[1]
         end
     end
@@ -1244,7 +1277,7 @@ for (gelsd, gelsy, elty, relty) in
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1297,7 +1330,7 @@ for (gelsd, gelsy, elty, relty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             subsetrows(B, newB, n), rnk[1]
         end
     end
@@ -1364,7 +1397,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                        Ptr{BlasInt}),
                       &m, &n, &p, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), c, d, X,
                       work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1436,7 +1469,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobvl, &jobvr, &n, A, &max(1,stride(A,2)), WR, WI, VL, &n,
                           VR, &n, work, &lwork, info)
                 end
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1499,7 +1532,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &job, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, iwork, info)
                 end
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1544,7 +1577,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobu, &jobvt, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, info)
                 end
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -1617,7 +1650,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     V, &ldv, Q, &ldq,
                     work, iwork, info)
             end
-            @lapackerror
+            chklapackerror(info)
             if m - k[1] - l[1] >= 0
                 R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
             else
@@ -1760,7 +1793,7 @@ for (geevx, ggev, elty) in
                 lwork = convert(BlasInt, work[1])
                 work = Array($elty, lwork)
             end
-            @lapackerror
+            chklapackerror(info)
             A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
         end
     #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
@@ -1822,7 +1855,7 @@ for (geevx, ggev, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             alphar, alphai, beta, vl, vr
         end
     end
@@ -1901,7 +1934,7 @@ for (geevx, ggev, elty, relty) in
             lwork = convert(BlasInt, work[1])
             work = Array($elty, lwork)
         end
-        @lapackerror
+        chklapackerror(info)
         A, w, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
     end
 
@@ -1965,7 +1998,7 @@ for (geevx, ggev, elty, relty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             alpha, beta, vl, vr
         end
     end
@@ -2098,7 +2131,7 @@ for (gtsv, gttrf, gttrs, elty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), dl, d, du, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
         #       SUBROUTINE DGTTRF( N, DL, D, DU, DU2, IPIV, INFO )
@@ -2122,7 +2155,7 @@ for (gtsv, gttrf, gttrs, elty) in
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, dl, d, du, du2, ipiv, info)
-            @lapackerror
+            chklapackerror(info)
             dl, d, du, du2, ipiv
         end
         #       SUBROUTINE DGTTRS( TRANS, N, NRHS, DL, D, DU, DU2, IPIV, B, LDB, INFO )
@@ -2153,8 +2186,8 @@ for (gtsv, gttrf, gttrs, elty) in
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                    &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &max(1,stride(B,2)), info)
-             @lapackerror
-             B
+            chklapackerror(info)
+            B
          end
     end
 end
@@ -2219,7 +2252,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2253,7 +2286,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &m, &n, &k, A,
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2287,7 +2320,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &m, &n, &k, A,
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2321,7 +2354,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &m, &n, &k, A,
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2370,7 +2403,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1,stride(C,2)), work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2418,7 +2451,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1, stride(C,2)), work, &lwork,
                       info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2466,7 +2499,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1, stride(C,2)), work, &lwork,
                       info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2511,7 +2544,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1,stride(C,2)), work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -2566,7 +2599,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                 &k, &nb, V, &ldv,
                 T, &max(1,stride(T,2)), C, &max(1,ldc),
                 work, info)
-            @lapackerror
+            chklapackerror(info)
             return C
         end
     end
@@ -2674,13 +2707,13 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             if size(B,1) != n
                 throw(DimensionMismatch("First dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
             end
-            info    = Array(BlasInt, 1)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(posv)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), info)
-            @assertargsok
-            @assertposdef
+            chkargsok(info)
+            chkposdef(info)
             A, B
         end
         # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
@@ -2701,7 +2734,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(blasfunc(potrf)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &lda, info)
-            @assertargsok
+            chkargsok(info)
             #info[1]>0 means the leading minor of order info[i] is not positive definite
             #ordinarily, throw Exception here, but return error code here
             #this simplifies isposdef! and factorize
@@ -2720,8 +2753,8 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(blasfunc(potri)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &max(1,stride(A,2)), info)
-            @assertargsok
-            @assertnonsingular
+            chkargsok(info)
+            chknonsingular(info)
             A
         end
         #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
@@ -2749,7 +2782,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                    &uplo, &n, &nrhs, A,
                    &lda, B, &ldb, info)
-            @lapackerror
+            chklapackerror(info)
             return B
         end
         #       SUBROUTINE DPSTRF( UPLO, N, A, LDA, PIV, RANK, TOL, WORK, INFO )
@@ -2772,7 +2805,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), piv, rank, &tol, work, info)
-            @assertargsok
+            chkargsok(info)
             A, piv, rank[1], info[1] #Stored in PivotedCholesky
         end
     end
@@ -2860,7 +2893,7 @@ for (ptsv, pttrf, elty, relty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
         #       SUBROUTINE DPTTRF( N, D, E, INFO )
@@ -2877,7 +2910,7 @@ for (ptsv, pttrf, elty, relty) in
             ccall(($(blasfunc(pttrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, D, E, info)
-            @lapackerror
+            chklapackerror(info)
             D, E
         end
     end
@@ -2924,7 +2957,7 @@ for (pttrs, elty, relty) in
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -2956,7 +2989,7 @@ for (pttrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -2995,7 +3028,7 @@ for (trtri, trtrs, elty) in
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &uplo, &diag, &n, A, &lda, info)
-            @lapackerror
+            chklapackerror(info)
             A
         end
         #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
@@ -3020,7 +3053,7 @@ for (trtri, trtrs, elty) in
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &max(1,stride(A,2)),
                   B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -3076,7 +3109,7 @@ for (trcon, trevc, trrfs, elty) in
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
                   A, &max(1,stride(A,2)), rcond, work, iwork, info)
-            @lapackerror
+            chklapackerror(info)
             rcond[1]
         end
         # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
@@ -3116,7 +3149,7 @@ for (trcon, trevc, trrfs, elty) in
                 T, &ldt, VL, &ldvl,
                 VR, &ldvr, &mm, m,
                 work, info)
-            @lapackerror
+            chklapackerror(info)
 
             #Decide what exactly to return
             if howmny=='S' #compute selected eigenvectors
@@ -3167,7 +3200,7 @@ for (trcon, trevc, trrfs, elty) in
                 &uplo, &trans, &diag, &n,
                 &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
                 Ferr, Berr, work, iwork, info)
-            @lapackerror
+            chklapackerror(info)
             Ferr, Berr
         end
     end
@@ -3200,7 +3233,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
                   A, &max(1,stride(A,2)), rcond, work, rwork, info)
-            @lapackerror
+            chklapackerror(info)
             rcond[1]
         end
 
@@ -3243,7 +3276,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                 T, &ldt, VL, &ldvl,
                 VR, &ldvr, &mm, m,
                 work, rwork, info)
-            @lapackerror
+            chklapackerror(info)
 
             #Decide what exactly to return
             if howmny=='S' #compute selected eigenvectors
@@ -3294,7 +3327,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                 &uplo, &trans, &diag, &n,
                 &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
                 Ferr, Berr, work, rwork, info)
-            @lapackerror
+            chklapackerror(info)
             Ferr, Berr
         end
     end
@@ -3360,7 +3393,7 @@ for (stev, stebz, stegr, stein, elty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
-            @lapackerror
+            chklapackerror(info)
             dv, Zmat
         end
         #*  DSTEBZ computes the eigenvalues of a symmetric tridiagonal
@@ -3392,9 +3425,10 @@ for (stev, stebz, stegr, stein, elty) in
                 dv, ev, m, nsplit,
                 w, iblock, isplit, work,
                 iwork, info)
-                @lapackerror
+            chklapackerror(info)
             w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
         end
+
         function stegr!(jobz::Char, range::Char, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             n = length(dv)
             if length(ev) != n - 1
@@ -3431,7 +3465,7 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             w[1:m[1]], Z[:,1:m[1]]
         end
 
@@ -3477,8 +3511,7 @@ for (stev, stebz, stegr, stein, elty) in
                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{BlasInt}),
                 &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
-
-            @lapackerror
+            chklapackerror(info)
             all(ifail.==0) || error("failed to converge eigenvectors:\n$(nonzeros(ifail))")
             z
         end
@@ -3562,7 +3595,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
-            @lapackerror
+            chklapackerror(info)
             A, work
         end
         #       SUBROUTINE DSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
@@ -3590,8 +3623,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
-                @assertargsok
-                @assertnonsingular
+                chkargsok(info)
+                chknonsingular(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3622,8 +3655,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-                @assertargsok
-                @assertnonsingular
+                chkargsok(info)
+                chknonsingular(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3651,7 +3684,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 @assertargsok
-#                 @assertnonsingular
+#                 chknonsingular(info)
 #                 if lwork < 0
 #                     lwork = BlasInt(real(work[1]))
 #                     work = Array($elty, lwork)
@@ -3676,8 +3709,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
-            @assertargsok
-            @assertnonsingular
+            chkargsok(info)
+            chknonsingular(info)
             A
         end
         #       SUBROUTINE DSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -3701,7 +3734,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -3732,7 +3765,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
-            @lapackerror
+            chklapackerror(info)
             A, work
         end
 #       SUBROUTINE ZHESV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
@@ -3760,7 +3793,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3789,8 +3822,8 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
-                @assertargsok
-                @assertnonsingular
+                chkargsok(info)
+                chknonsingular(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3844,7 +3877,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
-            @lapackerror
+            chklapackerror(info)
             A
         end
 #       SUBROUTINE ZHETRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -3867,7 +3900,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -3903,8 +3936,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
-                @assertargsok
-                @assertnonsingular
+                chkargsok(info)
+                chknonsingular(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3936,8 +3969,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
-                @assertargsok
-                @assertnonsingular
+                chkargsok(info)
+                chknonsingular(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -3991,7 +4024,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
-            @lapackerror
+            chklapackerror(info)
             A
         end
 #       SUBROUTINE ZSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -4015,7 +4048,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror
+            chklapackerror(info)
             B
         end
     end
@@ -4138,7 +4171,7 @@ for (syev, syevr, sygvd, elty) in
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &max(1,stride(A,2)), W, work, &lwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4195,7 +4228,7 @@ for (syev, syevr, sygvd, elty) in
                     w, Z, &max(1,ldz), isuppz,
                     work, &lwork, iwork, &liwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4247,8 +4280,8 @@ for (syev, syevr, sygvd, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            @assertargsok
-            @assertposdef
+            chkargsok(info)
+            chkposdef(info)
             w, A, B
         end
     end
@@ -4279,7 +4312,7 @@ for (syev, syevr, sygvd, elty, relty) in
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4341,7 +4374,7 @@ for (syev, syevr, sygvd, elty, relty) in
                     w, Z, &ldz, isuppz,
                     work, &lwork, rwork, &lrwork,
                     iwork, &liwork, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4405,8 +4438,8 @@ for (syev, syevr, sygvd, elty, relty) in
                     rwork = Array($relty, lrwork)
                 end
             end
-            @assertargsok
-            @assertposdef
+            chkargsok(info)
+            chkposdef(info)
             w, A, B
         end
     end
@@ -4496,8 +4529,7 @@ for (bdsqr, relty, elty) in
                 &ncc, d, e_, Vt,
                 &ldvt, U, &ldu, C,
                 &ldc, work, info)
-
-            @lapackerror
+            chklapackerror(info)
             d, Vt, U, C #singular values in descending order, P**T * VT, U * Q, Q**T * C
         end
     end
@@ -4558,14 +4590,13 @@ for (bdsdc, elty) in
             iwork=Array(BlasInt, 8n)
             info =Array(BlasInt, 1)
             ccall(($(blasfunc(bdsdc)), liblapack), Void,
-           (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
-            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-            &uplo, &compq, &n, d, e_,
-            u, &ldu, vt, &ldvt,
-            q, iq, work, iwork, info)
-
-            @lapackerror
+               (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &uplo, &compq, &n, d, e_,
+                u, &ldu, vt, &ldvt,
+                q, iq, work, iwork, info)
+            chklapackerror(info)
             d, e, u, vt, q, iq
         end
     end
@@ -4614,7 +4645,7 @@ for (gecon, elty) in
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
                   info)
-            @lapackerror
+            chklapackerror(info)
             rcond[1]
         end
     end
@@ -4647,7 +4678,7 @@ for (gecon, elty, relty) in
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
                   info)
-            @lapackerror
+            chklapackerror(info)
             rcond[1]
         end
     end
@@ -4690,7 +4721,7 @@ for (gehrd, elty) in
                     &n, &ilo, &ihi, A,
                     &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4740,7 +4771,7 @@ for (orghr, elty) in
                     &n, &ilo, &ihi, A,
                     &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4792,7 +4823,7 @@ for (gees, gges, elty) in
                         A, &max(1, stride(A, 2)), sdim, wr,
                         wi, vs, &ldvs, work,
                         &lwork, C_NULL, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4845,7 +4876,7 @@ for (gees, gges, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             A, B, complex(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
@@ -4884,7 +4915,7 @@ for (gees, gges, elty, relty) in
                         A, &max(1, stride(A, 2)), &sdim, w,
                         vs, &ldvs, work, &lwork,
                         rwork, C_NULL, info)
-                @lapackerror
+                chklapackerror(info)
                 if lwork < 0
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4938,7 +4969,7 @@ for (gees, gges, elty, relty) in
                     work = Array($elty, lwork)
                 end
             end
-            @lapackerror
+            chklapackerror(info)
             A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
@@ -4996,7 +5027,7 @@ for (trexc, trsen, tgsen, elty) in
                   T, &ldt, Q, &ldq,
                   &ifst, &ilst,
                   work, info)
-            @lapackerror
+            chklapackerror(info)
             T, Q
         end
         trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
@@ -5037,7 +5068,7 @@ for (trexc, trsen, tgsen, elty) in
                     wr, wi, &m, C_NULL, C_NULL,
                     work, &lwork, iwork, &liwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
                     liwork = BlasInt(real(iwork[1]))
@@ -5104,7 +5135,7 @@ for (trexc, trsen, tgsen, elty) in
                     &m, C_NULL, C_NULL, C_NULL,
                     work, &lwork, iwork, &liwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
@@ -5144,7 +5175,7 @@ for (trexc, trsen, tgsen, elty) in
                   T, &ldt, Q, &ldq,
                   &ifst, &ilst,
                   info)
-            @lapackerror
+            chklapackerror(info)
             T, Q
         end
         trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
@@ -5181,7 +5212,7 @@ for (trexc, trsen, tgsen, elty) in
                     w, &m, C_NULL, C_NULL,
                     work, &lwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
@@ -5245,7 +5276,7 @@ for (trexc, trsen, tgsen, elty) in
                     &m, C_NULL, C_NULL, C_NULL,
                     work, &lwork, iwork, &liwork,
                     info)
-                @lapackerror
+                chklapackerror(info)
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
                     work   = Array($elty, lwork)
@@ -5317,7 +5348,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 &transa, &transb, &isgn, &m, &n,
                 A, &lda, B, &ldb, C, &ldc,
                 scale, info)
-            @lapackerror
+            chklapackerror(info)
             C, scale[1]
         end
     end
