@@ -5339,7 +5339,12 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::lifetime_end));
         if (!InlineFunction(*it,info))
             jl_error("Inlining Pass failed");
-        inlinef->eraseFromParent();
+        if (inlinef->getParent())
+            inlinef->eraseFromParent();
+        else {
+            inlinef->dropAllReferences();
+            delete inlinef;
+        }
     }
 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
