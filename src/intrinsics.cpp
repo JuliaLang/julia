@@ -824,7 +824,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
     return mark_julia_type(thePtr, false, aty);
 }
 
-static Value *emit_srem(Value *x, Value *den, jl_codectx_t *ctx)
+static Value *emit_checked_srem(Value *x, Value *den, jl_codectx_t *ctx)
 {
     Type *t = den->getType();
     raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
@@ -867,39 +867,6 @@ struct math_builder {
         builder.SetFastMathFlags(old_fmf);
     }
 };
-
-static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
-{
-    Type *t = den->getType();
-    raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                           prepare_global(jldiverr_var), ctx);
-    BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
-    BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksmod",ctx->f);
-    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_smod",ctx->f);
-    PHINode *ret = PHINode::Create(t, 2);
-    builder.CreateCondBr(builder.CreateICmpEQ(den,ConstantInt::get(t,-1,true)),
-                         m1BB, okBB);
-    builder.SetInsertPoint(m1BB);
-    builder.CreateBr(cont);
-    builder.SetInsertPoint(okBB);
-
-    Value *rem = builder.CreateSRem(x,den);
-    Value *smodval =
-        builder.
-        CreateSelect(builder.CreateICmpEQ(builder.CreateICmpSLT(x,ConstantInt::get(t,0)),
-                                          builder.CreateICmpSLT(den,ConstantInt::get(t,0))),
-                     // mod == rem for arguments with same sign
-                     rem,
-                     builder.CreateSRem(builder.CreateAdd(den,rem),den));
-
-    builder.CreateBr(cont);
-    builder.SetInsertPoint(cont);
-    ret->addIncoming(// rem(typemin, -1) is undefined
-                     ConstantInt::get(t,0), m1BB);
-    ret->addIncoming(smodval, okBB);
-    builder.Insert(ret);
-    return ret;
-}
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
                                        jl_codectx_t *ctx, jl_datatype_t* *newtyp);
@@ -1154,43 +1121,10 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case add_int: return builder.CreateAdd(JL_INT(x), JL_INT(y));
     case sub_int: return builder.CreateSub(JL_INT(x), JL_INT(y));
     case mul_int: return builder.CreateMul(JL_INT(x), JL_INT(y));
-    case sdiv_int:
-        den = JL_INT(y);
-        t = den->getType();
-        x = JL_INT(x);
-
-        typemin = builder.CreateShl(ConstantInt::get(t,1),
-                                    x->getType()->getPrimitiveSizeInBits()-1);
-        raise_exception_unless(builder.
-                               CreateAnd(builder.
-                                         CreateICmpNE(den, ConstantInt::get(t,0)),
-                                         builder.
-                                         CreateOr(builder.
-                                                  CreateICmpNE(den,
-                                                               ConstantInt::get(t,-1,true)),
-                                                  builder.CreateICmpNE(x, typemin))),
-                               prepare_global(jldiverr_var), ctx);
-
-        return builder.CreateSDiv(x, den);
-    case udiv_int:
-        den = JL_INT(y);
-        t = den->getType();
-        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               prepare_global(jldiverr_var), ctx);
-        return builder.CreateUDiv(JL_INT(x), den);
-
-    case srem_int:
-        return emit_srem(JL_INT(x), JL_INT(y), ctx);
-
-    case urem_int:
-        den = JL_INT(y);
-        t = den->getType();
-        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               prepare_global(jldiverr_var), ctx);
-        return builder.CreateURem(JL_INT(x), den);
-
-    case smod_int:
-        return emit_smod(JL_INT(x), JL_INT(y), ctx);
+    case sdiv_int: return builder.CreateSDiv(JL_INT(x), JL_INT(y));
+    case udiv_int: return builder.CreateUDiv(JL_INT(x), JL_INT(y));
+    case srem_int: return builder.CreateSRem(JL_INT(x), JL_INT(y));
+    case urem_int: return builder.CreateURem(JL_INT(x), JL_INT(y));
 
 // Implements IEEE negate. Unfortunately there is no compliant way
 // to implement this in LLVM 3.4, though there are two different idioms
@@ -1281,6 +1215,41 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
     }
+
+    case checked_sdiv:
+        den = JL_INT(y);
+        t = den->getType();
+        x = JL_INT(x);
+
+        typemin = builder.CreateShl(ConstantInt::get(t,1),
+                                    x->getType()->getPrimitiveSizeInBits()-1);
+        raise_exception_unless(builder.
+                               CreateAnd(builder.
+                                         CreateICmpNE(den, ConstantInt::get(t,0)),
+                                         builder.
+                                         CreateOr(builder.
+                                                  CreateICmpNE(den,
+                                                               ConstantInt::get(t,-1,true)),
+                                                  builder.CreateICmpNE(x, typemin))),
+                               prepare_global(jldiverr_var), ctx);
+
+        return builder.CreateSDiv(x, den);
+    case checked_udiv:
+        den = JL_INT(y);
+        t = den->getType();
+        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
+                               prepare_global(jldiverr_var), ctx);
+        return builder.CreateUDiv(JL_INT(x), den);
+
+    case checked_srem:
+        return emit_checked_srem(JL_INT(x), JL_INT(y), ctx);
+
+    case checked_urem:
+        den = JL_INT(y);
+        t = den->getType();
+        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
+                               prepare_global(jldiverr_var), ctx);
+        return builder.CreateURem(JL_INT(x), den);
 
     case check_top_bit:
         // raise InexactError if argument's top bit is set
