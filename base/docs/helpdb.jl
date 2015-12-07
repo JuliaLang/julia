@@ -6312,11 +6312,11 @@ Create an IOBuffer, which may optionally operate on a pre-existing array. If the
 IOBuffer(data=?)
 
 doc"""
-    findmax(itr) -> (x, index)
+    findmax(itr, [gt= >]) -> (x, index)
 
-Returns the maximum element and its index.
+Returns the maximum element and its index. Optionally use the custom comparison `gt`.
 """
-findmax(itr)
+findmax(itr,?)
 
 doc"""
     findmax(A, dims) -> (maxval, index)
@@ -8703,11 +8703,11 @@ Compute the trigamma function of `x` (the logarithmic second derivative of `gamm
 trigamma
 
 doc"""
-    findmin(itr) -> (x, index)
+    findmin(itr, [lt=<]) -> (x, index)
 
-Returns the minimum element and its index.
+Returns the minimum element and its index. Optionally use a custom comparison `lt`.
 """
-findmin(itr)
+findmin(itr,?)
 
 doc"""
     findmin(A, dims) -> (minval, index)

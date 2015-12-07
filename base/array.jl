@@ -817,7 +817,7 @@ function findnz{T}(A::AbstractMatrix{T})
     return (I, J, NZs)
 end
 
-function findmax(a)
+function findmax(a; gt= >)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
@@ -827,7 +827,7 @@ function findmax(a)
     while !done(a, s)
         ai, s = next(a, s)
         i += 1
-        if ai > m || m!=m
+        if gt(ai, m) || m!=m
             m = ai
             mi = i
         end
@@ -835,7 +835,7 @@ function findmax(a)
     return (m, mi)
 end
 
-function findmin(a)
+function findmin(a; lt=<)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
@@ -845,7 +845,7 @@ function findmin(a)
     while !done(a, s)
         ai, s = next(a, s)
         i += 1
-        if ai < m || m!=m
+        if lt(ai, m) || m!=m
             m = ai
             mi = i
         end

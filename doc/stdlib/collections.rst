@@ -329,11 +329,11 @@ Iterable Collections
 
    Returns the index of the minimum element in a collection.
 
-.. function:: findmax(itr) -> (x, index)
+.. function:: findmax(itr, [gt= >]) -> (x, index)
 
    .. Docstring generated from Julia source
 
-   Returns the maximum element and its index.
+   Returns the maximum element and its index. Optionally use the custom comparison `gt`.
 
 .. function:: findmax(A, dims) -> (maxval, index)
 
@@ -341,11 +341,11 @@ Iterable Collections
 
    For an array input, returns the value and index of the maximum over the given dimensions.
 
-.. function:: findmin(itr) -> (x, index)
+.. function:: findmin(itr, [lt=<]) -> (x, index)
 
    .. Docstring generated from Julia source
 
-   Returns the minimum element and its index.
+   Returns the minimum element and its index. Optionally use the custom comparison `lt`.
 
 .. function:: findmin(A, dims) -> (minval, index)
 

@@ -316,6 +316,12 @@ end
 @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
 @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
 
+#findmin findmax with custom comparison
+lt(t1,t2) = t1[2] < t2[2]
+gt(t1,t2) = t1[2] > t2[2]
+@test findmin([(1,3),(2,3),(3,1)], lt=lt) == ((3,1),3)
+@test findmax([(1,3),(2,3),(3,1)], gt=gt) == ((1,3),1)
+
 # #14085
 @test findmax(4:9) == (9,6)
 @test indmax(4:9) == 6
