@@ -11,14 +11,14 @@ import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
 #Generic LAPACK error handlers
-
 """
 Handle only negative LAPACK error codes
 
 *NOTE* use only if the positive error code is useful.
 """
 function chkargsok(info::Vector{BlasInt})
-    if info < 0
+    ret = info[1]
+    if ret < 0
         throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
     end
     return info
@@ -29,10 +29,10 @@ function chklapackerror(info::Vector{BlasInt})
     ret = info[1]
     if ret == 0
         return info
-    elseif ret > 0
-        throw(LAPACKException(info[1]))
     elseif ret < 0
         throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
+    else # ret > 0
+        throw(LAPACKException(info[1]))
     end
 end
 
@@ -85,7 +85,7 @@ end
 subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
 subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
 
-function checkfinite(A::StridedMatrix)
+function chkfinite(A::StridedMatrix)
     for i = eachindex(A)
         if !isfinite(A[i])
             throw(ArgumentError("matrix contains NaNs"))
@@ -101,7 +101,6 @@ for (gbtrf, gbtrs, elty) in
      (:zgbtrf_,:zgbtrs_,:Complex128),
      (:cgbtrf_,:cgbtrs_,:Complex64))
     @eval begin
-
         # SUBROUTINE DGBTRF( M, N, KL, KU, AB, LDAB, IPIV, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, KL, KU, LDAB, M, N
@@ -179,7 +178,6 @@ for (gebal, gebak, elty, relty) in
      (:zgebal_, :zgebak_, :Complex128, :Float64),
      (:cgebal_, :cgebak_, :Complex64, :Float32))
     @eval begin
-
         #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          JOB
@@ -188,12 +186,12 @@ for (gebal, gebak, elty, relty) in
         #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
         function gebal!(job::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
-            ihi     = Array(BlasInt, 1)
-            ilo     = Array(BlasInt, 1)
-            scale   = similar(A, $relty, n)
-            info    = Array(BlasInt, 1)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
+            ihi = Array(BlasInt, 1)
+            ilo = Array(BlasInt, 1)
+            scale = similar(A, $relty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gebal)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
@@ -212,8 +210,8 @@ for (gebal, gebak, elty, relty) in
                         ilo::BlasInt, ihi::BlasInt, scale::Vector{$relty},
                         V::StridedMatrix{$elty})
             chkstride1(V)
-            checkfinite(V) # balancing routines don't support NaNs and Infs
             chkside(side)
+            chkfinite(V) # balancing routines don't support NaNs and Infs
             n = chksquare(V)
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(gebak)), liblapack), Void,
@@ -261,7 +259,6 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
      (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
      (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
-
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
         # .. Scalar Arguments ..
@@ -280,7 +277,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(gebrd)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$elty},
@@ -289,7 +286,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      d, e, tauq, taup,
                      work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -304,7 +301,6 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function gelqf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
-            info  = Array(BlasInt, 1)
             m     = BlasInt(size(A, 1))
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
@@ -312,14 +308,15 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
-            work  = Array($elty, (1,))
-            for i in 1:2                # first call returns lwork as work[1]
+            work  = Array($elty, 1)
+            info  = Array(BlasInt, 1)
+            for i = 1:2  # first call returns lwork as work[1]
                 ccall(($(blasfunc(gelqf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -334,7 +331,6 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function geqlf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
-            info  = Array(BlasInt, 1)
             m     = BlasInt(size(A, 1))
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
@@ -342,14 +338,15 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
-            work  = Array($elty, (1,))
-            for i in 1:2                # first call returns lwork as work[1]
+            work  = Array($elty, 1)
+            info  = Array(BlasInt, 1)
+            for i = 1:2  # first call returns lwork as work[1]
                 ccall(($(blasfunc(geqlf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -365,23 +362,25 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function geqp3!(A::StridedMatrix{$elty}, jpvt::Vector{BlasInt}, tau::Vector{$elty})
             chkstride1(A)
-            m, n  = size(A)
+            m,n = size(A)
             if length(tau) != min(m,n)
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             if length(jpvt) != n
                 throw(DimensionMismatch("jpvt has length $(length(jpvt)), but needs length $n"))
             end
-            lda   = stride(A,2)
+            lda = stride(A,2)
             if lda == 0
                 return A, tau, jpvt
             end # Early exit
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
-            info  = Array(BlasInt, 1)
             cmplx = eltype(A)<:Complex
-            if cmplx; rwork = Array($relty, 2n); end
-            for i in 1:2
+            if cmplx
+                rwork = Array($relty, 2n)
+            end
+            info = Array(BlasInt, 1)
+            for i = 1:2
                 if cmplx
                     ccall(($(blasfunc(geqp3)), liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -400,7 +399,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                           &lwork, info)
                 end
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
                 end
@@ -470,13 +469,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2                # first call returns lwork as work[1]
+            for i = 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(geqrf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -491,20 +490,20 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function gerqf!(A::StridedMatrix{$elty},tau::Vector{$elty})
             chkstride1(A)
-            info  = Array(BlasInt, 1)
             m, n  = size(A)
             if length(tau) != min(m,n)
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
             work  = Array($elty, 1)
-            for i in 1:2                # first call returns lwork as work[1]
+            info  = Array(BlasInt, 1)
+            for i = 1:2                # first call returns lwork as work[1]
                 ccall(($(blasfunc(gerqf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -520,10 +519,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * )
         function getrf!(A::StridedMatrix{$elty})
             chkstride1(A)
-            info = Array(BlasInt, 1)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
             ipiv = similar(A, BlasInt, min(m,n))
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(getrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -649,6 +648,7 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
+
 """
     geqlf!(A) -> (A, tau)
 
@@ -658,6 +658,7 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
+
 """
     geqrt!(A, nb) -> (A, T)
 
@@ -669,6 +670,7 @@ triangular block reflectors which parameterize the elementary reflectors of
 the factorization.
 """
 geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
+
 """
     geqrt3!(A) -> (A, T)
 
@@ -678,6 +680,7 @@ Returns `A`, modified in-place, and `T`, which contains upper triangular block
 reflectors which parameterize the elementary reflectors of the factorization.
 """
 geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
+
 """
     geqrf!(A) -> (A, tau)
 
@@ -687,6 +690,7 @@ Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
 geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
+
 """
     gerqf!(A) -> (A, tau)
 
@@ -721,7 +725,7 @@ Returns `A`, modified in-place, `jpvt`, which represents the pivoting matrix `P`
 and `tau`, which stores the elementary reflectors.
 """
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
-    m,n=size(A)
+    m,n = size(A)
     geqp3!(A,zeros(BlasInt,n),similar(A,T,min(m,n)))
 end
 
@@ -732,14 +736,13 @@ for (tzrzf, ormrz, elty) in
      (:ztzrzf_,:zunmrz_,:Complex128),
      (:ctzrzf_,:cunmrz_,:Complex64))
     @eval begin
-
- #      *       SUBROUTINE ZTZRZF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
- #   22 *
- #   23 *       .. Scalar Arguments ..
- #   24 *       INTEGER            INFO, LDA, LWORK, M, N
- #   25 *       ..
- #   26 *       .. Array Arguments ..
- #   27 *       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+         #       SUBROUTINE ZTZRZF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
+         #
+         #       .. Scalar Arguments ..
+         #       INTEGER            INFO, LDA, LWORK, M, N
+         #       ..
+         #       .. Array Arguments ..
+         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function tzrzf!(A::StridedMatrix{$elty})
             m, n = size(A)
             if n < m
@@ -747,34 +750,35 @@ for (tzrzf, ormrz, elty) in
             end
             lda = max(1, m)
             tau = similar(A, $elty, m)
-            work = Array($elty, 1)
-            lwork = -1
-            info = Array(BlasInt, 1)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(tzrzf)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                     &m, &n, A, &lda,
                     tau, work, &lwork, info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             A, tau
         end
-   # 21 *       SUBROUTINE ZUNMRZ( SIDE, TRANS, M, N, K, L, A, LDA, TAU, C, LDC,
-   # 22 *                          WORK, LWORK, INFO )
-   # 23 *
-   # 24 *       .. Scalar Arguments ..
-   # 25 *       CHARACTER          SIDE, TRANS
-   # 26 *       INTEGER            INFO, K, L, LDA, LDC, LWORK, M, N
-   # 27 *       ..
-   # 28 *       .. Array Arguments ..
-   # 29 *       COMPLEX*16         A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
 
-        function ormrz!(side::Char, trans::Char, A::StridedMatrix{$elty}, tau::StridedVector{$elty}, C::StridedMatrix{$elty})
+        #       SUBROUTINE ZUNMRZ( SIDE, TRANS, M, N, K, L, A, LDA, TAU, C, LDC,
+        #                          WORK, LWORK, INFO )
+        #
+        #       .. Scalar Arguments ..
+        #       CHARACTER          SIDE, TRANS
+        #       INTEGER            INFO, K, L, LDA, LDC, LWORK, M, N
+        #       ..
+        #       .. Array Arguments ..
+        #       COMPLEX*16         A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+        function ormrz!(side::Char, trans::Char, A::StridedMatrix{$elty},
+                        tau::StridedVector{$elty}, C::StridedMatrix{$elty})
             chktrans(trans)
             chkside(side)
             m, n = size(C)
@@ -782,9 +786,9 @@ for (tzrzf, ormrz, elty) in
             l = size(A, 2) - size(A, 1)
             lda = max(1, stride(A,2))
             ldc = max(1, stride(C,2))
-            work = Array($elty, 1)
-            lwork = -1
-            info = Array(BlasInt, 1)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(ormrz)), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -795,12 +799,12 @@ for (tzrzf, ormrz, elty) in
                     &k, &l, A, &lda,
                     tau, C, &ldc, work,
                     &lwork, info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             C
         end
     end
@@ -849,7 +853,7 @@ for (gels, gesv, getrs, getri, elty) in
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(gels)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -857,22 +861,24 @@ for (gels, gesv, getrs, getri, elty) in
                       &(btrn?'T':'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       B, &max(1,stride(B,2)), work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             k   = min(m, n)
             F   = m < n ? tril(A[1:k, 1:k]) : triu(A[1:k, 1:k])
-            ssr = [begin
+            ssr = Array($elty, size(B,2))
+            for i = 1:size(B,2)
                 x = zero($elty)
-                for j=k+1:size(B,1)
-                    x += abs2(B[j, i])
+                for j = k+1:size(B,1)
+                    x += abs2(B[j,i])
                 end
-                x
-            end for i=1:size(B,2)]
+                ssr[i] = x
+            end
             F, subsetrows(B, B, k), ssr
         end
+
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LDB, N, NRHS
@@ -886,8 +892,8 @@ for (gels, gesv, getrs, getri, elty) in
             if size(B,1) != n
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
             end
-            ipiv    = similar(A, BlasInt, n)
-            info    = Array(BlasInt, 1)
+            ipiv = similar(A, BlasInt, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(gesv)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -895,6 +901,7 @@ for (gels, gesv, getrs, getri, elty) in
             chklapackerror(info)
             B, A, ipiv
         end
+
         #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          TRANS
@@ -918,6 +925,7 @@ for (gels, gesv, getrs, getri, elty) in
             chklapackerror(info)
             B
         end
+
         #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
         #*     .. Scalar Arguments ..
         #      INTEGER            INFO, LDA, LWORK, N
@@ -930,17 +938,17 @@ for (gels, gesv, getrs, getri, elty) in
             if n != length(ipiv)
                 throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs $n"))
             end
-            lda     = max(1,stride(A, 2))
-            info    = Array(BlasInt, 1)
-            lwork   = -1
-            work    = Array($elty, 1)
-            for i in 1:2
+            lda = max(1,stride(A, 2))
+            lwork = BlasInt(-1)
+            work  = Array($elty, 1)
+            info  = Array(BlasInt, 1)
+            for i = 1:2
                 ccall(($(blasfunc(getri)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &n, A, &lda, ipiv, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work  = Array($elty, lwork)
                 end
@@ -1013,21 +1021,21 @@ for (gesvx, elty) in
         #    $                   WORK( * ), X( LDX, *
         #
         function gesvx!(fact::Char, trans::Char, A::StridedMatrix{$elty},
-               AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
-               R::Vector{$elty}, C::Vector{$elty}, B::StridedVecOrMat{$elty})
+                        AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
+                        R::Vector{$elty}, C::Vector{$elty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
-            n   = chksquare(A)
-            lda = stride(A,2)
-            n   = chksquare(AF)
+            n    = chksquare(A)
+            lda  = stride(A,2)
+            n    = chksquare(AF)
             ldaf = stride(AF,2)
             nrhs = size(B,2)
-            ldb = stride(B,2)
-            rcond     = Array($elty, 1)
-            ferr      = similar(A, $elty, nrhs)
-            berr      = similar(A, $elty, nrhs)
-            work      = Array($elty, 4n)
-            iwork     = Array(BlasInt, n)
-            info      = Array(BlasInt, 1)
+            ldb  = stride(B,2)
+            rcond = Array($elty, 1)
+            ferr  = similar(A, $elty, nrhs)
+            berr  = similar(A, $elty, nrhs)
+            work  = Array($elty, 4n)
+            iwork = Array(BlasInt, n)
+            info  = Array(BlasInt, 1)
             X = similar(A, $elty, n, nrhs)
             ccall(($(blasfunc(gesvx)), liblapack), Void,
               (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -1038,18 +1046,25 @@ for (gesvx, elty) in
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
             chklapackerror(info)
-            @lapackerror
             if info[1] == n+1
-                warn("Matrix is singular to working precision.")
+                warn("matrix is singular to working precision")
             else
                 chknonsingular(info)
             end
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, work[1]
         end
+
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-            n=size(A,1)
-            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, similar(A, $elty, n, n), similar(A, BlasInt, n), 'N', similar(A, $elty, n),  similar(A, $elty, n), B)
+            n = size(A,1)
+            X, equed, R, C, B, rcond, ferr, berr, rpgf =
+                gesvx!('N', 'N', A,
+                       similar(A, $elty, n, n),
+                       similar(A, BlasInt, n),
+                       'N',
+                       similar(A, $elty, n),
+                       similar(A, $elty, n),
+                       B)
             X, rcond, ferr, berr, rpgf
         end
     end
@@ -1074,8 +1089,8 @@ for (gesvx, elty, relty) in
         #     COMPLEX*16         A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
         #    $                   WORK( * ), X( LDX, * )
         function gesvx!(fact::Char, trans::Char, A::StridedMatrix{$elty},
-             AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
-             R::Vector{$relty}, C::Vector{$relty}, B::StridedVecOrMat{$elty})
+                        AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
+                        R::Vector{$relty}, C::Vector{$relty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
             n   = chksquare(A)
             lda = stride(A,2)
@@ -1083,12 +1098,12 @@ for (gesvx, elty, relty) in
             ldaf = stride(AF,2)
             nrhs = size(B,2)
             ldb = stride(B,2)
-            rcond     = Array($relty, 1)
-            ferr      = similar(A, $relty, nrhs)
-            berr      = similar(A, $relty, nrhs)
-            work      = Array($elty, 2n)
-            rwork     = Array($relty, 2n)
-            info      = Array(BlasInt, 1)
+            rcond = Array($relty, 1)
+            ferr  = similar(A, $relty, nrhs)
+            berr  = similar(A, $relty, nrhs)
+            work  = Array($elty, 2n)
+            rwork = Array($relty, 2n)
+            info  = Array(BlasInt, 1)
             X = similar(A, $elty, n, nrhs)
             ccall(($(blasfunc(gesvx)), liblapack), Void,
               (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -1100,17 +1115,25 @@ for (gesvx, elty, relty) in
               &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
             chklapackerror(info)
             if info[1] == n+1
-                warn("Matrix is singular to working precision.")
+                warn("matrix is singular to working precision")
             else
                 chknonsingular(info)
             end
             #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
         end
+
         #Wrapper for the no-equilibration, no-transpose calculation
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-            n=size(A,1)
-            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, similar(A, $elty, n, n), similar(A, BlasInt, n), 'N', similar(A, $relty, n),  similar(A, $relty, n), B)
+            n = size(A,1)
+            X, equed, R, C, B, rcond, ferr, berr, rpgf =
+                gesvx!('N', 'N', A,
+                       similar(A, $elty, n, n),
+                       similar(A, BlasInt, n),
+                       'N',
+                       similar(A, $relty, n),
+                       similar(A, $relty, n),
+                       B)
             X, rcond, ferr, berr, rpgf
         end
     end
@@ -1177,7 +1200,7 @@ for (gelsd, gelsy, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(gelsd)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1186,7 +1209,7 @@ for (gelsd, gelsy, elty) in
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     iwork = Array(BlasInt, iwork[1])
@@ -1194,15 +1217,16 @@ for (gelsd, gelsy, elty) in
             end
             subsetrows(B, newB, n), rnk[1]
         end
-#       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
-#      $                   WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
-#       DOUBLE PRECISION   RCOND
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            JPVT( * )
-#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
+
+        #       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
+        #      $                   WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+        #       DOUBLE PRECISION   RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            JPVT( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real=eps($elty))
             chkstride1(A, B)
             m = size(A, 1)
@@ -1218,7 +1242,7 @@ for (gelsd, gelsy, elty) in
             rcond = convert($elty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
-            lwork = -1
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(gelsy)), liblapack), Void,
@@ -1230,16 +1254,17 @@ for (gelsd, gelsy, elty) in
                     &lda, newB, &ldb, jpvt,
                     &rcond, rnk, work, &lwork,
                     info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             subsetrows(B, newB, n), rnk[1]
         end
     end
 end
+
 for (gelsd, gelsy, elty, relty) in
     ((:zgelsd_,:zgelsy_,:Complex128,:Float64),
      (:cgelsd_,:cgelsy_,:Complex64,:Float32))
@@ -1269,7 +1294,7 @@ for (gelsd, gelsy, elty, relty) in
             lwork = BlasInt(-1)
             rwork = Array($relty, 1)
             iwork = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(gelsd)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
@@ -1278,7 +1303,7 @@ for (gelsd, gelsy, elty, relty) in
                       &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     rwork = Array($relty, BlasInt(rwork[1]))
@@ -1288,16 +1313,16 @@ for (gelsd, gelsy, elty, relty) in
             subsetrows(B, newB, n), rnk[1]
         end
 
-#       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
-#      $                   WORK, LWORK, RWORK, INFO )
-# *     .. Scalar Arguments ..
-#       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
-#       DOUBLE PRECISION   RCOND
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            JPVT( * )
-#       DOUBLE PRECISION   RWORK( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        #       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
+        #      $                   WORK, LWORK, RWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+        #       DOUBLE PRECISION   RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            JPVT( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsy!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::Real=eps($relty))
             chkstride1(A, B)
             m, n = size(A)
@@ -1312,7 +1337,7 @@ for (gelsd, gelsy, elty, relty) in
             rcond = convert($relty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
-            lwork = -1
+            lwork = BlasInt(-1)
             rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
             for i = 1:2
@@ -1325,12 +1350,12 @@ for (gelsd, gelsy, elty, relty) in
                     &lda, newB, &ldb, jpvt,
                     &rcond, rnk, work, &lwork,
                     rwork, info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             subsetrows(B, newB, n), rnk[1]
         end
     end
@@ -1389,7 +1414,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             info  = Array(BlasInt, 1)
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(gglse)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -1398,7 +1423,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                       &m, &n, &p, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), c, d, X,
                       work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -1434,13 +1459,13 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #      $                   WI( * ), WORK( * ), WR( * )
         function geev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
             lvecs = jobvl == 'V'
             rvecs = jobvr == 'V'
             VL    = similar(A, $elty, (n, lvecs ? n : 0))
             VR    = similar(A, $elty, (n, rvecs ? n : 0))
-            cmplx = eltype(A)<:Complex
+            cmplx = eltype(A) <: Complex
             if cmplx
                 W     = similar(A, $elty, n)
                 rwork = similar(A, $relty, 2n)
@@ -1470,13 +1495,14 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           VR, &n, work, &lwork, info)
                 end
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             cmplx ? (W, VL, VR) : (WR, WI, VL, VR)
         end
+
         #    SUBROUTINE DGESDD( JOBZ, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK,
         #                   LWORK, IWORK, INFO )
         #*     .. Scalar Arguments ..
@@ -1533,13 +1559,29 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           work, &lwork, iwork, info)
                 end
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            job=='O' ? (m>=n? (A, S, VT) : (U, S, A)) : (U, S, VT)
+            if job == 'O'
+                if m >= n
+                    return (A, S, VT)
+                else
+                    # ()__
+                    # ||::Z__
+                    # ||::|:::Z____
+                    # ||::|:::|====|
+                    # ||==|===|====|
+                    # ||""|===|====|
+                    # ||  `"""|====|
+                    # ||      `""""`
+                    return (U, S, A)
+                end
+            end
+            return (U, S, VT)
         end
+
         # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          JOBU, JOBVT
@@ -1555,8 +1597,10 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             U      = similar(A, $elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
             VT     = similar(A, $elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
-            cmplx  = eltype(A)<:Complex
-            if cmplx; rwork = Array($relty, 5minmn); end
+            cmplx  = eltype(A) <: Complex
+            if cmplx
+                rwork = Array($relty, 5minmn)
+            end
             lwork  = BlasInt(-1)
             info   = Array(BlasInt, 1)
             for i in 1:2
@@ -1578,25 +1622,41 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           work, &lwork, info)
                 end
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            jobu=='O' ? (A, S, VT) : (jobvt=='O' ? (U, S, A) : (U, S, VT))
+            if jobu == 'O'
+                return (A, S, VT)
+            elseif jobvt == 'O'
+                    # =============|===========|()
+                                   # # # #::::::
+                                   # # # #::::::
+                                   # # # #::::::
+                                   # # # #::::::
+                                   # # # # # # #
+                                   # # # # # # #
+                                   # # # # # # #
+                return (U, S, A)   # # # # # # #
+            else                   # # # # # # #
+                return (U, S, VT)  # # # # # # #
+
+            end
         end
-#       SUBROUTINE ZGGSVD( JOBU, JOBV, JOBQ, M, N, P, K, L, A, LDA, B,
-#      $                   LDB, ALPHA, BETA, U, LDU, V, LDV, Q, LDQ, WORK,
-#      $                   RWORK, IWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBQ, JOBU, JOBV
-#       INTEGER            INFO, K, L, LDA, LDB, LDQ, LDU, LDV, M, N, P
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IWORK( * )
-#       DOUBLE PRECISION   ALPHA( * ), BETA( * ), RWORK( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
-#      $                   U( LDU, * ), V( LDV, * ), WORK( * )
+
+        #       SUBROUTINE ZGGSVD( JOBU, JOBV, JOBQ, M, N, P, K, L, A, LDA, B,
+        #      $                   LDB, ALPHA, BETA, U, LDU, V, LDV, Q, LDQ, WORK,
+        #      $                   RWORK, IWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBQ, JOBU, JOBV
+        #       INTEGER            INFO, K, L, LDA, LDB, LDQ, LDU, LDV, M, N, P
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   ALPHA( * ), BETA( * ), RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), Q( LDQ, * ),
+        #      $                   U( LDU, * ), V( LDV, * ), WORK( * )
         function ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
@@ -1617,8 +1677,10 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             ldq = max(1, n)
             Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
             work = Array($elty, max(3n, m, p) + n)
-            cmplx = eltype(A)<:Complex
-            if cmplx; rwork = Array($relty, 2n); end
+            cmplx = eltype(A) <: Complex
+            if cmplx
+                rwork = Array($relty, 2n)
+            end
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             if cmplx
@@ -1717,23 +1779,23 @@ for (geevx, ggev, elty) in
     ((:dgeevx_,:dggev_,:Float64),
      (:sgeevx_,:sggev_,:Float32))
     @eval begin
-   #     SUBROUTINE DGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, WR, WI,
-   #                          VL, LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM,
-   #                          RCONDE, RCONDV, WORK, LWORK, IWORK, INFO )
-   #
-   #       .. Scalar Arguments ..
-   #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
-   #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
-   #       DOUBLE PRECISION   ABNRM
-   #       ..
-   #       .. Array Arguments ..
-   #       INTEGER            IWORK( * )
-   #       DOUBLE PRECISION   A( LDA, * ), RCONDE( * ), RCONDV( * ),
-   #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
-   #      $                   WI( * ), WORK( * ), WR( * )
+        #     SUBROUTINE DGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, WR, WI,
+        #                          VL, LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM,
+        #                          RCONDE, RCONDV, WORK, LWORK, IWORK, INFO )
+        #
+        #       .. Scalar Arguments ..
+        #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
+        #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
+        #       DOUBLE PRECISION   ABNRM
+        #       ..
+        #       .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), RCONDE( * ), RCONDV( * ),
+        #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   WI( * ), WORK( * ), WR( * )
         function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
-            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
             lda = max(1,stride(A,2))
             wr = similar(A, $elty, n)
             wi = similar(A, $elty, n)
@@ -1765,7 +1827,7 @@ for (geevx, ggev, elty) in
             rconde = similar(A, $elty, n)
             rcondv = similar(A, $elty, n)
             work = Array($elty, 1)
-            lwork::BlasInt = -1
+            lwork = BlasInt(-1)
             iworksize = 0
             if sense == 'N' || sense == 'E'
                 iworksize = 0
@@ -1790,22 +1852,25 @@ for (geevx, ggev, elty) in
                        &max(1,ldvr), ilo, ihi, scale,
                        abnrm, rconde, rcondv, work,
                        &lwork, iwork, info)
-                lwork = convert(BlasInt, work[1])
-                work = Array($elty, lwork)
+                chklapackerror(info)
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    work = Array($elty, lwork)
+                end
             end
-            chklapackerror(info)
             A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
         end
-    #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
-#      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBVL, JOBVR
-#       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
-#      $                   B( LDB, * ), BETA( * ), VL( LDVL, * ),
-#      $                   VR( LDVR, * ), WORK( * )
+
+        #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
+        #      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+        #      $                   B( LDB, * ), BETA( * ), VL( LDVL, * ),
+        #      $                   VR( LDVR, * ), WORK( * )
         function ggev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
             n, m = chksquare(A,B)
@@ -1836,7 +1901,7 @@ for (geevx, ggev, elty) in
             end
             vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
-            lwork = -one(BlasInt)
+            lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(ggev)), liblapack), Void,
@@ -1850,105 +1915,108 @@ for (geevx, ggev, elty) in
                     alphai, beta, vl, &ldvl,
                     vr, &ldvr, work, &lwork,
                     info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             alphar, alphai, beta, vl, vr
         end
     end
 end
+
 for (geevx, ggev, elty, relty) in
     ((:zgeevx_,:zggev_,:Complex128,:Float64),
      (:cgeevx_,:cggev_,:Complex64,:Float32))
     @eval begin
-  #     SUBROUTINE ZGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, W, VL,
-  #                          LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM, RCONDE,
-  #                          RCONDV, WORK, LWORK, RWORK, INFO )
-  #
-  #       .. Scalar Arguments ..
-  #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
-  #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
-  #       DOUBLE PRECISION   ABNRM
-  #       ..
-  #       .. Array Arguments ..
-  #       DOUBLE PRECISION   RCONDE( * ), RCONDV( * ), RWORK( * ),
-  #      $                   SCALE( * )
-  #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
-  #      $                   W( * ), WORK( * )
-    function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
-        checkfinite(A) # balancing routines don't support NaNs and Infs
-        n = chksquare(A)
-        lda = max(1,stride(A,2))
-        w = similar(A, $elty, n)
-        if balanc ∉ ['N', 'P', 'S', 'B']
-            throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
-        end
-        ldvl = 0
-        if jobvl == 'V'
-            ldvl = n
-        elseif jobvl == 'N'
+        #     SUBROUTINE ZGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, W, VL,
+        #                          LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM, RCONDE,
+        #                          RCONDV, WORK, LWORK, RWORK, INFO )
+        #
+        #       .. Scalar Arguments ..
+        #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
+        #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
+        #       DOUBLE PRECISION   ABNRM
+        #       ..
+        #       .. Array Arguments ..
+        #       DOUBLE PRECISION   RCONDE( * ), RCONDV( * ), RWORK( * ),
+        #      $                   SCALE( * )
+        #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   W( * ), WORK( * )
+        function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+            n = chksquare(A)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
+            lda = max(1,stride(A,2))
+            w = similar(A, $elty, n)
+            if balanc ∉ ['N', 'P', 'S', 'B']
+                throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+            end
             ldvl = 0
-        else
-            throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
-        end
-        VL = similar(A, $elty, ldvl, n)
-        ldvr = 0
-        if jobvr == 'V'
-            ldvr = n
-        elseif jobvr == 'N'
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 0
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
+            VL = similar(A, $elty, ldvl, n)
             ldvr = 0
-        else
-            throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 0
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
+            if sense ∉ ['N','E','V','B']
+                throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
+            end
+            VR = similar(A, $elty, ldvr, n)
+            ilo = Array(BlasInt, 1)
+            ihi = Array(BlasInt, 1)
+            scale = similar(A, $relty, n)
+            abnrm = Array($relty, 1)
+            rconde = similar(A, $relty, n)
+            rcondv = similar(A, $relty, n)
+            work = Array($elty, 1)
+            lwork = BlasInt(-1)
+            rwork = Array($relty, 2n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(blasfunc(geevx)), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty},
+                       Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{$relty}, Ptr{BlasInt}),
+                       &balanc, &jobvl, &jobvr, &sense,
+                       &n, A, &lda, w,
+                       VL, &max(1,ldvl), VR, &max(1,ldvr),
+                       ilo, ihi, scale, abnrm,
+                       rconde, rcondv, work, &lwork,
+                       rwork, info)
+                chklapackerror(info)
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            A, w, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
         end
-        if sense ∉ ['N','E','V','B']
-            throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
-        end
-        VR = similar(A, $elty, ldvr, n)
-        ilo = Array(BlasInt, 1)
-        ihi = Array(BlasInt, 1)
-        scale = similar(A, $relty, n)
-        abnrm = Array($relty, 1)
-        rconde = similar(A, $relty, n)
-        rcondv = similar(A, $relty, n)
-        work = Array($elty, 1)
-        lwork::BlasInt = -1
-        rwork = Array($relty, 2n)
-        info = Array(BlasInt, 1)
-        for i = 1:2
-            ccall(($(blasfunc(geevx)), liblapack), Void,
-                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty},
-                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{$relty}, Ptr{BlasInt}),
-                   &balanc, &jobvl, &jobvr, &sense,
-                   &n, A, &lda, w,
-                   VL, &max(1,ldvl), VR, &max(1,ldvr),
-                   ilo, ihi, scale, abnrm,
-                   rconde, rcondv, work, &lwork,
-                   rwork, info)
-            lwork = convert(BlasInt, work[1])
-            work = Array($elty, lwork)
-        end
-        chklapackerror(info)
-        A, w, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
-    end
 
-      # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
-     # $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
-# *     .. Scalar Arguments ..
-      # CHARACTER          JOBVL, JOBVR
-      # INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-      # DOUBLE PRECISION   RWORK( * )
-      # COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
-     # $                   BETA( * ), VL( LDVL, * ), VR( LDVR, * ),
-     # $                   WORK( * )
+        # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
+        #      $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+        #      $                   BETA( * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   WORK( * )
         function ggev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
             n, m = chksquare(A, B)
@@ -1978,7 +2046,7 @@ for (geevx, ggev, elty, relty) in
             end
             vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
-            lwork = -one(BlasInt)
+            lwork = BlasInt(-1)
             rwork = Array($relty, 8n)
             info = Array(BlasInt, 1)
             for i = 1:2
@@ -1993,12 +2061,12 @@ for (geevx, ggev, elty, relty) in
                     beta, vl, &ldvl, vr,
                     &ldvr, work, &lwork, rwork,
                     info)
+                chklapackerror(info)
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             alpha, beta, vl, vr
         end
     end
@@ -2038,15 +2106,16 @@ for (laic1, elty) in
     ((:dlaic1_,:Float64),
      (:slaic1_,:Float32))
     @eval begin
-   # 21 *       SUBROUTINE DLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
-   # 22 *
-   # 23 *       .. Scalar Arguments ..
-   # 24 *       INTEGER            J, JOB
-   # 25 *       DOUBLE PRECISION   C, GAMMA, S, SEST, SESTPR
-   # 26 *       ..
-   # 27 *       .. Array Arguments ..
-   # 28 *       DOUBLE PRECISION   W( J ), X( J )
-        function laic1!(job::Integer, x::StridedVector{$elty}, sest::$elty, w::StridedVector{$elty}, gamma::$elty)
+        #  SUBROUTINE DLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
+        #
+        #  .. Scalar Arguments ..
+        #  INTEGER            J, JOB
+        #  DOUBLE PRECISION   C, GAMMA, S, SEST, SESTPR
+        #  ..
+        #  .. Array Arguments ..
+        #  DOUBLE PRECISION   W( J ), X( J )
+        function laic1!(job::Integer, x::StridedVector{$elty},
+                        sest::$elty, w::StridedVector{$elty}, gamma::$elty)
             j = length(x)
             if j != length(w)
                 throw(DimensionMismatch("Vectors must have same length, but length of x is $j and length of w is $(length(w))"))
@@ -2069,16 +2138,17 @@ for (laic1, elty, relty) in
     ((:zlaic1_,:Complex128,:Float64),
      (:claic1_,:Complex64,:Float32))
     @eval begin
-   # 21 *       SUBROUTINE ZLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
-   # 22 *
-   # 23 *       .. Scalar Arguments ..
-   # 24 *       INTEGER            J, JOB
-   # 25 *       DOUBLE PRECISION   SEST, SESTPR
-   # 26 *       COMPLEX*16         C, GAMMA, S
-   # 27 *       ..
-   # 28 *       .. Array Arguments ..
-   # 29 *       COMPLEX*16         W( J ), X( J )
-        function laic1!(job::Integer, x::StridedVector{$elty}, sest::$relty, w::StridedVector{$elty}, gamma::$elty)
+       #  SUBROUTINE ZLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
+       #
+       #  .. Scalar Arguments ..
+       #  INTEGER            J, JOB
+       #  DOUBLE PRECISION   SEST, SESTPR
+       #  COMPLEX*16         C, GAMMA, S
+       #  ..
+       #  .. Array Arguments ..
+       #  COMPLEX*16         W( J ), X( J )
+        function laic1!(job::Integer, x::StridedVector{$elty},
+                        sest::$relty, w::StridedVector{$elty}, gamma::$elty)
             j = length(x)
             if j != length(w)
                 throw(DimensionMismatch("Vectors must have same length, but length of x is $j and length of w is $(length(w))"))
@@ -2134,6 +2204,7 @@ for (gtsv, gttrf, gttrs, elty) in
             chklapackerror(info)
             B
         end
+
         #       SUBROUTINE DGTTRF( N, DL, D, DU, DU2, IPIV, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, N
@@ -2158,6 +2229,7 @@ for (gtsv, gttrf, gttrs, elty) in
             chklapackerror(info)
             dl, d, du, du2, ipiv
         end
+
         #       SUBROUTINE DGTTRS( TRANS, N, NRHS, DL, D, DU, DU2, IPIV, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       CHARACTER          TRANS
@@ -2231,7 +2303,6 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
      (:zunglq_,:zungqr_,:zungql_,:zungrq_,:zunmlq_,:zunmqr_,:zunmql_,:zunmrq_,:zgemqrt_,:Complex128),
      (:cunglq_,:cungqr_,:cungql_,:cungrq_,:cunmlq_,:cunmqr_,:cunmql_,:cunmrq_,:cgemqrt_,:Complex64))
     @eval begin
-
         # SUBROUTINE DORGLQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
@@ -2247,23 +2318,24 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(orglq)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            if m<size(A,1)
+            if m < size(A,1)
                 A[1:m,:]
             else
                 A
             end
         end
+
         # SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
@@ -2279,7 +2351,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(orgqr)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -2287,17 +2359,18 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            if n<size(A,2)
+            if n < size(A,2)
                 A[:,1:n]
             else
                 A
             end
         end
+
         # SUBROUTINE DORGQL( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
@@ -2313,7 +2386,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(orgql)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -2321,17 +2394,18 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            if n<size(A,2)
+            if n < size(A,2)
                 A[:,1:n]
             else
                 A
             end
         end
+
         # SUBROUTINE DORGRQ( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
@@ -2347,7 +2421,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(orgrq)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -2355,17 +2429,18 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &max(1,stride(A,2)), tau, work, &lwork,
                       info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            if n<size(A,2)
+            if n < size(A,2)
                 A[:,1:n]
             else
                 A
             end
         end
+
         #      SUBROUTINE DORMLQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, LWORK, INFO )
         #      .. Scalar Arguments ..
@@ -2378,9 +2453,9 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chktrans(trans)
             chkside(side)
             chkstride1(A, C)
-            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
-            nA    = size(A, 2)
-            k     = length(tau)
+            m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
+            nA  = size(A, 2)
+            k   = length(tau)
             if side == 'L' && m != nA
                 throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
             end
@@ -2396,7 +2471,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(ormlq)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -2404,13 +2479,14 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1,stride(C,2)), work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             C
         end
+
         #      SUBROUTINE DORMQR( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, INFO )
         #      .. Scalar Arguments ..
@@ -2423,9 +2499,9 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chktrans(trans)
             chkside(side)
             chkstride1(A, C)
-            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
-            mA    = size(A, 1)
-            k     = length(tau)
+            m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
+            mA  = size(A, 1)
+            k   = length(tau)
             if side == 'L' && m != mA
                 throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
             end
@@ -2441,7 +2517,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(ormqr)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -2452,13 +2528,14 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       C, &max(1, stride(C,2)), work, &lwork,
                       info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             C
         end
+
         #      SUBROUTINE DORMQL( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, INFO )
         #      .. Scalar Arguments ..
@@ -2471,9 +2548,9 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chktrans(trans)
             chkside(side)
             chkstride1(A, C)
-            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
-            mA    = size(A, 1)
-            k     = length(tau)
+            m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
+            mA  = size(A, 1)
+            k   = length(tau)
             if side == 'L' && m != mA
                 throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
             end
@@ -2489,7 +2566,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(ormql)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -2500,13 +2577,14 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       C, &max(1, stride(C,2)), work, &lwork,
                       info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             C
         end
+
         #      SUBROUTINE DORMRQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, LWORK, INFO )
         #      .. Scalar Arguments ..
@@ -2519,9 +2597,9 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chktrans(trans)
             chkside(side)
             chkstride1(A, C)
-            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
-            nA    = size(A, 2)
-            k     = length(tau)
+            m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
+            nA  = size(A, 2)
+            k   = length(tau)
             if side == 'L' && m != nA
                 throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
             end
@@ -2537,7 +2615,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(ormrq)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -2545,20 +2623,23 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1,stride(C,2)), work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             C
         end
+
         function gemqrt!(side::Char, trans::Char, V::StridedMatrix{$elty}, T::StridedMatrix{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
             chkstride1(V, T, C)
-            m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
+            m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
             nb, k = size(T)
-            if k == 0 return C end
+            if k == 0
+                return C
+            end
             if side == 'L'
                 if !(0 <= k <= m)
                     throw(DimensionMismatch("Wrong value for k = $k: must be between 0 and $m"))
@@ -2716,6 +2797,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkposdef(info)
             A, B
         end
+
         # SUBROUTINE DPOTRF( UPLO, N, A, LDA, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO
@@ -2740,6 +2822,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             #this simplifies isposdef! and factorize
             return A, info[1]
         end
+
         #       SUBROUTINE DPOTRI( UPLO, N, A, LDA, INFO )
         #       .. Scalar Arguments ..
         #       CHARACTER          UPLO
@@ -2757,6 +2840,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chknonsingular(info)
             A
         end
+
         #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
         #     .. Scalar Arguments ..
         #      CHARACTER          UPLO
@@ -2785,6 +2869,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chklapackerror(info)
             return B
         end
+
         #       SUBROUTINE DPSTRF( UPLO, N, A, LDA, PIV, RANK, TOL, WORK, INFO )
         #       .. Scalar Arguments ..
         #       DOUBLE PRECISION   TOL
@@ -2866,8 +2951,8 @@ rank-deficient.
 """
 pstrf!(uplo::Char, A::StridedMatrix, tol::Real)
 
-## (PT) positive-definite, symmetric, tri-diagonal matrices
-## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
+# (PT) positive-definite, symmetric, tri-diagonal matrices
+# Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
 for (ptsv, pttrf, elty, relty) in
     ((:dptsv_,:dpttrf_,:Float64,:Float64),
      (:sptsv_,:spttrf_,:Float32,:Float32),
@@ -2896,6 +2981,7 @@ for (ptsv, pttrf, elty, relty) in
             chklapackerror(info)
             B
         end
+
         #       SUBROUTINE DPTTRF( N, D, E, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, N
@@ -2962,18 +3048,19 @@ for (pttrs, elty, relty) in
         end
     end
 end
+
 for (pttrs, elty, relty) in
     ((:zpttrs_,:Complex128,:Float64),
      (:cpttrs_,:Complex64,:Float32))
     @eval begin
-#       SUBROUTINE ZPTTRS( UPLO, N, NRHS, D, E, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDB, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   D( * )
-#       COMPLEX*16         B( LDB, * ), E( * )
+        #       SUBROUTINE ZPTTRS( UPLO, N, NRHS, D, E, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   D( * )
+        #       COMPLEX*16         B( LDB, * ), E( * )
         function pttrs!(uplo::Char, D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             chkuplo(uplo)
@@ -3022,8 +3109,8 @@ for (trtri, trtrs, elty) in
             n = chksquare(A)
             chkuplo(uplo)
             chkdiag(diag)
-            lda     = max(1,stride(A, 2))
-            info    = Array(BlasInt, 1)
+            lda = max(1,stride(A, 2))
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(trtri)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
@@ -3031,6 +3118,7 @@ for (trtri, trtrs, elty) in
             chklapackerror(info)
             A
         end
+
         #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          DIAG, TRANS, UPLO
@@ -3085,17 +3173,16 @@ for (trcon, trevc, trrfs, elty) in
     ((:dtrcon_,:dtrevc_,:dtrrfs_,:Float64),
      (:strcon_,:strevc_,:strrfs_,:Float32))
     @eval begin
-        #SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
-        #                   IWORK, INFO )
-        #.. Scalar Arguments ..
-        #CHARACTER          DIAG, NORM, UPLO
-        #INTEGER            INFO, LDA, N
-        #DOUBLE PRECISION   RCOND
-        #.. Array Arguments ..
-        #INTEGER            IWORK( * )
-        #DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function trcon!(norm::Char, uplo::Char, diag::Char,
-                        A::StridedMatrix{$elty})
+        # SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                  IWORK, INFO )
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, NORM, UPLO
+        # INTEGER            INFO, LDA, N
+        # DOUBLE PRECISION   RCOND
+        # .. Array Arguments ..
+        # INTEGER            IWORK( * )
+        # DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function trcon!(norm::Char, uplo::Char, diag::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             chkdiag(diag)
             n = chksquare(A)
@@ -3112,6 +3199,7 @@ for (trcon, trevc, trrfs, elty) in
             chklapackerror(info)
             rcond[1]
         end
+
         # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
         #                    LDVR, MM, M, WORK, INFO )
         #
@@ -3124,7 +3212,8 @@ for (trcon, trevc, trrfs, elty) in
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
         function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
-                VL::StridedMatrix{$elty} = similar(T), VR::StridedMatrix{$elty} = similar(T))
+                        VL::StridedMatrix{$elty} = similar(T),
+                        VR::StridedMatrix{$elty} = similar(T))
             # Extract
             if side ∉ ['L','R','B']
                 throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
@@ -3152,24 +3241,25 @@ for (trcon, trevc, trrfs, elty) in
             chklapackerror(info)
 
             #Decide what exactly to return
-            if howmny=='S' #compute selected eigenvectors
-                if side=='L' #left eigenvectors only
+            if howmny == 'S' #compute selected eigenvectors
+                if side == 'L' #left eigenvectors only
                     return select, VL[:,1:m[1]]
-                elseif side=='R' #right eigenvectors only
+                elseif side == 'R' #right eigenvectors only
                     return select, VR[:,1:m[1]]
-                else #side=='B' #both eigenvectors
+                else #side == 'B' #both eigenvectors
                     return select, VL[:,1:m[1]], VR[:,1:m[1]]
                 end
             else #compute all eigenvectors
-                if side=='L' #left eigenvectors only
+                if side == 'L' #left eigenvectors only
                     return VL[:,1:m[1]]
-                elseif side=='R' #right eigenvectors only
+                elseif side == 'R' #right eigenvectors only
                     return VR[:,1:m[1]]
-                else #side=='B' #both eigenvectors
+                else #side == 'B' #both eigenvectors
                     return VL[:,1:m[1]], VR[:,1:m[1]]
                 end
             end
         end
+
         # SUBROUTINE DTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
         #                    LDX, FERR, BERR, WORK, IWORK, INFO )
         # .. Scalar Arguments ..
@@ -3181,7 +3271,8 @@ for (trcon, trevc, trrfs, elty) in
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::Char, trans::Char, diag::Char,
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty} = similar(B, $elty, size(B,2)))
+                Ferr::StridedVector{$elty} = similar(B, $elty, size(B,2)),
+                Berr::StridedVector{$elty} = similar(B, $elty, size(B,2)))
             chktrans(trans)
             chkuplo(uplo)
             chkdiag(diag)
@@ -3205,21 +3296,21 @@ for (trcon, trevc, trrfs, elty) in
         end
     end
 end
+
 for (trcon, trevc, trrfs, elty, relty) in
     ((:ztrcon_,:ztrevc_,:ztrrfs_,:Complex128,:Float64),
      (:ctrcon_,:ctrevc_,:ctrrfs_,:Complex64, :Float32))
     @eval begin
-        #SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        # SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
         #                   RWORK, INFO )
-        #.. Scalar Arguments ..
-        #CHARACTER          DIAG, NORM, UPLO
-        #INTEGER            INFO, LDA, N
-        #DOUBLE PRECISION   RCOND
-        #.. Array Arguments ..
-        #DOUBLE PRECISION   RWORK( * )
-        #COMPLEX*16         A( LDA, * ), WORK( * )
-        function trcon!(norm::Char, uplo::Char, diag::Char,
-                        A::StridedMatrix{$elty})
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, NORM, UPLO
+        # INTEGER            INFO, LDA, N
+        # DOUBLE PRECISION   RCOND
+        # .. Array Arguments ..
+        # DOUBLE PRECISION   RWORK( * )
+        # COMPLEX*16         A( LDA, * ), WORK( * )
+        function trcon!(norm::Char, uplo::Char, diag::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
@@ -3250,7 +3341,8 @@ for (trcon, trevc, trrfs, elty, relty) in
         # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
         function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
-                VL::StridedMatrix{$elty} = similar(T), VR::StridedMatrix{$elty} = similar(T))
+                        VL::StridedMatrix{$elty} = similar(T),
+                        VR::StridedMatrix{$elty} = similar(T))
             # Extract
             n, mm = chksquare(T), size(VL, 2)
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
@@ -3266,7 +3358,6 @@ for (trcon, trevc, trrfs, elty, relty) in
             work = Array($elty, 2n)
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
-
             ccall(($(blasfunc(trevc)), liblapack), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -3279,24 +3370,25 @@ for (trcon, trevc, trrfs, elty, relty) in
             chklapackerror(info)
 
             #Decide what exactly to return
-            if howmny=='S' #compute selected eigenvectors
-                if side=='L' #left eigenvectors only
+            if howmny == 'S' #compute selected eigenvectors
+                if side == 'L' #left eigenvectors only
                     return select, VL[:,1:m[1]]
-                elseif side=='R' #right eigenvectors only
+                elseif side == 'R' #right eigenvectors only
                     return select, VR[:,1:m[1]]
                 else #side=='B' #both eigenvectors
                     return select, VL[:,1:m[1]], VR[:,1:m[1]]
                 end
             else #compute all eigenvectors
-                if side=='L' #left eigenvectors only
+                if side == 'L' #left eigenvectors only
                     return VL[:,1:m[1]]
-                elseif side=='R' #right eigenvectors only
+                elseif side == 'R' #right eigenvectors only
                     return VR[:,1:m[1]]
                 else #side=='B' #both eigenvectors
                     return VL[:,1:m[1]], VR[:,1:m[1]]
                 end
             end
         end
+
         # SUBROUTINE ZTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
         #                    LDX, FERR, BERR, WORK, IWORK, INFO )
         # .. Scalar Arguments ..
@@ -3307,19 +3399,20 @@ for (trcon, trevc, trrfs, elty, relty) in
         # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::Char, trans::Char, diag::Char,
-                A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$relty}=similar(B, $relty, size(B,2)), Berr::StridedVector{$relty}=similar(B, $relty, size(B,2)))
+                        A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
+                        Ferr::StridedVector{$relty} = similar(B, $relty, size(B,2)),
+                        Berr::StridedVector{$relty} = similar(B, $relty, size(B,2)))
             chktrans(trans)
             chkuplo(uplo)
             chkdiag(diag)
-            n=size(A,2)
-            nrhs=size(B,2)
+            n = size(A,2)
+            nrhs = size(B,2)
             if nrhs != size(X,2)
                 throw(DimensionMismatch("Second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
             end
-            work=Array($elty, 2n)
-            rwork=Array($relty, n)
-            info=Array(BlasInt, 1)
+            work  = Array($elty, 2n)
+            rwork = Array($relty, n)
+            info  = Array(BlasInt, 1)
             ccall(($(blasfunc(trrfs)), liblapack), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -3396,6 +3489,7 @@ for (stev, stebz, stegr, stein, elty) in
             chklapackerror(info)
             dv, Zmat
         end
+
         #*  DSTEBZ computes the eigenvalues of a symmetric tridiagonal
         #*  matrix T.  The user may ask for all eigenvalues, all eigenvalues
         #*  in the half-open interval (VL, VU], or the IL-th through IU-th
@@ -3442,9 +3536,9 @@ for (stev, stebz, stegr, stein, elty) in
             Z = similar(dv, $elty, ldz, n)
             isuppz = similar(dv, BlasInt, 2n)
             work = Array($elty, 1)
-            lwork = -one(BlasInt)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = -one(BlasInt)
+            liwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(stegr)), liblapack), Void,
@@ -3458,6 +3552,7 @@ for (stev, stebz, stegr, stein, elty) in
                     &iu, abstol, m, w,
                     Z, &ldz, isuppz, work,
                     &lwork, iwork, &liwork, info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
@@ -3465,7 +3560,6 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            chklapackerror(info)
             w[1:m[1]], Z[:,1:m[1]]
         end
 
@@ -3498,13 +3592,11 @@ for (stev, stebz, stegr, stein, elty) in
             else
                 isplit[1:length(isplit_in)] = isplit_in
             end
-
             z = similar(dv, $elty,(n,m))
-            work = Array($elty, 5*n)
+            work  = Array($elty, 5*n)
             iwork = Array(BlasInt,n)
             ifail = Array(BlasInt,m)
-            info = Array(BlasInt,1)
-
+            info  = Array(BlasInt,1)
             ccall(($(blasfunc(stein)), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -3512,7 +3604,10 @@ for (stev, stebz, stegr, stein, elty) in
                 Ptr{BlasInt}),
                 &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
             chklapackerror(info)
-            all(ifail.==0) || error("failed to converge eigenvectors:\n$(nonzeros(ifail))")
+            if any(ifail .!= 0)
+                # TODO: better error message / type
+                error("failed to converge eigenvectors:\n$(nonzeros(ifail))")
+            end
             z
         end
     end
@@ -3577,7 +3672,6 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
     ((:dsyconv_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
      (:ssyconv_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32))
     @eval begin
-
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO, WAY
@@ -3589,8 +3683,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            work  = Array($elty, n)
-            info  = Array(BlasInt, 1)
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(syconv)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -3598,6 +3692,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chklapackerror(info)
             A, work
         end
+
         #       SUBROUTINE DSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
         #                         LWORK, INFO )
         #       .. Scalar Arguments ..
@@ -3617,7 +3712,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(sysv)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3625,13 +3720,14 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                       work, &lwork, info)
                 chkargsok(info)
                 chknonsingular(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             B, A, ipiv
         end
+
         #       SUBROUTINE DSYTRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO
@@ -3650,20 +3746,21 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(sytrf)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
                 chkargsok(info)
                 chknonsingular(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             return A, ipiv
         end
+
         #       SUBROUTINE DSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       CHARACTER          UPLO
@@ -3692,6 +3789,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #             end
 #             A
 #         end
+
         #      SUBROUTINE DSYTRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
         #     .. Scalar Arguments ..
         #      CHARACTER          UPLO
@@ -3703,8 +3801,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            work  = Array($elty, n)
-            info  = Array(BlasInt, 1)
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(sytri)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -3713,6 +3811,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chknonsingular(info)
             A
         end
+
         #       SUBROUTINE DSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         #
         #       .. Scalar Arguments ..
@@ -3729,7 +3828,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
-            info  = Array(BlasInt, 1)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(sytrs)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3746,21 +3845,21 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
     ((:zsyconv_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128, :Float64),
      (:csyconv_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
     @eval begin
-   #   SUBROUTINE ZSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
-   # 22 *
-   # 23 *       .. Scalar Arguments ..
-   # 24 *       CHARACTER          UPLO, WAY
-   # 25 *       INTEGER            INFO, LDA, N
-   # 26 *       ..
-   # 27 *       .. Array Arguments ..
-   # 28 *       INTEGER            IPIV( * )
-   # 29 *       COMPLEX*16         A( LDA, * ), WORK( * )
+       #   SUBROUTINE ZSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
+       #
+       #        .. Scalar Arguments ..
+       #        CHARACTER          UPLO, WAY
+       #        INTEGER            INFO, LDA, N
+       #        ..
+       #        .. Array Arguments ..
+       #        INTEGER            IPIV( * )
+       #        COMPLEX*16         A( LDA, * ), WORK( * )
         function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            work  = Array($elty, n)
-            info  = Array(BlasInt, 1)
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(syconv)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -3768,14 +3867,15 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             chklapackerror(info)
             A, work
         end
-#       SUBROUTINE ZHESV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+
+        #       SUBROUTINE ZHESV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function hesv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
             n = chksquare(A)
@@ -3787,28 +3887,29 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(hesv)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             B, A, ipiv
         end
-#       SUBROUTINE ZHETRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
+
+        #       SUBROUTINE ZHETRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
@@ -3824,13 +3925,14 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
                 chkargsok(info)
                 chknonsingular(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             A, ipiv
         end
+
 #       SUBROUTINE ZHETRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO
@@ -3859,20 +3961,22 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #             end
 #             A
 #         end
-#       SUBROUTINE ZHETRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
+
+
+        #       SUBROUTINE ZHETRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            work  = Array($elty, n)
-            info  = Array(BlasInt, 1)
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(hetri)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -3880,14 +3984,15 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             chklapackerror(info)
             A
         end
-#       SUBROUTINE ZHETRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LDB, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * )
+
+        #       SUBROUTINE ZHETRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function hetrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
@@ -3895,7 +4000,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
-            info  = Array(BlasInt, 1)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(hetrs)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3910,15 +4015,15 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
     ((:zsysv_,:zsytrf_,:zsytri_,:zsytrs_,:Complex128, :Float64),
      (:csysv_,:csytrf_,:csytri_,:csytrs_,:Complex64, :Float32))
     @eval begin
-#       SUBROUTINE ZSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
-#      $                  LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        #       SUBROUTINE ZSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+        #      $                  LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sysv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
             n = chksquare(A)
@@ -3930,7 +4035,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(sysv)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3938,46 +4043,48 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                       work, &lwork, info)
                 chkargsok(info)
                 chknonsingular(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             B, A, ipiv
         end
-#       SUBROUTINE ZSYTRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
+
+        #       SUBROUTINE ZSYTRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            ipiv  = similar(A, BlasInt, n)
+            ipiv = similar(A, BlasInt, n)
             if n == 0
                 return A, ipiv
             end
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(sytrf)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
                 chkargsok(info)
                 chknonsingular(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             A, ipiv
         end
+
 #       SUBROUTINE ZSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          UPLO
@@ -4006,20 +4113,21 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #             end
 #             A
 #         end
-#       SUBROUTINE ZSYTRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
+
+        #       SUBROUTINE ZSYTRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
             n = chksquare(A)
             chkuplo(uplo)
-            work  = Array($elty, n)
-            info  = Array(BlasInt, 1)
+            work = Array($elty, n)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(sytri)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -4027,14 +4135,15 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             chklapackerror(info)
             A
         end
-#       SUBROUTINE ZSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          UPLO
-#       INTEGER            INFO, LDA, LDB, N, NRHS
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IPIV( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * )
+
+        #       SUBROUTINE ZSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
@@ -4043,7 +4152,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
-            info  = Array(BlasInt, 1)
+            info = Array(BlasInt, 1)
             ccall(($(blasfunc(sytrs)), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -4166,19 +4275,20 @@ for (syev, syevr, sygvd, elty) in
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(syev)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &max(1,stride(A,2)), W, work, &lwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            jobz=='V' ? (W, A) : W
+            jobz == 'V' ? (W, A) : W
         end
+
         #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
         #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
         #      $                   IWORK, LIWORK, INFO )
@@ -4190,7 +4300,8 @@ for (syev, syevr, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            ISUPPZ( * ), IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )
-        function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty}, vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+        function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty},
+                        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = chksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
@@ -4209,12 +4320,12 @@ for (syev, syevr, sygvd, elty) in
                 Z = similar(A, $elty, ldz, n)
             end
             isuppz = similar(A, BlasInt, 2*n)
-            work  = Array($elty, 1)
-            lwork = BlasInt(-1)
-            iwork = Array(BlasInt, 1)
+            work   = Array($elty, 1)
+            lwork  = BlasInt(-1)
+            iwork  = Array(BlasInt, 1)
             liwork = BlasInt(-1)
-            info  = Array(BlasInt, 1)
-            for i in 1:2
+            info   = Array(BlasInt, 1)
+            for i = 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -4229,7 +4340,7 @@ for (syev, syevr, sygvd, elty) in
                     work, &lwork, iwork, &liwork,
                     info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     liwork = iwork[1]
@@ -4238,17 +4349,19 @@ for (syev, syevr, sygvd, elty) in
             end
             w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
         end
-        syevr!(jobz::Char, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
+        syevr!(jobz::Char, A::StridedMatrix{$elty}) =
+            syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
+
         # Generalized eigenproblem
-#           SUBROUTINE DSYGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
-#      $                   LWORK, IWORK, LIWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, UPLO
-#       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IWORK( * )
-#       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
+        #           SUBROUTINE DSYGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
+        #      $                   LWORK, IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
         function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
             n, m = chksquare(A, B)
@@ -4259,9 +4372,9 @@ for (syev, syevr, sygvd, elty) in
             ldb = max(1, stride(B, 2))
             w = similar(A, $elty, n)
             work = Array($elty, 1)
-            lwork = -one(BlasInt)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = -one(BlasInt)
+            liwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(sygvd)), liblapack), Void,
@@ -4273,6 +4386,7 @@ for (syev, syevr, sygvd, elty) in
                     A, &lda, B, &ldb,
                     w, work, &lwork, iwork,
                     &liwork, info)
+                chkargsok(info)
                 if i == 1
                     lwork = BlasInt(work[1])
                     work = Array($elty, lwork)
@@ -4280,7 +4394,6 @@ for (syev, syevr, sygvd, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            chkargsok(info)
             chkposdef(info)
             w, A, B
         end
@@ -4291,14 +4404,14 @@ for (syev, syevr, sygvd, elty, relty) in
     ((:zheev_,:zheevr_,:zhegvd_,:Complex128,:Float64),
      (:cheev_,:cheevr_,:chegvd_,:Complex64,:Float32))
     @eval begin
-# SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, UPLO
-#       INTEGER            INFO, LDA, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   RWORK( * ), W( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
+        # SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   RWORK( * ), W( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function syev!(jobz::Char, uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
@@ -4307,33 +4420,35 @@ for (syev, syevr, sygvd, elty, relty) in
             lwork = BlasInt(-1)
             rwork = Array($relty, max(1, 3n-2))
             info  = Array(BlasInt, 1)
-            for i in 1:2
+            for i = 1:2
                 ccall(($(blasfunc(syev)), liblapack), Void,
                       (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            jobz=='V' ? (W, A) : W
+            jobz == 'V' ? (W, A) : W
         end
-#       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
-#      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
-#      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, RANGE, UPLO
-#       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LRWORK, LWORK,
-#      $                   M, N
-#       DOUBLE PRECISION   ABSTOL, VL, VU
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            ISUPPZ( * ), IWORK( * )
-#       DOUBLE PRECISION   RWORK( * ), W( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * )
-        function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty}, vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+
+        #       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
+        #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
+        #      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, RANGE, UPLO
+        #       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LRWORK, LWORK,
+        #      $                   M, N
+        #       DOUBLE PRECISION   ABSTOL, VL, VU
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            ISUPPZ( * ), IWORK( * )
+        #       DOUBLE PRECISION   RWORK( * ), W( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * )
+        function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty},
+                        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = chksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
@@ -4353,29 +4468,29 @@ for (syev, syevr, sygvd, elty, relty) in
                 Z = similar(A, $elty, ldz, n)
             end
             isuppz = similar(A, BlasInt, 2*n)
-            work  = Array($elty, 1)
-            lwork = BlasInt(-1)
-            rwork = Array($relty, 1)
+            work   = Array($elty, 1)
+            lwork  = BlasInt(-1)
+            rwork  = Array($relty, 1)
             lrwork = BlasInt(-1)
-            iwork = Array(BlasInt, 1)
+            iwork  = Array(BlasInt, 1)
             liwork = BlasInt(-1)
-            info  = Array(BlasInt, 1)
-            for i in 1:2
+            info   = Array(BlasInt, 1)
+            for i = 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
-                    (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
-                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
-                            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                        &jobz, &range, &uplo, &n,
-                    A, &lda, &vl, &vu,
-                    &il, &iu, &abstol, m,
-                    w, Z, &ldz, isuppz,
-                    work, &lwork, rwork, &lrwork,
-                    iwork, &liwork, info)
+                      (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                       Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &jobz, &range, &uplo, &n,
+                      A, &lda, &vl, &vu,
+                      &il, &iu, &abstol, m,
+                      w, Z, &ldz, isuppz,
+                      work, &lwork, rwork, &lrwork,
+                      iwork, &liwork, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                     lrwork = BlasInt(rwork[1])
@@ -4386,23 +4501,19 @@ for (syev, syevr, sygvd, elty, relty) in
             end
             w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
         end
-        syevr!(jobz::Char, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
-#       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
-#      $                   LWORK, RWORK, LRWORK, IWORK, LIWORK, INFO )
-# *
-# *  -- LAPACK driver routine (version 3.3.1) --
-# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
-# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
-# *  -- April 2011                                                      --
-# *
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, UPLO
-#       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LRWORK, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IWORK( * )
-#       DOUBLE PRECISION   RWORK( * ), W( * )
-#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        syevr!(jobz::Char, A::StridedMatrix{$elty}) =
+            syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
+
+        #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
+        #      $                   LWORK, RWORK, LRWORK, IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LRWORK, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   RWORK( * ), W( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
             n, m = chksquare(A, B)
@@ -4413,11 +4524,11 @@ for (syev, syevr, sygvd, elty, relty) in
             ldb = max(1, stride(B, 2))
             w = similar(A, $relty, n)
             work = Array($elty, 1)
-            lwork = -one(BlasInt)
+            lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
-            liwork = -one(BlasInt)
+            liwork = BlasInt(-1)
             rwork = Array($relty)
-            lrwork = -one(BlasInt)
+            lrwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(sygvd)), liblapack), Void,
@@ -4429,6 +4540,7 @@ for (syev, syevr, sygvd, elty, relty) in
                     A, &lda, B, &ldb,
                     w, work, &lwork, rwork,
                     &lrwork, iwork, &liwork, info)
+                chkargsok(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
@@ -4438,7 +4550,6 @@ for (syev, syevr, sygvd, elty, relty) in
                     rwork = Array($relty, lrwork)
                 end
             end
-            chkargsok(info)
             chkposdef(info)
             w, A, B
         end
@@ -4467,7 +4578,8 @@ found. `abstol` can be set as a tolerance for convergence.
 
 The eigenvalues are returned in `W` and the eigenvectors in `Z`.
 """
-syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix, vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix,
+       vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
 
 """
     sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (w, A, B)
@@ -4491,13 +4603,12 @@ for (bdsqr, relty, elty) in
      (:cbdsqr_,:Float32,:Complex64))
     @eval begin
         function bdsqr!(uplo::Char, d::Vector{$relty}, e_::Vector{$relty},
-            Vt::StridedMatrix{$elty}, U::StridedMatrix{$elty}, C::StridedMatrix{$elty})
+                        Vt::StridedMatrix{$elty}, U::StridedMatrix{$elty}, C::StridedMatrix{$elty})
 
             # Extract number
             n = length(d)
             ncvt, nru, ncc = size(Vt, 2), size(U, 1), size(C, 2)
             ldvt, ldu, ldc = max(1, stride(Vt,2)), max(1, stride(U, 2)), max(1, stride(C,2))
-
             # Do checks
             chkuplo(uplo)
             if length(e_) != n - 1
@@ -4515,11 +4626,9 @@ for (bdsqr, relty, elty) in
             if ncc > 0 && ldc < n
                 throw(DimensionMismatch("leading dimension of C, $ldc, must be at least $n"))
             end
-
             # Allocate
             work = Array($relty, 4n)
             info = Array(BlasInt,1)
-
             ccall(($(blasfunc(bdsqr)), liblapack), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty},
@@ -4567,7 +4676,7 @@ for (bdsdc, elty) in
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             chkuplo(uplo)
             if compq == 'N'
-                lwork = 6n
+                lwork = 6*n
             elseif compq == 'P'
                 warn("COMPQ='P' is not tested")
                 #TODO turn this into an actual LAPACK call
@@ -4575,20 +4684,20 @@ for (bdsdc, elty) in
                 smlsiz=100 #For now, completely overkill
                 ldq = n*(11+2*smlsiz+8*round(Int,log((n/(smlsiz+1)))/log(2)))
                 ldiq = n*(3+3*round(Int,log(n/(smlsiz+1))/log(2)))
-                lwork = 6n
+                lwork = 6*n
             elseif compq == 'I'
                 ldvt=ldu=max(1, n)
-                lwork=3*n^2 + 4n
+                lwork=3*n^2 + 4*n
             else
                 throw(ArgumentError("COMPQ argument must be 'N', 'P' or 'I', got $(repr(compq))"))
             end
-            u = similar(d, $elty, (ldu,  n))
-            vt= similar(d, $elty, (ldvt, n))
-            q = similar(d, $elty, ldq)
-            iq= similar(d, BlasInt, ldiq)
-            work =Array($elty, lwork)
-            iwork=Array(BlasInt, 8n)
-            info =Array(BlasInt, 1)
+            u  = similar(d, $elty, (ldu,  n))
+            vt = similar(d, $elty, (ldvt, n))
+            q  = similar(d, $elty, ldq)
+            iq = similar(d, BlasInt, ldiq)
+            work  = Array($elty, lwork)
+            iwork = Array(BlasInt, 8n)
+            info  = Array(BlasInt, 1)
             ccall(($(blasfunc(bdsdc)), liblapack), Void,
                (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -4621,17 +4730,17 @@ for (gecon, elty) in
     ((:dgecon_,:Float64),
      (:sgecon_,:Float32))
     @eval begin
+        #  SUBROUTINE DGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, IWORK,
+        #      $                   INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          NORM
+        #       INTEGER            INFO, LDA, N
+        #       DOUBLE PRECISION   ANORM, RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function gecon!(normtype::Char, A::StridedMatrix{$elty}, anorm::$elty)
-#                   SUBROUTINE DGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, IWORK,
-#      $                   INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          NORM
-#       INTEGER            INFO, LDA, N
-#       DOUBLE PRECISION   ANORM, RCOND
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            IWORK( * )
-#       DOUBLE PRECISION   A( LDA, * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
             lda = max(1, stride(A, 2))
@@ -4650,21 +4759,22 @@ for (gecon, elty) in
         end
     end
 end
+
 for (gecon, elty, relty) in
     ((:zgecon_,:Complex128,:Float64),
      (:cgecon_,:Complex64, :Float32))
     @eval begin
+        #       SUBROUTINE ZGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, RWORK,
+        #      $                   INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          NORM
+        #       INTEGER            INFO, LDA, N
+        #       DOUBLE PRECISION   ANORM, RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
         function gecon!(normtype::Char, A::StridedMatrix{$elty}, anorm::$relty)
-#       SUBROUTINE ZGECON( NORM, N, A, LDA, ANORM, RCOND, WORK, RWORK,
-#      $                   INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          NORM
-#       INTEGER            INFO, LDA, N
-#       DOUBLE PRECISION   ANORM, RCOND
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   RWORK( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
             lda = max(1, stride(A, 2))
@@ -4700,15 +4810,16 @@ for (gehrd, elty) in
      (:zgehrd_,:Complex128),
      (:cgehrd_,:Complex64))
     @eval begin
+
+        #                 .. Scalar Arguments ..
+        #       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
         function gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty})
-#                 .. Scalar Arguments ..
-#       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
             chkstride1(A)
-            checkfinite(A) # balancing routines don't support NaNs and Infs
             n = chksquare(A)
+            chkfinite(A) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             work = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -4722,7 +4833,7 @@ for (gehrd, elty) in
                     &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -4749,12 +4860,12 @@ for (orghr, elty) in
      (:zunghr_,:Complex128),
      (:cunghr_,:Complex64))
     @eval begin
+        # *     .. Scalar Arguments ..
+        #       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
-# *     .. Scalar Arguments ..
-#       INTEGER            IHI, ILO, INFO, LDA, LWORK, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
             if n - length(tau) != 1
@@ -4772,7 +4883,7 @@ for (orghr, elty) in
                     &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -4794,15 +4905,15 @@ for (gees, gges, elty) in
     ((:dgees_,:dgges_,:Float64),
      (:sgees_,:sgges_,:Float32))
     @eval begin
+        #     .. Scalar Arguments ..
+        #     CHARACTER          JOBVS, SORT
+        #     INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
+        #     ..
+        #     .. Array Arguments ..
+        #     LOGICAL            BWORK( * )
+        #     DOUBLE PRECISION   A( LDA, * ), VS( LDVS, * ), WI( * ), WORK( * ),
+        #    $                   WR( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
-#     .. Scalar Arguments ..
-#     CHARACTER          JOBVS, SORT
-#     INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
-#     ..
-#     .. Array Arguments ..
-#     LOGICAL            BWORK( * )
-#     DOUBLE PRECISION   A( LDA, * ), VS( LDVS, * ), WI( * ), WORK( * ),
-#    $                   WR( * )
             chkstride1(A)
             n = chksquare(A)
             sdim = Array(BlasInt, 1)
@@ -4824,23 +4935,24 @@ for (gees, gges, elty) in
                         wi, vs, &ldvs, work,
                         &lwork, C_NULL, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             A, vs, all(wi .== 0) ? wr : complex(wr, wi)
         end
+
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVSL, JOBVSR, SORT
+        #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            BWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+        #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
+        #      $                   VSR( LDVSR, * ), WORK( * )
         function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBVSL, JOBVSR, SORT
-#       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
-# *     ..
-# *     .. Array Arguments ..
-#       LOGICAL            BWORK( * )
-#       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
-#      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
-#      $                   VSR( LDVSR, * ), WORK( * )
             chkstride1(A, B)
             n, m = chksquare(A, B)
             if n != m
@@ -4871,29 +4983,30 @@ for (gees, gges, elty) in
                     beta, vsl, &ldvsl, vsr,
                     &ldvsr, work, &lwork, C_NULL,
                     info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             A, B, complex(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
 end
+
 for (gees, gges, elty, relty) in
     ((:zgees_,:zgges_,:Complex128,:Float64),
      (:cgees_,:cgges_,:Complex64,:Float32))
     @eval begin
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVS, SORT
+        #       INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            BWORK( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBVS, SORT
-#       INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
-# *     ..
-# *     .. Array Arguments ..
-#       LOGICAL            BWORK( * )
-#       DOUBLE PRECISION   RWORK( * )
-#       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
             sort = 'N'
@@ -4916,24 +5029,25 @@ for (gees, gges, elty, relty) in
                         vs, &ldvs, work, &lwork,
                         rwork, C_NULL, info)
                 chklapackerror(info)
-                if lwork < 0
+                if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
             A, vs, w
         end
+
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVSL, JOBVSR, SORT
+        #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            BWORK( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+        #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
+        #      $                   WORK( * )
         function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBVSL, JOBVSR, SORT
-#       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
-# *     ..
-# *     .. Array Arguments ..
-#       LOGICAL            BWORK( * )
-#       DOUBLE PRECISION   RWORK( * )
-#       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
-#      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
-#      $                   WORK( * )
             chkstride1(A, B)
             n, m = chksquare(A, B)
             if n != m
@@ -4964,12 +5078,12 @@ for (gees, gges, elty, relty) in
                     vsl, &ldvsl, vsr, &ldvsr,
                     work, &lwork, rwork, C_NULL,
                     info)
+                chklapackerror(info)
                 if i == 1
                     lwork = BlasInt(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            chklapackerror(info)
             A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
@@ -5003,21 +5117,19 @@ for (trexc, trsen, tgsen, elty) in
     ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),
      (:strexc_, :strsen_, :stgsen_, :Float32))
     @eval begin
-        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) = trexc!('V', ifst, ilst, T, Q)
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          COMPQ
+        #       INTEGER            IFST, ILST, INFO, LDQ, LDT, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          COMPQ
-#       INTEGER            IFST, ILST, INFO, LDQ, LDT, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
             chkstride1(T, Q)
             n = chksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             work = Array($elty, n)
             info = Array(BlasInt, 1)
-
             ccall(($(blasfunc(trexc)), liblapack), Void,
                   (Ptr{UInt8},  Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -5030,18 +5142,20 @@ for (trexc, trsen, tgsen, elty) in
             chklapackerror(info)
             T, Q
         end
-        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
-            trsen!('N', 'V', select, T, Q)
-        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          COMPQ, JOB
-#       INTEGER            INFO, LDQ, LDT, LIWORK, LWORK, M, N
-#       DOUBLE PRECISION   S, SEP
-# *     ..
-# *     .. Array Arguments ..
-#       LOGICAL            SELECT( * )
-#       INTEGER            IWORK( * )
-#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
+        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trexc!('V', ifst, ilst, T, Q)
+
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          COMPQ, JOB
+        #       INTEGER            INFO, LDQ, LDT, LIWORK, LWORK, M, N
+        #       DOUBLE PRECISION   S, SEP
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            SELECT( * )
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
+        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
+                        T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
             n = chksquare(T)
             ldt = max(1, stride(T, 2))
@@ -5055,7 +5169,6 @@ for (trexc, trsen, tgsen, elty) in
             liwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
-
             for i = 1:2
                 ccall(($(blasfunc(trsen)), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -5078,21 +5191,24 @@ for (trexc, trsen, tgsen, elty) in
             end
             T, Q, all(wi .== 0) ? wr : complex(wr, wi)
         end
+        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trsen!('N', 'V', select, T, Q)
+
+        #        .. Scalar Arguments ..
+        #        LOGICAL            WANTQ, WANTZ
+        #        INTEGER            IJOB, INFO, LDA, LDB, LDQ, LDZ, LIWORK, LWORK,
+        #       $                   M, N
+        #        DOUBLE PRECISION   PL, PR
+        #        ..
+        #        .. Array Arguments ..
+        #        LOGICAL            SELECT( * )
+        #        INTEGER            IWORK( * )
+        #        DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+        #       $                   B( LDB, * ), BETA( * ), DIF( * ), Q( LDQ, * ),
+        #       $                   WORK( * ), Z( LDZ, * )
+        #        ..
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
-                                            Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
-# *       .. Scalar Arguments ..
-# *       LOGICAL            WANTQ, WANTZ
-# *       INTEGER            IJOB, INFO, LDA, LDB, LDQ, LDZ, LIWORK, LWORK,
-# *      $                   M, N
-# *       DOUBLE PRECISION   PL, PR
-# *       ..
-# *       .. Array Arguments ..
-# *       LOGICAL            SELECT( * )
-# *       INTEGER            IWORK( * )
-# *       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
-# *      $                   B( LDB, * ), BETA( * ), DIF( * ), Q( LDQ, * ),
-# *      $                   WORK( * ), Z( LDZ, * )
-# *       ..
+                        Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
             chkstride1(S, T, Q, Z)
             n, nt, nq, nz = chksquare(S, T, Q, Z)
             if n != nt
@@ -5118,7 +5234,6 @@ for (trexc, trsen, tgsen, elty) in
             iwork = Array(BlasInt, 1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
-
             for i = 1:2
                 ccall(($(blasfunc(tgsen)), liblapack), Void,
                        (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -5152,20 +5267,18 @@ for (trexc, trsen, tgsen, elty) in
     ((:ztrexc_, :ztrsen_, :ztgsen_, :Complex128),
      (:ctrexc_, :ctrsen_, :ctgsen_, :Complex64))
     @eval begin
-        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) = trexc!('V', ifst, ilst, T, Q)
+        #      .. Scalar Arguments ..
+        #      CHARACTER          COMPQ
+        #      INTEGER            IFST, ILST, INFO, LDQ, LDT, N
+        #      ..
+        #      .. Array Arguments ..
+        #      DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          COMPQ
-#       INTEGER            IFST, ILST, INFO, LDQ, LDT, N
-# *     ..
-# *     .. Array Arguments ..
-#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
             chkstride1(T, Q)
             n = chksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             info = Array(BlasInt, 1)
-
             ccall(($(blasfunc(trexc)), liblapack), Void,
                   (Ptr{UInt8},  Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -5178,17 +5291,19 @@ for (trexc, trsen, tgsen, elty) in
             chklapackerror(info)
             T, Q
         end
-        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
-            trsen!('N', 'V', select, T, Q)
-        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-# *     .. Scalar Arguments ..
-#       CHARACTER          COMPQ, JOB
-#       INTEGER            INFO, LDQ, LDT, LWORK, M, N
-#       DOUBLE PRECISION   S, SEP
-# *     ..
-# *     .. Array Arguments ..
-#       LOGICAL            SELECT( * )
-#       COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
+        trexc!(ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trexc!('V', ifst, ilst, T, Q)
+
+        #      .. Scalar Arguments ..
+        #      CHARACTER          COMPQ, JOB
+        #      INTEGER            INFO, LDQ, LDT, LWORK, M, N
+        #      DOUBLE PRECISION   S, SEP
+        #      ..
+        #      .. Array Arguments ..
+        #      LOGICAL            SELECT( * )
+        #      COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
+        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
+                        T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
             n = chksquare(T)
             ldt = max(1, stride(T, 2))
@@ -5199,7 +5314,6 @@ for (trexc, trsen, tgsen, elty) in
             lwork = BlasInt(-1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
-
             for i = 1:2
                 ccall(($(blasfunc(trsen)), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -5220,21 +5334,24 @@ for (trexc, trsen, tgsen, elty) in
             end
             T, Q, w
         end
+        trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
+            trsen!('N', 'V', select, T, Q)
+
+        #        .. Scalar Arguments ..
+        #        LOGICAL            WANTQ, WANTZ
+        #        INTEGER            IJOB, INFO, LDA, LDB, LDQ, LDZ, LIWORK, LWORK,
+        #       $                   M, N
+        #        DOUBLE PRECISION   PL, PR
+        #        ..
+        #        .. Array Arguments ..
+        #        LOGICAL            SELECT( * )
+        #        INTEGER            IWORK( * )
+        #        DOUBLE PRECISION   DIF( * )
+        #        COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+        #       $                   BETA( * ), Q( LDQ, * ), WORK( * ), Z( LDZ, * )
+        #        ..
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
-                                            Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
-# *       .. Scalar Arguments ..
-# *       LOGICAL            WANTQ, WANTZ
-# *       INTEGER            IJOB, INFO, LDA, LDB, LDQ, LDZ, LIWORK, LWORK,
-# *      $                   M, N
-# *       DOUBLE PRECISION   PL, PR
-# *       ..
-# *       .. Array Arguments ..
-# *       LOGICAL            SELECT( * )
-# *       INTEGER            IWORK( * )
-# *       DOUBLE PRECISION   DIF( * )
-# *       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
-# *      $                   BETA( * ), Q( LDQ, * ), WORK( * ), Z( LDZ, * )
-# *       ..
+                        Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
             chkstride1(S, T, Q, Z)
             n, nt, nq, nz = chksquare(S, T, Q, Z)
             if n != nt
@@ -5259,7 +5376,6 @@ for (trexc, trsen, tgsen, elty) in
             iwork = Array(BlasInt, 1)
             info = Array(BlasInt, 1)
             select = convert(Array{BlasInt}, select)
-
             for i = 1:2
                 ccall(($(blasfunc(tgsen)), liblapack), Void,
                        (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -5327,7 +5443,8 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                    (:ztrsyl_, :Complex128, :Float64),
                    (:ctrsyl_, :Complex64, :Float32))
     @eval begin
-        function trsyl!(transa::Char, transb::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
+        function trsyl!(transa::Char, transb::Char, A::StridedMatrix{$elty},
+                        B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
             chkstride1(A, B, C)
             m, n = chksquare(A, B)
             lda = max(1, stride(A, 2))
@@ -5337,10 +5454,8 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 throw(DimensionMismatch("Dimensions of A, ($m,$n), and C, ($m1,$n1), must match"))
             end
             ldc = max(1, stride(C, 2))
-
             scale = Array($relty, 1)
-            info = Array(BlasInt, 1)
-
+            info  = Array(BlasInt, 1)
             ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
