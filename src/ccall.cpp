@@ -677,6 +677,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
+        f->removeFromParent();
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
         for (auto it : localDecls) {
             llvmcallDecls[it.first] = cast<GlobalValue>(prepare_call(m->getNamedValue(it.second)));
@@ -720,11 +721,24 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
      * generated the entire function, so we need to store it in the context until the end of the
      * function. This also has the benefit of looking exactly like we cut/pasted it in in `code_llvm`.
      */
-    f->setLinkage(GlobalValue::LinkOnceODRLinkage);
+
+    // Since we dumped all of f's dependencies into the active module,
+    // we cannot reasonably inline it, so leave it there and just emit
+    // a regular call
+    if (!isString) {
+        static int llvmcallnumbering = 0;
+        std::stringstream name;
+        name << "jl_llvmcall" << llvmcallnumbering++;
+        f->setName(name.str());
+        f = cast<Function>(prepare_call(function_proto(f)));
+    }
+    else
+        f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
     // the actual call
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
-    ctx->to_inline.push_back(inst);
+    if (isString)
+        ctx->to_inline.push_back(inst);
 
     JL_GC_POP();
 
