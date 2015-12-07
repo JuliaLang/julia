@@ -50,12 +50,12 @@ typealias RecursiveSpinLock RecursiveTatasLock
 
 function lock!(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()
+        l.handle[] += 1
         return 0
     end
     while true
         if l.handle[] == 0
-            p = atomic_xchg!(l.handle, 1)
-            if p == 0
+            if atomic_cas!(l.handle, 0, 1)
                 l.ownertid[] = threadid()
                 return 0
             end
@@ -66,14 +66,15 @@ end
 
 function trylock!(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()
+        l.handle[] += 1
         return 0
     end
     if l.handle[] == 0
-        p = atomic_xchg!(l.handle, 1)
-        if p == 0
+        if atomic_cas!(l.handle, 0, 1)
             l.ownertid[] = threadid()
+            return 0
         end
-        return p
+        return 1
     end
     return 1
 end
@@ -82,8 +83,12 @@ function unlock!(l::RecursiveTatasLock)
     if l.ownertid[] != threadid()
         return 1
     end
-    l.ownertid[] = 0
-    l.handle[] = 0
+    if l.handle[] == 1
+        l.ownertid[] = 0
+        l.handle[] = 0
+    else
+        l.handle[] -= 1
+    end
     return 0
 end
 

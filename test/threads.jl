@@ -74,3 +74,12 @@ end
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
 @test threaded_add_locked(Threads.RecursiveSpinLock, 0, 10000) == 10000
 @test threaded_add_locked(Mutex, 0, 10000) == 10000
+
+# Check if the recursive lock can be locked and unlocked correctly.
+let lock = Threads.RecursiveSpinLock()
+    @test lock!(lock) == 0
+    @test lock!(lock) == 0
+    @test unlock!(lock) == 0
+    @test unlock!(lock) == 0
+    @test unlock!(lock) == 1
+end
