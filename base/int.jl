@@ -841,6 +841,19 @@ for T in SignedIntTypes
     if WORD_SIZE == 32 && T === Int128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
+            # use regular Int128 operations to avoid codegen bug
+            unchecked_neg(x::$T) =
+                box($T,unchecked_sneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_sadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_ssub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) = x * y
+            unchecked_div(x::$T, y::$T) = x ÷ y
+            unchecked_rem(x::$T, y::$T) = x % y
+        end
+    else
+        @eval begin
             unchecked_neg(x::$T) =
                 box($T,unchecked_sneg(unbox($T,x)))
             unchecked_add(x::$T, y::$T) =
@@ -855,16 +868,6 @@ for T in SignedIntTypes
                 y == -1 && return $T(0)   # avoid overflow
                 box($T,unchecked_srem(unbox($T,x), unbox($T,y)))
             end
-        end
-    else
-        @eval begin
-            # use regular Int128 operations to avoid codegen bug
-            unchecked_neg(x::$T) = -x
-            unchecked_add(x::$T, y::$T) = x + y
-            unchecked_sub(x::$T, y::$T) = x - y
-            unchecked_mul(x::$T, y::$T) = x * y
-            unchecked_div(x::$T, y::$T) = x ÷ y
-            unchecked_rem(x::$T, y::$T) = x % y
         end
     end
 end
@@ -887,6 +890,19 @@ for T in UnsignedIntTypes
     if WORD_SIZE == 32 && T === UInt128
         # There is a code generation bug on 32-bit Linux with LLVM 3.3
         @eval begin
+            # use regular UInt128 operations to avoid codegen bug
+            unchecked_neg(x::$T) =
+                box($T,unchecked_uneg(unbox($T,x)))
+            unchecked_add(x::$T, y::$T) =
+                box($T,unchecked_uadd(unbox($T,x), unbox($T,y)))
+            unchecked_sub(x::$T, y::$T) =
+                box($T,unchecked_usub(unbox($T,x), unbox($T,y)))
+            unchecked_mul(x::$T, y::$T) = x * y
+            unchecked_div(x::$T, y::$T) = x ÷ y
+            unchecked_rem(x::$T, y::$T) = x % y
+        end
+    else
+        @eval begin
             unchecked_neg(x::$T) =
                 box($T,unchecked_uneg(unbox($T,x)))
             unchecked_add(x::$T, y::$T) =
@@ -899,16 +915,6 @@ for T in UnsignedIntTypes
                 box($T,unchecked_udiv(unbox($T,x), unbox($T,y)))
             unchecked_rem(x::$T, y::$T) =
                 box($T,unchecked_urem(unbox($T,x), unbox($T,y)))
-        end
-    else
-        @eval begin
-            # use regular UInt128 operations to avoid codegen bug
-            unchecked_neg(x::$T) = -x
-            unchecked_add(x::$T, y::$T) = x + y
-            unchecked_sub(x::$T, y::$T) = x - y
-            unchecked_mul(x::$T, y::$T) = x * y
-            unchecked_div(x::$T, y::$T) = x ÷ y
-            unchecked_rem(x::$T, y::$T) = x % y
         end
     end
 end
