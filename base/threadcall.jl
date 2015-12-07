@@ -49,36 +49,43 @@ macro threadcall(f, rettype, argtypes, argvals...)
 
     # generate code to fill an argument buffer
     filler = Any[]
+    push!(filler, :(args_size = 0))
+    for T in argtypes.args
+        push!(filler, :(args_size += sizeof($T)))
+    end
+    push!(filler, :(args_arr = Array{UInt8}(args_size)))
+    push!(filler, :(ptr = pointer(args_arr)))
     for (T, arg) in zip(argtypes.args, argvals)
-        push!(filler, :(write(buf, convert($T, $arg))))
+        push!(filler, :(unsafe_store!(convert(Ptr{$T}, ptr), convert($T, $arg))))
+        push!(filler, :(ptr += sizeof($arg)))
     end
 
     :(let
-        # generate wrapper function
-        $wrapper
-        fun_ptr = cfunction(wrapper, Int, (Ptr{Void}, Ptr{Void}))
-
-        # wait for a worker thread to be available
-        acquire(threadcall_restrictor)
-        idx = findfirst(isnull, thread_notifiers)
-        thread_notifiers[idx] = Nullable{Condition}(Condition())
-
-        # create and fill argument and return buffers
-        buf = IOBuffer()
-        $(filler...)
-        args_arr = takebuf_array(buf)
-        ret_arr = Array(UInt8, sizeof($rettype))
-
-        # queue up the work to be done
-        ccall(:jl_queue_work, Void,
-            (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}, Cint),
-            fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
-
-        # wait for a result & return it
-        wait(get(thread_notifiers[idx]))
-        thread_notifiers[idx] = Nullable{Condition}()
-        release(threadcall_restrictor)
-
-        unsafe_load(convert(Ptr{$rettype}, pointer(ret_arr)))
+        $wrapper # generate wrapper function
+        $(filler...) # fill the argument buffer
+        do_threadcall(wrapper, $rettype, args_arr)
     end)
+end
+
+function do_threadcall(wrapper::Function, rettype::Type, args_arr::Vector{UInt8})
+    # create return buffer, generate function pointer
+    ret_arr = Array(UInt8, sizeof(rettype))
+    fun_ptr = cfunction(wrapper, Int, (Ptr{Void}, Ptr{Void}))
+
+    # wait for a worker thread to be available
+    acquire(threadcall_restrictor)
+    idx = findfirst(isnull, thread_notifiers)
+    thread_notifiers[idx] = Nullable{Condition}(Condition())
+
+    # queue up the work to be done
+    ccall(:jl_queue_work, Void,
+        (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}, Cint),
+        fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
+
+    # wait for a result & return it
+    wait(get(thread_notifiers[idx]))
+    thread_notifiers[idx] = Nullable{Condition}()
+    release(threadcall_restrictor)
+
+    unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))
 end
