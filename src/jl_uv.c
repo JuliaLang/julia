@@ -849,11 +849,6 @@ struct work_baton {
 
 void jl_work_wrapper(uv_work_t *req) {
     struct work_baton *baton = (struct work_baton*) req->data;
-#ifdef _OS_LINUX_
-    baton->tid = syscall(SYS_gettid);
-#else
-    baton->tid = 0;
-#endif
     baton->work_func(baton->work_args, baton->work_retval);
 }
 
