@@ -1292,6 +1292,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         jl_compile_linfo(linfo, NULL);
     }
     if (getdeclarations) {
+        JL_GC_POP();
         if (getwrapper || linfo->functionObjects.specFunctionObject == NULL)
             return linfo->functionObjects.functionObject;
         else
@@ -4568,13 +4569,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 #ifdef LLVM37
         f->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-        fwrap = gen_jlcall_wrapper(lam, ast, f, ctx.sret);
         definitions->specFunctionObject = f;
-        definitions->functionObject = fwrap;
-        if (declarations) {
+        if (declarations)
             declarations->specFunctionObject = function_proto(f);
+        fwrap = gen_jlcall_wrapper(lam, ast,
+            (llvm::Function*)lam->functionObjects.specFunctionObject, ctx.sret);
+        definitions->functionObject = fwrap;
+        if (declarations)
             declarations->functionObject = function_proto(fwrap);
-        }
     }
     else {
         f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
