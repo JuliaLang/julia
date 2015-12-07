@@ -125,7 +125,6 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 
 // thread ID
 JL_DLLEXPORT int jl_n_threads;     // # threads we're actually using
-JL_DLLEXPORT int jl_max_threads;   // # threads possible
 jl_thread_task_state_t *jl_all_task_states;
 
 // return calling thread's ID
@@ -278,14 +277,14 @@ void jl_init_threading(void)
     char *cp;
 
     // how many threads available, usable
-    jl_max_threads = jl_cpu_cores();
+    int max_threads = jl_cpu_cores();
     jl_n_threads = DEFAULT_NUM_THREADS;
     cp = getenv(NUM_THREADS_NAME);
     if (cp) {
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     }
-    if (jl_n_threads > jl_max_threads)
-        jl_n_threads = jl_max_threads;
+    if (jl_n_threads > max_threads)
+        jl_n_threads = max_threads;
 
     // set up space for per-thread heaps
     jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
@@ -533,7 +532,6 @@ void jl_init_threading(void)
 {
     static jl_thread_task_state_t _jl_all_task_states;
     jl_all_task_states = &_jl_all_task_states;
-    jl_max_threads = 1;
     jl_n_threads = 1;
 
 #if defined(__linux__) && defined(JL_USE_INTEL_JITEVENTS)
