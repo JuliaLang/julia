@@ -3543,3 +3543,37 @@ end
 # issue #14339
 f14339{T<:Union{}}(x::T, y::T) = 0
 @test_throws MethodError f14339(1, 2)
+
+# Make sure jlcall objects are rooted
+# PR #14301
+module JLCall14301
+
+# Define f
+f() = 1
+
+let i = Any[[1.23], [2.34]]
+    # f() with capture variables
+    # Intentionally type unstable so that the dynamic dispatch will
+    # read the corrupted tag if the object is incorrectly GC'd.
+    global f() = i[1][1] * i[2][1]
+end
+
+# Another function that use f()
+g() = f() * 100
+# Compile it
+g()
+
+let i = 9.0
+    # Override f()
+    global f() = i + 1
+end
+
+# Make sure the old f() method is GC'd if it was not rooted properly
+gc()
+gc()
+gc()
+
+# Run again.
+g()
+
+end
