@@ -544,7 +544,7 @@ function recompile_stale(mod, cachefile)
         error("module $mod not found in current path; removed orphaned cache file $cachefile")
     end
     if stale_cachefile(path, cachefile)
-        info("Recompiling stale cache file $cachefile for module $mod.")
+        isinteractive() && info("Recompiling stale cache file $cachefile for module $mod.")
         if !success(create_expr_cache(path, cachefile))
             error("Failed to precompile $mod to $cachefile")
         end
