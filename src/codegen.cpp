@@ -2408,13 +2408,12 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
             // attempt compile-time specialization for inferred types
             if (aty != NULL) {
                 rt1 = (jl_value_t*)jl_apply_tuple_type(aty);
-                /*
-                  if (trace) {
-                      jl_printf(JL_STDOUT, "call %s%s\n",
-                      jl_sprint(args[0]),
-                      jl_sprint((jl_value_t*)aty));
-                  }
-                */
+#ifdef JL_TRACE
+                jl_printf(JL_STDOUT, "call ");
+                jl_static_show(JL_STDOUT, args[0]);
+                jl_static_show(JL_STDOUT, (jl_value_t*)aty);
+                jl_printf(JL_STDOUT, "\n");
+#endif
                 f = jl_get_specialization(f, (jl_tupletype_t*)rt1);
                 if (f != NULL) {
                     assert(f->linfo->functionObject != NULL);
@@ -4415,7 +4414,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
     }
     assert(jl_is_expr(ast));
     sparams = jl_svec_tvars_to_symbols(lam->sparams);
-    //jl_printf((jl_value_t*)ast);
+    //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
     std::map<jl_sym_t*, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
