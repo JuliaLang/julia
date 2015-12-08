@@ -2110,8 +2110,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         }
 
         // 2. mark every object in a remembered binding
-        int n_bnd_refyoung = 0;
         FOR_EACH_HEAP () {
+            int n_bnd_refyoung = 0;
             for (int i = 0; i < rem_bindings.len; i++) {
                 jl_binding_t *ptr = (jl_binding_t*)rem_bindings.items[i];
                 // A null pointer can happen here when the binding is cleaned up
