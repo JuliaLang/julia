@@ -200,7 +200,9 @@ function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
             write(out, '0')
             ndigits += 1
         end
-        write(out, trailingzeros ? '.' : ' ')
+        if trailingzeros
+            write(out, '.')
+        end
     else # 0 < pt < ndigits
         # dd.dd0000
         ndigits -= pt
@@ -411,7 +413,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char, inside_g
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
     push!(blk.args, :(exp = pt-1))
-    expmark = c=='E' ? "E" : "e"
+    expmark = isupper(c) ? "E" : "e"
     if precision==0 && '#' in flags
         expmark = string(".",expmark)
     end
@@ -680,6 +682,17 @@ function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
 end
 
 function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print to fixed trailing precision
+    #  [g]: lower case e on scientific
+    #  [G]: Upper case e on scientific
+    #
+    # flags
+    #  (#): always print a decimal point
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    #
     x, ex, blk = special_handler(flags,width)
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,length(DIGITS)-1)
@@ -709,14 +722,9 @@ function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(width = $width))
     # need to compute value before left-padding since trailing zeros are elided
     push!(blk.args, :(tmpout = IOBuffer()))
-    push!(blk.args, :(if fprec > 0
-                          print_fixed(tmpout,fprec,pt,len,$('#' in flags))
-                      else
-                          write(tmpout, pointer(DIGITS), len)
-                          while pt >= (len+=1) write(tmpout,'0') end
-                      end))
+    push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
     push!(blk.args, :(tmpstr = takebuf_string(tmpout)))
-    push!(blk.args, :(if fprec > 0 width -= length(tmpstr); end ))
+    push!(blk.args, :(width -= length(tmpstr)))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
     else
