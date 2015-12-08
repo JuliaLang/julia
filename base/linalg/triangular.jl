@@ -35,7 +35,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
             return $t(B)
         end
 
-        copy{T,S}(A::$t{T,S}) = $t{T,S}(copy(A.data))
+        copy(A::$t) = $t(copy(A.data))
 
         big(A::$t) = $t(big(A.data))
 
@@ -257,23 +257,23 @@ function tril!(A::UnitLowerTriangular,k::Integer=0)
     return tril!(LowerTriangular(A.data),k)
 end
 
-transpose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(transpose(A.data))
-transpose{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(transpose(A.data))
-ctranspose{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(ctranspose(A.data))
-ctranspose{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(ctranspose(A.data))
+transpose(A::LowerTriangular) = UpperTriangular(transpose(A.data))
+transpose(A::UnitLowerTriangular) = UnitUpperTriangular(transpose(A.data))
+transpose(A::UpperTriangular) = LowerTriangular(transpose(A.data))
+transpose(A::UnitUpperTriangular) = UnitLowerTriangular(transpose(A.data))
+ctranspose(A::LowerTriangular) = UpperTriangular(ctranspose(A.data))
+ctranspose(A::UnitLowerTriangular) = UnitUpperTriangular(ctranspose(A.data))
+ctranspose(A::UpperTriangular) = LowerTriangular(ctranspose(A.data))
+ctranspose(A::UnitUpperTriangular) = UnitLowerTriangular(ctranspose(A.data))
 
-transpose!{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(copytri!(A.data, 'L'))
-transpose!{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(copytri!(A.data, 'L'))
-transpose!{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(copytri!(A.data, 'U'))
-transpose!{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(copytri!(A.data, 'U'))
-ctranspose!{T,S}(A::LowerTriangular{T,S}) = UpperTriangular{T, S}(copytri!(A.data, 'L' , true))
-ctranspose!{T,S}(A::UnitLowerTriangular{T,S}) = UnitUpperTriangular{T, S}(copytri!(A.data, 'L' , true))
-ctranspose!{T,S}(A::UpperTriangular{T,S}) = LowerTriangular{T, S}(copytri!(A.data, 'U' , true))
-ctranspose!{T,S}(A::UnitUpperTriangular{T,S}) = UnitLowerTriangular{T, S}(copytri!(A.data, 'U' , true))
+transpose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L'))
+transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L'))
+transpose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U'))
+transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U'))
+ctranspose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L' , true))
+ctranspose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true))
+ctranspose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true))
+ctranspose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true))
 
 diag(A::LowerTriangular) = diag(A.data)
 diag(A::UnitLowerTriangular) = ones(eltype(A), size(A,1))
