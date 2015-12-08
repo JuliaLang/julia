@@ -4,6 +4,9 @@ Julia v0.5.0 Release Notes
 New language features
 ---------------------
 
+  * `x ∈ X` is now a synonym for `x in X` in `for` loops and comprehensions,
+    as it already was in comparisons ([#13824]).
+
 Language changes
 ----------------
 
@@ -1589,6 +1592,7 @@ Too numerous to mention.
 [#7917]: https://github.com/JuliaLang/julia/issues/7917
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
+[#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8113]: https://github.com/JuliaLang/julia/issues/8113
 [#8135]: https://github.com/JuliaLang/julia/issues/8135
@@ -1736,6 +1740,8 @@ Too numerous to mention.
 [#13465]: https://github.com/JuliaLang/julia/issues/13465
 [#13496]: https://github.com/JuliaLang/julia/issues/13496
 [#13480]: https://github.com/JuliaLang/julia/issues/13480
+[#13496]: https://github.com/JuliaLang/julia/issues/13496
 [#13542]: https://github.com/JuliaLang/julia/issues/13542
 [#13680]: https://github.com/JuliaLang/julia/issues/13680
 [#13681]: https://github.com/JuliaLang/julia/issues/13681
+[#13824]: https://github.com/JuliaLang/julia/issues/13824
