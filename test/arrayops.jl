@@ -24,6 +24,15 @@ b = a+a
 @test isequal(1./[1,2,5], [1.0,0.5,0.2])
 @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
+@test isequal(2.%[1,2,3], [0,0,2])
+@test isequal([1,2,3].%2, [1,0,1])
+@test isequal(2.÷[1,2,3], [2,1,0])
+@test isequal([1,2,3].÷2, [0,1,1])
+@test isequal(-2.%[1,2,3], [0,0,-2])
+@test isequal([-1,-2,-3].%2, [-1,0,-1])
+@test isequal(-2.÷[1,2,3], [-2,-1,0])
+@test isequal([-1,-2,-3].÷2, [0,-1,-1])
+
 @test isequal(1.<<[1,2,5], [2,4,32])
 @test isequal(128.>>[1,2,5], [64,32,4])
 @test isequal(2.>>1, 1)

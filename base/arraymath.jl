@@ -104,6 +104,7 @@ end
 for (f,F) in ((:.+,  DotAddFun()),
           (:.-,  DotSubFun()),
           (:.*,  DotMulFun()),
+          (:.÷,  DotIDivFun()),
           (:.%,  DotRemFun()),
           (:.<<, DotLSFun()),
           (:.>>, DotRSFun()),
