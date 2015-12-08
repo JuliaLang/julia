@@ -17,7 +17,7 @@ Julia uses three calling conventions for four distinct purposes:
 +       +--------------+----------------------------------+
 |       |``jl_``       | Builtins                         |
 +-------+--------------+----------------------------------+
-+C ABI  |``jlcapi_``   | Wrapper callable from C          |
+|C ABI  |``jlcapi_``   | Wrapper callable from C          |
 +-------+--------------+----------------------------------+
 
 Julia Native Calling Convention
