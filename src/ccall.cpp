@@ -1323,8 +1323,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     //llvmf->dump();
-    //for (std::vector<Value *>::iterator it = argvals.begin() ; it != argvals.end(); ++it)
-    //    (*it)->dump();
+    //for (int i = 0; i < (nargs - 3) / 2 + sret; ++i)
+    //    argvals[i]->dump();
 
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
