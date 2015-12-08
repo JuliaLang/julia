@@ -148,6 +148,7 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 const % = rem
 .%(x::Real, y::Real) = x%y
 const ÷ = div
+.÷(x::Real, y::Real) = x÷y
 
 # mod returns in [0,y) or (y,0] (for negative y),
 # whereas mod1 returns in (0,y] or [y,0)
@@ -468,6 +469,8 @@ export
     $,
     %,
     .%,
+    ÷,
+    .÷,
     &,
     *,
     +,
@@ -510,7 +513,6 @@ export
     |>,
     <|,
     ~,
-    ÷,
     ⋅,
     ×,
     ∈,
@@ -534,10 +536,10 @@ export
     ctranspose,
     call
 
-import ..this_module: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose, call,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end
