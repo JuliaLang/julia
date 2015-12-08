@@ -3536,3 +3536,6 @@ let
     finalize(obj2)
     @test finalized == 4
 end
+
+# issue #14323
+@test_throws ErrorException eval(Expr(:body, :(1)))
