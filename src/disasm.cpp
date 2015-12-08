@@ -585,7 +585,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                     buf << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
                     Streamer->EmitRawText(buf.str());
 #else
-                    streamer << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
+                    stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
 #endif
 #elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
@@ -597,7 +597,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                     buf << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
                     Streamer->EmitRawText(buf.str());
 #else
-                    streamer << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
+                    stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
 #endif
 #endif
                 if (insSize == 0) // skip illegible bytes
