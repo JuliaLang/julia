@@ -212,6 +212,7 @@ include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")
+import .BLAS: gemv! # consider renaming gemv! in matmul
 include("linalg/matmul.jl")
 include("linalg/lapack.jl")
 
