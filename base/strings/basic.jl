@@ -48,6 +48,8 @@ sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary rep
 eltype{T<:AbstractString}(::Type{T}) = Char
 
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
+(.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
+(.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
 function length(s::AbstractString)
