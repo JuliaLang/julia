@@ -20,7 +20,7 @@ import ..Base: show, uv_error
 
 global CPU_CORES
 
-function init_sysinfo()
+function __init__()
     # set CPU core count
     global const CPU_CORES =
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
