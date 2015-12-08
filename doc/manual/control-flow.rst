@@ -484,7 +484,7 @@ explanation of variable scope and how it works in Julia.
 
 In general, the ``for`` loop construct can iterate over any container.
 In these cases, the alternative (but fully equivalent) keyword ``in``
-or `∈` is typically used instead of ``=``, since it makes the code read more
+or ``∈`` is typically used instead of ``=``, since it makes the code read more
 clearly:
 
 .. doctest::

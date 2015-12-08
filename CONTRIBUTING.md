@@ -151,6 +151,8 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - try to adhere to a 92 character line length limit
  - use upper camel case convention for modules, type names
  - use lower case with underscores for method names
+ - it is generally preferred to use ASCII operators and identifiers over
+   Unicode equivalents whenever possible
 
 #### General Formatting Guidelines For C code contributions
 
