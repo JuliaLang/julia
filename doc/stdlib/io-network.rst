@@ -40,6 +40,26 @@ General I/O
     a+   read, write, create, append
    ==== =================================
 
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
+
+   .. Docstring generated from Julia source
+
+   Start running ``command`` asynchronously, and return a tuple
+   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
+   reads from the process's standard output and ``stdio`` optionally
+   specifies the process's standard input stream.  If ``mode`` is
+   ``"w"``, then ``stream`` writes to the process's standard input
+   and ``stdio`` optionally specifies the process's standard output
+   stream.
+
+.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   .. Docstring generated from Julia source
+
+   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
+   on the resulting read or write stream, then closes the stream
+   and waits for the process to complete.  Returns the value returned
+   by ``f``.
 
 .. function:: open(f::Function, args...)
 
