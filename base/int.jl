@@ -34,11 +34,13 @@ for T in (Int8,Int16,Int32,Int64,Int128)
 end
 
 flipsign(x::Signed, y::Signed)  = flipsign(promote(x,y)...)
+flipsign(x::Signed, y::Float16) = flipsign(x, reinterpret(Int16,y))
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
 flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 
 copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
+copysign(x::Signed, y::Float16) = copysign(x, reinterpret(Int16,y))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
 copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
