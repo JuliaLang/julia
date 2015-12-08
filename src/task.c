@@ -764,16 +764,27 @@ JL_DLLEXPORT void gdblookup(ptrint_t ip)
     size_t inlinedat_line;
     char *inlinedat_file;
     frame_info_from_ip(&func_name, &file_name, &line_num, &inlinedat_file, &inlinedat_line, ip,
-                      /* skipC */ 0, /* skipInline */ 1);
+                      /* skipC */ 0, /* skipInline */ 0);
     if (line_num == ip) {
         jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
     }
-    else if (line_num == -1) {
-        jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
-    }
     else {
-        jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, file_name,
-                       (uintptr_t)line_num);
+        if (line_num != -1) {
+            jl_safe_printf("%s at %s:%" PRIuPTR "\n", inlinedat_file ? "[inline]" : func_name, file_name,
+                           (uintptr_t)line_num);
+        }
+        else {
+            jl_safe_printf("%s at %s (unknown line)\n", inlinedat_file ? "[inline]" : func_name, file_name);
+        }
+        if (inlinedat_file) {
+            if (inlinedat_line != -1) {
+                jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, inlinedat_file,
+                               (uintptr_t)inlinedat_line);
+            }
+            else {
+                jl_safe_printf("%s at %s (unknown line)\n", func_name, inlinedat_file);
+            }
+        }
     }
     free(func_name);
     free(file_name);
