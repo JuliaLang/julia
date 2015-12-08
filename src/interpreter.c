@@ -539,9 +539,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
                              int start, int toplevel)
 {
     jl_handler_t __eh;
-    size_t i=start;
+    size_t i=start, ns = jl_array_len(stmts);
 
     while (1) {
+        if (i >= ns)
+            jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
             i = label_idx(jl_gotonode_label(stmt), stmts);
