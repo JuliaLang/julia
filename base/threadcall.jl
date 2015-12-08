@@ -9,7 +9,7 @@ function notify_fun(idx)
 end
 
 function init_threadcall()
-    global const c_notify_fun = cfunction(notify_fun, Void, (Cint,))
+    global c_notify_fun = cfunction(notify_fun, Void, (Cint,))
 end
 
 """
