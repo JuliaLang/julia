@@ -3485,6 +3485,15 @@ end
 @test foo13855(Base.AddFun())() == Base.AddFun()
 @test foo13855(Base.MulFun())() == Base.MulFun()
 
+# issue #8487
+@test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
+let A = Array(Int, 4,3)
+    for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
+        A[i,j] = 17*i + 51*j
+    end
+    @test A == [17*i + 51*j for i ∈ 1:size(A,1), j ∈ 1:size(A,2)]
+end
+
 # check if finalizers for the old gen can be triggered manually
 # issue #13986
 let

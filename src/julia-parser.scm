@@ -1414,7 +1414,8 @@
                       r)
                      ((eq? r ':)
                       r)
-                     ((and (length= r 4) (eq? (car r) 'comparison) (eq? (caddr r) 'in))
+                     ((and (length= r 4) (eq? (car r) 'comparison)
+                           (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
                       `(= ,(cadr r) ,(cadddr r)))
                      (else
                       (error "invalid iteration specification")))))
