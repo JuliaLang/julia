@@ -93,7 +93,6 @@ function make_fastmath(expr::Expr)
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
-        info("FM: rewriting op $(expr.head) with $op")
         var = expr.args[1]
         rhs = expr.args[2]
         if isa(var, Symbol)
