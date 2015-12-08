@@ -41,12 +41,23 @@ for (typ, lt) in atomicintsmap
                 store atomic volatile $lt %1, $lt* %0 monotonic, align $WORD_SIZE
                 ret void
             """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
-    @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-        llvmcall($"""
-                %rv = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel monotonic
-                %bv = extractvalue { $lt, i1 } %rv, 1
-                ret i1 %bv
-            """, Bool, Tuple{Ptr{$typ},$typ,$typ}, unsafe_convert(Ptr{$typ}, x), cmp, new)
+    if VersionNumber(Base.libllvm_version) >= v"3.5"
+        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+            llvmcall($"""
+                     %rv = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel monotonic
+                     %bv = extractvalue { $lt, i1 } %rv, 1
+                     ret i1 %bv
+                     """, Bool, Tuple{Ptr{$typ},$typ,$typ},
+                     unsafe_convert(Ptr{$typ}, x), cmp, new)
+    else
+        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+            llvmcall($"""
+                     %rv = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel
+                     %bv = icmp eq $lt %1, %rv
+                     ret i1 %bv
+                     """, Bool, Tuple{Ptr{$typ},$typ,$typ},
+                     unsafe_convert(Ptr{$typ}, x), cmp, new)
+    end
     for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = symbol("atomic_", rmw, "!")
@@ -61,4 +72,3 @@ for (typ, lt) in atomicintsmap
                 """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
     end
 end
-
