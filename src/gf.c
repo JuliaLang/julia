@@ -1855,8 +1855,8 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 }
 #endif
 
-
-JL_CALLABLE(jl_apply_generic)
+static jl_function_t *jl_specialize_generic(jl_value_t *F, jl_value_t **args,
+                                            uint32_t nargs, int *specialized)
 {
     assert(jl_is_gf(F));
     jl_methtable_t *mt = jl_gf_mtable(F);
@@ -1882,7 +1882,8 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc != jl_bottom_func) {
 #ifdef JL_TRACE
         if (traceen)
-            jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
+            jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name,
+                      mfunc->linfo->line);
 #endif
         if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
@@ -1895,10 +1896,12 @@ JL_CALLABLE(jl_apply_generic)
                     li->unspecialized->env = NULL;
                 jl_gc_wb(li, li->unspecialized);
             }
-            return jl_apply_unspecialized(mfunc, args, nargs);
+            *specialized = 0;
+            return mfunc;
         }
         assert(!mfunc->linfo || !mfunc->linfo->inInference);
-        return jl_apply(mfunc, args, nargs);
+        *specialized = 1;
+        return mfunc;
     }
 
     // cache miss case
@@ -1922,7 +1925,107 @@ JL_CALLABLE(jl_apply_generic)
         jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
 #endif
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
-    jl_value_t *res = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    *specialized = 1;
+    return mfunc;
+}
+
+JL_CALLABLE(jl_apply_generic)
+{
+    int specialized = 0;
+    jl_function_t *mfunc = jl_specialize_generic(F, args, nargs, &specialized);
+    JL_GC_PUSH1(&mfunc);
+    jl_value_t *res;
+    if (specialized) {
+        res = jl_apply(mfunc, args, nargs);
+    }
+    else {
+        res = jl_apply_unspecialized(mfunc, args, nargs);
+    }
+    JL_GC_POP();
+    return res;
+}
+
+static void jl_gf_update_callsite_cache(jl_value_t *F, jl_value_t **args,
+                                        uint32_t nargs, uint64_t mask,
+                                        void **cache, jl_lambda_info_t *linfo,
+                                        size_t root_offset,
+                                        jl_function_t *mfunc)
+{
+    assert(nargs < 64);
+    // Check if the specialization is cachable and record the types
+    void *cache_entry[64];
+    int cache_size = 0;
+    if (!(mask & 1)) {
+        cache_entry[0] = F;
+        cache_size++;
+    }
+    for (uint32_t i = 0;i < nargs;i++) {
+        if ((mask >> (i + 1)) & 1)
+            continue;
+        if (jl_is_type(args[i]))
+            return;
+        cache_entry[cache_size] = jl_typeof(args[i]);
+        cache_size++;
+    }
+    // Find a cache line to use and reset the counters
+    int cache_line = 0;
+    uintptr_t min_count = -1;
+    uintptr_t second_min_count = -1;
+    void **cache_results = cache + cache_size * JL_GF_CALLSITE_CACHE_SIZE;
+    for (int i = 0;i < JL_GF_CALLSITE_CACHE_SIZE;i++) {
+        uintptr_t count = (uintptr_t)cache_results[2 * i + 1];
+        if (count < min_count) {
+            second_min_count = min_count;
+            min_count = count;
+            cache_line = i;
+        }
+        cache_results[2 * i + 1] = (void*)(count >> 1);
+    }
+    // Fill the cache
+    cache_results[2 * cache_line] = mfunc;
+    cache_results[2 * cache_line + 1] = (void*)second_min_count;
+    memcpy(cache + cache_line * cache_size,
+           cache_entry, cache_size * sizeof(void*));
+    // Fill the GC root
+    jl_array_t *cache_roots = linfo->dynRoots;
+    root_offset += (cache_size + 1) * cache_line;
+    for (int i = 0;i < cache_size;i++) {
+        jl_cellset(cache_roots, root_offset + i, cache_entry[i]);
+    }
+    jl_cellset(cache_roots, root_offset + cache_size, mfunc);
+}
+
+/**
+ * Layout of the mask:
+ *     [known argument types in reverse direction 63bits][known function 1bit]
+ *
+ * Layout of the cache:
+ *     [n x [[function object if not constant (jl_function_t*)]
+ *           [m x [typeof of the argument if not known (jl_datatype_t*)]]]]
+ *     [n x [[specialized function object]
+ *           [counter for cache management (uintptr_t)]]
+ */
+DLLEXPORT jl_value_t *jl_apply_cached(jl_value_t *F, jl_value_t **args,
+                                      uint32_t nargs, uint64_t mask,
+                                      void **cache, jl_lambda_info_t *linfo,
+                                      size_t root_offset)
+{
+    int specialized = 0;
+    jl_function_t *mfunc = jl_specialize_generic(F, args, nargs, &specialized);
+    JL_GC_PUSH1(&mfunc);
+
+    if (specialized)
+        jl_gf_update_callsite_cache(F, args, nargs, mask, cache, linfo,
+                                    root_offset, mfunc);
+
+    jl_value_t *res;
+    if (specialized) {
+        res = jl_apply(mfunc, args, nargs);
+    }
+    else {
+        res = jl_apply_unspecialized(mfunc, args, nargs);
+    }
     JL_GC_POP();
     return res;
 }

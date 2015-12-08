@@ -493,6 +493,7 @@ static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlnsvec_func;
 static Function *jlapplygeneric_func;
+static Function *jlapplycached_func;
 static Function *jlgetfield_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
@@ -2109,6 +2110,21 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     JL_GC_POP();
 }
 
+static size_t jl_reserve_linfo_slots(jl_lambda_info_t *li, size_t num)
+{
+    li = li->def;
+    if (li->dynRoots == NULL) {
+        li->dynRoots = jl_alloc_cell_1d(num);
+        jl_gc_wb(li, li->dynRoots);
+        return 0;
+    }
+    else {
+        size_t rlen = jl_array_dim0(li->dynRoots);
+        jl_array_grow_end(li->dynRoots, num);
+        return rlen;
+    }
+}
+
 static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 {
     assert(jl_is_lambda_info(expr));
@@ -2972,6 +2988,209 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
     return emit_jlcall(theFptr, theF, argStart, nargs, ctx);
 }
 
+static Value *emit_saturated_inc(Value *v, Type *t, jl_codectx_t *ctx)
+{
+    Value *sat = builder.CreateICmpEQ(v, ConstantInt::get(t, -1));
+    BasicBlock *curBB = builder.GetInsertBlock();
+    BasicBlock *incBB = BasicBlock::Create(getGlobalContext(), "inc", ctx->f);
+    BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "incmerge");
+    builder.CreateCondBr(sat, mergeBB, incBB);
+    builder.SetInsertPoint(incBB);
+
+    Value *inc = builder.CreateAdd(v, ConstantInt::get(t, 1));
+    builder.CreateBr(mergeBB);
+
+    ctx->f->getBasicBlockList().push_back(mergeBB);
+    builder.SetInsertPoint(mergeBB);
+
+    PHINode *res = builder.CreatePHI(t, 2);
+    res->addIncoming(ConstantInt::get(t, -1), curBB);
+    res->addIncoming(inc, incBB);
+    return res;
+}
+
+static void emit_cache_keys(Value **keys, Value *theF, int argStart,
+                            size_t nargs, uint64_t mask, jl_codectx_t *ctx)
+{
+    int entry_idx = 0;
+    if (!(mask & 1)) {
+        entry_idx++;
+        keys[0] = builder.CreateBitCast(theF, T_pint8);
+    }
+    for (int i = 0;i < nargs;i++) {
+        if (!((mask >> (i + 1)) & 1)) {
+            Value *value = builder.CreateLoad(emit_temp_slot(argStart + i, ctx));
+            keys[entry_idx] = builder.CreateBitCast(emit_typeof(value), T_pint8);
+            entry_idx++;
+        }
+    }
+}
+
+static Value *emit_apply_cached(Value *theF, int argStart, size_t nargs,
+                                jl_codectx_t *ctx, uint64_t mask,
+                                int cache_size)
+{
+    // Pseudocode:
+    //     static void *cache_keys[JL_GF_CALLSITE_CACHE_SIZE][cache_size];
+    //     static void *cache_res[JL_GF_CALLSITE_CACHE_SIZE][2];
+    //     void *key = {...};
+    //     jl_value_t *res;
+    //     for (int i = 0;i < JL_GF_CALLSITE_CACHE_SIZE;i++) {
+    //         if (compare_key(cache_keys[i], key)) {
+    //             inc_count(cache_res[i]);
+    //             jl_function_t *mfunc = cache_res[i][1];
+    //             res = mfunc->fptr(mfunc, ...);
+    //             goto end;
+    //         }
+    //     }
+    //     res = jl_apply_cached(...);
+    // end:
+    std::stringstream gvname;
+    gvname << "jl_callsite_cache#" << globalUnique++;
+    size_t cache_keys_size = JL_GF_CALLSITE_CACHE_SIZE * cache_size;
+    ArrayType *cacheGVType = ArrayType::get(T_pint8, cache_keys_size +
+                                            JL_GF_CALLSITE_CACHE_SIZE * 2);
+    // FIXME: This should be TLS
+    GlobalVariable *cache_gv =
+        new GlobalVariable(*jl_Module, cacheGVType, false,
+                           GlobalVariable::InternalLinkage,
+                           ConstantAggregateZero::get(cacheGVType),
+                           gvname.str());
+    cache_gv->setAlignment(16);
+
+    Value *cache_keys = builder.CreateBitCast(cache_gv, T_ppint8);
+    Value *cache_vals = builder.CreateConstGEP1_32(cache_keys, cache_keys_size);
+    BasicBlock *curBB = builder.GetInsertBlock();
+    BasicBlock *matchBB = BasicBlock::Create(getGlobalContext(), "matchsig",
+                                             ctx->f);
+    BasicBlock *hitBB = BasicBlock::Create(getGlobalContext(), "cachehit");
+    BasicBlock *missBB = BasicBlock::Create(getGlobalContext(), "cachemiss");
+    BasicBlock *slowBB = BasicBlock::Create(getGlobalContext(), "slowpath");
+    BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "cachemerge");
+
+    // Generate key
+    Value *key[63];
+    emit_cache_keys(key, theF, argStart, nargs, mask, ctx);
+    builder.CreateBr(matchBB);
+
+    builder.SetInsertPoint(matchBB);
+    // Loop variable
+    PHINode *cache_idx = builder.CreatePHI(T_int32, 2);
+    cache_idx->addIncoming(ConstantInt::get(T_int32, 0), curBB);
+    // Compare keys
+    Value *keys_offset = builder.CreateMul(cache_idx,
+                                           ConstantInt::get(T_int32,
+                                                            cache_size));
+    Value *key_entry = builder.CreateGEP(cache_keys, keys_offset);
+    Value *match_res = ConstantInt::get(T_int1, 1);
+    for (int i = 0;i < cache_size;i++) {
+        Value *entry_ele =
+            builder.CreateLoad(builder.CreateConstGEP1_32(key_entry, i));
+        Value *cmp_ele = builder.CreateICmpEQ(key[i], entry_ele);
+        match_res = builder.CreateAnd(match_res, cmp_ele);
+    }
+    // match_res = ConstantInt::get(T_int1, 0);
+    builder.CreateCondBr(match_res, hitBB, missBB);
+
+    ctx->f->getBasicBlockList().push_back(hitBB);
+    builder.SetInsertPoint(hitBB);
+    // Call function
+    Value *vals_offset = builder.CreateMul(cache_idx,
+                                           ConstantInt::get(T_int32, 2));
+    Value *val_entry = builder.CreateGEP(cache_vals, vals_offset);
+    Value *val_cnt = builder.CreateConstGEP1_32(val_entry, 1);
+    Value *theHitF = builder.CreateBitCast(builder.CreateLoad(val_entry),
+                                           T_pjlvalue);
+    Value *count = builder.CreatePtrToInt(builder.CreateLoad(val_cnt), T_size);
+    count = emit_saturated_inc(count, T_size, ctx);
+    builder.CreateStore(builder.CreateIntToPtr(count, T_pint8), val_cnt);
+    Value *theHitFptr =
+        emit_nthptr_recast(theHitF,
+                           (ssize_t)(offsetof(jl_function_t, fptr) /
+                                     sizeof(void*)),
+                           tbaa_func, jl_pfptr_llvmt);
+    Value *hit_res = emit_jlcall(theHitFptr, theHitF, argStart, nargs, ctx);
+
+    hitBB = builder.GetInsertBlock();
+    builder.CreateBr(mergeBB);
+
+    ctx->f->getBasicBlockList().push_back(missBB);
+    builder.SetInsertPoint(missBB);
+    Value *idx_inc = builder.CreateAdd(cache_idx, ConstantInt::get(T_int32, 1));
+    Value *loop_end =
+        builder.CreateICmpEQ(ConstantInt::get(T_int32,
+                                              JL_GF_CALLSITE_CACHE_SIZE),
+                             idx_inc);
+    builder.CreateCondBr(loop_end, slowBB, matchBB);
+    cache_idx->addIncoming(idx_inc, missBB);
+
+    ctx->f->getBasicBlockList().push_back(slowBB);
+    builder.SetInsertPoint(slowBB);
+    Value *myargs;
+    if (nargs > 0)
+        myargs = emit_temp_slot(argStart, ctx);
+    else
+        myargs = Constant::getNullValue(T_ppjlvalue);
+    size_t root_num = JL_GF_CALLSITE_CACHE_SIZE * (cache_size + 1);
+#ifdef LLVM37
+    Value *slow_res = builder.CreateCall(
+        prepare_call(jlapplycached_func), {theF, myargs,
+                ConstantInt::get(T_int32, nargs),
+                ConstantInt::get(T_int64, mask), cache_keys,
+                literal_pointer_val((jl_value_t*)ctx->linfo->def),
+                ConstantInt::get(T_size, jl_reserve_linfo_slots(ctx->linfo,
+                                                                root_num))});
+#else
+    Value *slowArgs[] = {
+        theF, myargs, ConstantInt::get(T_int32, nargs),
+        ConstantInt::get(T_int64, mask), cache_keys,
+        literal_pointer_val((jl_value_t*)ctx->linfo->def),
+        ConstantInt::get(T_size, jl_reserve_linfo_slots(ctx->linfo, root_num))
+    };
+    Value *slow_res = builder.CreateCall(prepare_call(jlapplycached_func),
+                                         ArrayRef<Value*>(&slowArgs[0], 7));
+#endif
+    slowBB = builder.GetInsertBlock();
+    builder.CreateBr(mergeBB);
+
+    ctx->f->getBasicBlockList().push_back(mergeBB);
+    builder.SetInsertPoint(mergeBB);
+    PHINode *res = builder.CreatePHI(T_pjlvalue, 2);
+    res->addIncoming(hit_res, hitBB);
+    res->addIncoming(slow_res, slowBB);
+    // ctx->f->dump();
+    return res;
+}
+
+static Value *emit_apply_cached(jl_function_t *f, Value *theF,
+                                jl_value_t **args, size_t nargs,
+                                jl_codectx_t *ctx)
+{
+    // emit arguments
+    bool cacheable = true;
+    uint64_t mask = f ? 1 : 0;
+    int cache_size = f ? 0 : 1;
+    int argStart = ctx->gc.argDepth;
+    for (size_t i = 0;i < nargs;i++) {
+        jl_cgval_t anArg = emit_expr(args[i], ctx, true, true);
+        jl_value_t *t = anArg.typ;
+        if (jl_type_is_type(t)) {
+            cacheable = false;
+        }
+        else if (jl_is_leaf_type(t)) {
+            mask |= uint64_t(1) << (i + 1);
+        }
+        else {
+            cache_size++;
+        }
+        // put into argument space
+        make_gcroot(boxed(anArg, ctx, expr_type(args[i], ctx)), ctx);
+    }
+    if (!cacheable || cache_size == 0)
+        return emit_jlcall(jlapplygeneric_func, theF, argStart, nargs, ctx);
+    return emit_apply_cached(theF, argStart, nargs, ctx, mask, cache_size);
+}
+
 static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value *theFptr,
                                         bool specialized,
                                         jl_value_t **args, size_t nargs,
@@ -3044,7 +3263,15 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
         call->setAttributes(cf->getAttributes());
         return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty);
     }
-    return mark_julia_type(emit_jlcall(theFptr, theF, &args[1], nargs, ctx), true, jl_any_type); // (typ will be patched up by caller)
+    Value *res;
+    if (theFptr == jlapplygeneric_func && nargs <= 63) {
+        res = emit_apply_cached(f, theF, &args[1], nargs, ctx);
+    }
+    else {
+        res = emit_jlcall(theFptr, theF, &args[1], nargs, ctx);
+    }
+    // (typ will be patched up by caller)
+    return mark_julia_type(res, true, jl_any_type);
 }
 
 static Value *emit_is_function(Value *x, jl_codectx_t *ctx)
@@ -3143,8 +3370,23 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         int argStart = ctx->gc.argDepth;
         Value *theFunc = boxed(emit_expr(args[0], ctx), ctx);
         make_gcroot(theFunc, ctx);
-        for(size_t i=0; i < nargs; i++) {
+        // For the call overloading version
+        bool cacheable = nargs <= 62;
+        uint64_t cache_mask = 1;
+        int cache_size = 1;
+        for (size_t i = 0;i < nargs;i++) {
             jl_cgval_t anArg = emit_expr(args[i+1], ctx);
+            jl_value_t *t = anArg.typ;
+            // put into argument space
+            if (jl_type_is_type(t)) {
+                cacheable = false;
+            }
+            else if (jl_is_leaf_type(t)) {
+                cache_mask |= uint64_t(1) << (i + 2);
+            }
+            else {
+                cache_size += 1;
+            }
             // put into argument space
             make_gcroot(boxed(anArg, ctx, expr_type(args[i+1],ctx)), ctx);
         }
@@ -3174,26 +3416,23 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         ctx->f->getBasicBlockList().push_back(elseBB1);
         builder.SetInsertPoint(elseBB1);
         // not function
-        myargs = emit_temp_slot(argStart, ctx);
         jl_value_t *call_func = (jl_value_t*)jl_module_call_func(ctx->module);
         Value *r2;
         if (!jl_is_gf(call_func)) {
             just_emit_error("\"call\" is not a generic function", ctx);
             r2 = UndefValue::get(T_pjlvalue);
         }
-        else {
-#ifdef LLVM37
-            r2 = builder.CreateCall(prepare_call(jlapplygeneric_func),
-                                    {literal_pointer_val(call_func),
-                                     myargs,
-                                     ConstantInt::get(T_int32, nargs + 1)});
-#else
-            r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
-                                     literal_pointer_val(call_func),
-                                     myargs,
-                                     ConstantInt::get(T_int32, nargs + 1));
-#endif
+        else if (cacheable && cache_size) {
+            r2 = emit_apply_cached(literal_pointer_val(call_func), argStart,
+                                   nargs + 1, ctx, cache_mask, cache_size);
         }
+        else {
+            r2 = emit_jlcall(jlapplygeneric_func,
+                             literal_pointer_val(call_func), argStart,
+                             nargs + 1, ctx);
+        }
+        // emit_apply_cached could insert new blocks
+        elseBB1 = builder.GetInsertBlock();
         builder.CreateBr(mergeBB1);
         ctx->f->getBasicBlockList().push_back(mergeBB1);
         builder.SetInsertPoint(mergeBB1);
@@ -5866,6 +6105,19 @@ static void init_julia_llvm_env(Module *m)
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_get_field];
     jlapplygeneric_func = jlcall_func_to_llvm("jl_apply_generic", (void*)&jl_apply_generic, m);
+
+    std::vector<Type*> applycachedargs(0);
+    applycachedargs.push_back(T_pjlvalue);
+    applycachedargs.push_back(T_ppjlvalue);
+    applycachedargs.push_back(T_uint32);
+    applycachedargs.push_back(T_uint64);
+    applycachedargs.push_back(T_ppint8);
+    applycachedargs.push_back(T_pjlvalue);
+    applycachedargs.push_back(T_size);
+    jlapplycached_func = Function::Create(
+        FunctionType::get(T_pjlvalue, applycachedargs, false),
+        Function::ExternalLinkage, "jl_apply_cached", m);
+    add_named_global(jlapplycached_func, (void*)&jl_apply_cached);
 
     jltypeassert_func = Function::Create(FunctionType::get(T_void, two_pvalue_llvmt, false),
                                         Function::ExternalLinkage,
