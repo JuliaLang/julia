@@ -17,6 +17,12 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
+for s1 in (-1,+1), s2 in (-1,+1)
+    @test flipsign(Int16(3s1), Float16(3s2)) === Int16(3s1*s2)
+    @test flipsign(Int32(3s1), Float32(3s2)) === Int32(3s1*s2)
+    @test flipsign(Int64(3s1), Float64(3s2)) === Int64(3s1*s2)
+end
+
 @test signed(3) == 3
 @test signed(UInt(3)) == 3
 @test isa(signed(UInt(3)), Int)
