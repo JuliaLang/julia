@@ -222,6 +222,7 @@ include("i18n.jl")
 using .I18n
 
 # frontend
+include("initdefs.jl")
 include("Terminals.jl")
 include("LineEdit.jl")
 include("REPLCompletions.jl")

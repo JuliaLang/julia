@@ -21,6 +21,11 @@ const cd = Dir.cd
 dir(path...) = Dir.path(path...)
 init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
 
+function __init__()
+    vers = "v$(VERSION.major).$(VERSION.minor)"
+    unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
+end
+
 edit() = cd(Entry.edit)
 rm(pkg::AbstractString) = cd(Entry.rm,pkg)
 add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
