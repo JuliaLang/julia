@@ -23,13 +23,17 @@ can be increased by setting the `UV_THREADPOOL_SIZE` environment variable and
 restarting the `julia` process.
 """
 macro threadcall(f, rettype, argtypes, argvals...)
-    f = esc(f)
-    rettype = esc(rettype)
-    argvals = map(esc, argvals)
+    # check for usage errors
     isa(argtypes,Expr) && argtypes.head == :tuple ||
-        error("syntax: threadcall argument types must be a tuple; try \"(T,)\"")
+        error("threadcall: argument types must be a tuple")
     length(argtypes.args) == length(argvals) ||
         error("threadcall: wrong number of arguments to C function")
+
+    # hygiene escape arguments
+    f = esc(f)
+    rettype = esc(rettype)
+    argtypes = map(esc, argtypes.args)
+    argvals = map(esc, argvals)
 
     # construct non-allocating wrapper to call C function
     wrapper = :(function wrapper(args_ptr::Ptr{Void}, retval_ptr::Ptr{Void})
@@ -37,40 +41,39 @@ macro threadcall(f, rettype, argtypes, argvals...)
     end)
     body = wrapper.args[2].args
     args = Symbol[]
-    for (i,T) in enumerate(argtypes.args)
+    for (i,T) in enumerate(argtypes)
         arg = symbol("arg$i")
         push!(body, :($arg = unsafe_load(convert(Ptr{$T}, p))))
         push!(body, :(p += sizeof($T)))
         push!(args, arg)
     end
-    push!(body, :(ret = ccall($f, $rettype, ($(argtypes.args...),), $(args...))))
+    push!(body, :(ret = ccall($f, $rettype, ($(argtypes...),), $(args...))))
     push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
     push!(body, :(return sizeof($rettype)))
 
-    # generate code to fill an argument buffer
-    filler = Any[]
-    push!(filler, :(args_size = 0))
-    for T in argtypes.args
-        push!(filler, :(args_size += sizeof($T)))
-    end
-    push!(filler, :(args_arr = Array{UInt8}(args_size)))
-    push!(filler, :(ptr = pointer(args_arr)))
-    for (T, arg) in zip(argtypes.args, argvals)
-        push!(filler, :(unsafe_store!(convert(Ptr{$T}, ptr), convert($T, $arg))))
-        push!(filler, :(ptr += sizeof($arg)))
-    end
-
+    # return code to generate wrapper function and send work request thread queue
     :(let
-        $wrapper # generate wrapper function
-        $(filler...) # fill the argument buffer
-        do_threadcall(wrapper, $rettype, args_arr)
+        $wrapper
+        do_threadcall(wrapper, $rettype, Any[$(argtypes...)], Any[$(argvals...)])
     end)
 end
 
-function do_threadcall(wrapper::Function, rettype::Type, args_arr::Vector{UInt8})
-    # create return buffer, generate function pointer
-    ret_arr = Array(UInt8, sizeof(rettype))
+function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argvals::Vector)
+    # generate function pointer
     fun_ptr = cfunction(wrapper, Int, (Ptr{Void}, Ptr{Void}))
+
+    # cconvert, root and unsafe_convert arguments
+    roots = Any[]
+    args_arr = Array{UInt8}(sum(sizeof, argtypes))
+    ptr = pointer(args_arr)
+    for (T, x) in zip(argtypes, argvals)
+        y = cconvert(T, x)
+        push!(roots, y)
+        unsafe_store!(convert(Ptr{T}, ptr), unsafe_convert(T, y))
+    end
+
+    # create return buffer
+    ret_arr = Array(UInt8, sizeof(rettype))
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
