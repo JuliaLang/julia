@@ -145,6 +145,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy. ``cholfact!`` can also reuse the symbolic factorization from a different matrix ``F`` with the same structure when used as: ``cholfact!(F::CholmodFactor, A)``.
 
+.. currentmodule:: Base.LinAlg
+
+.. function:: update(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+   .. Docstring generated from Julia source
+
+   Update a Cholesky factorization ``C`` with the vector ``v``\ . If ``A = C[:U]'C[:U]`` then ``CC = cholfact(C[:U]'C[:U] + v*v')`` but the computation of ``CC`` only uses ``O(n^2)`` operations.
+
+.. function:: downdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+   .. Docstring generated from Julia source
+
+   Downdate a Cholesky factorization ``C`` with the vector ``v``\ . If ``A = C[:U]'C[:U]`` then ``CC = cholfact(C[:U]'C[:U] - v*v')`` but the computation of ``CC`` only uses ``O(n^2)`` operations.
+
+.. function:: update!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+   .. Docstring generated from Julia source
+
+   Update a Cholesky factorization ``C`` with the vector ``v``\ . If ``A = C[:U]'C[:U]`` then ``CC = cholfact(C[:U]'C[:U] + v*v')`` but the computation of ``CC`` only uses ``O(n^2)`` operations. The input factorization ``C`` is updated in place such that on exit ``C == CC``\ . The vector ``v`` is destroyed during the computation.
+
+.. function:: downdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+   .. Docstring generated from Julia source
+
+   Downdate a Cholesky factorization ``C`` with the vector ``v``\ . If ``A = C[:U]'C[:U]`` then ``CC = cholfact(C[:U]'C[:U] - v*v')`` but the computation of ``CC`` only uses ``O(n^2)`` operations. The input factorization ``C`` is updated in place such that on exit ``C == CC``\ . The vector ``v`` is destroyed during the computation.
+
+.. currentmodule:: Base
+
 .. function:: ldltfact(::SymTridiagonal) -> LDLt
 
    .. Docstring generated from Julia source
