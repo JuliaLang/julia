@@ -2,6 +2,14 @@
 
 # fast math
 
+# check expansions
+
+@test macroexpand(:(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
+@test macroexpand(:(@fastmath +)) == :(Base.FastMath.add_fast)
+@test macroexpand(:(@fastmath min(1))) == :(Base.FastMath.min_fast(1))
+@test macroexpand(:(@fastmath min)) == :(Base.FastMath.min_fast)
+@test macroexpand(:(@fastmath x.min)) == :(x.min)
+
 # basic arithmetic
 
 const one32 = one(Float32)

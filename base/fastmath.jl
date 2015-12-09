@@ -88,14 +88,17 @@ const rewrite_op =
          :^= => :^)
 
 function make_fastmath(expr::Expr)
+    if expr.head === :quote
+        return expr
+    end
     op = get(rewrite_op, expr.head, :nothing)
-    if op != :nothing
+    if op !== :nothing
         var = expr.args[1]
         rhs = expr.args[2]
         if isa(var, Symbol)
             # simple assignment
-            expr = :($var = $(op)($var, $rhs))
-        elseif isa(var, Expr) && var.head == :ref
+            expr = :($var = $op($var, $rhs))
+        elseif isa(var, Expr) && var.head === :ref
             # array reference
             arr = var.args[1]
             inds = tuple(var.args[2:end]...)
@@ -104,7 +107,7 @@ function make_fastmath(expr::Expr)
             expr = quote
                 $(Expr(:(=), arrvar, arr))
                 $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
-                $(arrvar)[$(indvars...)] = $(op)($(arrvar)[$(indvars...)], $rhs)
+                $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
             end
         end
     end
@@ -112,17 +115,16 @@ function make_fastmath(expr::Expr)
 end
 function make_fastmath(symb::Symbol)
     fast_symb = get(fast_op, symb, :nothing)
-    if fast_symb == :nothing
+    if fast_symb === :nothing
         return symb
     end
-    :(Base.FastMath.$(fast_symb))
+    :(Base.FastMath.$fast_symb)
 end
 make_fastmath(expr) = expr
 
 macro fastmath(expr)
     make_fastmath(esc(expr))
 end
-
 
 
 
