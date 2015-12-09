@@ -1059,7 +1059,7 @@ export
     promote_type,
     subtypes,
     instances,
-    super,
+    supertype,
     typeintersect,
     typejoin,
     widen,

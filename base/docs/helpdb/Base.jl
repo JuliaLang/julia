@@ -7416,11 +7416,11 @@ The inverse of `ind2sub`, returns the linear index corresponding to the provided
 sub2ind
 
 """
-    super(T::DataType)
+    supertype(T::DataType)
 
 Return the supertype of DataType `T`.
 """
-super
+supertype
 
 """
     readline(stream=STDIN)

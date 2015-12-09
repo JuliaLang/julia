@@ -1228,29 +1228,29 @@ As it happens, types are all composite values and thus all have a type of
 
 :obj:`DataType` is its own type.
 
-Another operation that applies to some types is :func:`super`, which
+Another operation that applies to some types is :func:`supertype`, which
 reveals a type's supertype.
 Only declared types (:obj:`DataType`) have unambiguous supertypes:
 
 .. doctest::
 
-    julia> super(Float64)
+    julia> supertype(Float64)
     AbstractFloat
 
-    julia> super(Number)
+    julia> supertype(Number)
     Any
 
-    julia> super(AbstractString)
+    julia> supertype(AbstractString)
     Any
 
-    julia> super(Any)
+    julia> supertype(Any)
     Any
 
-If you apply :func:`super` to other type objects (or non-type objects), a
+If you apply :func:`supertype` to other type objects (or non-type objects), a
 :exc:`MethodError` is raised::
 
-    julia> super(Union{Float64,Int64})
-    ERROR: `super` has no method matching super(::Type{Union{Float64,Int64}})
+    julia> supertype(Union{Float64,Int64})
+    ERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})
 
 "Value types"
 -------------
