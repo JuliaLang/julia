@@ -918,3 +918,6 @@ function tty_size()
     end
     return iosize()
 end
+
+#14335
+@deprecate super(T::DataType) supertype(T)
