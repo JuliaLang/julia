@@ -855,6 +855,10 @@ checked_iintrinsic_fast(LLVMSub_sov, check_ssub, sub, checked_ssub,  )
 checked_iintrinsic_fast(LLVMSub_uov, check_usub, sub, checked_usub, u)
 checked_iintrinsic_slow(LLVMMul_sov, checked_smul,  )
 checked_iintrinsic_slow(LLVMMul_uov, checked_umul, u)
+checked_iintrinsic_slow(LLVMDiv_sov, checked_sdiv,  )
+checked_iintrinsic_slow(LLVMDiv_uov, checked_udiv, u)
+checked_iintrinsic_slow(LLVMRem_sov, checked_srem,  )
+checked_iintrinsic_slow(LLVMRem_uov, checked_urem, u)
 
 JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
 {
