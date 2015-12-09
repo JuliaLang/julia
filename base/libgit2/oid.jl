@@ -71,12 +71,12 @@ Base.string(id::Oid) = hex(id)
 
 Base.show(io::IO, id::Oid) = print(io, "Oid($(string(id)))")
 
-Base.hash(id::Oid) = hash(id.val)
+Base.hash(id::Oid, h::UInt) = hash(id.val, h)
 
-cmp(id1::Oid, id2::Oid) = int(ccall((:git_oid_cmp, :libgit2), Cint,
-                                         (Ptr{Oid}, Ptr{Oid}), Ref(id1), Ref(id2)))
+cmp(id1::Oid, id2::Oid) = Int(ccall((:git_oid_cmp, :libgit2), Cint,
+                                    (Ptr{Oid}, Ptr{Oid}), Ref(id1), Ref(id2)))
 
-Base.isequal(id1::Oid, id2::Oid) = cmp(id1, id2) == 0
+==(id1::Oid, id2::Oid) = cmp(id1, id2) == 0
 Base.isless(id1::Oid, id2::Oid)  = cmp(id1, id2) < 0
 
 function iszero(id::Oid)
@@ -87,5 +87,3 @@ function iszero(id::Oid)
 end
 
 Base.zero(::Type{Oid}) = Oid()
-
-Base.isequal(id1::Oid, id2::Oid) = id1.val == id2.val
