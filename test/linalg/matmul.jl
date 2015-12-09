@@ -59,6 +59,9 @@ A = rand(1:20, 5, 5) .- 10
 B = rand(1:20, 5, 5) .- 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
+v = [1,2]
+C = Array(Int, 2, 2)
+@test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
 
 # Preallocated
 C = Array(Int, size(A, 1), size(B, 2))
