@@ -404,13 +404,125 @@ invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
 invdigamma(x::Real) = invdigamma(Float64(x))
 @vectorize_1arg Real invdigamma
 
-function beta(x::Number, w::Number)
-    yx, sx = lgamma_r(x)
-    yw, sw = lgamma_r(w)
-    yxw, sxw = lgamma_r(x+w)
-    return exp(yx + yw - yxw) * (sx*sw*sxw)
+
+const MAXGAM = 171.624376956302725
+const ASYMP_FACTOR = 1e6
+
+function beta(a::Number, b::Number)
+    a <= 0.0 && isinteger(a) && return beta_negint(a, b)
+    b <= 0.0 && isinteger(b) && return beta_negint(b, a)
+
+    if abs(a) < abs(b)
+        a, b = b, a
+    end
+
+    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR)
+        # Avoid loss of precision in lgamma(a + b) - lgamma(a)
+        y, s = lbeta_asymp(a, b)
+        return s * exp(y)
+    end
+
+    y = a + b
+    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM)
+    	y, s = lgamma_r(y)
+    	yb, sb = lgamma_r(b)
+        y = yb - y
+    	ya, sa = lgamma_r(a)
+        y = ya + y
+    	# if (y > MAXLOG) {
+    	#     goto overflow;
+    	# }
+    	return s*sa*sb * exp(y)
+    end
+
+    y = gamma(y)
+    a = gamma(a)
+    b = gamma(b)
+    y == 0.0 && return Inf
+
+    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y)))
+        y = b / y
+        y *= a
+    else
+        y = a / y
+        y *= b
+    end
+
+    return y
 end
-lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
+
+function lbeta(a::Number, b::Number)
+    a <= 0.0 && isinteger(a) && return lbeta_negint(a, b)
+    b <= 0.0 && isinteger(b) && return lbeta_negint(b, a)
+
+    if abs(a) < abs(b)
+        a, b = b, a
+    end
+
+    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR)
+        # Avoid loss of precision in lgamma(a + b) - lgamma(a)
+        y, s = lbeta_asymp(a, b)
+        return y
+    end
+
+    y = a + b
+    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM)
+    	y, s = lgamma_r(y)
+    	yb, sb = lgamma_r(b)
+        y = yb - y
+    	ya, sa = lgamma_r(a)
+        y = ya + y
+    	return y
+    end
+
+    y = gamma(y)
+    a = gamma(a)
+    b = gamma(b)
+    y == 0.0 && return Inf
+
+    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y)))
+        y = b / y
+        y *= a
+    else
+        y = a / y
+        y *= b
+    end
+
+    return y < 0 ? log(-y) : log(y)
+end
+
+# assuming isinteger(x) and x < 0.
+function beta_negint(x::Number, w::Number)
+    if isinteger(w) && 1 - x - w > 0
+        s = ifelse(w % 2 , -1, 1)
+        return s * beta(1 - x - w, w)
+    else
+        return Inf
+    end
+end
+
+# assuming isinteger(x) and x < 0.
+function lbeta_negint(x::Number, w::Number)
+    if isinteger(w) && 1 - x - w > 0
+        s = ifelse(w % 2 , -1, 1)
+        return s * lbeta(1 - x - w, w)
+    else
+        return Inf
+    end
+end
+
+ # Asymptotic expansion for  ln(|B(a, b)|) for a > ASYMP_FACTOR*max(|b|, 1).
+function lbeta_asymp(a::Number, b::Number)
+    r, s = lgammma_r(b)
+    r -= b * log(a)
+
+    r += b*(1-b)/(2*a);
+    r += b*(1-b)*(1-2*b)/(12*a*a)
+    r += - b*b*(1-b)*(1-b)/(12*a*a*a)
+
+    return r, s
+end
+
 @vectorize_2arg Number beta
 @vectorize_2arg Number lbeta
 
