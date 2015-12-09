@@ -96,7 +96,7 @@
 
 ;; characters that can be in an operator
 (define opchar? (Set op-chars))
-;; characters that can follow . in an operator
+;; characters that can follow . in an operatore
 (define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%≥≤≠÷" c)))
 (define operator? (Set operators))
 
@@ -104,6 +104,12 @@
                          stagedfunction function macro quote let local global const
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
+
+(define reserved-words (append reserved-words
+                               '(iniciar mientras si por intentar regresar romper continuar
+                                 funcion_generada funcion comilla sea abstracto tipo_alias
+                                 tipo tipo_bits inmutable llamar_c hacer modulo modulo_simple
+                                 usando importar exportar importar_todo)))
 
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
@@ -126,6 +132,7 @@
 (define inside-vec #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
+(define simbolo-fin end-symbol)
 ; treat newline like ordinary whitespace instead of as a potential separator
 (define whitespace-newline #f)
 
