@@ -4,7 +4,7 @@
 
 const (<:) = issubtype
 
-super(T::DataType) = T.super
+supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
@@ -193,7 +193,7 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
-eltype(t::DataType) = eltype(super(t))
+eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
 # copying immutable things

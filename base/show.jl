@@ -945,7 +945,7 @@ xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
 # Types
 xdump(fn::Function, io::IO, x::Union, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
-    println(io, x, "::", typeof(x), " ", " <: ", super(x))
+    println(io, x, "::", typeof(x), " ", " <: ", supertype(x))
     fields = fieldnames(x)
     if n > 0
         for idx in 1:min(10, length(fields))
@@ -992,7 +992,7 @@ function dumptype(io::IO, x, n::Int, indent)
                     if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end
-                elseif isa(t, DataType) && super(t).name == x.name
+                elseif isa(t, DataType) && supertype(t).name == x.name
                     # type aliases
                     if string(s) != string(t.name)
                         println(io, indent, "  ", s, " = ", t.name)
