@@ -17,6 +17,20 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
+# Result type must be type of first argument
+for T in (Int8,Int16,Int32,Int64,Int128,BigInt,
+          UInt8,UInt16,UInt32,UInt64,UInt128,
+          Rational{Int},Rational{BigInt},
+          Float16,Float32,Float64)
+    for U in (Int8,Int16,Int32,Int64,Int128,BigInt,
+              Rational{Int},Rational{BigInt},
+              UInt8,UInt16,UInt32,UInt64,UInt128,
+              Float16,Float32,Float64)
+        @test typeof(copysign(T(3), U(4))) === T
+        @test typeof(flipsign(T(3), U(4))) === T
+    end
+end
+
 for s1 in (-1,+1), s2 in (-1,+1)
     @test flipsign(Int16(3s1), Float16(3s2)) === Int16(3s1*s2)
     @test flipsign(Int32(3s1), Float32(3s2)) === Int32(3s1*s2)
