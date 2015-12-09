@@ -72,6 +72,10 @@ backticks, e.g.
 """
 Cmd
 
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
+==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
+                     x.dir == y.dir && isequal(x.flags, y.flags)
+
 immutable OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
