@@ -2,21 +2,25 @@
 
 # Base.Cartesian
 
-doc"""
+"""
     @nall N expr
 
-`@nall 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 && i_2 > 1 && i_3 > 1)`. This can be convenient for bounds-checking.
+`@nall 3 d->(i_d > 1)` would generate the expression `(i_1 > 1 && i_2 > 1 && i_3 > 1)`. This
+can be convenient for bounds-checking.
 """
 :(Cartesian.@nall)
 
-doc"""
+"""
     @nloops N itersym rangeexpr bodyexpr
     @nloops N itersym rangeexpr preexpr bodyexpr
     @nloops N itersym rangeexpr preexpr postexpr bodyexpr
 
-Generate `N` nested loops, using `itersym` as the prefix for the iteration variables. `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case the range is `1:size(var,d)` for dimension `d`.
+Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
+`rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
+the range is `1:size(var,d)` for dimension `d`.
 
-Optionally, you can provide "pre" and "post" expressions. These get executed first and last, respectively, in the body of each loop. For example, :
+Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
+respectively, in the body of each loop. For example, :
 
     @nloops 2 i A d->j_d=min(i_d,5) begin
         s += @nref 2 A j
@@ -32,18 +36,20 @@ would generate :
         end
     end
 
-If you want just a post-expression, supply `nothing` for the pre-expression. Using parenthesis and semicolons, you can supply multi-statement expressions.
+If you want just a post-expression, supply `nothing` for the pre-expression. Using
+parenthesis and semicolons, you can supply multi-statement expressions.
 """
 :(Cartesian.@nloops)
 
-doc"""
+"""
     @ntuple N expr
 
-Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 2 k->k+1` would generate `(2,3)`.
+Generates an `N`-tuple. `@ntuple 2 i` would generate `(i_1, i_2)`, and `@ntuple 2 k->k+1`
+would generate `(2,3)`.
 """
 :(Cartesian.@ntuple)
 
-doc"""
+"""
     @nif N conditionexpr expr
     @nif N conditionexpr expr elseexpr
 
@@ -63,17 +69,17 @@ would generate:
 """
 :(Cartesian.@nif)
 
-doc"""
+"""
     @nref N A indexexpr
 
-Generate expressions like `A[i_1,i_2,...]`. `indexexpr` can either be an iteration-symbol prefix, or an anonymous-function expression.
+Generate expressions like `A[i_1,i_2,...]`. `indexexpr` can either be an iteration-symbol
+prefix, or an anonymous-function expression.
 """
 :(Cartesian.@nref)
 
-doc"""
+"""
     @nexprs N expr
 
 Generate `N` expressions. `expr` should be an anonymous-function expression.
 """
 :(Cartesian.@nexprs)
-
