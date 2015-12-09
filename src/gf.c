@@ -437,7 +437,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
         fargs[2] = (jl_value_t*)jl_emptysvec;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        jl_printf(JL_STDERR,"inference on %s", li->name->name);
+        jl_printf(JL_STDERR,"inference on %s", jl_symbol_name(li->name));
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)argtypes);
         jl_printf(JL_STDERR, "\n");
 #endif
@@ -1846,7 +1846,7 @@ static int error_en = 1;
 static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
 static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    jl_printf(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
+    jl_printf(JL_STDOUT, "%s(",  jl_symbol_name(jl_gf_name(F)));
     for(size_t i=0; i < nargs; i++) {
         if (i > 0) jl_printf(JL_STDOUT, ", ");
         jl_static_show(JL_STDOUT, jl_typeof(args[i]));
@@ -1882,7 +1882,7 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc != jl_bottom_func) {
 #ifdef JL_TRACE
         if (traceen)
-            jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
+            jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->linfo->file), mfunc->linfo->line);
 #endif
         if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
@@ -1919,7 +1919,7 @@ JL_CALLABLE(jl_apply_generic)
     }
 #ifdef JL_TRACE
     if (traceen)
-        jl_printf(JL_STDOUT, " at %s:%d\n", mfunc->linfo->file->name, mfunc->linfo->line);
+        jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->linfo->file), mfunc->linfo->line);
 #endif
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
     jl_value_t *res = jl_apply(mfunc, args, nargs);
