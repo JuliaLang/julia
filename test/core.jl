@@ -3539,3 +3539,7 @@ end
 
 # issue #14323
 @test_throws ErrorException eval(Expr(:body, :(1)))
+
+# issue #14339
+f14339{T<:Union{}}(x::T, y::T) = 0
+@test_throws MethodError f14339(1, 2)
