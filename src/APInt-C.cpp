@@ -7,7 +7,7 @@
 
 extern "C" {
 #include "APInt-C.h"
-JL_DLLEXPORT void jl_error(const char *str);
+#include "julia.h"
 }
 
 using namespace llvm;
