@@ -220,7 +220,7 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     return cs, sn, r
 end
 
-doc"""
+"""
 
     givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
 
