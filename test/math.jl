@@ -459,6 +459,10 @@ end
       0.00634645247782269506319336871208405439180447035257028310080 -
       0.00169495384841964531409376316336552555952269360134349446910im)
 
+ for i=1:10
+     @test beta(-i, i) == (-1)^i / i
+ end
+
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
     @test gamma(Float64[1:25;]) == gamma(1:25)
