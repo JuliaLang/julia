@@ -26,6 +26,7 @@
 
 (define (deparse e)
   (cond ((or (symbol? e) (number? e)) (string e))
+        ((string? e) (print-to-string e))
         ((eq? e #t) "true")
         ((eq? e #f) "false")
         ((eq? (typeof e) 'julia_value)
