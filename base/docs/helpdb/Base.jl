@@ -2075,7 +2075,7 @@ booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open
 equivalent to setting the following boolean groups:
 
 | Mode | Description                   |
-|------|-------------------------------|
+|:-----|:------------------------------|
 | r    | read                          |
 | r+   | read, write                   |
 | w    | write, create, truncate       |
@@ -2293,7 +2293,7 @@ Returns a structure whose fields contain information about the file. The fields 
 structure are:
 
 | Name    | Description                                                        |
-|---------|--------------------------------------------------------------------|
+|:--------|:-------------------------------------------------------------------|
 | size    | The size (in bytes) of the file                                    |
 | device  | ID of the device that contains the file                            |
 | inode   | The inode number of the file                                       |
@@ -3453,7 +3453,7 @@ should also support `abs` and `<`. When `A` is sparse and have element of type `
 examples are shown in the table below.
 
 | Type of input `A`                              | Type of output `F`     | Relationship between `F` and `A`             |
-|------------------------------------------------|------------------------|----------------------------------------------|
+|:-----------------------------------------------|:-----------------------|:---------------------------------------------|
 | [`Matrix`](:func:`Matrix`)                     | `LU`                   | `F[:L]*F[:U] == A[F[:p], :]`                 |
 | [`Tridiagonal`](:func:`Tridiagonal`)           | `LU{T,Tridiagonal{T}}` | `F[:L]*F[:U] == A[F[:p], :]`                 |
 | [`SparseMatrixCSC`](:func:`SparseMatrixCSC`)   | `UmfpackLU`            | `F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]` |
@@ -3461,7 +3461,7 @@ examples are shown in the table below.
 The individual components of the factorization `F` can be accessed by indexing:
 
 | Component | Description                         | `LU` | `LU{T,Tridiagonal{T}}` | `UmfpackLU` |
-|-----------|-------------------------------------|------|------------------------|-------------|
+|:----------|:------------------------------------|:-----|:-----------------------|:------------|
 | `F[:L]`   | `L` (lower triangular) part of `LU` | ✓    | ✓                      | ✓           |
 | `F[:U]`   | `U` (upper triangular) part of `LU` | ✓    | ✓                      | ✓           |
 | `F[:p]`   | (right) permutation `Vector`        | ✓    | ✓                      | ✓           |
@@ -3471,7 +3471,7 @@ The individual components of the factorization `F` can be accessed by indexing:
 | `F[:(:)]` | `(L,U,p,q,Rs)` components           |      |                        | ✓           |
 
 | Supported function | `LU` | `LU{T,Tridiagonal{T}}` | `UmfpackLU` |
-|--------------------|------|------------------------|-------------|
+|:-------------------|:-----|:-----------------------|:------------|
 | `/`                | ✓    |                        |             |
 | `\\`               | ✓    | ✓                      | ✓           |
 | `cond`             | ✓    |                        | ✓           |
@@ -8482,12 +8482,6 @@ run. Returns `nothing` if run from a REPL or an empty string if evaluated by `ju
 """
 :@__FILE__
 
-keywords[symbol("@__LINE__")] = doc"""
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the call-site.
-"""
-
 """
     charwidth(c)
 
@@ -8853,7 +8847,7 @@ sumabs2(A,dims)
 Gets the permissions of the owner of the file as a bitfield of
 
 | Value | Description        |
-|-------|--------------------|
+|:------|:-------------------|
 | 01    | Execute Permission |
 | 02    | Write Permission   |
 | 04    | Read Permission    |
@@ -9533,7 +9527,7 @@ Computes the QR factorization of `A`. The return type of `F` depends on the elem
 `A` and whether pivoting is specified (with `pivot==Val{true}`).
 
 | Return type   | `eltype(A)`     | `pivot`      | Relationship between `F` and `A` |
-|---------------|-----------------|--------------|----------------------------------|
+|:--------------|:----------------|:-------------|:---------------------------------|
 | `QR`          | not `BlasFloat` | either       | `A==F[:Q]*F[:R]`                 |
 | `QRCompactWY` | `BlasFloat`     | `Val{false}` | `A==F[:Q]*F[:R]`                 |
 | `QRPivoted`   | `BlasFloat`     | `Val{true}`  | `A[:,F[:p]]==F[:Q]*F[:R]`        |
@@ -9543,7 +9537,7 @@ Computes the QR factorization of `A`. The return type of `F` depends on the elem
 The individual components of the factorization `F` can be accessed by indexing:
 
 | Component | Description                               | `QR`            | `QRCompactWY`      | `QRPivoted`     |
-|-----------|-------------------------------------------|-----------------|--------------------|-----------------|
+|:----------|:------------------------------------------|:----------------|:-------------------|:----------------|
 | `F[:Q]`   | `Q` (orthogonal/unitary) part of `QR`     | ✓ (`QRPackedQ`) | ✓ (`QRCompactWYQ`) | ✓ (`QRPackedQ`) |
 | `F[:R]`   | `R` (upper right triangular) part of `QR` | ✓               | ✓                  | ✓               |
 | `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
