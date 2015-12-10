@@ -409,8 +409,8 @@ const MAXGAM = 171.624376956302725
 const ASYMP_FACTOR = 1e6
 
 function beta(a::Number, b::Number)
-    a <= 0.0 && isinteger(a) && return beta_negint(a, b)
-    b <= 0.0 && isinteger(b) && return beta_negint(b, a)
+    real(a) <= 0.0 && isinteger(a) && return beta_negint(a, b)
+    real(b) <= 0.0 && isinteger(b) && return beta_negint(b, a)
 
     if abs(a) < abs(b)
         a, b = b, a
@@ -452,8 +452,8 @@ function beta(a::Number, b::Number)
 end
 
 function lbeta(a::Number, b::Number)
-    a <= 0.0 && isinteger(a) && return lbeta_negint(a, b)
-    b <= 0.0 && isinteger(b) && return lbeta_negint(b, a)
+    real(a) <= 0.0 && isinteger(a) && return lbeta_negint(a, b)
+    real(b) <= 0.0 && isinteger(b) && return lbeta_negint(b, a)
 
     if abs(a) < abs(b)
         a, b = b, a
@@ -488,7 +488,7 @@ function lbeta(a::Number, b::Number)
         y *= b
     end
 
-    return y < 0 ? log(-y) : log(y)
+    return real(y) < 0 ? log(-y) : log(y)
 end
 
 # assuming isinteger(x) and x < 0.
