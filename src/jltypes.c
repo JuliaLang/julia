@@ -672,6 +672,10 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             }
         }
         else {
+            if (a->ub == jl_bottom_type) {
+                JL_GC_POP();
+                return jl_bottom_type;
+            }
             if (!is_bnd(a,penv)) {
                 JL_GC_POP();
                 return (jl_value_t*)a;
@@ -2466,6 +2470,8 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             if (jl_subtype_le(a, jl_svecref(bp,i), ta, invariant))
                 return 1;
         }
+        if (!ta && jl_is_typevar(a) && ((jl_tvar_t*)a)->ub == jl_bottom_type)
+            return 1;
         return 0;
     }
 
