@@ -19,7 +19,7 @@ The following keyword arguments are supported:
 * `which`: type of eigenvalues to compute. See the note below.
 
 | `which` | type of eigenvalues                                                                                                       |
-|---------|---------------------------------------------------------------------------------------------------------------------------|
+|:--------|:--------------------------------------------------------------------------------------------------------------------------|
 | `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
 | `:SM`   | eigenvalues of smallest magnitude                                                                                         |
 | `:LR`   | eigenvalues of largest real part                                                                                          |
@@ -48,7 +48,7 @@ The `sigma` and `which` keywords interact: the description of eigenvalues search
 constructed by the specification of the iteration mode implied by `sigma`.
 
 | `sigma`         | iteration mode                   | `which` refers to eigenvalues of |
-|-----------------|----------------------------------|----------------------------------|
+|:----------------|:---------------------------------|:---------------------------------|
 | `nothing`       | ordinary (forward)               | ``A``                            |
 | real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
 """
@@ -83,7 +83,7 @@ The following keyword arguments are supported:
 * `which`: type of eigenvalues to compute. See the note below.
 
 | `which` | type of eigenvalues                                                                                                       |
-|---------|---------------------------------------------------------------------------------------------------------------------------|
+|:--------|:--------------------------------------------------------------------------------------------------------------------------|
 | `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
 | `:SM`   | eigenvalues of smallest magnitude                                                                                         |
 | `:LR`   | eigenvalues of largest real part                                                                                          |
@@ -112,7 +112,7 @@ The `sigma` and `which` keywords interact: the description of eigenvalues search
 the linear operator constructed by the specification of the iteration mode implied by `sigma`.
 
 | `sigma`         | iteration mode                   | `which` refers to the problem      |
-|-----------------|----------------------------------|------------------------------------|
+|:----------------|:---------------------------------|:-----------------------------------|
 | `nothing`       | ordinary (forward)               | ``Av = Bv\\lambda``                |
 | real or complex | inverse with level shift `sigma` | ``(A - \\sigma B )^{-1}B = v\\nu`` |
 """

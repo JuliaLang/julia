@@ -90,7 +90,7 @@ Construct a `DateTime` type by parsing the `dt` date string following the patter
 the `format` string. The following codes can be used for constructing format strings:
 
 | Code       | Matches   | Comment                                                      |
-|------------|-----------|--------------------------------------------------------------|
+|:-----------|:----------|:-------------------------------------------------------------|
 | `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
 | `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
 | `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
