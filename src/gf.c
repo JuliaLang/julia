@@ -1038,7 +1038,10 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt,
                 JL_GC_POP();
                 return func;
             }
-            jl_function_t *res = cache_method(mt, tt, func, m->sig, jl_emptysvec, m->isstaged);
+            // make sure the argument is rooted in `cache_method`
+            // in case another thread changed it.
+            newsig = m->sig;
+            jl_function_t *res = cache_method(mt, tt, func, newsig, jl_emptysvec, m->isstaged);
             JL_GC_POP();
             return res;
         }
