@@ -1,31 +1,92 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# printf
-# int
 @test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"
-for (fmt, val) in (("%i", "42"),
-                   ("%u", "42"),
-                   ("Test: %i", "Test: 42"),
-                   ("%#x", "0x2a"),
-                   ("%#o", "052"),
-                   ("%X", "2A"),
-                   ("%X", "2A"),
-                   ("% i", " 42"),
-                   ("%+i", "+42"),
-                   ("%4i", "  42"),
-                   ("%-4i", "42  "))
-    @test( @eval(@sprintf($fmt, 42) == $val))
+
+# printing an int value
+for (fmt, val) in (
+        ("%i", "42"),
+        ("%i", "42"),
+        ("%u", "42"),
+        ("%x", "2a"),
+        ("%X", "2A"),
+        ("%o", "52"),
+        ("%a", "0x1.5p+5"),
+        ("%A", "0X1.5P+5"),
+        ("%f", "42.000000"),
+        ("%g", "42"),
+        ("%p", "0x000000000000002a"),
+    ),
+      num in (UInt16(42), UInt32(42), UInt64(42), UInt128(42),
+              Int16(42), Int32(42), Int64(42), Int128(42),
+              #big"42" # causes stack overflow on %a ; gh #14409
+    )
+    @test( @eval(@sprintf($fmt, $num) == $val))
 end
 
-# float / BigFloat
-for (fmt, val) in (("%7.2f", "   1.23"),
-                   ("%-7.2f", "1.23   "),
-                   ("%07.2f", "0001.23"),
-                   ("%.0f", "1"),
-                   ("%#.0f", "1."),
-                   ("%.4e", "1.2345e+00")),
-      num in (1.2345, big"1.2345")
+# printing float / BigFloat values
+for (fmt, val) in (
+        ("%.3f", "1.234"),
+        ("%.3e", "1.234e+00"),
+        ("%.3E", "1.234E+00"),
+        ("%.2a", "0x1.3cp+0"),
+        ("%.2A", "0X1.3CP+0")
+        ),
+      num in (Float16(1.234), Float32(1.234), Float64(1.234), big"1.234")
     @test( @eval(@sprintf($fmt, $num) == $val))
+end
+
+# numeric spacing and various flag tests
+function _test_flags(val, vflag::AbstractString, fmt::AbstractString, res::AbstractString, prefix::AbstractString)
+    vflag = string("%", vflag)
+    space_fmt = string(length(res) + length(prefix) + 3, fmt)
+    fsign = string((val < 0 ? "-" : "+"), prefix)
+    nsign = string((val < 0 ? "-" : " "), prefix)
+    osign = val < 0 ? string("-", prefix) : string(prefix, "0")
+    esign = string(val < 0 ? "-" : "", prefix)
+    esignend = val < 0 ? "" : " "
+
+    for (flag::AbstractString, ans::AbstractString) in (
+            ("", string("  ", nsign, res)),
+            ("+", string("  ", fsign, res)),
+            (" ", string("  ", nsign, res)),
+            ("0", string(osign, "00", res)),
+            ("-", string(esign, res, "  ", esignend)),
+            ("0+", string(fsign, "00", res)),
+            ("0 ", string(nsign, "00", res)),
+            ("-+", string(fsign, res, "  ")),
+            ("- ", string(nsign, res, "  ")),
+        )
+        fmt_string = string(vflag, flag, space_fmt)
+        @test( @eval(@sprintf($fmt_string, $val) == $ans))
+    end
+end
+
+for i in (
+        (42, "", "i", "42", ""),
+        (42, "", "d", "42", ""),
+
+        (42, "", "u", "42", ""),
+        (42, "", "x", "2a", ""),
+        (42, "", "X", "2A", ""),
+        (42, "", "o", "52", ""),
+
+        (42, "#", "x", "2a", "0x"),
+        (42, "#", "X", "2A", "0X"),
+        (42, "#", "o", "052", ""),
+
+        (1.2345, "", ".2f", "1.23", ""),
+        (1.2345, "", ".2e", "1.23e+00", ""),
+        (1.2345, "", ".2E", "1.23E+00", ""),
+
+        (1.2345, "#", ".0f", "1.", ""),
+        (1.2345, "#", ".0e", "1.e+00", ""),
+        (1.2345, "#", ".0E", "1.E+00", ""),
+
+        (1.2345, "", ".2a", "1.3cp+0", "0x"),
+        (1.2345, "", ".2A", "1.3CP+0", "0X"),
+    )
+    _test_flags(i...)
+    _test_flags(-i[1], i[2:5]...)
 end
 
 # Inf / NaN handling
@@ -34,11 +95,26 @@ end
 @test (@sprintf "%f" big"Inf") == "Inf"
 @test (@sprintf "%f" big"NaN") == "NaN"
 
+# pointers
+@test (@sprintf "%20p" 0) == "  0x0000000000000000"
+@test (@sprintf "%-20p" 0) == "0x0000000000000000  "
+
 # scientific notation
 @test (@sprintf "%.0e" 3e142) == "3e+142"
 @test (@sprintf "%#.0e" 3e142) == "3.e+142"
 @test (@sprintf "%.0e" big"3e142") == "3e+142"
 @test (@sprintf "%#.0e" big"3e142") == "3.e+142"
+
+@test (@sprintf "%.0e" big"3e1042") == "3e+1042"
+
+@test (@sprintf "%e" 3e42) == "3.000000e+42"
+@test (@sprintf "%E" 3e42) == "3.000000E+42"
+@test (@sprintf "%e" 3e-42) == "3.000000e-42"
+@test (@sprintf "%E" 3e-42) == "3.000000E-42"
+@test (@sprintf "%a" 3e4) == "0x1.d4cp+14"
+@test (@sprintf "%A" 3e4) == "0X1.D4CP+14"
+@test (@sprintf "%.4a" 3e-4) == "0x1.3a93p-12"
+@test (@sprintf "%.4A" 3e-4) == "0X1.3A93P-12"
 
 # %g
 for (val, res) in ((12345678., "1.23457e+07"),
@@ -86,18 +162,63 @@ end
 # chars
 @test (@sprintf "%c" 65) == "A"
 @test (@sprintf "%c" 'A') == "A"
+@test (@sprintf "%3c" 'A') == "  A"
+@test (@sprintf "%-3c" 'A') == "A  "
 @test (@sprintf "%c" 248) == "ø"
 @test (@sprintf "%c" 'ø') == "ø"
 
+# escape %
+@test (@sprintf "%%") == "%"
+@test (@sprintf "%%s") == "%s"
+@test_throws ArgumentError eval(:(@sprintf "%"))
+
+# argument count
+@test_throws ArgumentError eval(:(@sprintf "%s"))
+@test_throws ArgumentError eval(:(@sprintf "%s" "1" "2"))
+
+# unimplemented features
+@test_throws ErrorException eval(:(@sprintf "%n" "1"))
+@test_throws ErrorException eval(:(@sprintf "%'u" 1000))
+
+# type width specifier parsing (ignored)
+@test (@sprintf "%llf" 1.2) == "1.200000"
+@test (@sprintf "%Lf" 1.2) == "1.200000"
+@test (@sprintf "%hhu" 1) == "1"
+@test (@sprintf "%hu" 1) == "1"
+@test (@sprintf "%lu" 1) == "1"
+@test (@sprintf "%llu" 1) == "1"
+@test (@sprintf "%Lu" 1) == "1"
+@test (@sprintf "%zu" 1) == "1"
+@test (@sprintf "%ju" 1) == "1"
+@test (@sprintf "%tu" 1) == "1"
+
+# fixed point
+@test (@sprintf "%f" 400.0) == "400.000000"
+@test (@sprintf "%f" 0.004) == "0.004000"
+
 # strings
 @test (@sprintf "%s" "test") == "test"
+@test (@sprintf "%8s" "test") == "    test"
+@test (@sprintf "%-8s" "test") == "test    "
+
 @test (@sprintf "%s" "tést") == "tést"
+
+@test (@sprintf "%s" :test) == "test"
+@test (@sprintf "%#s" :test) == ":test"
+@test (@sprintf "%#8s" :test) == "   :test"
+@test (@sprintf "%#-8s" :test) == ":test   "
 
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
 
-#test simple splatting
+# test simple splatting
 @test (@sprintf "%d%d" [1 2]...) == "12"
+
+# invalid format specifiers, not "diouxXDOUeEfFgGaAcCsSpn"
+for c in "bBhHIjJkKlLmMNPqQrRtTvVwWyYzZ"
+    fmt_str = string("%", c)
+    @test_throws ArgumentError eval(:(@sprintf $fmt_str 1))
+end
 
 # combo
 @test (@sprintf "%f %d %d %f" 1.0 [3 4]... 5) == "1.000000 3 4 5.000000"
