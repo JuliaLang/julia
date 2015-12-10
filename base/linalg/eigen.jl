@@ -72,7 +72,7 @@ eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vecto
 
 eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
 
-doc"""
+"""
 
     eigvals!(A,[irange,][vl,][vu]) -> values
 

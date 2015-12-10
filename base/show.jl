@@ -1197,7 +1197,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     end
 end
 
-doc"""
+"""
     summary(x)
 
 Return a string giving a brief description of a value. By default returns

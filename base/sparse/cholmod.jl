@@ -1231,12 +1231,12 @@ function cholfact(A::Sparse; kws...)
     return F
 end
 
-doc"""
+"""
     ldltfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}; shift=0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the `LDLt` factorization of a sparse symmetric or Hermitian matrix. A
 fill-reducing permutation is used. `F = ldltfact(A)` is most frequently used to
-solve systems of equations `A*x = b` with `F\b`. The returned factorization
+solve systems of equations `A*x = b` with `F\\b`. The returned factorization
 object `F` also supports the methods `diag`, `det`, and `logdet`. You can
 extract individual factors from `F` using `F[:L]`. However, since pivoting is
 on by default, the factorization is internally represented as `A == P'*L*D*L'*P`

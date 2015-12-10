@@ -684,7 +684,7 @@ end
 
 precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
 
-doc"""
+"""
     setprecision([T=BigFloat,] precision::Int)
 
 Set the precision (in bits) to be used for `T` arithmetic.
@@ -819,7 +819,7 @@ eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 realmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
-doc"""
+"""
     setprecision(f::Function, [T=BigFloat,] precision::Integer)
 
 Change the `T` arithmetic precision (in bits) for the duration of `f`.

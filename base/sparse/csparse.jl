@@ -316,7 +316,7 @@ end
 
 # based on cs_symperm p. 21, "Direct Methods for Sparse Linear Systems"
 # form A[p,p] for a symmetric A stored in the upper triangle
-doc"""
+"""
     symperm(A, p)
 
 Return the symmetric permutation of `A`, which is `A[p,p]`. `A` should be

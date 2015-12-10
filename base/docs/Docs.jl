@@ -478,7 +478,7 @@ end
 
 multidoc(meta, objs) = quote $([:(@doc $(esc(meta)) $(esc(obj))) for obj in objs]...) end
 
-doc"""
+"""
     @__doc__(ex)
 
 Low-level macro used to mark expressions returned by a macro that should be documented. If
@@ -486,9 +486,9 @@ more than one expression is marked then the same docstring is applied to each ex
 
     macro example(f)
         quote
-            $(f)() = 0
-            @__doc__ $(f)(x) = 1
-            $(f)(x, y) = 2
+            \$(f)() = 0
+            @__doc__ \$(f)(x) = 1
+            \$(f)(x, y) = 2
         end |> esc
     end
 
