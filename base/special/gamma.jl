@@ -404,7 +404,6 @@ invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
 invdigamma(x::Real) = invdigamma(Float64(x))
 @vectorize_1arg Real invdigamma
 
-
 const MAXGAM = 171.624376956302725
 const ASYMP_FACTOR = 1e6
 
@@ -416,14 +415,14 @@ function beta(a::Number, b::Number)
         a, b = b, a
     end
 
-    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR)
+    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR
         # Avoid loss of precision in lgamma(a + b) - lgamma(a)
         y, s = lbeta_asymp(a, b)
         return s * exp(y)
     end
 
     y = a + b
-    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM)
+    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM
     	y, s = lgamma_r(y)
     	yb, sb = lgamma_r(b)
         y = yb - y
@@ -440,7 +439,7 @@ function beta(a::Number, b::Number)
     b = gamma(b)
     y == 0.0 && return Inf
 
-    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y)))
+    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y))
         y = b / y
         y *= a
     else
@@ -459,14 +458,14 @@ function lbeta(a::Number, b::Number)
         a, b = b, a
     end
 
-    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR)
+    if abs(a) > ASYMP_FACTOR * abs(b) && a > ASYMP_FACTOR
         # Avoid loss of precision in lgamma(a + b) - lgamma(a)
         y, s = lbeta_asymp(a, b)
         return y
     end
 
     y = a + b
-    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM)
+    if abs(y) > MAXGAM || abs(a) > MAXGAM || abs(b) > MAXGAM
     	y, s = lgamma_r(y)
     	yb, sb = lgamma_r(b)
         y = yb - y
@@ -480,7 +479,7 @@ function lbeta(a::Number, b::Number)
     b = gamma(b)
     y == 0.0 && return Inf
 
-    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y)))
+    if abs(abs(a) - abs(y)) > abs(abs(b) - abs(y))
         y = b / y
         y *= a
     else
@@ -494,7 +493,7 @@ end
 # assuming isinteger(x) and x < 0.
 function beta_negint(x::Number, w::Number)
     if isinteger(w) && 1 - x - w > 0
-        s = ifelse(w % 2 , -1, 1)
+        s = ifelse(w % 2 == 0, 1., -1.)
         return s * beta(1 - x - w, w)
     else
         return Inf
@@ -504,7 +503,7 @@ end
 # assuming isinteger(x) and x < 0.
 function lbeta_negint(x::Number, w::Number)
     if isinteger(w) && 1 - x - w > 0
-        s = ifelse(w % 2 , -1, 1)
+        s = ifelse(w % 2 == 0 , 1., -1.)
         return s * lbeta(1 - x - w, w)
     else
         return Inf
