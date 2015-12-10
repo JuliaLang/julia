@@ -2,7 +2,7 @@
 
 # editing files
 
-doc"""
+"""
     editor()
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
@@ -426,7 +426,7 @@ end
 # testing
 
 
-doc"""
+"""
     whos([io,] [Module,] [pattern::Regex])
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.

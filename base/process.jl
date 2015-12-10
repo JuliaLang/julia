@@ -30,7 +30,7 @@ immutable Cmd <: AbstractCmd
     end
 end
 
-doc"""
+"""
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide,
                   env, dir)
 
@@ -49,7 +49,7 @@ keyword arguments:
   arguments are sent to a program as a single "command-line" string, and
   programs are responsible for parsing it into arguments.  By default,
   empty arguments and arguments with spaces or tabs are quoted with double
-  quotes `"` in the command line, and `\` or `"` are preceded by backslashes.
+  quotes `"` in the command line, and `\\` or `"` are preceded by backslashes.
   `windows_verbatim=true` is useful for launching programs that parse their
   command line in nonstandard ways.)  Has no effect on non-Windows systems.
 * `windows_hide::Bool`: If `true` (defaults to `false`), then on Windows no
