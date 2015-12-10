@@ -3441,3 +3441,7 @@ let
     finalize(obj)
     @test finalized == 1
 end
+
+# issue #14339
+f14339{T<:Union{}}(x::T, y::T) = 0
+@test_throws MethodError f14339(1, 2)
