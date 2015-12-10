@@ -347,11 +347,10 @@ void gc_debug_print_status(void)
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
-    jl_printf(JL_STDOUT,
-              "Allocations: %" PRIu64 " "
-              "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-              pool_count + other_count, pool_count, other_count,
-              n_pause);
+    jl_safe_printf("Allocations: %" PRIu64 " "
+                   "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
+                   pool_count + other_count, pool_count, other_count,
+                   n_pause);
 }
 
 static inline void gc_debug_print(void)
