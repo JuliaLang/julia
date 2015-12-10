@@ -512,7 +512,7 @@ end
 
  # Asymptotic expansion for  ln(|B(a, b)|) for a > ASYMP_FACTOR*max(|b|, 1).
 function lbeta_asymp(a::Number, b::Number)
-    r, s = lgammma_r(b)
+    r, s = lgamma_r(b)
     r -= b * log(a)
 
     r += b*(1-b)/(2*a);
