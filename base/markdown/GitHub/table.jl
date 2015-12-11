@@ -115,6 +115,24 @@ function plain(io::IO, md::Table)
     end
 end
 
+function rst(io::IO, md::Table)
+    cells = mapmap(rstinline, md.rows)
+    padcells!(cells, md.align, len = length, min = 3)
+    single = ["-"^length(c) for c in cells[1]]
+    double = ["="^length(c) for c in cells[1]]
+    function print_row(row, row_sep, col_sep)
+        print(io, col_sep, row_sep)
+        print_joined(io, row, string(row_sep, col_sep, row_sep))
+        println(io, row_sep, col_sep)
+    end
+    print_row(single, '-', '+')
+    for i = 1:length(cells)
+        print_row(cells[i], ' ', '|')
+        i ≡ 1 ? print_row(double, '=', '+') :
+                print_row(single, '-', '+')
+    end
+end
+
 function term(io::IO, md::Table, columns)
     cells = mapmap(terminline, md.rows)
     padcells!(cells, md.align, len = ansi_length)
