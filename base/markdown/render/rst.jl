@@ -84,6 +84,15 @@ rstinline(io::IO, md::Vector) = !isempty(md) && rstinline(io, md...)
 
 rstinline(io::IO, md::Link) = rstinline(io, "`", md.text, " <", md.url, ">`_")
 
+function rstinline(io::IO, md::Footnote)
+    if md.text ≡ nothing
+        print(io, "[", md.id, "]_")
+    else
+        print(io, ".. [", md.id, "]")
+        rstinline(io, md.text)
+    end
+end
+
 rstescape(s) = replace(s, "\\", "\\\\")
 
 rstinline(io::IO, s::AbstractString) = print(io, rstescape(s))
