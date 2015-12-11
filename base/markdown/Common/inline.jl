@@ -34,6 +34,12 @@ function inline_code(stream::IO, md::MD)
     return result === nothing ? nothing : Code(result)
 end
 
+@trigger '`' ->
+function inline_tex(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "``"; rep=true)
+    return result === nothing ? nothing : LaTeX(result)
+end
+
 # ––––––––––––––
 # Images & Links
 # ––––––––––––––
