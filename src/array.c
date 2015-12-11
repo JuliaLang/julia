@@ -97,6 +97,10 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->how = 2;
+        // Make sure the GC can correctly identify if this is pool allocated
+        // and mark the page accordingly
+        a->pooled = tsz <= GC_MAX_SZCLASS;
+
         data = jl_gc_managed_malloc(tot);
         jl_gc_track_malloced_array(a);
         if (!isunboxed)
