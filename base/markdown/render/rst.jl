@@ -73,7 +73,7 @@ function rstinline(io::IO, md...)
     wasCode = false
     for el in md
         wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
-        wasCode = (isa(el, Code) || isa(el, LaTeX)) && (wasCode = true)
+        wasCode = (isa(el, Code) || isa(el, LaTeX) || isa(el, Link)) && (wasCode = true)
         rstinline(io, el)
     end
 end
