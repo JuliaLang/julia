@@ -167,23 +167,23 @@ importall .Sort
 include("version.jl")
 
 # BigInts and BigFloats
-include("gmp.jl")
-importall .GMP
-include("mpfr.jl")
-importall .MPFR
-big(n::Integer) = convert(BigInt,n)
-big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
+# include("gmp.jl")
+# importall .GMP
+# include("mpfr.jl")
+# importall .MPFR
+# big(n::Integer) = convert(BigInt,n)
+# big(x::AbstractFloat) = convert(BigFloat,x)
+# big(q::Rational) = big(num(q))//big(den(q))
 
-include("combinatorics.jl")
+#include("combinatorics.jl")
 
 # more hashing definitions
 include("hashing2.jl")
 
 # random number generation
-include("dSFMT.jl")
-include("random.jl")
-importall .Random
+#include("dSFMT.jl")
+#include("random.jl")
+#importall .Random
 
 # (s)printf macros
 include("printf.jl")
@@ -207,9 +207,9 @@ include("managers.jl")
 include("loading.jl")
 
 # memory-mapped and shared arrays
-include("mmap.jl")
-import .Mmap
-include("sharedarray.jl")
+#include("mmap.jl")
+#import .Mmap
+#include("sharedarray.jl")
 
 # utilities - timing, help, edit
 include("datafmt.jl")
@@ -233,55 +233,55 @@ include("client.jl")
 include("util.jl")
 
 # dense linear algebra
-include("linalg.jl")
-importall .LinAlg
-const ⋅ = dot
-const × = cross
-include("broadcast.jl")
-importall .Broadcast
+#include("linalg.jl")
+#importall .LinAlg
+#const ⋅ = dot
+#const × = cross
+#include("broadcast.jl")
+#importall .Broadcast
 
 # statistics
 include("statistics.jl")
 
 # irrational mathematical constants
-include("irrationals.jl")
+#include("irrationals.jl")
 
 # signal processing
-include("dft.jl")
-importall .DFT
-include("dsp.jl")
-importall .DSP
+#include("dft.jl")
+#importall .DFT
+#include("dsp.jl")
+#importall .DSP
 
 # system information
 include("sysinfo.jl")
 import .Sys.CPU_CORES
 
 # Numerical integration
-include("quadgk.jl")
-importall .QuadGK
+#include("quadgk.jl")
+#importall .QuadGK
 
 # Fast math
-include("fastmath.jl")
-importall .FastMath
+#include("fastmath.jl")
+#importall .FastMath
 
 # libgit2 support
-include("libgit2.jl")
+#include("libgit2.jl")
 
 # package manager
-include("pkg.jl")
-const Git = Pkg.Git
+#include("pkg.jl")
+#const Git = Pkg.Git
 
 # profiler
-include("profile.jl")
-importall .Profile
+#include("profile.jl")
+#importall .Profile
 
 # dates
-include("Dates.jl")
-import .Dates: Date, DateTime, now
+#include("Dates.jl")
+#import .Dates: Date, DateTime, now
 
 # sparse matrices, vectors, and sparse linear algebra
-include("sparse.jl")
-importall .SparseArrays
+#include("sparse.jl")
+#importall .SparseArrays
 
 # Documentation
 
@@ -291,11 +291,11 @@ using .Docs
 using .Markdown
 
 # deprecated functions
-include("deprecated.jl")
+#include("deprecated.jl")
 
 # Some basic documentation
-include("docs/helpdb.jl")
-include("docs/basedocs.jl")
+#include("docs/helpdb.jl")
+#include("docs/basedocs.jl")
 
 # threads
 include("threads.jl")
