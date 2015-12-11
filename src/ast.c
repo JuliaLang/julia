@@ -277,12 +277,14 @@ static jl_value_t *full_list(fl_context_t *fl_ctx, value_t e, int expronly)
     size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
+    JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
         jl_cellset(ar, i, scm_to_julia_(fl_ctx, car_(e), expronly));
         e = cdr_(e);
         i++;
     }
+    JL_GC_POP();
     return (jl_value_t*)ar;
 }
 
@@ -291,12 +293,14 @@ static jl_value_t *full_list_of_lists(fl_context_t *fl_ctx, value_t e, int expro
     size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
+    JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
         jl_cellset(ar, i, full_list(fl_ctx, car_(e),expronly));
         e = cdr_(e);
         i++;
     }
+    JL_GC_POP();
     return (jl_value_t*)ar;
 }
 
@@ -304,18 +308,18 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, int expronly)
 {
-    int en = jl_gc_enable(0); // Might GC
-    jl_value_t *v;
+    jl_value_t *v = NULL;
+    JL_GC_PUSH1(&v);
     JL_TRY {
         v = scm_to_julia_(fl_ctx, e, expronly);
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
         jl_expr_t *ex = jl_exprn(error_sym, 1);
-        jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
         v = (jl_value_t*)ex;
+        jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
     }
-    jl_gc_enable(en);
+    JL_GC_POP();
     return v;
 }
 
@@ -396,14 +400,17 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             size_t i;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
+                jl_array_t *vinf = NULL;
+                jl_lambda_info_t *nli = NULL;
+                JL_GC_PUSH3(&ex, &vinf, &nli);
                 e = cdr_(e);
                 value_t largs = car_(e);
-                jl_cellset(ex->args, 0, full_list(fl_ctx, largs,eo));
+                jl_cellset(ex->args, 0, full_list(fl_ctx, largs, eo));
                 e = cdr_(e);
 
                 value_t ee = car_(e);
-                jl_array_t *vinf = jl_alloc_cell_1d(4);
-                jl_cellset(vinf, 0, full_list_of_lists(fl_ctx, car_(ee),eo));
+                vinf = jl_alloc_cell_1d(4);
+                jl_cellset(vinf, 0, full_list_of_lists(fl_ctx, car_(ee), eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 1, full_list_of_lists(fl_ctx, car_(ee),eo));
                 ee = cdr_(ee);
@@ -421,8 +428,9 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                     jl_cellset(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
                     e = cdr_(e);
                 }
-                jl_lambda_info_t *nli = jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec, jl_current_module);
+                nli = jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec, jl_current_module);
                 resolve_globals(nli->ast, nli);
+                JL_GC_POP();
                 return (jl_value_t*)nli;
             }
 
@@ -479,14 +487,18 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 sym = quote_sym;
             }
             jl_expr_t *ex = jl_exprn(sym, n);
+            JL_GC_PUSH1(&ex);
             // allocate a fresh args array for empty exprs passed to macros
-            if (eo && n == 0)
+            if (eo && n == 0) {
                 ex->args = jl_alloc_cell_1d(0);
+                jl_gc_wb(ex, ex->args);
+            }
             for(i=0; i < n; i++) {
                 assert(iscons(e));
                 jl_cellset(ex->args, i, scm_to_julia_(fl_ctx, car_(e),eo));
                 e = cdr_(e);
             }
+            JL_GC_POP();
             return (jl_value_t*)ex;
         }
         else {
@@ -494,9 +506,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         }
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e)) == fl_ctx->wchartype) {
-        jl_value_t *wc =
-            jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
-        return wc;
+        return jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
     }
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
