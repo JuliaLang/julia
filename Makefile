@@ -503,8 +503,8 @@ light-source-dist.tmp: $(JULIAHOME)/doc/_build/html
 light-source-dist: light-source-dist.tmp
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
-	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
-	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp | LC_ALL=C sort > light-source-dist.tmp1; \
+	cd ../ && GZIP=-n tar -cz -T $$DIRNAME/light-source-dist.tmp1 --format=ustar --owner=root --group=root --mode="a=rX,u+w" --mtime=@`cd $$DIRNAME && git log -n1 --format=%ct` --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
@@ -521,8 +521,8 @@ full-source-dist: light-source-dist.tmp
 
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
-	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
-	cd ../ && tar -cz -T $$DIRNAME/full-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
+	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp | LC_ALL=C sort > full-source-dist.tmp1; \
+	cd ../ && GZIP=-n tar -cz -T $$DIRNAME/full-source-dist.tmp1 --format=ustar --owner=root --group=root --mode="a=rX,u+w" --mtime=@`cd $$DIRNAME && git log -n1 --format=%ct` --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
