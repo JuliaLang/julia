@@ -2,7 +2,7 @@
 
 module Profile
 
-import Base: hash, ==
+import Base.StackTraces: StackFrame, UNKNOWN, lookup
 
 export @profile
 
@@ -117,7 +117,7 @@ end
 
 function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{UInt, LineInfo}([ip=>lookup(ip) for ip in uip])
+    Dict{UInt, StackFrame}([ip=>lookup(ip) for ip in uip])
 end
 
 # TODO update signature in docstring.
@@ -166,35 +166,6 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
 
 
-####
-#### Internal interface
-####
-immutable LineInfo
-    func::ByteString
-    file::ByteString
-    line::Int
-    inlined_file::ByteString
-    inlined_line::Int
-    fromC::Bool
-    ip::Int64 # large enough that this struct can be losslessly read on any machine (32 or 64 bit)
-end
-
-const UNKNOWN = LineInfo("?", "?", -1, "?", -1, true, 0)
-
-#
-# If the LineInfo has function and line information, we consider two of them the same
-# if they share the same function/line information. For unknown functions, line==ip
-# so we never actually need to consider the .ip field.
-#
-==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
-
-function hash(li::LineInfo, h::UInt)
-    h += 0xf4fbda67fe20ce88 % UInt
-    h = hash(li.line, h)
-    h = hash(li.file, h)
-    h = hash(li.func, h)
-end
-
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
@@ -207,16 +178,6 @@ get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
-
-function lookup(ip::Ptr{Void})
-    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
-    if length(info) == 7
-        return LineInfo(string(info[1]), string(info[2]), Int(info[3]), string(info[4]), Int(info[5]), info[6], Int64(info[7]))
-    else
-        return UNKNOWN
-    end
-end
-lookup(ip::UInt) = lookup(convert(Ptr{Void},ip))
 
 error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
@@ -282,7 +243,7 @@ function parse_flat(iplist, n, lidict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.fromC && !C) for x in lilist]
+    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     lilist, n
@@ -301,7 +262,7 @@ function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     print_flat(io, lilist, n, combine, cols, sortedby)
 end
 
-function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
+function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
@@ -330,8 +291,8 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
     maxfunc = 0
     for li in lilist
         maxline = max(maxline, li.line)
-        maxfile = max(maxfile, length(li.file))
-        maxfunc = max(maxfunc, length(li.func))
+        maxfile = max(maxfile, length(string(li.file)))
+        maxfunc = max(maxfunc, length(string(li.func)))
     end
     wline = max(5, ndigits(maxline))
     ntext = cols - wcounts - wline - 3
@@ -371,9 +332,9 @@ function tree_aggregate{T<:Unsigned}(data::Vector{T})
     bt, counts
 end
 
-tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
+tree_format_linewidth(x::StackFrame) = ndigits(x.line)+6
 
-function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
+function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Integer)
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
@@ -394,18 +355,20 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
             if showextra
                 base = string(base, "+", nextra, " ")
             end
-            if li.line == li.ip
+            if li.line == li.pointer
                 strs[i] = string(base,
                           rpad(string(counts[i]), ndigcounts, " "),
-                          " ","unknown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
+                          " ",
+                          "unknown function (pointer: 0x",
+                          hex(li.pointer,2*sizeof(Ptr{Void})),
                           ")")
             else
                 base = string(base,
                               rpad(string(counts[i]), ndigcounts, " "),
                               " ",
-                              truncto(string(li.file), widthfile),
+                              truncto(li.file, widthfile),
                               "; ",
-                              truncto(string(li.func), widthfunc),
+                              truncto(li.func, widthfunc),
                               "; ")
                 if li.line == -1
                     strs[i] = string(base, "(unknown line)")
@@ -428,7 +391,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     # Organize backtraces into groups that are identical up to this level
     if combine
         # Combine based on the line information
-        d = Dict{LineInfo,Vector{Int}}()
+        d = Dict{StackFrame,Vector{Int}}()
         for i = 1:length(bt)
             ip = bt[i][level+1]
             key = lidict[ip]
@@ -441,7 +404,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts
         dlen = length(d)
-        lilist = Array(LineInfo, dlen)
+        lilist = Array(StackFrame, dlen)
         group = Array(Vector{Int}, dlen)
         n = Array(Int, dlen)
         i = 1
@@ -465,7 +428,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Array(LineInfo, dlen)
+        lilist = Array(StackFrame, dlen)
         group = Array(Vector{Int}, dlen)
         n = Array(Int, dlen)
         i = 1
@@ -516,7 +479,7 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
 end
 
 function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
-    counts = Dict{LineInfo, Int}()
+    counts = Dict{StackFrame, Int}()
     lastmatched = false
     for id in bt
         if id == 0
@@ -548,8 +511,10 @@ function truncto(str::ByteString, w::Int)
     ret
 end
 
+truncto(str::Symbol, w::Int) = truncto(string(str), w)
+
 # Order alphabetically (file, function) and then by line number
-function liperm(lilist::Vector{LineInfo})
+function liperm(lilist::Vector{StackFrame})
     comb = Array(ByteString, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
@@ -568,7 +533,7 @@ warning_empty() = warn("""
             Profile.init().""")
 
 function purgeC(data, lidict)
-    keep = Bool[d == 0 || lidict[d].fromC == false for d in data]
+    keep = Bool[d == 0 || lidict[d].from_c == false for d in data]
     data[keep]
 end
 
