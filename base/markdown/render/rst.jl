@@ -45,7 +45,7 @@ function rst(io::IO, list::List)
 end
 
 function rst(io::IO, q::BlockQuote)
-    s = sprint(buf -> plain(buf, q.content))
+    s = sprint(buf -> rst(buf, q.content))
     for line in split(rstrip(s), "\n")
         println(io, "    ", line)
     end
