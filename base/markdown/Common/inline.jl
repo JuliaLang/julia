@@ -76,6 +76,21 @@ function link(stream::IO, md::MD)
     end
 end
 
+type Footnote
+    id::UTF8String
+    text
+end
+
+@trigger '[' ->
+function footnote(stream::IO, md::MD)
+    withstream(stream) do
+        startswith(stream, "[^") || return
+        id = readuntil(stream, ']', match = '[')
+        id ≡ nothing && return
+        Footnote(id, startswith(stream, ':') ? parseinline(stream, md) : nothing)
+    end
+end
+
 # –––––––––––
 # Punctuation
 # –––––––––––
