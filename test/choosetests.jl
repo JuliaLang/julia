@@ -29,8 +29,8 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
-        "nullable", "meta", "profile", "libgit2", "docs", "markdown",
-        "base64", "serialize", "functors", "misc", "threads",
+        "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
+        "markdown", "base64", "serialize", "functors", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
         "boundscheck"
