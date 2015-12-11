@@ -22,10 +22,10 @@ else
 endif
 
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
-	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | sort > $@)
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
-	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)
+	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/fenv_constants.jl: $(SRCDIR)/../src/fenv_constants.h
 	@$(PRINT_PERL) $(CPP_STDOUT) -DJULIA $< | tail -n 8 | perl -ple 's/\sFE_UN\w+/ 0x10/g; s/\sFE_O\w+/ 0x08/g; s/\sFE_DI\w+/ 0x04/g; s/\sFE_INV\w+/ 0x01/g; s/\sFE_TON\w+/ 0x00/g; s/\sFE_UP\w+/ 0x800/g; s/\sFE_DO\w+/ 0x400/g; s/\sFE_TOW\w+/ 0xc00/g' > $@
