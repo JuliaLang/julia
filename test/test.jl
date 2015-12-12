@@ -18,7 +18,7 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-# Test printing of result types
+# Test printing of Pass results
 # Pass - constant
 @test contains(sprint(show, @test true), "Expression: true")
 # Pass - expression
@@ -27,6 +27,31 @@ a[1,1,1,1,1] = 10
 # Pass - exception
 @test contains(sprint(show, @test_throws ErrorException error()),
                 "Thrown: ErrorException")
+
+# Test printing of Fail results
+type NoThrowTestSet <: Base.Test.AbstractTestSet
+    results::Vector
+    NoThrowTestSet(desc) = new([])
+end
+Base.Test.record(ts::NoThrowTestSet, t::Base.Test.Result) = (push!(ts.results, t); t)
+Base.Test.finish(ts::NoThrowTestSet) = ts.results
+fails = @testset NoThrowTestSet begin
+    # Fail - wrong exception
+    @test_throws OverflowError error()
+    # Fail - no exception
+    @test_throws OverflowError 1 + 1
+    # Fail - const
+    @test false
+    # Fail - comparison
+    @test 1+1 == 2+2
+end
+for i in 1:4
+    @test isa(fails[i], Base.Test.Fail)
+end
+@test contains(sprint(show, fails[1]), "Thrown: ErrorException")
+@test contains(sprint(show, fails[2]), "No exception thrown")
+@test contains(sprint(show, fails[3]), "Evaluated: false")
+@test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3))
