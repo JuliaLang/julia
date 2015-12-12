@@ -21,7 +21,7 @@
 
 for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
     fs = f(s)
-    for T = (UTF8String, UTF16String, UTF32String)
+    for T = (String, UTF16String, UTF32String)
         t = convert(T,s)
         ft = f(t)
         @test s == t

@@ -166,7 +166,7 @@ function capture_names(re)
     name_count = info(re, INFO_NAMECOUNT, UInt32)
     name_entry_size = info(re, INFO_NAMEENTRYSIZE, UInt32)
     nametable_ptr = info(re, INFO_NAMETABLE, Ptr{UInt8})
-    names = Dict{Int, UTF8String}()
+    names = Dict{Int, String}()
     for i=1:name_count
         offset = (i-1)*name_entry_size + 1
         # The capture group index corresponding to name 'i' is stored as a

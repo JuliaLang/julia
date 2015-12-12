@@ -132,7 +132,7 @@ profile buffer is used.
 """
 function callers end
 
-function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
+function callers(funcname::String, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
     if filename === nothing && linerange === nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
@@ -144,7 +144,7 @@ function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = noth
     end
 end
 
-callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwargs...)
+callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector{UInt}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
@@ -348,7 +348,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols-nindent-ndigcounts-ndigline-5
     widthfile = floor(Integer,0.4ntext)
     widthfunc = floor(Integer,0.6ntext)
-    strs = Array(ByteString, length(lilist))
+    strs = Array(String, length(lilist))
     showextra = false
     if level > nindent
         nextra = level-nindent
@@ -510,14 +510,14 @@ function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
 end
 
 # Utilities
-function rtruncto(str::ByteString, w::Int)
+function rtruncto(str::String, w::Int)
     ret = str;
     if length(str) > w
         ret = string("...", str[end-w+4:end])
     end
     ret
 end
-function ltruncto(str::ByteString, w::Int)
+function ltruncto(str::String, w::Int)
     ret = str;
     if length(str) > w
         ret = string(str[1:w-4], "...")
@@ -530,7 +530,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Array(ByteString, length(lilist))
+    comb = Array(String, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN

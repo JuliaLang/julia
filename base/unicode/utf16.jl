@@ -119,7 +119,7 @@ function convert(::Type{UTF16String}, str::AbstractString)
     UTF16String(buf)
 end
 
-function convert(::Type{UTF16String}, str::UTF8String)
+function convert(::Type{UTF16String}, str::String)
     dat = str.data
     # handle zero length string quickly
     sizeof(dat) == 0 && return empty_utf16
@@ -156,14 +156,14 @@ function convert(::Type{UTF16String}, str::UTF8String)
     UTF16String(buf)
 end
 
-function convert(::Type{UTF8String}, str::UTF16String)
+function convert(::Type{String}, str::UTF16String)
     dat = str.data
     len = sizeof(dat) >>> 1
     # handle zero length string quickly
     len <= 1 && return empty_utf8
     # get number of bytes to allocate
     len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len-1)
-    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
+    flags == 0 && @inbounds return String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
     return encode_to_utf8(UInt16, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
 

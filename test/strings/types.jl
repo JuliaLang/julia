@@ -62,7 +62,7 @@ write(b, u)
 @test_throws BoundsError getindex(u, 0:1)
 @test_throws BoundsError getindex(u, 7:7)
 @test reverseind(u, 1) == 4
-@test typeof(Base.cconvert(Ptr{Int8},u)) == SubString{UTF8String}
+@test typeof(Base.cconvert(Ptr{Int8},u)) == SubString{String}
 @test Base.cconvert(Ptr{Int8},u) == u
 
 str = "føøbar"
@@ -131,7 +131,7 @@ let s="lorem ipsum",
     end
 end #let
 
-#for isvalid(SubString{UTF8String})
+#for isvalid(SubString{String})
 let s = utf8("Σx + βz - 2")
   for i in -1:length(s)+2
       ss=SubString(s,1,i)
@@ -145,7 +145,7 @@ ss=SubString("hello",1,5)
 @test_throws BoundsError chr2ind(ss, 10)
 @test_throws BoundsError ind2chr(ss, 10)
 
-# length(SubString{UTF8String}) performance specialization
+# length(SubString{String}) performance specialization
 let s = "|η(α)-ϕ(κ)| < ε"
     @test length(SubString(s,1,0))==length(s[1:0])
     @test length(SubString(s,4,4))==length(s[4:4])
@@ -165,7 +165,7 @@ rs = RevString("foobar")
 @test parse(Float64,RevString("64")) === 46.0
 
 # reverseind
-for T in (UTF8String, UTF16String, UTF32String)
+for T in (String, UTF16String, UTF32String)
     for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
         for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
             for c in ('X', 'δ', '\U0001d6a5')

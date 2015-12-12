@@ -551,7 +551,7 @@ contained in a string:
     false
 
     julia> contains("Xylophon", 'o')
-    ERROR: MethodError: `contains` has no method matching contains(::ASCIIString, ::Char)
+    ERROR: MethodError: `contains` has no method matching contains(::String, ::Char)
     Closest candidates are:
       contains(!Matched::Function, ::Any, !Matched::Any)
       contains(::AbstractString, !Matched::AbstractString)
@@ -705,7 +705,7 @@ a string is invalid). Here is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Array{Union{SubString{UTF8String},Void},1}:
+    3-element Array{Union{SubString{String},Void},1}:
      "a"
      "c"
      "d"
@@ -726,7 +726,7 @@ a string is invalid). Here is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Array{Union{SubString{UTF8String},Void},1}:
+    3-element Array{Union{SubString{String},Void},1}:
      "a"
      nothing
      "d"

@@ -13,7 +13,7 @@ u32 = utf32(u8)
 @test_throws UnicodeError utf32(UInt8[1,2,3])
 
 # issue #11551 (#11004,#10959)
-function tstcvt(strUTF8::UTF8String, strUTF16::UTF16String, strUTF32::UTF32String)
+function tstcvt(strUTF8::String, strUTF16::UTF16String, strUTF32::UTF32String)
     @test utf16(strUTF8) == strUTF16
     @test utf32(strUTF8) == strUTF32
     @test utf8(strUTF16) == strUTF8
@@ -30,9 +30,9 @@ strL_UTF8 = "abcdef\uff\uff"
 str2_UTF8 = "abcd\uff\uff\u7ff\u7ff"
 str3_UTF8 = "abcd\uff\uff\u7fff\u7fff"
 str4_UTF8 = "abcd\uff\u7ff\u7fff\U7ffff"
-strS_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\xed\xa0\x80\xed\xb0\x80")
-strC_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\U10000")
-strz_UTF8 = UTF8String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\0")
+strS_UTF8 = String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\xed\xa0\x80\xed\xb0\x80")
+strC_UTF8 = String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\U10000")
+strz_UTF8 = String(b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\0")
 strZ      = b"abcd\xc3\xbf\xdf\xbf\xe7\xbf\xbf\xc0\x80"
 
 strA_UTF16 = utf16(strA_UTF8)
@@ -69,16 +69,16 @@ tstcvt(str4_UTF8,str4_UTF16,str4_UTF32)
 
 # Test converting overlong \0
 @test utf8(strZ)  == strz_UTF8
-@test utf16(UTF8String(strZ)) == strz_UTF8
-@test utf32(UTF8String(strZ)) == strz_UTF8
+@test utf16(String(strZ)) == strz_UTF8
+@test utf32(String(strZ)) == strz_UTF8
 
 # Test invalid sequences
 
-strval(::Type{UTF8String}, dat) = dat
-strval(::Union{Type{UTF16String},Type{UTF32String}}, dat) = UTF8String(dat)
+strval(::Type{String}, dat) = dat
+strval(::Union{Type{UTF16String},Type{UTF32String}}, dat) = String(dat)
 
 byt = 0x0
-for T in (UTF8String, UTF16String, UTF32String)
+for T in (String, UTF16String, UTF32String)
     try
     # Continuation byte not after lead
     for byt in 0x80:0xbf
@@ -238,7 +238,7 @@ let str = ascii("this ")
     @test unsafe_load(p16,1) == 0x0068
     @test typeof(p32) == Ptr{UInt32}
     @test unsafe_load(p32,1) == 'h'
-    s8  = SubString{UTF8String}(u8,   3, 5)
+    s8  = SubString{String}(u8,   3, 5)
     s16 = SubString{UTF16String}(u16, 3, 5)
     s32 = SubString{UTF32String}(u32, 3, 5)
     p8  = pointer(s8)

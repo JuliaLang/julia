@@ -148,8 +148,6 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-@deprecate_binding String AbstractString
-
 # 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
 @deprecate_binding Uint    UInt
 @deprecate_binding Uint8   UInt8
@@ -491,11 +489,11 @@ export float32_isvalid, float64_isvalid
 
 # 11241
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
-@deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
+@deprecate is_valid_utf8(str::String)   isvalid(str)
 @deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_utf32(str::UTF32String) isvalid(str)
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
-@deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
+@deprecate is_valid_utf8(str)  isvalid(String, str)
 @deprecate is_valid_utf16(str) isvalid(UTF16String, str)
 @deprecate is_valid_utf32(str) isvalid(UTF32String, str)
 

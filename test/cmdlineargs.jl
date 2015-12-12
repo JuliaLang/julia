@@ -214,10 +214,10 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
             write(testfile, """
                 println(ARGS)
             """)
-            @test readchomp(`$exename $testfile foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') == ["UTF8String[\"$(escape(testfile))\"]", "UTF8String[]"]
+            @test readchomp(`$exename $testfile foo -bar --baz`) == "String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == "String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) == "String[\"foo\",\"-bar\",\"--baz\"]"
+            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') == ["String[\"$(escape(testfile))\"]", "String[]"]
             @test !success(`$exename --foo $testfile`)
             @test !success(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`)
         finally
@@ -249,7 +249,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     end
 
     # issue #10562
-    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "UTF8String[\"\"]"
+    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 
     # issue #12679
     extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""

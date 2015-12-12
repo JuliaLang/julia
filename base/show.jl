@@ -139,8 +139,8 @@ end
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
 function show_type_parameter(io::IO, p::ANY)
-    if p === ByteString
-        print(io, "ByteString")
+    if p === String
+        print(io, "String")
     else
         show(io, p)
     end

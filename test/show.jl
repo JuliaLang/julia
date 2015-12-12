@@ -7,9 +7,9 @@ replstr(x) = sprint((io,x) -> writemime(io,MIME("text/plain"),x), x)
 @test replstr(cell(2,2,2)) == "2x2x2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 
 immutable T5589
-    names::Vector{UTF8String}
+    names::Vector{String}
 end
-@test replstr(T5589(Array(UTF8String,100))) == "T5589(UTF8String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array(String,100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
 @test replstr(parse("type X end")) == ":(type X\n    end)"
 @test replstr(parse("immutable X end")) == ":(immutable X\n    end)"

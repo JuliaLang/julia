@@ -81,7 +81,6 @@
       <item> AbstractVector </item>
       <item> Any </item>
       <item> Array </item>
-      <item> ASCIIString </item>
       <item> Associative </item>
       <item> AsyncStream </item>
       <item> Bidiagonal </item>
@@ -91,7 +90,6 @@
       <item> BitMatrix </item>
       <item> BitVector </item>
       <item> Bool </item>
-      <item> ByteString </item>
       <item> Char </item>
       <item> CharString </item>
       <item> Cholesky </item>
@@ -198,7 +196,6 @@
       <item> UInt128 </item>
       <item> Union </item>
       <item> Unsigned </item>
-      <item> UTF8String </item>
       <item> UVError </item>
       <item> VecOrMat </item>
       <item> Vector </item>

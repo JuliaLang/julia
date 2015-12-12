@@ -68,14 +68,14 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 ############################################################################
 
-function utf8proc_map(s::ByteString, flags::Integer)
+function utf8proc_map(s::String, flags::Integer)
     p = Ref{Ptr{UInt8}}()
     result = ccall(:utf8proc_map, Cssize_t,
                    (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
                    s, sizeof(s), p, flags)
     result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
-    pointer_to_string(p[], result, true)::ByteString
+    pointer_to_string(p[], result, true)::String
 end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(bytestring(s), flags)

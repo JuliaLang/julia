@@ -128,7 +128,7 @@ Getting Around
 
    When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
 
-.. function:: Base.compilecache(module::ByteString)
+.. function:: Base.compilecache(module::String)
 
    .. Docstring generated from Julia source
 

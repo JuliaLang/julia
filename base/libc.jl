@@ -263,7 +263,7 @@ function FormatMessage end
         buf = Array(UInt16, len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-        return UTF8String(utf16to8(buf))
+        return String(utf16to8(buf))
     end
 end
 

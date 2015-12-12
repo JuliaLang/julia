@@ -168,7 +168,7 @@ else
     close(f)
 
     f=open(joinpath(unicodedir,"UTF-8.unicode"))
-    str2 = UTF8String(read(f, UInt8, 4382595)[4:end])
+    str2 = String(read(f, UInt8, 4382595)[4:end])
     close(f)
     @test str1 == str2
 

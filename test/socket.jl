@@ -92,7 +92,7 @@ wait(tsk)
 mktempdir() do tmpdir
     socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
-    for T in (UTF8String, UTF16String) # test for issue #9435
+    for T in (String, UTF16String) # test for issue #9435
         tsk = @async begin
             s = listen(T(socketname))
             Base.notify(c)
