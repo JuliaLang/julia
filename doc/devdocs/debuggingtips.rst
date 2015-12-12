@@ -24,7 +24,7 @@ Similarly, if you're debugging some of julia's internals (e.g.,
 
 This is a good way to circumvent problems that arise from the order in which julia's output streams are initialized.
 
-Julia's flisp interpreter uses ``value_t*`` objects; these can be displayed
+Julia's flisp interpreter uses ``value_t`` objects; these can be displayed
 with ``call fl_print(ios_stdout, obj)``.
 
 Useful Julia variables for Inspecting
@@ -74,7 +74,7 @@ Another useful frame is ``to_function(jl_lambda_info_t *li, bool cstyle)``. The 
 
    #2  0x00007ffff7928bf7 in to_function (li=0x2812060, cstyle=false) at codegen.cpp:584
    584	        abort();
-   (gdb) p jl_(jl_uncompress_ast(li, li.ast))
+   (gdb) p jl_(jl_uncompress_ast(li, li->ast))
 
 Inserting breakpoints upon certain conditions
 ---------------------------------------------
@@ -91,9 +91,30 @@ Calling a particular method
 
 ::
 
-   (gdb) break jl_apply_generic if strcmp(F->name->name, "method_to_break")==0
+   (gdb) break jl_apply_generic if strcmp((char*)(jl_symbol_name)(jl_gf_mtable(F)->name), "method_to_break")==0
 
 Since this function is used for every call, you will make everything 1000x slower if you do this.
+
+Dealing with signals
+--------------------
+
+Julia requires a few signal to function property. The profiler uses ``SIGUSR2``
+for sampling and the garbage collector uses ``SIGSEGV`` for threads
+synchronization. If you are debugging some code that uses the profiler or
+multiple julia threads, you may want to let the debugger ignore these signals
+since they can be triggered very often during normal operations. The command to
+do this in GDB is (replace ``SIGSEGV`` with ``SIGUSRS`` or other signals you
+want to ignore)::
+
+   (gdb) handle SIGSEGV noprint nostop pass
+
+The corresponding LLDB command is (after the process is started)::
+
+   (lldb) pro hand -p true -s false -n false SIGSEGV
+
+If you are debugging a segfault with threaded code, you can set a breakpoint on
+``jl_critical_error`` (``sigdie_handler`` should also work on Linux and BSD) in
+order to only catch the actual segfault rather than the GC synchronization points.
 
 Debugging during julia's build process (bootstrap)
 --------------------------------------------------
