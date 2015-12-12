@@ -532,7 +532,7 @@ static NOINLINE int true_main(int argc, char *argv[])
         int i;
         for (i=0; i < argc; i++) {
             jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-            jl_set_typeof(s,jl_utf8_string_type);
+            jl_set_typeof(s,jl_string_type);
             jl_arrayset(args, s, i);
         }
     }

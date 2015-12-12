@@ -833,7 +833,7 @@ void jl_get_builtin_hooks(void)
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
 #endif
 
-    jl_utf8_string_type = (jl_datatype_t*)core("String");
+    jl_string_type = (jl_datatype_t*)core("String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 

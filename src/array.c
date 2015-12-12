@@ -363,7 +363,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     if (!jl_typeis(a, jl_array_uint8_type))
         jl_type_error("jl_array_to_string", (jl_value_t*)jl_array_uint8_type, (jl_value_t*)a);
     jl_value_t *s = (jl_value_t*)jl_gc_alloc_1w();
-    jl_set_typeof(s, jl_utf8_string_type);
+    jl_set_typeof(s, jl_string_type);
     jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
 }
