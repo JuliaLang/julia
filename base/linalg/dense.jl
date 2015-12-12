@@ -282,7 +282,7 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
-doc"""
+"""
 ```rst
 ..  logm(A::StridedMatrix)
 

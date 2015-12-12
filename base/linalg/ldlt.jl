@@ -15,7 +15,7 @@ convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U
 convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
-doc"""
+"""
 
     ldltfact!(::SymTridiagonal) -> LDLt
 
@@ -32,7 +32,7 @@ function ldltfact!{T<:Real}(S::SymTridiagonal{T})
     return LDLt{T,SymTridiagonal{T}}(S)
 end
 
-doc"""
+"""
     ldltfact(::SymTridiagonal) -> LDLt
 
 Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that `A = L*Diagonal(d)*L'` where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt` factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax = b` with `F\b`.
