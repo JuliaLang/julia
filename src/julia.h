@@ -75,8 +75,9 @@ JL_DLLEXPORT void jl_threading_profile(void);
 #if defined(__GNUC__)
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        __sync_fetch_and_add(&(a), (b))
+// Returns the original value of `a`
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       __sync_bool_compare_and_swap(&(a), (b), (c))
+       __sync_val_compare_and_swap(&(a), (b), (c))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        __sync_lock_test_and_set(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
@@ -84,12 +85,13 @@ JL_DLLEXPORT void jl_threading_profile(void);
 #elif defined(_OS_WINDOWS_)
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
+// Returns the original value of `a`
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
        _InterlockedCompareExchange64((volatile LONG64 *)&(a), (c), (b))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        _InterlockedExchange64(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
-       _InterlockedExchange64(&(a), 0)
+       (void)_InterlockedExchange64(&(a), 0)
 #else
 #  error "No atomic operations supported."
 #endif
@@ -112,7 +114,7 @@ JL_DLLEXPORT void jl_threading_profile(void);
             for (;;) {                                                  \
                 if (m ## _mutex == 0 &&                                 \
                     JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, 0,          \
-                                               uv_thread_self())) {     \
+                                               uv_thread_self()) == 0) { \
                     m ## _lock_count = 1;                               \
                     break;                                              \
                 }                                                       \
