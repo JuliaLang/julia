@@ -172,10 +172,6 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
-_utf8(str) = utf8(str)
-match{T<:String}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
-    match(re, _utf8(str), idx, add_opts)
-
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
 match(r::Regex, s::AbstractString, i::Integer) =
     throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))

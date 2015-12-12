@@ -75,7 +75,7 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
-bytestring{T <: String}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+bytestring(p::SubString{String}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
@@ -84,7 +84,7 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-function cmp{T<:String,S<:String}(a::SubString{T}, b::SubString{S})
+function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
     nb = sizeof(b)
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
@@ -93,9 +93,9 @@ function cmp{T<:String,S<:String}(a::SubString{T}, b::SubString{S})
 end
 
 # don't make unnecessary copies when passing substrings to C functions
-cconvert{T<:String}(::Type{Ptr{UInt8}}, s::SubString{T}) = s
-cconvert{T<:String}(::Type{Ptr{Int8}}, s::SubString{T}) = s
-function unsafe_convert{T<:String, R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{T})
+cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
+cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
+function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
     unsafe_convert(Ptr{R}, s.string.data) + s.offset
 end
 
