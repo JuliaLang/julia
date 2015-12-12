@@ -79,6 +79,8 @@ a = reshape([1.:6;], (2,3))
 @test scale(a, [1; 2; 3]) == a.*[1 2 3]
 @test scale([1; 2], a) == a.*[1; 2]
 @test scale(eye(Int, 2), 0.5) == 0.5*eye(2)
+@test scale([1; 2], sub(a, :, :)) == a.*[1; 2]
+@test scale(sub([1; 2], :), a) == a.*[1; 2]
 @test_throws DimensionMismatch scale(a, ones(2))
 @test_throws DimensionMismatch scale(ones(3), a)
 
