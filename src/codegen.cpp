@@ -6298,7 +6298,7 @@ extern "C" void jl_init_codegen(void)
 #endif
     jl_init_debuginfo();
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR <= 3
+#ifndef LLVM34
     // this option disables LLVM's signal handlers
     llvm::DisablePrettyStackTrace = true;
 #endif
