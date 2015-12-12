@@ -247,13 +247,13 @@ function translate(file)
                 for mdoc in getdoc(mod, funcname)
                     mdecl, mbody = split_decl_rst(mdoc)
                     if contains(replace(mdecl, r"[\n ][\n ]+", " "),
-                                replace(".. function:: " * full,
+                                replace(".. function:: " * unescape_string(full),
                                         r"[\n ][\n ]+", " "))
                         if doc != nothing
                             error("duplicate $full $l")
                         end
                         doc = mdoc
-                        decl = mdecl
+                        decl = replace(mdecl, '\\', "\\\\")
                         body = mbody
                     end
                 end
