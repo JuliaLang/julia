@@ -57,7 +57,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Pass
+    Fail
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
