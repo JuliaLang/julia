@@ -127,13 +127,13 @@ convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVe
     convert(T, utf32(v))
 
 # specialize for performance reasons:
-function convert{T<:String, S<:Union{UInt32,Char,Int32}}(::Type{T}, data::AbstractVector{S})
+function convert{T<:Union{UInt32,Char,Int32}}(::Type{String}, data::AbstractVector{T})
     s = IOBuffer(Array(UInt8,length(data)), true, true)
     truncate(s,0)
     for x in data
         print(s, Char(x))
     end
-    convert(T, takebuf_string(s))
+    convert(String, takebuf_string(s))
 end
 
 convert(::Type{Vector{UInt32}}, str::UTF32String) = str.data
@@ -227,7 +227,7 @@ pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
 pointer(x::Union{UTF16String,UTF32String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 
 # pointer conversions of SubString of ASCII/UTF8/UTF16/UTF32:
-pointer{T<:String}(x::SubString{T}) = pointer(x.string.data) + x.offset
-pointer{T<:String}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.string.data))
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.string.data))

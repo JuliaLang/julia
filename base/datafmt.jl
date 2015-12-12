@@ -119,7 +119,7 @@ function result(dlmoffsets::DLMOffsets)
     dlmoffsets.oarr
 end
 
-type DLMStore{T,S<:String} <: DLMHandler
+type DLMStore{T} <: DLMHandler
     hdr::Array{AbstractString, 2}
     data::Array{T, 2}
 
@@ -128,29 +128,29 @@ type DLMStore{T,S<:String} <: DLMHandler
     lastrow::Int
     lastcol::Int
     hdr_offset::Int
-    sbuff::S
+    sbuff::String
     auto::Bool
     eol::Char
 end
 
-function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
+function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::String, auto::Bool, eol::Char)
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) = (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
 
-function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
+function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
     lastrow = dlmstore.lastrow
     cells::Array{T,2} = dlmstore.data
-    sbuff::S = dlmstore.sbuff
+    sbuff = dlmstore.sbuff
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
     (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
@@ -316,12 +316,12 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
     end
 end
 
-function colval{S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
     n = tryparse_internal(Bool, sbuff, startpos, endpos, false)
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:Integer, S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval{T<:Integer}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
     n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
@@ -336,11 +336,11 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Float32,
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:AbstractString, S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval{T<:AbstractString}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
     cells[row, col] = SubString(sbuff, startpos, endpos)
     return false
 end
-function colval{S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int)
     # if array is of Any type, attempt parsing only the most common types: Int, Bool, Float64 and fallback to SubString
     len = endpos-startpos+1
     if len > 0
@@ -359,7 +359,7 @@ function colval{S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{An
     cells[row, col] = SubString(sbuff, startpos, endpos)
     false
 end
-function colval{T<:Char, S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval{T<:Char}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
     if startpos == endpos
         cells[row, col] = next(sbuff, startpos)[1]
         return false
@@ -367,7 +367,7 @@ function colval{T<:Char, S<:String}(sbuff::S, startpos::Int, endpos::Int, cells:
         return true
     end
 end
-colval{S<:String}(sbuff::S, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
+colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
 function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D,
                         ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
@@ -376,7 +376,7 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D,
                                  isascii(dlm) &&
                                  (!allow_quote || isascii(qchar)) &&
                                  (!allow_comments || isascii(cchar)))
-    if (T <: String) && all_ascii
+    if T === String && all_ascii
         return dlm_parse(dbuff.data, eol % UInt8, dlm % UInt8, qchar % UInt8, cchar % UInt8,
                          ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
     end
