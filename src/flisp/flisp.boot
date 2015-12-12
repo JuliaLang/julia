@@ -59,9 +59,8 @@
   trycatch lambda if and pair? eq? car quote thrown-value cadr caddr raise])  let #fn(">000s1^|C6B0|m62}Mm02}Nm1530]2c0c1L1c2c3|32L1c4}3133c2c5|32g66C0c6g6g7L2L1g6L3540g7g8K;" [#fn(nconc)
   lambda #fn(map) #fn("5000r1|F650|M;|;" [])
   #fn(copy-list) #fn("5000r1|F650|\x84;e040;" [void]) letrec]))
-	  *whitespace* "\t\n\v\f\r \u0085  ᠎           \u2028\u2029  　" 1+
-	  #fn("6000r1|aw;" [] 1+) 1- #fn("6000r1|ax;" [] 1-) 1arg-lambda?
-	  #fn("7000r1|F16T02|Mc0<16J02|NF16B02|\x84F16:02e1|\x84a42;" [lambda
+	  1+ #fn("6000r1|aw;" [] 1+) 1-
+	  #fn("6000r1|ax;" [] 1-) 1arg-lambda? #fn("7000r1|F16T02|Mc0<16J02|NF16B02|\x84F16:02e1|\x84a42;" [lambda
   length=] 1arg-lambda?)
 	  <= #fn("6000r2|}X17602|}W;" [] <=) >
 	  #fn("6000r2}|X;" [] >) >= #fn("6000r2}|X17602|}W;" [] >=)
