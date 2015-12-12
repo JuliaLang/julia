@@ -45,7 +45,7 @@ end
 isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
 isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2])
 
-function splitdir(path::ByteString)
+function splitdir(path::String)
     a, b = splitdrive(path)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
@@ -134,7 +134,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
         systemerror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
-        x && return UTF8String(utf16to8(buf))
+        x && return String(utf16to8(buf))
     end
 end
 
@@ -148,7 +148,7 @@ end
         systemerror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
-        x && return UTF8String(utf16to8(buf))
+        x && return String(utf16to8(buf))
     end
 end
 

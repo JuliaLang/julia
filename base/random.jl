@@ -1261,7 +1261,7 @@ function Base.repr(u::UUID)
     end
     a[[24,19,14,9]] = '-'
 
-    return UTF8String(a)
+    return String(a)
 end
 
 Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
@@ -1269,7 +1269,7 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 # return a random string (often useful for temporary filenames/dirnames)
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, n::Int) = UTF8String(b[rand(r, 1:length(b), n)])
+    randstring(r::AbstractRNG, n::Int) = String(b[rand(r, 1:length(b), n)])
     randstring(r::AbstractRNG) = randstring(r,8)
     randstring(n::Int) = randstring(GLOBAL_RNG, n)
     randstring() = randstring(GLOBAL_RNG)

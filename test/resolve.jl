@@ -59,14 +59,14 @@ end
 # auxiliary functions
 
 function deps_from_data(deps_data)
-    deps = Dict{ByteString,Dict{VersionNumber,Available}}()
+    deps = Dict{String,Dict{VersionNumber,Available}}()
     for d in deps_data
         p = d[1]; vn = d[2]; r = d[3:end]
         if !haskey(deps, p)
             deps[p] = Dict{VersionNumber,Available}()
         end
         if !haskey(deps[p], vn)
-            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{ByteString,VersionSet}())
+            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSet}())
         end
         isempty(r) && continue
         rp = r[1]
@@ -80,7 +80,7 @@ function deps_from_data(deps_data)
     deps
 end
 function reqs_from_data(reqs_data)
-    reqs = Dict{ByteString,VersionSet}()
+    reqs = Dict{String,VersionSet}()
     for r in reqs_data
         p = r[1]
         reqs[p] = VersionSet(VersionNumber[r[2:end]...])
@@ -91,7 +91,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
     deps = deps_from_data(deps_data)
     #println("deps=$deps")
     #println()
-    result = sanity_check(deps, Set(ByteString[pkgs...]))
+    result = sanity_check(deps, Set(String[pkgs...]))
     length(result) == length(expected_result) || return false
     for (p, vn, pp) in result
         in((p, vn), expected_result) || return  false

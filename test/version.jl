@@ -231,12 +231,12 @@ io = IOBuffer()
 @test VERSION.minor == ccall(:jl_ver_minor, Cint, ())
 @test VERSION.patch == ccall(:jl_ver_patch, Cint, ())
 
-# test construction with non-Int and non-UTF8String components
+# test construction with non-Int and non-String components
 @test_throws MethodError VersionNumber()
 @test VersionNumber(true) == v"1"
 @test VersionNumber(true, 0x2) == v"1.2"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
-@test VersionNumber(true, 0x2, Int128(3), (UTF8String("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (UTF8String("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (), (UTF8String("sp"), 0x2)) == v"1.2.3+sp.2"
+@test VersionNumber(true, 0x2, Int128(3), (String("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (String("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (), (String("sp"), 0x2)) == v"1.2.3+sp.2"

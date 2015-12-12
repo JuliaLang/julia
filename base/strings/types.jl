@@ -31,7 +31,7 @@ SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offs
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
-sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
+sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 
 # TODO: length(s::SubString) = ??
 # default implementation will work but it's slow
@@ -39,7 +39,7 @@ sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 # that may require additional string interfaces
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
-function length(s::SubString{UTF8String})
+function length(s::SubString{String})
     return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
                                       pointer(s), nextind(s, s.endof) - 1))
 end
@@ -75,7 +75,7 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
-bytestring{T <: ByteString}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+bytestring{T <: String}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
@@ -84,7 +84,7 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-function cmp{T<:ByteString,S<:ByteString}(a::SubString{T}, b::SubString{S})
+function cmp{T<:String,S<:String}(a::SubString{T}, b::SubString{S})
     na = sizeof(a)
     nb = sizeof(b)
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
@@ -93,9 +93,9 @@ function cmp{T<:ByteString,S<:ByteString}(a::SubString{T}, b::SubString{S})
 end
 
 # don't make unnecessary copies when passing substrings to C functions
-cconvert{T<:ByteString}(::Type{Ptr{UInt8}}, s::SubString{T}) = s
-cconvert{T<:ByteString}(::Type{Ptr{Int8}}, s::SubString{T}) = s
-function unsafe_convert{T<:ByteString, R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{T})
+cconvert{T<:String}(::Type{Ptr{UInt8}}, s::SubString{T}) = s
+cconvert{T<:String}(::Type{Ptr{Int8}}, s::SubString{T}) = s
+function unsafe_convert{T<:String, R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{T})
     unsafe_convert(Ptr{R}, s.string.data) + s.offset
 end
 
@@ -167,7 +167,7 @@ end
 
 convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
 
-function repeat(s::ByteString, r::Integer)
+function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     d = s.data; n = length(d)
     out = Array(UInt8, n*r)

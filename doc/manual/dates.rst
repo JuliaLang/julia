@@ -58,7 +58,7 @@ Delimited slots are marked by specifying the delimiter the parser should expect 
 
 Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next.
 
-Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
+Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
 One note on parsing performance: using the ``Date(date_string,format_string)`` function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a :class:`Dates.DateFormat`, and pass it instead of a raw format string.
 
@@ -233,7 +233,7 @@ The :func:`dayname` and :func:`monthname` methods can also take an optional ``lo
   julia> Dates.dayname(t;locale="french")
   "Vendredi"
 
-Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,UTF8String}`` should be loaded in :const:`VALUETOMONTH`.
+Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,String}`` should be loaded in :const:`VALUETOMONTH`.
 
 TimeType-Period Arithmetic
 --------------------------

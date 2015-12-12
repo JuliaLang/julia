@@ -281,7 +281,7 @@ JL_DLLEXPORT const char *jl_ver_string(void)
    return JULIA_VERSION_STRING;
 }
 
-// return char* from ByteString field in Base.GIT_VERSION_INFO
+// return char* from String field in Base.GIT_VERSION_INFO
 static const char *git_info_string(const char *fld)
 {
     static jl_value_t *GIT_VERSION_INFO = NULL;

@@ -69,7 +69,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    Set the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank ``proto`` delegating the choice to the package developer.
 
-.. function:: available() -> Vector{ASCIIString}
+.. function:: available() -> Vector{String}
 
    .. Docstring generated from Julia source
 
@@ -81,7 +81,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    Returns the version numbers available for package ``pkg``\ .
 
-.. function:: installed() -> Dict{ASCIIString,VersionNumber}
+.. function:: installed() -> Dict{String,VersionNumber}
 
    .. Docstring generated from Julia source
 

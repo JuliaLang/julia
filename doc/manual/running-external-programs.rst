@@ -127,7 +127,7 @@ case, just use an array (or any other iterable container):
 .. doctest::
 
     julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
-    2-element Array{ASCIIString,1}:
+    2-element Array{String,1}:
      "/etc/passwd"
      "/Volumes/External HD/data.csv"
 
@@ -141,7 +141,7 @@ shell's ``{a,b,c}`` argument generation:
 .. doctest::
 
     julia> names = ["foo","bar","baz"]
-    3-element Array{ASCIIString,1}:
+    3-element Array{String,1}:
      "foo"
      "bar"
      "baz"
@@ -155,13 +155,13 @@ shell's Cartesian product generation behavior is emulated:
 .. doctest::
 
     julia> names = ["foo","bar","baz"]
-    3-element Array{ASCIIString,1}:
+    3-element Array{String,1}:
      "foo"
      "bar"
      "baz"
 
     julia> exts = ["aux","log"]
-    2-element Array{ASCIIString,1}:
+    2-element Array{String,1}:
      "aux"
      "log"
 

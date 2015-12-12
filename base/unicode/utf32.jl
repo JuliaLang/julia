@@ -23,18 +23,18 @@ function convert(::Type{UTF32String}, str::AbstractString)
     UTF32String(buf)
 end
 
-function convert(::Type{UTF8String},  str::UTF32String)
+function convert(::Type{String},  str::UTF32String)
     dat = str.data
     len = sizeof(dat) >>> 2
     # handle zero length string quickly
     len <= 1 && return empty_utf8
     # get number of bytes to allocate
     len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat, 1, len-1)
-    flags == 0 && @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
+    flags == 0 && @inbounds return String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
     return encode_to_utf8(UInt32, dat, len + num2byte + num3byte*2 + num4byte*3)
 end
 
-function convert(::Type{UTF32String}, str::UTF8String)
+function convert(::Type{UTF32String}, str::String)
     dat = str.data
     # handle zero length string quickly
     sizeof(dat) == 0 && return empty_utf32
@@ -127,7 +127,7 @@ convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVe
     convert(T, utf32(v))
 
 # specialize for performance reasons:
-function convert{T<:ByteString, S<:Union{UInt32,Char,Int32}}(::Type{T}, data::AbstractVector{S})
+function convert{T<:String, S<:Union{UInt32,Char,Int32}}(::Type{T}, data::AbstractVector{S})
     s = IOBuffer(Array(UInt8,length(data)), true, true)
     truncate(s,0)
     for x in data
@@ -200,7 +200,7 @@ end
 # '\0', and which are terminated by a '\0'
 
 containsnul(s::AbstractString) = '\0' in s
-containsnul(s::ByteString) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::Union{UTF16String,UTF32String}) = findfirst(s.data, 0) != length(s.data)
 
 if sizeof(Cwchar_t) == 2
@@ -222,12 +222,12 @@ function unsafe_convert(::Type{Cwstring}, s::WString)
 end
 
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
-pointer(x::Union{ByteString,UTF16String,UTF32String}) = pointer(x.data)
-pointer(x::ByteString, i::Integer) = pointer(x.data)+(i-1)
+pointer(x::Union{String,UTF16String,UTF32String}) = pointer(x.data)
+pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
 pointer(x::Union{UTF16String,UTF32String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 
 # pointer conversions of SubString of ASCII/UTF8/UTF16/UTF32:
-pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
-pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer{T<:String}(x::SubString{T}) = pointer(x.string.data) + x.offset
+pointer{T<:String}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.string.data))
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.string.data))

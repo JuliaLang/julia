@@ -23,7 +23,7 @@ type MIState
     current_mode
     aborted::Bool
     mode_state
-    kill_buffer::ByteString
+    kill_buffer::String
     previous_key::Array{Char,1}
     key_repeats::Int
 end
@@ -664,7 +664,7 @@ function write_prompt(terminal, p::Prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
 end
-write_prompt(terminal, s::ByteString) = write(terminal, s)
+write_prompt(terminal, s::String) = write(terminal, s)
 
 ### Keymap Support
 
@@ -743,11 +743,11 @@ end
 # This is different from the default eager redirect, which only looks at the current and lower
 # layers of the stack.
 immutable KeyAlias
-    seq::UTF8String
+    seq::String
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, ByteString(cs)))
+match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, String(cs)))
 match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
 match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
@@ -1053,7 +1053,7 @@ init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer
 type PrefixSearchState <: ModeState
     terminal
     histprompt
-    prefix::ByteString
+    prefix::String
     response_buffer::IOBuffer
     ias::InputAreaState
     indent::Int

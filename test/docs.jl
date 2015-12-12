@@ -606,7 +606,7 @@ type C <: A end
 
 immutable D <: B
     one
-    two::UTF8String
+    two::String
     three::Float64
 end
 
@@ -673,7 +673,7 @@ immutable Undocumented.D <: Undocumented.B
 **Fields:**
 ```
 one   :: Any
-two   :: UTF8String
+two   :: String
 three :: Float64
 ```
 """)

@@ -141,7 +141,7 @@
             <word name="Type"/>
             <word name="IO"/>
             <word name="Any"/>
-            <word name="ASCIIString"/>
+            <word name="String"/>
             <word name="Union"/>
             <word name="Dict"/>
             <word name="Function"/>

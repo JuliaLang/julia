@@ -220,7 +220,7 @@ function tempdir()
         error("GetTempPath failed: $(Libc.FormatMessage())")
     end
     resize!(temppath,lentemppath)
-    return UTF8String(utf16to8(temppath))
+    return String(utf16to8(temppath))
 end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
@@ -233,7 +233,7 @@ function tempname(temppath::AbstractString,uunique::UInt32)
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
     resize!(tname,lentname)
-    return UTF8String(utf16to8(tname))
+    return String(utf16to8(tname))
 end
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))
@@ -287,7 +287,7 @@ function readdir(path::AbstractString)
     # The list of dir entries is returned as a contiguous sequence of null-terminated
     # strings, the first of which is pointed to by ptr in uv_readdir_req.
     # The following lines extracts those strings into dirent
-    entries = ByteString[]
+    entries = String[]
     offset = 0
 
     for i = 1:file_count

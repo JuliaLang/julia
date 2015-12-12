@@ -153,7 +153,7 @@ function syntax_deprecation_warnings(f::Function, warn::Bool)
     end
 end
 
-function parse_input_line(s::ByteString)
+function parse_input_line(s::String)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
@@ -255,7 +255,7 @@ function process_options(opts::JLOptions)
             # program
             repl = false
             # remove filename from ARGS
-            global PROGRAM_FILE = UTF8String(shift!(ARGS))
+            global PROGRAM_FILE = String(shift!(ARGS))
             if !is_interactive
                 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             end

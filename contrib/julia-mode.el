@@ -280,7 +280,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
      "Cuchar" "Cshort" "Cushort" "Cint" "Cuint" "Clonglong" "Culonglong" "Cintmax_t" "Cuintmax_t"
      "Cfloat" "Cdouble" "Cptrdiff_t" "Cssize_t" "Csize_t"
      "Cchar" "Clong" "Culong" "Cwchar_t"
-     "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
+     "Char" "String" "AbstractString" "SubString"
      "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC" "BitArray"
      "Range" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
      "Tuple" "NTuple" "Vararg"

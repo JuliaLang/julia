@@ -517,7 +517,7 @@ function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     len = Int(ccall(:strlen, Csize_t, (Cstring,), p))
-    UTF8String(pointer_to_array(p,len,true))
+    String(pointer_to_array(p,len,true))
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)

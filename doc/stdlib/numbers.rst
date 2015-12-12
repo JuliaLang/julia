@@ -140,7 +140,7 @@ Data Formats
 
    Convert a hexadecimal string to the floating point number it represents.
 
-.. function:: hex2bytes(s::ASCIIString)
+.. function:: hex2bytes(s::AbstractString)
 
    .. Docstring generated from Julia source
 
@@ -150,7 +150,7 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ``ASCIIString``\ .
+   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ``String``\ .
 
 General Number Functions and Constants
 --------------------------------------

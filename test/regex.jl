@@ -34,7 +34,7 @@ show(buf, r"")
 # see #10994, #11447: PCRE2 allows NUL chars in the pattern
 @test ismatch(Regex("^a\0b\$"), "a\0b")
 
-# regex match / search string must be a ByteString
+# regex match / search string must be a String
 @test_throws ArgumentError match(r"test", utf32("this is a test"))
 @test_throws ArgumentError search(utf32("this is a test"), r"test")
 

@@ -11,7 +11,7 @@ url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
-    pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
+    pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
@@ -31,7 +31,7 @@ end
 available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
 function latest(names=readdir("METADATA"))
-    pkgs = Dict{ByteString,Available}()
+    pkgs = Dict{String,Available}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
@@ -185,7 +185,7 @@ requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,Tuple{VersionNumber,Bool}}()
+    pkgs = Dict{String,Tuple{VersionNumber,Bool}}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
@@ -204,7 +204,7 @@ end
 
 function fixed(avail::Dict=available(), inst::Dict=installed(avail),
     julia_version::VersionNumber=VERSION)
-    pkgs = Dict{ByteString,Fixed}()
+    pkgs = Dict{String,Fixed}()
     for (pkg,(ver,fix)) in inst
         fix || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
@@ -215,7 +215,7 @@ function fixed(avail::Dict=available(), inst::Dict=installed(avail),
 end
 
 function free(inst::Dict=installed())
-    pkgs = Dict{ByteString,VersionNumber}()
+    pkgs = Dict{String,VersionNumber}()
     for (pkg,(ver,fix)) in inst
         fix && continue
         pkgs[pkg] = ver

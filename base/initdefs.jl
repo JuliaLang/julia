@@ -2,8 +2,8 @@
 
 ## initdefs.jl - initialization and runtime management definitions
 
-PROGRAM_FILE = UTF8String("")
-const ARGS = UTF8String[]
+PROGRAM_FILE = ""
+const ARGS = String[]
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
@@ -14,8 +14,8 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-const LOAD_PATH = ByteString[]
-const LOAD_CACHE_PATH = ByteString[]
+const LOAD_PATH = String[]
+const LOAD_CACHE_PATH = String[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")

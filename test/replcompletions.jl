@@ -236,11 +236,11 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(prevind, Tuple{UTF8String, Int})[1])
+@test c[1] == string(methods(prevind, Tuple{String, Int})[1])
 @test r == 1:7
 @test s[r] == "prevind"
 
-for (T, arg) in [(UTF8String,"\")\""),(Char, "')'")]
+for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
@@ -271,7 +271,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test4(\"e\",r\" \","
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test4, Tuple{UTF8String, Regex})[1])
+@test c[1] == string(methods(CompletionFoo.test4, Tuple{String, Regex})[1])
 @test r == 1:19
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
@@ -377,7 +377,7 @@ c, r, res = test_scomplete(s)
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (UTF8String[], 0:-1, false) == test_scomplete("\$a")
+@test (String[], 0:-1, false) == test_scomplete("\$a")
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp

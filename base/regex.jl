@@ -8,7 +8,7 @@ const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 type Regex
-    pattern::ByteString
+    pattern::String
     compile_options::UInt32
     match_options::UInt32
     regex::Ptr{Void}
@@ -103,12 +103,12 @@ function show(io::IO, re::Regex)
     end
 end
 
-# TODO: map offsets into non-ByteStrings back to original indices.
+# TODO: map offsets into strings in other encodings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
 immutable RegexMatch
-    match::SubString{UTF8String}
-    captures::Vector{Union{Void,SubString{UTF8String}}}
+    match::SubString{String}
+    captures::Vector{Union{Void,SubString{String}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
@@ -157,7 +157,7 @@ end
 
 (r::Regex)(s) = ismatch(r, s)
 
-function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
+function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
     if !PCRE.exec(re.regex, str, idx-1, opts, re.match_data)
@@ -166,24 +166,24 @@ function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::In
     ovec = re.ovec
     n = div(length(ovec),2) - 1
     mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{UTF8String}}[
+    cap = Union{Void,SubString{String}}[
             ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
 
 _utf8(str) = utf8(str)
-match{T<:ByteString}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
+match{T<:String}(re::Regex, str::Union{T,SubString{T}}, idx::Integer, add_opts::UInt32=UInt32(0)) =
     match(re, _utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
 match(r::Regex, s::AbstractString, i::Integer) =
     throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))
 
-function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
+function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
     n = length(str.data)
-    matches = SubString{UTF8String}[]
+    matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
     opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
@@ -214,10 +214,10 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::Union{ByteString,SubString}, overlap::Bool=false) =
+matchall(re::Regex, str::Union{String,SubString}, overlap::Bool=false) =
     matchall(re, utf8(str), overlap)
 
-function search(str::Union{ByteString,SubString}, re::Regex, idx::Integer)
+function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end
@@ -315,7 +315,7 @@ end
 
 immutable RegexMatchIterator
     regex::Regex
-    string::UTF8String
+    string::String
     overlap::Bool
 
     function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)

@@ -118,7 +118,7 @@ are ``Hello, World!``::
     IOStream(<file hello.txt>)
 
     julia> readlines(f)
-    1-element Array{Union{ASCIIString,UTF8String},1}:
+    1-element Array{String,1}:
      "Hello, World!\n"
 
 If you want to write to a file, you can open it with the write (``"w"``) flag::
@@ -250,7 +250,7 @@ As with other streams, use :func:`close` to disconnect the socket::
 Resolving IP Addresses
 ----------------------
 
-One of the :func:`connect` methods that does not follow the :func:`listen` methods is ``connect(host::ASCIIString,port)``, which will attempt to connect to the host
+One of the :func:`connect` methods that does not follow the :func:`listen` methods is ``connect(host::String,port)``, which will attempt to connect to the host
 given by the ``host`` parameter on the port given by the port parameter. It
 allows you to do things like::
 

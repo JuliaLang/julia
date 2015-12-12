@@ -579,7 +579,7 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
     return jl_parse_eval_all(fpath, len, NULL, 0);
 }
 
-// load from filename given as a ByteString object
+// load from filename given as a String object
 JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
     return jl_load(jl_string_data(str), jl_string_len(str));

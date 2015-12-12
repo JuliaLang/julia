@@ -2,7 +2,7 @@
 
 ## from base/boot.jl:
 #
-# immutable UTF8String <: AbstractString
+# immutable String <: AbstractString
 #     data::Vector{UInt8}
 # end
 #
@@ -28,7 +28,7 @@ const utf8_trailing = [
 
 ## required core functionality ##
 
-function endof(s::UTF8String)
+function endof(s::String)
     d = s.data
     i = length(d)
     i == 0 && return i
@@ -38,7 +38,7 @@ function endof(s::UTF8String)
     i
 end
 
-function length(s::UTF8String)
+function length(s::String)
     d = s.data
     cnum = 0
     for i = 1:length(d)
@@ -47,7 +47,7 @@ function length(s::UTF8String)
     cnum
 end
 
-function next(s::UTF8String, i::Int)
+function next(s::String, i::Int)
     # potentially faster version
     # d = s.data
     # a::UInt32 = d[i]
@@ -86,7 +86,7 @@ function first_utf8_byte(ch::Char)
                   ((c>>18) | 0xf0)%UInt8
 end
 
-function reverseind(s::UTF8String, i::Integer)
+function reverseind(s::String, i::Integer)
     j = lastidx(s) + 1 - i
     d = s.data
     while is_valid_continuation(d[j])
@@ -97,16 +97,16 @@ end
 
 ## overload methods for efficiency ##
 
-sizeof(s::UTF8String) = sizeof(s.data)
+sizeof(s::String) = sizeof(s.data)
 
-lastidx(s::UTF8String) = length(s.data)
+lastidx(s::String) = length(s.data)
 
-isvalid(s::UTF8String, i::Integer) =
+isvalid(s::String, i::Integer) =
     (1 <= i <= endof(s.data)) && !is_valid_continuation(s.data[i])
 
-const empty_utf8 = UTF8String(UInt8[])
+const empty_utf8 = String(UInt8[])
 
-function getindex(s::UTF8String, r::UnitRange{Int})
+function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return empty_utf8
     i, j = first(r), last(r)
     d = s.data
@@ -120,10 +120,10 @@ function getindex(s::UTF8String, r::UnitRange{Int})
         throw(BoundsError())
     end
     j = nextind(s,j)-1
-    UTF8String(d[i:j])
+    String(d[i:j])
 end
 
-function search(s::UTF8String, c::Char, i::Integer)
+function search(s::String, c::Char, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return 0
         throw(BoundsError(s, i))
@@ -140,7 +140,7 @@ function search(s::UTF8String, c::Char, i::Integer)
     end
 end
 
-function rsearch(s::UTF8String, c::Char, i::Integer)
+function rsearch(s::String, c::Char, i::Integer)
     c < Char(0x80) && return rsearch(s.data, c%UInt8, i)
     b = first_utf8_byte(c)
     while true
@@ -150,19 +150,19 @@ function rsearch(s::UTF8String, c::Char, i::Integer)
     end
 end
 
-function string(a::ByteString...)
+function string(a::String...)
     if length(a) == 1
-        return a[1]::UTF8String
+        return a[1]::String
     end
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
     data = Array(UInt8,0)
     for d in a
         append!(data,d.data)
     end
-    UTF8String(data)
+    String(data)
 end
 
-function string(a::Union{ByteString,Char}...)
+function string(a::Union{String,Char}...)
     s = Array(UInt8,0)
     for d in a
         if isa(d,Char)
@@ -189,10 +189,10 @@ function string(a::Union{ByteString,Char}...)
             append!(s,d.data)
         end
     end
-    UTF8String(s)
+    String(s)
 end
 
-function reverse(s::UTF8String)
+function reverse(s::String)
     dat = s.data
     n = length(dat)
     n <= 1 && return s
@@ -221,26 +221,26 @@ function reverse(s::UTF8String)
             pos += 1
         end
     end
-    UTF8String(buf)
+    String(buf)
 end
 
 ## outputting UTF-8 strings ##
 
-write(io::IO, s::UTF8String) = write(io, s.data)
+write(io::IO, s::String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
 
-utf8(x) = convert(UTF8String, x)
-convert(::Type{UTF8String}, s::UTF8String) = s
+utf8(x) = convert(String, x)
+convert(::Type{String}, s::String) = s
 
-function convert(::Type{UTF8String}, dat::Vector{UInt8})
+function convert(::Type{String}, dat::Vector{UInt8})
     # handle zero length string quickly
     isempty(dat) && return empty_utf8
     # get number of bytes to allocate
     len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat)
     if (flags & (UTF_LONG | UTF_SURROGATE)) == 0
         len = sizeof(dat)
-        @inbounds return UTF8String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
+        @inbounds return String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
     end
     # Copy, but eliminate over-long encodings and surrogate pairs
     len += num2byte + num3byte*2 + num4byte*3
@@ -283,10 +283,10 @@ function convert(::Type{UTF8String}, dat::Vector{UInt8})
             end
         end
     end
-    UTF8String(buf)
+    String(buf)
 end
 
-function convert(::Type{UTF8String}, a::Vector{UInt8}, invalids_as::AbstractString)
+function convert(::Type{String}, a::Vector{UInt8}, invalids_as::AbstractString)
     l = length(a)
     idx = 1
     iscopy = false
@@ -305,12 +305,12 @@ function convert(::Type{UTF8String}, a::Vector{UInt8}, invalids_as::AbstractStri
         splice!(a, idx:endn, invalids_as.data)
         l = length(a)
     end
-    UTF8String(a)
+    String(a)
 end
-convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
+convert(::Type{String}, s::AbstractString) = utf8(bytestring(s))
 
 """
-Converts an already validated vector of `UInt16` or `UInt32` to a `UTF8String`
+Converts an already validated vector of `UInt16` or `UInt32` to a `String`
 
 Input Arguments:
 
@@ -319,7 +319,7 @@ Input Arguments:
 
 Returns:
 
-* `UTF8String`
+* `String`
 """
 function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
     buf = Vector{UInt8}(len)
@@ -349,8 +349,8 @@ function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
             buf[out += 1] = 0x80 | (ch & 0x3f)
         end
     end
-    UTF8String(buf)
+    String(buf)
 end
 
-utf8(p::Ptr{UInt8}) = UTF8String(bytestring(p))
+utf8(p::Ptr{UInt8}) = String(bytestring(p))
 utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))

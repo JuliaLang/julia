@@ -19,9 +19,9 @@ convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr{Void},p))
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-unsafe_convert(::Type{Ptr{UInt8}}, s::ByteString) = unsafe_convert(Ptr{UInt8}, s.data)
-unsafe_convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, unsafe_convert(Ptr{UInt8}, s.data))
-# convert strings to ByteString etc. to pass as pointers
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = unsafe_convert(Ptr{UInt8}, s.data)
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, unsafe_convert(Ptr{UInt8}, s.data))
+# convert strings to String etc. to pass as pointers
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
@@ -54,7 +54,7 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
     a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
               (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+    ccall(:jl_array_to_string, Any, (Any,), a)::String
 end
 pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
     pointer_to_string(p, ccall(:strlen, Csize_t, (Cstring,), p), own)

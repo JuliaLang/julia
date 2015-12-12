@@ -30,7 +30,7 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
+startswith(a::String, b::String) = startswith(a.data, b.data)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
@@ -45,12 +45,12 @@ function chomp(s::AbstractString)
     if (j < 1 || s[j] != '\r') return s[1:i-1] end
     return s[1:j-1]
 end
-chomp(s::ByteString) =
+chomp(s::String) =
     (endof(s) < 1 || s.data[end]   != 0x0a) ? s :
     (endof(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
 
 # NOTE: use with caution -- breaks the immutable string convention!
-function chomp!(s::ByteString)
+function chomp!(s::String)
     if !isempty(s) && s.data[end] == 0x0a
         n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
         ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
@@ -177,7 +177,7 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-function replace(str::ByteString, pattern, repl, limit::Integer)
+function replace(str::String, pattern, repl, limit::Integer)
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -241,5 +241,5 @@ function bytes2hex(a::AbstractArray{UInt8})
         b[i += 1] = hex_chars[1 + x >> 4]
         b[i += 1] = hex_chars[1 + x & 0xf]
     end
-    return UTF8String(b)
+    return String(b)
 end

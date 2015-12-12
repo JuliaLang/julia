@@ -24,7 +24,7 @@ for c in child_nodes(root(xdoc))
             id = attribute(ce, "id")
             U = string(map(s -> Char(parse(Int, s, 16)),
                            split(id[2:end], "-"))...)
-            if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,UTF8String)
+            if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,String)
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else

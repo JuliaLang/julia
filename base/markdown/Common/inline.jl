@@ -45,8 +45,8 @@ end
 # ––––––––––––––
 
 type Image
-    url::UTF8String
-    alt::UTF8String
+    url::String
+    alt::String
 end
 
 @trigger '!' ->
@@ -65,7 +65,7 @@ end
 
 type Link
     text
-    url::UTF8String
+    url::String
 end
 
 @trigger '[' ->
@@ -83,7 +83,7 @@ function link(stream::IO, md::MD)
 end
 
 type Footnote
-    id::UTF8String
+    id::String
     text
 end
 

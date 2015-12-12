@@ -11,7 +11,7 @@ type LAPACKException <: Exception
 end
 
 type ARPACKException <: Exception
-    info::ByteString
+    info::String
 end
 
 function ARPACKException(i::Integer)

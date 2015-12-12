@@ -15,7 +15,7 @@ function locale()
     LOCALE
 end
 
-function locale(s::ByteString)
+function locale(s::String)
     global LOCALE = s
     # XXX:TBD call setlocale
     for cb in CALLBACKS

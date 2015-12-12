@@ -227,7 +227,7 @@ end
 let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
                                               "β","l","a","h",
                                               "b\u0302","l","á","h"]),
-                ("", UTF8String[]),
+                ("", String[]),
                 ("x\u0302", ["x\u0302"]),
                 ("\U1d4c1\u0302", ["\U1d4c1\u0302"]),
                 ("\U1d4c1\u0302\U1d4c1\u0300", ["\U1d4c1\u0302",
@@ -292,6 +292,6 @@ let str = ascii("This is a test")
     @test convert(UTF16String, g) == str
     io = IOBuffer()
     show(io, g)
-    check = "length-14 GraphemeIterator{UTF8String} for \"$str\""
+    check = "length-14 GraphemeIterator{String} for \"$str\""
     @test takebuf_string(io) == check
 end

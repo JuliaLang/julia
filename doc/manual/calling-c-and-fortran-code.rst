@@ -266,7 +266,7 @@ First, a review of some relevant Julia type terminology:
 ==============================  ==============================  ======================================================
 Syntax / Keyword                Example                         Description
 ==============================  ==============================  ======================================================
-``type``                        ``ASCIIString``                 "Leaf Type" :: A group of related data that includes
+``type``                        ``String``                      "Leaf Type" :: A group of related data that includes
                                                                 a type-tag, is managed by the Julia GC, and
                                                                 is defined by object-identity.
                                                                 The type parameters of a leaf type must be fully defined
@@ -345,7 +345,7 @@ There are several special types to be aware of, as no other type can be defined 
     If an array of eltype ``Ptr{T}`` is passed as a ``Ptr{Ptr{T}}`` argument,
     :func:`Base.cconvert` will attempt to first make a null-terminated copy of the array with
     each element replaced by its :func:`cconvert` version. This allows, for example, passing an ``argv``
-    pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
+    pointer array of type ``Vector{String}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
 
 On all systems we currently support, basic C/C++ value types may be
 translated to Julia types as follows. Every C type also has a corresponding
@@ -465,7 +465,7 @@ C name                  Standard Julia Alias    Julia Base Type
     For string arguments (``char*``) the Julia type should be ``Cstring`` (if NUL-
     terminated data is expected) or either ``Ptr{Cchar}`` or ``Ptr{UInt8}``
     otherwise (these two pointer types have the same effect), as described above,
-    not ``ASCIIString``. Similarly, for array arguments (``T[]`` or ``T*``), the
+    not ``String``. Similarly, for array arguments (``T[]`` or ``T*``), the
     Julia type should again be ``Ptr{T}``, not ``Vector{T}``.
 
 .. warning::

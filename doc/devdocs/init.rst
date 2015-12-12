@@ -196,26 +196,26 @@ Stack frame                   Source code        Notes
 ============================  =================  ===============================================
 jl_uv_write()                 jl_uv.c            called though :func:`Base.ccall`
 julia_write_282942            stream.jl          function write!{T}(s::AsyncStream, a::Array{T})
-julia_print_284639            ascii.jl           print(io::IO, s::ASCIIString) = (write(io, s);nothing)
+julia_print_284639            ascii.jl           print(io::IO, s::String) = (write(io, s);nothing)
 jlcall_print_284639
 jl_apply()                    julia.h
 jl_trampoline()               builtins.c
 jl_apply()                    julia.h
-jl_apply_generic()            gf.c               Base.print(Base.TTY, ASCIIString)
+jl_apply_generic()            gf.c               Base.print(Base.TTY, String)
 jl_apply()                    julia.h
 jl_trampoline()               builtins.c
 jl_apply()                    julia.h
-jl_apply_generic()            gf.c               Base.print(Base.TTY, ASCIIString, Char, Char...)
+jl_apply_generic()            gf.c               Base.print(Base.TTY, String, Char, Char...)
 jl_apply()                    julia.h
 jl_f_apply()                  builtins.c
 jl_apply()                    julia.h
 jl_trampoline()               builtins.c
 jl_apply()                    julia.h
-jl_apply_generic()            gf.c               Base.println(Base.TTY, ASCIIString, ASCIIString...)
+jl_apply_generic()            gf.c               Base.println(Base.TTY, String, String...)
 jl_apply()                    julia.h
 jl_trampoline()               builtins.c
 jl_apply()                    julia.h
-jl_apply_generic()            gf.c               Base.println(ASCIIString,)
+jl_apply_generic()            gf.c               Base.println(String,)
 jl_apply()                    julia.h
 do_call()                     interpreter.c
 eval()                        interpreter.c

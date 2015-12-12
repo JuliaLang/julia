@@ -959,7 +959,7 @@ an appropriate tuple type is generated on demand:
 .. doctest::
 
     julia> typeof((1,"foo",2.5))
-    Tuple{Int64,ASCIIString,Float64}
+    Tuple{Int64,String,Float64}
 
 Note the implications of covariance:
 
@@ -1196,7 +1196,7 @@ objects, they also have types, and we can ask what their types are:
     julia> typeof(Union{Real,Float64,Rational})
     DataType
 
-    julia> typeof(Union{Real,ASCIIString})
+    julia> typeof(Union{Real,String})
     Union
 
 What if we repeat the process? What is the type of a type of a type?

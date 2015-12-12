@@ -139,7 +139,7 @@ end
 
 # issue #1821
 let
-    d = Dict{UTF8String, Vector{Int}}()
+    d = Dict{String, Vector{Int}}()
     d["a"] = [1, 2]
     @test_throws MethodError d["b"] = 1
     @test isa(repr(d), AbstractString)  # check that printable without error
@@ -319,7 +319,7 @@ end
 let
     a = Dict("foo"  => 0.0, "bar" => 42.0)
     b = Dict("フー" => 17, "バー" => 4711)
-    @test is(typeof(merge(a, b)), Dict{UTF8String,Float64})
+    @test is(typeof(merge(a, b)), Dict{String,Float64})
 end
 
 # issue 9295
@@ -373,16 +373,16 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 
 # ImmutableDict
 import Base.ImmutableDict
-let d = ImmutableDict{UTF8String, UTF8String}(),
-    k1 = UTF8String("key1"),
-    k2 = UTF8String("key2"),
-    v1 = UTF8String("value1"),
-    v2 = UTF8String("value2"),
+let d = ImmutableDict{String, String}(),
+    k1 = "key1",
+    k2 = "key2",
+    v1 = "value1",
+    v2 = "value2",
     d1 = ImmutableDict(d, k1 => v1),
     d2 = ImmutableDict(d1, k2 => v2),
     d3 = ImmutableDict(d2, k1 => v2),
     d4 = ImmutableDict(d3, k2 => v1),
-    dnan = ImmutableDict{UTF8String, Float64}(k2, NaN),
+    dnan = ImmutableDict{String, Float64}(k2, NaN),
     dnum = ImmutableDict(dnan, k2 => 1)
 
     @test isempty(collect(d))

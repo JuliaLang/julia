@@ -11,7 +11,7 @@ include("../base/emoji_symbols.jl")
 #Sometimes there is more than one way...
 vals = Dict()
 for symbols in [latex_symbols, emoji_symbols], (k, v) in symbols
-    vals[v] = push!(get!(vals, v, ASCIIString[]), "\\"*k)
+    vals[v] = push!(get!(vals, v, String[]), "\\"*k)
 end
 
 #Join with Unicode names to aid in lookup

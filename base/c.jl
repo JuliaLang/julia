@@ -76,12 +76,12 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 # here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
 pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)
 
-# convert strings to ByteString etc. to pass as pointers
+# convert strings to String etc. to pass as pointers
 cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
 cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
 
 containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
-function unsafe_convert(::Type{Cstring}, s::ByteString)
+function unsafe_convert(::Type{Cstring}, s::String)
     p = unsafe_convert(Ptr{Cchar}, s)
     if containsnul(p, sizeof(s))
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
