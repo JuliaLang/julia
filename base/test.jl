@@ -57,7 +57,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Pass
+    Fail
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -71,10 +71,14 @@ end
 function Base.show(io::IO, t::Fail)
     print_with_color(:red, io, "Test Failed\n")
     print(io, "  Expression: ", t.orig_expr)
-    if t.test_type == :test_throws
-        # Either no exception, or wrong exception
+    if t.test_type == :test_throws_wrong
+        # An exception was thrown, but it was of the wrong type
         print(io, "\n    Expected: ", t.expr)
         print(io, "\n      Thrown: ", typeof(t.value))
+    elseif t.test_type == :test_throws_nothing
+        # An exception was expected, but no exception was thrown
+        print(io, "\n    Expected: ", t.expr)
+        print(io, "\n  No exception thrown")
     elseif !isa(t.expr, Expr)
         # Maybe just a constant, like false
         print(io, "\n   Evaluated: ", t.expr)
@@ -212,14 +216,14 @@ function do_test_throws(predicate, orig_expr, bt, extype)
     try
         predicate()
         # If we hit this line, no exception was thrown. We treat
-        # this as equivalent to the wrong exception being thrown.
-        Fail(:test_throws, orig_expr, extype, nothing)
+        # this a failure equivalent to the wrong exception being thrown.
+        Fail(:test_throws_nothing, orig_expr, extype, nothing)
     catch err
         # Check the right type of exception was thrown
         if isa(err, extype)
             Pass(:test_throws, orig_expr, extype, err)
         else
-            Fail(:test_throws, orig_expr, extype, err)
+            Fail(:test_throws_wrong, orig_expr, extype, err)
         end
     end)
 end
