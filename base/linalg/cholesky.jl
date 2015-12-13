@@ -81,8 +81,8 @@ end
 """
     chol(A::AbstractMatrix) -> U
 
-Compute the Cholesky factorization of a positive definite matrix `A` and return the
-UpperTriangular matrix `U` such that `A = U'U`.
+Compute the Cholesky factorization of a positive definite matrix `A`
+and return the UpperTriangular matrix `U` such that `A = U'U`.
 """
 function chol{T}(A::AbstractMatrix{T})
     S = promote_type(typeof(chol(one(T))), Float32)
@@ -122,6 +122,12 @@ function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
+
+"""
+    cholfact!(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+
+The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+"""
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     if uplo == :U
         Cholesky(chol!(A, UpperTriangular).data, 'U')
@@ -129,13 +135,45 @@ function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
         Cholesky(chol!(A, LowerTriangular).data, 'L')
     end
 end
-cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) = throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
+
+"""
+    cholfact!(A::StridedMatrix, uplo::Symbol, Val{true}) -> PivotedCholesky
+
+The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+"""
+cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
+    throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
 cholfact!(A::StridedMatrix, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
 
+"""
+    cholfact(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+
+Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
+and return a `Cholesky` factorization.
+The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
+The default is to use `:U`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The following functions are available for `Cholesky` objects: `size`, `\`, `inv`, `det`.
+A `PosDefException` exception is thrown in case the matrix is not positive definite.
+"""
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
     cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{false})
+
+"""
+    cholfact(A::StridedMatrix, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
+
+Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
+and return a `CholeskyPivoted` factorization.
+The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
+The default is to use `:U`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The following functions are available for `PivotedCholesky` objects: `size`, `\`, `inv`, `det`, and `rank`.
+The argument `tol` determines the tolerance for determining the rank.
+For negative values, the tolerance is the machine precision.
+"""
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
     cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{true}; tol = tol)
+
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol = :U) = cholfact(A, uplo, Val{false})
 
 function cholfact(x::Number, uplo::Symbol=:U)
