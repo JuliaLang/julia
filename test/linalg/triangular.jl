@@ -117,11 +117,21 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         # factorize
         @test factorize(A1) == A1
 
-        # (c)transpose
-        @test full(A1') == full(A1)'
-        @test full(A1.') == full(A1).'
-        @test transpose!(copy(A1)) == A1.'
-        @test ctranspose!(copy(A1)) == A1'
+        # [c]transpose[!] (test views as well, see issue #14317)
+        let vrange = 1:n-1, viewA1 = t1(sub(A1.data, vrange, vrange))
+            # transpose
+            @test full(A1.') == full(A1).'
+            @test full(viewA1.') == full(viewA1).'
+            # ctranspose
+            @test full(A1') == full(A1)'
+            @test full(viewA1') == full(viewA1)'
+            # transpose!
+            @test transpose!(copy(A1)) == A1.'
+            @test transpose!(t1(sub(copy(A1).data, vrange, vrange))) == viewA1.'
+            # ctranspose!
+            @test ctranspose!(copy(A1)) == A1'
+            @test ctranspose!(t1(sub(copy(A1).data, vrange, vrange))) == viewA1'
+        end
 
         # diag
         @test diag(A1) == diag(full(A1))
@@ -134,13 +144,25 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         # Unary operations
         @test full(-A1) == -full(A1)
 
-        # copy
-        B = similar(A1)
-        copy!(B,A1)
-        @test B == A1
-        B = similar(A1.')
-        copy!(B, A1.')
-        @test B == A1.'
+        # copy and copy! (test views as well, see issue #14317)
+        let vrange = 1:n-1, viewA1 = t1(sub(A1.data, vrange, vrange))
+            # copy
+            @test copy(A1) == copy(full(A1))
+            @test copy(viewA1) == copy(full(viewA1))
+            # copy!
+            B = similar(A1)
+            copy!(B, A1)
+            @test B == A1
+            B = similar(A1.')
+            copy!(B, A1.')
+            @test B == A1.'
+            B = similar(viewA1)
+            copy!(B, viewA1)
+            @test B == viewA1
+            B = similar(viewA1.')
+            copy!(B, viewA1.')
+            @test B == viewA1.'
+        end
 
         #expm/logm
         if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
