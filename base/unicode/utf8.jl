@@ -62,7 +62,7 @@ function next(s::UTF8String, i::Int)
     d = s.data
     b = d[i]
     if is_valid_continuation(b)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
+        throw(UnicodeError(ERR_INVALID_INDEX, i, d[i]))
     end
     trailing = utf8_trailing[b+1]
     if length(d) < i + trailing
@@ -114,7 +114,7 @@ function getindex(s::UTF8String, r::UnitRange{Int})
         throw(BoundsError(s, i))
     end
     if is_valid_continuation(d[i])
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
+        throw(UnicodeError(ERR_INVALID_INDEX, i, d[i]))
     end
     if j > length(d)
         throw(BoundsError())
@@ -130,7 +130,7 @@ function search(s::UTF8String, c::Char, i::Integer)
     end
     d = s.data
     if is_valid_continuation(d[i])
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
+        throw(UnicodeError(ERR_INVALID_INDEX, i, d[i]))
     end
     c < Char(0x80) && return search(d, c%UInt8, i)
     while true
@@ -203,16 +203,16 @@ function reverse(s::UTF8String)
         ch = dat[pos]
         if ch > 0xdf
             if ch < 0xf0
-                (out -= 3) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                (out -= 3) < 0 && throw(UnicodeError(ERR_SHORT, pos, ch))
                 buf[out + 1], buf[out + 2], buf[out + 3] = ch, dat[pos + 1], dat[pos + 2]
                 pos += 3
             else
-                (out -= 4) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                (out -= 4) < 0 && throw(UnicodeError(ERR_SHORT, pos, ch))
                 buf[out+1], buf[out+2], buf[out+3], buf[out+4] = ch, dat[pos+1], dat[pos+2], dat[pos+3]
                 pos += 4
             end
         elseif ch > 0x7f
-            (out -= 2) < 0 && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+            (out -= 2) < 0 && throw(UnicodeError(ERR_SHORT, pos, ch))
             buf[out + 1], buf[out + 2] = ch, dat[pos + 1]
             pos += 2
         else

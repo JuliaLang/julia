@@ -149,7 +149,7 @@ unsafe_convert{T<:Union{UInt32,Int32,Char}}(::Type{Ptr{T}}, s::UTF32String) =
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return empty_utf32
-    length(bytes) & 3 != 0 && throw(UnicodeError(UTF_ERR_ODD_BYTES_32,0,0))
+    length(bytes) & 3 != 0 && throw(UnicodeError(ERR_ODD_BYTES_32,0,0))
     data = reinterpret(UInt32, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0x0000feff # native byte order
@@ -194,7 +194,7 @@ function map(f, s::UTF32String)
     @inbounds for i = 1:(length(d)-1)
         c2 = f(Char(d[i]))
         if !isa(c2, Char)
-            throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
+            throw(UnicodeError(ERR_MAP_CHAR, 0, 0))
         end
         out[i] = (c2::Char)
     end

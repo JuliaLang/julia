@@ -176,7 +176,7 @@ function read(s::IO, ::Type{Char})
     end
 
     # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
+    trailing = Unicode.utf8_trailing[ch+1]
     c::UInt32 = 0
     for j = 1:trailing
         c += ch
@@ -184,7 +184,7 @@ function read(s::IO, ::Type{Char})
         ch = read(s, UInt8)
     end
     c += ch
-    c -= Base.utf8_offset[trailing+1]
+    c -= Unicode.utf8_offset[trailing+1]
     Char(c)
 end
 

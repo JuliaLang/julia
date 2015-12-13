@@ -20,7 +20,7 @@ const UTF_SURROGATE = 32        ##< surrogate pairs present
 ## Get a UTF-8 continuation byte, give error if invalid, return updated character value
 @inline function get_continuation(ch::UInt32, byt::UInt8, pos)
     if !is_valid_continuation(byt)
-        throw(UnicodeError(UTF_ERR_CONT, pos, byt))
+        throw(UnicodeError(ERR_CONT, pos, byt))
     end
     (ch << 6) | (byt & 0x3f)
 end
@@ -73,7 +73,7 @@ function unsafe_checkstring(dat::Vector{UInt8},
             # Check UTF-8 encoding
             if ch < 0xe0
                 # 2-byte UTF-8 sequence (i.e. characters 0x80-0x7ff)
-                (pos > endpos) && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                (pos > endpos) && throw(UnicodeError(ERR_SHORT, pos, ch))
                 byt, pos = next(dat, pos)
                 ch = get_continuation(ch & 0x3f, byt, pos)
                 if ch > 0x7f
@@ -84,28 +84,28 @@ function unsafe_checkstring(dat::Vector{UInt8},
                 elseif (ch == 0) && accept_long_null
                     flags |= UTF_LONG
                 else
-                    throw(UnicodeError(UTF_ERR_LONG, pos, ch))
+                    throw(UnicodeError(ERR_LONG, pos, ch))
                 end
              elseif ch < 0xf0
                 # 3-byte UTF-8 sequence (i.e. characters 0x800-0xffff)
-                (pos + 1 > endpos) && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                (pos + 1 > endpos) && throw(UnicodeError(ERR_SHORT, pos, ch))
                 byt, pos = next(dat, pos)
                 ch = get_continuation(ch & 0x0f, byt, pos)
                 byt, pos = next(dat, pos)
                 ch = get_continuation(ch, byt, pos)
                 # check for surrogate pairs, make sure correct
                 if is_surrogate_codeunit(ch)
-                    !is_surrogate_lead(ch) && throw(UnicodeError(UTF_ERR_NOT_LEAD, pos-2, ch))
+                    !is_surrogate_lead(ch) && throw(UnicodeError(ERR_NOT_LEAD, pos-2, ch))
                     # next character *must* be a trailing surrogate character
-                    (pos + 2 > endpos) && throw(UnicodeError(UTF_ERR_MISSING_SURROGATE, pos-2, ch))
+                    (pos + 2 > endpos) && throw(UnicodeError(ERR_MISSING_SURROGATE, pos-2, ch))
                     byt, pos = next(dat, pos)
-                    (byt != 0xed) && throw(UnicodeError(UTF_ERR_NOT_TRAIL, pos, byt))
+                    (byt != 0xed) && throw(UnicodeError(ERR_NOT_TRAIL, pos, byt))
                     byt, pos = next(dat, pos)
                     surr = get_continuation(0x0000d, byt, pos)
                     byt, pos = next(dat, pos)
                     surr = get_continuation(surr, byt, pos)
-                    !is_surrogate_trail(surr) && throw(UnicodeError(UTF_ERR_NOT_TRAIL, pos-2, surr))
-                    !accept_surrogates && throw(UnicodeError(UTF_ERR_SURROGATE, pos-2, surr))
+                    !is_surrogate_trail(surr) && throw(UnicodeError(ERR_NOT_TRAIL, pos-2, surr))
+                    !accept_surrogates && throw(UnicodeError(ERR_SURROGATE, pos-2, surr))
                     flags |= UTF_SURROGATE
                     num4byte += 1
                 elseif ch > 0x07ff
@@ -114,11 +114,11 @@ function unsafe_checkstring(dat::Vector{UInt8},
                     flags |= UTF_LONG
                     num2byte += 1
                 else
-                    throw(UnicodeError(UTF_ERR_LONG, pos-2, ch))
+                    throw(UnicodeError(ERR_LONG, pos-2, ch))
                 end
             elseif ch < 0xf5
                 # 4-byte UTF-8 sequence (i.e. characters > 0xffff)
-                (pos + 2 > endpos) && throw(UnicodeError(UTF_ERR_SHORT, pos, ch))
+                (pos + 2 > endpos) && throw(UnicodeError(ERR_SHORT, pos, ch))
                 byt, pos = next(dat, pos)
                 ch = get_continuation(ch & 0x07, byt, pos)
                 byt, pos = next(dat, pos)
@@ -126,11 +126,11 @@ function unsafe_checkstring(dat::Vector{UInt8},
                 byt, pos = next(dat, pos)
                 ch = get_continuation(ch, byt, pos)
                 if ch > 0x10ffff
-                    throw(UnicodeError(UTF_ERR_INVALID, pos-3, ch))
+                    throw(UnicodeError(ERR_INVALID, pos-3, ch))
                 elseif ch > 0xffff
                     num4byte += 1
                 elseif is_surrogate_codeunit(ch)
-                    throw(UnicodeError(UTF_ERR_SURROGATE, pos-3, ch))
+                    throw(UnicodeError(ERR_SURROGATE, pos-3, ch))
                 elseif accept_long_char
                     # This is an overly long encoded character
                     flags |= UTF_LONG
@@ -140,10 +140,10 @@ function unsafe_checkstring(dat::Vector{UInt8},
                         num2byte += 1
                     end
                 else
-                    throw(UnicodeError(UTF_ERR_LONG, pos-2, ch))
+                    throw(UnicodeError(ERR_LONG, pos-2, ch))
                 end
             else
-                throw(UnicodeError(UTF_ERR_INVALID, pos, ch))
+                throw(UnicodeError(ERR_INVALID, pos, ch))
             end
         end
     end
@@ -174,22 +174,22 @@ function unsafe_checkstring{T <: Union{Vector{UInt16}, Vector{UInt32}, AbstractS
                 num2byte += 1
                 flags |= UTF_UNICODE2
             elseif ch > 0x0ffff
-                (ch > 0x10ffff) && throw(UnicodeError(UTF_ERR_INVALID, pos, ch))
+                (ch > 0x10ffff) && throw(UnicodeError(ERR_INVALID, pos, ch))
                 num4byte += 1
             elseif !is_surrogate_codeunit(ch)
                 num3byte += 1
             elseif is_surrogate_lead(ch)
-                pos > endpos && throw(UnicodeError(UTF_ERR_MISSING_SURROGATE, pos, ch))
+                pos > endpos && throw(UnicodeError(ERR_MISSING_SURROGATE, pos, ch))
                 # next character *must* be a trailing surrogate character
                 ch, pos = next(dat, pos)
-                !is_surrogate_trail(ch) && throw(UnicodeError(UTF_ERR_NOT_TRAIL, pos, ch))
+                !is_surrogate_trail(ch) && throw(UnicodeError(ERR_NOT_TRAIL, pos, ch))
                 num4byte += 1
                 if T != Vector{UInt16}
-                    !accept_surrogates && throw(UnicodeError(UTF_ERR_SURROGATE, pos, ch))
+                    !accept_surrogates && throw(UnicodeError(ERR_SURROGATE, pos, ch))
                     flags |= UTF_SURROGATE
                 end
             else
-                throw(UnicodeError(UTF_ERR_NOT_LEAD, pos, ch))
+                throw(UnicodeError(ERR_NOT_LEAD, pos, ch))
             end
         end
     end
