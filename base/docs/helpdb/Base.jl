@@ -32,43 +32,6 @@ tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(
 writedlm
 
 """
-    cholfact(A, [LU=:U[,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
-
-Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix `A`
-and return either a `Cholesky` if `pivot==Val{false}` or `CholeskyPivoted` if
-`pivot==Val{true}`. `LU` may be `:L` for using the lower part or `:U` for the upper part.
-The default is to use `:U`. The triangular matrix can be obtained from the factorization `F`
-with: `F[:L]` and `F[:U]`. The following functions are available for `Cholesky` objects:
-`size`, `\\`, `inv`, `det`. For `CholeskyPivoted` there is also defined a `rank`. If
-`pivot==Val{false}` a `PosDefException` exception is thrown in case the matrix is not
-positive definite. The argument `tol` determines the tolerance for determining the rank. For
-negative values, the tolerance is the machine precision.
-"""
-cholfact(A, LU=:U, pivot=Val{false})
-
-"""
-    cholfact(A; shift=0, perm=Int[]) -> CHOLMOD.Factor
-
-Compute the Cholesky factorization of a sparse positive definite matrix `A`. A fill-reducing
-permutation is used. `F = cholfact(A)` is most frequently used to solve systems of equations
-with `F\\b`, but also the methods `diag`, `det`, `logdet` are defined for `F`. You can also
-extract individual factors from `F`, using `F[:L]`. However, since pivoting is on by
-default, the factorization is internally represented as `A == P'*L*L'*P` with a permutation
-matrix `P`; using just `L` without accounting for `P` will give incorrect answers. To
-include the effects of permutation, it's typically preferable to extact "combined" factors
-like `PtL = F[:PtL]` (the equivalent of `P'*L`) and `LtP = F[:UP]` (the equivalent of
-`L'*P`).
-
-Setting optional `shift` keyword argument computes the factorization of `A+shift*I` instead
-of `A`. If the `perm` argument is nonempty, it should be a permutation of `1:size(A,1)`
-giving the ordering to use (instead of CHOLMOD's default AMD ordering).
-
-The function calls the C library CHOLMOD and many other functions from the library are
-wrapped but not exported.
-"""
-cholfact(A)
-
-"""
     digamma(x)
 
 Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
@@ -5881,16 +5844,6 @@ given indices instead of making a copy.  Calling [`getindex`](:func:`getindex`) 
 indices to the parent array on the fly without checking bounds.
 """
 sub
-
-"""
-    cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
-
-`cholfact!` is the same as [`cholfact`](:func:`cholfact`), but saves space by overwriting
-the input `A`, instead of creating a copy. `cholfact!` can also reuse the symbolic
-factorization from a different matrix `F` with the same structure when used as:
-`cholfact!(F::CholmodFactor, A)`.
-"""
-cholfact!
 
 """
     expanduser(path::AbstractString) -> AbstractString
