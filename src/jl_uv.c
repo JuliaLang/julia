@@ -864,10 +864,10 @@ JL_DLLEXPORT int jl_queue_work(
 {
     struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
-    baton->work_func = work_func;
+    baton->work_func = (work_cb_t)work_func;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
-    baton->notify_func = notify_func;
+    baton->notify_func = (notify_cb_t)notify_func;
     baton->notify_idx = notify_idx;
 
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
