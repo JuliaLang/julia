@@ -94,7 +94,7 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const
     for (Instruction *I = Phi; ; I=J) {
         J = NULL;
         // Find the user of instruction I that is within loop L.
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
+#ifdef LLVM35
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
 #else
@@ -149,7 +149,7 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
         return false;
 
     DEBUG(dbgs() << "LSL: simd_loop found\n");
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
+#ifdef LLVM34
     MDNode* n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
