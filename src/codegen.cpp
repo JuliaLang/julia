@@ -6359,9 +6359,9 @@ extern "C" void jl_init_codegen(void)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #elif defined(CUSTOM_MEMORY_MANAGER)
-        .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManagerOSX()}))
+        .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManagerOSX()})
 #elif defined(USE_ORCMCJIT) // ORCJIT forgets to create one if one isn't created for it
-        .setMCJITMemoryManager(std::move(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()}))
+        .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()})
 #endif
         .setTargetOptions(options)
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
