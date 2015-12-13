@@ -1195,7 +1195,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
         else if (mode == MODE_MODULE_POSTWORK) {
             offs >>= 1;
         }
-        assert(offs >= 0 && offs < backref_list.len);
+        // assert(offs >= 0); // offs is unsigned so this is always true
+        assert(offs < backref_list.len);
         jl_value_t *bp = (jl_value_t*)backref_list.items[offs];
         assert(bp);
         if (isdatatype && loc != NULL) {
