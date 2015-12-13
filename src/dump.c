@@ -25,6 +25,8 @@
 extern "C" {
 #endif
 
+JL_DEFINE_MUTEX(dump)
+
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
@@ -68,7 +70,7 @@ static jl_array_t *serializer_worklist;
 static htable_t fptr_to_id;
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
-static jl_fptr_t id_to_fptrs[] = {
+static const jl_fptr_t id_to_fptrs[] = {
   NULL, NULL,
   jl_f_throw, jl_f_is, jl_f_no_function, jl_f_typeof, jl_f_subtype, jl_f_isa,
   jl_f_typeassert, jl_f_apply, jl_f_isdefined, jl_f_tuple, jl_f_svec,
@@ -975,7 +977,7 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
 }
 
 // serialize information about all of the modules accessible directly from Main
-void jl_serialize_mod_list(ios_t *s)
+static void jl_serialize_mod_list(ios_t *s)
 {
     jl_module_t *m = jl_main_module;
     size_t i;
@@ -1023,7 +1025,7 @@ static void jl_serialize_header(ios_t *s)
 
 // serialize the global _require_dependencies array of pathnames that
 // are include depenencies
-void jl_serialize_dependency_list(ios_t *s)
+static void jl_serialize_dependency_list(ios_t *s)
 {
     size_t total_size = 0;
     static jl_array_t *deps = NULL;
@@ -1574,7 +1576,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     return NULL;
 }
 
-void jl_deserialize_lambdas_from_mod(ios_t *s)
+static void jl_deserialize_lambdas_from_mod(ios_t *s)
 {
     while (1) {
         jl_module_t *mod = (jl_module_t*)jl_deserialize_value(s, NULL);
@@ -1601,7 +1603,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
     }
 }
 
-int jl_deserialize_verify_mod_list(ios_t *s)
+static int jl_deserialize_verify_mod_list(ios_t *s)
 {
     if (!jl_main_module->uuid) {
         jl_printf(JL_STDERR, "ERROR: Main module uuid state is invalid for module deserialization.\n");
@@ -1765,6 +1767,7 @@ void jl_save_system_image_to_stream(ios_t *f)
     jl_gc_collect(1); // full
     jl_gc_collect(0); // incremental (sweep finalizers)
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     int en = jl_gc_enable(0);
     htable_reset(&backref_table, 250000);
     arraylist_new(&reinit_list, 0);
@@ -1803,6 +1806,7 @@ void jl_save_system_image_to_stream(ios_t *f)
     arraylist_free(&reinit_list);
 
     jl_gc_enable(en);
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
 }
 
@@ -1860,6 +1864,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 void jl_restore_system_image_from_stream(ios_t *f)
 {
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
     mode = MODE_SYSTEM_IMAGE;
@@ -1912,6 +1917,7 @@ void jl_restore_system_image_from_stream(ios_t *f)
     jl_gc_enable(en);
     mode = last_mode;
     jl_update_all_fptrs();
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
 }
 
@@ -1955,6 +1961,7 @@ JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
         return jl_lam_body((jl_expr_t*)ast)->etype;
     assert(jl_is_array(ast));
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     if (li->module->constant_table == NULL) {
@@ -1972,6 +1979,7 @@ JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     jl_gc_enable(en);
     tree_literal_values = NULL;
     mode = last_mode;
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
     return rt;
 }
@@ -1979,6 +1987,7 @@ JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;
@@ -2010,6 +2019,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     tree_enclosing_module = last_tem;
     jl_gc_enable(en);
     mode = last_mode;
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
     return v;
 }
@@ -2017,6 +2027,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 {
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     assert(jl_is_array(data));
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
@@ -2034,6 +2045,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *dat
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;
     mode = last_mode;
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
     return v;
 }
@@ -2052,6 +2064,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_serialize_dependency_list(&f);
 
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     arraylist_new(&reinit_list, 0);
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
@@ -2076,6 +2089,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     htable_reset(&backref_table, 0);
     arraylist_free(&reinit_list);
     ios_close(&f);
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
 
     if (jl_fs_rename(tmpfname, fname) < 0) {
@@ -2206,6 +2220,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     size_t deplen = read_uint64(f);
     ios_skip(f, deplen); // skip past the dependency list
     JL_SIGATOMIC_BEGIN();
+    JL_LOCK(dump); // Might GC
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
@@ -2265,6 +2280,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     arraylist_free(&methtable_list);
     arraylist_free(&backref_list);
     ios_close(f);
+    JL_UNLOCK(dump);
     JL_SIGATOMIC_END();
 
     JL_GC_PUSH2(&init_order,&restored);
