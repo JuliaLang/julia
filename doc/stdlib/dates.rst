@@ -51,58 +51,61 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Construct a ``DateTime`` type by parts. Arguments must be convertible to ``Int64``.
+   Construct a ``DateTime`` type by parts. Arguments must be convertible to ``Int64``\ .
 
 .. function:: DateTime(periods::Period...) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Constuct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order.
-   DateTime parts not provided will default to the value of ``Dates.default(period)``.
+   Constuct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order. DateTime parts not provided will default to the value of ``Dates.default(period)``\ .
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Create a ``DateTime`` through the adjuster API. The starting point will be constructed from the
-   provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``. The step size in
-   adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
-   will stop when ``f::Function`` returns ``false`` instead of ``true``. ``limit`` provides a limit to
-   the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
+   Create a ``DateTime`` through the adjuster API. The starting point will be constructed from the provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 
 .. function:: DateTime(dt::Date) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Converts a ``Date`` type to a ``DateTime``.
-   The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
+   Converts a ``Date`` type to a ``DateTime``\ . The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
 
 .. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    .. Docstring generated from Julia source
 
-   Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in
-   the ``format`` string. The following codes can be used for constructing format strings:
+   Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in the ``format`` string. The following codes can be used for constructing format strings:
 
-   =============== ========= ===============================================================
-   Code            Matches    Comment
-   =============== ========= ===============================================================
-   ``y``           1996, 96  Returns year of 1996, 0096
-   ``m``           1, 01     Matches 1 or 2-digit months
-   ``u``           Jan       Matches abbreviated months according to the ``locale`` keyword
-   ``U``           January   Matches full month names according to the ``locale`` keyword
-   ``d``           1, 01     Matches 1 or 2-digit days
-   ``H``           00        Matches hours
-   ``M``           00        Matches minutes
-   ``S``           00        Matches seconds
-   ``s``           .500      Matches milliseconds
-   ``e``           Mon, Tues Matches abbreviated days of the week
-   ``E``           Monday    Matches full name days of the week
-   ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
-   =============== ========= ===============================================================
+   +--------------+-----------+----------------------------------------------------------------+
+   | Code         | Matches   | Comment                                                        |
+   +==============+===========+================================================================+
+   | ``y``        | 1996, 96  | Returns year of 1996, 0096                                     |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``m``        | 1, 01     | Matches 1 or 2-digit months                                    |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``u``        | Jan       | Matches abbreviated months according to the ``locale`` keyword |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``U``        | January   | Matches full month names according to the ``locale`` keyword   |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``d``        | 1, 01     | Matches 1 or 2-digit days                                      |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``H``        | 00        | Matches hours                                                  |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``M``        | 00        | Matches minutes                                                |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``S``        | 00        | Matches seconds                                                |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``s``        | .500      | Matches milliseconds                                           |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``e``        | Mon, Tues | Matches abbreviated days of the week                           |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``E``        | Monday    | Matches full name days of the week                             |
+   +--------------+-----------+----------------------------------------------------------------+
+   | ``yyyymmdd`` | 19960101  | Matches fixed-width year, month, and day                       |
+   +--------------+-----------+----------------------------------------------------------------+
 
-   All characters not listed above are treated as delimiters between date and time slots.
-   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
+   All characters not listed above are treated as delimiters between date and time slots. So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
 
 .. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
 
@@ -114,7 +117,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Similar form as above for parsing a ``DateTime``\ , but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
 
 .. function:: Date(y, [m, d]) -> Date
 
@@ -306,8 +309,7 @@ Adjuster Functions
 
    .. Docstring generated from Julia source
 
-   Truncates the value of ``dt`` according to the provided ``Period`` type.
-   E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
+   Truncates the value of ``dt`` according to the provided ``Period`` type. E.g. if ``dt`` is ``1996-01-01T12:30:00``\ , then ``trunc(dt,Day) == 1996-01-01T00:00:00``\ .
 
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
@@ -434,8 +436,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   Takes the number of seconds since unix epoch ``1970-01-01T00:00:00``
-   and converts to the corresponding ``DateTime``.
+   Takes the number of seconds since unix epoch ``1970-01-01T00:00:00`` and converts to the corresponding ``DateTime``\ .
 
 .. function:: datetime2unix(dt::DateTime) -> Float64
 
@@ -447,8 +448,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   Takes the number of Julian calendar days since epoch
-   ``-4713-11-24T12:00:00`` and returns the corresponding ``DateTime``.
+   Takes the number of Julian calendar days since epoch ``-4713-11-24T12:00:00`` and returns the corresponding ``DateTime``\ .
 
 .. function:: datetime2julian(dt::DateTime) -> Float64
 
@@ -460,8 +460,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
-   and returns the corresponding ``DateTime``.
+   Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00`` and returns the corresponding ``DateTime``\ .
 
 .. function:: datetime2rata(dt::TimeType) -> Int64
 

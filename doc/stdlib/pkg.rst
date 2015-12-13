@@ -67,7 +67,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Set the protocol used to access GitHub-hosted packages.  Defaults to 'https', with a blank ``proto`` delegating the choice to the package developer.
+   Set the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank ``proto`` delegating the choice to the package developer.
 
 .. function:: available() -> Vector{ASCIIString}
 
