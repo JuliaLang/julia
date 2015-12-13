@@ -28,22 +28,13 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   Prints profiling results to ``io`` (by default, ``STDOUT``). If you
-   do not supply a ``data`` vector, the internal buffer of accumulated
-   backtraces will be used.  ``format`` can be ``:tree`` or
-   ``:flat``. If ``C==true``, backtraces from C and Fortran code are
-   shown. ``combine==true`` merges instruction pointers that
-   correspond to the same line of code.  ``cols`` controls the width
-   of the display.
+   Prints profiling results to ``io`` (by default, ``STDOUT``\ ). If you do not supply a ``data`` vector, the internal buffer of accumulated backtraces will be used. ``format`` can be ``:tree`` or ``:flat``\ . If ``C==true``\ , backtraces from C and Fortran code are shown. ``combine==true`` merges instruction pointers that correspond to the same line of code. ``cols`` controls the width of the display.
 
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    .. Docstring generated from Julia source
 
-   Prints profiling results to ``io``. This variant is used to examine
-   results exported by a previous call to :func:`retrieve`.
-   Supply the vector ``data`` of backtraces and a dictionary
-   ``lidict`` of line information.
+   Prints profiling results to ``io``\ . This variant is used to examine results exported by a previous call to :func:`retrieve`\ . Supply the vector ``data`` of backtraces and a dictionary ``lidict`` of line information.
 
 .. function:: init(; n::Integer, delay::Float64)
 
@@ -55,13 +46,7 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   Returns a reference to the internal buffer of backtraces. Note that
-   subsequent operations, like :func:`clear`, can affect
-   ``data`` unless you first make a copy. Note that the values in
-   ``data`` have meaning only on this machine in the current session,
-   because it depends on the exact memory addresses used in
-   JIT-compiling. This function is primarily for internal use;
-   :func:`retrieve` may be a better choice for most users.
+   Returns a reference to the internal buffer of backtraces. Note that subsequent operations, like :func:`clear`\ , can affect ``data`` unless you first make a copy. Note that the values in ``data`` have meaning only on this machine in the current session, because it depends on the exact memory addresses used in JIT-compiling. This function is primarily for internal use; :func:`retrieve` may be a better choice for most users.
 
 .. function:: retrieve() -> data, lidict
 
@@ -73,22 +58,11 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    .. Docstring generated from Julia source
 
-   Given a previous profiling run, determine who called a particular
-   function. Supplying the filename (and optionally, range of line
-   numbers over which the function is defined) allows you to
-   disambiguate an overloaded method. The returned value is a vector
-   containing a count of the number of calls and line information
-   about the caller.  One can optionally supply backtrace data
-   obtained from :func:`retrieve`; otherwise, the current internal profile
-   buffer is used.
+   Given a previous profiling run, determine who called a particular function. Supplying the filename (and optionally, range of line numbers over which the function is defined) allows you to disambiguate an overloaded method. The returned value is a vector containing a count of the number of calls and line information about the caller. One can optionally supply backtrace data obtained from :func:`retrieve`\ ; otherwise, the current internal profile buffer is used.
 
 .. function:: clear_malloc_data()
 
    .. Docstring generated from Julia source
 
-   Clears any stored memory allocation data when running julia with
-   ``--track-allocation``.  Execute the command(s) you want to test
-   (to force JIT-compilation), then call :func:`clear_malloc_data`.
-   Then execute your command(s) again, quit Julia, and examine the
-   resulting ``*.mem`` files.
+   Clears any stored memory allocation data when running julia with ``--track-allocation``\ . Execute the command(s) you want to test (to force JIT-compilation), then call :func:`clear_malloc_data`\ . Then execute your command(s) again, quit Julia, and examine the resulting ``*.mem`` files.
 

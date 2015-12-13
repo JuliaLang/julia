@@ -48,8 +48,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left.
-   Gives floating-point results for integer arguments.
+   Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left. Gives floating-point results for integer arguments.
 
 .. _^:
 .. function:: ^(x, y)
@@ -181,26 +180,25 @@ Mathematical Operators
    .. code-block:: julia
 
        x == fld(x,y)*y + mod(x,y)
-
        x == (fld1(x,y)-1)*y + mod1(x,y)
 
 .. function:: mod1(x, y)
 
    .. Docstring generated from Julia source
 
-   Modulus after flooring division, returning a value in the range ``(0,y\]``
+   Modulus after flooring division, returning a value in the range ``(0, y]``\ .
 
 .. function:: fldmod1(x, y)
 
    .. Docstring generated from Julia source
 
-   Return ``(fld1(x,y), mod1(x,y))``
+   Return ``(fld1(x,y), mod1(x,y))``\ .
 
 .. function:: rem1(x, y)
 
    .. Docstring generated from Julia source
 
-   (Deprecated.) Remainder after division, returning in the range ``(0,y\]``
+   (Deprecated.) Remainder after division, returning in the range ``(0, y]``\ .
 
 .. _//:
 .. function:: //(num, den)
@@ -219,13 +217,13 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Numerator of the rational representation of ``x``
+   Numerator of the rational representation of ``x``\ .
 
 .. function:: den(x)
 
    .. Docstring generated from Julia source
 
-   Denominator of the rational representation of ``x``
+   Denominator of the rational representation of ``x``\ .
 
 .. _<<:
 .. function:: <<(x, n)
@@ -249,12 +247,11 @@ Mathematical Operators
    Unsigned right bit shift operator.
 
 .. _\::
-.. function:: \:(start, [step], stop)
+.. function:: :(start, [step], stop)
 
    .. Docstring generated from Julia source
 
-   Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1, and ``a:s:b`` is similar but uses a step size of ``s``. These syntaxes call the function ``colon``.
-   The colon is also used in indexing to select whole dimensions.
+   Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1, and ``a:s:b`` is similar but uses a step size of ``s``\ . These syntaxes call the function ``colon``\ . The colon is also used in indexing to select whole dimensions.
 
 .. function:: colon(start, [step], stop)
 
@@ -295,7 +292,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   See the :func:`is` operator
+   See the :func:`is` operator.
 
 .. _!==:
 .. function:: !==(x, y)
@@ -303,7 +300,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``!is(x, y)``
+   Equivalent to ``!is(x, y)``\ .
 
 .. _<:
 .. function:: <(x, y)
@@ -391,61 +388,61 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Bitwise not
+   Bitwise not.
 
 .. _&:
 .. function:: &(x, y)
 
    .. Docstring generated from Julia source
 
-   Bitwise and
+   Bitwise and.
 
 .. _|:
 .. function:: |(x, y)
 
    .. Docstring generated from Julia source
 
-   Bitwise or
+   Bitwise or.
 
 .. _$:
 .. function:: $(x, y)
 
    .. Docstring generated from Julia source
 
-   Bitwise exclusive or
+   Bitwise exclusive or.
 
 .. _!:
 .. function:: !(x)
 
    .. Docstring generated from Julia source
 
-   Boolean not
+   Boolean not.
 
 .. _&&:
 .. function:: x && y
 
    .. Docstring generated from Julia source
 
-   Short-circuiting boolean AND
+   Short-circuiting boolean AND.
 
 .. _||:
 .. function:: x || y
 
    .. Docstring generated from Julia source
 
-   Short-circuiting boolean OR
+   Short-circuiting boolean OR.
 
 .. function:: A_ldiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᴴ`\ .
 
 .. function:: A_ldiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᵀ`\ .
 
 .. function:: A_mul_B!(Y, A, B) -> Y
 
@@ -466,97 +463,97 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᴴ`\ .
 
 .. function:: A_mul_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᵀ`\ .
 
 .. function:: A_rdiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᴴ`\ .
 
 .. function:: A_rdiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᵀ`\ .
 
 .. function:: Ac_ldiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`B`\ .
 
 .. function:: Ac_ldiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`Bᴴ`\ .
 
 .. function:: Ac_mul_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ⋅B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ⋅B`\ .
 
 .. function:: Ac_mul_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ Bᴴ`\ .
 
 .. function:: Ac_rdiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / B`\ .
 
 .. function:: Ac_rdiv_Bc(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / Bᴴ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / Bᴴ`\ .
 
 .. function:: At_ldiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`B`\ .
 
 .. function:: At_ldiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`Bᵀ`\ .
 
 .. function:: At_mul_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅B`\ .
 
 .. function:: At_mul_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅Bᵀ`\ .
 
 .. function:: At_rdiv_B(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / B`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / B`\ .
 
 .. function:: At_rdiv_Bt(A, B)
 
    .. Docstring generated from Julia source
 
-   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / Bᵀ`
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / Bᵀ`\ .
 
 Mathematical Functions
 ----------------------
@@ -577,19 +574,19 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute sine of ``x``\ , where ``x`` is in radians
+   Compute sine of ``x``\ , where ``x`` is in radians.
 
 .. function:: cos(x)
 
    .. Docstring generated from Julia source
 
-   Compute cosine of ``x``\ , where ``x`` is in radians
+   Compute cosine of ``x``\ , where ``x`` is in radians.
 
 .. function:: tan(x)
 
    .. Docstring generated from Julia source
 
-   Compute tangent of ``x``\ , where ``x`` is in radians
+   Compute tangent of ``x``\ , where ``x`` is in radians.
 
 .. function:: sind(x)
 
@@ -601,13 +598,13 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute cosine of ``x``\ , where ``x`` is in degrees
+   Compute cosine of ``x``\ , where ``x`` is in degrees.
 
 .. function:: tand(x)
 
    .. Docstring generated from Julia source
 
-   Compute tangent of ``x``\ , where ``x`` is in degrees
+   Compute tangent of ``x``\ , where ``x`` is in degrees.
 
 .. function:: sinpi(x)
 
@@ -625,25 +622,25 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute hyperbolic sine of ``x``
+   Compute hyperbolic sine of ``x``\ .
 
 .. function:: cosh(x)
 
    .. Docstring generated from Julia source
 
-   Compute hyperbolic cosine of ``x``
+   Compute hyperbolic cosine of ``x``\ .
 
 .. function:: tanh(x)
 
    .. Docstring generated from Julia source
 
-   Compute hyperbolic tangent of ``x``
+   Compute hyperbolic tangent of ``x``\ .
 
 .. function:: asin(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse sine of ``x``\ , where the output is in radians
+   Compute the inverse sine of ``x``\ , where the output is in radians.
 
 .. function:: acos(x)
 
@@ -655,7 +652,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the inverse tangent of ``x``\ , where the output is in radians
+   Compute the inverse tangent of ``x``\ , where the output is in radians.
 
 .. function:: atan2(y, x)
 
@@ -667,61 +664,61 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the inverse sine of ``x``\ , where the output is in degrees
+   Compute the inverse sine of ``x``\ , where the output is in degrees.
 
 .. function:: acosd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse cosine of ``x``\ , where the output is in degrees
+   Compute the inverse cosine of ``x``\ , where the output is in degrees.
 
 .. function:: atand(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse tangent of ``x``\ , where the output is in degrees
+   Compute the inverse tangent of ``x``\ , where the output is in degrees.
 
 .. function:: sec(x)
 
    .. Docstring generated from Julia source
 
-   Compute the secant of ``x``\ , where ``x`` is in radians
+   Compute the secant of ``x``\ , where ``x`` is in radians.
 
 .. function:: csc(x)
 
    .. Docstring generated from Julia source
 
-   Compute the cosecant of ``x``\ , where ``x`` is in radians
+   Compute the cosecant of ``x``\ , where ``x`` is in radians.
 
 .. function:: cot(x)
 
    .. Docstring generated from Julia source
 
-   Compute the cotangent of ``x``\ , where ``x`` is in radians
+   Compute the cotangent of ``x``\ , where ``x`` is in radians.
 
 .. function:: secd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the secant of ``x``\ , where ``x`` is in degrees
+   Compute the secant of ``x``\ , where ``x`` is in degrees.
 
 .. function:: cscd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the cosecant of ``x``\ , where ``x`` is in degrees
+   Compute the cosecant of ``x``\ , where ``x`` is in degrees.
 
 .. function:: cotd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the cotangent of ``x``\ , where ``x`` is in degrees
+   Compute the cotangent of ``x``\ , where ``x`` is in degrees.
 
 .. function:: asec(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse secant of ``x``\ , where the output is in radians
+   Compute the inverse secant of ``x``\ , where the output is in radians.
 
 .. function:: acsc(x)
 
@@ -733,25 +730,25 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the inverse cotangent of ``x``\ , where the output is in radians
+   Compute the inverse cotangent of ``x``\ , where the output is in radians.
 
 .. function:: asecd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse secant of ``x``\ , where the output is in degrees
+   Compute the inverse secant of ``x``\ , where the output is in degrees.
 
 .. function:: acscd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse cosecant of ``x``\ , where the output is in degrees
+   Compute the inverse cosecant of ``x``\ , where the output is in degrees.
 
 .. function:: acotd(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse cotangent of ``x``\ , where the output is in degrees
+   Compute the inverse cotangent of ``x``\ , where the output is in degrees.
 
 .. function:: sech(x)
 
@@ -763,49 +760,49 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the hyperbolic cosecant of ``x``
+   Compute the hyperbolic cosecant of ``x``\ .
 
 .. function:: coth(x)
 
    .. Docstring generated from Julia source
 
-   Compute the hyperbolic cotangent of ``x``
+   Compute the hyperbolic cotangent of ``x``\ .
 
 .. function:: asinh(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic sine of ``x``
+   Compute the inverse hyperbolic sine of ``x``\ .
 
 .. function:: acosh(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic cosine of ``x``
+   Compute the inverse hyperbolic cosine of ``x``\ .
 
 .. function:: atanh(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic tangent of ``x``
+   Compute the inverse hyperbolic tangent of ``x``\ .
 
 .. function:: asech(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic secant of ``x``
+   Compute the inverse hyperbolic secant of ``x``\ .
 
 .. function:: acsch(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic cosecant of ``x``
+   Compute the inverse hyperbolic cosecant of ``x``\ .
 
 .. function:: acoth(x)
 
    .. Docstring generated from Julia source
 
-   Compute the inverse hyperbolic cotangent of ``x``
+   Compute the inverse hyperbolic cotangent of ``x``\ .
 
 .. function:: sinc(x)
 
@@ -823,19 +820,19 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Convert ``x`` from degrees to radians
+   Convert ``x`` from degrees to radians.
 
 .. function:: rad2deg(x)
 
    .. Docstring generated from Julia source
 
-   Convert ``x`` from radians to degrees
+   Convert ``x`` from radians to degrees.
 
 .. function:: hypot(x, y)
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
+   Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow.
 
 .. function:: log(x)
 
@@ -917,60 +914,50 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ``round(x)`` rounds ``x`` to an integer value according to the default
-   rounding mode (see :func:`rounding`), returning a value of the same type as
-   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
-   integer, with ties (fractional values of 0.5) being rounded to the even
-   integer.
+   ``round(x)`` rounds ``x`` to an integer value according to the default rounding mode (see :func:`rounding`\ ), returning a value of the same type as ``x``\ . By default (:obj:`RoundNearest`\ ), this will round to the nearest integer, with ties (fractional values of 0.5) being rounded to the even integer.
 
    .. doctest::
 
-      julia> round(1.7)
-      2.0
+       julia> round(1.7)
+       2.0
 
-      julia> round(1.5)
-      2.0
+       julia> round(1.5)
+       2.0
 
-      julia> round(2.5)
-      2.0
+       julia> round(2.5)
+       2.0
 
    The optional :obj:`RoundingMode` argument will change how the number gets rounded.
 
-   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
-   :exc:`InexactError` if the value is not representable.
+   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``\ , throwing an :exc:`InexactError` if the value is not representable.
 
-   ``round(x, digits)`` rounds to the specified number of digits after the
-   decimal place (or before if negative). ``round(x, digits, base)`` rounds
-   using a base other than 10.
+   ``round(x, digits)`` rounds to the specified number of digits after the decimal place (or before if negative). ``round(x, digits, base)`` rounds using a base other than 10.
 
    .. doctest::
 
-      julia> round(pi, 2)
-      3.14
+       julia> round(pi, 2)
+       3.14
 
-      julia> round(pi, 3, 2)
-      3.125
+       julia> round(pi, 3, 2)
+       3.125
 
-   .. note::
+   **note**
 
-      Rounding to specified digits in bases other than 2 can be inexact when
-      operating on binary floating point numbers. For example, the ``Float64``
-      value represented by ``1.15`` is actually *less* than 1.15, yet will be
-      rounded to 1.2.
+   Rounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the ``Float64`` value represented by ``1.15`` is actually *less* than 1.15, yet will be rounded to 1.2.
 
-      .. doctest::
+   .. doctest::
 
-         julia> x = 1.15
-         1.15
+       julia> x = 1.15
+       1.15
 
-         julia> @sprintf "%.20f" x
-         "1.14999999999999991118"
+       julia> @sprintf "%.20f" x
+       "1.14999999999999991118"
 
-         julia> x < 115//100
-         true
+       julia> x < 115//100
+       true
 
-         julia> round(x, 1)
-         1.2
+       julia> round(x, 1)
+       1.2
 
 .. data:: RoundingMode
 
@@ -1014,46 +1001,37 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Returns the nearest integral value of the same type as the complex-valued
-   ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
-   The first :obj:`RoundingMode` is used for rounding the real components while
-   the second is used for rounding the imaginary components.
+   Returns the nearest integral value of the same type as the complex-valued ``z`` to ``z``\ , breaking ties using the specified :obj:`RoundingMode`\ s. The first :obj:`RoundingMode` is used for rounding the real components while the second is used for rounding the imaginary components.
 
 .. function:: ceil([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
 
-   ``ceil(x)`` returns the nearest integral value of the same type as ``x``
-   that is greater than or equal to ``x``.
+   ``ceil(x)`` returns the nearest integral value of the same type as ``x`` that is greater than or equal to ``x``\ .
 
-   ``ceil(T, x)`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
+   ``ceil(T, x)`` converts the result to type ``T``\ , throwing an ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as for :func:`round`.
+   ``digits`` and ``base`` work as for :func:`round`\ .
 
 .. function:: floor([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
 
-   ``floor(x)`` returns the nearest integral value of the same type as ``x``
-   that is less than or equal to ``x``.
+   ``floor(x)`` returns the nearest integral value of the same type as ``x`` that is less than or equal to ``x``\ .
 
-   ``floor(T, x)`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
+   ``floor(T, x)`` converts the result to type ``T``\ , throwing an ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as for :func:`round`.
+   ``digits`` and ``base`` work as for :func:`round`\ .
 
 .. function:: trunc([T,] x, [digits, [base]])
 
    .. Docstring generated from Julia source
 
-   ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
-   value is less than or equal to ``x``.
+   ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute value is less than or equal to ``x``\ .
 
-   ``trunc(T, x)`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
+   ``trunc(T, x)`` converts the result to type ``T``\ , throwing an ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as for :func:`round`.
+   ``digits`` and ``base`` work as for :func:`round`\ .
 
 .. function:: unsafe_trunc(T, x)
 
@@ -1083,8 +1061,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return ``(min(x,y), max(x,y))``.
-   See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``
+   Return ``(min(x,y), max(x,y))``\ . See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``\ .
 
 .. function:: clamp(x, lo, hi)
 
@@ -1184,7 +1161,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Squared absolute value of ``x``
+   Squared absolute value of ``x``\ .
 
 .. function:: copysign(x, y)
 
@@ -1244,7 +1221,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the scaled complementary error function of ``x``\ , defined by :math:`e^{x^2} \operatorname{erfc}(x)`\ .  Note also that :math:`\operatorname{erfcx}(-ix)` computes the Faddeeva function :math:`w(x)`\ .
+   Compute the scaled complementary error function of ``x``\ , defined by :math:`e^{x^2} \operatorname{erfc}(x)`\ . Note also that :math:`\operatorname{erfcx}(-ix)` computes the Faddeeva function :math:`w(x)`\ .
 
 .. function:: erfi(x)
 
@@ -1274,31 +1251,31 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return the real part of the complex number ``z``
+   Return the real part of the complex number ``z``\ .
 
 .. function:: imag(z)
 
    .. Docstring generated from Julia source
 
-   Return the imaginary part of the complex number ``z``
+   Return the imaginary part of the complex number ``z``\ .
 
 .. function:: reim(z)
 
    .. Docstring generated from Julia source
 
-   Return both the real and imaginary parts of the complex number ``z``
+   Return both the real and imaginary parts of the complex number ``z``\ .
 
 .. function:: conj(z)
 
    .. Docstring generated from Julia source
 
-   Compute the complex conjugate of a complex number ``z``
+   Compute the complex conjugate of a complex number ``z``\ .
 
 .. function:: angle(z)
 
    .. Docstring generated from Julia source
 
-   Compute the phase angle in radians of a complex number ``z``
+   Compute the phase angle in radians of a complex number ``z``\ .
 
 .. function:: cis(z)
 
@@ -1310,24 +1287,19 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Number of ways to choose ``k`` out of ``n`` items
+   Number of ways to choose ``k`` out of ``n`` items.
 
 .. function:: factorial(n)
 
    .. Docstring generated from Julia source
 
-   Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
-   is computed as an integer (promoted to at least 64 bits).  Note
-   that this may overflow if ``n`` is not small, but you can use
-   ``factorial(big(n))`` to compute the result exactly in arbitrary
-   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
-   equivalent to :func:`gamma(n+1) <gamma>`.
+   Factorial of ``n``\ .  If ``n`` is an :obj:`Integer`\ , the factorial is computed as an integer (promoted to at least 64 bits).  Note that this may overflow if ``n`` is not small, but you can use ``factorial(big(n))`` to compute the result exactly in arbitrary precision. If ``n`` is not an ``Integer``\ , ``factorial(n)`` is equivalent to :func:`gamma(n+1) <gamma>`\ .
 
 .. function:: factorial(n,k)
 
    .. Docstring generated from Julia source
 
-   Compute ``factorial(n)/factorial(k)``
+   Compute ``factorial(n)/factorial(k)``\ .
 
 .. function:: factor(n) -> Dict
 
@@ -1358,27 +1330,27 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
+   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`\ .
 
    .. doctest::
 
-      julia> gcdx(12, 42)
-      (6,-3,1)
+       julia> gcdx(12, 42)
+       (6,-3,1)
 
    .. doctest::
 
-      julia> gcdx(240, 46)
-      (2,-9,47)
+       julia> gcdx(240, 46)
+       (2,-9,47)
 
-   .. note::
+   **note**
 
-      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`. Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
+   Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
 .. function:: ispow2(n) -> Bool
 
    .. Docstring generated from Julia source
 
-   Test whether ``n`` is a power of two
+   Test whether ``n`` is a power of two.
 
 .. function:: nextpow2(n)
 
@@ -1410,7 +1382,13 @@ Mathematical Functions
 
    Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`\ , :math:`p_2`\ , etc.
 
-   For a list of integers i1, i2, i3, find the smallest     i1^n1 * i2^n2 * i3^n3 >= x for integer n1, n2, n3
+   For a list of integers i1, i2, i3, find the smallest
+
+   .. code-block:: julia
+
+       i1^n1 * i2^n2 * i3^n3 >= x
+
+   for integer n1, n2, n3
 
 .. function:: invmod(x,m)
 
@@ -1428,15 +1406,13 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the gamma function of ``x``
+   Compute the gamma function of ``x``\ .
 
 .. function:: lgamma(x)
 
    .. Docstring generated from Julia source
 
-   Compute the logarithm of the absolute value of :func:`gamma` for
-   :obj:`Real` ``x``, while for :obj:`Complex` ``x`` it computes the
-   logarithm of ``gamma(x)``.
+   Compute the logarithm of the absolute value of :func:`gamma` for :obj:`Real` ``x``\ , while for :obj:`Complex` ``x`` it computes the logarithm of ``gamma(x)``\ .
 
 .. function:: lfact(x)
 
@@ -1460,7 +1436,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``\ )
+   Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``\ ).
 
 .. function:: polygamma(m, x)
 
@@ -1856,7 +1832,7 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   Performs a multidimensional FFT of the array ``A``\ .  The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see ``nextprod()``\ .  See also ``plan_fft()`` for even greater efficiency.
+   Performs a multidimensional FFT of the array ``A``\ . The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along. Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see ``nextprod()``\ . See also ``plan_fft()`` for even greater efficiency.
 
    A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as defined by
 
@@ -1875,8 +1851,7 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   Same as :func:`fft`, but operates in-place on ``A``,
-   which must be an array of complex floating-point numbers.
+   Same as :func:`fft`\ , but operates in-place on ``A``\ , which must be an array of complex floating-point numbers.
 
 .. function:: ifft(A [, dims])
 
@@ -1898,227 +1873,153 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   Same as :func:`ifft`, but operates in-place on ``A``.
+   Same as :func:`ifft`\ , but operates in-place on ``A``\ .
 
 .. function:: bfft(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
-   transform, which must be divided by the product of the sizes of the
-   transformed dimensions in order to obtain the inverse. (This is slightly
-   more efficient than :func:`ifft` because it omits a scaling step, which in
-   some applications can be combined with other computational steps elsewhere.)
+   Similar to :func:`ifft`\ , but computes an unnormalized inverse (backward) transform, which must be divided by the product of the sizes of the transformed dimensions in order to obtain the inverse. (This is slightly more efficient than :func:`ifft` because it omits a scaling step, which in some applications can be combined with other computational steps elsewhere.)
 
    .. math::
 
-      \operatorname{BDFT}(A)[k] = \operatorname{length}(A) \operatorname{IDFT}(A)[k]
+       \operatorname{BDFT}(A)[k] = \operatorname{length}(A) \operatorname{IDFT}(A)[k]
 
 .. function:: bfft!(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Same as :func:`bfft`, but operates in-place on ``A``.
+   Same as :func:`bfft`\ , but operates in-place on ``A``\ .
 
 .. function:: plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
-   matching the shape and type of ``A``.  (The first two arguments have
-   the same meaning as for :func:`fft`.)  Returns an object ``P`` which
-   represents the linear operator computed by the FFT, and which contains
-   all of the information needed to compute ``fft(A, dims)`` quickly.
+   Pre-plan an optimized FFT along given dimensions (``dims``\ ) of arrays matching the shape and type of ``A``\ .  (The first two arguments have the same meaning as for :func:`fft`\ .) Returns an object ``P`` which represents the linear operator computed by the FFT, and which contains all of the information needed to compute ``fft(A, dims)`` quickly.
 
-   To apply ``P`` to an array ``A``, use ``P * A``; in general, the
-   syntax for applying plans is much like that of matrices.  (A plan
-   can only be applied to arrays of the same size as the ``A`` for
-   which the plan was created.)  You can also apply a plan with a
-   preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
-   A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
-   apply the inverse plan with ``P \ Â`` (the inverse plan is cached
-   and reused for subsequent calls to ``inv`` or ``\``), and apply the
-   inverse plan to a pre-allocated output array ``A`` with
-   ``A_ldiv_B!(A, P, Â)``.
+   To apply ``P`` to an array ``A``\ , use ``P * A``\ ; in general, the syntax for applying plans is much like that of matrices.  (A plan can only be applied to arrays of the same size as the ``A`` for which the plan was created.)  You can also apply a plan with a preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan, A)``\ .  You can compute the inverse-transform plan by ``inv(P)`` and apply the inverse plan with ``P \ Â`` (the inverse plan is cached and reused for subsequent calls to ``inv`` or ``\``\ ), and apply the inverse plan to a pre-allocated output array ``A`` with ``A_ldiv_B!(A, P, Â)``\ .
 
-   The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
-   to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
-   will instead spend several seconds (or more) benchmarking different
-   possible FFT algorithms and picking the fastest one; see the FFTW manual
-   for more information on planner flags.  The optional ``timelimit`` argument
-   specifies a rough upper bound on the allowed planning time, in seconds.
-   Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A``
-   to be overwritten with zeros during plan creation.
+   The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting to ``FFTW.ESTIMATE``\ . e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` will instead spend several seconds (or more) benchmarking different possible FFT algorithms and picking the fastest one; see the FFTW manual for more information on planner flags.  The optional ``timelimit`` argument specifies a rough upper bound on the allowed planning time, in seconds. Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A`` to be overwritten with zeros during plan creation.
 
-   :func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan
-   that operates in-place on its argument (which must be an array of
-   complex floating-point numbers).  :func:`plan_ifft` and so on
-   are similar but produce plans that perform the equivalent of
-   the inverse transforms :func:`ifft` and so on.
+   :func:`plan_fft!` is the same as :func:`plan_fft` but creates a plan that operates in-place on its argument (which must be an array of complex floating-point numbers). :func:`plan_ifft` and so on are similar but produce plans that perform the equivalent of the inverse transforms :func:`ifft` and so on.
 
 .. function:: plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
-   :func:`ifft`.
+   Same as :func:`plan_fft`\ , but produces a plan that performs inverse transforms :func:`ifft`\ .
 
 .. function:: plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
-   backwards transform :func:`bfft`.
+   Same as :func:`plan_fft`\ , but produces a plan that performs an unnormalized backwards transform :func:`bfft`\ .
 
 .. function:: plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_fft`, but operates in-place on ``A``.
+   Same as :func:`plan_fft`\ , but operates in-place on ``A``\ .
 
 .. function:: plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_ifft`, but operates in-place on ``A``.
+   Same as :func:`plan_ifft`\ , but operates in-place on ``A``\ .
 
 .. function:: plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_bfft`, but operates in-place on ``A``.
+   Same as :func:`plan_bfft`\ , but operates in-place on ``A``\ .
 
 .. function:: rfft(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Multidimensional FFT of a real array ``A``, exploiting the fact that
-   the transform has conjugate symmetry in order to save roughly half
-   the computational time and storage costs compared with :func:`fft`.
-   If ``A`` has size ``(n_1, ..., n_d)``, the result has size
-   ``(div(n_1,2)+1, ..., n_d)``.
+   Multidimensional FFT of a real array ``A``\ , exploiting the fact that the transform has conjugate symmetry in order to save roughly half the computational time and storage costs compared with :func:`fft`\ . If ``A`` has size ``(n_1, ..., n_d)``\ , the result has size ``(div(n_1,2)+1, ..., n_d)``\ .
 
-   The optional ``dims`` argument specifies an iterable subset of one or
-   more dimensions of ``A`` to transform, similar to :func:`fft`.  Instead
-   of (roughly) halving the first dimension of ``A`` in the result, the
-   ``dims[1]`` dimension is (roughly) halved in the same way.
+   The optional ``dims`` argument specifies an iterable subset of one or more dimensions of ``A`` to transform, similar to :func:`fft`\ . Instead of (roughly) halving the first dimension of ``A`` in the result, the ``dims[1]`` dimension is (roughly) halved in the same way.
 
 .. function:: irfft(A, d [, dims])
 
    .. Docstring generated from Julia source
 
-   Inverse of :func:`rfft`: for a complex array ``A``, gives the
-   corresponding real array whose FFT yields ``A`` in the first half.
-   As for :func:`rfft`, ``dims`` is an optional subset of dimensions
-   to transform, defaulting to ``1:ndims(A)``.
+   Inverse of :func:`rfft`\ : for a complex array ``A``\ , gives the corresponding real array whose FFT yields ``A`` in the first half. As for :func:`rfft`\ , ``dims`` is an optional subset of dimensions to transform, defaulting to ``1:ndims(A)``\ .
 
-   ``d`` is the length of the transformed real array along the ``dims[1]``
-   dimension, which must satisfy ``div(d,2)+1 == size(A,dims[1])``.
-   (This parameter cannot be inferred from ``size(A)`` since both
-   ``2*size(A,dims[1])-2`` as well as ``2*size(A,dims[1])-1`` are valid sizes
-   for the transformed real array.)
+   ``d`` is the length of the transformed real array along the ``dims[1]`` dimension, which must satisfy ``div(d,2)+1 == size(A,dims[1])``\ . (This parameter cannot be inferred from ``size(A)`` since both ``2*size(A,dims[1])-2`` as well as ``2*size(A,dims[1])-1`` are valid sizes for the transformed real array.)
 
 .. function:: brfft(A, d [, dims])
 
    .. Docstring generated from Julia source
 
-   Similar to :func:`irfft` but computes an unnormalized inverse transform
-   (similar to :func:`bfft`), which must be divided by the product
-   of the sizes of the transformed dimensions (of the real output array)
-   in order to obtain the inverse transform.
+   Similar to :func:`irfft` but computes an unnormalized inverse transform (similar to :func:`bfft`\ ), which must be divided by the product of the sizes of the transformed dimensions (of the real output array) in order to obtain the inverse transform.
 
 .. function:: plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
-   except for :func:`rfft` instead of :func:`fft`.  The first two
-   arguments, and the size of the transformed result, are the same as
-   for :func:`rfft`.
+   Pre-plan an optimized real-input FFT, similar to :func:`plan_fft` except for :func:`rfft` instead of :func:`fft`\ . The first two arguments, and the size of the transformed result, are the same as for :func:`rfft`\ .
 
 .. function:: plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized real-input unnormalized transform, similar to
-   :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
-   The first two arguments and the size of the transformed result, are
-   the same as for :func:`brfft`.
+   Pre-plan an optimized real-input unnormalized transform, similar to :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`\ . The first two arguments and the size of the transformed result, are the same as for :func:`brfft`\ .
 
 .. function:: plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
-   except for :func:`irfft` and :func:`brfft`, respectively.  The first
-   three arguments have the same meaning as for :func:`irfft`.
+   Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft` except for :func:`irfft` and :func:`brfft`\ , respectively. The first three arguments have the same meaning as for :func:`irfft`\ .
 
 .. function:: dct(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Performs a multidimensional type-II discrete cosine transform (DCT)
-   of the array ``A``, using the unitary normalization of the DCT.
-   The optional ``dims`` argument specifies an iterable subset of
-   dimensions (e.g. an integer, range, tuple, or array) to transform
-   along.  Most efficient if the size of ``A`` along the transformed
-   dimensions is a product of small primes; see :func:`nextprod`.  See
-   also :func:`plan_dct` for even greater efficiency.
+   Performs a multidimensional type-II discrete cosine transform (DCT) of the array ``A``\ , using the unitary normalization of the DCT. The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see :func:`nextprod`\ . See also :func:`plan_dct` for even greater efficiency.
 
 .. function:: dct!(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Same as :func:`dct!`, except that it operates in-place
-   on ``A``, which must be an array of real or complex floating-point
-   values.
+   Same as :func:`dct!`\ , except that it operates in-place on ``A``\ , which must be an array of real or complex floating-point values.
 
 .. function:: idct(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Computes the multidimensional inverse discrete cosine transform (DCT)
-   of the array ``A`` (technically, a type-III DCT with the unitary
-   normalization).
-   The optional ``dims`` argument specifies an iterable subset of
-   dimensions (e.g. an integer, range, tuple, or array) to transform
-   along.  Most efficient if the size of ``A`` along the transformed
-   dimensions is a product of small primes; see :func:`nextprod`.  See
-   also :func:`plan_idct` for even greater efficiency.
+   Computes the multidimensional inverse discrete cosine transform (DCT) of the array ``A`` (technically, a type-III DCT with the unitary normalization). The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of ``A`` along the transformed dimensions is a product of small primes; see :func:`nextprod`\ .  See also :func:`plan_idct` for even greater efficiency.
 
 .. function:: idct!(A [, dims])
 
    .. Docstring generated from Julia source
 
-   Same as :func:`idct!`, but operates in-place on ``A``.
+   Same as :func:`idct!`\ , but operates in-place on ``A``\ .
 
 .. function:: plan_dct(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized discrete cosine transform (DCT), similar to
-   :func:`plan_fft` except producing a function that computes :func:`dct`.
-   The first two arguments have the same meaning as for :func:`dct`.
+   Pre-plan an optimized discrete cosine transform (DCT), similar to :func:`plan_fft` except producing a function that computes :func:`dct`\ . The first two arguments have the same meaning as for :func:`dct`\ .
 
 .. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_dct`, but operates in-place on ``A``.
+   Same as :func:`plan_dct`\ , but operates in-place on ``A``\ .
 
 .. function:: plan_idct(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
-   :func:`plan_fft` except producing a function that computes :func:`idct`.
-   The first two arguments have the same meaning as for :func:`idct`.
+   Pre-plan an optimized inverse discrete cosine transform (DCT), similar to :func:`plan_fft` except producing a function that computes :func:`idct`\ . The first two arguments have the same meaning as for :func:`idct`\ .
 
 .. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Same as :func:`plan_idct`, but operates in-place on ``A``.
+   Same as :func:`plan_idct`\ , but operates in-place on ``A``\ .
 
 .. function:: fftshift(x)
 
@@ -2148,8 +2049,7 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   Same as :func:`filt` but writes the result into the ``out`` argument,
-   which may alias the input ``x`` to modify it in-place.
+   Same as :func:`filt` but writes the result into the ``out`` argument, which may alias the input ``x`` to modify it in-place.
 
 .. function:: deconv(b,a)
 
@@ -2167,13 +2067,13 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    .. Docstring generated from Julia source
 
-   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm
+   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by the vectors ``u`` and ``v``\ . Uses 2-D FFT algorithm.
 
 .. function:: conv2(B,A)
 
    .. Docstring generated from Julia source
 
-   2-D convolution of the matrix ``B`` with the matrix ``A``\ . Uses 2-D FFT algorithm
+   2-D convolution of the matrix ``B`` with the matrix ``A``\ . Uses 2-D FFT algorithm.
 
 .. function:: xcorr(u,v)
 
@@ -2189,24 +2089,9 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   Performs a multidimensional real-input/real-output (r2r) transform
-   of type ``kind`` of the array ``A``, as defined in the FFTW manual.
-   ``kind`` specifies either a discrete cosine transform of various types
-   (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
-   ``FFTW.REDFT11``), a discrete sine transform of various types
-   (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
-   ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
-   (``FFTW.R2HC`` and its inverse ``FFTW.HC2R``), or a discrete
-   Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be
-   an array or tuple in order to specify different transform types
-   along the different dimensions of ``A``; ``kind[end]`` is used
-   for any unspecified dimensions.  See the FFTW manual for precise
-   definitions of these transform types, at http://www.fftw.org/doc.
+   Performs a multidimensional real-input/real-output (r2r) transform of type ``kind`` of the array ``A``\ , as defined in the FFTW manual. ``kind`` specifies either a discrete cosine transform of various types (``FFTW.REDFT00``\ , ``FFTW.REDFT01``\ , ``FFTW.REDFT10``\ , or ``FFTW.REDFT11``\ ), a discrete sine transform of various types (``FFTW.RODFT00``\ , ``FFTW.RODFT01``\ , ``FFTW.RODFT10``\ , or ``FFTW.RODFT11``\ ), a real-input DFT with halfcomplex-format output (``FFTW.R2HC`` and its inverse ``FFTW.HC2R``\ ), or a discrete Hartley transform (``FFTW.DHT``\ ).  The ``kind`` argument may be an array or tuple in order to specify different transform types along the different dimensions of ``A``\ ; ``kind[end]`` is used for any unspecified dimensions.  See the FFTW manual for precise definitions of these transform types, at http://www.fftw.org/doc.
 
-   The optional ``dims`` argument specifies an iterable subset of
-   dimensions (e.g. an integer, range, tuple, or array) to transform
-   along. ``kind[i]`` is then the transform type for ``dims[i]``,
-   with ``kind[end]`` being used for ``i > length(kind)``.
+   The optional ``dims`` argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along. ``kind[i]`` is then the transform type for ``dims[i]``\ , with ``kind[end]`` being used for ``i > length(kind)``\ .
 
    See also :func:`plan_r2r` to pre-plan optimized r2r transforms.
 
@@ -2214,22 +2099,19 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    .. Docstring generated from Julia source
 
-   Same as :func:`r2r`, but operates in-place on ``A``, which must be
-   an array of real or complex floating-point numbers.
+   Same as :func:`r2r`\ , but operates in-place on ``A``\ , which must be an array of real or complex floating-point numbers.
 
 .. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
-   except that the transforms (and the first three arguments)
-   correspond to :func:`r2r` and :func:`r2r!`, respectively.
+   Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft` except that the transforms (and the first three arguments) correspond to :func:`r2r` and :func:`r2r!`\ , respectively.
 
 .. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
 
    .. Docstring generated from Julia source
 
-   Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
+   Similar to :func:`Base.plan_fft`\ , but corresponds to :func:`r2r!`\ .
 
 .. currentmodule:: Base
 

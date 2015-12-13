@@ -105,9 +105,9 @@
    Construct a regex, such as ``r"^[a-z]*$"``\ . The regex also accepts one or more flags, listed after the ending quote, to change its behaviour:
 
    * ``i`` enables case-insensitive matching
-   * ``m`` treats the ``^`` and ``$`` tokens as matching the start and   end of individual lines, as opposed to the whole string.
+   * ``m`` treats the ``^`` and ``$`` tokens as matching the start and end of individual lines, as   opposed to the whole string.
    * ``s`` allows the ``.`` modifier to match newlines.
-   * ``x`` enables "comment mode": whitespace is enabled except when   escaped with ``\``\ , and ``#`` is treated as starting a comment.
+   * ``x`` enables "comment mode": whitespace is enabled except when escaped with ``\``\ , and ``#``   is treated as starting a comment.
 
    For example, this regex has all three flags enabled:
 
@@ -137,13 +137,13 @@
    Alternatively, finer control and additional transformations may be be obtained by calling ``normalize_string(s; keywords...)``\ , where any number of the following boolean keywords options (which all default to ``false`` except for ``compose``\ ) are specified:
 
    * ``compose=false``\ : do not perform canonical composition
-   * ``decompose=true``\ : do canonical decomposition instead of canonical composition (``compose=true`` is ignored if present)
+   * ``decompose=true``\ : do canonical decomposition instead of canonical composition (``compose=true``   is ignored if present)
    * ``compat=true``\ : compatibility equivalents are canonicalized
    * ``casefold=true``\ : perform Unicode case folding, e.g. for case-insensitive string comparison
-   * ``newline2lf=true``\ , ``newline2ls=true``\ , or ``newline2ps=true``\ : convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
+   * ``newline2lf=true``\ , ``newline2ls=true``\ , or ``newline2ps=true``\ : convert various newline sequences   (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS)   character, respectively
    * ``stripmark=true``\ : strip diacritical marks (e.g. accents)
-   * ``stripignore=true``\ : strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
-   * ``stripcc=true``\ : strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+   * ``stripignore=true``\ : strip Unicode's "default ignorable" characters (e.g. the soft hyphen   or the left-to-right marker)
+   * ``stripcc=true``\ : strip control characters; horizontal tabs and form feeds are converted to   spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
    * ``rejectna=true``\ : throw an error if unassigned code points are found
    * ``stable=true``\ : enforce Unicode Versioning Stability
 
@@ -171,7 +171,7 @@
 
    .. Docstring generated from Julia source
 
-   Tells whether index ``i`` is valid for the given string
+   Tells whether index ``i`` is valid for the given string.
 
 .. function:: is_assigned_char(c) -> Bool
 
@@ -253,7 +253,7 @@
 
    .. Docstring generated from Julia source
 
-   Reverses a string
+   Reverses a string.
 
 .. function:: replace(string, pat, r[, n])
 
@@ -331,7 +331,11 @@
 
    .. Docstring generated from Julia source
 
-   Join an array of ``strings`` into a single string, inserting the given delimiter between adjacent strings. If ``last`` is given, it will be used instead of ``delim`` between the last two strings. For example, ``join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"``\ .
+   Join an array of ``strings`` into a single string, inserting the given delimiter between adjacent strings. If ``last`` is given, it will be used instead of ``delim`` between the last two strings. For example
+
+   .. code-block:: julia
+
+       join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
 
    ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ .
 
@@ -375,9 +379,7 @@
 
    .. Docstring generated from Julia source
 
-   Create a random ASCII string of length ``len``, consisting of upper- and
-   lower-case letters and the digits 0-9. The optional ``rng`` argument
-   specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
+   Create a random ASCII string of length ``len``\ , consisting of upper- and lower-case letters and the digits 0-9. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: charwidth(c)
 
@@ -485,7 +487,7 @@
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`print_unescaped`\ .
 
 .. function:: utf16(s)
 

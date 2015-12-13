@@ -87,20 +87,33 @@
 
    Returns a structure whose fields contain information about the file. The fields of the structure are:
 
-   ========= ======================================================================
-    size      The size (in bytes) of the file
-    device    ID of the device that contains the file
-    inode     The inode number of the file
-    mode      The protection mode of the file
-    nlink     The number of hard links to the file
-    uid       The user id of the owner of the file
-    gid       The group id of the file owner
-    rdev      If this file refers to a device, the ID of the device it refers to
-    blksize   The file-system preferred block size for the file
-    blocks    The number of such blocks allocated
-    mtime     Unix timestamp of when the file was last modified
-    ctime     Unix timestamp of when the file was created
-   ========= ======================================================================
+   +---------+--------------------------------------------------------------------+
+   | Name    | Description                                                        |
+   +=========+====================================================================+
+   | size    | The size (in bytes) of the file                                    |
+   +---------+--------------------------------------------------------------------+
+   | device  | ID of the device that contains the file                            |
+   +---------+--------------------------------------------------------------------+
+   | inode   | The inode number of the file                                       |
+   +---------+--------------------------------------------------------------------+
+   | mode    | The protection mode of the file                                    |
+   +---------+--------------------------------------------------------------------+
+   | nlink   | The number of hard links to the file                               |
+   +---------+--------------------------------------------------------------------+
+   | uid     | The user id of the owner of the file                               |
+   +---------+--------------------------------------------------------------------+
+   | gid     | The group id of the file owner                                     |
+   +---------+--------------------------------------------------------------------+
+   | rdev    | If this file refers to a device, the ID of the device it refers to |
+   +---------+--------------------------------------------------------------------+
+   | blksize | The file-system preferred block size for the file                  |
+   +---------+--------------------------------------------------------------------+
+   | blocks  | The number of such blocks allocated                                |
+   +---------+--------------------------------------------------------------------+
+   | mtime   | Unix timestamp of when the file was last modified                  |
+   +---------+--------------------------------------------------------------------+
+   | ctime   | Unix timestamp of when the file was created                        |
+   +---------+--------------------------------------------------------------------+
 
 .. function:: lstat(file)
 
@@ -118,7 +131,7 @@
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``stat(file).mtime``
+   Equivalent to ``stat(file).mtime``\ .
 
 .. function:: filemode(file)
 
@@ -130,7 +143,7 @@
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``stat(file).size``
+   Equivalent to ``stat(file).size``\ .
 
 .. function:: uperm(file)
 
@@ -138,19 +151,23 @@
 
    Gets the permissions of the owner of the file as a bitfield of
 
-   ==== =====================
-    01   Execute Permission
-    02   Write Permission
-    04   Read Permission
-   ==== =====================
+   +-------+--------------------+
+   | Value | Description        |
+   +=======+====================+
+   | 01    | Execute Permission |
+   +-------+--------------------+
+   | 02    | Write Permission   |
+   +-------+--------------------+
+   | 04    | Read Permission    |
+   +-------+--------------------+
 
-   For allowed arguments, see ``stat``.
+   For allowed arguments, see ``stat``\ .
 
 .. function:: gperm(file)
 
    .. Docstring generated from Julia source
 
-   Like uperm but gets the permissions of the group owning the file
+   Like uperm but gets the permissions of the group owning the file.
 
 .. function:: operm(file)
 
