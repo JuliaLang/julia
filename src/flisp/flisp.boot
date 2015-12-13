@@ -71,9 +71,9 @@
 	  __script #fn("6000r1c0|q1c1t;" [#fn("6000r0e0~41;" [load])
 					  #fn("6000r1e0|312c1a41;" [top-level-exception-handler
 								    #fn(exit)])] __script)
-	  __start #fn("9000r1e0302|NF6\x8b0|Nk12^k22c3|\x84>17802c4|\x84>6g0e5c6|31b2326J0e7e8|31312e9302c:e;315>0e<c=312c>a31580e?|\x84315E0|k12]k22e<e@312eA302c>`41;" [__init_globals
-  *argv* *interactive* "-e" "--eval" > #fn(length) eval-string caddr newline #fn(io.flush)
-  *output-stream* princ "ERROR: -e/--eval needs an expression\n"
+	  __start #fn(":000r1e0302|NF6\x900|Nk12^k22c3|\x84>17802c4|\x84>6l0e5|b2326S0e6c7c8e9e:|31c;32c<33312c=e>315>0e?c@312cAa31580eB|\x84315E0|k12]k22e?eC312eD302cA`41;" [__init_globals
+  *argv* *interactive* "-e" "--eval" length> eval-string #fn(string) "(begin "
+  string.join cddr " " ")" #fn(io.flush) *output-stream* princ "ERROR: -e/--eval needs at least one expression\n"
   #fn(exit) __script *banner* repl] __start)
 	  abs #fn("6000r1|`X650|y;|;" [] abs) any
 	  #fn("7000r2}F16D02|}M3117:02e0|}N42;" [any] any) arg-counts #table(#.equal? 2  #.atom? 1  #.set-cdr! 2  #.symbol? 1  #.car 1  #.eq? 2  #.aref 2  #.boolean? 1  #.not 1  #.null? 1  #.eqv? 2  #.number? 1  #.pair? 1  #.builtin? 1  #.aset! 3  #.div0 2  #.= 2  #.bound? 1  #.compare 2  #.vector? 1  #.cdr 1  #.set-car! 2  #.< 2  #.fixnum? 1  #.cons 2)
