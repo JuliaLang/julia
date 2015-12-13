@@ -369,7 +369,7 @@ called *parallel map*, implemented in Julia as the :func:`pmap` function.
 For example, we could compute the singular values of several large
 random matrices in parallel as follows::
 
-    M = {rand(1000,1000) for i=1:10}
+    M = Matrix{Float64}[rand(1000,1000) for i=1:10]
     pmap(svd, M)
 
 Julia's :func:`pmap` is designed for the case where each function call does
@@ -405,7 +405,7 @@ they finish their current tasks.
 As an example, consider computing the singular values of matrices of
 different sizes::
 
-    M = {rand(800,800), rand(600,600), rand(800,800), rand(600,600)}
+    M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)]
     pmap(svd, M)
 
 If one process handles both 800x800 matrices and another handles both
