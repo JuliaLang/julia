@@ -3445,3 +3445,12 @@ end
 # issue #14339
 f14339{T<:Union{}}(x::T, y::T) = 0
 @test_throws MethodError f14339(1, 2)
+
+# make sure codegen doesn't remove argument to `isa`
+@noinline __g_isa_test_1(a) = push!(a,1)
+function __f_isa_arg_1()
+    a = []
+    isa(__g_isa_test_1(a), Any)
+    length(a)
+end
+@test __f_isa_arg_1() == 1
