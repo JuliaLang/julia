@@ -2520,12 +2520,14 @@ static bool emit_known_call(jl_cgval_t *ret, jl_value_t *ff,
         if (jl_is_type_type(ty) && !jl_has_typevars(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
+                emit_expr(args[1], ctx);  // TODO remove if no side effects
                 *ret = mark_julia_type(ConstantInt::get(T_int1, 1), false, jl_bool_type);
                 JL_GC_POP();
                 return true;
             }
             if (!jl_subtype(tp0, (jl_value_t*)jl_type_type, 0)) {
                 if (jl_is_leaf_type(arg)) {
+                    emit_expr(args[1], ctx);  // TODO remove if no side effects
                     *ret = mark_julia_type(ConstantInt::get(T_int1, 0), false, jl_bool_type);
                     JL_GC_POP();
                     return true;
