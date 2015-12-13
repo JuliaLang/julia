@@ -6,9 +6,7 @@ import Base: string, convert, write, length, endof, next, reverseind, lastidx, r
 	     lowercase, uppercase, eltype, isless, promote_rule, ==
 
 export UnicodeError, UTF16String, UTF32String, unsafe_checkstring, checkstring,
-       utf8, utf16, utf32, containsnul, WString, wstring,
-       charprop, CharCategoryCode, UnicodeProperty, CharCategory, CatLetter, CatMark, CatNumber,
-       CatPunctuation, CatSymbol, CatSeparator, CatOther, CatUpper,
+       utf8, utf16, utf32, containsnul, WString, wstring, charprop, Cat, CharType, CharCode,
        is_assigned_char, islower, isupper, isdigit, isalpha, isnumber, isalnum, iscntrl,
        ispunct, isspace, isprint, isgraph,
        isgraphemebreak, GraphemeIterator, normalize_string, graphemes, charwidth

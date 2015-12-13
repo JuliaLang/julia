@@ -22,6 +22,7 @@ export
     Serializer,
     Docs,
     Markdown,
+    Cat,
     Unicode,
 
 # Types
@@ -41,8 +42,8 @@ export
     CartesianIndex,
     CartesianRange,
     Channel,
-    CharCategory,
-    CharCategoryCode,
+    CharCode,
+    CharType,
     Cmd,
     Colon,
     Complex,

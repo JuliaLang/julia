@@ -12,71 +12,78 @@ isvalid(ch::Char) = isvalid(Char, ch)
 
 # Unicode General Category constants
 
-"""Unicode character properties"""
-abstract UnicodeProperty
-"""Unicode character categories"""
-abstract CharCategory   <: UnicodeProperty
+module Cat
+export Property, CharType, CharCode
 
-"""Unicode letter character category"""
-abstract CatLetter      <: CharCategory
-"""Unicode Mark character category"""
-abstract CatMark        <: CharCategory
-"""Unicode Numeric character category"""
-abstract CatNumber      <: CharCategory
-"""Unicode Punctuation character category"""
-abstract CatPunctuation <: CharCategory
-"""Unicode Symbol character category"""
-abstract CatSymbol      <: CharCategory
-"""Unicode Separator character category"""
-abstract CatSeparator   <: CharCategory
-"""Unicode Other character category"""
-abstract CatOther       <: CharCategory
+"""Unicode character properties"""
+abstract Property
+
+"""Unicode character category type"""
+abstract CharType    <: Property
+
+"""Unicode 'Letter' character category"""
+abstract Letter      <: CharType
+"""Unicode 'Mark' character category"""
+abstract Mark        <: CharType
+"""Unicode 'Number' character category"""
+abstract Number      <: CharType
+"""Unicode 'Punctuation' character category"""
+abstract Punctuation <: CharType
+"""Unicode 'Symbol' character category"""
+abstract Symbol      <: CharType
+"""Unicode 'Separator' character category"""
+abstract Separator   <: CharType
+"""Unicode 'Other' character category"""
+abstract Other       <: CharType
 
 """Unicode uppercase & titlecase letters"""
-abstract CatUpper       <: CatLetter
+abstract Upper       <: Letter
 
-"""Unicode Character Category Code (0-29)"""
-bitstype 8 CharCategoryCode
+"""Unicode character category code (0-29)"""
+bitstype 8 CharCode
 
-convert(::Type{CharCategoryCode}, x::Integer) = reinterpret(CharCategoryCode, x%UInt8)
-convert{T<:Integer}(::Type{T}, x::CharCategoryCode) = convert(T, reinterpret(UInt8, x))
-promote_rule{T<:Integer}(::Type{T}, ::Type{CharCategoryCode}) = T
-isless(x::CharCategoryCode, y::CharCategoryCode) = isless(UInt32(x), UInt32(y))
-isless(x::CharCategoryCode, y::Integer) = isless(UInt32(x), y)
-isless(x::Integer, y::CharCategoryCode) = isless(x, UInt32(y))
+end # module Cat
+import .Cat: Property, CharType, CharCode
+
+convert(::Type{CharCode}, x::Integer) = reinterpret(CharCode, x%UInt8)
+convert{T<:Integer}(::Type{T}, x::CharCode) = convert(T, reinterpret(UInt8, x))
+promote_rule{T<:Integer}(::Type{T}, ::Type{CharCode}) = T
+isless(x::CharCode, y::CharCode) = isless(UInt8(x), UInt8(y))
+isless(x::CharCode, y::Integer)  = isless(UInt8(x), y)
+isless(x::Integer, y::CharCode)  = isless(x, UInt8(y))
 
 for (nam, val, cat, typ, des) in
-    ((:Cn, 0,  :NotAssignedChar,    CatOther,       "Other, Not assigned"),
-     (:Lu, 1,  :UpperCase,          CatUpper,       "Letter, uppercase"),
-     (:Ll, 2,  :LowerCase,          CatLetter,      "Letter, lowercase"),
-     (:Lt, 3,  :TitleCase,          CatUpper,       "Letter, titlecase"),
-     (:Lm, 4,  :ModifierLetter,     CatLetter,      "Letter, modifier"),
-     (:Lo, 5,  :OtherLetter,        CatLetter,      "Letter, other"),
-     (:Mn, 6,  :NonSpacingMark,     CatMark,        "Mark, nonspacing"),
-     (:Mc, 7,  :CombiningMark,      CatMark,        "Mark, spacing combining"),
-     (:Me, 8,  :EnclosingMark,      CatMark,        "Mark, enclosing"),
-     (:Nd, 9,  :DecimalDigit,       CatNumber,      "Number, decimal digit"),
-     (:Nl, 10, :NumericLetter,      CatNumber,      "Number, letter"),
-     (:No, 11, :OtherNumber,        CatNumber,      "Number, other"),
-     (:Pc, 12, :ConnectorPunct,     CatPunctuation, "Punctuation, connector"),
-     (:Pd, 13, :DashPunct,          CatPunctuation, "Punctuation, dash"),
-     (:Ps, 14, :OpenPunct,          CatPunctuation, "Punctuation, open"),
-     (:Pe, 15, :ClosePunct,         CatPunctuation, "Punctuation, close"),
-     (:Pi, 16, :BegQuotePunct,      CatPunctuation, "Punctuation, initial quote"),
-     (:Pf, 17, :EndQuotePunct,      CatPunctuation, "Punctuation, final quote"),
-     (:Po, 18, :OtherPunct,         CatPunctuation, "Punctuation, other"),
-     (:Sm, 19, :MathSymbol,         CatSymbol,      "Symbol, math"),
-     (:Sc, 20, :CurrencySymbol,     CatSymbol,      "Symbol, currency"),
-     (:Sk, 21, :ModifierSymbol,     CatSymbol,      "Symbol, modifier"),
-     (:So, 22, :OtherSymbol,        CatSymbol,      "Symbol, other"),
-     (:Zs, 23, :SpaceSeparator,     CatSeparator,   "Separator, space"),
-     (:Zl, 24, :LineSeparator,      CatSeparator,   "Separator, line"),
-     (:Zp, 25, :ParagraphSeparator, CatSeparator,   "Separator, paragraph"),
-     (:Cc, 26, :ControlChar,        CatOther,       "Other, control"),
-     (:Cf, 27, :FormatChar,         CatOther,       "Other, format"),
-     (:Cs, 28, :SurrogateChar,      CatOther,       "Other, surrogate"),
-     (:Co, 29, :PrivateUseChar,     CatOther,       "Other, private use"))
-    @eval const global $nam = CharCategoryCode($val)
+    ((:Cn, 0,  :NotAssignedChar,    Cat.Other,       "Other, Not assigned"),
+     (:Lu, 1,  :UpperCase,          Cat.Upper,       "Letter, uppercase"),
+     (:Ll, 2,  :LowerCase,          Cat.Letter,      "Letter, lowercase"),
+     (:Lt, 3,  :TitleCase,          Cat.Upper,       "Letter, titlecase"),
+     (:Lm, 4,  :ModifierLetter,     Cat.Letter,      "Letter, modifier"),
+     (:Lo, 5,  :OtherLetter,        Cat.Letter,      "Letter, other"),
+     (:Mn, 6,  :NonSpacingMark,     Cat.Mark,        "Mark, nonspacing"),
+     (:Mc, 7,  :CombiningMark,      Cat.Mark,        "Mark, spacing combining"),
+     (:Me, 8,  :EnclosingMark,      Cat.Mark,        "Mark, enclosing"),
+     (:Nd, 9,  :DecimalDigit,       Cat.Number,      "Number, decimal digit"),
+     (:Nl, 10, :NumericLetter,      Cat.Number,      "Number, letter"),
+     (:No, 11, :OtherNumber,        Cat.Number,      "Number, other"),
+     (:Pc, 12, :ConnectorPunct,     Cat.Punctuation, "Punctuation, connector"),
+     (:Pd, 13, :DashPunct,          Cat.Punctuation, "Punctuation, dash"),
+     (:Ps, 14, :OpenPunct,          Cat.Punctuation, "Punctuation, open"),
+     (:Pe, 15, :ClosePunct,         Cat.Punctuation, "Punctuation, close"),
+     (:Pi, 16, :BegQuotePunct,      Cat.Punctuation, "Punctuation, initial quote"),
+     (:Pf, 17, :EndQuotePunct,      Cat.Punctuation, "Punctuation, final quote"),
+     (:Po, 18, :OtherPunct,         Cat.Punctuation, "Punctuation, other"),
+     (:Sm, 19, :MathSymbol,         Cat.Symbol,      "Symbol, math"),
+     (:Sc, 20, :CurrencySymbol,     Cat.Symbol,      "Symbol, currency"),
+     (:Sk, 21, :ModifierSymbol,     Cat.Symbol,      "Symbol, modifier"),
+     (:So, 22, :OtherSymbol,        Cat.Symbol,      "Symbol, other"),
+     (:Zs, 23, :SpaceSeparator,     Cat.Separator,   "Separator, space"),
+     (:Zl, 24, :LineSeparator,      Cat.Separator,   "Separator, line"),
+     (:Zp, 25, :ParagraphSeparator, Cat.Separator,   "Separator, paragraph"),
+     (:Cc, 26, :ControlChar,        Cat.Other,       "Other, control"),
+     (:Cf, 27, :FormatChar,         Cat.Other,       "Other, format"),
+     (:Cs, 28, :SurrogateChar,      Cat.Other,       "Other, surrogate"),
+     (:Co, 29, :PrivateUseChar,     Cat.Other,       "Other, private use"))
+    @eval const global $nam = CharCode($val)
     @eval export $cat
     @eval abstract $cat <: $typ
     @eval @doc $(string("Unicode Category Code: ",des)) $nam
@@ -94,54 +101,53 @@ const c2t = [NotAssignedChar, UpperCase, LowerCase, TitleCase, ModifierLetter, O
 
 ############################################################################
 
-
 """
 Return various Unicode properties for character
 """
 function charprop end
 
-charprop(::Type{CharCategory}, c) = c2t[Int(charprop(CharCategoryCode, c))+1]
+charprop(::Type{CharType}, c) = c2t[Int(charprop(CharCode, c))+1]
 
-is_assigned_char(c) = charprop(CharCategoryCode, c) != Cn
+is_assigned_char(c) = charprop(CharCode, c) != Cn
 
 ## libc character class predicates ##
 
-islower(c::Char) = charprop(CharCategoryCode, c) == Ll
+islower(c::Char) = charprop(CharCode, c) == Ll
 
 # true for Unicode upper and mixed case
-isupper(c::Char) = (ccode = charprop(CharCategoryCode, c)) == Lu || ccode == Lt
+isupper(c::Char) = (ccode = charprop(CharCode, c)) == Lu || ccode == Lt
 
 isdigit(c::Char)  = ('0' <= c <= '9')
-isalpha(c::Char)  = (Lu <= charprop(CharCategoryCode, c) <= Lo)
-isnumber(c::Char) = (Nd <= charprop(CharCategoryCode, c) <= No)
-isalnum(c::Char)  = (Lu <= (ccode = charprop(CharCategoryCode, c)) <= Lo) || (Nd <= ccode <= No)
+isalpha(c::Char)  = (Lu <= charprop(CharCode, c) <= Lo)
+isnumber(c::Char) = (Nd <= charprop(CharCode, c) <= No)
+isalnum(c::Char)  = (Lu <= (ccode = charprop(CharCode, c)) <= Lo) || (Nd <= ccode <= No)
 
 # These are about 3 times slower, because the isa method
 # is much slower than checking if an integer is within range (or two ranges)
 # If that is sped up, then these, which are more readable, could replace the other forms.
 #=
-isalpha(c::Char)  = charprop(CharCategory, c) <: CatLetter
-isnumber(c::Char) = charprop(CharCategory, c) <: CatNumber
-isupper(c::Char)  = charprop(CharCategory, c) <: CatUpper
-isalnum(c::Char)  = charprop(CharCategory, c) <: Union{CatLetter, CatNumber}
-ispunct(c::Char)  = charprop(CharCategory, c) <: CatPunctuation
+isalpha(c::Char)  = charprop(CharType, c) <: CatLetter
+isnumber(c::Char) = charprop(CharType, c) <: CatNumber
+isupper(c::Char)  = charprop(CharType, c) <: CatUpper
+isalnum(c::Char)  = charprop(CharType, c) <: Union{CatLetter, CatNumber}
+ispunct(c::Char)  = charprop(CharType, c) <: CatPunctuation
 =#
 
 # following C++ only control characters from the Latin-1 subset return true
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
-ispunct(c::Char) = (Pc <= charprop(CharCategoryCode, c) <= Po)
+ispunct(c::Char) = (Pc <= charprop(CharCode, c) <= Po)
 
 # \u85 is the Unicode Next Line (NEL) character
 # the check for \ufffd allows for branch removal on ASCIIStrings
 @inline isspace(c::Char) =
     (c == ' ' || '\t' <= c <='\r' || c == '\u85' ||
-     ('\ua0' <= c && c != '\ufffd' && charprop(CharCategoryCode, c) == Zs))
+     ('\ua0' <= c && c != '\ufffd' && charprop(CharCode, c) == Zs))
 
-isprint(c::Char) = (Lu <= charprop(CharCategoryCode, c) <= Zs)
+isprint(c::Char) = (Lu <= charprop(CharCode, c) <= Zs)
 
 # true in principle if a printer would use ink
-isgraph(c::Char) = (Lu <= charprop(CharCategoryCode, c) <= So)
+isgraph(c::Char) = (Lu <= charprop(CharCode, c) <= So)
 
 for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
             "lower", "print", "punct", "space", "upper")
