@@ -204,8 +204,8 @@ end
 
 #Linear solvers
 A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(transpose(A), b)
-Ac_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(ctranspose(A), b)
+At_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
+Ac_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = A_ldiv_B!(ctranspose(A), b)
 function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
