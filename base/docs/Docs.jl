@@ -90,8 +90,11 @@ end
 
 function get_obj_meta(obj)
     for mod in modules
-        haskey(meta(mod), obj) && return meta(mod)[obj]
+        if haskey(meta(mod), obj)
+            return meta(mod)[obj]
+        end
     end
+    nothing
 end
 
 "`doc(obj)`: Get the metadata associated with `obj`."
@@ -146,38 +149,60 @@ function functionsummary(func::Function)
     return Markdown.parse(takebuf_string(io))
 end
 
+function qualified_name(b::Binding)
+    if b.mod === Main
+        string(b.var)
+    else
+        join((b.mod, b.var), '.')
+    end
+end
+
 function doc(b::Binding)
     d = get_obj_meta(b)
-    if d === nothing
-        v = getfield(b.mod,b.var)
-        d = doc(v)
-        if d === nothing
-            if startswith(string(b.var),'@')
-                # check to see if the binding var is a macro
-                d = catdoc(Markdown.parse("""
-                No documentation found.
+    if d !== nothing
+        return d
+    end
+    if !(b.defined)
+        return Markdown.parse("""
 
-                """), macrosummary(b.var, v))
-            elseif isa(v,Function)
-                d = catdoc(Markdown.parse("""
-                No documentation found.
+        No documentation found.
 
-                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
-                """), functionsummary(v))
-            elseif isa(v,DataType)
-                d = catdoc(Markdown.parse("""
-                No documentation found.
+        Binding `$(qualified_name(b))` does not exist.
+        """)
+    end
+    v = getfield(b.mod,b.var)
+    d = doc(v)
+    if d !== nothing
+        return d
+    end
+    if startswith(string(b.var),'@')
+        # check to see if the binding var is a macro
+        d = catdoc(Markdown.parse("""
 
-                """), typesummary(v))
-            else
-                T = typeof(v)
-                d = catdoc(Markdown.parse("""
-                No documentation found.
+        No documentation found.
 
-                `$(b.mod === Main ? b.var : join((b.mod, b.var),'.'))` is of type `$T`:
-                """), typesummary(typeof(v)))
-            end
-        end
+        """), macrosummary(b.var, v))
+    elseif isa(v,Function)
+        d = catdoc(Markdown.parse("""
+
+        No documentation found.
+
+        `$(qualified_name(b))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+        """), functionsummary(v))
+    elseif isa(v,DataType)
+        d = catdoc(Markdown.parse("""
+
+        No documentation found.
+
+        """), typesummary(v))
+    else
+        T = typeof(v)
+        d = catdoc(Markdown.parse("""
+
+        No documentation found.
+
+        `$(qualified_name(b))` is of type `$T`:
+        """), typesummary(typeof(v)))
     end
     return d
 end
@@ -518,8 +543,9 @@ function docm(meta, def, define = true)
 
     def′ = unblock(def)
 
-    isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall) &&
+    if isexpr(def′, :quote) && isexpr(def′.args[1], :macrocall)
         return vardoc(meta, nothing, namify(def′.args[1]))
+    end
 
     ex = def # Save unexpanded expression for error reporting.
     def = macroexpand(def)
