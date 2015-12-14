@@ -540,13 +540,10 @@ end
 function recompile_stale(mod, cachefile)
     path = find_in_path(string(mod), nothing)
     if path === nothing
-        rm(cachefile)
-        error("module $mod not found in current path; removed orphaned cache file $cachefile")
+        error("module $mod not found in current path; you should rm(\"$(escape_string(cachefile))\") to remove the orphaned cache file")
     end
     if stale_cachefile(path, cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
-        if !success(create_expr_cache(path, cachefile))
-            error("Failed to precompile $mod to $cachefile")
-        end
+        compilecache(mod)
     end
 end
