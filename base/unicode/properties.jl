@@ -59,44 +59,49 @@ Base.isless(x::Code, y::Code) = isless(UInt8(x), UInt8(y))
 Base.isless(x::Code, y::Integer)  = isless(UInt8(x), y)
 Base.isless(x::Integer, y::Code)  = isless(x, UInt8(y))
 
-for (nam, val, cat, typ, des) in
-    ((:Cn, 0,  :NotAssignedChar,         :Other,       "Other, Not assigned"),
-     (:Lu, 1,  :UpperCase,               :Upper,       "Letter, uppercase"),
-     (:Ll, 2,  :LowerCase,               :Letter,      "Letter, lowercase"),
-     (:Lt, 3,  :TitleCase,               :Upper,       "Letter, titlecase"),
-     (:Lm, 4,  :ModifierLetter,          :Letter,      "Letter, modifier"),
-     (:Lo, 5,  :OtherLetter,             :Letter,      "Letter, other"),
-     (:Mn, 6,  :NonSpacingMark,          :Mark,        "Mark, nonspacing"),
-     (:Mc, 7,  :CombiningMark,           :Mark,        "Mark, spacing combining"),
-     (:Me, 8,  :EnclosingMark,           :Mark,        "Mark, enclosing"),
-     (:Nd, 9,  :DecimalDigit,            :Number,      "Number, decimal digit"),
-     (:Nl, 10, :NumericLetter,           :Number,      "Number, letter"),
-     (:No, 11, :OtherNumber,             :Number,      "Number, other"),
-     (:Pc, 12, :ConnectorPunctuation,    :Punctuation, "Punctuation, connector"),
-     (:Pd, 13, :DashPunctuation,         :Punctuation, "Punctuation, dash"),
-     (:Ps, 14, :OpenPunctuation,         :Punctuation, "Punctuation, open"),
-     (:Pe, 15, :ClosePunctuation,        :Punctuation, "Punctuation, close"),
-     (:Pi, 16, :InitialQuotePunctuation, :Punctuation, "Punctuation, initial quote"),
-     (:Pf, 17, :FinalQuotePunctuation,   :Punctuation, "Punctuation, final quote"),
-     (:Po, 18, :OtherPunctuation,        :Punctuation, "Punctuation, other"),
-     (:Sm, 19, :MathSymbol,              :Symbol,      "Symbol, math"),
-     (:Sc, 20, :CurrencySymbol,          :Symbol,      "Symbol, currency"),
-     (:Sk, 21, :ModifierSymbol,          :Symbol,      "Symbol, modifier"),
-     (:So, 22, :OtherSymbol,             :Symbol,      "Symbol, other"),
-     (:Zs, 23, :SpaceSeparator,          :Separator,   "Separator, space"),
-     (:Zl, 24, :LineSeparator,           :Separator,   "Separator, line"),
-     (:Zp, 25, :ParagraphSeparator,      :Separator,   "Separator, paragraph"),
-     (:Cc, 26, :ControlChar,             :Other,       "Other, control"),
-     (:Cf, 27, :FormatChar,              :Other,       "Other, format"),
-     (:Cs, 28, :SurrogateChar,           :Other,       "Other, surrogate"),
-     (:Co, 29, :PrivateUseChar,          :Other,       "Other, private use"))
-    @eval const global $nam = $(Code(val))
-    @eval abstract $cat <: $typ
-    @eval Base.convert(::Type{Code}, ct::$cat) = $(Code(val))
-    @eval @doc $(string("Unicode Category Code: ",des)) $nam
-    @eval @doc $(string("Unicode Category Type: ",des)) $cat
+let c2t = DataType[]
+    for (nam, val, cat, typ, des) in
+        ((:Cn, 0,  :NotAssignedChar,         :Other,       "Other, Not assigned"),
+         (:Lu, 1,  :UpperCase,               :Upper,       "Letter, uppercase"),
+         (:Ll, 2,  :LowerCase,               :Letter,      "Letter, lowercase"),
+         (:Lt, 3,  :TitleCase,               :Upper,       "Letter, titlecase"),
+         (:Lm, 4,  :ModifierLetter,          :Letter,      "Letter, modifier"),
+         (:Lo, 5,  :OtherLetter,             :Letter,      "Letter, other"),
+         (:Mn, 6,  :NonSpacingMark,          :Mark,        "Mark, nonspacing"),
+         (:Mc, 7,  :CombiningMark,           :Mark,        "Mark, spacing combining"),
+         (:Me, 8,  :EnclosingMark,           :Mark,        "Mark, enclosing"),
+         (:Nd, 9,  :DecimalDigit,            :Number,      "Number, decimal digit"),
+         (:Nl, 10, :NumericLetter,           :Number,      "Number, letter"),
+         (:No, 11, :OtherNumber,             :Number,      "Number, other"),
+         (:Pc, 12, :ConnectorPunctuation,    :Punctuation, "Punctuation, connector"),
+         (:Pd, 13, :DashPunctuation,         :Punctuation, "Punctuation, dash"),
+         (:Ps, 14, :OpenPunctuation,         :Punctuation, "Punctuation, open"),
+         (:Pe, 15, :ClosePunctuation,        :Punctuation, "Punctuation, close"),
+         (:Pi, 16, :InitialQuotePunctuation, :Punctuation, "Punctuation, initial quote"),
+         (:Pf, 17, :FinalQuotePunctuation,   :Punctuation, "Punctuation, final quote"),
+         (:Po, 18, :OtherPunctuation,        :Punctuation, "Punctuation, other"),
+         (:Sm, 19, :MathSymbol,              :Symbol,      "Symbol, math"),
+         (:Sc, 20, :CurrencySymbol,          :Symbol,      "Symbol, currency"),
+         (:Sk, 21, :ModifierSymbol,          :Symbol,      "Symbol, modifier"),
+         (:So, 22, :OtherSymbol,             :Symbol,      "Symbol, other"),
+         (:Zs, 23, :SpaceSeparator,          :Separator,   "Separator, space"),
+         (:Zl, 24, :LineSeparator,           :Separator,   "Separator, line"),
+         (:Zp, 25, :ParagraphSeparator,      :Separator,   "Separator, paragraph"),
+         (:Cc, 26, :ControlChar,             :Other,       "Other, control"),
+         (:Cf, 27, :FormatChar,              :Other,       "Other, format"),
+         (:Cs, 28, :SurrogateChar,           :Other,       "Other, surrogate"),
+         (:Co, 29, :PrivateUseChar,          :Other,       "Other, private use"))
+        @eval const global $nam = $(Code(val))
+        @eval abstract $cat <: $typ
+        @eval push!($c2t, $cat)
+        @eval Base.convert(::Type{Code}, ct::$cat) = $(Code(val))
+        @eval @doc $(string("Unicode Category Code: ",des)) $nam
+        @eval @doc $(string("Unicode Category Type: ",des)) $cat
+    end
+    @eval const global code2general = $c2t
 end
 
+#=
 const c2t = [NotAssignedChar, UpperCase, LowerCase, TitleCase, ModifierLetter, OtherLetter,
              NonSpacingMark, CombiningMark, EnclosingMark,
              DecimalDigit, NumericLetter, OtherNumber,
@@ -104,22 +109,29 @@ const c2t = [NotAssignedChar, UpperCase, LowerCase, TitleCase, ModifierLetter, O
              InitialQuotePunctuation, FinalQuotePunctuation, OtherPunctuation,
              MathSymbol, CurrencySymbol, ModifierSymbol, OtherSymbol,
              SpaceSeparator, LineSeparator, ParagraphSeparator,
-	     ControlChar, FormatChar, SurrogateChar, PrivateUseChar]
+             ControlChar, FormatChar, SurrogateChar, PrivateUseChar]
+=#
 
-Base.convert(::Type{General}, cat::Code) = c2t[Int(cat)+1]
+Base.convert(::Type{General}, cat::Code) = code2general[Int(cat)+1]
 
 Unicode.charprop(Mask, c) = Mask(1<<Int(charprop(Code, c)))
 
-const global UpperMask  = Mask(1<<Int(Lu) | 1<<Int(Lt))
-const global AlphaMask  = Mask(1<<Int(Lu) | 1<<Int(Ll) | 1<<Int(Lt) | 1<<Int(Lm) | 1<<Int(Lo))
-const global NumberMask = Mask((1<<Int(Nd) | 1<<Int(Nl) | 1<<Int(No)))
-const global AlphaNumericMask = AlphaMask | NumberMask
+Base.&(c::Code, m::Mask) = ((1<<Int(c)) & m) != 0
+
+Base.|(x::Code, y::Code) = Mask((1<<Int(x)) | (1<<Int(y)))
+Base.|(c::Code, m::Mask) = Mask((1<<Int(c)) | m)
+Base.|(m::Mask, c::Code) = (c | m)
+
+@eval const global UpperMask  = $(Lu | Lt)
+@eval const global AlphaMask  = $(Lu | Ll | Lt | Lm | Lo)
+@eval const global NumberMask = $(Nd | Nl | No)
+@eval const global AlphaNumericMask = AlphaMask | NumberMask
 
 let mask = 0 ; for i = Int(Pc):Int(Po) ; mask |= (1<<i) ; end
     @eval const global PunctuationMask = $(Mask(mask))
     mask = 0 ; for i = Int(Lu):Int(So) ; mask |= (1<<i) ; end
     @eval const global GraphMask = $(Mask(mask))
-    @eval const global PrintMask = $(Mask(mask | (1<<Int(Zs))))
+    @eval const global PrintMask = $(Mask(mask) | Zs)
 end
 
 end # module Cat
@@ -129,17 +141,17 @@ importall .Category
 
 is_assigned_char(c) = charprop(Category.Code, c) != Category.Cn
 
-islower(c::Char)  = charprop(Category.Code, c) == Category.Ll
+islower(c::Char)    = charprop(Category.Code, c) == Category.Ll
 
 # true for Unicode upper and mixed case
-isupper(c::Char)  = (charprop(Category.Mask, c) & Category.UpperMask) != 0
-isalpha(c::Char)  = (charprop(Category.Mask, c) & Category.AlphaMask) != 0
-isnumber(c::Char) = (charprop(Category.Mask, c) & Category.NumberMask) != 0
-isalnum(c::Char)  = (charprop(Category.Mask, c) & Category.AlphaNumericMask) != 0
-ispunct(c::Char)  = (charprop(Category.Mask, c) & Category.PunctuationMask) != 0
-isprint(c::Char)  = (charprop(Category.Mask, c) & Category.PrintMask) != 0
+isupper(c::Char)  = charprop(Category.Code, c) & Category.UpperMask
+isalpha(c::Char)  = charprop(Category.Code, c) & Category.AlphaMask
+isnumber(c::Char) = charprop(Category.Code, c) & Category.NumberMask
+isalnum(c::Char)  = charprop(Category.Code, c) & Category.AlphaNumericMask
+ispunct(c::Char)  = charprop(Category.Code, c) & Category.PunctuationMask
+isprint(c::Char)  = charprop(Category.Code, c) & Category.PrintMask
 # true in principle if a printer would use ink
-isgraph(c::Char)  = (charprop(Category.Mask, c) & Category.GraphMask) != 0
+isgraph(c::Char)  = charprop(Category.Code, c) & Category.GraphMask
 
 isdigit(c::Char)  = ('0' <= c <= '9')
 

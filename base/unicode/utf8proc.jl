@@ -72,12 +72,21 @@ normalize_string(s::AbstractString, nf::Symbol) =
 
 charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 
-lowercase(c::Char) = (isascii(c)
-                      ? ('A' <= c <= 'Z' ? c + 0x20 : c)
-                      : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c)))
-uppercase(c::Char) = (isascii(c)
-                      ? ('a' <= c <= 'z' ? c - 0x20 : c)
-                      : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c)))
+function lowercase(c::Char)
+    if isascii(c)
+        'A' <= c <= 'Z' ? c + 0x20 : c
+    else
+        Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+    end
+end
+
+function uppercase(c::Char)
+    if isascii(c)
+        'a' <= c <= 'z' ? c - 0x20 : c
+    else
+        Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+    end
+end
 
 ############################################################################
 
