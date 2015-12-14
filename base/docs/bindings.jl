@@ -5,7 +5,15 @@ export @var
 immutable Binding
     mod::Module
     var::Symbol
-    Binding(m, v) = new(Base.which_module(m, v), v)
+    defined::Bool
+
+    function Binding(m, v)
+        if !isdefined(m, v)
+            new(m, v, false)
+        else
+            new(Base.binding_module(m, v), v, true)
+        end
+    end
 end
 
 function splitexpr(x::Expr)
