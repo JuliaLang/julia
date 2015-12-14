@@ -32,10 +32,13 @@ hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
 num2hex{T<:Union{Float16, Float32, Float64}}(x::T) = hex(x)
 
-hex2num(s::AbstractString) =
-    (length(s) <= 8
-     ? box(Float32,unbox(UInt32,parse(UInt32,s,16)))
-     : box(Float64,unbox(UInt64,parse(UInt64,s,16))))
+function hex2num(s::AbstractString)
+    if length(s) <= 8
+        box(Float32,unbox(UInt32,parse(UInt32,s,16)))
+    else
+        box(Float64,unbox(UInt64,parse(UInt64,s,16)))
+    end
+end
 
 @vectorize_1arg Number abs
 @vectorize_1arg Number abs2

@@ -235,9 +235,9 @@ function hex2bytes(s::AbstractString)
 end
 
 function hex(arr::Vector{UInt8})
-    out = Vector{UInt8}(sizeof(arr)<<1)
+    out = Vector{UInt8}(length(arr)<<1)
     o = 0
-    for i = 1:sizeof(arr)
+    for i = 1:length(arr)
         v = arr[i]
         d = v>>4
         out[o += 1] = ('0' + d + 39 * (d > 9))
