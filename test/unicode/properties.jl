@@ -143,9 +143,9 @@ end
 
 # check handling of CN category constants
 let c_ll = 'β', c_cn = '\u038B'
-    @test charprop(CharCode, c_ll) == Unicode.Ll
+    @test charprop(CategoryCode, c_ll) == Category.Ll
     # check codepoint with category code CN
-    @test charprop(CharCode, c_cn) == Unicode.Cn
+    @test charprop(CategoryCode, c_cn) == Category.Cn
 end
 
 # Make sure fastplus is called for coverage
