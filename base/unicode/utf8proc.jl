@@ -81,8 +81,8 @@ uppercase(c::Char) = (isascii(c)
 
 ############################################################################
 
-# returns CategoryCode (values 0:29) giving Unicode category
-charprop(::Type{CategoryCode}, c) = CategoryCode(ccall(:utf8proc_category, Cint, (UInt32,), c))
+# returns Category.Code (values 0:29) giving Unicode category
+charprop(::Type{Category.Code}, c) = Category.Code(ccall(:utf8proc_category, Cint, (UInt32,), c))
 
 ############################################################################
 

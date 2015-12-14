@@ -7,7 +7,6 @@ import Base: string, convert, write, length, endof, next, reverseind, lastidx, r
 
 export UnicodeError, UTF16String, UTF32String, unsafe_checkstring, checkstring,
        utf8, utf16, utf32, containsnul, WString, wstring, charprop, Category,
-       CategoryType, CategoryCode,
        is_assigned_char, islower, isupper, isdigit, isalpha, isnumber, isalnum, iscntrl,
        ispunct, isspace, isprint, isgraph,
        isgraphemebreak, GraphemeIterator, normalize_string, graphemes, charwidth

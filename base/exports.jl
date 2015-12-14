@@ -42,8 +42,6 @@ export
     CartesianIndex,
     CartesianRange,
     Channel,
-    CategoryCode,
-    CategoryType,
     Cmd,
     Colon,
     Complex,

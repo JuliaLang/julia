@@ -21,25 +21,24 @@ function charprop end
 # Unicode General Category constants
 
 module Category
-export CategoryType, CategoryCode
 
 """Unicode character category type"""
-abstract CategoryType <: Unicode.Property
+abstract General     <: Unicode.Property
 
 """Unicode 'Letter' character category"""
-abstract Letter      <: CategoryType
+abstract Letter      <: General
 """Unicode 'Mark' character category"""
-abstract Mark        <: CategoryType
+abstract Mark        <: General
 """Unicode 'Number' character category"""
-abstract Number      <: CategoryType
+abstract Number      <: General
 """Unicode 'Punctuation' character category"""
-abstract Punctuation <: CategoryType
+abstract Punctuation <: General
 """Unicode 'Symbol' character category"""
-abstract Symbol      <: CategoryType
+abstract Symbol      <: General
 """Unicode 'Separator' character category"""
-abstract Separator   <: CategoryType
+abstract Separator   <: General
 """Unicode 'Other' character category"""
-abstract Other       <: CategoryType
+abstract Other       <: General
 
 """Unicode uppercase & titlecase letters"""
 abstract Upper       <: Letter
@@ -48,14 +47,17 @@ abstract Upper       <: Letter
 typealias AlphaNumeric Union{Letter, Number}
 
 """Unicode character category code (0-29)"""
-bitstype 8 CategoryCode
+bitstype 8 Code
 
-Base.convert(::Type{CategoryCode}, x::Integer) = reinterpret(CategoryCode, x%UInt8)
-Base.convert{T<:Integer}(::Type{T}, x::CategoryCode) = convert(T, reinterpret(UInt8, x))
-Base.promote_rule{T<:Integer}(::Type{T}, ::Type{CategoryCode}) = T
-Base.isless(x::CategoryCode, y::CategoryCode) = isless(UInt8(x), UInt8(y))
-Base.isless(x::CategoryCode, y::Integer)  = isless(UInt8(x), y)
-Base.isless(x::Integer, y::CategoryCode)  = isless(x, UInt8(y))
+"""Unicode character category mask"""
+typealias Mask UInt32
+
+Base.convert(::Type{Code}, x::Integer) = reinterpret(Code, x%UInt8)
+Base.convert{T<:Integer}(::Type{T}, x::Code) = convert(T, reinterpret(UInt8, x))
+Base.promote_rule{T<:Integer}(::Type{T}, ::Type{Code}) = T
+Base.isless(x::Code, y::Code) = isless(UInt8(x), UInt8(y))
+Base.isless(x::Code, y::Integer)  = isless(UInt8(x), y)
+Base.isless(x::Integer, y::Code)  = isless(x, UInt8(y))
 
 for (nam, val, cat, typ, des) in
     ((:Cn, 0,  :NotAssignedChar,         :Other,       "Other, Not assigned"),
@@ -88,8 +90,9 @@ for (nam, val, cat, typ, des) in
      (:Cf, 27, :FormatChar,              :Other,       "Other, format"),
      (:Cs, 28, :SurrogateChar,           :Other,       "Other, surrogate"),
      (:Co, 29, :PrivateUseChar,          :Other,       "Other, private use"))
-    @eval const global $nam = CategoryCode($val)
+    @eval const global $nam = $(Code(val))
     @eval abstract $cat <: $typ
+    @eval Base.convert(::Type{Code}, ct::$cat) = $(Code(val))
     @eval @doc $(string("Unicode Category Code: ",des)) $nam
     @eval @doc $(string("Unicode Category Type: ",des)) $cat
 end
@@ -101,56 +104,55 @@ const c2t = [NotAssignedChar, UpperCase, LowerCase, TitleCase, ModifierLetter, O
              InitialQuotePunctuation, FinalQuotePunctuation, OtherPunctuation,
              MathSymbol, CurrencySymbol, ModifierSymbol, OtherSymbol,
              SpaceSeparator, LineSeparator, ParagraphSeparator,
-             ControlChar, FormatChar, SurrogateChar, PrivateUseChar]
+	     ControlChar, FormatChar, SurrogateChar, PrivateUseChar]
 
-charprop(::Type{CategoryType}, c) = c2t[Int(charprop(CategoryCode, c))+1]
+Base.convert(::Type{General}, cat::Code) = c2t[Int(cat)+1]
+
+Unicode.charprop(Mask, c) = Mask(1<<Int(charprop(Code, c)))
+
+const global UpperMask  = Mask(1<<Int(Lu) | 1<<Int(Lt))
+const global AlphaMask  = Mask(1<<Int(Lu) | 1<<Int(Ll) | 1<<Int(Lt) | 1<<Int(Lm) | 1<<Int(Lo))
+const global NumberMask = Mask((1<<Int(Nd) | 1<<Int(Nl) | 1<<Int(No)))
+const global AlphaNumericMask = AlphaMask | NumberMask
+
+let mask = 0 ; for i = Int(Pc):Int(Po) ; mask |= (1<<i) ; end
+    @eval const global PunctuationMask = $(Mask(mask))
+    mask = 0 ; for i = Int(Lu):Int(So) ; mask |= (1<<i) ; end
+    @eval const global GraphMask = $(Mask(mask))
+    @eval const global PrintMask = $(Mask(mask | (1<<Int(Zs))))
+end
 
 end # module Cat
 importall .Category
 
 ############################################################################
 
-is_assigned_char(c) = charprop(CategoryCode, c) != Category.Cn
+is_assigned_char(c) = charprop(Category.Code, c) != Category.Cn
 
-## libc character class predicates ##
-
-islower(c::Char) = charprop(CategoryCode, c) == Category.Ll
+islower(c::Char)  = charprop(Category.Code, c) == Category.Ll
 
 # true for Unicode upper and mixed case
-isupper(c::Char) = (ccode = charprop(CategoryCode, c)) == Category.Lu || ccode == Category.Lt
+isupper(c::Char)  = (charprop(Category.Mask, c) & Category.UpperMask) != 0
+isalpha(c::Char)  = (charprop(Category.Mask, c) & Category.AlphaMask) != 0
+isnumber(c::Char) = (charprop(Category.Mask, c) & Category.NumberMask) != 0
+isalnum(c::Char)  = (charprop(Category.Mask, c) & Category.AlphaNumericMask) != 0
+ispunct(c::Char)  = (charprop(Category.Mask, c) & Category.PunctuationMask) != 0
+isprint(c::Char)  = (charprop(Category.Mask, c) & Category.PrintMask) != 0
+# true in principle if a printer would use ink
+isgraph(c::Char)  = (charprop(Category.Mask, c) & Category.GraphMask) != 0
 
 isdigit(c::Char)  = ('0' <= c <= '9')
-isalpha(c::Char)  = (Category.Lu <= charprop(CategoryCode, c) <= Category.Lo)
-isnumber(c::Char) = (Category.Nd <= charprop(CategoryCode, c) <= Category.No)
-isalnum(c::Char)  = ((Category.Lu <= (ccode = charprop(CategoryCode, c)) <= Category.Lo) ||
-                     (Category.Nd <= ccode <= Category.No))
-
-# These are about 3 times slower, because the isa method
-# is much slower than checking if an integer is within range (or two ranges)
-# If that is sped up, then these, which are more readable, could replace the other forms.
-#=
-isalpha(c::Char)  = charprop(CategoryType, c) <: Category.Letter
-isnumber(c::Char) = charprop(CategoryType, c) <: Category.Number
-isupper(c::Char)  = charprop(CategoryType, c) <: Category.Upper
-isalnum(c::Char)  = charprop(CategoryType, c) <: Category.AlphaNumeric
-ispunct(c::Char)  = charprop(CategoryType, c) <: Category.Punctuation
-=#
 
 # following C++ only control characters from the Latin-1 subset return true
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
-ispunct(c::Char) = (Category.Pc <= charprop(CategoryCode, c) <= Category.Po)
 
 # \u85 is the Unicode Next Line (NEL) character
 # the check for \ufffd allows for branch removal on ASCIIStrings
 @inline isspace(c::Char) =
     (c == ' ' || '\t' <= c <='\r' || c == '\u85' ||
-     ('\ua0' <= c && c != '\ufffd' && charprop(CategoryCode, c) == Category.Zs))
+     ('\ua0' <= c && c != '\ufffd' && charprop(Category.Code, c) == Category.Zs))
 
-isprint(c::Char) = (Category.Lu <= charprop(CategoryCode, c) <= Category.Zs)
-
-# true in principle if a printer would use ink
-isgraph(c::Char) = (Category.Lu <= charprop(CategoryCode, c) <= Category.So)
 
 for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
             "lower", "print", "punct", "space", "upper")
