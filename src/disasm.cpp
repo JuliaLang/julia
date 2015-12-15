@@ -19,6 +19,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <set>
@@ -73,9 +74,6 @@
 #include <llvm/IR/DebugInfo.h>
 #else
 #include <llvm/DebugInfo.h>
-#endif
-#ifndef LLVM37
-#define format_hex(v, d) format("%#0" #d "x", v)
 #endif
 
 #include "julia.h"
@@ -584,33 +582,32 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                                       /*REMOVE*/ nulls(), nulls());
             switch (S) {
             case MCDisassembler::Fail:
-                if (pass != 0) {
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
-#ifdef LLVM37
-                    std::ostringstream buf;
-                    buf << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-                    Streamer->EmitRawText(buf.str());
-#else
-                    stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-#endif
-#elif defined(_CPU_X86_) || defined(_CPU_X86_64_)
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
-                                        SourceMgr::DK_Warning,
-                                        "invalid instruction encoding");
-#else
-#ifdef LLVM37
-                    std::ostringstream buf;
-                    buf << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
-                    Streamer->EmitRawText(buf.str());
-#else
-                    stream << "\t.byte " << format_hex(*(uint8_t*)(Fptr+Index), 4) << "\n";
-#endif
-#endif
                 if (insSize == 0) // skip illegible bytes
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
+#endif
+                if (pass != 0) {
+                    std::ostringstream buf;
+                    if (insSize == 4)
+                        buf << "\t.long\t0x" << std::hex
+                            << std::setfill('0') << std::setw(8)
+                            << *(const uint32_t*)(Fptr+Index) << "\n";
+                    else
+                        for (uint64_t i=0; i<insSize; ++i)
+                            buf << "\t.byte\t0x" << std::hex
+                                << std::setfill('0') << std::setw(2)
+                                << *(const uint8_t*)(Fptr+Index+i) << "\n";
+#ifdef LLVM37
+                    Streamer->EmitRawText(buf.str());
+#else
+                    stream << buf.str();
+#endif
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
+                                        SourceMgr::DK_Warning,
+                                        "invalid instruction encoding");
 #endif
                 }
                 break;
