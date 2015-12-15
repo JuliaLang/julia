@@ -258,7 +258,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
 static jl_cgval_t emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 {
     Constant *c = julia_const_to_llvm(e);
-    if (c) return mark_julia_type(c, false, expr_type(e, ctx));
+    if (c) return mark_julia_type(c, false, expr_type(e, ctx), ctx);
     return emit_expr(e, ctx, false);
 }
 
@@ -417,7 +417,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         Value *r = builder.CreateCall2(func, arg1, arg2);
 #endif
         jl_value_t *et = expr_type(targ, ctx);
-        return mark_julia_type(r, true, jl_is_type_type(et) ? jl_tparam0(et) : (jl_value_t*)jl_any_type);
+        return mark_julia_type(r, true, jl_is_type_type(et) ? jl_tparam0(et) : (jl_value_t*)jl_any_type, ctx);
     }
 
     Type *llvmt = staticeval_bitstype(bt);
@@ -479,7 +479,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
             vx = builder.CreateBitCast(vx, llvmt);
     }
 
-    return mark_julia_type(vx, false, bt);
+    return mark_julia_type(vx, false, bt, ctx);
 }
 
 // put a bits type tag on some value
@@ -521,7 +521,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
         else
             prepare_call(builder.CreateMemCpy(newobj, builder.CreateBitCast(v.V, T_pint8), nb, alignment)->getCalledValue());
-        return mark_julia_type(newobj, true, bt ? bt : (jl_value_t*)jl_any_type);
+        return mark_julia_type(newobj, true, bt ? bt : (jl_value_t*)jl_any_type, ctx);
     }
 
     if (!jl_is_bitstype(bt)) {
@@ -576,7 +576,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             vx = builder.CreateBitCast(vx, llvmt);
     }
 
-    return mark_julia_type(vx, false, bt);
+    return mark_julia_type(vx, false, bt, ctx);
 }
 
 // NOTE: signd (signed) only relevant if check == true
@@ -594,7 +594,7 @@ static jl_cgval_t generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         raise_exception_unless(builder.CreateICmpEQ(back, ix),
                                prepare_global(jlinexacterr_var), ctx);
     }
-    return mark_julia_type(ans, false, jlto);
+    return mark_julia_type(ans, false, jlto, ctx);
 }
 
 static jl_cgval_t generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -605,7 +605,7 @@ static jl_cgval_t generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ct
     Value *ix = JL_INT(auto_unbox(x, ctx));
     if (ix->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateSExt(ix, to);
-    return mark_julia_type(ans, false, jlto);
+    return mark_julia_type(ans, false, jlto, ctx);
 }
 
 static jl_cgval_t generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -616,7 +616,7 @@ static jl_cgval_t generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ct
     Value *ix = JL_INT(auto_unbox(x, ctx));
     if (ix->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateZExt(ix, to);
-    return mark_julia_type(ans, false, jlto);
+    return mark_julia_type(ans, false, jlto, ctx);
 }
 
 static Value *emit_eqfsi(Value *x, Value *y)
@@ -670,7 +670,7 @@ static jl_cgval_t emit_checked_fptosi(jl_value_t *targ, jl_value_t *x, jl_codect
     else {
         raise_exception_unless(emit_eqfsi(fx, ans), prepare_global(jlinexacterr_var), ctx);
     }
-    return mark_julia_type(ans, false, jlto);
+    return mark_julia_type(ans, false, jlto, ctx);
 }
 
 static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -690,7 +690,7 @@ static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codect
     else {
         raise_exception_unless(emit_eqfui(fx, ans), prepare_global(jlinexacterr_var), ctx);
     }
-    return mark_julia_type(ans, false, jlto);
+    return mark_julia_type(ans, false, jlto, ctx);
 }
 
 static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
@@ -709,7 +709,7 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codec
     else {
         ety = (jl_value_t*)jl_any_type;
     }
-    return mark_julia_type(ret, true, ety);
+    return mark_julia_type(ret, true, ety, ctx);
 }
 
 static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
@@ -735,7 +735,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
                         builder.CreateBitCast(thePtr, T_ppjlvalue),
                         im1)),
                     true,
-                    ety);
+                    ety, ctx);
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
             emit_error("pointerref: invalid pointer type", ctx);
             return jl_cgval_t();
@@ -750,7 +750,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
         prepare_call(builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
                              thePtr, size, 1)->getCalledValue());
-        return mark_julia_type(strct, true, ety);
+        return mark_julia_type(strct, true, ety, ctx);
     }
     // TODO: alignment?
     return typed_load(thePtr, im1, ety, ctx, tbaa_user, 1);
@@ -819,7 +819,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
         // TODO: alignment?
         typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL, 1);
     }
-    return mark_julia_type(thePtr, false, aty);
+    return mark_julia_type(thePtr, false, aty, ctx);
 }
 
 static Value *emit_checked_srem_int(Value *x, Value *den, jl_codectx_t *ctx)
@@ -895,7 +895,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
     case arraylen:
         return mark_julia_type(emit_arraylen(emit_expr(args[1], ctx), args[1], ctx), false,
-                               jl_long_type);
+                               jl_long_type, ctx);
 #if 0 // this section enables runtime-intrinsics (e.g. for testing), and disables their llvm counterparts
     default:
         Value *r;
@@ -930,7 +930,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         else {
             assert(0);
         }
-        return mark_julia_type(r, true, (jl_value_t*)jl_any_type);
+        return mark_julia_type(r, true, (jl_value_t*)jl_any_type, ctx);
 #else
     case pointerref:
         return emit_pointerref(args[1], args[2], ctx);
@@ -961,7 +961,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *xi = JL_INT(auto_unbox(args[2],ctx));
         if (xi->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-        return mark_julia_type(builder.CreateUIToFP(xi, FTnbits(nb)), false, bt);
+        return mark_julia_type(builder.CreateUIToFP(xi, FTnbits(nb)), false, bt, ctx);
     }
 
     case sitofp: {
@@ -970,7 +970,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *xi = JL_INT(auto_unbox(args[2],ctx));
         if (xi->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-        return mark_julia_type(builder.CreateSIToFP(xi, FTnbits(nb)), false, bt);
+        return mark_julia_type(builder.CreateSIToFP(xi, FTnbits(nb)), false, bt, ctx);
     }
 
     case fptoui_auto: {
@@ -979,7 +979,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return mark_julia_type(
                 builder.CreateFPToUI(FP(x), JL_INTT(x->getType())),
                 false,
-                JL_JLUINTT(x->getType()));
+                JL_JLUINTT(x->getType()), ctx);
     }
     case fptoui: {
         jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
@@ -987,7 +987,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *xf = FP(auto_unbox(args[2],ctx));
         if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-        return mark_julia_type(builder.CreateFPToUI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
+        return mark_julia_type(builder.CreateFPToUI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt, ctx);
     }
 
     case fptosi_auto: {
@@ -995,7 +995,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return mark_julia_type(
                 builder.CreateFPToSI(FP(x), JL_INTT(x->getType())),
                 false,
-                JL_JLSINTT(x->getType()));
+                JL_JLSINTT(x->getType()), ctx);
     }
     case fptosi: {
         jl_value_t *bt = staticeval_bitstype(args[1], "sitofp", ctx);
@@ -1003,7 +1003,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *xf = FP(auto_unbox(args[2],ctx));
         if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-        return mark_julia_type(builder.CreateFPToSI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt);
+        return mark_julia_type(builder.CreateFPToSI(xf, Type::getIntNTy(jl_LLVMContext, nb)), false, bt, ctx);
     }
 
     case fptrunc: {
@@ -1012,7 +1012,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int nb = get_bitstype_nbits(bt);
         Value *xf = FP(auto_unbox(args[2],ctx));
         if (xf->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-        return mark_julia_type(builder.CreateFPTrunc(xf, FTnbits(nb)), false, bt);
+        return mark_julia_type(builder.CreateFPTrunc(xf, FTnbits(nb)), false, bt, ctx);
     }
 
     case fpext: {
@@ -1031,7 +1031,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.CreateStore(FP(x), builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
         x  = builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
 #endif
-        return mark_julia_type(builder.CreateFPExt(x, FTnbits(nb)), false, bt);
+        return mark_julia_type(builder.CreateFPExt(x, FTnbits(nb)), false, bt, ctx);
     }
 
     case select_value: {
@@ -1061,7 +1061,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             if (y.ispointer) // TODO: elid this load if unnecessary
                 vy = builder.CreateLoad(builder.CreatePointerCast(vy, llt1->getPointerTo(0)));
             ifelse_result = builder.CreateSelect(isfalse, vy, vx);
-            return mark_julia_type(ifelse_result, false, t2);
+            return mark_julia_type(ifelse_result, false, t2, ctx);
         }
         else {
             Value *arg1 = boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx));
@@ -1070,7 +1070,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Value *arg2 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
             ifelse_result = builder.CreateSelect(isfalse, arg2, arg1);
             jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-            return mark_julia_type(ifelse_result, true, jt);
+            return mark_julia_type(ifelse_result, true, jt, ctx);
         }
     }
 
@@ -1104,7 +1104,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (!newtyp && r->getType() != x->getType())
             // cast back to the exact original type (e.g. float vs. int) before remarking as a julia type
             r = builder.CreateBitCast(r, x->getType());
-        return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ);
+        return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ, ctx);
     }
 #endif
     }
