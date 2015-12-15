@@ -22,7 +22,6 @@ export
     Serializer,
     Docs,
     Markdown,
-    Category,
     Unicode,
 
 # Types
