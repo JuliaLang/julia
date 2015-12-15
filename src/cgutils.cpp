@@ -1555,8 +1555,8 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
                             idx)));
             if ((unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
-            *ret = mark_julia_type(fld, true, jl_any_type, ctx);
-            ret->needsgcroot = strct.needsgcroot || !strct.isimmutable;
+            bool needsgcroot = true; // !strct.isimmutable; // jwn: probably want this as a llvm pass
+            *ret = mark_julia_type(fld, true, jl_any_type, ctx, needsgcroot);
             return true;
         }
         else if (is_tupletype_homogeneous(stt->types)) {
@@ -1631,8 +1631,8 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
-            jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx);
-            ret.needsgcroot = strct.needsgcroot || !strct.isimmutable;
+            bool needsgcroot = true; // !strct.isimmutable; // jwn: probably want this as a llvm pass
+            jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, needsgcroot);
             return ret;
         }
         else {
@@ -2173,6 +2173,13 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
     }
 }
 
+static bool might_need_root(jl_value_t *ex)
+{
+    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
+            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
+            !jl_is_globalref(ex));
+}
+
 static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
 {
     assert(jl_is_datatype(ty));
@@ -2217,8 +2224,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             j++;
         }
         Value *strct = emit_allocobj(sty->size);
-        if (nf > j)
-            make_gcrooted(strct, ctx);
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                             emit_typeptr_addr(strct));
@@ -2249,7 +2254,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 if (!jl_subtype(expr_type(args[i],ctx), jl_svecref(sty->types,i-1), 0))
                     emit_typecheck(rhs, jl_svecref(sty->types,i-1), "new", ctx);
             }
-            if (!need_wb && rhs.needsgcroot)
+            if (might_need_root(args[i])) // TODO: how to remove this?
                 need_wb = true;
             emit_setfield(sty, strctinfo, i-1, rhs, ctx, false, need_wb);
         }

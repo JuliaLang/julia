@@ -420,9 +420,9 @@ static Function *diff_gc_total_bytes_func;
 
 // placeholder functions
 Function *gcroot_func;
+Function *gckill_func;
 Function *jlcall_frame_func;
 Function *jlcall_root_func;
-
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
@@ -434,6 +434,7 @@ static std::map<jl_fptr_t, Function*> builtin_func_map;
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
+    Value *gcroot; // the gcroot associated with V (if it has one)
     jl_value_t *typ; // the original type of V, never NULL
     //Type *T; // cached result of julia_type_to_llvm(typ)
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
@@ -442,49 +443,48 @@ struct jl_cgval_t {
     bool isimmutable; // V points to something that is definitely immutable (e.g. not stack allocated)
     //bool isstack; // points to stack-allocated memory
     //bool isarg; // derived from an argument
-    mutable bool needsgcroot; // this value needs a gcroot
-    jl_cgval_t(Value *V, bool isboxed, jl_value_t *typ) : // general constructor (with pointer type auto-detect)
+    jl_cgval_t(Value *V, Value *gcroot, bool isboxed, jl_value_t *typ) : // general constructor (with pointer type auto-detect)
         V(V), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen contexts
+        gcroot(gcroot),
         typ(typ),
         //T(julia_type_to_llvm(typ)),
         isboxed(isboxed),
         isghost(false),
-        ispointer(this->isboxed),
-        isimmutable(this->isboxed && jl_is_immutable_datatype(typ)),
-        needsgcroot(this->isboxed)
+        ispointer(isboxed),
+        isimmutable(isboxed && jl_is_immutable_datatype(typ))
     {
     }
     jl_cgval_t(jl_value_t *typ) : // ghost value constructor
         V(NULL),
+        gcroot(NULL),
         typ(typ),
         //T(T_void),
         isboxed(false),
         isghost(true),
         ispointer(false),
-        isimmutable(true),
-        needsgcroot(false)
+        isimmutable(true)
     {
     }
     jl_cgval_t(const jl_cgval_t &v, jl_value_t *typ) : // copy constructor with new type
         V(v.V),
+        gcroot(v.gcroot),
         typ(typ),
         //T(V.T),
         isboxed(v.isboxed),
         isghost(v.isghost),
         ispointer(v.ispointer),
-        isimmutable(v.isimmutable),
-        needsgcroot(v.needsgcroot)
+        isimmutable(v.isimmutable)
     {
         assert(isboxed || v.typ == typ); // expect a badly or equivalently typed version
     }
     jl_cgval_t() : // undef / unreachable / default constructor
         V(UndefValue::get(T_void)),
+        gcroot(NULL),
         typ(jl_bottom_type),
         isboxed(false),
         isghost(true),
         ispointer(false),
-        isimmutable(true),
-        needsgcroot(false)
+        isimmutable(true)
     {
     }
 };
@@ -612,8 +612,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true
 static jl_cgval_t emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 
-static void make_gcrooted(Value *v, jl_codectx_t *ctx);
 static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx);
+static Value* emit_local_slot(jl_codectx_t *ctx);
+static void mark_gc_use(const jl_cgval_t &v);
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx);
@@ -652,12 +653,12 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ)
 {
     // eagerly put this back onto the stack
     assert(v->getType() != T_pjlvalue);
-    jl_cgval_t tagval(v, false, typ);
+    jl_cgval_t tagval(v, NULL, false, typ);
     tagval.ispointer = true;
     return tagval;
 }
 
-static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx)
+static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     Type *T = julia_type_to_llvm(typ);
     if (type_is_ghost(T)) {
@@ -671,11 +672,16 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         builder.CreateStore(v, loc);
         return mark_julia_slot(loc, typ);
     }
-    return jl_cgval_t(v, isboxed, typ);
+    Value *froot = NULL;
+    if (needsroot && isboxed) {
+        froot = emit_local_slot(ctx);
+        builder.CreateStore(v, froot);
+    }
+    return jl_cgval_t(v, froot, isboxed, typ);
 }
-static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *typ, jl_codectx_t *ctx)
+static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
-    return mark_julia_type(v, isboxed, (jl_value_t*)typ, ctx);
+    return mark_julia_type(v, isboxed, (jl_value_t*)typ, ctx, needsroot);
 }
 
 static inline jl_cgval_t remark_julia_type(const jl_cgval_t &v, jl_value_t *typ)
@@ -696,8 +702,7 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
     if (type_is_ghost(julia_type_to_llvm(typ))) {
         return ghostValue(typ);
     }
-    jl_cgval_t constant(literal_pointer_val(jv), true, typ);
-    constant.needsgcroot = false;
+    jl_cgval_t constant(literal_pointer_val(jv), NULL, true, typ);
     return constant;
 }
 
@@ -1998,29 +2003,19 @@ static Value* emit_local_slot(jl_codectx_t *ctx)
     return newroot;
 }
 
-static void make_gcrooted(Value *v, jl_codectx_t *ctx) // TODO: this function should be removed
+// Marks a use (and thus a potential kill) of a gcroot
+static void mark_gc_use(const jl_cgval_t &v)
 {
-    assert(v->getType() == T_pjlvalue);
-    Instruction *Inst = dyn_cast<Instruction>(v);
-    if (Inst) { // ignore make_gcrooted(Constant) -- TODO: make this an error
-        Value *froot = emit_local_slot(ctx);
-        StoreInst *store = new StoreInst(Inst, froot);
-        store->insertAfter(Inst);
-    }
+    if (v.gcroot)
+        builder.CreateCall(gckill_func, v.gcroot);
 }
 
-static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this function should be folded into boxed / emit_unbox
+static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this function should be removed
 {
     Value *I = boxed(v, ctx);
-    if ((!v.isboxed || v.needsgcroot) && !v.isghost) {
-        Instruction *Inst = dyn_cast<Instruction>(I);
-        if (Inst) { // ignore make_gcrooted(Constant) -- TODO: make this an error
-            Value *froot = emit_local_slot(ctx);
-            StoreInst *store = new StoreInst(Inst, froot);
-            store->insertAfter(Inst);
-            return builder.CreateLoad(froot);
-        }
-    }
+    if (!v.isboxed)
+        mark_julia_type(I, true, v.typ, ctx); // force gc-root creation
+    mark_gc_use(v);
     return I;
 }
 
@@ -2032,7 +2027,7 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
     int slot = 0;
     assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
-        Value *arg = get_gcrooted(**I, ctx);
+        Value *arg = boxed(**I, ctx); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
         Value *newroot = builder.CreateGEP(largs, ConstantInt::get(T_int32, slot));
         builder.CreateStore(arg, newroot);
     }
@@ -2120,8 +2115,8 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     Value *result = builder.CreateCall3(prepare_call(jlgetfield_func), V_null, myargs,
                                         ConstantInt::get(T_int32,2));
 #endif
-    jl_cgval_t ret = mark_julia_type(result, true, jl_any_type, ctx); // (typ will be patched up by caller)
-    ret.needsgcroot = arg1.needsgcroot || !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ);
+    bool needsgcroot = true; // !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ); // jwn: probably want this as a llvm pass
+    jl_cgval_t ret = mark_julia_type(result, true, jl_any_type, ctx, needsgcroot); // (typ will be patched up by caller)
     return ret;
 }
 
@@ -2240,10 +2235,8 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
         return builder.CreateICmpEQ(arg1.V, arg2.V);
     }
 
-    if (arg2.isboxed && arg2.needsgcroot)
-        make_gcrooted(arg2.V, ctx);
     Value *varg1 = get_gcrooted(arg1, ctx);
-    Value *varg2 = boxed(arg2, ctx); // unrooted!
+    Value *varg2 = boxed(arg2, ctx); // potentially unrooted!
 #ifdef LLVM37
     return builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
 #else
@@ -2288,9 +2281,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         // emit values
         jl_cgval_t v1 = emit_unboxed(args[1], ctx);
-        if (v1.isboxed && v1.needsgcroot)
-            make_gcrooted(v1.V, ctx);
-        jl_cgval_t v2 = emit_unboxed(args[2], ctx); // unrooted!
+        jl_cgval_t v2 = emit_unboxed(args[2], ctx);
         // FIXME: v.typ is roughly equiv. to expr_type, but with typeof(T) == Type{T} instead of DataType in a few cases
         if (v1.typ == (jl_value_t*)jl_datatype_type)
             v1 = remark_julia_type(v1, expr_type(args[1], ctx)); // patch up typ if necessary
@@ -2298,6 +2289,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             v2 = remark_julia_type(v2, expr_type(args[2], ctx)); // patch up typ if necessary
         // emit comparison test
         Value *ans = emit_f_is(v1, v2, ctx);
+        mark_gc_use(v1);
+        mark_gc_use(v2);
         *ret = mark_julia_type(ans, false, jl_bool_type, ctx);
         JL_GC_POP();
         return true;
@@ -2619,14 +2612,15 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             Value *idx = emit_unbox(T_size,
                                     emit_unboxed(args[2], ctx), fldt);
             idx = emit_bounds_check(
-                    jl_cgval_t(builder.CreateGEP(ctx->argArray, ConstantInt::get(T_size, ctx->nReqArgs)), false, NULL),
+                    jl_cgval_t(builder.CreateGEP(ctx->argArray, ConstantInt::get(T_size, ctx->nReqArgs)), NULL, false, NULL),
                     NULL, idx, valen, ctx);
             idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
             *ret = mark_julia_type(
                     tbaa_decorate(tbaa_user, builder.CreateLoad(builder.CreateGEP(ctx->argArray, idx))),
-                    true,
-                    expr_type(expr, ctx), ctx);
-            ret->needsgcroot = false;
+                    /*boxed*/ true,
+                    expr_type(expr, ctx),
+                    ctx,
+                    /*needsgcroot*/ false);
             JL_GC_POP();
             return true;
         }
@@ -2852,12 +2846,13 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
                 jl_cgval_t arg = i==0 ? theF : emit_unboxed(args[i], ctx);
-                if (arg.isimmutable && !arg.needsgcroot && arg.ispointer) {
+                if (arg.isimmutable && arg.ispointer) {
                     // can lazy load on demand, no copy needed
                     Value *argv = arg.V;
                     if (argv->getType() != at)
                         argv = builder.CreatePointerCast(argv, at);
                     argvals[idx] = argv;
+                    mark_gc_use(arg); // jwn must be after the jlcall
                 }
                 else {
                     Value *v = emit_unbox(et, arg, jt);
@@ -3154,12 +3149,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else {
             slot = emit_expr(r, ctx, true);
-            if (slot.needsgcroot) {
-                // add a gc root for this GenSym node
-                // TODO: remove this
-                make_gcrooted(slot.V, ctx);
-                slot.needsgcroot = false;
-            }
         }
         ctx->gensym_SAvalues.at(idx) = slot; // now gensym_SAvalues[idx] contains the SAvalue
         assert(ctx->gensym_assigned.at(idx) = true); // (assignment, not comparison test)
@@ -3206,15 +3195,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         if (!vi.used)
             return;
 
-        Value *rval = boxed(rval_info, ctx);
-        if (rval_info.needsgcroot && !vi.memloc) {
-            // add a gc root for this SA node
-            // TODO: remove this?
-            assert(vi.isSA);
-            vi.memloc = emit_local_slot(ctx);
-            vi.hasGCRoot = true;
-            rval_info.needsgcroot = false;
-        }
         if (vi.memloc) {
             Value *bp = vi.memloc;
             if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && (!rval_info.typ || rval_info.typ == jl_bottom_type)) {
@@ -3229,6 +3209,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 }
                 return;
             }
+            Value *rval = boxed(rval_info, ctx);
             builder.CreateStore(rval, bp, vi.isVolatile); // todo: move this closer to the value creation?
         }
         else {
@@ -3244,7 +3225,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             vi.value = rval_info;
         }
         // add info to arravar list
-        if (rval && !isa<UndefValue>(rval) && rval_info.isboxed) {
+        if (rval_info.isboxed) {
             // check isboxed in case rval isn't the right type (for example, on a dead branch),
             // so we don't try to assign it to the arrayvar info
             jl_arrayvar_t *av = arrayvar_for(l, ctx);
@@ -4709,19 +4690,18 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 else if (llvmArgType->isAggregateType())
                     theArg = mark_julia_slot(&*AI++, argType); // this argument is by-pointer
                 else
-                    theArg = mark_julia_type(&*AI++, isboxed, argType, &ctx);
+                    theArg = mark_julia_type(&*AI++, isboxed, argType, &ctx, /*needsgcroot*/false);
             }
             else {
                 if (i==0) {
                     // first (function) arg is separate in jlcall
-                    theArg = mark_julia_type(fArg, true, vi.value.typ, &ctx);
+                    theArg = mark_julia_type(fArg, true, vi.value.typ, &ctx, /*needsgcroot*/false);
                 }
                 else {
                     Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
-                    theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ, &ctx);
+                    theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ, &ctx, /*needsgcroot*/false);
                 }
             }
-            theArg.needsgcroot = false;
 
             Value *lv = vi.memloc;
             if (lv == NULL) {
@@ -5746,9 +5726,14 @@ static void init_julia_llvm_env(Module *m)
                      "julia.gc_root_decl", m);
     add_named_global(gcroot_func, NULL);
 
-    Type* jlcall_frame_args[1] = { T_int32 };
+    gckill_func =
+        Function::Create(FunctionType::get(T_void, ArrayRef<Type*>(T_ppjlvalue), false),
+                     Function::ExternalLinkage,
+                     "julia.gc_root_kill", m);
+    add_named_global(gcroot_func, NULL);
+
     jlcall_frame_func =
-        Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_frame_args), false),
+        Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
                      Function::ExternalLinkage,
                      "julia.jlcall_frame_decl", m);
     add_named_global(jlcall_frame_func, NULL);
