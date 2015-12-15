@@ -2471,7 +2471,7 @@ end
 # widen
 @test widen(1.5f0) === 1.5
 @test widen(Int32(42)) === Int64(42)
-@test widen(Int8) === Int
+@test widen(Int8) === Int32
 @test widen(Float32) === Float64
 ## Note: this should change to e.g. Float128 at some point
 @test widen(Float64) === BigFloat
