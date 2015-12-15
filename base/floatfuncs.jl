@@ -26,15 +26,18 @@ maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (trunc(x)==x)&isfinite(x)
 
-num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
-num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
-num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
+hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
+hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
+hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
+
+num2hex{T<:Union{Float16, Float32, Float64}}(x::T) = hex(x)
 
 function hex2num(s::AbstractString)
     if length(s) <= 8
-        return box(Float32,unbox(UInt32,parse(UInt32,s,16)))
+        box(Float32,unbox(UInt32,parse(UInt32,s,16)))
+    else
+        box(Float64,unbox(UInt64,parse(UInt64,s,16)))
     end
-    return box(Float64,unbox(UInt64,parse(UInt64,s,16)))
 end
 
 @vectorize_1arg Number abs

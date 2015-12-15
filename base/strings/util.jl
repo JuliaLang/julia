@@ -234,4 +234,19 @@ function hex2bytes(s::AbstractString)
     return a
 end
 
-bytes2hex(arr::Vector{UInt8}) = join([hex(i,2) for i in arr])
+function hex(arr::Vector{UInt8})
+    out = Vector{UInt8}(length(arr)<<1)
+    o = 0
+    for i = 1:length(arr)
+        v = arr[i]
+        d = v>>4
+        out[o += 1] = ('0' + d + 39 * (d > 9))
+        d = v & 0xf
+        out[o += 1] = ('0' + d + 39 * (d > 9))
+    end
+    ASCIIString(out)
+end
+
+hex(str::ByteString) = hex(str.data)
+
+bytes2hex(arr::Vector{UInt8}) = hex(arr)

@@ -267,7 +267,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         x >>= 4
         i -= 1
     end
-    if neg; a[1]='-'; end
+    neg && (a[1] = '-')
     ASCIIString(a)
 end
 
