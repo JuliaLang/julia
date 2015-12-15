@@ -537,7 +537,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
     Value *vx;
     if (v.ispointer) {
         // TODO: validate the size and type of the pointer contents
-        if (v.isimmutable && !v.needsgcroot) { // wrong type, but can lazy load this later as needed
+        if (v.isimmutable) { // wrong type, but can lazy load this later as needed
             v.typ = bt;
             v.isboxed = false;
             return v;
@@ -1064,12 +1064,14 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             return mark_julia_type(ifelse_result, false, t2, ctx);
         }
         else {
-            Value *arg1 = boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx));
-            // TODO: if (!arg1.isboxed || arg1.needsgcroot)
-                make_gcrooted(arg1, ctx);
-            Value *arg2 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
-            ifelse_result = builder.CreateSelect(isfalse, arg2, arg1);
+            jl_cgval_t arg1 = emit_expr(args[2],ctx);
+            jl_cgval_t arg2 = emit_expr(args[3],ctx);
+            ifelse_result = builder.CreateSelect(isfalse,
+                    get_gcrooted(arg2, ctx),
+                    get_gcrooted(arg1, ctx));
             jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
+            mark_gc_use(arg1);
+            mark_gc_use(arg2);
             return mark_julia_type(ifelse_result, true, jt, ctx);
         }
     }

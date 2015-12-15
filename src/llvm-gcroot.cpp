@@ -8,6 +8,7 @@
 
 using namespace llvm;
 extern Function *gcroot_func;
+extern Function *gckill_func;
 extern Function *jlcall_frame_func;
 extern Function *jlcall_root_func;
 
@@ -166,8 +167,8 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
         // which is currently a safe assumption due to the specific behavior of `make_jlcall` and `emit_jlcall`, but may not be sufficiently general
         std::map<frame_register, liveness::id> &inuse_list = bb_uses[bb];
         unsigned live_out = 0;
-        for (BasicBlock::reverse_iterator ri = bb->rbegin(); ri != bb->rend(); ++ri) {
-            Instruction *i = &*ri;
+        for (BasicBlock::iterator ri = bb->end(); ri != bb->begin(); ) {
+            Instruction *i = &*--ri;
             if (CallInst* callInst = dyn_cast<CallInst>(i)) {
                 if (callInst->getCalledFunction() == jlcall_frame_func) {
                     unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
@@ -176,6 +177,11 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
                         if (!live)
                             live = liveness::kill | liveness::assign;
                     }
+                }
+                if (callInst->getCalledFunction() == gckill_func) {
+                    // jwn: record this information instead of simply destroying it
+                    ++ri;
+                    callInst->eraseFromParent();
                 }
             }
             else if (StoreInst *storeInst = dyn_cast<StoreInst>(i)) {
@@ -218,6 +224,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
                     if (gcroot) {
                         Value* args[2] = {callInst, ConstantInt::get(T_int32, arg_offset)};
                         ReplaceInstWithInst(gcroot, CallInst::Create(jlcall_root_func, makeArrayRef(args)));
+                        ++ri;
                         storeInst->eraseFromParent();
                         loadInst->eraseFromParent();
                         ++live_out;
