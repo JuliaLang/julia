@@ -492,7 +492,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     }
 
     JL_GC_POP();
-    return mark_julia_type(res, false, rt);
+    return mark_julia_type(res, false, rt, ctx);
 }
 
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
@@ -763,7 +763,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
 
-    return mark_julia_type(inst, retboxed, rtt);
+    return mark_julia_type(inst, retboxed, rtt, ctx);
 }
 
 // --- code generator for ccall itself ---
@@ -778,9 +778,9 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         return mark_julia_type(
                 init_bits_value(emit_allocobj(nb), runtime_bt, result),
                 true,
-                (jl_value_t*)jl_pointer_type);
+                (jl_value_t*)jl_pointer_type, ctx);
     }
-    return mark_julia_type(result, isboxed, rt);
+    return mark_julia_type(result, isboxed, rt, ctx);
 }
 
 typedef AttributeSet attr_type;
