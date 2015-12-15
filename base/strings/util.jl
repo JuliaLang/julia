@@ -234,4 +234,12 @@ function hex2bytes(s::AbstractString)
     return a
 end
 
-bytes2hex(arr::Vector{UInt8}) = join([hex(i,2) for i in arr])
+function bytes2hex(a::AbstractArray{UInt8})
+    b = Vector{UInt8}(2*length(a))
+    i = 0
+    for x in a
+        b[i += 1] = hex_chars[1 + x >> 4]
+        b[i += 1] = hex_chars[1 + x & 0xf]
+    end
+    return ASCIIString(b)
+end
