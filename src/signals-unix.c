@@ -70,13 +70,12 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 #include <signals-mach.c>
 #else
 
-extern int in_jl_;
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
     assert(sig == SIGSEGV);
 
-    if (in_jl_ || is_addr_on_stack(info->si_addr)) { // stack overflow, or restarting jl_
+    if (jl_in_jl_ || is_addr_on_stack(info->si_addr)) { // stack overflow, or restarting jl_
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
