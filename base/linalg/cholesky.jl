@@ -267,11 +267,11 @@ chkfullrank(C::CholeskyPivoted) = C.rank < size(C.factors, 1) && throw(RankDefic
 rank(C::CholeskyPivoted) = C.rank
 
 """
-    update!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
 """
-function update!(C::Cholesky, v::StridedVector)
+function lowrankupdate!(C::Cholesky, v::StridedVector)
     A = C.factors
     n = length(v)
     if size(C, 1) != n
@@ -310,11 +310,11 @@ function update!(C::Cholesky, v::StridedVector)
 end
 
 """
-    downdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
 """
-function downdate!(C::Cholesky, v::StridedVector)
+function lowrankdowndate!(C::Cholesky, v::StridedVector)
     A = C.factors
     n = length(v)
     if size(C, 1) != n
@@ -360,15 +360,15 @@ function downdate!(C::Cholesky, v::StridedVector)
 end
 
 """
-    update(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations.
 """
-update(C::Cholesky, v::StridedVector) = update!(copy(C), copy(v))
+lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
 
 """
-    downdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations.
 """
-downdate(C::Cholesky, v::StridedVector) = downdate!(copy(C), copy(v))
+lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))

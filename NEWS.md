@@ -70,6 +70,9 @@ Library improvements
       appropriate. The `sparsevec` function returns a one-dimensional sparse
       vector instead of a one-column sparse matrix. ([#13440])
 
+    * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
+    and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243],[#14424])
+
   * New `foreach` function for calling a function on every element of a collection when
     the results are not needed.
 
