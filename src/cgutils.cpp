@@ -29,6 +29,9 @@ static Instruction *tbaa_decorate(MDNode* md, Instruction* load_or_store)
     return load_or_store;
 }
 
+// This is the same as the IRBUilder's CreateGlobalString(Ptr), except that the
+// string constant gets created in the active module rather than the function's
+// parent module.
 static GlobalVariable *CreateGlobalString(StringRef Str,
                                                   const Twine &Name,
                                                   unsigned AddressSpace) {
@@ -42,8 +45,6 @@ static GlobalVariable *CreateGlobalString(StringRef Str,
     return GV;
 }
 
-/// \brief Same as CreateGlobalString, but return a pointer with "i8*" type
-/// instead of a pointer to array of i8.
 static Value *CreateGlobalStringPtr(llvm::IRBuilder<> *Builder, StringRef Str, const Twine &Name = "",
                            unsigned AddressSpace = 0) {
     GlobalVariable *gv = CreateGlobalString(Str, Name, AddressSpace);
@@ -154,14 +155,14 @@ static bool handleUse(Use &Use1,llvm::GlobalValue *G,std::map<llvm::Module*,llvm
         Value::use_iterator UI2 = Expr->use_begin(), E2 = Expr->use_end();
         for (; UI2 != E2;) {
             Use &Use2 = *UI2;
-             ++UI2;
-             struct ExprChain NextChain;
-             NextChain.Expr = Expr;
-             NextChain.OpNo = Use1.getOperandNo();
-             NextChain.Next = nullptr;
-             if (ChainEnd)
-                ChainEnd->Next = &NextChain;
-             handleUse(Use2,G,FixedGlobals,Chain ? Chain : &NextChain,&NextChain);
+            ++UI2;
+            struct ExprChain NextChain;
+            NextChain.Expr = Expr;
+            NextChain.OpNo = Use1.getOperandNo();
+            NextChain.Next = nullptr;
+            if (ChainEnd)
+               ChainEnd->Next = &NextChain;
+            handleUse(Use2,G,FixedGlobals,Chain ? Chain : &NextChain,&NextChain);
         }
         return true;
     }
@@ -455,9 +456,11 @@ public:
                     if (oldF)
                         return oldF;
 
+#ifndef USE_ORCJIT
                     // Also check if this function is pending in any other module
                     if (jl_ExecutionEngine->FindFunctionNamed(F->getName().data()))
                         return InjectFunctionProto(F);
+#endif
 
                     return CloneFunctionProto(shadow);
                 }
