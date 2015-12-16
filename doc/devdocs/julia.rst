@@ -14,6 +14,7 @@
    ast
    types
    object
+   functions
    callconv
    cartesian
    meta

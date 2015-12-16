@@ -697,20 +697,10 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
-    Closest candidates are:
-      Union(!Matched::Any...)
-      BoundsError()
-      BoundsError(!Matched::Any...)
-      ...
+    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
 
     julia> x(x+1)
-    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
-    Closest candidates are:
-      Union(!Matched::Any...)
-      BoundsError()
-      BoundsError(!Matched::Any...)
-      ...
+    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
 
 Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a

@@ -585,30 +585,41 @@ In particular, they do not participate in method dispatch. Methods are
 dispatched based only on positional arguments, with keyword arguments processed
 after the matching method is identified.
 
-Call overloading and function-like objects
-------------------------------------------
+Function-like objects
+---------------------
 
-For any arbitrary Julia object ``x`` other than ``Function`` objects
-(defined via ``function`` syntax), ``x(args...)`` is equivalent to
-``call(x, args...)``, where :func:`call` is a generic function in
-the Julia ``Base`` module.   By adding new methods to ``call``, you
-can add a function-call syntax to arbitrary Julia types.   (Such
-"callable" objects are sometimes called "functors.")
+Methods are associated with types, so it is possible to make any arbitrary
+Julia object "callable" by adding methods to its type.
+(Such "callable" objects are sometimes called "functors.")
 
-For example, if you want to make ``x(arg)`` equivalent to ``x * arg`` for
-``x::Number``, you can define::
+For example, you can define a type that stores the coefficients of a
+polynomial, but behaves like a function evaluating the polynomial::
 
-    Base.call(x::Number, arg) = x * arg
+    immutable Polynomial{R}
+        coeffs::Vector{R}
+    end
 
-at which point you can do::
+    function (p::Polynomial)(x)
+        v = p.coeffs[end]
+        for i = (length(p.coeffs)-1):-1:1
+            v = v*x + p.coeffs[i]
+        end
+        return v
+    end
 
-    x = 7
-    x(10)
+Notice that the function is specified by type instead of by name.
+In the function body, ``p`` will refer to the object that was called.
+A ``Polynomial`` can be used as follows::
 
-to get ``70``.
+    julia> p = Polynomial([1,10,100])
+    Polynomial{Int64}([1,10,100])
 
-``call`` overloading is also used extensively for type constructors in
-Julia, discussed :ref:`later in the manual <constructors-call-and-conversion>`.
+    julia> p(3)
+    931
+
+This mechanism is also the key to how type constructors and closures
+(inner functions that refer to their surrounding environment) work
+in Julia, discussed :ref:`later in the manual <constructors-and-conversion>`.
 
 Empty generic functions
 -----------------------

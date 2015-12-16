@@ -755,21 +755,11 @@ each field:
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{Float64}}, ::Float64)
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      Point{T}(::Any, !Matched::Any)
-      call{T}(::Type{T}, ::Any)
-      convert{T}(::Type{T}, !Matched::T)
-     in call at essentials.jl:56
 
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{Float64}}, ::Float64, ::Float64, ::Float64)
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      Point{T}(::Any, ::Any)
-      call{T}(::Type{T}, ::Any)
-      convert{T}(::Type{T}, !Matched::T)
-     in call at essentials.jl:57
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -805,11 +795,6 @@ isn't the case, the constructor will fail with a :exc:`MethodError`:
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T}}, ::Int64, ::Float64)
     This may have arisen from a call to the constructor Point{T}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      Point{T}(::T, !Matched::T)
-      call{T}(::Type{T}, ::Any)
-      convert{T}(::Type{T}, !Matched::T)
-     in call at essentials.jl:57
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in

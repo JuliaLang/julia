@@ -31,7 +31,7 @@ The following data types exist in lowered ASTs:
     used to name local variables and static parameters within a function.
 
 ``LambdaStaticData``
-    wraps the AST of each function, including inner functions.
+    wraps the AST of each method.
 
 ``LineNumberNode``
     line number metadata
@@ -62,7 +62,8 @@ The following data types exist in lowered ASTs:
     (SSA) variable inserted by the compiler.
 
 ``NewvarNode``
-    marks a point where a closed variable needs to have a new box allocated.
+    Marks a point where a variable is created. This has the effect of resetting a
+    variable to undefined.
 
 
 Expr types
@@ -87,20 +88,28 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``method``
     adds a method to a generic function and assigns the result if necessary.
 
-    ``args[1]`` - function name (symbol), or a ``GlobalRef``, or an ``Expr``
-    with head ``kw``.  In the ``(kw f)`` case, the method is actually a keyword
-    argument sorting function for ``f``. It will be stored instead in
-    ``generic_function->env->kwsorter``.
+    Has a 1-argument form and a 4-argument form. In the 1-argument form, the
+    argument is a symbol. If this symbol already names a function in the
+    current scope, nothing happens. If the symbol is undefined, a new function
+    is created and assigned to the identifier specified by the symbol.
+    This form arises from the syntax ``function foo end``.
 
-    If ``method`` has only one argument, it corresponds to the form ``function
-    foo end`` and only creates a function without adding any methods.
+    The 4-argument form has the following arguments:
+    ``args[1]`` - A function name, or ``false`` if unknown. This is purely
+    informative and sometimes gives the "display name" of the function
+    (i.e. how it should be printed). The reason this can be ``false`` is that
+    functions can be added strictly by type, ``(::T)(x) = x``, in which case
+    there is no "name".
 
     ``args[2]`` - a ``SimpleVector`` of argument type data. ``args[2][1]`` is
-    a ``Tuple type`` of the argument types, and ``args[2][2]`` is a
+    a ``Tuple`` type of the argument types, and ``args[2][2]`` is a
     ``SimpleVector`` of type variables corresponding to the method's static
     parameters.
 
-    ``args[3]`` - a ``LambdaStaticData`` of the method itself.
+    ``args[3]`` - a ``LambdaStaticData`` of the method itself. For "out of scope"
+    method definitions (adding a method to a function that also has methods defined
+    in different scopes) this is an expression that evaluates to a ``:lambda``
+    expression.
 
     ``args[4]`` - ``true`` or ``false``, identifying whether the method is
     staged (``@generated function``)
