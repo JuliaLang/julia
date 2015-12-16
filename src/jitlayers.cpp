@@ -190,8 +190,7 @@ private:
       jit_code_entry* JITCodeEntry = new jit_code_entry();
 
       if (!JITCodeEntry) {
-        llvm::report_fatal_error(
-          "Allocation failed when registering a JIT entry!\n");
+        jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
       } else {
         JITCodeEntry->symfile_addr = Buffer;
         JITCodeEntry->symfile_size = Size;
