@@ -35,6 +35,7 @@
    embedding
    packages
    profile
+   stacktraces
    performance-tips
    style-guide
    faq
