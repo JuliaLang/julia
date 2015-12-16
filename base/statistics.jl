@@ -515,51 +515,105 @@ median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
-# TODO: need faster implementation (use select!?)
-#
-function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && throw(ArgumentError("empty data array"))
-    isempty(q) && throw(ArgumentError("empty quantile array"))
+"""
+    quantile!([q, ] v, p; sorted=false)
 
-    # make sure the quantiles are in [0,1]
-    q = bound_quantiles(q)
+Compute the quantile(s) of a vector `v` at the probabilities `p`, with optional output into
+array `q` (if not provided, a new output array is created). The keyword argument `sorted`
+indicates whether `v` can be assumed to be sorted; if `false` (the default), then the
+elements of `v` may be partially sorted.
+
+The elements of `p` should be on the interval [0,1], and `v` should not have any `NaN`
+values.
+
+Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
+for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
+(1996), and is the same as the R default.
+
+* Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
+  *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+"""
+function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
+                   sorted::Bool=false)
+    size(p) == size(q) || throw(DimensionMismatch())
+
+    isempty(v) && throw(ArgumentError("empty data vector"))
 
     lv = length(v)
-    lq = length(q)
+    if !sorted
+        minp, maxp = extrema(p)
+        lo = floor(Int,1+minp*(lv-1))
+        hi = ceil(Int,1+maxp*(lv-1))
 
-    index = 1 .+ (lv-1)*q
-    lo = floor(Int,index)
-    hi = ceil(Int,index)
-    sort!(v)
-    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
-    i = find(index .> lo)
-    r = float(v[lo])
-    h = (index.-lo)[i]
-    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
-    return r
-end
-
-"""
-    quantile(v, ps)
-
-Compute the quantiles of a vector `v` at a specified set of probability values `ps`. Note: Julia does not ignore `NaN` values in the computation.
-"""
-quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
-"""
-    quantile(v, p)
-
-Compute the quantile of a vector `v` at the probability `p`. Note: Julia does not ignore `NaN` values in the computation.
-"""
-quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
-
-function bound_quantiles(qs::AbstractVector)
-    epsilon = 100*eps()
-    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        throw(ArgumentError("quantiles out of [0,1] range"))
+        # only need to perform partial sort
+        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
-    [min(1,max(0,q)) for q = qs]
+    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
+
+    for i = 1:length(p)
+        @inbounds q[i] = _quantile(v,p[i])
+    end
+    return q
 end
 
+quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
+    quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
+
+function quantile!(v::AbstractVector, p::Real;
+                   sorted::Bool=false)
+    isempty(v) && throw(ArgumentError("empty data vector"))
+
+    lv = length(v)
+    if !sorted
+        lo = floor(Int,1+p*(lv-1))
+        hi = ceil(Int,1+p*(lv-1))
+
+        # only need to perform partial sort
+        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
+    end
+    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
+
+    return _quantile(v,p)
+end
+
+# Core quantile lookup function: assumes `v` sorted
+@inline function _quantile(v::AbstractVector, p::Real)
+    T = float(eltype(v))
+    isnan(p) && return T(NaN)
+
+    lv = length(v)
+    index = 1 + (lv-1)*p
+    1 <= index <= lv || error("input probability out of [0,1] range")
+
+    indlo = floor(index)
+    i = trunc(Int,indlo)
+
+    if index == indlo
+        return T(v[i])
+    else
+        h = T(index - indlo)
+        return (1-h)*T(v[i]) + h*T(v[i+1])
+    end
+end
+
+
+"""
+    quantile(v, p; sorted=false)
+
+Compute the quantile(s) of a vector `v` at a specified probability or vector `p`. The
+keyword argument `sorted` indicates whether `v` can be assumed to be sorted.
+
+The `p` should be on the interval [0,1], and `v` should not have any `NaN` values.
+
+Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
+for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
+(1996), and is the same as the R default.
+
+* Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
+  *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+"""
+quantile(v::AbstractVector, p; sorted::Bool=false) =
+    quantile!(sorted ? v : copy!(similar(v),v), p; sorted=sorted)
 
 
 ##### histogram #####

@@ -2451,13 +2451,6 @@ Like `mapreduce(f, op, v0, itr)`. In general, this cannot be used with empty col
 mapreduce(f, op, itr)
 
 """
-    quantile!(v, p)
-
-Like `quantile`, but overwrites the input vector.
-"""
-quantile!
-
-"""
     accept(server[,client])
 
 Accepts a connection on the given server and returns a connection to the client. An
