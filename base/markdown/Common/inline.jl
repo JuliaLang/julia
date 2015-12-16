@@ -34,6 +34,12 @@ function inline_code(stream::IO, md::MD)
     return result === nothing ? nothing : Code(result)
 end
 
+@trigger '`' ->
+function inline_tex(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "``"; rep=true)
+    return result === nothing ? nothing : LaTeX(result)
+end
+
 # ––––––––––––––
 # Images & Links
 # ––––––––––––––
@@ -73,6 +79,21 @@ function link(stream::IO, md::MD)
         url = readuntil(stream, ')', match = '(')
         url ≡ nothing && return
         return Link(parseinline(text, md), url)
+    end
+end
+
+type Footnote
+    id::UTF8String
+    text
+end
+
+@trigger '[' ->
+function footnote(stream::IO, md::MD)
+    withstream(stream) do
+        startswith(stream, "[^") || return
+        id = readuntil(stream, ']', match = '[')
+        id ≡ nothing && return
+        Footnote(id, startswith(stream, ':') ? parseinline(stream, md) : nothing)
     end
 end
 

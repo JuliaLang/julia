@@ -30,7 +30,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
+   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`\ ).
 
 .. function:: atexit(f)
 
@@ -132,7 +132,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
+   Creates a precompiled cache file for module (see help for ``require``\ ) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
@@ -352,37 +352,34 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   Convert ``x`` to a value of type ``T``.
+   Convert ``x`` to a value of type ``T``\ .
 
-   If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if
-   ``x`` is not representable by ``T``, for example if ``x`` is not
-   integer-valued, or is outside the range supported by ``T``.
+   If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if ``x`` is not representable by ``T``\ , for example if ``x`` is not integer-valued, or is outside the range supported by ``T``\ .
 
    .. doctest::
 
-      julia> convert(Int, 3.0)
-      3
+       julia> convert(Int, 3.0)
+       3
 
-      julia> convert(Int, 3.5)
-      ERROR: InexactError()
-       in convert at int.jl:209
+       julia> convert(Int, 3.5)
+       ERROR: InexactError()
+        in convert at int.jl:209
 
-   If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
-   the closest value to ``x`` representable by ``T``.
+   If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
 
    .. doctest::
 
-      julia> x = 1/3
-      0.3333333333333333
+       julia> x = 1/3
+       0.3333333333333333
 
-      julia> convert(Float32, x)
-      0.33333334f0
+       julia> convert(Float32, x)
+       0.33333334f0
 
-      julia> convert(Rational{Int32}, x)
-      1//3
+       julia> convert(Rational{Int32}, x)
+       1//3
 
-      julia> convert(Rational{Int64}, x)
-      6004799503160661//18014398509481984
+       julia> convert(Rational{Int64}, x)
+       6004799503160661//18014398509481984
 
 .. function:: promote(xs...)
 
@@ -556,8 +553,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
-   Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
+   Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
 
 .. function:: isbits(T)
 
@@ -601,17 +597,17 @@ Types
 
    .. Docstring generated from Julia source
 
-   Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``, respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
+   Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``\ , respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
 
    .. doctest::
 
-      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+       julia> @enum FRUIT apple=1 orange=2 kiwi=3
 
-      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(Int(x))"
-      f (generic function with 1 method)
+       julia> f(x::FRUIT) = "I'm a FRUIT with value: $(Int(x))"
+       f (generic function with 1 method)
 
-      julia> f(apple)
-      "I'm a FRUIT with value: 1"
+       julia> f(apple)
+       "I'm a FRUIT with value: 1"
 
 .. function:: instances(T::Type)
 
@@ -630,8 +626,8 @@ Generic Functions
 
    .. doctest::
 
-      julia> method_exists(length, Tuple{Array})
-      true
+       julia> method_exists(length, Tuple{Array})
+       true
 
 .. function:: applicable(f, args...) -> Bool
 
@@ -699,8 +695,7 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   Only valid in the context of an ``Expr`` returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
-   section of the Metaprogramming chapter of the manual for more details and examples.
+   Only valid in the context of an ``Expr`` returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros` section of the Metaprogramming chapter of the manual for more details and examples.
 
 .. function:: gensym([tag])
 
@@ -739,15 +734,13 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
+   Attempt to access the value of the ``Nullable`` object, ``x``\ . Returns the value if it is present; otherwise, throws a ``NullException``\ .
 
 .. function:: get(x, y)
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``\ . Returns the value if it is present; otherwise, returns ``convert(T, y)``\ .
 
 .. function:: isnull(x)
 
@@ -871,9 +864,11 @@ System
 
    **Examples**:
 
-   * ``run(pipeline(`ls`, `grep xyz`))``
-   * ``run(pipeline(`ls`, "out.txt"))``
-   * ``run(pipeline("out.txt", `grep xyz`))``
+   .. code-block:: julia
+
+       run(pipeline(`ls`, `grep xyz`))
+       run(pipeline(`ls`, "out.txt"))
+       run(pipeline("out.txt", `grep xyz`))
 
 .. function:: pipeline(command; stdin, stdout, stderr, append=false)
 
@@ -883,8 +878,10 @@ System
 
    **Examples**:
 
-   * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-   * ``run(pipeline(`update`, stdout="log.txt", append=true))``
+   .. code-block:: julia
+
+       run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
+       run(pipeline(`update`, stdout="log.txt", append=true))
 
 .. function:: gethostname() -> AbstractString
 
@@ -920,19 +917,19 @@ System
 
    .. Docstring generated from Julia source
 
-   Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
+   Set a timer to be read by the next call to :func:`toc` or :func:`toq`\ . The macro call ``@time expr`` can also be used to time evaluation.
 
 .. function:: toc()
 
    .. Docstring generated from Julia source
 
-   Print and return the time elapsed since the last :func:`tic`.
+   Print and return the time elapsed since the last :func:`tic`\ .
 
 .. function:: toq()
 
    .. Docstring generated from Julia source
 
-   Return, but do not print, the time elapsed since the last :func:`tic`.
+   Return, but do not print, the time elapsed since the last :func:`tic`\ .
 
 .. function:: @time
 
@@ -1005,13 +1002,13 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Raise an ``ErrorException`` with the given message
+   Raise an ``ErrorException`` with the given message.
 
 .. function:: throw(e)
 
    .. Docstring generated from Julia source
 
-   Throw an object as an exception
+   Throw an object as an exception.
 
 .. function:: rethrow([e])
 
@@ -1356,7 +1353,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
+   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`\ .
 
    All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 

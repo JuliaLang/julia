@@ -60,6 +60,26 @@ function compile(regex::Regex)
     regex
 end
 
+"""
+    @r_str -> Regex
+
+Construct a regex, such as `r"^[a-z]*\$"`. The regex also accepts one or more flags, listed
+after the ending quote, to change its behaviour:
+
+- `i` enables case-insensitive matching
+- `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
+  opposed to the whole string.
+- `s` allows the `.` modifier to match newlines.
+- `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
+  is treated as starting a comment.
+
+For example, this regex has all three flags enabled:
+
+```julia
+julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
+RegexMatch("angry,\\nBad world")
+```
+"""
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 copy(r::Regex) = r

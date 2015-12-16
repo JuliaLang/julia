@@ -785,7 +785,7 @@ immutable Prehashed
 end
 hash(x::Prehashed) = x.hash
 
-doc"""
+"""
     unique(itr[, dim])
 
 Returns an array containing only the unique elements of the iterable `itr`, in

@@ -281,29 +281,34 @@ covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1, corr
     covzm(x .- xmean, y .- ymean, vardim, corrected)
 
 # cov (API)
-doc"""
+"""
     cov(x[, corrected=true])
 
-Compute the variance of the vector `x`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+Compute the variance of the vector `x`. If `corrected` is `true` (the default) then the sum
+is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 """
 cov(x::AbstractVector, corrected::Bool) = covm(x, Base.mean(x), corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 cov{T<:AbstractVector}(x::T) = covm(x, Base.mean(x), true)
 
-doc"""
+"""
     cov(X[, vardim=1, corrected=true])
 
-Compute the covariance matrix of the matrix `X` along the dimension `vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim)`.
+Compute the covariance matrix of the matrix `X` along the dimension `vardim`. If `corrected`
+is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n`
+if `corrected` is `false` where `n = size(X, vardim)`.
 """
 cov(X::AbstractMatrix, vardim::Int, corrected::Bool=true) =
     covm(X, _vmean(X, vardim), vardim, corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 cov{T<:AbstractMatrix}(X::T) = cov(X, 1, true)
 
-doc"""
+"""
     cov(x, y[, corrected=true])
 
-Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x) = length(y)`.
+Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default)
+then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false`
+where `n = length(x) = length(y)`.
 """
 cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
     covm(x, Base.mean(x), y, Base.mean(y), corrected)
@@ -311,11 +316,12 @@ cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
 cov{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) =
     covm(x, Base.mean(x), y, Base.mean(y), true)
 
-doc"""
+"""
     cov(X, Y[, vardim=1, corrected=true])
 
-Compute the covariance between the vectors or matrices `X` and `Y` along the dimension `vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim) = size(Y, vardim)`.
-
+Compute the covariance between the vectors or matrices `X` and `Y` along the dimension
+`vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares
+the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim) = size(Y, vardim)`.
 """
 cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool=true) =
     covm(X, _vmean(X, vardim), Y, _vmean(Y, vardim), vardim, corrected)
@@ -416,7 +422,7 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
     corzm(x .- xmean, y .- ymean, vardim)
 
 # cor
-doc"""
+"""
     cor(x)
 
 Return the number one.
@@ -424,7 +430,7 @@ Return the number one.
 cor{T<:AbstractVector}(x::T) = one(real(eltype(x)))
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
-doc"""
+"""
     cor(X[, vardim=1])
 
 Compute the Pearson correlation matrix of the matrix `X` along the dimension `vardim`.
@@ -433,7 +439,7 @@ cor(X::AbstractMatrix, vardim::Int) = corm(X, _vmean(X, vardim), vardim)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 cor{T<:AbstractMatrix}(X::T) = cor(X, 1)
 
-doc"""
+"""
     cor(x, y)
 
 Compute the Pearson correlation between the vectors `x` and `y`.
@@ -441,11 +447,10 @@ Compute the Pearson correlation between the vectors `x` and `y`.
 cor{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) = corm(x, Base.mean(x), y, Base.mean(y))
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
-doc"""
+"""
     cor(X, Y[, vardim=1])
 
 Compute the Pearson correlation between the vectors or matrices `X` and `Y` along the dimension `vardim`.
-
 """
 cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int) =
     corm(x, _vmean(x, vardim), y, _vmean(y, vardim), vardim)

@@ -115,6 +115,11 @@ function terminline(io::IO, md::Link)
     terminline(io, md.text)
 end
 
+function terminline(io::IO, md::Footnote)
+    print(io, "[^", md.id, "]")
+    md.text ≡ nothing || (print(io, ":"); terminline(io, md.text))
+end
+
 function terminline(io::IO, code::Code)
     print_with_format(:cyan, io, code.code)
 end

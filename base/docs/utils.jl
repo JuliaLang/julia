@@ -350,6 +350,7 @@ internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
 stripmd(x::AbstractString) = x  # base case
+stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)
 stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
@@ -364,6 +365,7 @@ stripmd(x::Markdown.Link) = "$(stripmd(x.text)) $(x.url)"
 stripmd(x::Markdown.List) = join(map(stripmd, x.items), " ")
 stripmd(x::Markdown.MD) = join(map(stripmd, x.content), " ")
 stripmd(x::Markdown.Paragraph) = stripmd(x.content)
+stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 

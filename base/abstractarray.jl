@@ -1142,7 +1142,7 @@ end
 
 ## iteration utilities ##
 
-doc"""
+"""
     foreach(f, c...) -> Void
 
 Call function `f` on each element of iterable `c`.
