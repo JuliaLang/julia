@@ -326,11 +326,6 @@ types of the arguments given to the constructor. Here are some examples:
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Int64, ::Float64)
     This may have arisen from a call to the constructor Point{T<:Real}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
-      call{T}(::Type{T}, ::Any)
-      convert{T}(::Type{T}, !Matched::T)
-     in call at essentials.jl:57
 
     ## explicit T ##
 
@@ -427,12 +422,6 @@ However, other similar calls still don't work:
     ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Float64, ::Int64)
     This may have arisen from a call to the constructor Point{T<:Real}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      Point{T<:Real}(::T<:Real, !Matched::T<:Real)
-      call{T}(::Type{T}, ::Any)
-      convert{T}(::Type{T}, !Matched::T)
-      ...
-     in call at essentials.jl:57
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -567,19 +556,18 @@ reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
 it is short, self-contained, and implements an entire basic Julia type.
 
-.. _constructors-call-and-conversion:
+.. _constructors-and-conversion:
 
-Constructors, Call, and Conversion
-----------------------------------
+Constructors and Conversion
+---------------------------
 
-Technically, constructors ``T(args...)`` in Julia are implemented by
-defining new methods ``Base.call(::Type{T}, args...)`` for the
-:func:`call` function.  That is, Julia types are not functions, but
-they can be called as if they were functions (functors) via
-call overloading, just like any other Julia object.  This also means
-that you can declare more flexible constructors, e.g. constructors for
-abstract types, by instead explicitly defining ``Base.call`` methods
-using ``function`` syntax.
+Constructors ``T(args...)`` in Julia are implemented like other
+callable objects: methods are added to their types.
+The type of a type is ``Type``, so all constructor methods are
+stored in the method table for the ``Type`` type.
+This means that you can declare more flexible constructors, e.g.
+constructors for abstract types, by explicitly defining methods
+for the appropriate types.
 
 However, in some cases you could consider adding methods to
 ``Base.convert`` *instead* of defining a constructor, because defining
@@ -631,13 +619,13 @@ For example, when ``T`` is ``Int32``, we would like ``S`` to be ``Int64``.
 Therefore we want to avoid an interface that allows the user to construct
 instances of the type ``SummedArray{Int32,Int32}``.
 One way to do this is to provide only an outer constructor for ``SummedArray``.
-This can be done using explicit ``call`` overloading::
+This can be done using method definition by type::
 
     type SummedArray{T<:Number,S<:Number}
         data::Vector{T}
         sum::S
 
-        function call{T}(::Type{SummedArray}, a::Vector{T})
+        function (::Type{SummedArray}){T}(a::Vector{T})
             S = widen(T)
             new{T,S}(a, sum(S, a))
         end

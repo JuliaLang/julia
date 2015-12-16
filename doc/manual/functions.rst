@@ -196,7 +196,7 @@ Anonymous Functions
 
 Functions in Julia are `first-class objects
 <https://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
-variables, called using the standard function call syntax from the
+variables, and called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
 without being given a name, using either of these syntaxes:
@@ -204,16 +204,19 @@ without being given a name, using either of these syntaxes:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    (anonymous function)
+    #1 (generic function with 1 method)
 
     julia> function (x)
                x^2 + 2x - 1
            end
-    (anonymous function)
+    #2 (generic function with 1 method)
 
-This creates an unnamed function taking one argument *x* and returning the
-value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
-use for anonymous functions is passing them to functions which take
+This creates a function taking one argument *x* and returning the
+value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value.
+Notice that the result is a generic function, but with a
+compiler-generated name based on consecutive numbering.
+
+The primary use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is :func:`map`,
 which applies a function to each value of an array and returns a new
 array containing the resulting values:
