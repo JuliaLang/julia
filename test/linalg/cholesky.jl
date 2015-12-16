@@ -152,7 +152,7 @@ let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
     for uplo in (:U, :L)
         AcA = A'A
         F = cholfact(AcA, uplo)
-        @test LinAlg.update(F, v)[uplo] ≈ cholfact(AcA + v*v')[uplo]
-        @test LinAlg.downdate(F, v)[uplo] ≈ cholfact(AcA - v*v')[uplo]
+        @test LinAlg.lowrankupdate(F, v)[uplo] ≈ cholfact(AcA + v*v')[uplo]
+        @test LinAlg.lowrankdowndate(F, v)[uplo] ≈ cholfact(AcA - v*v')[uplo]
     end
 end
