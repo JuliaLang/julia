@@ -120,6 +120,10 @@ convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
 
 float(x) = convert(AbstractFloat, x)
 
+# for constructing arrays
+float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
+float{T}(::Type{T}) = Any
+
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptosi($Ti,unbox(Float32,x)))
