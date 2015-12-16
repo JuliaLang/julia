@@ -1156,7 +1156,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #ifdef LLVM37
       return builder.CreateCall(prepare_call(fmaintr),{ FP(x), FP(y), FP(z) });
 #else
-      return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
+      return builder.CreateCall3(prepare_call(fmaintr), FP(x), FP(y), FP(z));
 #endif
     }
     case muladd_float:
