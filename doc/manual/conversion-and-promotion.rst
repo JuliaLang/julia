@@ -97,13 +97,13 @@ requested conversion:
 .. doctest::
 
     julia> convert(AbstractFloat, "foo")
-    ERROR: MethodError: `convert` has no method matching convert(::Type{AbstractFloat}, ::ASCIIString)
+    ERROR: MethodError: Cannot `convert` an object of type ASCIIString to an object of type AbstractFloat
     This may have arisen from a call to the constructor AbstractFloat(...),
     since type constructors fall back to convert methods.
     Closest candidates are:
-      call{T}(::Type{T}, ::Any)
-      convert(::Type{AbstractFloat}, !Matched::Bool)
-      convert(::Type{AbstractFloat}, !Matched::Int8)
+      convert(::Type{AbstractFloat}, ::Bool)
+      convert(::Type{AbstractFloat}, ::Int8)
+      convert(::Type{AbstractFloat}, ::Int16)
       ...
 
 Some languages consider parsing strings as numbers or formatting
