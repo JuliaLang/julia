@@ -3,49 +3,54 @@
 using .ARPACK
 
 ## eigs
-doc"""
-```rst
-..  eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+"""
+    eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for
-real symmetric or general nonsymmetric matrices respectively.
+Computes eigenvalues `d` of `A` using Lanczos or Arnoldi iterations for real symmetric or
+general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
 
-* ``nev``: Number of eigenvalues
-* ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrix ``A``. The default is ``ncv = max(20,2*nev+1)``.
-  Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
-* ``which``: type of eigenvalues to compute. See the note below.
+* `nev`: Number of eigenvalues
+* `ncv`: Number of Krylov vectors used in the computation; should satisfy `nev+1 <= ncv <= n`
+  for real symmetric problems and `nev+2 <= ncv <= n` for other problems, where `n` is the
+  size of the input matrix `A`. The default is `ncv = max(20,2*nev+1)`. Note that these
+  restrictions limit the input matrix `A` to be of dimension at least 2.
+* `which`: type of eigenvalues to compute. See the note below.
 
-  ========= ======================================================================================================================
-  ``which`` type of eigenvalues
-  ========= ======================================================================================================================
-  ``:LM``   eigenvalues of largest magnitude (default)
-  ``:SM``   eigenvalues of smallest magnitude
-  ``:LR``   eigenvalues of largest real part
-  ``:SR``   eigenvalues of smallest real part
-  ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
-  ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
-  ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
-  ========= ======================================================================================================================
+| `which` | type of eigenvalues                                                                                                       |
+|:--------|:--------------------------------------------------------------------------------------------------------------------------|
+| `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
+| `:SM`   | eigenvalues of smallest magnitude                                                                                         |
+| `:LR`   | eigenvalues of largest real part                                                                                          |
+| `:SR`   | eigenvalues of smallest real part                                                                                         |
+| `:LI`   | eigenvalues of largest imaginary part (nonsymmetric or complex `A` only)                                                  |
+| `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
+| `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-* ``maxiter``: Maximum number of iterations (default = 300)
-* ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
-* ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-* ``v0``: starting vector from which to start the iterations
+* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `maxiter`: Maximum number of iterations (default = 300)
+* `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
+  defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
+  using shift and invert iterations.
+* `ritzvec`: Returns the Ritz vectors `v` (eigenvectors) if `true`
+* `v0`: starting vector from which to start the iterations
 
-``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+`eigs` returns the `nev` requested eigenvalues in `d`, the corresponding Ritz vectors `v`
+(only if `ritzvec=true`), the number of converged eigenvalues `nconv`, the number of
+iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
+final residual vector `resid`.
 
-.. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
+**note**
 
-   =============== ================================== ==================================
-   ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
-   =============== ================================== ==================================
-   ``nothing``     ordinary (forward)                 :math:`A`
-   real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
-   =============== ================================== ==================================
-```
+The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
+`which` do _not_ necessarily refer to the eigenvalues of `A`, but rather the linear operator
+constructed by the specification of the iteration mode implied by `sigma`.
+
+| `sigma`         | iteration mode                   | `which` refers to eigenvalues of |
+|:----------------|:---------------------------------|:---------------------------------|
+| `nothing`       | ordinary (forward)               | ``A``                            |
+| real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
@@ -62,49 +67,54 @@ function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
     eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
 end
-doc"""
-```rst
-..  eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+"""
+    eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using Lanczos or Arnoldi iterations for
+Computes generalized eigenvalues `d` of `A` and `B` using Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
 
-* ``nev``: Number of eigenvalues
-* ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems, where ``n`` is the size of the input matrices ``A`` and ``B``. The default is ``ncv = max(20,2*nev+1)``.
-  Note that these restrictions limit the input matrix ``A`` to be of dimension at least 2.
-* ``which``: type of eigenvalues to compute. See the note below.
+* `nev`: Number of eigenvalues
+* `ncv`: Number of Krylov vectors used in the computation; should satisfy `nev+1 <= ncv <= n`
+  for real symmetric problems and `nev+2 <= ncv <= n` for other problems, where `n` is the
+  size of the input matrices `A` and `B`. The default is `ncv = max(20,2*nev+1)`. Note that
+  these restrictions limit the input matrix `A` to be of dimension at least 2.
+* `which`: type of eigenvalues to compute. See the note below.
 
-  ========= ======================================================================================================================
-  ``which`` type of eigenvalues
-  ========= ======================================================================================================================
-  ``:LM``   eigenvalues of largest magnitude (default)
-  ``:SM``   eigenvalues of smallest magnitude
-  ``:LR``   eigenvalues of largest real part
-  ``:SR``   eigenvalues of smallest real part
-  ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
-  ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
-  ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
-  ========= ======================================================================================================================
+| `which` | type of eigenvalues                                                                                                       |
+|:--------|:--------------------------------------------------------------------------------------------------------------------------|
+| `:LM`   | eigenvalues of largest magnitude (default)                                                                                |
+| `:SM`   | eigenvalues of smallest magnitude                                                                                         |
+| `:LR`   | eigenvalues of largest real part                                                                                          |
+| `:SR`   | eigenvalues of smallest real part                                                                                         |
+| `:LI`   | eigenvalues of largest imaginary part (nonsymmetric or complex `A` only)                                                  |
+| `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
+| `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-* ``maxiter``: Maximum number of iterations (default = 300)
-* ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
-* ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-* ``v0``: starting vector from which to start the iterations
+* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `maxiter`: Maximum number of iterations (default = 300)
+* `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
+  defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
+  using shift and invert iterations.
+* `ritzvec`: Returns the Ritz vectors `v` (eigenvectors) if `true`
+* `v0`: starting vector from which to start the iterations
 
-``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+`eigs` returns the `nev` requested eigenvalues in `d`, the corresponding Ritz vectors `v`
+(only if `ritzvec=true`), the number of converged eigenvalues `nconv`, the number of
+iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
+final residual vector `resid`.
 
-.. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
+**note**
 
-   =============== ================================== ==================================
-   ``sigma``       iteration mode                     ``which`` refers to the problem
-   =============== ================================== ==================================
-   ``nothing``     ordinary (forward)                 :math:`Av = Bv\lambda`
-   real or complex inverse with level shift ``sigma`` :math:`(A - \sigma B )^{-1}B = v\nu`
-   =============== ================================== ==================================
-```
+The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
+`which` do _not_ necessarily refer to the eigenvalue problem ``Av = Bv\\lambda``, but rather
+the linear operator constructed by the specification of the iteration mode implied by `sigma`.
+
+| `sigma`         | iteration mode                   | `which` refers to the problem      |
+|:----------------|:---------------------------------|:-----------------------------------|
+| `nothing`       | ordinary (forward)               | ``Av = Bv\\lambda``                |
+| real or complex | inverse with level shift `sigma` | ``(A - \\sigma B )^{-1}B = v\\nu`` |
 """
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;

@@ -282,24 +282,24 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
-doc"""
-```rst
-..  logm(A::StridedMatrix)
+"""
+    logm(A::StridedMatrix)
 
-If ``A`` has no negative real eigenvalue, compute the principal matrix logarithm of ``A``, i.e. the unique matrix :math:`X` such that :math:`e^X = A` and :math:`-\pi < Im(\lambda) < \pi` for all the eigenvalues :math:`\lambda` of :math:`X`. If ``A`` has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.
+If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
+the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
+the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
+matrix function is returned whenever possible.
 
-If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`) is used, if ``A`` is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12]_ and [AHR13]_). For general matrices, the complex Schur form (:func:`schur`) is computed and the triangular algorithm is used on the triangular factor.
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+used, if `A` is triangular an improved version of the inverse scaling and squaring method is
+employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
+([`schur`](:func:`schur`)) is computed and the triangular algorithm is used on the
+triangular factor.
 
-.. [AH12] Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling
-   and squaring algorithms for the matrix logarithm", SIAM Journal on
-   Scientific Computing, 34(4), 2012, C153-C169.
-   `doi:10.1137/110852553 <http://dx.doi.org/10.1137/110852553>`_
-.. [AHR13] Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton,
-   "Computing the Fréchet derivative of the matrix logarithm and estimating
-   the condition number", SIAM Journal on Scientific Computing, 35(4), 2013,
-   C394-C410.
-   `doi:10.1137/120885991 <http://dx.doi.org/10.1137/120885991>`_
-```
+[^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](http://dx.doi.org/10.1137/110852553)
+
+[^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
+
 """
 function logm(A::StridedMatrix)
     # If possible, use diagonalization

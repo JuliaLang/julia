@@ -66,6 +66,11 @@ plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
 plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
 
+function plaininline(io::IO, md::Footnote)
+    print(io, "[^", md.id, "]")
+    md.text ≡ nothing || (print(io, ":"); plaininline(io, md.text))
+end
+
 plaininline(io::IO, md::Image) = plaininline(io, "![", md.alt, "](", md.url, ")")
 
 plaininline(io::IO, s::AbstractString) = print(io, s)
