@@ -39,6 +39,7 @@ __RCSID("$NetBSD: strptime.c,v 1.58 2015/10/31 03:42:00 ginsbach Exp $");
 #include <time.h>
 #include <stdint.h>
 #include "tzfile.h"
+#include "dtypes.h" // for strncasecmp on msvc
 
 typedef unsigned int uint;
 typedef unsigned char u_char;
@@ -621,7 +622,7 @@ namedzone:
 				 * Our current timezone
 				 */
 				ep = find_string(bp, &i,
-					       	 (const char * const *)tzname,
+					       	 (const char * const *)_tzname,
 					       	  NULL, 2);
 				if (ep != NULL) {
 					tm->tm_isdst = i;
@@ -629,7 +630,7 @@ namedzone:
 					tm->TM_GMTOFF = -timezone;
 #endif
 #ifdef TM_ZONE
-					tm->TM_ZONE = tzname[i];
+					tm->TM_ZONE = _tzname[i];
 #endif
 					bp = ep;
 					continue;
