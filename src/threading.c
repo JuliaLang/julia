@@ -421,7 +421,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
         argtypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
     else
         argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
-    fun = jl_get_specialization(f, argtypes);
+    fun = jl_get_specialization(f, argtypes, NULL);
     if (fun == NULL)
         fun = f;
     jl_generate_fptr(fun);

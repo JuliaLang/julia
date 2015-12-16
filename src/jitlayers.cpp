@@ -226,8 +226,9 @@ public:
                 auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
                 SavedObject = OwningBinary<ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
             }
-            else
+            else {
                 NotifyGDB(SavedObject);
+            }
 
             SavedObjects.push_back(std::move(SavedObject));
             ORCNotifyObjectEmitted(JuliaListener.get(),*Object,*SavedObjects.back().getBinary(),*LO);
@@ -286,10 +287,13 @@ public:
                     ErrorOr<std::unique_ptr<object::ObjectFile>> Obj =
                         object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
-                    // TODO: Actually report errors helpfully.
-                    if (Obj)
-                        return OwningObj(std::move(*Obj), std::move(ObjBuffer));
-                    return OwningObj(nullptr, nullptr);
+                    if (!Obj) {
+                        M.dump();
+                        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module.\n"
+                            "The module's content was printed above. Please file a bug report");
+                    }
+
+                    return OwningObj(std::move(*Obj), std::move(ObjBuffer));
                 }
             )};
             // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
