@@ -497,6 +497,12 @@ undocumented(x,y) = 3
 
 end
 
+@test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"""
+No documentation found.
+
+Binding `Undocumented.bindingdoesnotexist` does not exist.
+""")
+
 @test docstrings_equal(@doc(Undocumented.A), doc"""
 No documentation found.
 
@@ -577,12 +583,14 @@ end
 import Base.Docs: @var, Binding
 
 let x = Binding(Base, symbol("@time"))
+    @test x.defined == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
     @test @var(Base.Pkg.@time) == x
 end
 
 let x = Binding(Base.LinAlg, :norm)
+    @test x.defined == true
     @test @var(norm) == x
     @test @var(Base.norm) == x
     @test @var(Base.LinAlg.norm) == x
@@ -590,6 +598,7 @@ let x = Binding(Base.LinAlg, :norm)
 end
 
 let x = Binding(Core, :Int)
+    @test x.defined == true
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
@@ -597,12 +606,24 @@ let x = Binding(Core, :Int)
 end
 
 let x = Binding(Base, :Pkg)
+    @test x.defined == true
     @test @var(Pkg) == x
     @test @var(Base.Pkg) == x
     @test @var(Main.Pkg) == x
 end
 
 let x = Binding(Base, :VERSION)
+    @test x.defined == true
     @test @var(VERSION) == x
     @test @var(Base.VERSION) == x
+end
+
+let x = Binding(Base, :bindingdoesnotexist)
+    @test x.defined == false
+    @test @var(Base.bindingdoesnotexist) == x
+end
+
+let x = Binding(Main, :bindingdoesnotexist)
+    @test x.defined == false
+    @test @var(bindingdoesnotexist) == x
 end
