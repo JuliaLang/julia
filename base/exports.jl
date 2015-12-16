@@ -22,6 +22,7 @@ export
     Serializer,
     Docs,
     Markdown,
+    Unicode,
 
 # Types
     AbstractChannel,
@@ -116,6 +117,7 @@ export
     SymTridiagonal,
     Timer,
     Tridiagonal,
+    UnicodeProperty,
     UnitRange,
     UpperTriangular,
     UTF16String,
@@ -818,6 +820,7 @@ export
     bits,
     bytes2hex,
     bytestring,
+    charprop,
     charwidth,
     chomp,
     chop,

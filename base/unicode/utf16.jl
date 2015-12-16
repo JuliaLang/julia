@@ -54,10 +54,10 @@ function next(s::UTF16String, i::Int)
     ch = s.data[i]
     !is_surrogate_codeunit(ch) && return (Char(ch), i+1)
     # check length, account for terminating \0
-    i >= (length(s.data)-1) && throw(UnicodeError(UTF_ERR_MISSING_SURROGATE, i, UInt32(ch)))
-    !is_surrogate_lead(ch) && throw(UnicodeError(UTF_ERR_NOT_LEAD, i, ch))
+    i >= (length(s.data)-1) && throw(UnicodeError(ERR_MISSING_SURROGATE, i, UInt32(ch)))
+    !is_surrogate_lead(ch) && throw(UnicodeError(ERR_NOT_LEAD, i, ch))
     ct = s.data[i+1]
-    !is_surrogate_trail(ct) && throw((UTF_ERR_NOT_TRAIL, i, ch))
+    !is_surrogate_trail(ct) && throw((ERR_NOT_TRAIL, i, ch))
     Char(get_supplementary(ch, ct)), i+2
 end
 
@@ -222,7 +222,7 @@ end
 
 function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return UTF16String(UInt16[0])
-    isodd(length(bytes)) && throw(UnicodeError(UTF_ERR_ODD_BYTES_16, length(bytes), 0))
+    isodd(length(bytes)) && throw(UnicodeError(ERR_ODD_BYTES_16, length(bytes), 0))
     data = reinterpret(UInt16, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0xfeff        # native byte order
@@ -238,7 +238,7 @@ function convert(T::Type{UTF16String}, bytes::AbstractArray{UInt8})
         copy!(d,1, data,1, length(data)) # assume native byte order
     end
     d[end] = 0 # NULL terminate
-    !isvalid(UTF16String, d) && throw(UnicodeError(UTF_ERR_INVALID_16,0,0))
+    !isvalid(UTF16String, d) && throw(UnicodeError(ERR_INVALID_16,0,0))
     UTF16String(d)
 end
 
@@ -257,19 +257,19 @@ function map(fun, str::UTF16String)
     for ch in str
         c2 = fun(ch)
         if !isa(c2, Char)
-            throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
+            throw(UnicodeError(ERR_MAP_CHAR, 0, 0))
         end
         uc = UInt32(c2)
         if uc < 0x10000
             if is_surrogate_codeunit(UInt16(uc))
-                throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))
+                throw(UnicodeError(ERR_INVALID_CHAR, 0, uc))
             end
             push!(buf, UInt16(uc))
         elseif uc <= 0x10ffff
             push!(buf, UInt16(0xd7c0 + (uc >> 10)))
             push!(buf, UInt16(0xdc00 + (uc & 0x3ff)))
         else
-            throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))
+            throw(UnicodeError(ERR_INVALID_CHAR, 0, uc))
         end
     end
     push!(buf, 0)
