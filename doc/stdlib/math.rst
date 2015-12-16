@@ -1753,23 +1753,29 @@ Statistics
 
    Compute the midpoints of the bins with edges ``e``\ . The result is a vector/range of length ``length(e) - 1``\ . Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile(v, ps)
+.. function:: quantile(v, p; sorted=false)
 
    .. Docstring generated from Julia source
 
-   Compute the quantiles of a vector ``v`` at a specified set of probability values ``ps``\ . Note: Julia does not ignore ``NaN`` values in the computation.
+   Compute the quantile(s) of a vector ``v`` at a specified probability or vector ``p``\ . The keyword argument ``sorted`` indicates whether ``v`` can be assumed to be sorted.
 
-.. function:: quantile(v, p)
+   The ``p`` should be on the interval [0,1], and ``v`` should not have any ``NaN`` values.
+
+   Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
+
+   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+
+.. function:: quantile!([q, ] v, p; sorted=false)
 
    .. Docstring generated from Julia source
 
-   Compute the quantile of a vector ``v`` at the probability ``p``\ . Note: Julia does not ignore ``NaN`` values in the computation.
+   Compute the quantile(s) of a vector ``v`` at the probabilities ``p``\ , with optional output into array ``q`` (if not provided, a new output array is created). The keyword argument ``sorted`` indicates whether ``v`` can be assumed to be sorted; if ``false`` (the default), then the elements of ``v`` may be partially sorted.
 
-.. function:: quantile!(v, p)
+   The elements of ``p`` should be on the interval [0,1], and ``v`` should not have any ``NaN`` values.
 
-   .. Docstring generated from Julia source
+   Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
 
-   Like ``quantile``\ , but overwrites the input vector.
+   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 
 .. function:: cov(x[, corrected=true])
 

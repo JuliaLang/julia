@@ -77,6 +77,10 @@ Library improvements
     (to alter Windows command-line generation) and `windows_hide` (to
     suppress creation of new console windows) ([#13780]).
 
+  * Statistics:
+
+    * Improve performance of `quantile` ([#14413]).
+
 Deprecated or removed
 ---------------------
 
