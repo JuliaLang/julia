@@ -9,6 +9,7 @@
 #include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "ia_misc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -362,7 +363,9 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 
 // symbols --------------------------------------------------------------------
 
-static jl_sym_t *symtab = NULL;
+JL_DEFINE_MUTEX(symbol_table)
+
+static jl_sym_t *volatile symtab = NULL;
 
 static uptrint_t hash_symbol(const char *str, size_t len)
 {
@@ -407,40 +410,56 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     return sym;
 }
 
-static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t **parent)
+static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
+                               size_t len, jl_sym_t *volatile **slot)
 {
-    int x;
-    if (parent != NULL) *parent = NULL;
+    jl_sym_t *node = *ptree;
     uptrint_t h = hash_symbol(str, len);
 
-    // Tree nodes sorted by major key of (int(hash)) and minor key o (str).
-    while (*ptree != NULL) {
-        x = (int)(h-(*ptree)->hash);
+    // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
+    while (node != NULL) {
+        intptr_t x = (intptr_t)(h - node->hash);
         if (x == 0) {
-            x = strncmp(str, jl_symbol_name(*ptree), len);
-            if (x == 0 && jl_symbol_name(*ptree)[len] == 0)
-                return ptree;
+            x = strncmp(str, jl_symbol_name(node), len);
+            if (x == 0 && jl_symbol_name(node)[len] == 0) {
+                if (slot != NULL)
+                    *slot = ptree;
+                return node;
+            }
         }
-        if (parent != NULL) *parent = *ptree;
         if (x < 0)
-            ptree = &(*ptree)->left;
+            ptree = &node->left;
         else
-            ptree = &(*ptree)->right;
+            ptree = &node->right;
+        node = *ptree;
+        // We may need a data dependency barrier here to pair with the
+        // cpu write barrier in _jl_symbol so that we won't read a invalid
+        // value from `node`. However, this shouldn't be a problem on all
+        // the architectures we currently support.
+        // https://www.kernel.org/doc/Documentation/memory-barriers.txt
     }
-    return ptree;
+    if (slot != NULL)
+        *slot = ptree;
+    return node;
 }
 
 static jl_sym_t *_jl_symbol(const char *str, size_t len)
 {
-    jl_sym_t **pnode;
-    jl_sym_t *parent;
-    pnode = symtab_lookup(&symtab, str, len, &parent);
-    if (*pnode == NULL) {
-        *pnode = mk_symbol(str, len);
-        if (parent != NULL)
-            jl_gc_wb(parent, *pnode);
+    jl_sym_t *volatile *slot;
+    jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
+    if (node == NULL) {
+        JL_LOCK(symbol_table); // Might GC
+        // Someone might have updated it, check and look up again
+        if (*slot != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
+            JL_UNLOCK(symbol_table);
+            return node;
+        }
+        node = mk_symbol(str, len);
+        cpu_sfence();
+        *slot = node;
+        JL_UNLOCK(symbol_table);
     }
-    return *pnode;
+    return node;
 }
 
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str)
@@ -450,7 +469,7 @@ JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str)
 
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str)
 {
-    return *symtab_lookup(&symtab, str, strlen(str), NULL);
+    return symtab_lookup(&symtab, str, strlen(str), NULL);
 }
 
 JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
