@@ -319,8 +319,12 @@ end
 @test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
 
 @test quantile([1,2,3,4],0.5) == 2.5
+@test quantile([1,2,3,4],[0.5]) == [2.5]
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
-@test quantile([0.:100.;],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
+@test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == collect(0.0:10.0:100.0)
+@test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == collect(0.0:10.0:100.0)
+@test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == collect(0f0:10f0:100f0)
+
 
 # test invalid hist nbins argument (#9999)
 @test_throws ArgumentError hist(Int[], -1)
