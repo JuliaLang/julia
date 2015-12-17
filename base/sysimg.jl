@@ -48,6 +48,8 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 include("functors.jl")
+include("checked.jl")
+importall .Checked
 
 # array structures
 include("abstractarray.jl")

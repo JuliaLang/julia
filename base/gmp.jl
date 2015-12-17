@@ -553,5 +553,10 @@ Base.checked_neg(x::BigInt) = -x
 Base.checked_add(a::BigInt, b::BigInt) = a + b
 Base.checked_sub(a::BigInt, b::BigInt) = a - b
 Base.checked_mul(a::BigInt, b::BigInt) = a * b
+Base.checked_div(a::BigInt, b::BigInt) = div(a, b)
+Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
+Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
+Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
+Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
 
 end # module
