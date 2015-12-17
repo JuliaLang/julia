@@ -937,7 +937,7 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
             if (b->owner == m && b->value && b->constp) {
                 if (jl_is_datatype(b->value)) {
                     jl_methtable_t *mt = ((jl_datatype_t*)b->value)->name->mt;
-                    if (((jl_datatype_t*)b->value)->name->name == b->name && mt->module == m) {
+                    if (mt && ((jl_datatype_t*)b->value)->name->name == b->name && mt->module == m) {
                         jl_serialize_methtable_from_mod(s, mt, 0);
                         jl_serialize_methtable_from_mod(s, mt, 1);
                     }
@@ -2357,7 +2357,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
                      jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
-                     jl_densearray_type, jl_box_type, jl_void_type, jl_function_type,
+                     jl_densearray_type, jl_void_type, jl_function_type,
                      jl_typector_type, jl_typename_type, jl_builtin_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
@@ -2371,7 +2371,7 @@ void jl_init_serializer(void)
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
-                     jl_module_type->name, jl_box_type->name, jl_function_type->name,
+                     jl_module_type->name, jl_function_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,

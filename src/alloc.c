@@ -21,9 +21,6 @@ JL_DLLEXPORT jl_value_t *jl_false;
 jl_tvar_t     *jl_typetype_tvar;
 jl_datatype_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
-jl_datatype_t *jl_box_type;
-jl_value_t *jl_box_any_type;
-jl_typename_t *jl_box_typename;
 
 jl_datatype_t *jl_typector_type;
 
@@ -551,8 +548,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->uid = jl_assign_type_uid();
     tn->mt = NULL;
     JL_GC_PUSH1(&tn);
-    tn->mt = jl_new_method_table(name, module);
-    jl_gc_wb(tn, tn->mt);
+    tn->mt = NULL;
     JL_GC_POP();
     return tn;
 }
@@ -687,10 +683,16 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
 
     if (tn == NULL) {
         t->name = NULL;
-        if (jl_is_typename(name))
+        if (jl_is_typename(name)) {
             tn = (jl_typename_t*)name;
-        else
+        }
+        else {
             tn = jl_new_typename((jl_sym_t*)name);
+            if (!abstract) {
+                tn->mt = jl_new_method_table(name, jl_current_module);
+                jl_gc_wb(tn, tn->mt);
+            }
+        }
         t->name = tn;
         jl_gc_wb(t, t->name);
     }
