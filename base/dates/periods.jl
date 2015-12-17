@@ -15,6 +15,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     @eval $p(x::AbstractString) = $p(Base.parse(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
+    @eval $p(x::Array) = map(v -> $p(v), x)
 end
 # Now we're safe to define Period-Number conversions
 # Anything an Int64 can convert to, a Period can convert to
