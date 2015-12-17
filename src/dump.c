@@ -1045,6 +1045,45 @@ static void jl_serialize_dependency_list(ios_t *s)
     JL_GC_POP();
 }
 
+static int is_module_replaced(jl_module_t *m)
+{
+    return (jl_value_t*)m != jl_get_global(m->parent, m->name);
+}
+
+static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
+{
+    jl_methlist_t *l = *pl;
+    while (l != (void*)jl_nothing) {
+        if (is_module_replaced(l->func->module))
+            *pl = l->next;
+        else
+            pl = &l->next;
+        l = l->next;
+    }
+}
+
+static void remove_methods_from_replaced_modules_from_cache(jl_array_t *a)
+{
+    jl_value_t **data;
+    size_t i, l = jl_array_len(a); data = (jl_value_t**)jl_array_data(a);
+    for(i=0; i < l; i++) {
+        if (data[i] != NULL)
+            remove_methods_from_replaced_modules_from_list((jl_methlist_t**)&data[i]);
+    }
+}
+
+static void remove_methods_from_replaced_modules(jl_methtable_t *mt)
+{
+    remove_methods_from_replaced_modules_from_list(&mt->defs);
+    remove_methods_from_replaced_modules_from_list(&mt->cache);
+    if ((jl_value_t*)mt->cache_arg1 != jl_nothing)
+        remove_methods_from_replaced_modules_from_cache(mt->cache_arg1);
+    if ((jl_value_t*)mt->cache_targ != jl_nothing)
+        remove_methods_from_replaced_modules_from_cache(mt->cache_targ);
+    if (mt->kwsorter)
+        remove_methods_from_replaced_modules(jl_gf_mtable(mt->kwsorter));
+}
+
 // --- deserialize ---
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
@@ -1742,6 +1781,10 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_array_del_end(args, jl_array_len(args));
         }
     }
+
+    // remove constructors (which go in a single shared method table) from modules
+    // that were replaced during bootstrap.
+    remove_methods_from_replaced_modules(jl_datatype_type->name->mt);
 
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
