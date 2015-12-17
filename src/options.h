@@ -112,6 +112,10 @@
 #  define MEMDEBUG
 #  define KEEP_BODIES
 #  endif
+// Memory sanitizer also needs thread-local storage
+#  if __has_feature(memory_sanitizer)
+#  define CODEGEN_TLS
+#  endif
 #endif
 
 #endif

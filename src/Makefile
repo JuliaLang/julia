@@ -115,7 +115,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 
 # additional dependency links
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp intrinsics.h cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp intrinsics.h cgutils.cpp ccall.cpp jitlayers.cpp abi_*.cpp)
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-debug.c

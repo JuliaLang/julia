@@ -4,10 +4,15 @@
 // --- the ccall, cglobal, and llvm intrinsics ---
 
 // keep track of llvmcall declarations
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+static std::map<u_int64_t,llvm::GlobalValue*> llvmcallDecls;
+#else
 static std::set<u_int64_t> llvmcallDecls;
+#endif
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
+
 static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
 {
     // in pseudo-code, this function emits the following:
@@ -39,7 +44,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         runtime_lib = true;
         libptrgv = libMapGV[f_lib];
         if (libptrgv == NULL) {
-            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
+            libptrgv = new GlobalVariable(imaging_mode ? *shadow_module : *active_module, T_pint8,
                false, GlobalVariable::PrivateLinkage,
                ConstantPointerNull::get((PointerType*)T_pint8), f_lib);
             libMapGV[f_lib] = libptrgv;
@@ -69,7 +74,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         // the symbol of the actual function.
         std::string name = f_name;
         name = "ccall_" + name;
-        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc,
+        llvmgv = new GlobalVariable(imaging_mode ? *shadow_module : *active_module, T_pvoidfunc,
            false, GlobalVariable::PrivateLinkage,
            initnul, name);
         symMapGV[f_name] = llvmgv;
@@ -84,19 +89,20 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
                *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
     builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
 
+    assert(ctx->f->getParent() != NULL);
     ctx->f->getBasicBlockList().push_back(dlsym_lookup);
     builder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
-        libname = builder.CreateGlobalStringPtr(f_lib);
+        libname = CreateGlobalStringPtr(&builder,f_lib, "f_lib");
     }
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
 #ifdef LLVM37
-    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, builder.CreateGlobalStringPtr(f_name), libptrgv });
+    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, CreateGlobalStringPtr(&builder, f_name, "f_name"), libptrgv });
 #else
-    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
+    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, CreateGlobalStringPtr(&builder, f_name, "f_name"), libptrgv);
 #endif
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
@@ -274,7 +280,8 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     *needStackRestore = true;
                 }
                 ai->setAlignment(16);
-                builder.CreateMemCpy(ai, builder.CreateBitCast(jvinfo.V, T_pint8), nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+                prepare_call(
+                    builder.CreateMemCpy(ai, builder.CreateBitCast(jvinfo.V, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
                 return builder.CreateBitCast(ai, to);
             }
         }
@@ -301,7 +308,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        builder.CreateMemCpy(ai, jvinfo.V, nbytes, sizeof(void*)); // minimum gc-alignment in julia is pointer size
+        prepare_call(builder.CreateMemCpy(ai, jvinfo.V, nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
         Value *p2 = builder.CreatePointerCast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -319,7 +326,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     if (!jvinfo.ispointer)
         builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
     else
-        builder.CreateMemCpy(slot, jvinfo.V, (uint64_t)jl_datatype_size(ety), (uint64_t)((jl_datatype_t*)ety)->alignment);
+        prepare_call(builder.CreateMemCpy(slot, jvinfo.V, (uint64_t)jl_datatype_size(ety), (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
     return slot;
 }
 
@@ -594,7 +601,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             std::stringstream name;
             name << (ctx->f->getName().str()) << "u" << i++;
             ir_name = name.str();
-            if (jl_Module->getFunction(ir_name) == NULL)
+            if (builtins_module->getFunction(ir_name) == NULL)
                 break;
         }
 
@@ -611,6 +618,9 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         std::string rstring;
         llvm::raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+        std::map<u_int64_t,std::string> localDecls;
+#endif
 
         if (decl != NULL) {
             std::stringstream declarations(jl_string_data(decl));
@@ -619,8 +629,15 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             std::string declstr;
             while (std::getline(declarations, declstr, '\n')) {
                 u_int64_t declhash = memhash(declstr.c_str(), declstr.length());
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+                auto it = llvmcallDecls.find(declhash);
+                if (it != llvmcallDecls.end()) {
+                    prepare_call(it->second);
+                } else {
+#else
                 if (llvmcallDecls.count(declhash) == 0) {
-                    // Findi  name of declaration by searching for '@'
+#endif
+                    // Find name of declaration by searching for '@'
                     std::string::size_type atpos = declstr.find('@') + 1;
                     // Find end of declaration by searching for '('
                     std::string::size_type bracepos = declstr.find('(');
@@ -632,7 +649,11 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
                         ir_stream << "; Declarations\n" << declstr << "\n";
                     }
 
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+                    localDecls[declhash] = declname;
+#else
                     llvmcallDecls.insert(declhash);
+#endif
                 }
             }
         }
@@ -643,9 +664,9 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
         Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*builtins_module,Err);
         if (!failed)
-            m = jl_Module;
+            m = builtins_module;
 #else
         Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
 #endif
@@ -656,6 +677,12 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
+        f->removeFromParent();
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+        for (auto it : localDecls) {
+            llvmcallDecls[it.first] = cast<GlobalValue>(prepare_call(m->getNamedValue(it.second)));
+        }
+#endif
     }
     else {
         assert(isPtr);
@@ -668,8 +695,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             assert(*it == f->getFunctionType()->getParamType(i));
 
 #ifdef USE_MCJIT
-        if (f->getParent() != jl_Module) {
-            FunctionMover mover(jl_Module,f->getParent());
+        if (f->getParent() != active_module) {
+            FunctionMover mover(active_module,f->getParent());
             f = mover.CloneFunction(f);
         }
 #endif
@@ -694,12 +721,24 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
      * generated the entire function, so we need to store it in the context until the end of the
      * function. This also has the benefit of looking exactly like we cut/pasted it in in `code_llvm`.
      */
-    f->setLinkage(GlobalValue::LinkOnceODRLinkage);
+
+    // Since we dumped all of f's dependencies into the active module,
+    // we cannot reasonably inline it, so leave it there and just emit
+    // a regular call
+    if (!isString) {
+        static int llvmcallnumbering = 0;
+        std::stringstream name;
+        name << "jl_llvmcall" << llvmcallnumbering++;
+        f->setName(name.str());
+        f = cast<Function>(prepare_call(function_proto(f)));
+    }
+    else
+        f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
     // the actual call
-    assert(f->getParent() == jl_Module); // no prepare_call(f) is needed below, since this was just emitted into the same module
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
-    ctx->to_inline.push_back(inst);
+    if (isString)
+        ctx->to_inline.push_back(inst);
 
     JL_GC_POP();
 
@@ -1309,8 +1348,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     if (needStackRestore) {
-        stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
-                                                               Intrinsic::stacksave));
+        stacksave = CallInst::Create(prepare_call(Intrinsic::getDeclaration(builtins_module,
+                                                               Intrinsic::stacksave)));
         if (savespot) {
 #ifdef LLVM38
                 instList.insertAfter(savespot->getIterator(), (Instruction*)stacksave);
@@ -1337,8 +1376,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         result = ret;
     if (needStackRestore) {
         assert(stacksave != NULL);
-        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                     Intrinsic::stackrestore),
+        builder.CreateCall(prepare_call(
+            Intrinsic::getDeclaration(builtins_module,
+                                                     Intrinsic::stackrestore)),
                            stacksave);
     }
     ctx->gc.argDepth = last_depth;
