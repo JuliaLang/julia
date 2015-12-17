@@ -125,19 +125,19 @@ for T in (UInt8, UInt16, UInt32, UInt64)
     @test_throws InexactError convert(T, -1)
 end
 
-for i in 1:length(UItypes)-1
-    T = UItypes[i]
-    S = UItypes[i+1]
-    R = sizeof(S) < sizeof(UInt) ? S : UInt
-    @test widen(T(3)) == R(3)
-end
+@test widen(UInt8(3)) === UInt32(3)
+@test widen(UInt16(3)) === UInt32(3)
+@test widen(UInt32(3)) === UInt64(3)
+@test widen(UInt64(3)) === UInt128(3)
+@test widen(UInt128(3)) == 3
+@test typeof(widen(UInt128(3))) == BigInt
 
-for i in 1:length(SItypes)-1
-    T = SItypes[i]
-    S = SItypes[i+1]
-    R = sizeof(S) < sizeof(Int) ? S : Int
-    @test widen(T(3)) == R(3)
-end
+@test widen(Int8(-3)) === Int32(-3)
+@test widen(Int16(-3)) === Int32(-3)
+@test widen(Int32(-3)) === Int64(-3)
+@test widen(Int64(-3)) === Int128(-3)
+@test widen(Int128(-3)) == -3
+@test typeof(widen(Int128(-3))) == BigInt
 
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
