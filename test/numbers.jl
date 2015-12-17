@@ -1610,19 +1610,6 @@ for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
     @test typeof(fld(z,o)) === T
     @test typeof(mod(z,o)) === T
     @test typeof(cld(z,o)) === T
-
-    @test typeof(Base.checked_add(z)) === T
-    @test typeof(Base.checked_neg(z)) === T
-    @test typeof(Base.checked_abs(z)) === T
-    @test typeof(Base.checked_mul(z)) === T
-    @test typeof(Base.checked_add(z,z)) === T
-    @test typeof(Base.checked_sub(z,z)) === T
-    @test typeof(Base.checked_mul(z,z)) === T
-    @test typeof(Base.checked_div(z,o)) === T
-    @test typeof(Base.checked_rem(z,o)) === T
-    @test typeof(Base.checked_fld(z,o)) === T
-    @test typeof(Base.checked_mod(z,o)) === T
-    @test typeof(Base.checked_cld(z,o)) === T
 end
 
 # issue #4156
