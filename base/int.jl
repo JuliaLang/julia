@@ -65,43 +65,6 @@ function abs end
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
-"""
-    Base.checked_abs(x)
-
-Calculates `abs(x)`, checking for overflow errors where applicable.
-For example, standard two's complement signed integers (e.g. `Int`)
-cannot represent `abs(typemin(Int))`, thus leading to an overflow.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_abs end
-
-checked_abs(x::Unsigned) = abs(x)
-function checked_abs{T<:SignedIntTypes}(x::T)
-    x == typemin(T) && throw(OverflowError())
-    abs(x)
-end
-
-"""
-    Base.checked_neg(x)
-
-Calculates `-x`, checking for overflow errors where applicable. For
-example, standard two's complement signed integers (e.g. `Int`) cannot
-represent `-typemin(Int)`, thus leading to an overflow.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_neg end
-
-function checked_neg(x::Unsigned)
-    x != 0 && throw(OverflowError())
-    x
-end
-function checked_neg{T<:SignedIntTypes}(x::T)
-    x == typemin(T) && throw(OverflowError())
-    -x
-end
-
 ~(n::Integer) = -n-1
 
 unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned,zero(x))), x)
@@ -127,10 +90,10 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-div{T<:UnionS64Types}(x::T, y::T) = box(T,checked_sdiv(unbox(T,x),unbox(T,y)))
-rem{T<:UnionS64Types}(x::T, y::T) = box(T,checked_srem(unbox(T,x),unbox(T,y)))
-div{T<:UnionU64Types}(x::T, y::T) = box(T,checked_udiv(unbox(T,x),unbox(T,y)))
-rem{T<:UnionU64Types}(x::T, y::T) = box(T,checked_urem(unbox(T,x),unbox(T,y)))
+div{T<:UnionS64Types}(x::T, y::T) = box(T,checked_sdiv_int(unbox(T,x),unbox(T,y)))
+rem{T<:UnionS64Types}(x::T, y::T) = box(T,checked_srem_int(unbox(T,x),unbox(T,y)))
+div{T<:UnionU64Types}(x::T, y::T) = box(T,checked_udiv_int(unbox(T,x),unbox(T,y)))
+rem{T<:UnionU64Types}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)))
 
 # x == fld(x,y)*y + mod(x,y)
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
@@ -412,13 +375,48 @@ if WORD_SIZE == 32
         (lolo&0xffffffffffffffff) + UInt128(w1)<<64
     end
 
-    div(x::Int128, y::Int128) = Int128(div(BigInt(x),BigInt(y)))
-    div(x::UInt128, y::UInt128) = UInt128(div(BigInt(x),BigInt(y)))
+    function div(x::Int128, y::Int128)
+        try
+            Int128(div(BigInt(x),BigInt(y)))
+        catch e
+            isa(e, InexactError) && throw(DivideError())
+            rethrow()
+        end
+    end
+    function div(x::UInt128, y::UInt128)
+        try
+            UInt128(div(BigInt(x),BigInt(y)))
+        catch e
+            isa(e, InexactError) && throw(DivideError())
+            rethrow()
+        end
+    end
 
-    rem(x::Int128, y::Int128) = Int128(rem(BigInt(x),BigInt(y)))
-    rem(x::UInt128, y::UInt128) = UInt128(rem(BigInt(x),BigInt(y)))
+    function rem(x::Int128, y::Int128)
+        try
+            Int128(rem(BigInt(x),BigInt(y)))
+        catch e
+            isa(e, InexactError) && throw(DivideError())
+            rethrow()
+        end
+    end
+    function rem(x::UInt128, y::UInt128)
+        try
+            UInt128(rem(BigInt(x),BigInt(y)))
+        catch e
+            isa(e, InexactError) && throw(DivideError())
+            rethrow()
+        end
+    end
 
-    mod(x::Int128, y::Int128) = Int128(mod(BigInt(x),BigInt(y)))
+    function mod(x::Int128, y::Int128)
+        try
+            Int128(mod(BigInt(x),BigInt(y)))
+        catch e
+            isa(e, InexactError) && throw(DivideError())
+            rethrow()
+        end
+    end
 
     <<( x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
     <<( x::UInt128, y::Int) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int,y)))
@@ -429,207 +427,9 @@ if WORD_SIZE == 32
 else
     *{T<:Union{Int128,UInt128}}(x::T, y::T)  = box(T,mul_int(unbox(T,x),unbox(T,y)))
 
-    div(x::Int128,  y::Int128)  = box(Int128,checked_sdiv(unbox(Int128,x),unbox(Int128,y)))
-    div(x::UInt128, y::UInt128) = box(UInt128,checked_udiv(unbox(UInt128,x),unbox(UInt128,y)))
+    div(x::Int128,  y::Int128)  = box(Int128,checked_sdiv_int(unbox(Int128,x),unbox(Int128,y)))
+    div(x::UInt128, y::UInt128) = box(UInt128,checked_udiv_int(unbox(UInt128,x),unbox(UInt128,y)))
 
-    rem(x::Int128,  y::Int128)  = box(Int128,checked_srem(unbox(Int128,x),unbox(Int128,y)))
-    rem(x::UInt128, y::UInt128) = box(UInt128,checked_urem(unbox(UInt128,x),unbox(UInt128,y)))
-end
-
-## checked +, -, *, div, rem, fld, mod
-
-"""
-    Base.checked_add(x, y)
-
-Calculates `x+y`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_add end
-
-"""
-    Base.checked_sub(x, y)
-
-Calculates `x-y`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_sub end
-
-"""
-    Base.checked_mul(x, y)
-
-Calculates `x*y`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_mul end
-
-"""
-    Base.checked_div(x, y)
-
-Calculates `div(x,y)`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_div end
-
-"""
-    Base.checked_rem(x, y)
-
-Calculates `x%y`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_rem end
-
-"""
-    Base.checked_fld(x, y)
-
-Calculates `fld(x,y)`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_fld end
-
-"""
-    Base.checked_mod(x, y)
-
-Calculates `mod(x,y)`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_mod end
-
-"""
-    Base.checked_cld(x, y)
-
-Calculates `cld(x,y)`, checking for overflow errors where applicable.
-
-The overflow protection may impose a perceptible performance penalty.
-"""
-function checked_cld end
-
-# requires int arithmetic defined, for the loops to work
-
-# Int128 ## FIXME: #4905
-checked_add{T<:UnionS64Types}(x::T, y::T) = box(T,checked_sadd(unbox(T,x),unbox(T,y)))
-checked_sub{T<:UnionS64Types}(x::T, y::T) = box(T,checked_ssub(unbox(T,x),unbox(T,y)))
-checked_mul{T<:Union{Int16,Int32}}(x::T, y::T) = box(T,checked_smul(unbox(T,x),unbox(T,y)))
-
-# UInt128 ## FIXME: #4905
-checked_add{T<:UnionU64Types}(x::T, y::T) = box(T,checked_uadd(unbox(T,x),unbox(T,y)))
-checked_sub{T<:UnionU64Types}(x::T, y::T) = box(T,checked_usub(unbox(T,x),unbox(T,y)))
-checked_mul{T<:Union{UInt16,UInt32}}(x::T, y::T) = box(T,checked_umul(unbox(T,x),unbox(T,y)))
-
-# checked mul is broken for 8-bit types (LLVM bug?) ## FIXME: #4905
-
-for T in (Int8,UInt8)
-    @eval function checked_mul(x::$T, y::$T)
-        xy = widemul(x,y)
-        (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
-        return xy % $T
-    end
-end
-
-if WORD_SIZE == 32
-    for T in (Int64,UInt64)
-        @eval function checked_mul(x::$T, y::$T)
-            xy = Int128(x)*Int128(y)
-            (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
-            return xy % $T
-        end
-    end
-else
-    checked_mul(x::Int64,  y::Int64)  = box(Int64, checked_smul(unbox(Int64,x), unbox(Int64,y)))
-    checked_mul(x::UInt64, y::UInt64) = box(UInt64,checked_umul(unbox(UInt64,x),unbox(UInt64,y)))
-end
-
-# checked ops are broken for 128-bit types (LLVM bug) ## FIXME: #4905
-
-function checked_add(x::Int128, y::Int128)
-    # # x + y > typemax(Int128)
-    # y >= 0 && x > typemax(Int128) - y && throw(OverflowError())
-    # # x + y < typemin(Int128)
-    # y < 0 && x < typemin(Int128) - y && throw(OverflowError())
-    # x + y
-    r = x + y
-    # x and y have the same sign, and the result has a different sign
-    (x$y >= 0) & (x$r < 0) && throw(OverflowError())
-    r
-end
-
-function checked_sub(x::Int128, y::Int128)
-    # # x - y > typemax(Int128)
-    # y < 0 && x > typemax(Int128) + y && throw(OverflowError())
-    # # x - y < typemin(Int128)
-    # y >= 0 && x < typemin(Int128) + y && throw(OverflowError())
-    # x - y
-    r = x - y
-    # x and y have different signs, and the result has a different sign than x
-    (x$y < 0) & (x$r < 0) && throw(OverflowError())
-    r
-end
-
-function checked_mul(x::Int128, y::Int128)
-    if y > 0
-        # x * y > typemax(Int128)
-        # x * y < typemin(Int128)
-        x > fld(typemax(Int128), y) && throw(OverflowError())
-        x < cld(typemin(Int128), y) && throw(OverflowError())
-    elseif y < 0
-        # x * y > typemax(Int128)
-        # x * y < typemin(Int128)
-        x < cld(typemax(Int128), y) && throw(OverflowError())
-        # y == -1 can overflow fld
-        y != -1 && x > fld(typemin(Int128), y) && throw(OverflowError())
-    end
-    x * y
-end
-
-function checked_add(x::UInt128, y::UInt128)
-    # x + y > typemax(UInt128)
-    # x > typemax(UInt128) - y && throw(OverflowError())
-    # Note: ~x = -x-1
-    x > ~y && throw(OverflowError())
-    x + y
-end
-
-function checked_sub(x::UInt128, y::UInt128)
-    # x - y < 0
-    x < y && throw(OverflowError())
-    x - y
-end
-
-function checked_mul(x::UInt128, y::UInt128)
-    # x * y > typemax(UInt128)
-    y > 0 && x > fld(typemax(UInt128), y) && throw(OverflowError())
-    x * y
-end
-
-# These implementations check by default
-checked_div{T<:UnionIntTypes}(x::T, y::T) = div(x,y)
-checked_rem{T<:UnionIntTypes}(x::T, y::T) = rem(x,y)
-checked_fld{T<:UnionIntTypes}(x::T, y::T) = fld(x,y)
-checked_mod{T<:UnionIntTypes}(x::T, y::T) = mod(x,y)
-checked_cld{T<:UnionIntTypes}(x::T, y::T) = cld(x,y)
-
-# Handle multiple arguments
-checked_add(x) = x
-checked_mul(x) = x
-for f in (:checked_add, :checked_mul)
-    @eval begin
-        ($f){T}(x1::T, x2::T, x3::T) =
-            ($f)(($f)(x1, x2), x3)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T) =
-            ($f)(($f)(x1, x2), x3, x4)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T) =
-            ($f)(($f)(x1, x2), x3, x4, x5)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T) =
-            ($f)(($f)(x1, x2), x3, x4, x5, x6)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
-            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7)
-        ($f){T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
-            ($f)(($f)(x1, x2), x3, x4, x5, x6, x7, x8)
-    end
+    rem(x::Int128,  y::Int128)  = box(Int128,checked_srem_int(unbox(Int128,x),unbox(Int128,y)))
+    rem(x::UInt128, y::UInt128) = box(UInt128,checked_urem_int(unbox(UInt128,x),unbox(UInt128,y)))
 end
