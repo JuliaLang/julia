@@ -838,27 +838,27 @@ JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 }
 
 // checked arithmetic
-#define check_sadd(a,b) \
+#define check_sadd_int(a,b) \
         /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
          * where (a - a) == (typeof(a))0 */ \
         (b > 0) ? (a > ~((a - a + 1) << (8 * sizeof(a) - 1)) - b) : (a < ((a - a + 1) << (8 * sizeof(a) - 1)) - b)
-checked_iintrinsic_fast(LLVMAdd_sov, check_sadd, add, checked_sadd,  )
-#define check_uadd(a,b) \
+checked_iintrinsic_fast(LLVMAdd_sov, check_sadd_int, add, checked_sadd_int,  )
+#define check_uadd_int(a,b) \
         /* this test checks for (a + b) > typemax(a) ==> overflow */ \
         a >= -b
-checked_iintrinsic_fast(LLVMAdd_uov, check_uadd, add, checked_uadd, u)
-#define check_ssub(a,b) check_sadd(a,-b)
-checked_iintrinsic_fast(LLVMSub_sov, check_ssub, sub, checked_ssub,  )
-#define check_usub(a,b) \
+checked_iintrinsic_fast(LLVMAdd_uov, check_uadd_int, add, checked_uadd_int, u)
+#define check_ssub_int(a,b) check_sadd_int(a,-b)
+checked_iintrinsic_fast(LLVMSub_sov, check_ssub_int, sub, checked_ssub_int,  )
+#define check_usub_int(a,b) \
         /* this test checks for (a - b) < 0 ==> overflow */ \
         a < b
-checked_iintrinsic_fast(LLVMSub_uov, check_usub, sub, checked_usub, u)
-checked_iintrinsic_slow(LLVMMul_sov, checked_smul,  )
-checked_iintrinsic_slow(LLVMMul_uov, checked_umul, u)
-checked_iintrinsic_slow(LLVMDiv_sov, checked_sdiv,  )
-checked_iintrinsic_slow(LLVMDiv_uov, checked_udiv, u)
-checked_iintrinsic_slow(LLVMRem_sov, checked_srem,  )
-checked_iintrinsic_slow(LLVMRem_uov, checked_urem, u)
+checked_iintrinsic_fast(LLVMSub_uov, check_usub_int, sub, checked_usub_int, u)
+checked_iintrinsic_slow(LLVMMul_sov, checked_smul_int,  )
+checked_iintrinsic_slow(LLVMMul_uov, checked_umul_int, u)
+checked_iintrinsic_slow(LLVMDiv_sov, checked_sdiv_int,  )
+checked_iintrinsic_slow(LLVMDiv_uov, checked_udiv_int, u)
+checked_iintrinsic_slow(LLVMRem_sov, checked_srem_int,  )
+checked_iintrinsic_slow(LLVMRem_uov, checked_urem_int, u)
 
 JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
 {

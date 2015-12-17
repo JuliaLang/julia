@@ -40,6 +40,8 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+checked_add{T<:Integer}(x::T, y::T) = x+y
+checked_sub{T<:Integer}(x::T, y::T) = x-y
 
 # core array operations
 include("abstractarray.jl")
