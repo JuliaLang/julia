@@ -129,17 +129,6 @@ void *jl_install_thread_signal_handler(void);
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
-extern jl_datatype_t *jl_box_type;
-extern jl_value_t *jl_box_any_type;
-extern jl_typename_t *jl_box_typename;
-
-STATIC_INLINE int jl_is_box(void *v)
-{
-    jl_value_t *t = jl_typeof(v);
-    return (jl_is_datatype(t) &&
-            ((jl_datatype_t*)(t))->name == jl_box_typename);
-}
-
 ssize_t jl_max_jlgensym_in(jl_value_t *v);
 
 extern uv_loop_t *jl_io_loop;

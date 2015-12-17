@@ -774,7 +774,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY)
     if is(argtype,Bottom)
         return Bottom
     end
-    ft = isa(f,Type) ? Type{f} : typeof(f)
+    ft = type_typeof(f)
     types = Tuple{ft, types.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     meth = ccall(:jl_gf_invoke_lookup, Any, (Any,), types)
@@ -904,7 +904,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
     end
     meth = meth[1]::SimpleVector
     linfo = try
-        func_for_method(meth[3], atype, meth[2])
+        func_for_method(meth[3], meth[1], meth[2])
     catch
         NF
     end
@@ -2224,21 +2224,20 @@ function ast_localvars(ast)
     locals
 end
 
-# inline functions whose bodies "inline_worthy"
+# inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
-# functions with closure environments or varargs are also excluded.
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
-function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_ast::Expr)
+# `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
+function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_ast::Expr)
     local linfo,
         metharg::Type,
         methsp::SimpleVector,
         atypes = atype.parameters,
         argexprs = copy(e.args),
-        incompletematch = false,
-        isgf = true
+        incompletematch = false
 
-    if is(f, typeassert) && length(atypes)==2
+    if (is(f, typeassert) || is(ft, typeof(typeassert))) && length(atypes)==2
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[2]) && isleaftype(atypes[2]) &&
             atypes[1] <: atypes[2].parameters[1]
@@ -2263,26 +2262,26 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             return (e.typ.parameters[1],())
         end
     end
-    if isa(f,IntrinsicFunction)
+    if isa(f,IntrinsicFunction) || ft === IntrinsicFunction
         return NF
     end
 
     local methfunc
-    meth = _methods(f, atype, 1)
+    meth = _methods_by_ftype(ft, atype, 1)
     if meth === false || length(meth) != 1
         return NF
     end
     meth = meth[1]::SimpleVector
-    fatype = Tuple{abstract_eval_constant(f), atypes...}
+    metharg = meth[1]
+    fatype = Tuple{ft, atypes...}
     linfo = try
-        func_for_method(meth[3],fatype,meth[2])
+        func_for_method(meth[3],metharg,meth[2])
     catch
         NF
     end
     if linfo === NF
         return NF
     end
-    metharg = meth[1]
     methsp = meth[2]
     methfunc = meth[3].func
     methsig = meth[3].sig
@@ -2357,13 +2356,13 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
     if incompletematch
         cost *= 4
     end
-    if isgf && (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :done) ||
+    if (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :done) ||
        istopfunction(topmod, f, :unsafe_convert) || istopfunction(topmod, f, :cconvert))
         cost ÷= 4
     end
     inline_op = (istopfunction(topmod, f, :+) || istopfunction(topmod, f, :*) ||
         istopfunction(topmod, f, :min) || istopfunction(topmod, f, :max)) &&
-        (4 <= length(argexprs) <= 10) && methsig == Tuple{Any,Any,Any,Vararg{Any}}
+        (4 <= length(argexprs) <= 10) && methsig == Tuple{ft,Any,Any,Any,Vararg{Any}}
     if !inline_op && !inline_worthy(body, cost)
         if incompletematch
             # inline a typeassert-based call-site, rather than a
@@ -2444,15 +2443,12 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
             isva = true
         end
     elseif na != length(argexprs)
-        if isgf
-            # we have a method match only because an earlier
-            # inference step shortened our call args list, even
-            # though we have too many arguments to actually
-            # call this function
-            @assert isvarargtype(atypes[na])
-            return NF
-        end
-        return (Expr(:call, TopNode(:error), "wrong number of arguments"), [])
+        # we have a method match only because an earlier
+        # inference step shortened our call args list, even
+        # though we have too many arguments to actually
+        # call this function
+        @assert isvarargtype(atypes[na])
+        return NF
     end
 
     @assert na == length(argexprs)
@@ -2880,9 +2876,15 @@ function inlining_pass(e::Expr, sv, ast)
         end
     end
 
-    f1 = f = isconstantfunc(arg1, sv)
+    f = isconstantfunc(arg1, sv)
     if !is(f,false)
-        f = _ieval(f,sv)
+        f = _ieval(f,sv); ft = abstract_eval_constant(f)
+    else
+        f = nothing
+        ft = exprtype(arg1, sv)
+        if !( isleaftype(ft) || ft<:Type )
+            return (e, stmts)
+        end
     end
 
     if isdefined(Main, :Base) &&
@@ -2895,10 +2897,10 @@ function inlining_pass(e::Expr, sv, ast)
                                        exprtype(a1,sv) <: basenumtype)
                 if e.args[3]==2
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
-                    f = Main.Base.(:*)
+                    f = Main.Base.(:*); ft = abstract_eval_constant(f)
                 elseif e.args[3]==3
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1, a1]
-                    f = Main.Base.(:*)
+                    f = Main.Base.(:*); ft = abstract_eval_constant(f)
                 end
             end
         end
@@ -2913,7 +2915,7 @@ function inlining_pass(e::Expr, sv, ast)
         if length(atype.parameters) > MAX_TUPLETYPE_LEN
             atype = limit_tuple_type(atype)
         end
-        res = inlineable(f, e, atype, sv, ast)
+        res = inlineable(f, ft, e, atype, sv, ast)
         if isa(res,Tuple)
             if isa(res[2],Array) && !isempty(res[2])
                 append!(stmts,res[2])
@@ -2926,7 +2928,7 @@ function inlining_pass(e::Expr, sv, ast)
             # to simplify long vararg lists as in multi-arg +
             if isa(res,Expr) && is_known_call(res, _apply, sv)
                 e = res::Expr
-                f = _apply
+                f = _apply; ft = abstract_eval_constant(f)
             else
                 return (res,stmts)
             end
@@ -2956,10 +2958,15 @@ function inlining_pass(e::Expr, sv, ast)
 
             # now try to inline the simplified call
             f = isconstantfunc(e.args[1], sv)
-            if f===false
-                return (e,stmts)
+            if !is(f,false)
+                f = _ieval(f); ft = abstract_eval_constant(f)
+            else
+                f = nothing
+                ft = exprtype(e.args[1], sv)
+                if !( isleaftype(ft) || ft<:Type )
+                    return (e,stmts)
+                end
             end
-            f = _ieval(f,sv)
         else
             return (e,stmts)
         end

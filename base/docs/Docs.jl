@@ -176,7 +176,7 @@ function doc(b::Binding)
 
         No documentation found.
 
-        `$(qualified_name(b))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+        `$(qualified_name(b))` is a `Function`.
         """), functionsummary(v))
     elseif isa(v,DataType)
         d = catdoc(Markdown.parse("""
