@@ -2748,50 +2748,6 @@ So far only the second case can actually occur.
 
 (define (analyze-variables e) (analyze-vars e '() '() '()))
 
-#|
- * #14009 type growth issue (now worse with specialized closures)
- * fix `localize` and get all tests passing
- - don't specialize slots where a function is passed but not called
-
- - filter method tables and caches before `dump` to remove references to
-   replaced modules --- those where eval(m->parent, m->name) != m
-
- 1. Figure out how to pass in static parameters in --compile=no mode, fix --compile=all.
-
-*3. Figure out closure serialization. maybe only fully serialize types from
- Main.__hidden__
- idea: record the max module->counter after lowering is complete. anything higher than
- this might be nondeterministic, and needs to be serialized in full.
-
- 4. Staged functions containing closures are probably not lowered correctly
- (jl_instantiate_staged).
-
-
- 6. reduce amount of specialization on closure types somehow
-
-*6.1. cache_arg1 should actually look at arg 2 now for most functions
-
-*8. improve typing of closure fields; remove Box for single-assigned vars;
-
- 8.1. specialized Box{T} for mutable bindings with declared types. remove redundant Boxes.
-
-*8.2. inference for known-type non-constant functions
-
- 9. propagate static parameters into closure types, so e.g. closure method
- signatures can depend on them.
-
-
- 10. nice deprecation for `call` overloading
-
- 13. better handle local method definitions inside `if` blocks, etc.
-
- 14. don't allocate MethodTable for abstract types
-
- 15. decide what if anything to do about method overwrite warnings in core constructors
-
- 16. is there a more efficient way to have huge #s of types with only default constructors?
-|#
-
 ;; template for generating a closure type with parameters
 (define (type-for-closure-parameterized name P fields types super)
   (let ((n (length P)))
