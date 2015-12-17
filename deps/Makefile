@@ -671,6 +671,11 @@ $(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
 else ifeq ($(LLVM_VER),3.6.0)
 $(eval $(call LLVM_PATCH,zerosign-llvm-3.6.0))
 $(eval $(call LLVM_PATCH,win64-allocas-llvm-3.6.0))
+else ifeq ($(LLVM_VER),3.7.0)
+$(eval $(call LLVM_PATCH,llvm-3.7.0))
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
+else ifeq ($(LLVM_VER),3.7.1)
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
 endif # LLVM_VER
 
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
