@@ -496,7 +496,7 @@ end
 function summarysize(obj::TypeName, seen, excl)
     key = pointer_from_objref(obj)
     haskey(seen, key) ? (return 0) : (seen[key] = true)
-    return Core.sizeof(obj) + summarysize(obj.mt, seen, excl)
+    return Core.sizeof(obj) + (isdefined(obj,:mt) ? summarysize(obj.mt, seen, excl) : 0)
 end
 
 summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)

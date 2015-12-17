@@ -71,10 +71,6 @@
 #    module::Module
 #end
 
-#type Box
-#    contents::Any
-#end
-
 #abstract Ref{T}
 #bitstype {32|64} Ptr{T} <: Ref{T}
 
@@ -282,6 +278,12 @@ function kwftype(t::ANY)
     typeof(mt.kwsorter)
 end
 
+type Box
+    contents::Any
+    Box(x::ANY) = new(x)
+    Box() = new()
+end
+
 # constructors for built-in types
 
 type WeakRef
@@ -316,8 +318,6 @@ _new(:TopNode, :Symbol)
 _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
-_new(:Box, :ANY)
-eval(:((::Type{Box})() = $(Expr(:new, :Box))))
 eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 

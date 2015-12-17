@@ -1294,7 +1294,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         jl_printf(JL_STDERR,
                   "WARNING: Returned code may not match what actually runs.\n");
         if (linfo->unspecialized) {
-            linfo = linfo->unspecialized->linfo;
+            linfo = linfo->unspecialized;
         }
         else {
             // linfo can't be compiled directly,
@@ -2995,8 +2995,8 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
               }*/
             jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)aty, ctx->cyclectx);
             if (li != NULL) {
-                assert(li->functionObject != NULL);
-                theFptr = (Value*)li->functionObject;
+                assert(li->functionObjects.functionObject != NULL);
+                theFptr = (Value*)li->functionObjects.functionObject;
                 jl_cgval_t fval;
                 if (f != NULL) {
                     // TODO jb/functions: avoid making too many roots here

@@ -354,7 +354,11 @@ function serialize(s::SerializationState, t::TypeName)
     serialize(s, t.primary.abstract)
     serialize(s, t.primary.mutable)
     serialize(s, t.primary.ninitialized)
-    serialize(s, t.mt)
+    if isdefined(t, :mt)
+        serialize(s, t.mt)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
 end
 
 # decide whether to send all data for a type (instead of just its name)
@@ -630,8 +634,10 @@ function deserialize(s::SerializationState, ::Type{TypeName})
     tn.primary = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                        tn, super, parameters, names, types,
                        abstr, mutable, ninitialized)
-    mt = deserialize(s)
-    tn.mt = mt
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        tn.mt = handle_deserialize(s, tag)
+    end
 
     return tn
 end
