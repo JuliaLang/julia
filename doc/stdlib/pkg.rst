@@ -13,7 +13,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.4`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
+   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.5`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
 .. function:: dir(names...) -> AbstractString
 
@@ -55,7 +55,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Clone a package directly from the git URL ``url``\ . The package does not need to be a registered in ``Pkg.dir("METADATA")``\ . The package repo is cloned by the name ``pkg`` if provided; if not provided, ``pkg`` is determined automatically from ``url``\ .
+   Clone a package directly from the git URL ``url``\ . The package does not need to be registered in ``Pkg.dir("METADATA")``\ . The package repo is cloned by the name ``pkg`` if provided; if not provided, ``pkg`` is determined automatically from ``url``\ .
 
 .. function:: clone(pkg)
 
@@ -103,13 +103,13 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Update package the metadata repo – kept in ``Pkg.dir("METADATA")`` – then update any fixed packages that can safely be pulled from their origin; then call ``Pkg.resolve()`` to determine a new optimal set of packages versions.
+   Update the metadata repo – kept in ``Pkg.dir("METADATA")`` – then update any fixed packages that can safely be pulled from their origin; then call ``Pkg.resolve()`` to determine a new optimal set of packages versions.
 
 .. function:: checkout(pkg, [branch="master"]; merge=true, pull=true)
 
    .. Docstring generated from Julia source
 
-   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``\ . Changes are merged (fast-forward only) if the keyword argument ``merge == true``\ , and the latest version is pulled from the upsream repo if ``pull == true``\ .
+   Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``\ . Defaults to checking out the "master" branch. To go back to using the newest compatible released version, use ``Pkg.free(pkg)``\ . Changes are merged (fast-forward only) if the keyword argument ``merge == true``\ , and the latest version is pulled from the upstream repo if ``pull == true``\ .
 
 .. function:: pin(pkg)
 
