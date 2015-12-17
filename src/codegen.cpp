@@ -935,6 +935,7 @@ static void jl_finalize_module(Module *m)
 }
 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
+#ifdef JL_DEBUG_BUILD
 static void writeRecoveryFile(llvm::Module *mod)
 {
     std::error_code err;
@@ -949,6 +950,7 @@ static void writeRecoveryFile(llvm::Module *mod)
     OS.flush();
     abort();
 }
+#endif
 
 static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
 {
