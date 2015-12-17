@@ -901,6 +901,9 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuplet
                                          linenum
                                          );
     jl_cellset(body->args, 0, linenode);
+    assert(jl_nparams(tt) == jl_array_len(oldargnames) ||
+           (jl_is_rest_arg(jl_cellref(oldargnames,jl_array_len(oldargnames)-1)) &&
+            (jl_nparams(tt) >= jl_array_len(oldargnames)-1)));
     jl_cellset(body->args, 1, jl_call_method_internal(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
     jl_cellset(ex->args, 1, jl_exprn(jl_symbol("scope-block"), 1));
     jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
@@ -1474,11 +1477,11 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
     return (jl_tupletype_t*)tt;
 }
 
-jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
+jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types, void *cyclectx)
 {
     jl_tupletype_t *tt = jl_argtype_with_function(f,types);
     JL_GC_PUSH1(&tt);
-    jl_lambda_info_t *res = jl_get_specialization1((jl_tupletype_t*)tt);
+    jl_lambda_info_t *res = jl_get_specialization1((jl_tupletype_t*)tt, cyclectx);
     JL_GC_POP();
     return res;
 }

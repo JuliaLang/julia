@@ -6262,13 +6262,6 @@ generic function and type signature to `STDOUT`.
 code_native
 
 """
-    isgeneric(f::Function) -> Bool
-
-Determine whether a `Function` is generic.
-"""
-isgeneric
-
-"""
     symdiff(s1,s2...)
 
 Construct the symmetric difference of elements in the passed in sets or arrays. Maintains
