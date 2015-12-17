@@ -127,7 +127,7 @@ Base.showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
-#   pt <= 0             .000########        len-pt+1
+#   pt <= 0             0.000########       len-pt+1
 #   len <= pt (dot)     ########000.        pt+1
 #   len <= pt (no dot)  ########000         pt
 # exponential:
@@ -149,8 +149,8 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
         write(io, dec(e))
         return
     elseif pt <= 0
-        # => .000########
-        write(io, '.')
+        # => 0.000########
+        write(io, "0.")
         while pt < 0
             write(io, '0')
             pt += 1

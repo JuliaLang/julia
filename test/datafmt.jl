@@ -93,6 +93,18 @@ let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     @test readcsv(io) == [x y]
 end
 
+let x = [0.1 0.3 0.5], io = IOBuffer()
+    writedlm(io, x, ", ")
+    seek(io, 0)
+    @test readall(io) == "0.1, 0.3, 0.5\n"
+end
+
+let x = [0.1 0.3 0.5], io = IOBuffer()
+    writedlm(io, x, ", ")
+    seek(io, 0)
+    @test readcsv(io) == [0.1 0.3 0.5]
+end
+
 let x = ["abc", "def\"ghi", "jk\nl"], y = [1, ",", "\"quoted\""], io = IOBuffer()
     writedlm(io, zip(x,y), ',')
     seek(io, 0)
