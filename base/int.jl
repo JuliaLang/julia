@@ -339,10 +339,10 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<127)
 @eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>1)))
 
-widen{T<:Union{Int8, Int16}}(::Type{T}) = Int
+widen{T<:Union{Int8, Int16}}(::Type{T}) = Int32
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen{T<:Union{UInt8, UInt16}}(::Type{T}) = UInt
+widen{T<:Union{UInt8, UInt16}}(::Type{T}) = UInt32
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 
