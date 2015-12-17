@@ -262,7 +262,9 @@ import .Sys.CPU_CORES
 include("quadgk.jl")
 importall .QuadGK
 
-# Fast math
+# Unchecked arithmetic and fast math
+include("nowrap.jl")
+importall .NoWrap
 include("fastmath.jl")
 importall .FastMath
 

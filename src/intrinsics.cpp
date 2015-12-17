@@ -1260,6 +1260,31 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                                prepare_global(jldiverr_var), ctx);
         return builder.CreateURem(JL_INT(x), den);
 
+    case unchecked_sneg_int:
+        return builder.CreateNSWNeg(JL_INT(x));
+    case unchecked_uneg_int:
+        return builder.CreateNUWNeg(JL_INT(x));
+    case unchecked_sadd_int:
+        return builder.CreateNSWAdd(JL_INT(x), JL_INT(y));
+    case unchecked_uadd_int:
+        return builder.CreateNUWAdd(JL_INT(x), JL_INT(y));
+    case unchecked_ssub_int:
+        return builder.CreateNSWSub(JL_INT(x), JL_INT(y));
+    case unchecked_usub_int:
+        return builder.CreateNUWSub(JL_INT(x), JL_INT(y));
+    case unchecked_smul_int:
+        return builder.CreateNSWMul(JL_INT(x), JL_INT(y));
+    case unchecked_umul_int:
+        return builder.CreateNUWMul(JL_INT(x), JL_INT(y));
+    case unchecked_sdiv_int:
+        return builder.CreateSDiv(JL_INT(x), JL_INT(y));
+    case unchecked_udiv_int:
+        return builder.CreateUDiv(JL_INT(x), JL_INT(y));
+    case unchecked_srem_int:
+        return builder.CreateSRem(JL_INT(x), JL_INT(y));
+    case unchecked_urem_int:
+        return builder.CreateURem(JL_INT(x), JL_INT(y));
+
     case check_top_bit:
         // raise InexactError if argument's top bit is set
         x = JL_INT(x);

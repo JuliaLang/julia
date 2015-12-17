@@ -860,6 +860,20 @@ checked_iintrinsic_slow(LLVMDiv_uov, checked_udiv_int, u)
 checked_iintrinsic_slow(LLVMRem_sov, checked_srem_int,  )
 checked_iintrinsic_slow(LLVMRem_uov, checked_urem_int, u)
 
+// unchecked arithmetic
+un_iintrinsic_fast(LLVMNeg, neg, unchecked_sneg_int,  )
+un_iintrinsic_fast(LLVMNeg, neg, unchecked_uneg_int, u)
+bi_iintrinsic_fast(LLVMAdd, add, unchecked_sadd_int,  )
+bi_iintrinsic_fast(LLVMAdd, add, unchecked_uadd_int, u)
+bi_iintrinsic_fast(LLVMSub, sub, unchecked_ssub_int,  )
+bi_iintrinsic_fast(LLVMSub, sub, unchecked_usub_int, u)
+bi_iintrinsic_fast(LLVMMul, mul, unchecked_smul_int,  )
+bi_iintrinsic_fast(LLVMMul, mul, unchecked_umul_int, u)
+bi_iintrinsic_fast(LLVMSDiv, div, unchecked_sdiv_int,  )
+bi_iintrinsic_fast(LLVMUDiv, div, unchecked_udiv_int, u)
+bi_iintrinsic_fast(LLVMSRem, rem, unchecked_srem_int,  )
+bi_iintrinsic_fast(LLVMURem, rem, unchecked_urem_int, u)
+
 JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *ty = jl_typeof(a);
