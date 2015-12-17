@@ -208,6 +208,18 @@ add_tfunc(typeof, 1, 1, typeof_tfunc)
 add_tfunc(typeassert, 2, 2,
     (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) : Any))
 
+function type_depth(t::ANY, d::Int=0)
+    if isa(t,Union)
+        t === Bottom && return d
+        return maximum(x->type_depth(x, d+1), t.types)
+    elseif isa(t,DataType)
+        P = t.parameters
+        isempty(P) && return d
+        return maximum(x->type_depth(x, d+1), P)
+    end
+    return d
+end
+
 function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     if isa(t,TypeVar) || isa(t,TypeConstructor)
         return t
@@ -1508,6 +1520,20 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
     global inference_stack, CYCLE_ID
+
+    f = inference_stack
+    while !isa(f,EmptyCallStack)
+        if is(f.ast,ast0)
+            # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
+            td = type_depth(atypes)
+            if td > MAX_TYPE_DEPTH && td > type_depth(f.types)
+                atypes = limit_type_depth(atypes, 0, true, [])
+                break
+            end
+        end
+        f = f.prev
+    end
+
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
