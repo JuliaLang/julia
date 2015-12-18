@@ -480,6 +480,8 @@ static int frame_info_from_ip(char **func_name,
                               char **inlinedat_file, size_t *inlinedat_line,
                               size_t ip, int skipC, int skipInline)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     static const char *name_unknown = "???";
     int fromC = 0;
 
@@ -757,6 +759,8 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 //for looking up functions from gdb:
 JL_DLLEXPORT void gdblookup(ptrint_t ip)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     char *func_name;
     size_t line_num;
     char *file_name;

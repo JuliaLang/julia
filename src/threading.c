@@ -134,6 +134,8 @@ JL_DLLEXPORT int jl_n_threads;     // # threads we're actually using
 jl_thread_task_state_t *jl_all_task_states;
 
 // return calling thread's ID
+// Also update the suspended_threads list in signals-mach when changing the
+// type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
 struct _jl_thread_heap_t *jl_mk_thread_heap(void);

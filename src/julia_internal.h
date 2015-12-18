@@ -285,9 +285,6 @@ JL_DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 JL_DLLEXPORT void jl_raise_debugger(void);
-#ifdef _OS_DARWIN_
-JL_DLLEXPORT void attach_exception_port(void);
-#endif
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
@@ -438,6 +435,11 @@ int jl_array_store_unboxed(jl_value_t *el_type);
 int jl_array_isdefined(jl_value_t **args, int nargs);
 
 JL_DEFINE_MUTEX_EXT(codegen)
+
+#if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
+void jl_mach_gc_begin(void);
+void jl_mach_gc_end(void);
+#endif
 
 #if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
