@@ -409,27 +409,27 @@ for elty in (Float64, Complex{Float64})
         @test F1 == F2
     end
 
-    ### update!
+    ### cholfact!/ldltfact!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(F.p).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
     F = cholfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)

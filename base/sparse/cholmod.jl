@@ -6,8 +6,8 @@ import Base: (*), convert, copy, eltype, get, getindex, show, showarray, size,
              linearindexing, LinearFast, LinearSlow, ctranspose
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 cholfact, det, diag, ishermitian, isposdef,
-                 issym, ldltfact, logdet
+                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
+                 issym, ldltfact, ldltfact!, logdet
 
 importall ..SparseArrays
 
@@ -1194,8 +1194,9 @@ Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
 
 ## Factorization methods
 
+## Compute that symbolic factorization only
 function fact_{Tv<:VTypes}(A::Sparse{Tv}, cm::Array{UInt8};
-    shift::Real=0.0, perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[],
+    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[],
     postorder::Bool=true, userperm_only::Bool=true)
 
     sA = unsafe_load(get(A.p))
@@ -1214,85 +1215,160 @@ function fact_{Tv<:VTypes}(A::Sparse{Tv}, cm::Array{UInt8};
         F = analyze_p(A, SuiteSparse_long[p-1 for p in perm], cm)
     end
 
-    factorize_p!(A, shift, F, cm)
     return F
 end
 
-function cholfact(A::Sparse; kws...)
-    cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
-    set_print_level(cm, 0) # no printing from CHOLMOD by default
+function cholfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
+    cm = common()
 
     # Makes it an LLt
     unsafe_store!(common_final_ll, 1)
 
-    F = fact_(A, cm; kws...)
+    # Compute the numerical factorization
+    factorize_p!(A, shift, F, cm)
+
     s = unsafe_load(get(F.p))
     s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
 """
-    ldltfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}; shift=0, perm=Int[]) -> CHOLMOD.Factor
+    cholfact!(F::Factor, A::Union{SparseMatrixCSC,
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+    shift = 0.0) -> CHOLMOD.Factor
 
-Compute the `LDLt` factorization of a sparse symmetric or Hermitian matrix. A
-fill-reducing permutation is used. `F = ldltfact(A)` is most frequently used to
-solve systems of equations `A*x = b` with `F\\b`. The returned factorization
-object `F` also supports the methods `diag`, `det`, and `logdet`. You can
-extract individual factors from `F` using `F[:L]`. However, since pivoting is
-on by default, the factorization is internally represented as `A == P'*L*D*L'*P`
-with a permutation matrix `P`; using just `L` without accounting for `P` will
-give incorrect answers. To include the effects of permutation, it's typically
-preferable to extact "combined" factors like `PtL = F[:PtL]` (the equivalent of
-`P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`). The complete list of
-supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
+Compute the LDLt factorization of `A`, reusing the symbolic factorization `F`.
+"""
+cholfact!(F::Factor, A::Union{SparseMatrixCSC,
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+    shift = 0.0) =
+    cholfact!(F, Sparse(A); shift = shift)
 
-Setting optional `shift` keyword argument computes the factorization of
-`A+shift*I` instead of `A`. If the `perm` argument is nonempty, it should be a
-permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's
-default AMD ordering).
+function cholfact(A::Sparse; shift::Real=0.0,
+    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
 
-The function calls the C library CHOLMOD and many other functions from the
-library are wrapped but not exported.
+    cm = defaults(common())
+    set_print_level(cm, 0)
+
+    # Compute the symbolic factorization
+    F = fact_(A, cm; perm = perm)
+
+    # Compute the numerical factorization
+    cholfact!(F, A; shift = shift)
+
+    s = unsafe_load(get(F.p))
+    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
+    return F
+end
 
 """
-ldltfact(A::SparseMatrixCSC; shift=0, perm=Int[])
+    cholfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,
+        SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},
+        SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
-function ldltfact(A::Sparse; kws...)
-    cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
-    set_print_level(cm, 0) # no printing from CHOLMOD by default
+Compute the Cholesky factorization of a sparse positive definite matrix `A`.
+A fill-reducing permutation is used.
+`F = cholfact(A)` is most frequently used to solve systems of equations with `F\b`,
+but also the methods `diag`, `det`, `logdet` are defined for `F`.
+You can also extract individual factors from `F`, using `F[:L]`.
+However, since pivoting is on by default,
+the factorization is internally represented as `A == P'*L*L'*P` with a permutation matrix `P`;
+using just `L` without accounting for `P` will give incorrect answers.
+To include the effects of permutation,
+it's typically preferable to extact "combined" factors like `PtL = F[:PtL]` (the equivalent of `P'*L`)
+and `LtP = F[:UP]` (the equivalent of `L'*P`).
+
+Setting optional `shift` keyword argument computes the factorization of `A+shift*I` instead of `A`.
+If the `perm` argument is nonempty,
+it should be a permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+
+The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+"""
+cholfact(A::Union{SparseMatrixCSC,
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+    kws...) = cholfact(Sparse(A); kws...)
+
+
+function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
+    cm = common()
 
     # Makes it an LDLt
     unsafe_store!(common_final_ll, 0)
 
+    # Compute the numerical factorization
+    factorize_p!(A, shift, F, cm)
+
     # Really make sure it's an LDLt by avoiding supernodal factorisation
     unsafe_store!(common_supernodal, 0)
 
-    F = fact_(A, cm; kws...)
     s = unsafe_load(get(F.p))
     s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
     return F
 end
 
+"""
+    ldltfact!(F::Factor, A::Union{SparseMatrixCSC,
+        Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+        Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+        shift = 0.0) -> CHOLMOD.Factor
 
-for f in (:cholfact, :ldltfact)
-    @eval begin
-        $f(A::SparseMatrixCSC; kws...) = $f(Sparse(A); kws...)
-        $f(A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}; kws...) = $f(Sparse(A); kws...)
-        $f(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}; kws...) = $f(Sparse(A); kws...)
-    end
-end
+Compute the LDLt factorization of `A`, reusing the symbolic factorization `F`.
+"""
+ldltfact!(F::Factor, A::Union{SparseMatrixCSC,
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+    shift = 0.0) =
+    ldltfact!(F, Sparse(A), shift = shift)
 
-function update!{Tv<:VTypes}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
-    cm = defaults(common()) # setting the common struct to default values. Should only be done when creating new factorization.
-    set_print_level(cm, 0) # no printing from CHOLMOD by default
+function ldltfact(A::Sparse; shift::Real=0.0,
+    perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[])
+
+    cm = defaults(common())
+    set_print_level(cm, 0)
+
+    # Compute the symbolic factorization
+    F = fact_(A, cm; perm = perm)
+
+    # Compute the numerical factorization
+    ldltfact!(F, A; shift = shift)
 
     s = unsafe_load(get(F.p))
-    if s.is_ll!=0
-        unsafe_store!(common_final_ll, 1) # Makes it an LLt
-    end
-    factorize_p!(A, shift, F, cm)
+    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+    return F
 end
-update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}; kws...) = update!(F, Sparse(A); kws...)
+
+"""
+    ldltfact(::Union{SparseMatrixCSC,
+        Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},
+        Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+        shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+
+Compute the `LDLt` factorization of a sparse symmetric or Hermitian matrix.
+A fill-reducing permutation is used.
+`F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\b`.
+The returned factorization object `F` also supports the methods `diag`,
+`det`, and `logdet`. You can extract individual factors from `F` using `F[:L]`.
+However, since pivoting is on by default,
+the factorization is internally represented as `A == P'*L*D*L'*P` with a permutation matrix `P`;
+using just `L` without accounting for `P` will give incorrect answers.
+To include the effects of permutation,
+it's typically preferable to extact "combined" factors like `PtL = F[:PtL]` (the equivalent of
+`P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
+The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
+
+Setting optional `shift` keyword argument computes the factorization of `A+shift*I` instead of `A`.
+If the `perm` argument is nonempty,
+it should be a permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+
+The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+"""
+ldltfact(A::Union{SparseMatrixCSC,
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+    Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+    kws...) = ldltfact(Sparse(A); kws...)
 
 ## Solvers
 
