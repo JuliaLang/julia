@@ -1113,7 +1113,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
             end
         end
     elseif is(e.head,:method)
-        t = Function
+        t = (length(e.args) == 1) ? Any : Void
     elseif is(e.head,:copyast)
         t = abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:inert)
@@ -1222,7 +1222,7 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
         abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:method)
         fname = e.args[1]
-        if isa(fname,Symbol) && length(e.args)==1
+        if isa(fname,Symbol)
             return StateUpdate(fname, VarState(Any,false), vtypes)
         end
     end

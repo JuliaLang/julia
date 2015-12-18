@@ -22,6 +22,7 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
+# TODO jb/functions make this a deprecation
 const call = (f,args...)->f(args...)
 
 # The specialization for 1 arg is important when running with --inline=no, see #11158
