@@ -412,6 +412,11 @@ void jl_gc_signal_init(void)
 
 static void jl_gc_signal_begin(void)
 {
+#ifdef __APPLE__
+    // This needs to be after setting `jl_gc_running` so that only one thread
+    // can talk to the signal handler
+    jl_mach_gc_begin();
+#endif
 #ifdef _OS_WINDOWS_
     DWORD old_prot;
     VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
@@ -432,6 +437,9 @@ static void jl_gc_signal_end(void)
                    PAGE_READONLY, &old_prot);
 #else
     mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_READ);
+#endif
+#ifdef __APPLE__
+    jl_mach_gc_end();
 #endif
 }
 #else
