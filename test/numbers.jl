@@ -1593,6 +1593,22 @@ end
 @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
 @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
+# Test exceptions and special cases
+for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
+    @test_throws DivideError div(T(1), T(0))
+    @test_throws DivideError fld(T(1), T(0))
+    @test_throws DivideError cld(T(1), T(0))
+    @test_throws DivideError rem(T(1), T(0))
+    @test_throws DivideError mod(T(1), T(0))
+end
+for T in (Int8,Int16,Int32,Int64,Int128)
+    @test_throws DivideError div(typemin(T), T(-1))
+    @test_throws DivideError fld(typemin(T), T(-1))
+    @test_throws DivideError cld(typemin(T), T(-1))
+    @test rem(typemin(T), T(-1)) === T(0)
+    @test mod(typemin(T), T(-1)) === T(0)
+end
+
 # Test return types
 for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
     z, o = T(0), T(1)
