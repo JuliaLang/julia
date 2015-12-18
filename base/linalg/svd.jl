@@ -77,7 +77,12 @@ end
 GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
+    # xggsvd3 replaced xggsvd in LAPACK 3.6.0
+    if LAPACK.VERSION[] < v"3.6.0"
+        U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
+    else
+        U, V, Q, a, b, k, l, R = LAPACK.ggsvd3!('U', 'V', 'Q', A, B)
+    end
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
@@ -130,7 +135,12 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
+    # xggsvd3 replaced xggsvd in LAPACK 3.6.0
+    if LAPACK.VERSION[] < v"3.6.0"
+        _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
+    else
+        _, _, _, a, b, k, l, _ = LAPACK.ggsvd3!('N', 'N', 'N', A, B)
+    end
     a[1:k + l] ./ b[1:k + l]
 end
 svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A),copy(B))
