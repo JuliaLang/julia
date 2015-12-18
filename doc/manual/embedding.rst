@@ -29,7 +29,7 @@ We start with a simple C program that initializes Julia and calls some Julia cod
            julia time to cleanup pending write requests
            and run all finalizers
       */
-      jl_atexit_hook();
+      jl_atexit_hook(0);
       return 0;
   }
 
