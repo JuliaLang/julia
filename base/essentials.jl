@@ -187,21 +187,23 @@ macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
 
-call{T}(::Type{Array{T}}, d::Tuple{Int}) =
+call{T}(::Type{Array{T,1}}, d::Tuple{Int}) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, d[1])
-call{T}(::Type{Array{T}}, d::Tuple{Int, Int}) =
+call{T}(::Type{Array{T,2}}, d::Tuple{Int, Int}) =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, d[1], d[2])
-call{T}(::Type{Array{T}}, d::Tuple{Int, Int, Int}) =
+call{T}(::Type{Array{T,3}}, d::Tuple{Int, Int, Int}) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, d[1], d[2], d[3])
-call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
+call{T,N}(::Type{Array{T,N}}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
 
-call{T,N}(::Type{Array{T}}, d::NTuple{N,Integer}) = Array{T}(convert(Tuple{Vararg{Int}}, d))
-call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+call{T,N}(::Type{Array{T,N}}, d::NTuple{N,Integer}) = Array{T,N}(convert(NTuple{N,Int}, d))
+call{T,N}(::Type{Array{T}}, d::NTuple{N,Integer}) = Array{T,N}(convert(NTuple{N,Int}, d))
+call{T,N}(::Type{Array{T,N}}, d::Integer...) = Array{T,N}(d)
+call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(d)
 
 # TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Integer}) = Array{T}(convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert(Tuple{Vararg{Int}}, d))
+Array{T,N}(::Type{T}, d::NTuple{N,Integer}) = Array{T,N}(d)
+Array{T}(::Type{T}, d::Integer...)      = Array{T}(d)
 
 # SimpleVector
 

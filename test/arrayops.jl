@@ -167,6 +167,43 @@ rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int
 @test size(Matrix(2,3)) == (2,3)
 @test size(Matrix()) == (0,0)
 
+@test typeof(Array{Int}()) == Array{Int,0}
+@test typeof(Array{Int}(3)) == Array{Int,1}
+@test typeof(Array{Int}(2,3)) == Array{Int,2}
+@test typeof(Array{Int}(2,3,4)) == Array{Int,3}
+@test typeof(Array{Int}(2,3,4,5)) == Array{Int,4}
+@test size(Array{Int}()) == ()
+@test size(Array{Int}(3)) == (3,)
+@test size(Array{Int}(2,3)) == (2,3)
+@test size(Array{Int}(2,3,4)) == (2,3,4)
+@test size(Array{Int}(2,3,4,5)) == (2,3,4,5)
+
+@test typeof(Array{Int,0}()) == Array{Int,0}
+@test typeof(Array{Int,1}(3)) == Array{Int,1}
+@test typeof(Array{Int,2}(2,3)) == Array{Int,2}
+@test typeof(Array{Int,3}(2,3,4)) == Array{Int,3}
+@test typeof(Array{Int,4}(2,3,4,5)) == Array{Int,4}
+@test size(Array{Int,0}()) == ()
+@test size(Array{Int,1}(3)) == (3,)
+@test size(Array{Int,2}(2,3)) == (2,3)
+@test size(Array{Int,3}(2,3,4)) == (2,3,4)
+@test size(Array{Int,4}(2,3,4,5)) == (2,3,4,5)
+
+@test typeof(Array{Int,0}()) == Array{Int,0}
+@test typeof(Array{Int,1}(0x3)) == Array{Int,1}
+@test typeof(Array{Int,2}(Int8(2),Int16(3))) == Array{Int,2}
+@test typeof(Array{Int,3}((0x0002,3,Int128(4)))) == Array{Int,3}
+@test typeof(Array{Int,4}(2,Int32(3),Int64(4),5)) == Array{Int,4}
+@test size(Array{Int,0}()) == ()
+@test size(Array{Int,1}(0x3)) == (3,)
+@test size(Array{Int,2}((Int16(2),Int128(3)))) == (2,3)
+@test size(Array{Int,3}(0x0002,UInt32(3),4)) == (2,3,4)
+@test size(Array{Int,4}((2,3,4,5))) == (2,3,4,5)
+
+@test_throws MethodError Array{Int,1}(1,2)
+@test_throws MethodError Array{Int,2}(1)
+@test_throws MethodError Array{Int,3}((1,2,3,4))
+
 # get
 let
     A = reshape(1:24, 3, 8)
