@@ -477,6 +477,8 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 extern "C"
 char *jl_demangle(const char *name)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     const char *start = name + 6;
     const char *end = name + strlen(name);
     char *ret;
@@ -508,6 +510,8 @@ void lookup_pointer(DIContext *context, char **name, size_t *line,
                     char **inlinedat_file, size_t pointer,
                     int demangle, int *fromC)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     DILineInfo info, topinfo;
     DIInliningInfo inlineinfo;
     if (demangle && *name != NULL) {
@@ -629,6 +633,8 @@ void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
                              char** inlinedat_file, size_t *inlinedat_line,
                              size_t pointer, int *fromC, int skipC, int skipInline)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
     BOOL isvalid;
@@ -838,6 +844,8 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         size_t pointer, int *fromC, int skipC, int skipInline)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     *name = NULL;
     *line = -1;
     *filename = NULL;

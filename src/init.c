@@ -677,6 +677,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
             jl_current_module;
     }
 
+    // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 
