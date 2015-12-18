@@ -845,7 +845,6 @@ function _binarymap{Tx,Ty}(f::BinaryOp,
     ynzval = nonzeros(y)
     mx = length(xnzind)
     my = length(ynzind)
-    (mx == 0 || my == 0) && return SparseVector(R, 0)
     cap = (mode == 0 ? min(mx, my) : mx + my)::Int
 
     rind = Array(Int, cap)
