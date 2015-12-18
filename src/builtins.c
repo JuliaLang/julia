@@ -94,8 +94,7 @@ JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
     jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
-                                               const char *context,
+JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *context,
                                                jl_value_t *ty, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
@@ -106,8 +105,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
     jl_throw(ex);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
-                                            jl_value_t *expected,
+JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expected,
                                             jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
@@ -188,6 +186,14 @@ JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
         (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
     assert(eof_error != NULL);
     jl_exceptionf(eof_error, "");
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
+{
+    jl_methtable_t *mt = jl_gf_mtable(f);
+    if (mt->kwsorter == NULL)
+        jl_errorf("function %s does not accept keyword arguments", jl_symbol_name(mt->name));
+    return mt->kwsorter;
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -515,9 +521,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     return jl_toplevel_eval_in_warn(m, ex, 0);
 }
 
-JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m,
-                                                  jl_value_t *ex,
-                                                  int delay_warn)
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
 {
     static int jl_warn_on_eval = 0;
     int last_delay_warn = jl_warn_on_eval;

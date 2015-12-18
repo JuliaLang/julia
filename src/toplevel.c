@@ -661,12 +661,12 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
     jl_value_t *gf=NULL;
 
     assert(name && bp);
-    //if (bnd && bnd->value != NULL && !bnd->constp)
-    //    jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd)->name);
+    if (bnd && bnd->value != NULL && !bnd->constp)
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd->name));
     if (*bp != NULL) {
         gf = *bp;
-        //if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)))
-        //    jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+        if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
+            jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     }
     if (bnd)
         bnd->constp = 1;

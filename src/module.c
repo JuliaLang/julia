@@ -123,8 +123,7 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 // get binding for adding a method
 // like jl_get_binding_wr, but uses existing imports instead of warning
 // and overwriting.
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m,
-                                                         jl_sym_t *var)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_base_module && m->std_imports && !jl_binding_resolved_p(m,var)) {
         jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
@@ -145,25 +144,21 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m,
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", jl_symbol_name(b->owner->name), jl_symbol_name(var));
-            if (!b->imported && (b2->value==NULL /*|| jl_is_function(b2->value)*/)) {
-                //if (b2->value && !jl_is_gf(b2->value)) {
-                //    jl_errorf("error in method definition: %s.%s cannot be extended", jl_symbol_name(b->owner->name), jl_symbol_name(var));
-                //} else
-                {
-                    if (jl_base_module && m->std_imports && b->owner == jl_base_module) {
-                        jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
-                        if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
-                            jl_printf(JL_STDERR,
-                                      "WARNING: module %s should explicitly import %s from %s\n",
-                                      jl_symbol_name(m->name),
-                                      jl_symbol_name(var),
-                                      jl_symbol_name(b->owner->name));
-                            return b2;
-                        }
+            // TODO: we might want to require explicitly importing types to add constructors
+            if (!b->imported && (b2->value == NULL || !jl_is_type(b2->value))) {
+                if (jl_base_module && m->std_imports && b->owner == jl_base_module) {
+                    jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
+                    if (opmod != NULL && jl_defines_or_exports_p(opmod, var)) {
+                        jl_printf(JL_STDERR,
+                                  "WARNING: module %s should explicitly import %s from %s\n",
+                                  jl_symbol_name(m->name),
+                                  jl_symbol_name(var),
+                                  jl_symbol_name(b->owner->name));
+                        return b2;
                     }
-                    jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", jl_symbol_name(b->owner->name),
-                              jl_symbol_name(var));
                 }
+                jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", jl_symbol_name(b->owner->name),
+                          jl_symbol_name(var));
             }
             return b2;
         }
