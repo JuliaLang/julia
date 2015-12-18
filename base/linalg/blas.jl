@@ -2,7 +2,7 @@
 
 module BLAS
 
-import Base: copy!, blasfunc
+import Base: copy!, @blasfunc
 import Base.LinAlg: axpy!, dot
 
 export
@@ -67,7 +67,7 @@ for (fname, elty) in ((:dcopy_,:Float64),
     @eval begin
         # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
         function blascopy!(n::Integer, DX::Union{Ptr{$elty},StridedArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},StridedArray{$elty}}, incy::Integer)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, DX, &incx, DY, &incy)
             DY
@@ -83,7 +83,7 @@ for (fname, elty) in ((:dscal_,:Float64),
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
         function scal!(n::Integer, DA::$elty, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, &DA, DX, &incx)
             DX
@@ -103,7 +103,7 @@ for (fname, elty) in ((:ddot_,:Float64),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dot(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
-            ccall(($(blasfunc(fname)), libblas), $elty,
+            ccall((@blasfunc($fname), libblas), $elty,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, DX, &incx, DY, &incy)
         end
@@ -120,7 +120,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
             result = Array($elty, 1)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[1]
@@ -138,7 +138,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
             result = Array($elty, 1)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[1]
@@ -175,7 +175,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
         function nrm2(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
-            ccall(($(blasfunc(fname)), libblas), $ret_type,
+            ccall((@blasfunc($fname), libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
@@ -192,7 +192,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
     @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
         function asum(n::Integer, X::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer)
-            ccall(($(blasfunc(fname)), libblas), $ret_type,
+            ccall((@blasfunc($fname), libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
@@ -215,7 +215,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
                 #*     .. Array Arguments ..
                 #      DOUBLE PRECISION DX(*),DY(*)
         function axpy!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer, dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, &alpha, dx, &incx, dy, &incy)
             dy
@@ -253,7 +253,7 @@ for (fname, elty) in ((:idamax_,:Float64),
                       (:icamax_,:Complex64))
     @eval begin
         function iamax(n::Integer, dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer)
-            ccall(($(blasfunc(fname)), libblas),BlasInt,
+            ccall((@blasfunc($fname), libblas),BlasInt,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &n, dx, &incx)
         end
@@ -286,7 +286,7 @@ for (fname, elty) in ((:dgemv_,:Float64),
             elseif trans == 'T' && (length(X) != m || length(Y) != n)
                 throw(DimensionMismatch("A.' has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -318,7 +318,7 @@ for (fname, elty) in ((:dgbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gbmv!(trans::Char, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -364,7 +364,7 @@ for (fname, elty) in ((:dsymv_,:Float64),
             if m != length(y)
                 throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}),
@@ -400,7 +400,7 @@ for (fname, elty) in ((:zhemv_,:Complex128),
             lda = max(1, stride(A, 2))
             incx = stride(x, 1)
             incy = stride(y, 1)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}),
@@ -430,7 +430,7 @@ for (fname, elty) in ((:dsbmv_,:Float64),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function sbmv!(uplo::Char, k::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -461,7 +461,7 @@ for (fname, elty) in ((:zhbmv_,:Complex128),
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function hbmv!(uplo::Char, k::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, beta::($elty), y::StridedVector{$elty})
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -497,7 +497,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
             if n != length(x)
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &diag, &n,
@@ -526,7 +526,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
             if n != length(x)
                 throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &diag, &n,
@@ -550,7 +550,7 @@ for (fname, elty) in ((:dger_,:Float64),
             if m != length(x) || n != length(y)
                 throw(DimensionMismatch("A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
@@ -573,7 +573,7 @@ for (fname, elty) in ((:dsyr_,:Float64),
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &n, &α, x,
@@ -592,7 +592,7 @@ for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &n, &α, x,
@@ -627,7 +627,7 @@ for (gemm, elty) in
             if m != size(C,1) || n != size(C,2)
                 throw(DimensionMismatch("A has size ($m,$k), B has size ($k,$n), C has size $(size(C))"))
             end
-            ccall(($(blasfunc(gemm)), libblas), Void,
+            ccall((@blasfunc($gemm), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -669,7 +669,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             if size(B,2) != n
                 throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
-            ccall(($(blasfunc(mfname)), libblas), Void,
+            ccall((@blasfunc($mfname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -707,7 +707,7 @@ for (mfname, elty) in ((:zhemm_,:Complex128),
             if size(B,2) != n
                 throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
-            ccall(($(blasfunc(mfname)), libblas), Void,
+            ccall((@blasfunc($mfname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -745,7 +745,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall(($(blasfunc(fname)), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Void,
                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                   Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                   Ptr{$elty}, Ptr{BlasInt}),
@@ -782,7 +782,7 @@ for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
                throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
            end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall(($(blasfunc(fname)), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Void,
                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                   Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                   Ptr{$elty}, Ptr{BlasInt}),
@@ -821,7 +821,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall((@blasfunc($fname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}),
@@ -858,7 +858,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Comple
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
-           ccall(($(blasfunc(fname)), libblas), Void,
+           ccall((@blasfunc($fname), libblas), Void,
                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                   Ptr{$elty1}, Ptr{$elty1}, Ptr{BlasInt}, Ptr{$elty1}, Ptr{BlasInt},
                   Ptr{$elty2},  Ptr{$elty1}, Ptr{BlasInt}),
@@ -896,7 +896,7 @@ for (mmname, smname, elty) in
             if nA != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
             end
-            ccall(($(blasfunc(mmname)), libblas), Void,
+            ccall((@blasfunc($mmname), libblas), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &side, &uplo, &transa, &diag, &m, &n,
@@ -921,7 +921,7 @@ for (mmname, smname, elty) in
             if k != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A is $n, size(B)=($m,$n) and transa='$transa'"))
             end
-            ccall(($(blasfunc(smname)), libblas), Void,
+            ccall((@blasfunc($smname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
                  Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),

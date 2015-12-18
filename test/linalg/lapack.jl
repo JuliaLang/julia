@@ -151,7 +151,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq S lS
     @test_approx_eq V' lVt
     B = rand(elty,10,10)
-    @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
+    # xggsvd3 replaced xggsvd in LAPACK 3.6.0
+    if LAPACK.VERSION[] < v"3.6.0"
+        @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
+    else
+        @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
+    end
 end
 
 #geevx, ggev errors
