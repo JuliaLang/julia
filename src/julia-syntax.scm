@@ -294,6 +294,10 @@
 	    `(,@head (curly Vararg ,(cadr las)))
 	    `(,@head ,las)))))
 
+(define (hidden-name? s)
+  (and (symbol? s)
+       (eqv? (string.char (string s) 0) #\#)))
+
 (define (method-def-expr- name sparams argl body isstaged)
   (receive
    (names bounds) (sparam-name-bounds sparams '() '())
@@ -307,7 +311,16 @@
            (error "function argument and static parameter names must be distinct")))
      (if (and name (not (sym-ref? name)))
          (error (string "invalid method name \"" (deparse name) "\"")))
-     (let* ((types (llist-types argl))
+     (if (and (not (null? argl)) (or (eq? name 'call) (and (pair? name) (sym-ref? name)
+                                                           (equal? (caddr name) '(inert call)))))
+         (let* ((n (arg-name (car argl)))
+                (n (if (hidden-name? n) "" n))
+                (t (deparse (arg-type (car argl)))))
+           (syntax-deprecation #f
+                               (string "call(" n "::" t ", ...)")
+                               (string "(" n "::" t ")(...)"))))
+     (let* ((name  (if (eq? name 'call) #f name))
+            (types (llist-types argl))
             (body  (method-lambda-expr argl body))
             (mdef
              (if (null? sparams)
@@ -323,10 +336,8 @@
                                                                    types)))
                                    (call (top svec) ,@gss)))
                             ,body ,isstaged)))))
-       (if (and (symbol? name) (not (eq? name 'call)))
-           `(block (method ,name)  ;; first make sure is initialized
-                   ,mdef
-                   ,name)          ;; return function
+       (if (symbol? name)
+           `(block ,mdef ,name)  ;; return the function
            mdef)))))
 
 (define (const-default? x)

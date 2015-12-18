@@ -9,7 +9,6 @@ using Base.Test
 # use versions of these functions that doesn't have static-parameters
 # so that code_llvm can handle them
 plus(a, b) = +(a, b)
-#call(args...) = Base.call(args...)
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -35,7 +34,7 @@ function test_code_reflections(tester, freflect)
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
     test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
     if tester == test_ast_reflection
-        test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # transform to Base.call with incomplete types
+        test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
     end
 end
 
