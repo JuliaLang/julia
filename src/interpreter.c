@@ -220,11 +220,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     }
     else if (ex->head == method_sym) {
         jl_sym_t *fname = (jl_sym_t*)args[0];
-        jl_value_t **bp=NULL;
-        jl_value_t *bp_owner=NULL;
-        jl_binding_t *b=NULL;
-        if (jl_expr_nargs(ex) == 1) {
-            assert(jl_is_symbol(fname));
+        assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
+
+        if (jl_is_symbol(fname)) {
+            jl_value_t **bp=NULL;
+            jl_value_t *bp_owner=NULL;
+            jl_binding_t *b=NULL;
             for (size_t i=0; i < nl; i++) {
                 if (locals[i*2] == (jl_value_t*)fname) {
                     bp = &locals[i*2+1];
@@ -236,7 +237,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                 bp = &b->value;
                 bp_owner = (jl_value_t*)jl_current_module;
             }
-            return jl_generic_function_def(fname, bp, bp_owner, b);
+            jl_value_t *gf = jl_generic_function_def(fname, bp, bp_owner, b);
+            if (jl_expr_nargs(ex) == 1)
+                return gf;
         }
 
         jl_value_t *atypes=NULL, *meth=NULL;

@@ -266,7 +266,7 @@ include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 eval(e::ANY) = eval(Main, e)
 eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(f::ANY) = typeof(f).name.mt.kwsorter
+kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
 function kwftype(t::ANY)
     mt = t.name.mt
