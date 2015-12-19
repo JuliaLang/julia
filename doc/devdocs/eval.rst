@@ -53,7 +53,7 @@ The 10,000 foot view of the whole process is as follows:
    Whenever a Julia function is called for the first time with a given set of argument types, `type inference`_ will be run on that function.
    This information is used by the codegen_ step to generate faster code.
 #. Eventually, the user quits the REPL, or the end of the program is reached, and the :func:`_start` method returns.
-#. Just before exiting, :c:func:`main` calls `jl_atexit_hook() <https://github.com/JuliaLang/julia/blob/master/src/init.c>`_.
+#. Just before exiting, :c:func:`main` calls `jl_atexit_hook(exit_code) <https://github.com/JuliaLang/julia/blob/master/src/init.c>`_.
    This calls :func:`Base._atexit` (which calls any functions registered to :func:`atexit` inside Julia).
    Then it calls `jl_gc_run_all_finalizers() <https://github.com/JuliaLang/julia/blob/master/src/gc.c>`_.
    Finally, it gracefully cleans up all ``libuv`` handles and waits for them to flush and close.
