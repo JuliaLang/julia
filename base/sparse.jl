@@ -7,7 +7,8 @@ using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
 import Base: +, -, *, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
-import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!, A_ldiv_B!
+import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!, At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
+import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, chol, conj!, cos, cosc, cosd, cosh, cospi, cot,
