@@ -274,8 +274,8 @@ function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
 end
 
 # read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
-function readbytes(s::IO, nb=typemax(Int))
-    b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
+function readbytes(s::IO, nb=1024)
+    b = Array(UInt8, nb)
     nr = readbytes!(s, b, nb)
     resize!(b, nr)
 end
