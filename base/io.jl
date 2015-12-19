@@ -275,6 +275,8 @@ end
 
 # read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
 function readbytes(s::IO, nb=typemax(Int))
+    # Let readbytes! grow the array progressively by default
+    # instead of taking of risk of over-allocating
     b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     resize!(b, nr)
