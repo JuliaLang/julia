@@ -64,6 +64,9 @@ end
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
 @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 
+# test show() function for UDPSocket()
+@test repr(UDPSocket()) == "UDPSocket(init)"
+
 port = Channel(1)
 defaultport = rand(2000:4000)
 tsk = @async begin
