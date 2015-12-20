@@ -434,6 +434,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     JL_LOCK(codegen); // Might GC
     size_t i;
     int need_guard_entries = 0;
+    int cache_as_orig = 0;
     jl_value_t *temp=NULL;
     jl_value_t *temp2=NULL;
     jl_lambda_info_t *newmeth=NULL;
@@ -469,7 +470,11 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
 
         int set_to_any = 0;
-        if (decl_i == jl_ANY_flag) {
+        int notcalled_func = (i>0 && i<=8 && !(method->called&(1<<(i-1))) &&
+                              jl_subtype(elt,(jl_value_t*)jl_function_type,0));
+        if (decl_i == jl_ANY_flag || ((decl_i == (jl_value_t*)jl_any_type ||
+                                       decl_i == (jl_value_t*)jl_function_type) &&
+                                      notcalled_func)) {
             // don't specialize on slots marked ANY
             jl_svecset(newparams, i, (jl_value_t*)jl_any_type);
             temp2 = (jl_value_t*)jl_svec_copy(newparams);
@@ -478,9 +483,9 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             jl_methlist_t *curr = mt->defs;
             // if this method is the only match even with the current slot
             // set to Any, then it is safe to cache it that way.
-            while (curr != (void*)jl_nothing && curr->func!=method) {
-                if (jl_type_intersection((jl_value_t*)curr->sig,
-                                         (jl_value_t*)temp2) !=
+            while (curr != (void*)jl_nothing && (curr->func != method ||
+                                                 decl_i == (jl_value_t*)jl_function_type)) {
+                if (jl_type_intersection((jl_value_t*)curr->sig, (jl_value_t*)temp2) !=
                     (jl_value_t*)jl_bottom_type) {
                     nintr++;
                     if (nintr > MAX_UNSPECIALIZED_CONFLICTS) break;
@@ -494,8 +499,11 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             }
             else {
                 set_to_any = 1;
-                if (nintr > 0)
+                if (nintr > 0) {
                     need_guard_entries = 1;
+                    if (decl_i == (jl_value_t*)jl_function_type)
+                        cache_as_orig = 1;
+                }
             }
         }
         if (set_to_any || isstaged) {
@@ -740,7 +748,10 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     if (lilist != NULL && !li->inInference) {
         assert(li);
         newmeth = li;
-        (void)jl_method_cache_insert(mt, type, newmeth);
+        if (cache_as_orig)
+            (void)jl_method_cache_insert(mt, origtype, newmeth);
+        else
+            (void)jl_method_cache_insert(mt, type, newmeth);
         JL_GC_POP();
         JL_UNLOCK(codegen);
         return newmeth;
@@ -782,7 +793,10 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         newmeth->fptr = NULL;  // TODO jb/functions this may be unnecessary
     }
 
-    (void)jl_method_cache_insert(mt, type, newmeth);
+    if (cache_as_orig)
+        (void)jl_method_cache_insert(mt, origtype, newmeth);
+    else
+        (void)jl_method_cache_insert(mt, type, newmeth);
 
     if (newmeth->sparams == jl_emptysvec) {
         // when there are no static parameters, one unspecialized version
