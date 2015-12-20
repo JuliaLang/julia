@@ -311,6 +311,7 @@ typedef struct _jl_lambda_info_t {
     int32_t line;
     int8_t inferred;
     int8_t pure;
+    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
 
     // hidden fields:
     // flag telling if inference is running on this function

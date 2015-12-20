@@ -289,6 +289,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
     li->file = null_sym;
     li->line = 0;
     li->pure = 0;
+    li->called = 0xff;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
         if (has_meta(body, pure_sym))
@@ -301,6 +302,16 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
             li->file = (jl_sym_t*)jl_exprarg(body1, 1);
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
+        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
+        size_t narg = jl_array_len(jl_lam_args((jl_expr_t*)li->ast));
+        uint8_t called=0;
+        int i;
+        for(i=1; i < narg && i <= 8; i++) {
+            if (jl_unbox_long(jl_cellref(jl_cellref(vis,i),2))&64) {
+                called |= (1<<(i-1));
+            }
+        }
+        li->called = called;
     }
     li->module = ctx;
     li->sparams = sparams;
