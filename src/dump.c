@@ -813,6 +813,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->specializations);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
+        write_int8(s, li->called);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
         jl_serialize_value(s, (jl_value_t*)li->module);
@@ -1054,7 +1055,7 @@ static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
 {
     jl_methlist_t *l = *pl;
     while (l != (void*)jl_nothing) {
-        if (is_module_replaced(l->func->module))
+        if (l->func && is_module_replaced(l->func->module))
             *pl = l->next;
         else
             pl = &l->next;
@@ -1373,6 +1374,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->specializations) jl_gc_wb(li, li->specializations);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
+        li->called = read_int8(s);
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->file);
         li->line = read_int32(s);

@@ -2698,6 +2698,13 @@ So far only the second case can actually occur.
                  (if (assq (car vi) captvars)
                      (vinfo:set-iasg! vi #t)))))
          `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars sp)))
+        ((call)
+         (let ((vi (var-info-for (cadr e) env)))
+           (if vi
+               (vinfo:set-called! vi #t))
+           (cons (car e)
+                 (map (lambda (x) (analyze-vars x env captvars sp))
+                      (cdr e)))))
         ((decl |::|)
          ; handle var::T declaration by storing the type in the var-info
          ; record. for non-symbols or globals, emit a type assertion.
