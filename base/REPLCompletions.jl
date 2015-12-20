@@ -133,12 +133,12 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         return UTF8String[], 0:-1, false
     end
 
-    matches = Dict{UTF8String,Bool}()
+    matches = Set{UTF8String}()
     for file in files
         if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
-            matches[id ? file * (@windows? "\\\\" : "/") : file] = true
+            push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
 
@@ -178,13 +178,13 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
                 if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                    matches[file] = true
+                    push!(matches, file)
                 end
             end
         end
     end
 
-    matchList = UTF8String[replace(s, r"\s", "\\ ") for s in keys(matches)]
+    matchList = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
