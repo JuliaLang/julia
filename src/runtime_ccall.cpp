@@ -24,6 +24,7 @@ static void jl_read_sonames(void)
 #else
     FILE *ldc = popen("/sbin/ldconfig -r", "r");
 #endif
+    if (ldc == NULL) return; // ignore errors in running ldconfig (other than whatever might have been printed to stderr)
 
     while (!feof(ldc)) {
         ssize_t n = getline(&line, &sz, ldc);
