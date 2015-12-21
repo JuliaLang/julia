@@ -38,21 +38,21 @@ function test_futures_dgc(id)
     fid = Base.remoteref_id(f)
 
     # remote value should be deleted after a fetch
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == false
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == false
 
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
     fid = Base.remoteref_id(f)
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
     Base.flush_gc_msgs()
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, fid) == false
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
@@ -117,12 +117,12 @@ function test_remoteref_dgc(id)
     rrid = Base.remoteref_id(rr)
 
     # remote value should be deleted after finalizing the ref
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == true
     @test fetch(rr) == :OK
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     Base.flush_gc_msgs()
-    @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), id, rrid) == false
+    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
