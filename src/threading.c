@@ -174,10 +174,10 @@ static void ti_init_master_thread(void)
 }
 
 // all threads call this function to run user code
-static jl_value_t *ti_run_fun(jl_function_t *f, jl_svec_t *args)
+static jl_value_t *ti_run_fun(jl_svec_t *args)
 {
     JL_TRY {
-        jl_apply(f, jl_svec_data(args), jl_svec_len(args));
+        jl_apply(jl_svec_data(args), jl_svec_len(args));
     }
     JL_CATCH {
         return jl_exception_in_transit;
@@ -270,7 +270,7 @@ void ti_threadfun(void *arg)
                 //       support in the codegen and runtime we don't need to
                 //       enter GC unsafe region when starting the work.
                 int8_t gc_state = jl_gc_unsafe_enter();
-                ti_run_fun(work->fun, work->args);
+                ti_run_fun(work->args);
                 jl_gc_unsafe_leave(gc_state);
             }
         }
@@ -422,7 +422,7 @@ JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 {
     // GC safe
 #if PROFILE_JL_THREADING
@@ -430,24 +430,17 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 #endif
 
     jl_tupletype_t *argtypes = NULL;
-    jl_function_t *fun = NULL;
-    if ((jl_value_t*)args == jl_emptytuple)
-        args = jl_emptysvec;
     JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
 
     int8_t gc_state = jl_gc_unsafe_enter();
-    JL_GC_PUSH2(&argtypes, &fun);
-    if (jl_svec_len(args) == 0)
-        argtypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
-    else
-        argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
-    fun = jl_get_specialization(f, argtypes, NULL);
-    if (fun == NULL)
-        fun = f;
-    jl_generate_fptr(fun);
+    JL_GC_PUSH1(&argtypes);
+    argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
+    jl_lambda_info_t *li = jl_get_specialization1(argtypes, NULL);
+    jl_generate_fptr(li);
 
     threadwork.command = TI_THREADWORK_RUN;
-    threadwork.fun = fun;
+    // TODO jb/functions: lookup and store jlcall fptr here
+    threadwork.fun = NULL;
     threadwork.args = args;
     threadwork.ret = jl_nothing;
 
@@ -466,7 +459,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 #endif
 
     // this thread must do work too (TODO: reduction?)
-    tw->ret = ti_run_fun(fun, args);
+    tw->ret = ti_run_fun(args);
 
 #if PROFILE_JL_THREADING
     uint64_t trun = rdtsc();
@@ -545,12 +538,10 @@ JL_DLLEXPORT void jl_threading_profile(void)
 
 #else // !JULIA_ENABLE_THREADING
 
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 {
-    if ((jl_value_t*)args == jl_emptytuple)
-        args = jl_emptysvec;
     JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
-    return ti_run_fun(f, args);
+    return ti_run_fun(args);
 }
 
 void jl_init_threading(void)

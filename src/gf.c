@@ -70,12 +70,12 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tupletype_t *sig
     return 1;
 }
 
-static inline int cache_match(jl_value_t **args, size_t n, jl_tupletype_t *sig,
+static inline int cache_match(jl_value_t **args, size_t n, jl_value_t **sig,
                               int va, size_t lensig)
 {
     // NOTE: This function is a huge performance hot spot!!
     for(size_t i=0; i < n; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *decl = sig[i];
         if (i == lensig-1) {
             if (va) {
                 jl_value_t *t = jl_tparam0(decl);
@@ -263,7 +263,7 @@ static jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_valu
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_datatype_nfields(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            if (cache_match(args, n, ml->sig, ml->va, lensig)) {
+            if (cache_match(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig)) {
                 return ml->func;
             }
             // if we hit a guard entry (ml->func == NULL), do a more
@@ -374,18 +374,19 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
         // called
         assert(li->inInference == 0);
         li->inInference = 1;
-        jl_value_t *fargs[4];
-        fargs[0] = (jl_value_t*)li;
-        fargs[1] = (jl_value_t*)argtypes;
-        fargs[2] = (jl_value_t*)jl_emptysvec;
-        fargs[3] = (jl_value_t*)def;
+        jl_value_t *fargs[5];
+        fargs[0] = (jl_value_t*)jl_typeinf_func;
+        fargs[1] = (jl_value_t*)li;
+        fargs[2] = (jl_value_t*)argtypes;
+        fargs[3] = (jl_value_t*)jl_emptysvec;
+        fargs[4] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
         jl_printf(JL_STDERR,"inference on ");
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)argtypes);
         jl_printf(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
-        jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
+        jl_value_t *newast = jl_apply(fargs, 5);
         li->ast = jl_fieldref(newast, 0);
         jl_gc_wb(li, li->ast);
         li->inferred = 1;
@@ -500,9 +501,10 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             else {
                 set_to_any = 1;
                 if (nintr > 0) {
-                    need_guard_entries = 1;
                     if (decl_i == (jl_value_t*)jl_function_type)
                         cache_as_orig = 1;
+                    else
+                        need_guard_entries = 1;
                 }
             }
         }

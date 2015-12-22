@@ -216,7 +216,8 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
                                                             jl_symbol("task_done_hook"));
     }
     if (task_done_hook_func != NULL) {
-        jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
+        jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
+        jl_apply(args, 2);
     }
     abort();
 }
@@ -243,7 +244,7 @@ static void NOINLINE JL_NORETURN start_task(void)
     }
     else {
         JL_TRY {
-            res = jl_do_call(t->start, NULL, 0);
+            res = jl_apply(&t->start, 1);
         }
         JL_CATCH {
             res = jl_exception_in_transit;

@@ -231,7 +231,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
-                jl_apply((jl_function_t*)f, NULL, 0);
+                jl_apply(&f, 1);
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
