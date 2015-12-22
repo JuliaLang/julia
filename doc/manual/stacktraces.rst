@@ -10,7 +10,7 @@ The :mod:`StackTraces` module provides simple stack traces that are both human r
 Viewing a stack trace
 ---------------------
 
-The primary function used to obtain a stack trace is ``stacktrace``::
+The primary function used to obtain a stack trace is :func:`stacktrace`::
 
     julia> using StackTraces
 
@@ -19,7 +19,7 @@ The primary function used to obtain a stack trace is ``stacktrace``::
      StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13041465684)
      StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,1304140086)
 
-Calling ``stacktrace`` returns a vector of ``StackFrame``s. For ease of use, the alias ``StackTrace`` can be used in place of ``Vector{StackFrame}``.
+Calling :func:`stacktrace` returns a vector of :obj:`StackFrame` s. For ease of use, the alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``.
 
 ::
 
@@ -32,7 +32,7 @@ Calling ``stacktrace`` returns a vector of ``StackFrame``s. For ease of use, the
      StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13041465684)
      StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,13041400866)
 
-If you'd like the output to be a little more human-readable, replace calls to ``stacktrace`` (which returns a vector of ``StackFrame``s) with ``show_stacktrace`` (which prints the stacktrace to an IO stream).
+If you'd like the output to be a little more human-readable, replace calls to :func:`stacktrace` (which returns a vector of :obj:`StackFrame` s) with :func:`show_stacktrace` (which prints the stacktrace to an IO stream).
 
 ::
 
@@ -45,7 +45,7 @@ If you'd like the output to be a little more human-readable, replace calls to ``
       eval_user_input at REPL.jl:62
       [inlined code from REPL.jl:92] anonymous at task.jl:63
 
-Note that when calling ``stacktrace`` from the REPL you'll always have those last two frames in the stack from ``REPL.jl`` (including the anonymous function from ``task.jl``).
+Note that when calling :func:`stacktrace` from the REPL you'll always have those last two frames in the stack from ``REPL.jl`` (including the anonymous function from ``task.jl``).
 
 ::
 
@@ -69,7 +69,7 @@ Note that when calling ``stacktrace`` from the REPL you'll always have those las
 Extracting useful information
 -----------------------------
 
-Each ``StackFrame`` contains the function name, file name, line number, file and line information for inlined functions, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by ``Base.backtrace``::
+Each :obj:`StackFrame` contains the function name, file name, line number, file and line information for inlined functions, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by :func:`backtrace`::
 
     julia> top_frame = stacktrace()[1]
     StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false, 13203085684)
@@ -100,7 +100,7 @@ This makes stack trace information available programmatically without having to 
 Error handling
 --------------
 
-While having easy access to information about the current state of the callstack can be helpful in many places, the most obvious application is in error handling and debuggin.
+While having easy access to information about the current state of the callstack can be helpful in many places, the most obvious application is in error handling and debugging.
 
 ::
 
@@ -117,9 +117,9 @@ While having easy access to information about the current state of the callstack
       eval_user_input at REPL.jl:62
       [inlined code from REPL.jl:92] anonymous at task.jl:63
 
-You may notice that in the example above the first stack frame points points at line 4, where ``stacktraces`` is called, rather than line 2, where the error occurred. While in this example it's trivial to track down the actual source of the error, things can get misleading pretty quickly if the stack trace doesn't even point to the right function.
+You may notice that in the example above the first stack frame points points at line 4, where :func:`stacktrace` is called, rather than line 2, where the error occurred. While in this example it's trivial to track down the actual source of the error, things can get misleading pretty quickly if the stack trace doesn't even point to the right function.
 
-This can be remedied by calling ``catch_stacktrace`` instead of ``stacktrace``. Instead of returning callstack information for the current context, `catch_stacktrace` returns stack information for the context of the most recent error::
+This can be remedied by calling :func:`catch_stacktrace` instead of :func:`stacktrace`. Instead of returning callstack information for the current context, :func:`catch_stacktrace` returns stack information for the context of the most recent error::
 
     julia> example() = try
                error("Oh no!")
@@ -163,10 +163,10 @@ Notice that the stack trace now indicates the appropriate line number.
       eval_user_input at REPL.jl:62
       [inlined code from REPL.jl:92] anonymous at task.jl:63
 
-Comparison with ``Base.backtrace``
---------------------------------
+Comparison with ``backtrace``
+-----------------------------
 
-Developers familiar with Julia's ``backtrace`` function, which returns a vector of ``Ptr{Void}``, may be interested to know that you can pass that vector into ``stacktrace``::
+A call to :func:`backtrace` returns a vector of ``Ptr{Void}``, which may then be passed into :func:`stacktrace` for translation::
 
     julia> stack = backtrace()
     15-element Array{Ptr{Void},1}:
@@ -192,7 +192,7 @@ Developers familiar with Julia's ``backtrace`` function, which returns a vector 
      StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13203085684)
      StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,13203037218)
 
-You may notice that the vector returned by ``Base.backtrace`` had 15 pointers, but the vector returned by `stacktrace` only had 3. This is because, by default, `stacktrace` removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this::
+Notice that the vector returned by :func:`backtrace` had 15 pointers, while the vector returned by :func:`stacktrace` only has 3. This is because, by default, :func:`stacktrace` removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this::
 
     julia> stacktrace(stack, true)
     15-element Array{StackTraces.StackFrame,1}:
