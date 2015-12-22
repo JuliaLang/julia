@@ -1372,17 +1372,12 @@ STATIC_INLINE int jl_vinfo_usedundef(jl_array_t *vi)
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
 
 STATIC_INLINE
-jl_value_t *jl_apply(jl_value_t *f, jl_value_t **args, uint32_t nargs)
+jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 {
-    // TODO maybe deprecate this API
-    jl_value_t **a = (jl_value_t**)alloca((nargs+1)*sizeof(jl_value_t*));
-    a[0] = f;
-    memcpy(&a[1], args, nargs*sizeof(jl_value_t*));
-    return jl_apply_generic(a, nargs+1);
+    return jl_apply_generic(args, nargs);
 }
 
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_do_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);
