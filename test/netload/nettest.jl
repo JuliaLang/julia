@@ -7,9 +7,9 @@ function test_connect_disconnect(exp)
     print("Testing 10^$exp connect/disconnects:\n")
 
     (port, server) = listenany(8000)
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         clients_served = 0
@@ -55,9 +55,9 @@ function test_send(exp)
 
     print("Testing open, send of 10^$exp bytes and closing:\n")
 
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         print("\t\t\t[SERVER] Started on port $(port)\n")
@@ -148,9 +148,9 @@ function test_bidirectional(exp)
     (port, server) = listenany(8000)
 
     # For both the server and the client, we will transfer/receive 10^exp bytes
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         print("\t\t\t[SERVER] Started on port $(port)\n")
