@@ -52,7 +52,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl, size_t ngensym)
 {
     jl_value_t **argv;
-    JL_GC_PUSHARGS(argv, nargs+1);
+    JL_GC_PUSHARGS(argv, nargs);
     size_t i;
     for(i=0; i < nargs; i++)
         argv[i] = eval(args[i], locals, nl, ngensym);

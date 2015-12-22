@@ -1016,7 +1016,8 @@ static void jl_serialize_dependency_list(ios_t *s)
     static jl_value_t *unique_func = NULL;
     if (!unique_func)
         unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
-    jl_array_t *udeps = deps && unique_func ? (jl_array_t *) jl_apply((jl_function_t*)unique_func, (jl_value_t**)&deps, 1) : NULL;
+    jl_value_t *uniqargs[2] = {unique_func,(jl_value_t*)deps};
+    jl_array_t *udeps = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL;
 
     JL_GC_PUSH1(&udeps);
     if (udeps) {
@@ -1619,8 +1620,9 @@ static int jl_deserialize_verify_mod_list(ios_t *s)
             static jl_value_t *require_func = NULL;
             if (!require_func)
                 require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+            jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
             JL_TRY {
-                jl_apply((jl_function_t*)require_func, (jl_value_t**)&sym, 1);
+                jl_apply(reqargs, 2);
             }
             JL_CATCH {
                 ios_close(s);

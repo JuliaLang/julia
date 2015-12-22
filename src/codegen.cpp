@@ -1774,7 +1774,10 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                     }
                     jl_value_t *result;
                     JL_TRY {
-                        result = jl_apply(f, v, n);
+                        if (f == jl_builtin_tuple)
+                            result = jl_f_tuple(NULL, v, n);
+                        else
+                            result = jl_f_apply_type(NULL, v, n);
                     }
                     JL_CATCH {
                         result = NULL;
@@ -4769,6 +4772,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
 
     // step 11. check arg count
+    // TODO jb/functions: this code can probably be deleted
     if (jl_is_va_tuple(ctx.linfo->specTypes)) {
         assert(argCount != NULL);
         assert(!specsig);
