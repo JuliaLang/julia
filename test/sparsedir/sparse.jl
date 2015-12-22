@@ -199,6 +199,9 @@ for i = 1:5
     c = sparse(rand(Float32,5,5))
     d = sparse(rand(Float64,5,5))
     @test full(kron(c,d)) == kron(full(c),full(d))
+    f = Diagonal(rand(5))
+    @test full(a*f) == full(a)*f
+    @test full(f*b) == f*full(b)
 end
 
 # scale and scale!
