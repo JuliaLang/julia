@@ -74,7 +74,7 @@ foo
 @test md"""Hello
 
 ---
-World""" |> plain == "Hello\n\n–––\n\nWorld\n"
+World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test md"[*a*](b)" |> plain == "[*a*](b)\n"
 @test md"""
 > foo
