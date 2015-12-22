@@ -92,6 +92,8 @@ Library improvements
 
     * Improve performance of `quantile` ([#14413]).
 
+  * The new `Base.StackTraces` module makes stack traces easier to use programmatically. ([#pr])
+
 Deprecated or removed
 ---------------------
 
