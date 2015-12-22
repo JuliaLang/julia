@@ -108,11 +108,11 @@ end
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # b^p mod m
-function powermod{T}(b::Integer, p::Integer, m::T)
+function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
     p < 0 && throw(DomainError())
-    b = oftype(m,mod(b,m))  # this also checks for divide by zero
-    p == 0 && return mod(one(b),m)
+    p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
+    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
     local r::T
@@ -128,6 +128,9 @@ function powermod{T}(b::Integer, p::Integer, m::T)
     end
     return r
 end
+
+# optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
+powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
 # smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
