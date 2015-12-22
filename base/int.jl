@@ -376,46 +376,22 @@ if WORD_SIZE == 32
     end
 
     function div(x::Int128, y::Int128)
-        try
-            Int128(div(BigInt(x),BigInt(y)))
-        catch e
-            isa(e, InexactError) && throw(DivideError())
-            rethrow()
-        end
+        (x == typemin(Int128)) & (y == -1) && throw(DivideError())
+        Int128(div(BigInt(x),BigInt(y)))
     end
     function div(x::UInt128, y::UInt128)
-        try
-            UInt128(div(BigInt(x),BigInt(y)))
-        catch e
-            isa(e, InexactError) && throw(DivideError())
-            rethrow()
-        end
+        UInt128(div(BigInt(x),BigInt(y)))
     end
 
     function rem(x::Int128, y::Int128)
-        try
-            Int128(rem(BigInt(x),BigInt(y)))
-        catch e
-            isa(e, InexactError) && throw(DivideError())
-            rethrow()
-        end
+        Int128(rem(BigInt(x),BigInt(y)))
     end
     function rem(x::UInt128, y::UInt128)
-        try
-            UInt128(rem(BigInt(x),BigInt(y)))
-        catch e
-            isa(e, InexactError) && throw(DivideError())
-            rethrow()
-        end
+        UInt128(rem(BigInt(x),BigInt(y)))
     end
 
     function mod(x::Int128, y::Int128)
-        try
-            Int128(mod(BigInt(x),BigInt(y)))
-        catch e
-            isa(e, InexactError) && throw(DivideError())
-            rethrow()
-        end
+        Int128(mod(BigInt(x),BigInt(y)))
     end
 
     <<( x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
