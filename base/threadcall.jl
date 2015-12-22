@@ -64,7 +64,8 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]
-    args_arr = Array{UInt8}(sum(sizeof, argtypes))
+    args_size = isempty(argtypes) ? 0 : sum(sizeof, argtypes)
+    args_arr = Array{UInt8}(args_size)
     ptr = pointer(args_arr)
     for (T, x) in zip(argtypes, argvals)
         y = cconvert(T, x)

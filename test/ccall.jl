@@ -230,3 +230,5 @@ threadcall_test_func(x) =
     @unix_only @async @threadcall(:sleep, Cuint, (Cuint,), 1)
     @windows_only @async @threadcall(:Sleep, Void, (UInt32,), 1000)
 end
+
+@test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
