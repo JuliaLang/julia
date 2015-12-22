@@ -622,7 +622,7 @@ JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
     if (f == NULL)
         return;
     JL_TRY {
-        jl_apply(f, NULL, 0);
+        jl_apply(&f, 1);
     }
     JL_CATCH {
         if (jl_initerror_type == NULL) {

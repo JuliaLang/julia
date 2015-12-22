@@ -422,9 +422,6 @@ JL_CALLABLE(jl_f__apply)
                 return (jl_value_t*)t;
             }
         }
-        if (jl_is_svec(args[1])) {
-            return jl_apply(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
-        }
     }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
@@ -446,15 +443,21 @@ JL_CALLABLE(jl_f__apply)
                     JL_TYPECHK(apply, tuple, jl_typeof(args[i]));
                 }
             }
-            jl_value_t *argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
+            jl_array_t *argarr = NULL;
+            JL_GC_PUSH2(&argarr, &f);
+            args[0] = jl_append_any_func;
+            argarr = (jl_array_t*)jl_apply(args, nargs);
             assert(jl_typeis(argarr, jl_array_any_type));
-            JL_GC_PUSH1(&argarr);
-            jl_value_t *result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
+            jl_array_grow_beg(argarr, 1);
+            jl_cellset(argarr, 0, f);
+            args[0] = f;
+            jl_value_t *result = jl_apply(jl_cell_data(argarr), jl_array_len(argarr));
             JL_GC_POP();
             return result;
         }
     }
     jl_value_t **newargs;
+    n++;
     int onstack = (n < jl_page_size/sizeof(jl_value_t*));
     JL_GC_PUSHARGS(newargs, onstack ? n : 1);
     jl_svec_t *arg_heap = NULL;
@@ -468,7 +471,8 @@ JL_CALLABLE(jl_f__apply)
     //          `jl_cellref` will not be young if `arg_heap` becomes old
     //          since they are allocated before `arg_heap`. Otherwise,
     //          we need to add write barrier for !onstack
-    n = 0;
+    newargs[0] = f;
+    n = 1;
     for(i=1; i < nargs; i++) {
         jl_value_t *ai = args[i];
         if (jl_is_svec(ai)) {
@@ -509,7 +513,7 @@ JL_CALLABLE(jl_f__apply)
             }
         }
     }
-    jl_value_t *result = jl_apply(f, newargs, n);
+    jl_value_t *result = jl_apply(newargs, n);
     JL_GC_POP();
     return result;
 }
@@ -919,8 +923,8 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
                       jl_symbol_name(((jl_datatype_t*)jl_typeof(v))->name->name));
             return;
         }
-        jl_value_t *args[2] = {stream,v};
-        jl_apply(jl_show_gf, args, 2);
+        jl_value_t *args[3] = {jl_show_gf,stream,v};
+        jl_apply(args, 3);
     }
 }
 
@@ -1521,7 +1525,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         return jl_static_show(s, type);
     size_t n = 0;
     if (jl_nparams(ftype)==0 || ftype == ((jl_datatype_t*)ftype)->name->primary) {
-        n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)ftype)->name->name));
+        n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)ftype)->name->mt->name));
     }
     else {
         n += jl_printf(s, "(::");
