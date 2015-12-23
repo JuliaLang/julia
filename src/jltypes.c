@@ -3608,6 +3608,7 @@ void jl_init_types(void)
     kw_sym = jl_symbol("kw");
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");
+    inbounds_sym = jl_symbol("inbounds");
     fastmath_sym = jl_symbol("fastmath");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");

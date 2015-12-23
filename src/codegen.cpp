@@ -580,6 +580,7 @@ typedef struct {
     bool sret;
     int nReqArgs;
     std::vector<bool> boundsCheck;
+    std::vector<bool> inbounds;
 
     jl_gcinfo_t gc;
 
@@ -3875,9 +3876,25 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
 #endif
         builder.SetInsertPoint(tryblk);
     }
-    else if (head == boundscheck_sym) {
+    else if (head == inbounds_sym) {
         if (jl_array_len(ex->args) > 0 &&
             jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_DEFAULT) {
+            jl_value_t *arg = args[0];
+            if (arg == jl_true) {
+                ctx->inbounds.push_back(true);
+            }
+            else if (arg == jl_false) {
+                ctx->inbounds.push_back(false);
+            }
+            else {
+                if (!ctx->inbounds.empty())
+                    ctx->inbounds.pop_back();
+            }
+        }
+        return ghostValue(jl_void_type);
+    }
+    else if (head == boundscheck_sym) {
+        if (jl_array_len(ex->args) > 0) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
                 ctx->boundsCheck.push_back(true);
@@ -4436,7 +4453,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.funcName = jl_symbol_name(lam->name);
     ctx.vaName = NULL;
     ctx.vaStack = false;
-    ctx.boundsCheck.push_back(true);
+    ctx.inbounds.push_back(false);
+    ctx.boundsCheck.push_back(false);
     ctx.cyclectx = cyclectx;
 
     // step 2. process var-info lists to see what vars are captured, need boxing
@@ -5342,8 +5360,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 builder.SetInsertPoint(bb);
             }
         }
-        else {
-            (void)emit_expr(stmt, &ctx, false, false);
+        else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == boundscheck_sym) {
+            // always emit expressions that update the boundscheck stack
+            emit_expr(stmt, &ctx, false, false);
+        }
+        else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx)) {
+            // elide bounds check blocks
+        } else {
+            emit_expr(stmt, &ctx, false, false);
         }
     }
 
