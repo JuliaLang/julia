@@ -86,19 +86,85 @@ jl_options_t jl_options = { 0,    // quiet
 };
 
 int jl_boot_file_loaded = 0;
-char *jl_stack_lo;
-char *jl_stack_hi;
 size_t jl_page_size;
+
+void jl_init_stack_limits(void)
+{
+#if defined(_OS_LINUX_)
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr)) {
+        // On linux `pthread_getattr_np` can fail on master thread if
+        // `/proc/self/maps` is not readable, in which case we fall back to
+        // `rlimit`
+        struct rlimit rl;
+        getrlimit(RLIMIT_STACK, &rl);
+        jl_stack_hi = (char*)&attr;
+        jl_stack_lo = jl_stack_hi - rl.rlim_cur;
+    }
+    else {
+        void *stackaddr;
+        size_t stacksize;
+        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+        pthread_attr_destroy(&attr);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+    }
+#elif defined(_OS_DARWIN_)
+    extern void *pthread_get_stackaddr_np(pthread_t thread);
+    extern size_t pthread_get_stacksize_np(pthread_t thread);
+    pthread_t thread = pthread_self();
+    void *stackaddr = pthread_get_stackaddr_np(thread);
+    size_t stacksize = pthread_get_stacksize_np(thread);
+    jl_stack_lo = (char*)stackaddr;
+    jl_stack_hi = (char*)stackaddr + stacksize;
+#elif defined(_OS_FREEBSD_)
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_get_np(pthread_self(), &attr);
+    void *stackaddr;
+    size_t stacksize;
+    pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+    pthread_attr_destroy(&attr);
+    jl_stack_lo = (char*)stackaddr;
+    jl_stack_hi = (char*)stackaddr + stacksize;
+#elif defined(_OS_WINDOWS_)
+#  ifdef _COMPILER_MICROSOFT_
+#    ifdef _P64
+    void **tib = (void**)__readgsqword(0x30);
+#    else
+    void **tib = (void**)__readfsdword(0x18);
+#    endif
+#  else
+    void **tib;
+#    ifdef _P64
+    __asm__("movq %%gs:0x30, %0" : "=r" (tib) : : );
+#    else
+    __asm__("movl %%fs:0x18, %0" : "=r" (tib) : : );
+#    endif
+#  endif
+    // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
+    jl_stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
+    jl_stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
+#else
+#  ifdef JULIA_ENABLE_THREADING
+#    warning "Getting stack size for thread is not supported."
+#  endif
+    struct rlimit rl;
+    getrlimit(RLIMIT_STACK, &rl);
+    size_t stack_size = rl.rlim_cur;
+    jl_stack_hi = (char*)&stack_size;
+    jl_stack_lo = jl_stack_hi - stack_size;
+#endif
+}
 
 static void jl_find_stack_bottom(void)
 {
-    size_t stack_size;
-#ifndef _OS_WINDOWS_
+#if !defined(_OS_WINDOWS_) && defined(__has_feature)
+#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
     struct rlimit rl;
 
-    // When using the sanitizers, increase stack size because they bloat stack usage
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
+    // When using the sanitizers, increase stack size because they bloat
+    // stack usage
     const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
     int result;
 
@@ -114,14 +180,7 @@ static void jl_find_stack_bottom(void)
     }
 #endif
 #endif
-
-    getrlimit(RLIMIT_STACK, &rl);
-    stack_size = rl.rlim_cur;
-#else
-    stack_size = 262144;  // guess
-#endif
-    jl_stack_hi = (char*)&stack_size;
-    jl_stack_lo = jl_stack_hi - stack_size;
+    jl_init_stack_limits();
 }
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };

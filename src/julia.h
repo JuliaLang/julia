@@ -1431,6 +1431,8 @@ typedef struct _jl_tls_states_t {
     jl_task_t *root_task;
     jl_value_t *volatile task_arg_in_transit;
     void *stackbase;
+    char *stack_lo;
+    char *stack_hi;
     jl_jmp_buf *volatile jmp_target;
     jl_jmp_buf base_ctx; // base context of stack
     int8_t in_jl_;

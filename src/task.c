@@ -953,7 +953,6 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->bufsz = 0;
     jl_current_task->stkbuf = NULL;
 #else
-    // TODO update for threads
     jl_current_task->ssize = ssize;
     jl_current_task->stkbuf = stack;
 #endif
