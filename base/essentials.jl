@@ -168,15 +168,17 @@ end
 
 esc(e::ANY) = Expr(:escape, e)
 
-macro boundscheck(yesno,blk)
+macro boundscheck(blk)
     # hack: use this syntax since it avoids introducing line numbers
-    :($(Expr(:boundscheck,yesno));
+    :($(Expr(:boundscheck,true));
       $(esc(blk));
       $(Expr(:boundscheck,:pop)))
 end
 
 macro inbounds(blk)
-    :(@boundscheck false $(esc(blk)))
+    :($(Expr(:inbounds,true));
+      $(esc(blk));
+      $(Expr(:inbounds,:pop)))
 end
 
 macro label(name::Symbol)
