@@ -763,69 +763,62 @@ function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
 end
 
 #Generic solver using naive substitution
-function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector=b)
+# manually hoisting x[j] significantly improves performance as of Dec 2015
+# manually eliding bounds checking significantly improves performance as of Dec 2015
+# directly indexing A.data rather than A significantly improves performance as of Dec 2015
+# replacing repeated references to A.data with [Adata = A.data and references to Adata] does not significantly impact performance as of Dec 2015
+# replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj] does not significantly impact performance as of Dec 2015
+function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
-    for j = n:-1:1
-        xj = b[j]
-        for k = j+1:1:n
-            xj -= A[j,k] * x[k]
-        end
-        Ajj = A[j,j]
-        if Ajj == zero(Ajj)
-            throw(SingularException(j))
-        else
-            x[j] = Ajj\xj
+    @inbounds for j in n:-1:1
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        xj = x[j] = A.data[j,j] \ b[j]
+        for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
+            b[i] -= A.data[i,j] * xj
         end
     end
     x
 end
-function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector=b)
+function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
-    for j = n:-1:1
-        xj = b[j]
-        for k = j+1:1:n
-            xj -= A[j,k] * x[k]
-        end
-        x[j] = xj
-    end
-    x
-end
-function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector=b)
-    n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
-    end
-    for j = 1:n
-        xj = b[j]
-        for k = 1:j-1
-            xj -= A[j,k] * x[k]
-        end
-        Ajj = A[j,j]
-        if Ajj == zero(Ajj)
-            throw(SingularException(j))
-        else
-            x[j] = Ajj\xj
+    @inbounds for j in n:-1:1
+        xj = x[j] = b[j]
+        for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
+            b[i] -= A.data[i,j] * xj
         end
     end
     x
 end
-function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector=b)
+function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)) must be equal"))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
-    for j = 1:n
-        xj = b[j]
-        for k = 1:j-1
-            xj -= A[j,k] * x[k]
+    @inbounds for j in 1:n
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        xj = x[j] = A.data[j,j] \ b[j]
+        for i in j+1:n
+            b[i] -= A.data[i,j] * xj
         end
-        x[j] = xj
+    end
+    x
+end
+function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 2)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        xj = x[j] = b[j]
+        for i in j+1:n
+            b[i] -= A.data[i,j] * xj
+        end
     end
     x
 end
