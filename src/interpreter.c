@@ -471,6 +471,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     else if (ex->head == boundscheck_sym) {
         return (jl_value_t*)jl_nothing;
     }
+    else if (ex->head == inbounds_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
     else if (ex->head == fastmath_sym) {
         return (jl_value_t*)jl_nothing;
     }
