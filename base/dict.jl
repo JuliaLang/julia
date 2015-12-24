@@ -8,9 +8,20 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
-function in(p::Pair, a::Associative)
+function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
-    !is(v, secret_table_token) && (v == p[2])
+    if !is(v, secret_table_token)
+        if valcmp === is
+            is(v, p[2]) && return true
+        elseif valcmp === (==)
+            ==(v, p[2]) && return true
+        elseif valcmp === isequal
+            isequal(v, p[2]) && return true
+        else
+            valcmp(v, p[2]) && return true
+        end
+    end
+    return false
 end
 
 function in(p, a::Associative)
@@ -245,12 +256,13 @@ filter(f, d::Associative) = filter!(f,copy(d))
 eltype{K,V}(::Type{Associative{K,V}}) = Pair{K,V}
 
 function isequal(l::Associative, r::Associative)
+    l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
-    for (key, value) in l
-        if !isequal(value, get(r, key, secret_table_token))
+    for pair in l
+        if !in(pair, r, isequal)
             return false
         end
     end
@@ -258,12 +270,13 @@ function isequal(l::Associative, r::Associative)
 end
 
 function ==(l::Associative, r::Associative)
+    l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
-    for (key, value) in l
-        if value != get(r, key, secret_table_token)
+    for pair in l
+        if !in(pair, r, ==)
             return false
         end
     end
@@ -855,3 +868,89 @@ function next{K,V}(t::WeakKeyDict{K,V}, i)
     (Pair{K,V}(kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+
+
+immutable ImmutableDict{K, V} <: Associative{K,V}
+    parent::ImmutableDict{K, V}
+    key::K
+    value::V
+    ImmutableDict() = new() # represents an empty dictionary
+    ImmutableDict(key, value) = (empty = new(); new(empty, key, value))
+    ImmutableDict(parent::ImmutableDict, key, value) = new(parent, key, value)
+end
+
+"""
+    ImmutableDict
+
+ImmutableDict is a Dictionary implemented as an immutable linked list,
+which is optimal for small dictionaries that are constructed over many individual insertions
+Note that it is not possible to remove a value, although it can be partially overridden and hidden
+by inserting a new value with the same key
+
+    ImmutableDict(KV::Pair)
+
+Create a new entry in the Immutable Dictionary for the key => value pair
+
+ - use `(key => value) in dict` to see if this particular combination is in the properties set
+ - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+
+"""
+ImmutableDict
+ImmutableDict{K,V}(KV::Pair{K,V}) = ImmutableDict{K,V}(KV[1], KV[2])
+ImmutableDict{K,V}(t::ImmutableDict{K,V}, KV::Pair) = ImmutableDict{K,V}(t, KV[1], KV[2])
+
+function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
+    key, value = key_value
+    while isdefined(dict, :parent)
+        if dict.key == key
+            if valcmp === is
+                is(value, dict.value) && return true
+            elseif valcmp === (==)
+                ==(value, dict.value) && return true
+            elseif valcmp === isequal
+                isequal(value, dict.value) && return true
+            else
+                valcmp(value, dict.value) && return true
+            end
+        end
+        dict = dict.parent
+    end
+    return false
+end
+
+function haskey(dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        dict.key == key && return true
+        dict = dict.parent
+    end
+    return false
+end
+
+function getindex(dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        dict.key == key && return dict.value
+        dict = dict.parent
+    end
+    throw(KeyError(key))
+end
+function get(dict::ImmutableDict, key, default)
+    while isdefined(dict, :parent)
+        dict.key == key && return dict.value
+        dict = dict.parent
+    end
+    return default
+end
+
+# this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
+start(t::ImmutableDict) = t
+next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
+done(::ImmutableDict, t) = !isdefined(t, :parent)
+length(t::ImmutableDict) = count(x->1, t)
+isempty(t::ImmutableDict) = done(t, start(t))
+copy(t::ImmutableDict) = t
+function similar(t::ImmutableDict)
+    while isdefined(t, :parent)
+        t = t.parent
+    end
+    return t
+end
