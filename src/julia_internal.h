@@ -11,8 +11,8 @@ extern "C" {
 #endif
 
 extern size_t jl_page_size;
-extern char *jl_stack_lo;
-extern char *jl_stack_hi;
+#define jl_stack_lo (jl_get_ptls_states()->stack_lo)
+#define jl_stack_hi (jl_get_ptls_states()->stack_hi)
 extern jl_function_t *jl_typeinf_func;
 #if defined(JL_USE_INTEL_JITEVENTS)
 extern unsigned sig_stack_size;
@@ -228,6 +228,7 @@ void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void);
+void jl_init_stack_limits(void);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void jl_gc_init(void);
@@ -238,7 +239,6 @@ void _julia_init(JL_IMAGE_SEARCH rel);
 #define jl_stackbase (jl_get_ptls_states()->stackbase)
 #endif
 
-void jl_set_stackbase(char *__stk);
 void jl_set_base_ctx(char *__stk);
 
 void jl_init_threading(void);
