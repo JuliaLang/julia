@@ -664,6 +664,17 @@ Generic Functions
        julia> [1:5;] |> x->x.^2 |> sum |> inv
        0.01818181818181818
 
+.. function:: |>(xs::Tuple, f)
+
+   .. Docstring generated from Julia source
+
+   Applies a function to the preceding tuple. This allows for easy function chaining.
+
+   .. doctest::
+
+       julia> (5, 2) |> divrem |> complex |> float
+       2.0 + 1.0im
+
 .. function:: call(x, args...)
 
    .. Docstring generated from Julia source

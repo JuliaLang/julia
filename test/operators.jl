@@ -55,3 +55,10 @@ let xs = [[i:i+4;] for i in 1:10]
         @test max(xs[1:n]...) == [n:n+4;]
     end
 end
+
+# function chaining
+f_chain(x) = :x
+f_chain(xs...) = :xs
+@test 1 |> f_chain == :x
+@test (1, 2) |> f_chain == :xs
+@test ((1, 2),) |> f_chain == :x
