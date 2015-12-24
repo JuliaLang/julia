@@ -1811,7 +1811,7 @@ JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
 
 static int contains_unions(jl_value_t *type)
 {
-    if (jl_is_uniontype(type)) return 1;
+    if (jl_is_uniontype(type)) return type != jl_bottom_type;
     if (jl_is_typector(type)) return contains_unions(((jl_typector_t*)type)->body);
     if (!jl_is_datatype(type)) return 0;
     int i;
@@ -1832,7 +1832,8 @@ static int is_typekey_ordered(jl_value_t **key, size_t n)
         if (jl_is_type(k) &&
             !(jl_is_datatype(k) && (((jl_datatype_t*)k)->uid ||
                                     k == ((jl_datatype_t*)k)->name->primary ||
-                                    (!jl_has_typevars_(k,1) && !contains_unions(k)))))
+                                    (!jl_has_typevars_(k,1) && !contains_unions(k)))) &&
+            k != jl_bottom_type)
             return 0;
     }
     return 1;
