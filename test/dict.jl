@@ -329,16 +329,18 @@ let
 end
 
 # issue #10647
+type T10647{T}; x::T; end
 let
     a = ObjectIdDict()
     a[1] = a
     a[a] = 2
-    type T10647{T}; x::T; end
     a[3] = T10647(a)
+    @test a == a
     show(IOBuffer(), a)
     Base.showdict(IOBuffer(), a)
     Base.showdict(IOBuffer(), a; limit=true)
 end
+
 
 # Issue #7944
 let d = Dict{Int,Int}()
@@ -358,3 +360,72 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test_throws ArgumentError Dict(0)
 @test_throws ArgumentError Dict([1])
 @test_throws ArgumentError Dict([(1,2),0])
+
+# ImmutableDict
+import Base.ImmutableDict
+let d = ImmutableDict{UTF8String, UTF8String}(),
+    k1 = UTF8String("key1"),
+    k2 = UTF8String("key2"),
+    v1 = UTF8String("value1"),
+    v2 = UTF8String("value2"),
+    d1 = ImmutableDict(d, k1 => v1),
+    d2 = ImmutableDict(d1, k2 => v2),
+    d3 = ImmutableDict(d2, k1 => v2),
+    d4 = ImmutableDict(d3, k2 => v1),
+    dnan = ImmutableDict{UTF8String, Float64}(k2, NaN),
+    dnum = ImmutableDict(dnan, k2 => 1)
+
+    @test isempty(collect(d))
+    @test !isempty(collect(d1))
+    @test isempty(d)
+    @test !isempty(d1)
+    @test length(d) == 0
+    @test length(d1) == 1
+    @test length(d2) == 2
+    @test length(d3) == 3
+    @test length(d4) == 4
+    @test !(k1 in keys(d))
+    @test k1 in keys(d1)
+    @test k1 in keys(d2)
+    @test k1 in keys(d3)
+    @test k1 in keys(d4)
+
+    @test !haskey(d, k1)
+    @test haskey(d1, k1)
+    @test haskey(d2, k1)
+    @test haskey(d3, k1)
+    @test haskey(d4, k1)
+    @test !(k2 in keys(d1))
+    @test k2 in keys(d2)
+    @test !(k1 in values(d4))
+    @test v1 in values(d4)
+    @test collect(d1) == [Pair(k1, v1)]
+    @test collect(d4) == reverse([Pair(k1, v1), Pair(k2, v2), Pair(k1, v2), Pair(k2, v1)])
+    @test d1 == ImmutableDict(d, k1 => v1)
+    @test !((k1 => v2) in d2)
+    @test (k1 => v2) in d3
+    @test (k1 => v1) in d4
+    @test (k1 => v2) in d4
+    @test !in(k2 => "value2", d4, is)
+    @test in(k2 => v2, d4, is)
+    @test in(k2 => NaN, dnan, isequal)
+    @test in(k2 => NaN, dnan, is)
+    @test !in(k2 => NaN, dnan, ==)
+    @test !in(k2 => 1, dnum, is)
+    @test in(k2 => 1.0, dnum, is)
+    @test !in(k2 => 1, dnum, <)
+    @test in(k2 => 0, dnum, <)
+    @test get(d1, "key1", :default) === v1
+    @test get(d4, "key1", :default) === v2
+    @test get(d4, "foo", :default) === :default
+    @test get(d, k1, :default) === :default
+    @test d1["key1"] === v1
+    @test d4["key1"] === v2
+    @test copy(d4) === d4
+    @test copy(d) === d
+    @test similar(d3) === d
+    @test similar(d) === d
+
+    @test_throws KeyError d[k1]
+    @test_throws KeyError d1["key2"]
+end
