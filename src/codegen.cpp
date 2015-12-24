@@ -969,7 +969,11 @@ static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
         realize_pending_globals();
         #ifndef USE_ORCJIT
         #ifdef JL_DEBUG_BUILD
+#ifdef LLVM38
+        Module *backup = llvm::CloneModule(active_module).release();
+#else
         Module *backup = llvm::CloneModule(active_module);
+#endif
         if(verifyModule(*active_module))
             writeRecoveryFile(backup);
         #endif
