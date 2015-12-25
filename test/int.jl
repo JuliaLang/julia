@@ -142,3 +142,27 @@ end
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
+@test widemul(Int64(2), Int64(3)) === Int128(6)
+@test widemul(Int64(2), Int64(-3)) === Int128(-6)
+@test widemul(Int64(-2), Int64(-3)) === Int128(6)
+
+@test *(Int128(2), Int128(3)) === Int128(6)
+@test *(Int128(2), Int128(-3)) === Int128(-6)
+@test *(Int128(2), Int128(-3)) === Int128(-6)
+
+@test *(UInt128(2), UInt128(3)) == UInt128(6)
+
+@test div(Int128(7), Int128(3)) === Int128(2)
+@test div(Int128(7), Int128(-3)) === Int128(-2)
+@test div(UInt128(7), UInt128(3)) === UInt128(2)
+
+@test rem(Int128(7), Int128(3)) === Int128(1)
+@test rem(UInt128(7), UInt128(3)) === UInt128(1)
+
+@test Int128(3) << 2 === Int128(12)
+@test Int128(5) >> 2 === Int128(1)
+@test Int128(4) >>> 2 === Int128(1)
+
+@test UInt128(3) << 2 === UInt128(12)
+@test UInt128(5) >> 2 === UInt128(1)
+@test UInt128(4) >>> 2 === UInt128(1)
