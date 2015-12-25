@@ -13,6 +13,17 @@ static std::set<u_int64_t> llvmcallDecls;
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
 
+static Value *GetStringPtr(llvm::IRBuilder <> *builder, GlobalValue *GV, const Twine &Name)
+{
+    Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
+    Value *Args[] = { zero, zero };
+#ifdef LLVM37
+    return builder->CreateInBoundsGEP(GV->getValueType(), GV, Args, Name);
+#else
+    return builder->CreateInBoundsGEP(GV, Args, Name);
+#endif
+}
+
 static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
 {
     // in pseudo-code, this function emits the following:
@@ -94,15 +105,15 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     builder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
-        libname = CreateGlobalStringPtr(&builder,f_lib, "f_lib");
+        libname = GetStringPtr(&builder, stringConst(f_lib), "f_lib");
     }
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
 #ifdef LLVM37
-    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, CreateGlobalStringPtr(&builder, f_name, "f_name"), libptrgv });
+    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, GetStringPtr(&builder, stringConst(f_name), "f_name"), libptrgv });
 #else
-    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, CreateGlobalStringPtr(&builder, f_name, "f_name"), libptrgv);
+    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, GetStringPtr(&builder, stringConst(f_name), "f_name"), libptrgv);
 #endif
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
