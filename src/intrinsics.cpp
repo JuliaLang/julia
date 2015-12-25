@@ -1218,7 +1218,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #ifdef LLVM37
         Value *res = builder.CreateCall(prepare_call(intr),{ix, iy});
 #else
-        Value *res = builder.CreateCall2(intr, ix, iy);
+        Value *res = builder.CreateCall2(prepare_call(intr), ix, iy);
 #endif
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
         raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
@@ -1372,7 +1372,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #ifdef LLVM37
         return builder.CreateCall(prepare_call(ctlz), {x, ConstantInt::get(T_int1,0)});
 #else
-        return builder.CreateCall2(ctlz, x, ConstantInt::get(T_int1,0));
+        return builder.CreateCall2(prepare_call(ctlz), x, ConstantInt::get(T_int1,0));
 #endif
     }
     case cttz_int: {
@@ -1382,7 +1382,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #ifdef LLVM37
         return builder.CreateCall(prepare_call(cttz), {x, ConstantInt::get(T_int1, 0)});
 #else
-        return builder.CreateCall2(cttz, x, ConstantInt::get(T_int1, 0));
+        return builder.CreateCall2(prepare_call(cttz), x, ConstantInt::get(T_int1, 0));
 #endif
     }
 

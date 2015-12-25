@@ -29,35 +29,6 @@ static Instruction *tbaa_decorate(MDNode* md, Instruction* load_or_store)
     return load_or_store;
 }
 
-// This is the same as the IRBUilder's CreateGlobalString(Ptr), except that the
-// string constant gets created in the active module rather than the function's
-// parent module.
-static GlobalVariable *CreateGlobalString(StringRef Str,
-                                                  const Twine &Name,
-                                                  unsigned AddressSpace) {
-    Constant *StrConstant = ConstantDataArray::getString(jl_LLVMContext, Str);
-    GlobalVariable *GV = new GlobalVariable(*active_module, StrConstant->getType(),
-                                          true, GlobalValue::PrivateLinkage,
-                                          StrConstant, Name, NULL,
-                                          GlobalVariable::NotThreadLocal,
-                                          AddressSpace);
-    GV->setUnnamedAddr(true);
-    return GV;
-}
-
-static Value *CreateGlobalStringPtr(llvm::IRBuilder<> *Builder, StringRef Str, const Twine &Name = "",
-                           unsigned AddressSpace = 0) {
-    GlobalVariable *gv = CreateGlobalString(Str, Name, AddressSpace);
-    Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
-    Value *Args[] = { zero, zero };
-#ifdef LLVM37
-    return Builder->CreateInBoundsGEP(gv->getValueType(), gv, Args, Name);
-#else
-    return Builder->CreateInBoundsGEP(gv, Args, Name);
-#endif
-}
-
-
 // Fixing up references to other modules for MCJIT
 std::set<llvm::GlobalValue*> pending_globals;
 static GlobalVariable *prepare_global(GlobalVariable *G)
@@ -98,7 +69,9 @@ static GlobalValue *realize_pending_global(Instruction *User, GlobalValue *G, st
             if (!NewGV) {
                 NewGV = new GlobalVariable(*M, GV->getType()->getElementType(),
                                         GV->isConstant(), GlobalVariable::ExternalLinkage,
-                                        NULL, GV->getName(), NULL, GV->getThreadLocalMode());
+                                        NULL, GV->getName(), NULL, GV->getThreadLocalMode(),
+                                        GV->getType()->getAddressSpace());
+                NewGV->setUnnamedAddr(GV->hasUnnamedAddr());
                 // Move over initializer
                 if (GV->hasInitializer()) {
                     NewGV->setInitializer(GV->getInitializer());
@@ -146,12 +119,11 @@ struct ExprChain {
     struct ExprChain *Next;
 };
 
-static bool handleUse(Use &Use1,llvm::GlobalValue *G,std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals,struct ExprChain *Chain, struct ExprChain *ChainEnd)
+static void handleUse(Use &Use1,llvm::GlobalValue *G,std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals,struct ExprChain *Chain, struct ExprChain *ChainEnd)
 {
     Instruction *User = dyn_cast<Instruction>(Use1.getUser());
     if (!User) {
-        ConstantExpr *Expr = dyn_cast<ConstantExpr>(Use1.getUser());
-        assert(Expr);
+        ConstantExpr *Expr = cast<ConstantExpr>(Use1.getUser());
         Value::use_iterator UI2 = Expr->use_begin(), E2 = Expr->use_end();
         for (; UI2 != E2;) {
             Use &Use2 = *UI2;
@@ -164,17 +136,17 @@ static bool handleUse(Use &Use1,llvm::GlobalValue *G,std::map<llvm::Module*,llvm
                ChainEnd->Next = &NextChain;
             handleUse(Use2,G,FixedGlobals,Chain ? Chain : &NextChain,&NextChain);
         }
-        return true;
+        return;
     }
     llvm::Constant *Replacement = realize_pending_global(User,G,FixedGlobals);
     if (!Replacement)
-        return false;
+        return;
     while (Chain) {
         Replacement = Chain->Expr->getWithOperandReplaced(Chain->OpNo,Replacement);
+        Chain->Expr = cast<ConstantExpr>(Replacement);
         Chain = Chain->Next;
     }
     Use1.set(Replacement);
-    return true;
 }
 
 // RAUW, but only for those users which live in a module, and create a module
@@ -183,12 +155,12 @@ static void realize_pending_globals()
 {
     std::set<llvm::GlobalValue *> local_pending_globals;
     std::swap(local_pending_globals,pending_globals);
+    std::map<llvm::Module*,llvm::GlobalValue*> FixedGlobals;
     for (auto *G : local_pending_globals) {
-        std::map<llvm::Module*,llvm::GlobalValue*> FixedGlobals;
         Value::use_iterator UI = G->use_begin(), E = G->use_end();
         for (; UI != E;)
-            if (!handleUse(*(UI++),G,FixedGlobals,nullptr,nullptr))
-                continue;
+            handleUse(*(UI++),G,FixedGlobals,nullptr,nullptr);
+        FixedGlobals.clear();
     }
 }
 
@@ -331,24 +303,6 @@ static Function *function_proto(Function *F) {
     // copyAttributesFrom sets them anyway, so clear them again manually
     NewF->setPersonalityFn(nullptr);
 #endif
-
-    AttributeSet OldAttrs = F->getAttributes();
-    // Clone any argument attributes that are present in the VMap.
-    auto ArgI = NewF->arg_begin();
-    for (const Argument &OldArg : F->args()) {
-        AttributeSet attrs =
-            OldAttrs.getParamAttributes(OldArg.getArgNo() + 1);
-        if (attrs.getNumSlots() > 0)
-            ArgI->addAttr(attrs);
-        ++ArgI;
-    }
-
-    NewF->setAttributes(
-      NewF->getAttributes()
-          .addAttributes(NewF->getContext(), AttributeSet::ReturnIndex,
-                         OldAttrs.getRetAttributes())
-          .addAttributes(NewF->getContext(), AttributeSet::FunctionIndex,
-                         OldAttrs.getFnAttributes()));
 
     return NewF;
 }
