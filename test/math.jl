@@ -140,7 +140,7 @@ for T in (Float32, Float64)
     @test_approx_eq acosh(cosh(x)) x
     @test_approx_eq asin(sin(x)) x
     @test_approx_eq cbrt(x)^3 x
-    @test_approx_eq cbrt(x^3) x
+    @test cbrt(x^3) == x
     @test_approx_eq asinh(sinh(x)) x
     @test_approx_eq atan(tan(x)) x
     @test_approx_eq atan2(x,y) atan(x/y)
@@ -158,7 +158,7 @@ for T in (Float32, Float64)
     @test_approx_eq sin(asin(x)) x
     @test_approx_eq sinh(asinh(x)) x
     @test_approx_eq sqrt(x)^2 x
-    @test_approx_eq sqrt(x^2) x
+    @test sqrt(x^2) == x
     @test_approx_eq tan(atan(x)) x
     @test_approx_eq tanh(atanh(x)) x
     # Test some properties
