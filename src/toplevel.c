@@ -77,7 +77,13 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_cell_1d(0);
         jl_cell_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f) jl_get_specialization(f, (jl_tupletype_t*)jl_typeof(jl_emptytuple), NULL);
+        if (f) {
+            jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
+            JL_GC_PUSH1(&tt);
+            tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
+            jl_get_specialization1((jl_tupletype_t*)tt, NULL);
+            JL_GC_POP();
+        }
     }
     else {
         jl_module_run_initializer(m);
