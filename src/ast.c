@@ -1094,7 +1094,6 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
     return expr;
 }
 
-// TODO: eval decl types for arguments of non-generic functions
 static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_svec_t *spenv)
 {
     size_t i, l = jl_array_len(vi);

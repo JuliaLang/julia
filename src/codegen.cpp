@@ -1280,9 +1280,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
     jl_lambda_info_t *linfo = NULL;
     JL_GC_PUSH2(&linfo, &tt);
     if (tt != NULL) {
-        linfo = jl_get_specialization(f, tt, NULL);
+        linfo = jl_get_specialization1(tt, NULL);
         if (linfo == NULL) {
-            tt = jl_argtype_with_function(f, tt);
             linfo = jl_method_lookup_by_type(jl_gf_mtable(f), tt, 0, 0);
             if (linfo == NULL) {
                 JL_GC_POP();
@@ -4772,31 +4771,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
 
     // step 11. check arg count
-    // TODO jb/functions: this code can probably be deleted
-    if (jl_is_va_tuple(ctx.linfo->specTypes)) {
-        assert(argCount != NULL);
-        assert(!specsig);
-        std::string msg;
-        Value *enough;
-        if (va) {
-            msg = "too few arguments";
-            enough = builder.CreateICmpUGE(argCount,
-                                           ConstantInt::get(T_int32, nreq==0 ? 0 : nreq-1));
-        }
-        else {
-            msg = "wrong number of arguments";
-            enough = builder.CreateICmpEQ(argCount,
-                                          ConstantInt::get(T_int32, largslen==0 ? 0 : nreq-1));
-        }
-        BasicBlock *elseBB  = BasicBlock::Create(getGlobalContext(), "else", f);
-        BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "ifcont");
-        builder.CreateCondBr(enough, mergeBB, elseBB);
-        builder.SetInsertPoint(elseBB);
-        just_emit_error(msg, &ctx);
-        builder.CreateUnreachable();
-        f->getBasicBlockList().push_back(mergeBB);
-        builder.SetInsertPoint(mergeBB);
-    }
+    // (obsoleted by jb/functions branch)
 
     // step 12. move args into local variables
     Function::arg_iterator AI = f->arg_begin();
