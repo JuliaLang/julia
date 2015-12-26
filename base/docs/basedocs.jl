@@ -161,7 +161,7 @@ end
     include expressions, literal values, and symbols. For example:
 
         macro sayhello(name)
-            return :( println("Hello, ", $name) )
+            return :( println("Hello, ", \$name) )
         end
 
     This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted
