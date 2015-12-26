@@ -896,37 +896,66 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuplet
     jl_lambda_info_t *func = NULL;
     jl_value_t *linenum = NULL;
     JL_GC_PUSH4(&ex, &oldast, &func, &linenum);
-    if (jl_is_expr(m->func->ast))
-        oldast = (jl_expr_t*)m->func->ast;
-    else
-        oldast = (jl_expr_t*)jl_uncompress_ast(m->func, m->func->ast);
-    assert(oldast->head == lambda_sym);
-    ex = jl_exprn(lambda_sym, 2);
-    jl_array_t *oldargnames = jl_lam_args(oldast);
-    jl_array_t *argnames = jl_alloc_cell_1d(jl_array_len(oldargnames));
-    jl_cellset(ex->args, 0, argnames);
-    for (size_t i = 0; i < jl_array_len(oldargnames); ++i) {
-        jl_cellset(argnames, i, jl_cellref(oldargnames,i));
-    }
-    if (env != jl_emptysvec) {
-        func = jl_add_static_parameters(m->func, env, m->sig);
-        func->fptr = NULL;
+    func = m->func;
+    if (jl_is_expr(func->ast)) {
+        oldast = (jl_expr_t*)func->ast;
     }
     else {
-        func = m->func;
+        oldast = (jl_expr_t*)jl_uncompress_ast(func, func->ast);
+        func->ast = (jl_value_t*)oldast; jl_gc_wb(func, oldast);
     }
+    assert(oldast->head == lambda_sym);
+    jl_array_t *oldargnames = jl_lam_args(oldast);
+
+    size_t nenv = jl_svec_len(env)/2;
+    size_t noa = jl_array_len(oldargnames);
+    if (nenv > 0 && (noa < 2 || jl_cellref(oldargnames,1) != (jl_value_t*)((jl_tvar_t*)jl_svecref(env,0))->name)) {
+        jl_array_t *vi = jl_lam_vinfo(oldast);
+        jl_array_grow_beg(oldargnames, nenv);
+        jl_array_grow_beg(vi, nenv);
+        jl_cellset(oldargnames, 0, jl_cellref(oldargnames, nenv));
+        // prepend static parameter names onto arg list and vinfo list
+        for (size_t i = 0; i < nenv; i++) {
+            jl_sym_t *s = ((jl_tvar_t*)jl_svecref(env, i*2))->name;
+            jl_cellset(oldargnames, i+1, s);
+            jl_array_t *v = jl_alloc_cell_1d(3);
+            jl_cellset(v, 0, s); jl_cellset(v, 1, jl_any_type), jl_cellset(v, 2, jl_box_long(0));
+            jl_cellset(vi, i, v);
+        }
+        // remove sparam list from ast
+        jl_cellset(jl_exprarg(oldast, 1), 3, jl_an_empty_cell);
+        //jl_type_infer(func, jl_anytuple_type, func);  // this doesn't help all that much
+        jl_compile_linfo(func, NULL);
+        jl_generate_fptr(func);
+    }
+
+    ex = jl_exprn(lambda_sym, 2);
+    jl_array_t *argnames = jl_alloc_cell_1d(jl_array_len(oldargnames)-nenv);
+    jl_cellset(argnames, 0, jl_cellref(oldargnames,0));
+    for (size_t i = 1; i < jl_array_len(argnames); ++i)
+        jl_cellset(argnames, i, jl_cellref(oldargnames,i+nenv));
+    jl_cellset(ex->args, 0, argnames);
     jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
     jl_cellset(ex->args, 1, body);
-    linenum = jl_box_long(m->func->line);
-    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type,
-                                         m->func->file,
-                                         linenum
-                                         );
+    linenum = jl_box_long(func->line);
+    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, m->func->file, linenum);
     jl_cellset(body->args, 0, linenode);
-    assert(jl_nparams(tt) == jl_array_len(oldargnames) ||
-           (jl_is_rest_arg(jl_cellref(oldargnames,jl_array_len(oldargnames)-1)) &&
-            (jl_nparams(tt) >= jl_array_len(oldargnames)-1)));
-    jl_cellset(body->args, 1, jl_call_method_internal(func, jl_svec_data(tt->parameters), jl_nparams(tt)));
+    assert(jl_nparams(tt) == jl_array_len(argnames) ||
+           (jl_is_rest_arg(jl_cellref(argnames,jl_array_len(argnames)-1)) &&
+            (jl_nparams(tt) >= jl_array_len(argnames)-1)));
+    {
+        // add static parameter values to beginning of arglist
+        size_t na = nenv + jl_nparams(tt);
+        jl_svec_t *argdata = jl_alloc_svec(na);
+        JL_GC_PUSH1(&argdata);
+        jl_svecset(argdata, 0, jl_tparam(tt, 0));
+        size_t i = 1;
+        for(; i < nenv+1; i++) jl_svecset(argdata, i, jl_svecref(env, (i-1)*2+1));
+        for(; i < na; i++)   jl_svecset(argdata, i, jl_tparam(tt, i-nenv));
+        // invoke code generator
+        jl_cellset(body->args, 1, jl_call_method_internal(func, jl_svec_data(argdata), na));
+        JL_GC_POP();
+    }
     jl_cellset(ex->args, 1, jl_exprn(jl_symbol("scope-block"), 1));
     jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
     if (m->tvars != jl_emptysvec) {
@@ -1499,15 +1528,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
     return (jl_tupletype_t*)tt;
 }
 
-jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types, void *cyclectx)
-{
-    jl_tupletype_t *tt = jl_argtype_with_function(f,types);
-    JL_GC_PUSH1(&tt);
-    jl_lambda_info_t *res = jl_get_specialization1((jl_tupletype_t*)tt, cyclectx);
-    JL_GC_POP();
-    return res;
-}
-
 /*
 static int tupletype_any_bottom(jl_value_t *sig)
 {
@@ -1742,9 +1762,9 @@ void jl_compile_all(void)
     htable_free(&h);
 }
 
-JL_DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tupletype_t *types)
+JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
 {
-    (void)jl_get_specialization(f, types, NULL);
+    (void)jl_get_specialization1(types, NULL);
 }
 
 #ifdef JL_TRACE

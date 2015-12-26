@@ -132,7 +132,7 @@ end
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
-    ccall(:jl_compile_hint, Void, (Any, Any), f, Tuple{args...})
+    ccall(:jl_compile_hint, Void, (Any,), Tuple{Core.Typeof(f), args...})
 end
 
 esc(e::ANY) = Expr(:escape, e)

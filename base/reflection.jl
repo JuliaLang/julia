@@ -180,21 +180,25 @@ function methods(f::ANY,t::ANY)
 end
 function _methods(f::ANY,t::ANY,lim)
     ft = isa(f,Type) ? Type{f} : typeof(f)
-    _methods_by_ftype(ft, t, lim)
-end
-function _methods_by_ftype(ft::ANY, t::ANY, lim)
     if isa(t,Type)
-        _methods(Any[ft, t.parameters...], length(t.parameters)+1, lim, [])
+        _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
     else
-        _methods(Any[ft, t...], length(t)+1, lim, [])
+        _methods_by_ftype(Tuple{ft, t...}, lim)
     end
+end
+function _methods_by_ftype(t::ANY, lim)
+    tp = t.parameters
+    for ti in tp
+        if isa(ti, Union)
+            return _methods(Any[tp...], length(tp), lim, [])
+        end
+    end
+    return ccall(:jl_matching_methods, Any, (Any,Int32), t, lim)
 end
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Int32), Tuple{t...}, lim)
-        if new === false
-            return false
-        end
+        new === false && return false
         append!(matching, new::Array{Any,1})
     else
         ti = t[i]
@@ -245,7 +249,7 @@ uncompressed_ast(l::LambdaStaticData) =
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
-    t = to_tuple_type(t)
+    t = tt_cons(Core.Typeof(f), to_tuple_type(t))
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, wrapper, native)
 
     if llvmf == C_NULL
