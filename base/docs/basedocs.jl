@@ -161,7 +161,7 @@ end
     include expressions, literal values, and symbols. For example:
 
         macro sayhello(name)
-            return :( println("Hello, ", \$name) )
+            return :( println("Hello, ", $name) )
         end
 
     This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted
@@ -554,7 +554,7 @@ end
 
     Use multiple arguments like so:
 
-        map(1:10, 10:20) do x, y
+        map(1:10, 11:20) do x, y
             x + y
         end
     """,
