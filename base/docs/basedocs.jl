@@ -554,7 +554,7 @@ end
 
     Use multiple arguments like so:
 
-        map(1:10, 10:20) do x, y
+        map(1:10, 11:20) do x, y
             x + y
         end
     """,
