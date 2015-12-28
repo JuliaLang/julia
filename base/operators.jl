@@ -150,11 +150,16 @@ const % = rem
 const ÷ = div
 .÷(x::Real, y::Real) = x÷y
 
+# mod with offset n
+mod{T<:Real}(x::T, y::T, n::T) = mod(mod(x,y)-mod(n,y),y)+n
+mod{T<:Integer}(x::T, y::T, n::T) = mod(mod(x,y)-mod(n,y),y)+n
+
 # mod returns in [0,y) or (y,0] (for negative y),
 # whereas mod1 returns in (0,y] or [y,0)
 mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
 fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
 fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+
 # efficient version for integers
 mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
 fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)

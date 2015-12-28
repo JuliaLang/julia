@@ -8081,6 +8081,18 @@ x == fld(x,y)*y + mod(x,y)
 mod
 
 """
+    mod(x, y, n)
+
+Modulus after flooring division, returning in the range \[n,y+n),
+if y is positive, or (y+n, n\] if y is negative.
+
+```julia
+x == fld(x-n,y)*y + mod(x,y,n)
+```
+"""
+mod(x, y, n)
+
+"""
     trues(dims)
 
 Create a `BitArray` with all values set to `true`.

@@ -140,6 +140,16 @@ Mathematical Operators
 
        x == fld(x,y)*y + mod(x,y)
 
+.. function:: mod(x, y, n)
+
+   .. Docstring generated from Julia source
+
+   Modulus after flooring division, returning in the range [n,y+n), if y is positive, or (y+n, n] if y is negative.
+
+   .. code-block:: julia
+
+       x == fld(x-n,y)*y + mod(x,y,n)
+
 .. function:: mod2pi(x)
 
    .. Docstring generated from Julia source

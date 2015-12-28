@@ -1347,6 +1347,30 @@ for yr = Any[
             @test sf2 == sf
             @test sm2 == sm
         end
+
+        # test mod
+        nr = []
+        if t2 <: AbstractFloat
+            nr = -10:0.25:10
+        elseif t2 <: Rational
+            nr = -10//1:1//4:10//1
+        elseif t2 <: Integer
+            nr = -10:10
+        end
+
+        for n in nr
+            mn = mod(x,y,n)
+
+            t = promote_type(typeof(x), typeof(y), typeof(n))
+
+            # type tests
+            @test typeof(mn) <: t
+            @test x == fld(x-n,y)*y + mn
+
+            # number checks
+            @test n <= mn < y+n
+            @test mod(mn, y) == mod(x, y)
+        end
     end
 end
 

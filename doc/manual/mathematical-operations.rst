@@ -454,6 +454,7 @@ Function                     Description
 :func:`cld(x,y) <cld>`       ceiling division; quotient rounded towards ``+Inf``
 :func:`rem(x,y) <rem>`       remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
 :func:`mod(x,y) <mod>`       modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
+:func:`mod(x,y,n) <mod>`     modulus with offset n; satisfies ``x == fld(x-n,y)*y + mod(x,y,n)``
 :func:`mod2pi(x) <mod2pi>`   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
 :func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
 :func:`fldmod(x,y) <fldmod>` returns ``(fld(x,y),mod(x,y))``
