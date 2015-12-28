@@ -3877,8 +3877,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         builder.SetInsertPoint(tryblk);
     }
     else if (head == inbounds_sym) {
-        if (jl_array_len(ex->args) > 0 &&
-            jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_DEFAULT) {
+        if (jl_array_len(ex->args) > 0) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
                 ctx->inbounds.push_back(true);
