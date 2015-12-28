@@ -15,7 +15,7 @@ function lucompletepivCopy!(A)
         if A[k,k] ≠ 0
             ρ = k+1:n
             A[ρ, k] = A[ρ, k]/A[k, k]
-            A[ρ, ρ] = A[ρ, ρ] - A[ρ, k] * A[k, ρ]
+            A[ρ, ρ] = A[ρ, ρ] - A[ρ, k:k] * A[k:k, ρ]
         end
     end
     return (A, rowpiv, colpiv)
