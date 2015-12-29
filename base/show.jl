@@ -568,20 +568,23 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
-            if length(func_args) > 1
+            na = length(func_args)
+            if na == 2 || (na > 2 && func in (:+, :++, :*))
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
                     show_list(io, func_args, sep, indent, func_prec, true)
                 end
-            else
+            elseif na == 1
                 # 1-argument call to normally-binary operator
                 op, cl = expr_calls[head]
                 print(io, "(")
                 show_unquoted(io, func, indent)
                 print(io, ")")
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
+            else
+                show_call(io, head, func, func_args, indent)
             end
 
         # normal function (i.e. "f(x,y)")

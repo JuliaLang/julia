@@ -338,3 +338,10 @@ end
 
 # Issue 14121
 @test_repr "(A'x)'"
+
+# issue #14481
+@test_repr "in(1,2,3)"
+@test_repr "<(1,2,3)"
+@test_repr "+(1,2,3)"
+@test_repr "-(1,2,3)"
+@test_repr "*(1,2,3)"
