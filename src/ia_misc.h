@@ -94,7 +94,29 @@ STATIC_INLINE void cpu_lfence(void)
     _mm_lfence();
 }
 
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
+#elif defined(_CPU_AARCH64_)
+
+STATIC_INLINE void cpu_pause(void)
+{
+    __asm__ volatile ("wfe" ::: "memory");
+}
+
+STATIC_INLINE void cpu_mfence(void)
+{
+    __asm__ volatile ("dmb ish" ::: "memory");
+}
+
+STATIC_INLINE void cpu_sfence(void)
+{
+    __asm__ volatile ("dmb ishst" ::: "memory");
+}
+
+STATIC_INLINE void cpu_lfence(void)
+{
+    __asm__ volatile ("dmb ishld" ::: "memory");
+}
+
+#elif defined(_CPU_ARM_) && __ARM_ARCH >= 7
 
 STATIC_INLINE void cpu_pause(void)
 {

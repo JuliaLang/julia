@@ -81,6 +81,8 @@
 #define _CPU_X86_64_
 #elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
 #define _CPU_X86_
+#elif defined(__aarch64__)
+#define _CPU_AARCH64_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
 #elif defined(__PPC64__)
