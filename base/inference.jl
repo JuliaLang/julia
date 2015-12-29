@@ -698,9 +698,10 @@ function abstract_call_gf(f, fargs, argtype, e)
         return Any
     end
     for (m::SimpleVector) in x
+        sig = m[1]
         local linfo
         linfo = try
-            func_for_method(m[3],argtype,m[2])
+            func_for_method(m[3],sig,m[2])
         catch
             NF
         end
@@ -709,7 +710,6 @@ function abstract_call_gf(f, fargs, argtype, e)
             break
         end
         linfo = linfo::LambdaStaticData
-        sig = m[1]
         lsig = length(m[3].sig.parameters)
         # limit argument type tuple based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments

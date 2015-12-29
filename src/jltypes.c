@@ -1238,8 +1238,15 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 // example: {Type{Int},} => {DataType,}
 // calling f{T}(x::T) as f({Int,}) should give T == {DataType,}, but we
 // might temporarily represent this type as {Type{Int},} for more precision.
-static jl_value_t *type_to_static_parameter_value(jl_value_t *t)
+static jl_value_t *type_to_static_parameter_value(jl_value_t *t, jl_value_t *tv, jl_value_t **tvs, int ntv)
 {
+    int i;
+    for(i=0; i < ntv; i++) {
+        if (tv == tvs[i])
+            break;
+    }
+    if (i >= ntv)
+        return t;  // don't widen vars not in env
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
         return jl_typeof(jl_tparam0(t));
     if (jl_is_tuple_type(t)) {
@@ -1249,7 +1256,7 @@ static jl_value_t *type_to_static_parameter_value(jl_value_t *t)
         jl_svec_t *np = jl_alloc_svec(l);
         JL_GC_PUSH1(&np);
         for(size_t i=0; i < l; i++) {
-            jl_value_t *el = type_to_static_parameter_value(jl_svecref(p,i));
+            jl_value_t *el = type_to_static_parameter_value(jl_svecref(p,i), NULL, NULL, 0);
             jl_svecset(np, i, el);
             if (el != jl_svecref(p,i))
                 changed = 1;
@@ -1275,7 +1282,7 @@ void print_env(cenv_t *soln)
 }
 */
 
-static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
+static int solve_tvar_constraints(cenv_t *env, cenv_t *soln, jl_value_t **tvs, int ntv)
 {
     jl_value_t *rt1=NULL, *rt2=NULL, *S=NULL;
     JL_GC_PUSH3(&rt1, &rt2, &S);
@@ -1319,8 +1326,8 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     if (TT == T) {
                         // found T=SS in env
                         if (!jl_is_typevar(SS)) {
-                            rt1 = type_to_static_parameter_value(S);
-                            rt2 = type_to_static_parameter_value(SS);
+                            rt1 = type_to_static_parameter_value(S, T, tvs, ntv);
+                            rt2 = type_to_static_parameter_value(SS, TT, tvs, ntv);
                             jl_value_t *m = meet(rt1, rt2, covariant);
                             if (m == NULL) goto ret_no;
                             S = m;
@@ -1359,7 +1366,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     }
                 }
                 else {
-                    extend(T, type_to_static_parameter_value(S), soln);
+                    extend(T, type_to_static_parameter_value(S, T, tvs, ntv), soln);
                 }
             }
             else {
@@ -1389,8 +1396,8 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 jl_value_t *TT = env->data[j];
                 jl_value_t *SS = env->data[j+1];
                 if (TT == T) {
-                    rt1 = type_to_static_parameter_value(S);
-                    rt2 = type_to_static_parameter_value(SS);
+                    rt1 = type_to_static_parameter_value(S, T, tvs, ntv);
+                    rt2 = type_to_static_parameter_value(SS, TT, tvs, ntv);
                     jl_value_t *m = meet(rt1, rt2, covariant);
                     if (m == NULL) goto ret_no;
                     S = m;
@@ -1406,7 +1413,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     S = (jl_value_t*)jl_new_typevar(underscore_sym,
                                                     (jl_value_t*)jl_bottom_type, S);
                 }
-                extend(T, type_to_static_parameter_value(S), soln);
+                extend(T, type_to_static_parameter_value(S, T, tvs, ntv), soln);
             }
         }
     }
@@ -1473,14 +1480,6 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         }
     }
 
-    if (!solve_tvar_constraints(&env, &eqc)) {
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-    //jl_printf(JL_STDOUT, "env: "); print_env(&env);
-    //jl_printf(JL_STDOUT, "sol: "); print_env(&eqc);
-
-    int env0 = eqc.n;
     jl_value_t **tvs;
     int tvarslen;
     if (jl_is_typevar(tvars)) {
@@ -1492,6 +1491,15 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         tvs = jl_svec_data(tvars);
         tvarslen = jl_svec_len(tvars);
     }
+
+    if (!solve_tvar_constraints(&env, &eqc, tvs, tvarslen)) {
+        JL_GC_POP();
+        return (jl_value_t*)jl_bottom_type;
+    }
+    //jl_printf(JL_STDOUT, "env: "); print_env(&env);
+    //jl_printf(JL_STDOUT, "sol: "); print_env(&eqc);
+
+    int env0 = eqc.n;
     for(int tk=0; tk < tvarslen; tk++) {
         jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
         for(e=0; e < env0; e+=2) {
