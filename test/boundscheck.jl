@@ -4,7 +4,7 @@ module TestBoundsCheck
 using Base.Test
 
 # test for boundscheck block eliminated at same level
-function A1()
+@inline function A1()
     r = 0
     @boundscheck r += 1
     return r
@@ -56,6 +56,6 @@ function A3_inbounds2()
     return r
 end
 
-# @test A3_inbounds2() == 3
+@test A3_inbounds2() == 3
 
 end

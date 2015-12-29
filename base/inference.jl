@@ -2985,7 +2985,10 @@ function inlining_pass(e::Expr, sv, ast)
         end
         res = inlineable(f, e, atype, sv, ast)
         if isa(res,Tuple)
-            if isa(res[2],Array)
+            if isa(res[2],Array) && !isempty(res[2])
+                # inlined statements are out-of-bounds by default
+                unshift!(res[2], Expr(:inbounds, false))
+                push!(res[2], Expr(:inbounds, :pop))
                 append!(stmts,res[2])
             end
             res = res[1]
