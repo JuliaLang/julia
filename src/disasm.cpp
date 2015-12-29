@@ -583,7 +583,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
             switch (S) {
             case MCDisassembler::Fail:
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
