@@ -8,16 +8,28 @@ n = 10 #Size of test matrix
 srand(1)
 
 debug && println("Bidiagonal matrices")
-for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     debug && println("elty is $(elty), relty is $(relty)")
-    dv = convert(Vector{elty}, randn(n))
-    ev = convert(Vector{elty}, randn(n-1))
-    b = convert(Matrix{elty}, randn(n, 2))
-    c = convert(Matrix{elty}, randn(n, n))
-    if (elty <: Complex)
-        dv += im*convert(Vector{elty}, randn(n))
-        ev += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Matrix{elty}, randn(n, 2))
+    if relty <: AbstractFloat
+        dv = convert(Vector{elty}, randn(n))
+        ev = convert(Vector{elty}, randn(n-1))
+        b = convert(Matrix{elty}, randn(n, 2))
+        c = convert(Matrix{elty}, randn(n, n))
+        if (elty <: Complex)
+            dv += im*convert(Vector{elty}, randn(n))
+            ev += im*convert(Vector{elty}, randn(n-1))
+            b += im*convert(Matrix{elty}, randn(n, 2))
+        end
+    elseif relty <: Integer
+        dv = convert(Vector{elty}, rand(1:10, n))
+        ev = convert(Vector{elty}, rand(1:10, n-1))
+        b = convert(Matrix{elty}, rand(1:10, n, 2))
+        c = convert(Matrix{elty}, rand(1:10, n, n))
+        if (elty <: Complex)
+            dv += im*convert(Vector{elty}, rand(1:10, n))
+            ev += im*convert(Vector{elty}, rand(1:10, n-1))
+            b += im*convert(Matrix{elty}, rand(1:10, n, 2))
+        end
     end
 
     debug && println("Test constructors")
@@ -89,23 +101,24 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         condT = cond(map(Complex128,Tfull))
         x = T \ b
         tx = Tfull \ b
+        promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
         @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
-        @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+        @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
         @test_throws DimensionMismatch T \ ones(elty,n+1,2)
         @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
         @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
         if relty != BigFloat
             x = T.'\c.'
             tx = Tfull.' \ c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T.'\b.'
             x = T'\c.'
             tx = Tfull' \ c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T'\b.'
             x = T\c.'
             tx = Tfull\c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T\b.'
         end
 
@@ -133,11 +146,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_throws ArgumentError diag(T,n+1)
 
         debug && println("Eigensystems")
-        d1, v1 = eig(T)
-        d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-        @test_approx_eq isupper?d1:reverse(d1) d2
-        if elty <: Real
-            Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+        if relty <: AbstractFloat
+            d1, v1 = eig(T)
+            d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
+            @test_approx_eq isupper?d1:reverse(d1) d2
+            if elty <: Real
+                Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+            end
         end
 
         debug && println("Singular systems")
@@ -161,8 +176,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.isupper)
         @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.isupper)
         for isupper2 in (true, false)
-            dv = convert(Vector{elty}, randn(n))
-            ev = convert(Vector{elty}, randn(n-1))
+            dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
+            ev = convert(Vector{elty}, relty <: AbstractFloat ? randn(n-1) : rand(1:10, n-1))
             T2 = Bidiagonal(dv, ev, isupper2)
             Tfull2 = full(T2)
             for op in (+, -, *)
