@@ -1052,6 +1052,15 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt,
     assert(jl_is_svec(env));
     func = m->func;
 
+    if (inexact && !jl_types_equal(ti, (jl_value_t*)tt)) {
+        // the compiler might attempt jl_get_specialization on e.g.
+        // convert(::Type{Type{Int}}, ::DataType), which is concrete but might not
+        // equal the run time type. in this case ti would be {Type{Type{Int}}, Type{Int}}
+        // but tt would be {Type{Type{Int}}, DataType}.
+        JL_GC_POP();
+        return jl_bottom_func;
+    }
+
     if (m->isstaged)
         func = jl_instantiate_staged(m,tt,env);
 

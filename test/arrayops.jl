@@ -1443,3 +1443,6 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
         @test isleaftype(Base.return_types(f, ())[1])
     end
 end
+
+# issue #14482
+@inferred Base.map_to!(Int8, 1, Int8[0], Int[0])
