@@ -216,7 +216,7 @@ void ti_threadfun(void *arg)
 
     // initialize this thread (set tid, create heap, etc.)
     ti_initthread(ta->tid);
-    jl_init_stack_limits();
+    jl_init_stack_limits(0);
 
     // set up tasking
     jl_init_root_task(jl_stack_lo, jl_stack_hi - jl_stack_lo);
