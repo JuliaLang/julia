@@ -3596,3 +3596,13 @@ code_typed(f14009, (Int,))
 type B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
+
+# issue #14477
+immutable Z14477
+    fld::Z14477
+    Z14477() = new(new())
+end
+let z1 = Z14477()
+    @test isa(z1, Z14477)
+    @test isa(z1.fld, Z14477)
+end
