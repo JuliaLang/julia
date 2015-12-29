@@ -3468,8 +3468,7 @@ end
 
 # issue #11327 and #13547
 @test_throws MethodError convert(Type{Int}, Float32)
-# TODO: this should probably be a MethodError in `convert`; not sure what's going on
-@test_throws TypeError Array{Type{Int64}}([Float32])
+@test_throws MethodError Array{Type{Int64}}([Float32])
 abstract A11327
 abstract B11327 <: A11327
 f11327{T}(::Type{T},x::T) = x
@@ -3605,4 +3604,10 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
+end
+
+# issue #14482
+let T = TypeVar(:T, true)
+    @test typeintersect(T, Type{Int8}) == Type{Int8}
+    @test typeintersect(Tuple{T}, Tuple{Type{Int8}}) == Tuple{Type{Int8}}
 end
