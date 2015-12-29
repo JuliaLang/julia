@@ -571,7 +571,7 @@ function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = m:-1:1
-            Bij = A.data[i,i]*B[i,j]
+            Bij = A.data[i,i]'B[i,j]
             for k = 1:i - 1
                 Bij += A.data[k,i]'B[k,j]
             end
@@ -604,7 +604,7 @@ function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = 1:m
-            Bij = A.data[i,i]*B[i,j]
+            Bij = A.data[i,i]'B[i,j]
             for k = i + 1:m
                 Bij += A.data[k,i]'B[k,j]
             end
@@ -703,7 +703,7 @@ function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
     end
     for i = 1:m
         for j = 1:n
-            Aij = A[i,j]*B[j,j]
+            Aij = A[i,j]*B.data[j,j]'
             for k = j + 1:n
                 Aij += A[i,k]*B.data[j,k]'
             end
@@ -736,7 +736,7 @@ function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
     end
     for i = 1:m
         for j = n:-1:1
-            Aij = A[i,j]*B[j,j]
+            Aij = A[i,j]*B.data[j,j]'
             for k = 1:j - 1
                 Aij += A[i,k]*B.data[j,k]'
             end
