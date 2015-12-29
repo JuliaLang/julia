@@ -117,6 +117,17 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         return profiler_segv_handler(exception_port, thread, task, exception, code, code_count);
     }
 #endif
+#ifdef JULIA_ENABLE_THREADING
+    jl_tls_states_t *ptls = NULL;
+    for (int16_t tid = 0;tid < jl_n_threads;tid++) {
+        if (pthread_mach_thread_np(jl_all_task_states[tid].system_id) == thread) {
+            ptls = jl_all_task_states[tid].ptls;
+            break;
+        }
+    }
+#else
+    jl_tls_states_t *ptls = &jl_tls_states;
+#endif
     kern_return_t ret = thread_get_state(thread, x86_EXCEPTION_STATE64, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
@@ -126,7 +137,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
 #endif
         jl_value_t *excpt;
-        if (is_addr_on_stack((void*)fault_addr)) {
+        if (is_addr_on_stack(ptls, (void*)fault_addr)) {
             excpt = jl_stackovf_exception;
         }
 #ifdef SEGV_EXCEPTION
