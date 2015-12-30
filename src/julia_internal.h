@@ -228,7 +228,7 @@ void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void);
-void jl_init_stack_limits(void);
+void jl_init_stack_limits(int ismaster);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void jl_gc_init(void);
