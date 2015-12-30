@@ -35,14 +35,14 @@ unsigned sig_stack_size = SIGSTKSZ;
 static pthread_t signals_thread;
 static volatile int remote_sig;
 
-static int is_addr_on_stack(void *addr)
+static int is_addr_on_stack(jl_tls_states_t *ptls, void *addr)
 {
 #ifdef COPY_STACKS
-    return ((char*)addr > (char*)jl_stack_lo-3000000 &&
-            (char*)addr < (char*)jl_stack_hi);
+    return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
+            (char*)addr < (char*)ptls->stack_hi);
 #else
-    return ((char*)addr > (char*)jl_current_task->stkbuf &&
-            (char*)addr < (char*)jl_current_task->stkbuf + jl_current_task->ssize);
+    return ((char*)addr > (char*)ptls->current_task->stkbuf &&
+            (char*)addr < (char*)ptls->current_task->stkbuf + ptls->current_task->ssize);
 #endif
 }
 
@@ -75,7 +75,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     sigset_t sset;
     assert(sig == SIGSEGV);
 
-    if (jl_in_jl_ || is_addr_on_stack(info->si_addr)) { // stack overflow, or restarting jl_
+    if (jl_in_jl_ || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);

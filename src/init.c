@@ -88,46 +88,10 @@ jl_options_t jl_options = { 0,    // quiet
 int jl_boot_file_loaded = 0;
 size_t jl_page_size;
 
-void jl_init_stack_limits(void)
+void jl_init_stack_limits(int ismaster)
 {
-#if defined(_OS_LINUX_)
-    pthread_attr_t attr;
-    if (pthread_getattr_np(pthread_self(), &attr)) {
-        // On linux `pthread_getattr_np` can fail on master thread if
-        // `/proc/self/maps` is not readable, in which case we fall back to
-        // `rlimit`
-        struct rlimit rl;
-        getrlimit(RLIMIT_STACK, &rl);
-        jl_stack_hi = (char*)&attr;
-        jl_stack_lo = jl_stack_hi - rl.rlim_cur;
-    }
-    else {
-        void *stackaddr;
-        size_t stacksize;
-        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
-        pthread_attr_destroy(&attr);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
-    }
-#elif defined(_OS_DARWIN_)
-    extern void *pthread_get_stackaddr_np(pthread_t thread);
-    extern size_t pthread_get_stacksize_np(pthread_t thread);
-    pthread_t thread = pthread_self();
-    void *stackaddr = pthread_get_stackaddr_np(thread);
-    size_t stacksize = pthread_get_stacksize_np(thread);
-    jl_stack_lo = (char*)stackaddr;
-    jl_stack_hi = (char*)stackaddr + stacksize;
-#elif defined(_OS_FREEBSD_)
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_get_np(pthread_self(), &attr);
-    void *stackaddr;
-    size_t stacksize;
-    pthread_attr_getstack(&attr, &stackaddr, &stacksize);
-    pthread_attr_destroy(&attr);
-    jl_stack_lo = (char*)stackaddr;
-    jl_stack_hi = (char*)stackaddr + stacksize;
-#elif defined(_OS_WINDOWS_)
+#ifdef _OS_WINDOWS_
+    (void)ismaster;
 #  ifdef _COMPILER_MICROSOFT_
 #    ifdef _P64
     void **tib = (void**)__readgsqword(0x30);
@@ -147,7 +111,46 @@ void jl_init_stack_limits(void)
     jl_stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
 #else
 #  ifdef JULIA_ENABLE_THREADING
-#    warning "Getting stack size for thread is not supported."
+    // Only use pthread_*_np functions to get stack address for non-master
+    // threads since it seems to return bogus values for master thread on Linux
+    // and possibly OSX.
+    if (!ismaster) {
+#    if defined(_OS_LINUX_)
+        pthread_attr_t attr;
+        pthread_getattr_np(pthread_self(), &attr);
+        void *stackaddr;
+        size_t stacksize;
+        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+        pthread_attr_destroy(&attr);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    elif defined(_OS_DARWIN_)
+        extern void *pthread_get_stackaddr_np(pthread_t thread);
+        extern size_t pthread_get_stacksize_np(pthread_t thread);
+        pthread_t thread = pthread_self();
+        void *stackaddr = pthread_get_stackaddr_np(thread);
+        size_t stacksize = pthread_get_stacksize_np(thread);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    elif defined(_OS_FREEBSD_)
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_get_np(pthread_self(), &attr);
+        void *stackaddr;
+        size_t stacksize;
+        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+        pthread_attr_destroy(&attr);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    else
+#      warning "Getting stack size for thread is not supported."
+#    endif
+    }
+#  else
+    (void)ismaster;
 #  endif
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
@@ -180,7 +183,7 @@ static void jl_find_stack_bottom(void)
     }
 #endif
 #endif
-    jl_init_stack_limits();
+    jl_init_stack_limits(1);
 }
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
