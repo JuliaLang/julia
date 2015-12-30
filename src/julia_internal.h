@@ -21,7 +21,7 @@ extern unsigned sig_stack_size;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
-#define jl_in_gc (jl_get_ptls_states()->in_gc)
+#define jl_in_finalizer (jl_get_ptls_states()->in_finalizer)
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
