@@ -367,7 +367,7 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
             jl_throw(t->exception);
         return t->result;
     }
-    if (jl_in_gc)
+    if (jl_in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     int8_t gc_state = jl_gc_unsafe_enter();
     jl_task_arg_in_transit = arg;
