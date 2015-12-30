@@ -246,8 +246,10 @@ static IntegerType *T_uint64;
 static IntegerType *T_char;
 static IntegerType *T_size;
 
+static Type *T_float16;
 static Type *T_float32;
 static Type *T_float64;
+static Type *T_float128;
 
 static Type *T_pint8;
 static Type *T_pint16;
@@ -5512,10 +5514,12 @@ static void init_julia_llvm_env(Module *m)
     else
         T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
+    T_float16 = Type::getHalfTy(getGlobalContext());
     T_float32 = Type::getFloatTy(getGlobalContext());
     T_pfloat32 = PointerType::get(T_float32, 0);
     T_float64 = Type::getDoubleTy(getGlobalContext());
     T_pfloat64 = PointerType::get(T_float64, 0);
+    T_float128 = Type::getFP128Ty(getGlobalContext());
     T_void = Type::getVoidTy(jl_LLVMContext);
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
