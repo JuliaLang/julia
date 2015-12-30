@@ -63,18 +63,10 @@ JL_DEFINE_MUTEX(finalizers)
  * the safepoint. This is fine since the thread won't be executing any GC
  * critical region during that time).
  *
- * When the GC needs to run the finalizers, it cannot keep the safepoint
- * activate since the code in the finalizer might trigger it and falls into
- * a dead loop. It also (not required since the lock is recursive) release the
- * `finalizers` lock so that other threads can update the finalizers list at
- * the same time. Since the safe point is deactivated in this phase and other
- * threads might have entered managed state from unmanaged state, when the
- * finalizers finish running, the GC thread wait for other threads to enter a
- * safe state again before continuing the GC. It is not possible for other
- * threads to enter the GC since `jl_gc_running` is still `1` in this phase.
- * In the future, it might be better to delay this after the GC is finished so
- * that we can wake up other threads and do more useful works as the finalizers
- * runs.
+ * The finalizers are run after the GC finishes in normal mode (the `gc_state`
+ * when `jl_gc_collect` is called) with `jl_in_finalizer = 1`. (TODO:) When we
+ * have proper support of GC transition in codegen, we should execute the
+ * finalizers in unmanaged (GC safe) mode.
  */
 
 // manipulating mark bits
@@ -363,11 +355,6 @@ JL_DLLEXPORT volatile size_t *jl_gc_signal_page = NULL;
 
 static void jl_wait_for_gc(void)
 {
-    assert(!jl_in_gc && "Safepoint triggered in GC");
-    // In case assertion is off. Make safepoint in GC a segfault instead
-    // of a infinite loop.
-    if (jl_in_gc)
-        return;
     while (jl_gc_running) {
         jl_cpu_pause(); // yield?
     }
@@ -550,10 +537,10 @@ void jl_gc_inhibit_finalizers(int state)
 {
     // NOTE: currently only called with the codegen lock held, but might need
     // more synchronization in the future
-    if (jl_gc_finalizers_inhibited && !state && !jl_in_gc) {
-        jl_in_gc = 1;
+    if (jl_gc_finalizers_inhibited && !state && !jl_in_finalizer) {
+        jl_in_finalizer = 1;
         run_finalizers();
-        jl_in_gc = 0;
+        jl_in_finalizer = 0;
     }
     jl_gc_finalizers_inhibited = state;
 }
@@ -2312,7 +2299,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
     int64_t estimate_freed = -1;
 
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
-    uint64_t post_time = 0, finalize_time = 0;
+    uint64_t post_time = 0;
 #endif
     if (mark_sp == 0 || sweeping) {
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
@@ -2424,28 +2411,16 @@ static void _jl_gc_collect(int full, char *stack_hi)
             allocd_bytes_since_sweep = 0;
             jl_gc_total_freed_bytes += freed_bytes;
             freed_bytes = 0;
-
-#if defined(GC_FINAL_STATS) || defined(GC_TIME)
-            finalize_time = jl_hrtime();
-#endif
-            if (!jl_gc_finalizers_inhibited && to_finalize.len) {
-                jl_gc_signal_end();
-                run_finalizers();
-                jl_gc_signal_begin();
-            }
-#if defined(GC_FINAL_STATS) || defined(GC_TIME)
-            finalize_time = jl_hrtime() - finalize_time;
-#endif
         }
 #if defined(GC_FINAL_STATS) || defined(GC_TIME)
         uint64_t sweep_pause = jl_hrtime() - sweep_t0;
 #endif
 #ifdef GC_FINAL_STATS
-        total_sweep_time += sweep_pause - finalize_time - post_time;
-        total_fin_time += finalize_time + post_time;
+        total_sweep_time += sweep_pause - post_time;
+        total_fin_time += + post_time;
 #endif
 #ifdef GC_TIME
-        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark, %.2f ms in %d fin) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), NS2MS(finalize_time), n_finalized, inc_count, sweep_mask, -allocd_bytes/1024);
+        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), inc_count, sweep_mask, -allocd_bytes/1024);
 #endif
     }
     n_pause++;
@@ -2469,7 +2444,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
 
 JL_DLLEXPORT void jl_gc_collect(int full)
 {
-    if (jl_gc_disable_counter || jl_in_gc)
+    if (jl_gc_disable_counter)
         return;
     char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
@@ -2487,26 +2462,31 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         jl_wait_for_gc();
         jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
 #else
-        // For single thread, jl_in_gc is always true when jl_gc_running is
-        // true so this should never happen.
+        // For single thread, GC should not call itself (in finalizers) before
+        // setting jl_gc_running to false so this should never happen.
         assert(0 && "GC synchronization failure");
 #endif
         return;
     }
     jl_gc_signal_begin();
 
-    jl_in_gc = 1;
     if (!jl_gc_disable_counter)
         _jl_gc_collect(full, stack_hi);
-    jl_in_gc = 0;
 
     // Need to reset the page protection before resetting the flag since
-    // the thread will trigger a segfault immediately after returning from the
-    // signal handler.
+    // the thread will trigger a segfault immediately after returning from
+    // the signal handler.
     jl_gc_signal_end();
     jl_gc_running = 0;
     JL_SIGATOMIC_END();
     jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
+
+    if (!jl_gc_finalizers_inhibited) {
+        int8_t was_in_finalizer = jl_in_finalizer;
+        jl_in_finalizer = 1;
+        run_finalizers();
+        jl_in_finalizer = was_in_finalizer;
+    }
 }
 
 // allocator entry points
