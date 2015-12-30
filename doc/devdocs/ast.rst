@@ -88,18 +88,24 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``method``
     adds a method to a generic function and assigns the result if necessary.
 
-    Has a 1-argument form and a 4-argument form. In the 1-argument form, the
+    Has a 1-argument form and a 4-argument form. The 1-argument form arises
+    from the syntax ``function foo end``. In the 1-argument form, the
     argument is a symbol. If this symbol already names a function in the
     current scope, nothing happens. If the symbol is undefined, a new function
     is created and assigned to the identifier specified by the symbol.
-    This form arises from the syntax ``function foo end``.
+    If the symbol is defined but names a non-function, an error is raised.
+    The definition of "names a function" is that the binding is constant, and
+    refers to an object of singleton type. The rationale for this is that an
+    instance of a singleton type uniquely identifies the type to add the method
+    to. When the type has fields, it wouldn't be clear whether the method was
+    being added to the instance or its type.
 
     The 4-argument form has the following arguments:
-    ``args[1]`` - A function name, or ``false`` if unknown. This is purely
-    informative and sometimes gives the "display name" of the function
-    (i.e. how it should be printed). The reason this can be ``false`` is that
-    functions can be added strictly by type, ``(::T)(x) = x``, in which case
-    there is no "name".
+    ``args[1]`` - A function name, or ``false`` if unknown. If a symbol,
+    then the expression first behaves like the 1-argument form above.
+    This argument is ignored from then on.
+    When this is ``false``, it means a method is being added strictly by type,
+    ``(::T)(x) = x``.
 
     ``args[2]`` - a ``SimpleVector`` of argument type data. ``args[2][1]`` is
     a ``Tuple`` type of the argument types, and ``args[2][2]`` is a

@@ -18,9 +18,6 @@ macro _pure_meta()
     Expr(:meta, :pure)
 end
 
-# TODO jb/functions make this a deprecation
-const call = (f,args...)->f(args...)
-
 # The specialization for 1 arg is important when running with --inline=no, see #11158
 call{T}(::Type{T}, arg) = convert(T, arg)::T
 call{T}(::Type{T}, args...) = convert(T, args...)::T

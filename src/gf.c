@@ -1047,7 +1047,7 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
         // equal the run time type. in this case ti would be {Type{Type{Int}}, Type{Int}}
         // but tt would be {Type{Type{Int}}, DataType}.
         JL_GC_POP();
-        return jl_bottom_func;
+        return NULL;
     }
 
     if (m->isstaged)

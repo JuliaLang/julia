@@ -298,6 +298,10 @@
   (and (symbol? s)
        (eqv? (string.char (string s) 0) #\#)))
 
+(define (is-call-name? name)
+  (or (eq? name 'call) (and (pair? name) (sym-ref? name)
+                            (equal? (caddr name) '(inert call)))))
+
 (define (method-def-expr- name sparams argl body isstaged)
   (receive
    (names bounds) (sparam-name-bounds sparams '() '())
@@ -311,15 +315,8 @@
            (error "function argument and static parameter names must be distinct")))
      (if (and name (not (sym-ref? name)))
          (error (string "invalid method name \"" (deparse name) "\"")))
-     (if (and (not (null? argl)) (or (eq? name 'call) (and (pair? name) (sym-ref? name)
-                                                           (equal? (caddr name) '(inert call)))))
-         (let* ((n (arg-name (car argl)))
-                (n (if (hidden-name? n) "" n))
-                (t (deparse (arg-type (car argl)))))
-           (syntax-deprecation #f
-                               (string "call(" n "::" t ", ...)")
-                               (string "(" n "::" t ")(...)"))))
-     (let* ((name  (if (eq? name 'call) #f name))
+     (let* ((iscall (is-call-name? name))
+            (name  (if iscall #f name))
             (types (llist-types argl))
             (body  (method-lambda-expr argl body))
             (mdef
@@ -336,6 +333,13 @@
                                                                    types)))
                                    (call (top svec) ,@gss)))
                             ,body ,isstaged)))))
+       (if (and iscall (not (null? argl)))
+           (let* ((n (arg-name (car argl)))
+                  (n (if (hidden-name? n) "" n))
+                  (t (deparse (arg-type (car argl)))))
+             (syntax-deprecation #f
+                                 (string "call(" n "::" t ", ...)")
+                                 (string "(" n "::" t ")(...)"))))
        (if (symbol? name)
            `(block ,mdef ,name)  ;; return the function
            mdef)))))
@@ -503,7 +507,8 @@
                                 (list `(... ,(arg-name (car vararg))))))))
           #f)
         ;; return primary function
-        ,name))))
+        ,(if (or (not (symbol? name)) (is-call-name? name))
+             '(null) name)))))
 
 (define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl . kw)
   ;; prologue includes line number node and eventual meta nodes
