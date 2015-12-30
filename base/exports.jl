@@ -284,7 +284,6 @@ export
     At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt,
-    call,
 
 # scalar math
     @evalpoly,
