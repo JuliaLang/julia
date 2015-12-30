@@ -3877,17 +3877,24 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         builder.SetInsertPoint(tryblk);
     }
     else if (head == inbounds_sym) {
+        // manipulate inbounds stack
+        // note that when entering an inbounds context, we must also update
+        // the boundsCheck context to be false
         if (jl_array_len(ex->args) > 0) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
                 ctx->inbounds.push_back(true);
+                ctx->boundsCheck.push_back(false);
             }
             else if (arg == jl_false) {
                 ctx->inbounds.push_back(false);
+                ctx->boundsCheck.push_back(false);
             }
             else {
                 if (!ctx->inbounds.empty())
                     ctx->inbounds.pop_back();
+                if (!ctx->boundsCheck.empty())
+                    ctx->boundsCheck.pop_back();
             }
         }
         return ghostValue(jl_void_type);
