@@ -414,7 +414,8 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
         Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'C', $isunitc, A.data, B)
 
         # Right division
-        A_rdiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedVecOrMat{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
+        A_rdiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
+        A_rdiv_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
         A_rdiv_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
         A_rdiv_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
 
@@ -1048,7 +1049,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UpperTriangular)
             for k = j + 1:n
                 Aij -= A[i,k]*B.data[j,k]'
             end
-            A[i,j] = Aij/B[j,j]
+            A[i,j] = Aij/B.data[j,j]'
         end
     end
     A
@@ -1081,7 +1082,7 @@ function A_rdiv_Bc!(A::StridedMatrix, B::LowerTriangular)
             for k = 1:j - 1
                 Aij -= A[i,k]*B.data[j,k]'
             end
-            A[i,j] = Aij/B[j,j]
+            A[i,j] = Aij/B.data[j,j]'
         end
     end
     A
@@ -1096,6 +1097,72 @@ function A_rdiv_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
             Aij = A[i,j]
             for k = 1:j - 1
                 Aij -= A[i,k]*B.data[j,k]'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+
+function A_rdiv_Bt!(A::StridedMatrix, B::UpperTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = n:-1:1
+            Aij = A[i,j]
+            for k = j + 1:n
+                Aij -= A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij/B.data[j,j].'
+        end
+    end
+    A
+end
+function A_rdiv_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = n:-1:1
+            Aij = A[i,j]
+            for k = j + 1:n
+                Aij -= A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+
+function A_rdiv_Bt!(A::StridedMatrix, B::LowerTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = 1:n
+            Aij = A[i,j]
+            for k = 1:j - 1
+                Aij -= A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij/B.data[j,j].'
+        end
+    end
+    A
+end
+function A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = 1:n
+            Aij = A[i,j]
+            for k = 1:j - 1
+                Aij -= A[i,k]*B.data[j,k].'
             end
             A[i,j] = Aij
         end
