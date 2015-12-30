@@ -382,6 +382,7 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
+A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
 A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
@@ -391,14 +392,19 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
     @eval begin
         # Vector multiplication
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
+        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
+        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
+        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'C', $isunitc, A.data, b)
 
         # Matrix multiplication
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
+        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
         Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
         Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
 
+        A_mul_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
         A_mul_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
         A_mul_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
 
@@ -581,7 +587,7 @@ function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = m:-1:1
-            Bij = A.data[i,i]*B[i,j]
+            Bij = A.data[i,i]'B[i,j]
             for k = 1:i - 1
                 Bij += A.data[k,i]'B[k,j]
             end
@@ -614,7 +620,7 @@ function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     for j = 1:n
         for i = 1:m
-            Bij = A.data[i,i]*B[i,j]
+            Bij = A.data[i,i]'B[i,j]
             for k = i + 1:m
                 Bij += A.data[k,i]'B[k,j]
             end
@@ -633,6 +639,72 @@ function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
             Bij = B[i,j]
             for k = i + 1:m
                 Bij += A.data[k,i]'B[k,j]
+            end
+            B[i,j] = Bij
+        end
+    end
+    B
+end
+
+function At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != size(A, 1)
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+    end
+    for j = 1:n
+        for i = m:-1:1
+            Bij = A.data[i,i].'B[i,j]
+            for k = 1:i - 1
+                Bij += A.data[k,i].'B[k,j]
+            end
+            B[i,j] = Bij
+        end
+    end
+    B
+end
+function At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != size(A, 1)
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+    end
+    for j = 1:n
+        for i = m:-1:1
+            Bij = B[i,j]
+            for k = 1:i - 1
+                Bij += A.data[k,i].'B[k,j]
+            end
+            B[i,j] = Bij
+        end
+    end
+    B
+end
+
+function At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != size(A, 1)
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+    end
+    for j = 1:n
+        for i = 1:m
+            Bij = A.data[i,i].'B[i,j]
+            for k = i + 1:m
+                Bij += A.data[k,i].'B[k,j]
+            end
+            B[i,j] = Bij
+        end
+    end
+    B
+end
+function At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    if m != size(A, 1)
+        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+    end
+    for j = 1:n
+        for i = 1:m
+            Bij = B[i,j]
+            for k = i + 1:m
+                Bij += A.data[k,i].'B[k,j]
             end
             B[i,j] = Bij
         end
@@ -713,7 +785,7 @@ function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
     end
     for i = 1:m
         for j = 1:n
-            Aij = A[i,j]*B[j,j]
+            Aij = A[i,j]*B.data[j,j]'
             for k = j + 1:n
                 Aij += A[i,k]*B.data[j,k]'
             end
@@ -746,7 +818,7 @@ function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
     end
     for i = 1:m
         for j = n:-1:1
-            Aij = A[i,j]*B[j,j]
+            Aij = A[i,j]*B.data[j,j]'
             for k = 1:j - 1
                 Aij += A[i,k]*B.data[j,k]'
             end
@@ -765,6 +837,72 @@ function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
             Aij = A[i,j]
             for k = 1:j - 1
                 Aij += A[i,k]*B.data[j,k]'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+
+function A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = 1:n
+            Aij = A[i,j]*B.data[j,j].'
+            for k = j + 1:n
+                Aij += A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+function A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = 1:n
+            Aij = A[i,j]
+            for k = j + 1:n
+                Aij += A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+
+function A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = n:-1:1
+            Aij = A[i,j]*B.data[j,j].'
+            for k = 1:j - 1
+                Aij += A[i,k]*B.data[j,k].'
+            end
+            A[i,j] = Aij
+        end
+    end
+    A
+end
+function A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
+    m, n = size(A)
+    if size(B, 1) != n
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+    end
+    for i = 1:m
+        for j = n:-1:1
+            Aij = A[i,j]
+            for k = 1:j - 1
+                Aij += A[i,k]*B.data[j,k].'
             end
             A[i,j] = Aij
         end
