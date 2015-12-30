@@ -307,25 +307,36 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             # Triangular-dense Matrix/vector multiplication
             @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
             @test_approx_eq A1*B full(A1)*B
+            @test_approx_eq A1.'B[:,1] full(A1).'B[:,1]
             @test_approx_eq A1'B[:,1] full(A1)'B[:,1]
+            @test_approx_eq A1.'B full(A1).'B
             @test_approx_eq A1'B full(A1)'B
+            @test_approx_eq A1*B.' full(A1)*B.'
             @test_approx_eq A1*B' full(A1)*B'
             @test_approx_eq B*A1 B*full(A1)
+            @test_approx_eq B[:,1].'A1 B[:,1].'full(A1)
             @test_approx_eq B[:,1]'A1 B[:,1]'full(A1)
+            @test_approx_eq B.'A1 B.'full(A1)
             @test_approx_eq B'A1 B'full(A1)
+            @test_approx_eq B*A1.' B*full(A1).'
             @test_approx_eq B*A1' B*full(A1)'
+            @test_approx_eq B[:,1].'A1.' B[:,1].'full(A1).'
             @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
+            @test_approx_eq B.'A1.' B.'full(A1).'
             @test_approx_eq B'A1' B'full(A1)'
 
             if eltyB == elty1
                 @test_approx_eq A_mul_B!(zeros(B),A1,B) A1*B
                 @test_approx_eq A_mul_Bc!(zeros(B),A1,B) A1*B'
+                @test_approx_eq A_mul_Bt!(zeros(B),A1,B) A1*B.'
             end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(ones(eltyB,n+1,n+1), A1)
+            @test_throws DimensionMismatch Base.LinAlg.At_mul_B!(A1, ones(eltyB,n+1))
             @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(A1, ones(eltyB,n+1))
             @test_throws DimensionMismatch Base.LinAlg.A_mul_Bc!(ones(eltyB,n+1,n+1),A1)
+            @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!(ones(eltyB,n+1,n+1),A1)
 
             # ... and division
             @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
