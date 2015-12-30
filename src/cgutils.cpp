@@ -1295,7 +1295,7 @@ static bool is_inbounds(jl_codectx_t *ctx)
     // inbounds rule is either of top two values on inbounds stack are true
     bool inbounds = !ctx->inbounds.empty() && ctx->inbounds.back();
     if (ctx->inbounds.size() > 1)
-        inbounds ^= ctx->inbounds[ctx->inbounds.size()-2];
+        inbounds |= ctx->inbounds[ctx->inbounds.size()-2];
     return inbounds;
 }
 
