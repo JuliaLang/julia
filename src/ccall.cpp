@@ -242,6 +242,8 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #  else
 #    include "abi_x86.cpp"
 #  endif
+#elif defined _CPU_AARCH64_
+#    include "abi_aarch64.cpp"
 #else
 #  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
 #  include "abi_llvm.cpp"

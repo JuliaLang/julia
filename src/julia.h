@@ -21,6 +21,9 @@ extern "C" {
 #  define jl_jmp_buf sigjmp_buf
 #  if defined(_CPU_ARM_)
 #    define MAX_ALIGN 8
+#  elif defined(_CPU_AARCH64_)
+// int128 is 16 bytes aligned on aarch64
+#    define MAX_ALIGN 16
 #  else
 #    define MAX_ALIGN sizeof(void*)
 #  endif
@@ -434,6 +437,7 @@ extern DLLEXPORT jl_datatype_t *jl_int32_type;
 extern DLLEXPORT jl_datatype_t *jl_uint32_type;
 extern DLLEXPORT jl_datatype_t *jl_int64_type;
 extern DLLEXPORT jl_datatype_t *jl_uint64_type;
+extern DLLEXPORT jl_datatype_t *jl_float16_type;
 extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
 extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
