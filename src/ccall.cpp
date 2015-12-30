@@ -141,6 +141,8 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
 #  else
 #    include "abi_x86.cpp"
 #  endif
+#elif defined _CPU_AARCH64_
+#    include "abi_aarch64.cpp"
 #else
 #  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
 #  include "abi_llvm.cpp"
@@ -900,8 +902,12 @@ static std::string generate_func_sig(
                 // Note that even though the LLVM argument is called ByVal
                 // this really means that the thing we're passing is pointing to
                 // the thing we want to pass by value
+#ifndef _CPU_AARCH64_
+                // the aarch64 backend seems to interpret ByVal as
+                // implicitly passed on stack.
                 if (byRef)
                     paramattrs[i + sret].addAttribute(Attribute::ByVal);
+#endif
                 if (inReg)
                     paramattrs[i + sret].addAttribute(Attribute::InReg);
                 if (av != Attribute::None)
