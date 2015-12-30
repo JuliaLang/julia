@@ -146,28 +146,22 @@ end
 @test widemul(Int64(2), Int64(-3)) === Int128(-6)
 @test widemul(Int64(-2), Int64(-3)) === Int128(6)
 
-@test *(Int128(2), Int128(3)) === Int128(6)
-@test *(Int128(2), Int128(-3)) === Int128(-6)
-@test *(Int128(2), Int128(-3)) === Int128(-6)
-
-@test *(UInt128(2), UInt128(3)) == UInt128(6)
-
-@test div(Int128(7), Int128(3)) === Int128(2)
-@test div(Int128(7), Int128(-3)) === Int128(-2)
-@test div(UInt128(7), UInt128(3)) === UInt128(2)
-
-@test rem(Int128(7), Int128(3)) === Int128(1)
-@test rem(UInt128(7), UInt128(3)) === UInt128(1)
-
-@test Int128(3) << 2 === Int128(12)
-@test Int128(5) >> 2 === Int128(1)
-@test Int128(4) >>> 2 === Int128(1)
-
-@test UInt128(3) << 2 === UInt128(12)
-@test UInt128(5) >> 2 === UInt128(1)
-@test UInt128(4) >>> 2 === UInt128(1)
-
 for T in [Int128, UInt128]
+    @test *(T(2), T(3)) === T(6)
+    @test *(T(2), T(-3)) === T(-6)
+    @test *(T(-2), T(3)) === T(-6)
+    @test *(T(-2), T(-3)) === T(6)
+
+    @test div(T(7), T(3)) === T(2)
+    @test div(T(7), T(-3)) === T(-2)
+    @test div(T(-7), T(3)) === T(-2)
+    @test div(T(-7), T(-3)) === T(2)
+
+    @test rem(T(7), T(3)) === T(1)
+    @test T(3) << 2 === T(12)
+    @test T(5) >> 2 === T(1)
+    @test T(4) >>> 2 === T128(1)
+
     @test (typemax(T) + 1) === typemin(T)
-    @test (typemin(T) - 1) === typemin(T)
+    @test (typemin(T) - 1) === typemax(T)
 end
