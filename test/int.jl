@@ -166,3 +166,8 @@ end
 @test UInt128(3) << 2 === UInt128(12)
 @test UInt128(5) >> 2 === UInt128(1)
 @test UInt128(4) >>> 2 === UInt128(1)
+
+for T in [Int128, UInt128]
+    @test (typemax(T) + 1) === typemin(T)
+    @test (typemin(T) - 1) === typemin(T)
+end
