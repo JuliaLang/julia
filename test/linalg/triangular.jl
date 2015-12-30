@@ -349,8 +349,11 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
             end
             @test_approx_eq B/A1 B/full(A1)
+            @test_approx_eq B/A1.' B/full(A1).'
             @test_approx_eq B/A1' B/full(A1)'
+            @test_approx_eq B.'/A1 B.'/full(A1)
             @test_approx_eq B'/A1 B'/full(A1)
+            @test_approx_eq B.'/A1.' B.'/full(A1).'
             @test_approx_eq B'/A1' B'/full(A1)'
 
             # Error bounds
