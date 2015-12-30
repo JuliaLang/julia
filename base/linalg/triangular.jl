@@ -410,6 +410,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
 
         # Left division
         A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
+        At_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
         Ac_ldiv_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
         Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'C', $isunitc, A.data, B)
 
@@ -968,6 +969,124 @@ function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector 
         for i in j+1:n
             b[i] -= A.data[i,j] * xj
         end
+    end
+    x
+end
+# in the following transpose and conjugate transpose naive substitution variants,
+# accumulating in z rather than b[j] significantly improves performance as of Dec 2015
+function At_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j] * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j] \ z
+    end
+    x
+end
+function At_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j] * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+function At_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j] * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j] \ z
+    end
+    x
+end
+function At_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j] * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+function Ac_ldiv_B!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j]' * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j]' \ z
+    end
+    x
+end
+function Ac_ldiv_B!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= A.data[i,j]' * x[i]
+        end
+        x[j] = z
+    end
+    x
+end
+function Ac_ldiv_B!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j]' * x[i]
+        end
+        A.data[j,j] == zero(A.data[j,j]) && throw(SingularException(j))
+        x[j] = A.data[j,j]' \ z
+    end
+    x
+end
+function Ac_ldiv_B!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    n = size(A, 1)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= A.data[i,j]' * x[i]
+        end
+        x[j] = z
     end
     x
 end

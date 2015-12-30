@@ -341,9 +341,13 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             # ... and division
             @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
             @test_approx_eq A1\B full(A1)\B
+            @test_approx_eq A1.'\B[:,1] full(A1).'\B[:,1]
             @test_approx_eq A1'\B[:,1] full(A1)'\B[:,1]
+            @test_approx_eq A1.'\B full(A1).'\B
             @test_approx_eq A1'\B full(A1)'\B
+            @test_approx_eq A1\B.' full(A1)\B.'
             @test_approx_eq A1\B' full(A1)\B'
+            @test_approx_eq A1.'\B.' full(A1).'\B.'
             @test_approx_eq A1'\B' full(A1)'\B'
             if t1 == UpperTriangular || t1 == LowerTriangular
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
