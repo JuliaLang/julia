@@ -58,4 +58,13 @@ end
 
 @test A3_inbounds2() == 3
 
+# swapped nesting order of @boundscheck and @inbounds
+function A1_nested()
+    r = 0
+    @boundscheck @inbounds r += 1
+    return r
+end
+
+@test A1_nested() == 1
+
 end
