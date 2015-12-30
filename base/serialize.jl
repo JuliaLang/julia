@@ -367,6 +367,8 @@ function should_send_whole_type(s, t::ANY)
     return t.name.module === Main
 end
 
+# `type_itself` means we are serializing a type object. when it's false, we are
+# sending the type tag part of some other object's representation.
 function serialize_type_data(s, t::ANY, type_itself::Bool)
     whole = should_send_whole_type(s, t)
     form = type_itself ? UInt8(0) : UInt8(1)
