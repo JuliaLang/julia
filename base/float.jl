@@ -265,12 +265,25 @@ function cmp(x::AbstractFloat, y::Real)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
+# Exact Float (Tf) vs Integer (Ti) comparisons
+# Assumes:
+# - typemax(Ti) == 2^n-1
+# - typemax(Ti) can't be exactly represented by Tf:
+#   => Tf(typemax(Ti)) == 2^n or Inf
+# - typemin(Ti) can be exactly represented by Tf
+#
+# 1. convert y::Ti to float fy::Tf
+# 2. perform Tf comparison x vs fy
+# 3. if x == fy, check if (1) resulted in rounding:
+#  a. convert fy back to Ti and compare with original y
+#  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
+#     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
     for Tf in (Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x == fy) & (y == unsafe_trunc($Ti,fy))
+                (x == fy) & (fy != $(Tf(typemax(Ti)))) & (y == unsafe_trunc($Ti,fy))
             end
             ==(y::$Ti, x::$Tf) = x==y
 
