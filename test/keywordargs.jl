@@ -185,3 +185,11 @@ let
     @test kwf1(0; p, q) == 310
     @test kwf1(0; q, hundreds=4) == 410
 end
+
+# with anonymous functions, issue #2773
+let f = (x;a=1,b=2)->(x, a, b)
+    @test f(0) === (0, 1, 2)
+    @test f(1,a=10,b=20) === (1,10,20)
+    @test f(0,b=88) === (0, 1, 88)
+    @test_throws ErrorException f(0,z=1)
+end
