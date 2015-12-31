@@ -810,7 +810,7 @@ ifneq ($(OS),WINNT)
 endif
 endif
 	echo 1 > $@
-$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre2-$(PCRE_VER)/checked
+$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET)
 	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $@
 	touch -c $@
@@ -1319,7 +1319,7 @@ arpack-ng-$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
 #	$(MAKE) check $(ARPACK_MFLAGS) && \
 #	cd TESTS && $(call spawn,./dnsimp$(EXE))
 	echo 1 > $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng-$(ARPACK_VER)/checked | $(build_shlibdir)
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
 	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
 ifeq ($(OS), WINNT)
 	mv $(build_shlibdir)/libarpack-2.dll $@
@@ -1466,14 +1466,14 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: check-fftw-single check-fftw-double
-	@$(MAKE) -s install-fftw-single
-	@$(MAKE) -s install-fftw-double
+install-fftw:
+	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-single
+	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-double
 
-get-fftw-single: fftw-$(FFTW_VER).tar.gz
-configure-fftw-single: fftw-$(FFTW_VER)-single/config.status
-compile-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
-check-fftw-single: fftw-$(FFTW_VER)-single/checked
+get-fftw-single: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
+configure-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
+compile-fftw-single: $(FFTW_SINGLE_SRC_TARGET)
+check-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/checked
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 
 get-fftw-double: fftw-$(FFTW_VER).tar.gz
@@ -1746,9 +1746,9 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
-	$(INSTALL_M) gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
-	$(INSTALL_F) gmp-$(GMP_VER)/gmp.h $(build_includedir)
+$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) | $(build_shlibdir) $(build_includedir)
+	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
+	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
 	touch -c $@
 
@@ -1810,7 +1810,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
-$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
+$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET)
 	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
 	touch -c $@
