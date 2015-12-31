@@ -220,23 +220,19 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 # displaying type-ambiguity warnings
 
 function code_warntype(io::IO, f, t::ANY)
-    task_local_storage(:TYPEEMPHASIZE, true)
-    try
-        ct = code_typed(f, t)
-        for ast in ct
-            println(io, "Variables:")
-            vars = ast.args[2][1]
-            for v in vars
-                print(io, "  ", v[1])
-                show_expr_type(io, v[2])
-                print(io, '\n')
-            end
-            print(io, "\nBody:\n  ")
-            show_unquoted(io, ast.args[3], 2)
-            print(io, '\n')
+    emph_io = IOContext(io, :TYPEEMPHASIZE => true)
+    ct = code_typed(f, t)
+    for ast in ct
+        println(emph_io, "Variables:")
+        vars = ast.args[2][1]
+        for v in vars
+            print(emph_io, "  ", v[1])
+            show_expr_type(emph_io, v[2], true)
+            print(emph_io, '\n')
         end
-    finally
-        task_local_storage(:TYPEEMPHASIZE, false)
+        print(emph_io, "\nBody:\n  ")
+        show_unquoted(emph_io, ast.args[3], 2)
+        print(emph_io, '\n')
     end
     nothing
 end
@@ -434,7 +430,7 @@ Print information about exported global variables in a module, optionally restri
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
 function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
-    maxline = tty_size()[2]
+    maxline = iosize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
     for v in sort!(names(m))

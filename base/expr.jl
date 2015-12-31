@@ -45,18 +45,6 @@ astcopy(x) = x
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
 
-function show(io::IO, tv::TypeVar)
-    if !is(tv.lb, Bottom)
-        show(io, tv.lb)
-        print(io, "<:")
-    end
-    write(io, tv.name)
-    if !is(tv.ub, Any)
-        print(io, "<:")
-        show(io, tv.ub)
-    end
-end
-
 expand(x) = ccall(:jl_expand, Any, (Any,), x)
 macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 

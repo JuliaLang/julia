@@ -8,9 +8,20 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
-function in(p::Pair, a::Associative)
+function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
-    !is(v, secret_table_token) && (v == p[2])
+    if !is(v, secret_table_token)
+        if valcmp === is
+            is(v, p[2]) && return true
+        elseif valcmp === (==)
+            ==(v, p[2]) && return true
+        elseif valcmp === isequal
+            isequal(v, p[2]) && return true
+        else
+            valcmp(v, p[2]) && return true
+        end
+    end
+    return false
 end
 
 function in(p, a::Associative)
@@ -50,87 +61,81 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
 end
 
 showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
-function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false, compact = false,
-                       sz=(s = tty_size(); (s[1]-3, s[2])))
-    shown_set = get(task_local_storage(), :SHOWNSET, nothing)
-    if shown_set === nothing
-        shown_set = ObjectIdDict()
-        task_local_storage(:SHOWNSET, shown_set)
+function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
+    (:SHOWN_SET => t) in io && (print(io, "#= circular reference =#"); return)
+
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = limit_output(io)
+    if compact
+        # show in a Julia-syntax-like form: Dict(k=>v, ...)
+        if isempty(t)
+            print(io, typeof(t), "()")
+        else
+            if isleaftype(K) && isleaftype(V)
+                print(io, typeof(t).name)
+            else
+                print(io, typeof(t))
+            end
+            print(io, '(')
+            first = true
+            n = 0
+            for (k, v) in t
+                first || print(io, ',')
+                first = false
+                show(recur_io, k)
+                print(io, "=>")
+                show(recur_io, v)
+                n+=1
+                limit && n >= 10 && (print(io, "…"); break)
+            end
+            print(io, ')')
+        end
+        return
     end
-    t in keys(shown_set) && (print(io, "#= circular reference =#"); return)
 
-    try
-        shown_set[t] = true
-        if compact
-            # show in a Julia-syntax-like form: Dict(k=>v, ...)
-            if isempty(t)
-                print(io, typeof(t), "()")
-            else
-                if isleaftype(K) && isleaftype(V)
-                    print(io, typeof(t).name)
-                else
-                    print(io, typeof(t))
-                end
-                print(io, '(')
-                first = true
-                n = 0
-                for (k, v) in t
-                    first || print(io, ',')
-                    first = false
-                    show(io, k)
-                    print(io, "=>")
-                    show(io, v)
-                    n+=1
-                    limit && n >= 10 && (print(io, "…"); break)
-                end
-                print(io, ')')
-            end
-            return
+    # Otherwise show more descriptively, with one line per key/value pair
+    print(io, summary(t))
+    isempty(t) && return
+    print(io, ":")
+    if limit
+        sz = iosize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+
+        # determine max key width to align the output, caching the strings
+        ks = Array(AbstractString, min(rows, length(t)))
+        keylen = 0
+        for (i, k) in enumerate(keys(t))
+            i > rows && break
+            ks[i] = sprint(0, show, k, env=recur_io)
+            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
         end
+    else
+        rows = cols = 0
+    end
 
-        # Otherwise show more descriptively, with one line per key/value pair
-        rows, cols = sz
-        print(io, summary(t))
-        isempty(t) && return
-        print(io, ":")
+    for (i, (k, v)) in enumerate(t)
+        print(io, "\n  ")
+        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
         if limit
-            rows < 2   && (print(io, " …"); return)
-            cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
-            cols -= 6 # Subtract the widths of prefix "  " separator " => "
-            rows -= 2 # Subtract the summary and final ⋮ continuation lines
-
-            # determine max key width to align the output, caching the strings
-            ks = Array(AbstractString, min(rows, length(t)))
-            keylen = 0
-            for (i, k) in enumerate(keys(t))
-                i > rows && break
-                ks[i] = sprint(show, k)
-                keylen = clamp(length(ks[i]), keylen, div(cols, 3))
-            end
+            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        else
+            key = sprint(0, show, k, env=recur_io)
         end
+        print(recur_io, key)
+        print(io, " => ")
 
-        for (i, (k, v)) in enumerate(t)
-            print(io, "\n  ")
-            limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
-
-            if limit
-                key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
-            else
-                key = sprint(show, k)
-            end
-            print(io, key)
-            print(io, " => ")
-
-            if limit
-                val = with_output_limit(()->sprint(show, v))
-                val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
-                print(io, val)
-            else
-                show(io, v)
-            end
+        if limit
+            val = sprint(0, show, v, env=recur_io)
+            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(recur_io, v)
         end
-    finally
-        delete!(shown_set, t)
     end
 end
 
@@ -146,18 +151,21 @@ summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
 
 show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
-showkv(iter::Union{KeyIterator,ValueIterator}; kw...) = showkv(STDOUT, iter; kw...)
-function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T; limit::Bool = false,
-                                                     sz=(s = tty_size(); (s[1]-3, s[2])))
-    rows, cols = sz
+showkv(iter::Union{KeyIterator,ValueIterator}) = showkv(STDOUT, iter)
+function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T)
     print(io, summary(iter))
     isempty(iter) && return
     print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
+    limit::Bool = limit_output(io)
     if limit
+        sz = iosize(io)
+        rows, cols = sz[1] - 3, sz[2]
         rows < 2 && (print(io, " …"); return)
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
         rows -= 2 # For summary and final ⋮ continuation lines
+    else
+        rows = cols = 0
     end
 
     for (i, v) in enumerate(iter)
@@ -165,7 +173,7 @@ function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T; limit::Boo
         limit && i >= rows && (print(io, "⋮"); break)
 
         if limit
-            str = with_output_limit(()->sprint(show, v))
+            str = sprint(0, show, v, env=io)
             str = _truncate_at_width_or_chars(str, cols, "\r\n")
             print(io, str)
         else
@@ -245,12 +253,13 @@ filter(f, d::Associative) = filter!(f,copy(d))
 eltype{K,V}(::Type{Associative{K,V}}) = Pair{K,V}
 
 function isequal(l::Associative, r::Associative)
+    l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
-    for (key, value) in l
-        if !isequal(value, get(r, key, secret_table_token))
+    for pair in l
+        if !in(pair, r, isequal)
             return false
         end
     end
@@ -258,12 +267,13 @@ function isequal(l::Associative, r::Associative)
 end
 
 function ==(l::Associative, r::Associative)
+    l === r && return true
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
-    for (key, value) in l
-        if value != get(r, key, secret_table_token)
+    for pair in l
+        if !in(pair, r, ==)
             return false
         end
     end
@@ -855,3 +865,89 @@ function next{K,V}(t::WeakKeyDict{K,V}, i)
     (Pair{K,V}(kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+
+
+immutable ImmutableDict{K, V} <: Associative{K,V}
+    parent::ImmutableDict{K, V}
+    key::K
+    value::V
+    ImmutableDict() = new() # represents an empty dictionary
+    ImmutableDict(key, value) = (empty = new(); new(empty, key, value))
+    ImmutableDict(parent::ImmutableDict, key, value) = new(parent, key, value)
+end
+
+"""
+    ImmutableDict
+
+ImmutableDict is a Dictionary implemented as an immutable linked list,
+which is optimal for small dictionaries that are constructed over many individual insertions
+Note that it is not possible to remove a value, although it can be partially overridden and hidden
+by inserting a new value with the same key
+
+    ImmutableDict(KV::Pair)
+
+Create a new entry in the Immutable Dictionary for the key => value pair
+
+ - use `(key => value) in dict` to see if this particular combination is in the properties set
+ - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+
+"""
+ImmutableDict
+ImmutableDict{K,V}(KV::Pair{K,V}) = ImmutableDict{K,V}(KV[1], KV[2])
+ImmutableDict{K,V}(t::ImmutableDict{K,V}, KV::Pair) = ImmutableDict{K,V}(t, KV[1], KV[2])
+
+function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
+    key, value = key_value
+    while isdefined(dict, :parent)
+        if dict.key == key
+            if valcmp === is
+                is(value, dict.value) && return true
+            elseif valcmp === (==)
+                ==(value, dict.value) && return true
+            elseif valcmp === isequal
+                isequal(value, dict.value) && return true
+            else
+                valcmp(value, dict.value) && return true
+            end
+        end
+        dict = dict.parent
+    end
+    return false
+end
+
+function haskey(dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        dict.key == key && return true
+        dict = dict.parent
+    end
+    return false
+end
+
+function getindex(dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        dict.key == key && return dict.value
+        dict = dict.parent
+    end
+    throw(KeyError(key))
+end
+function get(dict::ImmutableDict, key, default)
+    while isdefined(dict, :parent)
+        dict.key == key && return dict.value
+        dict = dict.parent
+    end
+    return default
+end
+
+# this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
+start(t::ImmutableDict) = t
+next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
+done(::ImmutableDict, t) = !isdefined(t, :parent)
+length(t::ImmutableDict) = count(x->1, t)
+isempty(t::ImmutableDict) = done(t, start(t))
+copy(t::ImmutableDict) = t
+function similar(t::ImmutableDict)
+    while isdefined(t, :parent)
+        t = t.parent
+    end
+    return t
+end
