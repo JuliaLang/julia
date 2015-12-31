@@ -1519,9 +1519,7 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw:
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-single
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-double
+install-fftw: install-fftw-single install-fftw-double
 
 get-fftw-single: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
