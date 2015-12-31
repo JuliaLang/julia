@@ -165,16 +165,3 @@ function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
     end
 end
 withenv(f::Function) = f() # handle empty keyvals case; see #10853
-
-## misc environment-related functionality ##
-
-function tty_size()
-    if isdefined(Base, :active_repl)
-        os = REPL.outstream(Base.active_repl)
-        if isa(os, Terminals.TTYTerminal)
-            return size(os)
-        end
-    end
-    return (parse(Int,get(ENV,"LINES","24")),
-            parse(Int,get(ENV,"COLUMNS","80")))
-end

@@ -253,20 +253,21 @@ It figures out the width in characters of each element, and if they
 end up too wide, it shows the first and last elements separated by a
 horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
 
-`print_range(io, r, sz, pre, sep, post, hdots)` uses optional
-parameters `sz` for the (rows,cols) of the screen,
-`pre` and `post` characters for each printed row, `sep` separator string between
-printed elements, `hdots` string for the horizontal ellipsis.
+`print_range(io, r, pre, sep, post, hdots)` uses optional
+parameters `pre` and `post` characters for each printed row,
+`sep` separator string between printed elements,
+`hdots` string for the horizontal ellipsis.
 """
 function print_range(io::IO, r::Range,
-                     sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
                      pre::AbstractString = " ",
                      sep::AbstractString = ",",
                      post::AbstractString = "",
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by writemime (replutil.jl) and by display()
-    screenheight, screenwidth = sz
+    limit = limit_output(io)
+    sz = iosize(io)
+    screenheight, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
     postsp = ""
     sepsize = length(sep)
@@ -278,7 +279,7 @@ function print_range(io::IO, r::Range,
     maxpossiblecols = div(screenwidth, 1+sepsize) # assume each element is at least 1 char + 1 separator
     colsr = n <= maxpossiblecols ? (1:n) : [1:div(maxpossiblecols,2)+1; (n-div(maxpossiblecols,2)):n]
     rowmatrix = r[colsr]' # treat the range as a one-row matrix for print_matrix_row
-    A = alignment(rowmatrix,1:m,1:length(rowmatrix),screenwidth,screenwidth,sepsize) # how much space range takes
+    A = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), screenwidth, screenwidth, sepsize) # how much space range takes
     if n <= length(A) # cols fit screen, so print out all elements
         print(io, pre) # put in pre chars
         print_matrix_row(io,rowmatrix,A,1,1:n,sep) # the entire range
@@ -287,9 +288,9 @@ function print_range(io::IO, r::Range,
         # how many chars left after dividing width of screen in half
         # and accounting for the horiz ellipsis
         c = div(screenwidth-length(hdots)+1,2)+1 # chars remaining for each side of rowmatrix
-        alignR = reverse(alignment(rowmatrix,1:m,length(rowmatrix):-1:1,c,c,sepsize)) # which cols of rowmatrix to put on the right
+        alignR = reverse(alignment(io, rowmatrix, 1:m, length(rowmatrix):-1:1, c, c, sepsize)) # which cols of rowmatrix to put on the right
         c = screenwidth - sum(map(sum,alignR)) - (length(alignR)-1)*sepsize - length(hdots)
-        alignL = alignment(rowmatrix,1:m,1:length(rowmatrix),c,c,sepsize) # which cols of rowmatrix to put on the left
+        alignL = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), c, c, sepsize) # which cols of rowmatrix to put on the left
         print(io, pre)   # put in pre chars
         print_matrix_row(io, rowmatrix,alignL,1,1:length(alignL),sep) # left part of range
         print(io, hdots) # horizontal ellipsis

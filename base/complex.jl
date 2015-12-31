@@ -59,25 +59,24 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
-function complex_show(io::IO, z::Complex, compact::Bool)
+function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact ? showcompact(io,r) : show(io,r)
+    compact = limit_output(io)
+    showcompact_lim(io, r)
     if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    compact ? showcompact(io, i) : show(io, i)
+    showcompact_lim(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
 end
-complex_show(io::IO, z::Complex{Bool}, compact::Bool) =
+show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
-show(io::IO, z::Complex) = complex_show(io, z, false)
-showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
 function read{T<:Real}(s::IO, ::Type{Complex{T}})
     r = read(s,T)

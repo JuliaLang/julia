@@ -3,7 +3,7 @@
 include("formatting.jl")
 
 const margin = 2
-cols() = Base.tty_size()[2]
+cols(io) = iosize(io)[2]
 
 function term(io::IO, content::Vector, cols)
     isempty(content) && return
@@ -14,7 +14,7 @@ function term(io::IO, content::Vector, cols)
     term(io, content[end], cols)
 end
 
-term(io::IO, md::MD, columns = cols()) = term(io, md.content, columns)
+term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
 
 function term(io::IO, md::Paragraph, columns)
     print(io, " "^margin)

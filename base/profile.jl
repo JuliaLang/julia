@@ -47,7 +47,13 @@ end
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_size()[2], maxdepth::Int = typemax(Int), sortedby::Symbol = :filefuncline)
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data);
+        format = :tree,
+        C = false,
+        combine = true,
+        maxdepth::Int = typemax(Int),
+        sortedby::Symbol = :filefuncline)
+    cols = Base.iosize(io)[2]
     if format == :tree
         tree(io, data, lidict, C, combine, cols, maxdepth)
     elseif format == :flat

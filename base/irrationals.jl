@@ -130,8 +130,8 @@ log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/l
 log(::Irrational{:e}, x) = log(x)
 
 # align along = for nice Array printing
-function alignment(x::Irrational)
-    m = match(r"^(.*?)(=.*)$", sprint(showcompact_lim, x))
-    m === nothing ? (length(sprint(showcompact_lim, x)), 0) :
+function alignment(io::IO, x::Irrational)
+    m = match(r"^(.*?)(=.*)$", sprint(0, showcompact_lim, x, env=io))
+    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
     (length(m.captures[1]), length(m.captures[2]))
 end

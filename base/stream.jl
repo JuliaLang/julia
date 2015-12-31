@@ -378,6 +378,45 @@ function close(stream::Union{LibuvStream, LibuvServer})
     nothing
 end
 
+@windows_only begin
+    ispty(s::TTY) = s.ispty
+    ispty(s::IO) = false
+end
+
+"    iosize(io) -> (lines, columns)
+Return the nominal size of the screen that may be used for rendering output to this io object"
+iosize(io::IO) = iosize()
+iosize() = (parse(Int, get(ENV, "LINES",   "24")),
+            parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
+
+function iosize(io::TTY)
+    local h::Int, w::Int
+    default_size = iosize()
+
+    @windows_only if ispty(io)
+        # io is actually a libuv pipe but a cygwin/msys2 pty
+        try
+            h, w = map(x -> parse(Int, x), split(readall(open(Base.Cmd(ByteString["stty", "size"]), "r", io)[1])))
+            h > 0 || (h = default_size[1])
+            w > 0 || (w = default_size[2])
+            return h, w
+        catch
+            return default_size
+        end
+    end
+
+    s1 = Ref{Int32}(0)
+    s2 = Ref{Int32}(0)
+    Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
+                                      Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
+                                      io, s1, s2) != 0)
+    w, h = s1[], s2[]
+    h > 0 || (h = default_size[1])
+    w > 0 || (w = default_size[2])
+    return h, w
+end
+
+
 ### Libuv callbacks ###
 
 #from `connect`
@@ -529,14 +568,13 @@ end
 #  (composed of two half-pipes: .in and .out)
 ##########################################
 
-abstract AbstractPipe <: IO
-# allows sharing implementation with Process and ProcessChain
-
 type Pipe <: AbstractPipe
     in::PipeEndpoint # writable
     out::PipeEndpoint # readable
 end
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
+pipe_reader(p::Pipe) = p.out
+pipe_writer(p::Pipe) = p.in
 
 function link_pipe(pipe::Pipe;
                julia_only_read = false,
@@ -544,37 +582,11 @@ function link_pipe(pipe::Pipe;
      link_pipe(pipe.out, julia_only_read, pipe.in, julia_only_write);
 end
 
-show(io::IO,stream::Pipe) = print(io,
+show(io::IO, stream::Pipe) = print(io,
     "Pipe(",
     uv_status_string(stream.in), " => ",
     uv_status_string(stream.out), ", ",
     nb_available(stream), " bytes waiting)")
-
-write(io::AbstractPipe, byte::UInt8) = write(io.in, byte)
-write(io::AbstractPipe, bytes::Vector{UInt8}) = write(io.in, bytes)
-write{T<:AbstractPipe}(io::T, args...) = write(io.in, args...)
-write{S<:AbstractPipe}(io::S, a::Array) = write(io.in, a)
-buffer_or_write(io::AbstractPipe, p::Ptr, n::Integer) = buffer_or_write(io.in, p, n)
-buffer_writes(io::AbstractPipe, args...) = buffer_writes(io.in, args...)
-flush(io::AbstractPipe) = flush(io.in)
-
-read(io::AbstractPipe, byte::Type{UInt8}) = read(io.out, byte)
-read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(io.out, bytes)
-read{T<:AbstractPipe}(io::T, args...) = read(io.out, args...)
-read!{T<:AbstractPipe}(io::T, args...) = read!(io.out, args...)
-readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(io.out, args...)
-readbytes(io::AbstractPipe) = readbytes(io.out)
-readavailable(io::AbstractPipe) = readavailable(io.out)
-
-isreadable(io::AbstractPipe) = isreadable(io.out)
-iswritable(io::AbstractPipe) = iswritable(io.in)
-isopen(io::AbstractPipe) = isopen(io.in) || isopen(io.out)
-close(io::AbstractPipe) = (close(io.in); close(io.out))
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(io.out, nb)
-wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(io.out, byte)
-wait_close(io::AbstractPipe) = (wait_close(io.in); wait_close(io.out))
-nb_available(io::AbstractPipe) = nb_available(io.out)
-eof(io::AbstractPipe) = eof(io.out)
 
 ##########################################
 # Async Worker
