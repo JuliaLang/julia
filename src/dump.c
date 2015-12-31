@@ -936,18 +936,18 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
-                if (jl_is_datatype(b->value)) {
-                    jl_methtable_t *mt = ((jl_datatype_t*)b->value)->name->mt;
-                    if (mt && ((jl_datatype_t*)b->value)->name->name == b->name && mt->module == m) {
-                        jl_serialize_methtable_from_mod(s, mt, 0);
-                        jl_serialize_methtable_from_mod(s, mt, 1);
-                    }
-                }
-                else if (jl_is_module(b->value)) {
+                if (jl_is_module(b->value)) {
                     jl_module_t *child = (jl_module_t*)b->value;
                     if (child != m && child->parent == m && child->name == b->name) {
                         // this is the original/primary binding for the submodule
                         jl_serialize_lambdas_from_mod(s, (jl_module_t*)b->value);
+                    }
+                }
+                else {
+                    jl_methtable_t *mt = jl_gf_mtable(b->value);
+                    if (mt && mt->name == b->name && mt->module == m) {
+                        jl_serialize_methtable_from_mod(s, mt, 0);
+                        jl_serialize_methtable_from_mod(s, mt, 1);
                     }
                 }
             }
@@ -1584,14 +1584,8 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
         int8_t iskw = read_int8(s);
-        if (iskw) {
-            jl_methtable_t* mt = jl_gf_mtable(gf);
-            if (!mt->kwsorter) {
-                mt->kwsorter = jl_new_generic_function(jl_gf_name(gf), mt->module);
-                jl_gc_wb(mt, mt->kwsorter);
-            }
-            gf = mt->kwsorter;
-        }
+        if (iskw)
+            gf = jl_get_kwsorter(jl_gf_mtable(gf));
         jl_tupletype_t *types = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_lambda_info_t *meth = (jl_lambda_info_t*)jl_deserialize_value(s, NULL);
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
