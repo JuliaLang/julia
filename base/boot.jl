@@ -268,15 +268,7 @@ eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
 kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
-function kwftype(t::ANY)
-    mt = t.name.mt
-    if isdefined(mt, :kwsorter)
-    else
-        # TODO jb/functions decide naming convention for these
-        mt.kwsorter = ccall(:jl_new_generic_function, Any, (Any, Any), t.name.name, mt.module)
-    end
-    typeof(mt.kwsorter)
-end
+kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name.mt))
 
 type Box
     contents::Any
