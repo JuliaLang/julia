@@ -1423,7 +1423,9 @@ $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $
 	echo 1 > $@
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
-	cd $(dir $@) && \
+	cd $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) && \
+	./bootstrap && \
+	cd ../../$(dir $@) && \
 	$< $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
 	touch -c $@
 $(ARPACK_OBJ_SOURCE): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
