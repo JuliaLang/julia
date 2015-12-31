@@ -851,7 +851,7 @@ ifneq ($(OS),WINNT)
 endif
 endif
 	echo 1 > $@
-$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) $(BUILDDIR)/pcre2-$(PCRE_VER)/checked
+$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET)
 	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $@
 	touch -c $@
@@ -1374,8 +1374,6 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
 endif
 	echo 1 > $@
-# XXX: bug_1315 ARPACK tests fail stochastically
-#$(ARPACK_OBJ_TARGET): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
 	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
 ifeq ($(OS), WINNT)
@@ -1521,7 +1519,7 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: check-fftw-single check-fftw-double # do these serially, to prevent write conflicts
+install-fftw:
 	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-single
 	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-double
 
@@ -1813,7 +1811,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) $(BUILDDIR)/gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
+$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) | $(build_shlibdir) $(build_includedir)
 	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
 	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
@@ -1881,7 +1879,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
-$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) $(BUILDDIR)/mpfr-$(MPFR_VER)/checked
+$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET)
 	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
 	touch -c $@
