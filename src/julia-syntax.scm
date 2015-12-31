@@ -961,8 +961,19 @@
       ((->)
        (let ((a    (cadr e))
              (body (caddr e)))
-         (let ((argl (if (and (pair? a) (eq? (car a) 'tuple))
-			 (cdr a)
+         (let ((argl (if (pair? a)
+                         (if (eq? (car a) 'tuple)
+                             (cdr a)
+                             (if (eq? (car a) 'block)
+                                 (cond ((length= a 1) '())
+                                       ((length= a 2) (list (cadr a)))
+                                       ((length= a 3)
+                                        (if (assignment? (caddr a))
+                                            `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
+                                            `((parameters ,(caddr a)) ,(cadr a))))
+                                       (else
+                                        (error "more than one semicolon in argument list")))
+                                 (list a)))
 			 (list a)))
 	       ;; TODO: always use a specific special name like #anon# or _, then ignore
 	       ;; this as a local variable name.
@@ -1616,11 +1627,10 @@
 
    'tuple
    (lambda (e)
-     (for-each (lambda (x)
-		 ;; assignment inside tuple looks like a keyword argument
-		 (if (assignment? x)
-		     (error "assignment not allowed inside tuple")))
-	       (cdr e))
+     (if (and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
+         (error "unexpected semicolon in tuple"))
+     (if (any assignment? (cdr e))
+         (error "assignment not allowed inside tuple"))
      (expand-forms `(call (top tuple) ,@(cdr e))))
 
    'dict
