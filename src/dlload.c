@@ -254,7 +254,7 @@ const char *jl_dlfind_win32(const char *f_name)
 #else
         return "msvcrt";
 #endif
-    if (jl_dlsym(jl_winsock_handle, f_name))
+    if (jl_dlsym_e(jl_winsock_handle, f_name))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,
     // it is better to specify the library explicitly in the code. This exists
