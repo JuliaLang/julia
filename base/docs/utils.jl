@@ -319,20 +319,11 @@ function docsearch(haystack, needle)
 end
 
 ## Searching specific documentation objects
-function docsearch(haystack::TypeDoc, needle)
-    docsearch(haystack.main, needle) && return true
+function docsearch(haystack::MultiDoc, needle)
     for v in values(haystack.fields)
         docsearch(v, needle) && return true
     end
-    for v in values(haystack.meta)
-        docsearch(v, needle) && return true
-    end
-    false
-end
-
-function docsearch(haystack::FuncDoc, needle)
-    docsearch(haystack.main, needle) && return true
-    for v in values(haystack.meta)
+    for v in values(haystack.docs)
         docsearch(v, needle) && return true
     end
     false

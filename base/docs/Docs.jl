@@ -58,6 +58,7 @@ include("bindings.jl")
 
 import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
+import Base: Callable
 
 export doc
 
@@ -241,32 +242,55 @@ typevars(::Symbol) = []
 tvar(x::Expr)   = :($(x.args[1]) = TypeVar($(quot(x.args[1])), $(x.args[2]), true))
 tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
 
-type FuncDoc
-    main
+
+"""
+    MultiDoc
+
+Stores a collection of docstrings for related objects, ie. a `Function`/`DataType` and
+associated `Method` objects.
+
+Each documented object in a `MultiDoc` is referred to by it's signature which is represented
+by a `Union` of `Tuple` types. For example the following `Method` definition
+
+    f(x, y) = ...
+
+is stored as `Tuple{Any, Any}` in the `MultiDoc` while
+
+    f{T}(x::T, y = ?) = ...
+
+is stored as `Union{Tuple{T}, Tuple{T, Any}}`.
+
+Note: The `Function`/`DataType` object's signature is always `Union{}`.
+"""
+type MultiDoc
+    "Sorted (via `type_morespecific`) vector of object signatures."
     order::Vector{Type}
-    meta::ObjectIdDict
+    "Documentation for each object. Keys are signatures."
+    docs::ObjectIdDict
+    "Source `Expr` for each object. As with `.docs` the keys are signatures."
     source::ObjectIdDict
+    "Stores the documentation for individual fields of a type."
+    fields::Dict{Symbol, Any}
+
+    MultiDoc() = new([], ObjectIdDict(), ObjectIdDict(), Dict())
 end
 
-FuncDoc() = FuncDoc(nothing, [], ObjectIdDict(), ObjectIdDict())
-
-# handles the :(function foo end) form
-function doc!(f::Function, data)
-    doc!(f, Union{}, data, nothing)
+function doc!(λ::Callable, sig::ANY, docstr, expr::Expr, fields::Dict)
+    m = get!(meta(), λ, MultiDoc())
+    if !haskey(m.docs, sig)
+        push!(m.order, sig)
+        sort!(m.order, lt = type_morespecific)
+    end
+    m.docs[sig] = docstr
+    m.fields    = fields
+    return m
 end
+doc!(λ::Callable, docstr)                 = doc!(λ, Union{}, docstr, :(),  Dict())
+doc!(λ::Callable, docstr, fields)         = doc!(λ, Union{}, docstr, :(),  fields)
+doc!(λ::Callable, sig::ANY, docstr, expr) = doc!(λ, sig,     docstr, expr, Dict())
 
-type_morespecific(a::Type, b::Type) =
-    (ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0)
 
-# handles the :(function foo(x...); ...; end) form
-function doc!(f::Function, sig::ANY, data, source)
-    fd = get!(meta(), f, FuncDoc())
-    isa(fd, FuncDoc) || error("can not document a method when the function already has metadata")
-    haskey(fd.meta, sig) || push!(fd.order, sig)
-    sort!(fd.order, lt=type_morespecific)
-    fd.meta[sig] = data
-    fd.source[sig] = source
-end
+type_morespecific(a::Type, b::Type) = ccall(:jl_type_morespecific, Int32, (Any,Any), a, b) > 0
 
 """
 `catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
@@ -298,45 +322,18 @@ function field_meta(def)
     return dict_expr(meta)
 end
 
-type TypeDoc
-    main
-    fields::Dict{Symbol, Any}
-    order::Vector{Type}
-    meta::ObjectIdDict
-end
-
-TypeDoc() = TypeDoc(nothing, Dict(), [], ObjectIdDict())
-
-function doc!(t::DataType, data, fields)
-    td = get!(meta(), t, TypeDoc())
-    td.main = data
-    td.fields = fields
-end
-
-function doc!(T::DataType, sig::ANY, data, source)
-    td = get!(meta(), T, TypeDoc())
-    if !isa(td, TypeDoc)
-        error("can not document a method when the type already has metadata")
-    end
-    !haskey(td.meta, sig) && push!(td.order, sig)
-    td.meta[sig] = data
-end
-
 function doc(obj::Base.Callable, sig::Type = Union)
     isgeneric(obj) && sig !== Union && isempty(methods(obj, sig)) && return nothing
     results, groups = [], []
     for m in modules
         if haskey(meta(m), obj)
             docs = meta(m)[obj]
-            if isa(docs, FuncDoc) || isa(docs, TypeDoc)
+            if isa(docs, MultiDoc)
                 push!(groups, docs)
                 for msig in docs.order
                     if sig <: msig
-                        push!(results, (msig, docs.meta[msig]))
+                        push!(results, (msig, docs.docs[msig]))
                     end
-                end
-                if isempty(results) && docs.main !== nothing
-                    push!(results, (Union{}, docs.main))
                 end
             else
                 push!(results, (Union{}, docs))
@@ -346,7 +343,7 @@ function doc(obj::Base.Callable, sig::Type = Union)
     # If all method signatures are Union{} ( ⊥ ), concat all docstrings.
     if isempty(results)
         for group in groups
-            append!(results, [group.meta[s] for s in reverse(group.order)])
+            append!(results, [group.docs[s] for s in reverse(group.order)])
         end
      else
         sort!(results, lt = (a, b) -> type_morespecific(first(a), first(b)))
@@ -394,12 +391,17 @@ isfield(x) = isexpr(x, :.) &&
 
 function fielddoc(T, k)
     for mod in modules
-        if haskey(meta(mod), T) && isa(meta(mod)[T], TypeDoc) && haskey(meta(mod)[T].fields, k)
-            return meta(mod)[T].fields[k]
+        docs = meta(mod)
+        if haskey(docs, T) && isa(docs[T], MultiDoc)
+            fields = docs[T].fields
+            if haskey(fields, k)
+                return fields[k]
+            end
         end
-  end
-  Text(sprint(io -> (print(io, "$T has fields: ");
-                     print_joined(io, fieldnames(T), ", ", " and "))))
+    end
+    fields = join(["`$f`" for f in fieldnames(T)], ", ", ", and ")
+    fields = isempty(fields) ? "no fields" : "fields $fields"
+    Markdown.parse("`$T` has $fields.")
 end
 
 # Generic Callables

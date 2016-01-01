@@ -38,8 +38,8 @@ function add_all_docs_meta(m::Module,meta)
     exports = names(m)
     for (obj, d) in meta
         isexported = sym_exported(obj, m, exports)
-        if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
-            add_all_docs(d.meta, (obj, isexported))
+        if isa(d, Base.Docs.MultiDoc)
+            add_all_docs(d.docs, (obj, isexported))
         else
             all_docs[d] = (obj, isexported)
         end
@@ -75,8 +75,8 @@ function find_docs(v)
     for mod in keys(mod_added)
         try
             meta = Docs.meta(mod)[v]
-            if isa(meta, Base.Docs.FuncDoc) || isa(meta, Base.Docs.TypeDoc)
-                append!(docs, collect(values(meta.meta)))
+            if isa(meta, Base.Docs.MultiDoc)
+                append!(docs, collect(values(meta.docs)))
             else
                 push!(docs, meta)
             end
