@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <unistd.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif

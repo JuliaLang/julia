@@ -618,6 +618,13 @@ CXX_ARG += -m$(BINARY)
 endif
 endif
 
+ifeq ($(OS),WINNT)
+ifneq ($(ARCH),x86_64)
+JCFLAGS += -mincoming-stack-boundary=2
+JCXXFLAGS += -mincoming-stack-boundary=2
+endif
+endif
+
 ifeq ($(USEGCC),1)
 ifeq ($(ISX86),1)
   SHIPFLAGS += -momit-leaf-frame-pointer
