@@ -358,7 +358,7 @@ function typesummary(T::DataType)
     """
     **Summary:**
     ```julia
-    $(T.abstract ? "abstract" : T.mutable ? "type" : "immutable") $T <: $(super(T))
+    $(T.abstract ? "abstract" : T.mutable ? "type" : "immutable") $T <: $(supertype(T))
     ```
     """
     ]

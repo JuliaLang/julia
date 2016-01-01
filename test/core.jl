@@ -3317,7 +3317,7 @@ immutable RGB{T<:AbstractFloat} <: Paint{T}
 end
 
 myeltype{T}(::Type{Paint{T}}) = T
-myeltype{P<:Paint}(::Type{P}) = myeltype(super(P))
+myeltype{P<:Paint}(::Type{P}) = myeltype(supertype(P))
 myeltype(::Type{Any}) = Any
 
 end

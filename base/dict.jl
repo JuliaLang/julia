@@ -227,9 +227,9 @@ function merge!(d::Associative, others::Associative...)
 end
 keytype{K,V}(::Type{Associative{K,V}}) = K
 keytype(a::Associative) = keytype(typeof(a))
-keytype{A<:Associative}(::Type{A}) = keytype(super(A))
+keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
 valtype{K,V}(::Type{Associative{K,V}}) = V
-valtype{A<:Associative}(::Type{A}) = valtype(super(A))
+valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 function merge(d::Associative, others::Associative...)
     K, V = keytype(d), valtype(d)
