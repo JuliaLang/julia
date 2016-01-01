@@ -269,7 +269,7 @@ Constructors
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
 
-.. function:: linspace(start, stop, n=100)
+.. function:: linspace(start, stop, n=50)
 
    .. Docstring generated from Julia source
 
