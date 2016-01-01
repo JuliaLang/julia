@@ -145,52 +145,55 @@ end
 @test meta(DocsTest)[DocsTest].meta[:module] == DocsTest
 
 let f = DocsTest.f
-    funcdoc = meta(DocsTest)[f]
-    @test funcdoc.main == nothing
-    @test docstrings_equal(funcdoc.meta[Tuple{Any}], doc"f-1")
-    @test docstrings_equal(funcdoc.meta[Tuple{Any,Any}], doc"f-2")
+    md = meta(DocsTest)[f]
+    @test docstrings_equal(md.docs[Tuple{Any}], doc"f-1")
+    @test docstrings_equal(md.docs[Tuple{Any,Any}], doc"f-2")
 end
 
 let s = DocsTest.s
-    funcdoc = meta(DocsTest)[s]
-    @test funcdoc.main == nothing
-    @test docstrings_equal(funcdoc.meta[Tuple{Any,}], doc"s-1")
-    @test docstrings_equal(funcdoc.meta[Tuple{Any,Any}], doc"s-2")
+    md = meta(DocsTest)[s]
+    @test docstrings_equal(md.docs[Tuple{Any,}], doc"s-1")
+    @test docstrings_equal(md.docs[Tuple{Any,Any}], doc"s-2")
 end
 
 let g = DocsTest.g
-    funcdoc = meta(DocsTest)[g]
-    @test docstrings_equal(funcdoc.meta[Union{}], doc"g")
+    md = meta(DocsTest)[g]
+    @test docstrings_equal(md.docs[Union{}], doc"g")
 end
 
 let h = DocsTest.h
-    funcdoc = meta(DocsTest)[h]
+    md = meta(DocsTest)[h]
     sig = Union{Tuple{}, Tuple{Any}, Tuple{Any, Any}, Tuple{Any, Any, Any}}
-    @test docstrings_equal(funcdoc.meta[sig], doc"h/0-3")
+    @test docstrings_equal(md.docs[sig], doc"h/0-3")
 end
 
 let AT = DocsTest.AT
-    @test meta(DocsTest)[AT] == doc"AT"
+    md = meta(DocsTest)[AT]
+    @test docstrings_equal(md.docs[Union{}], doc"AT")
 end
 
 let BT = DocsTest.BT
-    @test meta(DocsTest)[BT] == doc"BT"
+    md = meta(DocsTest)[BT]
+    @test docstrings_equal(md.docs[Union{}], doc"BT")
 end
 
-@test meta(DocsTest)[DocsTest.BT2] == doc"BT2"
+let BT2 = DocsTest.BT2
+    md = meta(DocsTest)[BT2]
+    @test docstrings_equal(md.docs[Union{}], doc"BT2")
+end
 
 let T = DocsTest.T
-    typedoc = meta(DocsTest)[T]
-    @test docstrings_equal(typedoc.main, doc"T")
-    @test docstrings_equal(typedoc.fields[:x], doc"T.x")
-    @test docstrings_equal(typedoc.fields[:y], doc"T.y")
+    md = meta(DocsTest)[T]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test docstrings_equal(md.fields[:x], doc"T.x")
+    @test docstrings_equal(md.fields[:y], doc"T.y")
 end
 
 let IT = DocsTest.IT
-    typedoc = meta(DocsTest)[IT]
-    @test docstrings_equal(typedoc.main, doc"IT")
-    @test docstrings_equal(typedoc.fields[:x], doc"IT.x")
-    @test docstrings_equal(typedoc.fields[:y], doc"IT.y")
+    md = meta(DocsTest)[IT]
+    @test docstrings_equal(md.docs[Union{}], doc"IT")
+    @test docstrings_equal(md.fields[:x], doc"IT.x")
+    @test docstrings_equal(md.fields[:y], doc"IT.y")
 end
 
 @test @doc(DocsTest.TA) == doc"TA"
@@ -306,17 +309,17 @@ end
 
 end
 
-let funcdoc = meta(MacroGenerated)[MacroGenerated.f]
-    @test funcdoc.order == [Tuple{Any}]
-    @test funcdoc.meta[Tuple{Any}] == doc"f"
+let md = meta(MacroGenerated)[MacroGenerated.f]
+    @test md.order == [Tuple{Any}]
+    @test md.docs[Tuple{Any}] == doc"f"
 end
 
 @test isdefined(MacroGenerated, :_f)
 
-let funcdoc = meta(MacroGenerated)[MacroGenerated.g]
-    @test funcdoc.order == [Tuple{Any}, Tuple{Any, Any}]
-    @test funcdoc.meta[Tuple{Any}] == doc"g"
-    @test funcdoc.meta[Tuple{Any, Any}] == doc"g"
+let md = meta(MacroGenerated)[MacroGenerated.g]
+    @test md.order == [Tuple{Any}, Tuple{Any, Any}]
+    @test md.docs[Tuple{Any}] == doc"g"
+    @test md.docs[Tuple{Any, Any}] == doc"g"
 end
 
 @test isdefined(MacroGenerated, :_g)
@@ -374,8 +377,8 @@ read(x) = x
 
 end
 
-let fd = Base.Docs.meta(I11798)[I11798.read],
-    d1 = fd.meta[fd.order[1]],
+let md = Base.Docs.meta(I11798)[I11798.read],
+    d1 = md.docs[md.order[1]],
     d2 = doc"read"
     @test docstrings_equal(d1,d2)
 end
