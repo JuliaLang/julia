@@ -72,7 +72,7 @@ function typejoin(a::ANY, b::ANY)
     while !is(b,Any)
         if a <: b.name.primary
             while a.name !== b.name
-                a = super(a)
+                a = supertype(a)
             end
             # join on parameters
             n = length(a.parameters)
@@ -87,7 +87,7 @@ function typejoin(a::ANY, b::ANY)
             end
             return a.name.primary{p...}
         end
-        b = super(b)
+        b = supertype(b)
     end
     return Any
 end
@@ -157,16 +157,16 @@ end
 # overflow.
 function promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom})
     @_pure_meta
-    promote_to_super(T, S, typejoin(T,S))
+    promote_to_supertype(T, S, typejoin(T,S))
 end
 
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_super{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = (@_pure_meta; T)
-promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_pure_meta; T)
-promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
-promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
+promote_to_supertype{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = (@_pure_meta; T)
+promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_pure_meta; T)
+promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
+promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
 +(x::Number, y::Number) = +(promote(x,y)...)

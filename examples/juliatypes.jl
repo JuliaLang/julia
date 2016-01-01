@@ -134,7 +134,7 @@ inst(t::TagT) = t
 inst(t::UnionAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
 inst(t::UnionAllT, param, rest...) = inst(inst(t,param), rest...)
 
-super(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
+supertype(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
 
 extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 
@@ -260,7 +260,7 @@ function issub(a::TagT, b::TagT, env)
     b === AnyT && return true
     a === AnyT && return false
     if a.name !== b.name
-        return issub(super(a), b, env)
+        return issub(supertype(a), b, env)
     end
     if a.name === TupleName
         va, vb = a.vararg, b.vararg

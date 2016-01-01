@@ -61,7 +61,7 @@ for (typ, lt) in atomicintsmap
     for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = symbol("atomic_", rmw, "!")
-        if (rmw == "max" || rmw == "min") && super(typ) == Unsigned
+        if (rmw == "max" || rmw == "min") && supertype(typ) == Unsigned
             # LLVM distinguishes signedness in the operation, not the integer type.
             rmw = "u" * rmw
         end
