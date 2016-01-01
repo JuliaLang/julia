@@ -5675,7 +5675,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jltls_states_var, (void*)&jl_tls_states);
 #else
     // For threading, we emit a call to the getter function.
-    // In non-imaging mode, (i.e. the code will not be safed to disk), we
+    // In non-imaging mode, (i.e. the code will not be saved to disk), we
     // use the address of the actual getter function directly
     // (`jl_tls_states_cb` returned by `jl_get_ptls_states_getter()`)
     // In imaging mode, we emit the function address as a load of a static
