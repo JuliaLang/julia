@@ -164,6 +164,7 @@ function test_linear(A, B)
     end
     if !isgood
         @show A
+        @show A.indexes
         @show B
         error("Mismatch")
     end
@@ -189,6 +190,7 @@ function _test_mixed(A, B)
         @show B
         error("Mismatch")
     end
+    nothing
 end
 
 function err_li(I::Tuple, ld::Int, ldc::Int)
@@ -229,6 +231,17 @@ function runtests(A::Array, I...)
 end
 
 function runtests(A::SubArray, I...)
+    # When A was created with sub, we have to check bounds, since some
+    # of the "residual" dimensions have size 1. It's possible that we
+    # need dedicated tests for sub.
+    for d = 1:length(I)-1
+        if !isa(I[d], Colon) && any(I[d] .> size(A,d))
+            return nothing
+        end
+    end
+    if !isa(I[end], Colon) && any(I[end] .> prod(size(A)[length(I):end]))
+        return nothing
+    end
     AA = copy_to_array(A)
     # Direct test of linear indexing inference
     C = Agen_nodrop(AA, I...)
@@ -308,8 +321,8 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
-index5 = (2, :, 2:5, 1:2:5, [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
-index25 = (8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
+index5 = (1, 2, :, 2:5, 1:2:5, [1], [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
+index25 = (3, 8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
 index125 = (113, :, 85:121, 2:15:92, [99,14,103], sub(1:125,[66,18,59]))
 
 if testfull
@@ -329,6 +342,8 @@ if testfull
         for o3 in oindex, o2 in oindex, o1 in oindex
             sliceB = slice(B, o1, o2, o3)
             runviews(sliceB, index5, index25, index125)
+            subB = sub(B, o1, o2, o3)
+            runviews(subB, index5, index25, index125)
         end
     end
 end
@@ -352,6 +367,8 @@ if !testfull
             runtests(B, oind...)
             sliceB = slice(B, oind)
             runviews(sliceB, index5, index25, index125)
+            subB = sub(B, oind)
+            runviews(subB, index5, index25, index125)
         end
     end
 end
