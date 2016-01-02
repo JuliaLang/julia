@@ -3,21 +3,28 @@
 # Base.Profile
 
 """
-    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true)
+    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline)
 
-Prints profiling results to `io` (by default, `STDOUT`). If you do not supply a `data`
-vector, the internal buffer of accumulated backtraces will be used. `format` can be `:tree`
-or `:flat`. If `C==true`, backtraces from C and Fortran code are shown. `combine==true`
-merges instruction pointers that correspond to the same line of code.
+Prints profiling results to `io` (by default, `STDOUT`). If you do not
+supply a `data` vector, the internal buffer of accumulated backtraces
+will be used. `format` can be `:tree` or `:flat`. If `C==true`,
+backtraces from C and Fortran code are shown. `combine==true` merges
+instruction pointers that correspond to the same line of
+code. `maxdepth` can be used to limit the depth of printing in `:tree`
+format, while `sortedby` can be used to control the order in `:flat`
+format (`:filefuncline` sorts by the source line, whereas `:count`
+sorts in order of number of collected samples).
 """
 Profile.print(io::IO = STDOUT, data::Vector=?)
 
 """
-    print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true)
+    print([io::IO = STDOUT,] data::Vector, lidict::Dict; kwargs)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
 previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
 a dictionary `lidict` of line information.
+
+See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
 Profile.print(io::IO = STDOUT, data::Vector = ?, lidict::Dict = ?)
 
