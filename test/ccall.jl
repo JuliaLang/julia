@@ -232,3 +232,13 @@ threadcall_test_func(x) =
 end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
+
+let pif = Float64(pi), r = Ref(pif)
+    io = IOBuffer()
+    show(io, r)
+    @test takebuf_string(io) == string("Base.RefValue{Float64}(",pif,")")
+    showcompact(io, r)
+    str = takebuf_string(io)
+    showcompact(io, pif)
+    @test str == string("Base.RefValue{Float64}(",takebuf_string(io),")")
+end
