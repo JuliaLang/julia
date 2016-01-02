@@ -9,25 +9,30 @@ immutable BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     ipiv::Vector{BlasInt}
     uplo::Char
     symmetric::Bool
-    BunchKaufman(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = new(LD, ipiv, uplo, symmetric)
+    rook::Bool
+    BunchKaufman(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool, rook::Bool) = new(LD, ipiv, uplo, symmetric, rook)
 end
-BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric)
+BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool, rook::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric, rook)
 
-function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
+function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A), rook::Bool=false)
     if !symmetric
         throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
     end
-    LD, ipiv = LAPACK.sytrf!(char_uplo(uplo) , A)
-    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
+    LD, ipiv = rook ? LAPACK.sytrf_rook!(char_uplo(uplo) , A) : LAPACK.sytrf!(char_uplo(uplo) , A)
+    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric, rook)
 end
-function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
-    LD, ipiv = (symmetric ? LAPACK.sytrf! : LAPACK.hetrf!)(char_uplo(uplo) , A)
-    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
+function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A), rook::Bool=false)
+    if rook
+        LD, ipiv = (symmetric ? LAPACK.sytrf_rook! : LAPACK.hetrf_rook!)(char_uplo(uplo) , A)
+    else
+        LD, ipiv = (symmetric ? LAPACK.sytrf! : LAPACK.hetrf!)(char_uplo(uplo) , A)
+    end
+    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric, rook)
 end
-bkfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A)) = bkfact!(copy(A), uplo, symmetric)
-bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A)) = bkfact!(convert(Matrix{promote_type(Float32,typeof(sqrt(one(T))))},A),uplo,symmetric)
+bkfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A), rook::Bool=false) = bkfact!(copy(A), uplo, symmetric, rook)
+bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A), rook::Bool=false) = bkfact!(convert(Matrix{promote_type(Float32,typeof(sqrt(one(T))))},A),uplo,symmetric,rook)
 
-convert{T}(::Type{BunchKaufman{T}},B::BunchKaufman) = BunchKaufman(convert(Matrix{T},B.LD),B.ipiv,B.uplo,B.symmetric)
+convert{T}(::Type{BunchKaufman{T}},B::BunchKaufman) = BunchKaufman(convert(Matrix{T},B.LD),B.ipiv,B.uplo,B.symmetric,B.rook)
 convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)
@@ -35,19 +40,43 @@ size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 issym(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-inv{T<:BlasReal}(B::BunchKaufman{T}) = copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
-
-function inv{T<:BlasComplex}(B::BunchKaufman{T})
-    if issym(B)
-        copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
+function inv{T<:BlasReal}(B::BunchKaufman{T})
+    if B.rook
+        copytri!(LAPACK.sytri_rook!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
     else
-        copytri!(LAPACK.hetri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
+        copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
     end
 end
 
-A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) = LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
+function inv{T<:BlasComplex}(B::BunchKaufman{T})
+    if issym(B)
+        if B.rook
+            copytri!(LAPACK.sytri_rook!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
+        else
+            copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo)
+        end
+    else
+        if B.rook
+            copytri!(LAPACK.hetri_rook!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
+        else
+            copytri!(LAPACK.hetri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
+        end
+    end
+end
+
+function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
+    if B.rook
+        LAPACK.sytrs_rook!(B.uplo, B.LD, B.ipiv, R)
+    else
+        LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
+    end
+end
 function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
-    (issym(B) ? LAPACK.sytrs! : LAPACK.hetrs!)(B.uplo, B.LD, B.ipiv, R)
+    if B.rook
+        (issym(B) ? LAPACK.sytrs_rook! : LAPACK.hetrs_rook!)(B.uplo, B.LD, B.ipiv, R)
+    else
+        (issym(B) ? LAPACK.sytrs! : LAPACK.hetrs!)(B.uplo, B.LD, B.ipiv, R)
+    end
 end
 
 function det(F::BunchKaufman)
