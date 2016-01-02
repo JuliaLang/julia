@@ -537,7 +537,7 @@ Ac_rdiv_B
 
 
 """
-    linspace(start, stop, n=100)
+    linspace(start, stop, n=50)
 
 Construct a range of `n` linearly spaced elements from `start` to `stop`.
 """
