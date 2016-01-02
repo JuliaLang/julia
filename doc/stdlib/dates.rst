@@ -57,7 +57,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Constuct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order. DateTime parts not provided will default to the value of ``Dates.default(period)``\ .
+   Construct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order. DateTime parts not provided will default to the value of ``Dates.default(period)``\ .
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
@@ -129,7 +129,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Constuct a ``Date`` type by ``Period`` type parts. Arguments may be in any order. ``Date`` parts not provided will default to the value of ``Dates.default(period)``\ .
+   Construct a ``Date`` type by ``Period`` type parts. Arguments may be in any order. ``Date`` parts not provided will default to the value of ``Dates.default(period)``\ .
 
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
@@ -442,7 +442,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   Takes the given ``DateTime`` and returns the number of seconds since the unix epoch as a ``Float64``\ .
+   Takes the given ``DateTime`` and returns the number of seconds since the unix epoch ``1970-01-01T00:00:00`` as a ``Float64``\ .
 
 .. function:: julian2datetime(julian_days) -> DateTime
 
@@ -454,7 +454,7 @@ Conversion Functions
 
    .. Docstring generated from Julia source
 
-   Takes the given ``DateTime`` and returns the number of Julian calendar days since the julian epoch as a ``Float64``\ .
+   Takes the given ``DateTime`` and returns the number of Julian calendar days since the julian epoch ``-4713-11-24T12:00:00`` as a ``Float64``\ .
 
 .. function:: rata2datetime(days) -> DateTime
 

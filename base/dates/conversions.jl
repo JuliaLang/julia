@@ -13,30 +13,86 @@ Base.convert{R<:Real}(::Type{R},x::Date)     = convert(R,value(x))
 
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
+
+"""
+    unix2datetime(x) -> DateTime
+
+Takes the number of seconds since unix epoch `1970-01-01T00:00:00` and converts to the
+corresponding `DateTime`.
+"""
 function unix2datetime(x)
     rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
-# Returns unix seconds since 1970-01-01T00:00:00
+"""
+    datetime2unix(dt::DateTime) -> Float64
+
+Takes the given `DateTime` and returns the number of seconds
+since the unix epoch `1970-01-01T00:00:00` as a `Float64`.
+"""
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
+
+"""
+    now() -> DateTime
+
+Returns a `DateTime` corresponding to the user's system time including the system timezone
+locale.
+"""
 function now()
     tv = Libc.TimeVal()
     tm = Libc.TmStruct(tv.sec)
     return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec,div(tv.usec,1000))
 end
+
+"""
+    today() -> Date
+
+Returns the date portion of `now()`.
+"""
 today() = Date(now())
+
+"""
+    now(::Type{UTC}) -> DateTime
+
+Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
+"""
 now(::Type{UTC}) = unix2datetime(time())
 
+"""
+    rata2datetime(days) -> DateTime
+
+Takes the number of Rata Die days since epoch `0000-12-31T00:00:00` and returns the
+corresponding `DateTime`.
+"""
 rata2datetime(days) = DateTime(yearmonthday(days)...)
+
+"""
+    datetime2rata(dt::TimeType) -> Int64
+
+Returns the number of Rata Die days since epoch from the given `Date` or `DateTime`.
+"""
 datetime2rata(dt::DateTime) = days(dt)
 
 # Julian conversions
 const JULIANEPOCH = value(DateTime(-4713,11,24,12))
+
+"""
+    julian2datetime(julian_days) -> DateTime
+
+Takes the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and returns the
+corresponding `DateTime`.
+"""
 function julian2datetime(f)
     rata = JULIANEPOCH + round(Int64, Int64(86400000) * f)
     return DateTime(UTM(rata))
 end
-# Returns # of julian days since -4713-11-24T12:00:00
+
+"""
+    datetime2julian(dt::DateTime) -> Float64
+
+Takes the given `DateTime` and returns the number of Julian calendar days since the julian
+epoch `-4713-11-24T12:00:00` as a `Float64`.
+"""
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 
 @vectorize_1arg Real unix2datetime

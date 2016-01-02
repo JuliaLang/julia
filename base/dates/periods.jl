@@ -30,6 +30,14 @@ Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
+"""
+    default(p::Period) -> Period
+
+Returns a sensible "default" value for the input Period by returning `one(p)` for Year,
+Month, and Day, and `zero(p)` for Hour, Minute, Second, and Millisecond.
+"""
+function default end
+
 default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
 default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
 

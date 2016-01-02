@@ -54,8 +54,26 @@ second(dt::DateTime) = mod(fld(value(dt),1000),60)
 millisecond(dt::DateTime) = mod(value(dt),1000)
 
 dayofmonth(dt::TimeType) = day(dt)
+
+"""
+    yearmonth(dt::TimeType) -> (Int64, Int64)
+
+Simultaneously return the year and month parts of a `Date` or `DateTime`.
+"""
 yearmonth(dt::TimeType) = yearmonth(days(dt))
+
+"""
+    monthday(dt::TimeType) -> (Int64, Int64)
+
+Simultaneously return the month and day parts of a `Date` or `DateTime`.
+"""
 monthday(dt::TimeType) = monthday(days(dt))
+
+"""
+    yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
+
+Simultaneously return the year, month, and day parts of a `Date` or `DateTime`.
+"""
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 
 @vectorize_1arg TimeType year
