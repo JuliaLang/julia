@@ -179,9 +179,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
                     }
                 }
                 if (callInst->getCalledFunction() == gckill_func) {
-                    // jwn: record this information instead of simply destroying it
-                    ++ri;
-                    callInst->eraseFromParent();
+                    // TODO: track variable liveness information starting from gckill, store-to-gcroot, and store-to-jlcall-frame
                 }
             }
             else if (StoreInst *storeInst = dyn_cast<StoreInst>(i)) {
@@ -335,6 +333,149 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
     if (last_gcframe_inst == gcframe)
         last_gcframe_inst = tempSlot;
 
+/* # allocate space in locals for the variables
+ * TBD
+ */
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
+        CallInst* callInst = dyn_cast<CallInst>(&*I);
+        ++I;
+        if (callInst && callInst->getCalledFunction() == gcroot_func) {
+            // see if a root is only used briefly for `store -> load -> store other` pattern or `store, store other`
+            // such that the first store can be trivially replaced with just "other" and delete the chain
+            // or if is used for store, but the value is never needed
+            StoreInst *theStore = NULL;
+            LoadInst *theLoad = NULL;
+            for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
+                // see if the gcroot uses consists of only the load and the store
+                User *user = use.getUse().getUser();
+                if (StoreInst *storeInst = dyn_cast<StoreInst>(user)) {
+                    if (theStore) {
+                        theStore = NULL;
+                        break;
+                    }
+                    theStore = storeInst;
+                }
+                else if (LoadInst *loadInst = dyn_cast<LoadInst>(user)) {
+                    if (theLoad) {
+                        theStore = NULL;
+                        break;
+                    }
+                    theLoad = loadInst;
+                }
+                else {
+                    theStore = NULL;
+                    break;
+                }
+            }
+            if (theStore) {
+                Value *theValue = theLoad ? theLoad : theStore->getValueOperand();
+                if (!theLoad && theValue->hasOneUse()) {
+                    // this gcroot is unused (the only Use of theValue is theStore)
+                    if (&*I == theStore) ++I;
+                    theStore->eraseFromParent();
+                    callInst->eraseFromParent();
+                }
+                else if (theValue->hasNUses(theLoad ? 1 : 2)) {
+                    StoreInst *theOther = NULL;
+                    bool patternMatchSuccess = false;
+                    // check if this value is only used for a store to another gcroot
+                    User::use_iterator value_use = theValue->use_begin();
+                    if (theLoad && *value_use == theStore)
+                        ++value_use;
+                    theOther = dyn_cast<StoreInst>(value_use.getUse().getUser());
+                    if (theOther && value_use.getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                        // test whether this store is valid as a gc-root
+                        CallInst *gcroot_other = dyn_cast<CallInst>(theOther->getPointerOperand());
+                        unsigned arg_offset = 0;
+                        if (!gcroot_other) {
+                            // also try to look through GEP for jlcall_frame_func
+                            if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(theOther->getPointerOperand())) {
+                                if (gepInst->getNumIndices() == 1) {
+                                    gcroot_other = dyn_cast<CallInst>(gepInst->getPointerOperand());
+                                    if (gcroot_other && gcroot_other->getCalledFunction() == jlcall_frame_func)
+                                        arg_offset = cast<ConstantInt>(gepInst->idx_begin()->get())->getZExtValue();
+                                    else
+                                        gcroot_other = NULL;
+                                }
+                            }
+                        }
+                        // it could be a gcroot
+                        if (gcroot_other && gcroot_other->getCalledFunction() == gcroot_func) {
+                            // need to make sure there aren't any other uses of gcroot_other (including gckill)
+                            // between the initial store and the replacement store
+                            BasicBlock *current = theStore->getParent();
+                            BasicBlock::iterator bbi = theStore, bbi_end = current->end();
+                            patternMatchSuccess = true;
+                            ++bbi;
+                            while (patternMatchSuccess) {
+                                Instruction *inst = &*bbi;
+                                if (inst == theOther) {
+                                    break; // success
+                                }
+                                for (Instruction::op_iterator op = inst->op_begin(), op_e = inst->op_end(); op != op_e; ++op) {
+                                    if (op->get() == gcroot_other) {
+                                        patternMatchSuccess = false;
+                                        break; // fail: gcroot_other had another reference, can't make this replacement
+                                    }
+                                }
+                                if (++bbi == bbi_end) {
+                                    // iterate the basicblock forward, if it's a simple branch
+#ifdef LLVM35
+                                    BasicBlock *next = current->getUniqueSuccessor();
+#else
+                                    succ_iterator SI = succ_begin(current), E = succ_end(current);
+                                    BasicBlock *next = NULL;
+                                    if (SI != E) {
+                                        next = *SI;
+                                        for (++SI; SI != E; ++SI) {
+                                            if (*SI != next) {
+                                                next = NULL;
+                                                break;
+                                            }
+                                        }
+                                    }
+#endif
+                                    if (next) {
+                                        bbi = next->begin();
+                                        bbi_end = next->end();
+                                        current = next;
+                                    }
+                                    else {
+                                        patternMatchSuccess = false;
+                                    }
+                                }
+                            }
+                        }
+                        // or it could be a jlcall frame
+                        else if (gcroot_other && gcroot_other->getCalledFunction() == jlcall_frame_func) {
+                            // only one store to a jlcall_frame_func slot exists now,
+                            // until the allocate space in temp-args for each jlcall frame
+                            // but do need to update liveness information for this slot
+                            // TODO: do this better once we have liveness information for locals
+                            if (theOther->getParent() == theStore->getParent()) {
+                                //frame_register def(gcroot_other, arg_offset);
+                                //std::map<frame_register, liveness::id> &inuse_list = bb_uses[theOther->getParent()];
+                                //std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
+                                patternMatchSuccess = true;
+                            }
+                        }
+                    }
+                    if (patternMatchSuccess) {
+                        // do the gcroot merge
+                        theStore->setOperand(StoreInst::getPointerOperandIndex(), theOther->getPointerOperand());
+                        if (&*I == theOther) ++I;
+                        theOther->eraseFromParent();
+                        if (theLoad) {
+                            if (&*I == theLoad) ++I;
+                            theLoad->eraseFromParent();
+                        }
+                        callInst->eraseFromParent();
+                    }
+                }
+            }
+        }
+    }
+
 /* # allocate space in temp-args for each jlcall frame
  * regs-used = zip(get-basic-blocks(), falses)
  * for bb in iterator(f)
@@ -357,6 +498,19 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
                     frames[callInst] = frame_offset;
                     if (frame_offset + arg_n > maxDepth)
                         maxDepth = frame_offset + arg_n;
+                }
+            }
+        }
+    }
+
+    // delete the now unused gckill information
+    for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
+        for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ) {
+            Instruction *inst = &*i;
+            ++i;
+            if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
+                if (callInst->getCalledFunction() == gckill_func) {
+                    callInst->eraseFromParent();
                 }
             }
         }
@@ -398,6 +552,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
                 }
             }
         }
+
         if (callInst && callInst->getCalledFunction() == gcroot_func) {
             if (!argSlot) {
                 argSlot = GetElementPtrInst::Create(gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
