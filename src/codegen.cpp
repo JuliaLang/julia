@@ -875,6 +875,7 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
     if (imaging_mode)
 #endif
         FPM->run(*f);
+
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -893,27 +894,42 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
     return f;
 }
 
+#ifndef LLVM37
+static Value *getModuleFlag(Module *m, StringRef Key)
+{
+    SmallVector<Module::ModuleFlagEntry, 8> ModuleFlags;
+    m->getModuleFlagsMetadata(ModuleFlags);
+    SmallVector<Module::ModuleFlagEntry, 8>::iterator it = ModuleFlags.begin();
+    for (;it != ModuleFlags.end(); ++it) {
+        if (Key == it->Key->getString())
+            return it->Val;
+    }
+    return NULL;
+}
+#else
+#define getModuleFlag(m,str) m->getModuleFlag(str)
+#endif
+
 static void jl_setup_module(Module *m)
 {
-    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
+    if (!getModuleFlag(m,"Dwarf Version"))
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
 #ifdef LLVM34
-    m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
-        llvm::DEBUG_METADATA_VERSION);
+    if (!getModuleFlag(m,"Debug Info Version"))
+        m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
+            llvm::DEBUG_METADATA_VERSION);
 #endif
 #ifdef LLVM37
-    if (jl_ExecutionEngine) {
 #ifdef USE_ORCJIT
-        m->setDataLayout(jl_ExecutionEngine->getDataLayout());
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #elif defined(LLVM38)
-        m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
 #else
-        m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
 #endif
-        m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
-    }
+    m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
 #elif defined(LLVM36)
-    if (jl_ExecutionEngine)
-        m->setDataLayout(jl_ExecutionEngine->getDataLayout());
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
 }
 
@@ -6216,25 +6232,19 @@ extern "C" void jl_init_codegen(void)
 #ifdef USE_MCJIT
     m = shadow_module = new Module("shadow", jl_LLVMContext);
     builtins_module = new Module("julia_builtins", jl_LLVMContext);
-    jl_setup_module(shadow_module);
-    jl_setup_module(builtins_module);
     if (imaging_mode) {
         engine_module = new Module("engine_module", jl_LLVMContext);
-        jl_setup_module(engine_module);
         active_module = shadow_module;
     }
     else {
         active_module = new Module("julia", jl_LLVMContext);
-        jl_setup_module(active_module);
         engine_module = m;
 #ifdef USE_ORCJIT
         engine_module = new Module("engine_module", jl_LLVMContext);
-        jl_setup_module(engine_module);
 #endif
     }
 #else
     engine_module = m = jl_Module = new Module("julia", jl_LLVMContext);
-    jl_setup_module(engine_module);
 #endif
 
     TargetOptions options = TargetOptions();
@@ -6321,17 +6331,6 @@ extern "C" void jl_init_codegen(void)
     jl_TargetMachine->setFastISel(true);
 #endif
 
-#if defined(LLVM38)
-    engine_module->setDataLayout(jl_TargetMachine->createDataLayout());
-    active_module->setDataLayout(jl_TargetMachine->createDataLayout());
-#elif defined(LLVM36) && !defined(LLVM37)
-    engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
-#elif defined(LLVM35) && !defined(LLVM37)
-    engine_module->setDataLayout(jl_TargetMachine->getDataLayout());
-#else
-    engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
-#endif
-
 #ifdef USE_ORCJIT
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
 #else
@@ -6350,26 +6349,14 @@ extern "C" void jl_init_codegen(void)
 
     mbuilder = new MDBuilder(getGlobalContext());
 
-#ifdef USE_ORCJIT
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
-    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
-    m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
-    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+    // Now that the execution engine exists, initialize all modules
+#ifdef USE_MCJIT
+    jl_setup_module(engine_module);
+    jl_setup_module(shadow_module);
+    jl_setup_module(active_module);
+    jl_setup_module(builtins_module);
 #else
-#ifdef LLVM37
-#ifdef LLVM38
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
-    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout().getStringRepresentation());
-#else
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
-    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
-#endif
-    m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
-    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
-#elif defined(LLVM36)
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
-    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
-#endif
+    jl_setup_module(engine_module);
 #endif
 
     if (imaging_mode)
