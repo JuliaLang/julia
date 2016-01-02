@@ -1498,6 +1498,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_set_typeof(v, dt);
         if (dt == jl_datatype_type)
             return jl_deserialize_datatype(s, pos, loc);
+        assert(mode==MODE_AST || sz!=0 || loc);
         if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) && dt == jl_typename_type) {
             int ref_only = read_uint8(s);
             if (ref_only) {
@@ -1556,6 +1557,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             uptrint_t pos = backref_list.len;
             arraylist_push(&backref_list, (void*)v);
             if (mode == MODE_MODULE) {
+                // TODO: optimize the case where the value can easily be obtained
+                // from an external module (tag == 6) as dt->instance
                 assert(loc != NULL);
                 arraylist_push(&flagref_list, loc);
                 arraylist_push(&flagref_list, (void*)pos);
@@ -1688,7 +1691,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 jl_idtable_rehash(a, jl_array_len(*a));
                 jl_gc_wb(v, *a);
                 break;
-                    }
+            }
             case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
                 jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name);
@@ -1707,7 +1710,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 b->value = v;
                 jl_gc_wb_binding(b, v);
                 break;
-                    }
+            }
             default:
                 assert(0);
         }
@@ -2096,38 +2099,43 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                          jl_lambda_info_t *method);
 
-static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start)
+static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_t *v)
 {
-    assert(dt->uid == -1);
-    jl_svec_t *tt = dt->parameters;
-    jl_value_t *v = dt->instance; // the instance before unique'ing
+    if (v == NULL)
+        v = dt->instance; // the instance before unique'ing
     jl_datatype_t *t; // the type after unique'ing
-    size_t l = jl_svec_len(tt);
-    if (l == 0) { // jl_cache_type doesn't work if length(parameters) == 0
-        dt->uid = jl_assign_type_uid();
-        t = dt;
+    if (dt->uid == -1) {
+        jl_svec_t *tt = dt->parameters;
+        size_t l = jl_svec_len(tt);
+        if (l == 0) { // jl_cache_type doesn't work if length(parameters) == 0
+            dt->uid = jl_assign_type_uid();
+            t = dt;
+        }
+        else {
+            // recache all type parameters, then type type itself
+            size_t i;
+            for (i = 0; i < l; i++) {
+                jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
+                if (jl_is_datatype(p) && p->uid == -1) {
+                    jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
+                    if (p != cachep)
+                        jl_svecset(tt, i, cachep);
+                }
+                jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
+                if (jl_is_datatype_singleton(tp)) {
+                    if (tp->uid == -1) {
+                        tp = jl_recache_type(tp, start, NULL);
+                    }
+                    if ((jl_value_t*)p != tp->instance)
+                        jl_svecset(tt, i, tp->instance);
+                }
+            }
+            dt->uid = 0;
+            t = (jl_datatype_t*)jl_cache_type_(dt);
+        }
     }
     else {
-        // recache all type parameters, then type type itself
-        size_t i;
-        for (i = 0; i < l; i++) {
-            jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-            if (jl_is_datatype(p) && p->uid == -1) {
-                jl_datatype_t *cachep = jl_recache_type(p, start);
-                if (p != cachep)
-                    jl_svecset(tt, i, cachep);
-            }
-            jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
-            if (jl_is_datatype_singleton(tp)) {
-                if (tp->uid == -1) {
-                    tp = jl_recache_type(tp, start);
-                }
-                if ((jl_value_t*)p != tp->instance)
-                    jl_svecset(tt, i, tp->instance);
-            }
-        }
-        dt->uid = 0;
-        t = (jl_datatype_t*)jl_cache_type_(dt);
+        t = dt;
     }
     assert(t->uid != 0);
     // delete / replace any other usages of this type in the backref list
@@ -2174,15 +2182,13 @@ static void jl_recache_types(void)
         if (jl_is_datatype(o)) {
             dt = (jl_datatype_t*)o;
             v = dt->instance;
-            t = jl_recache_type(dt, i);
+            assert(dt->uid == -1);
+            t = jl_recache_type(dt, i, NULL);
         }
         else {
             dt = (jl_datatype_t*)jl_typeof(o);
             v = o;
-            if (dt->uid == -1)
-                t = jl_recache_type(dt, i);
-            else
-                t = dt;
+            t = jl_recache_type(dt, i, v);
         }
         assert(dt);
         if (t != dt) {
