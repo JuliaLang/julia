@@ -3,13 +3,12 @@
 # Base.Collections
 
 """
-```rst
-..  PriorityQueue(K, V, [ord])
+    PriorityQueue(K, V, [ord])
 
-Construct a new :obj:`PriorityQueue`, with keys of type ``K`` and values/priorites of
-type ``V``. If an order is not given, the priority queue is min-ordered using
+Construct a new [``PriorityQueue``](:obj:`PriorityQueue`), with keys of type
+``K`` and values/priorites of type ``V``.
+If an order is not given, the priority queue is min-ordered using
 the default comparison for ``V``.
-```
 """
 Collections.PriorityQueue
 
@@ -35,11 +34,9 @@ Return the lowest priority key from a priority queue without removing that key f
 Collections.peek
 
 """
-```rst
-..  heapify!(v, [ord])
+    heapify!(v, [ord])
 
-In-place :func:`heapify`.
-```
+In-place [``heapify``](:func:`heapify`).
 """
 Collections.heapify!
 
