@@ -491,6 +491,22 @@ Shared Arrays
 
    If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, it is called on all the participating workers.
 
+.. function:: SharedArray(filename::AbstractString, T::Type, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+
+   .. Docstring generated from Julia source
+
+   Construct a ``SharedArray`` backed by the file ``filename``\ , with element type ``T`` (must be a ``bitstype``\ ) and size ``dims``\ , across the processes specified by ``pids`` - all of which have to be on the same host. This file is mmapped into the host memory, with the following consequences:
+
+   * The array data must be represented in binary format (e.g., an ASCII   format like CSV cannot be supported)
+
+   * Any changes you make to the array values (e.g., ``A[3] = 0``\ ) will   also change the values on disk
+
+   If ``pids`` is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, ``localindexes`` and ``indexpids`` will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.
+
+   ``mode`` must be one of ``"r"``\ , ``"r+"``\ , ``"w+"``\ , or ``"a+"``\ , and defaults to ``"r+"`` if the file specified by ``filename`` already exists, or ``"w+"`` if not. If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, it is called on all the participating workers. You cannot specify an ``init`` function if the file is not writable.
+
+   ``offset`` allows you to skip the specified number of bytes at the beginning of the file.
+
 .. function:: procs(S::SharedArray)
 
    .. Docstring generated from Julia source
@@ -508,6 +524,14 @@ Shared Arrays
    .. Docstring generated from Julia source
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping the SharedArray
+
+.. function:: localindexes(S::SharedArray)
+
+   .. Docstring generated from Julia source
+
+   Returns a range describing the "default" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of ``1:length(S)``\ .  In multi-process contexts, returns an empty range in the parent process (or any process for which ``indexpids`` returns 0).
+
+   It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish.  For a SharedArray, all indexes should be equally fast for each worker process.
 
 Cluster Manager Interface
 -------------------------

@@ -99,6 +99,7 @@ from Julia's root directory. Sometimes errors only show up in one of them, so if
 Existing docstrings now live primarily in `base/docs/helpdb.jl`.
 It is a goal over time to move the docstrings inline to their respective method definitions.
 If you want to edit the body of a method docstring, run the `doc/genstdlib.jl` script to regenerate the restructured text files **after** you have already rebuilt Julia.
+(From the top-level source directory, you can do this with `make julia-genstdlib`.)
 If you want to edit an existing docstring signature, you **first** have to change the signature in the `doc/stdlib` `..function` or `..data` definition (not the auto-generated content) and *then*
 edit the helpdb.jl or inline method docstrings.  The existing signatures in the `doc/stdlib/*.rst` files are pattern matched to base docstrings and the new content overwrites the content in `doc/stdlib/`.
 The signature definitions **must** be in sync or else the pattern match will fail and documentation will be lost in the result.
