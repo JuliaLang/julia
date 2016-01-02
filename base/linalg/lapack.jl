@@ -3980,6 +3980,128 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
     end
 end
 
+# Rook-pivoting variants of symmetric-matrix algorithms
+for (sysv, sytrf, sytri, sytrs, elty) in
+    ((:dsysv_rook_,:dsytrf_rook_,:dsytri_rook_,:dsytrs_rook_,:Float64),
+     (:ssysv_rook_,:ssytrf_rook_,:ssytri_rook_,:ssytrs_rook_,:Float32))
+    @eval begin
+        #       SUBROUTINE DSYSV_ROOK(UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+        #                             LWORK, INFO )
+        #       .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+        #       .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
+        function sysv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            chkuplo(uplo)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            ipiv  = similar(A, BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($sysv), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
+                      work, &lwork, info)
+                chkargsok(info[])
+                chknonsingular(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            B, A, ipiv
+        end
+
+        #       SUBROUTINE DSYTRF_ROOK(UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function sytrf_rook!(uplo::Char, A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            ipiv  = similar(A, BlasInt, n)
+            if n == 0
+                return A, ipiv
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($sytrf), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+                chkargsok(info[])
+                chknonsingular(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            return A, ipiv
+        end
+
+        #      SUBROUTINE DSYTRI_ROOK( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        #     .. Scalar Arguments ..
+        #      CHARACTER          UPLO
+        #      INTEGER            INFO, LDA, N
+        #     .. Array Arguments ..
+        #      INTEGER            IPIV( * )
+        #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            work = Array($elty, n)
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($sytri), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
+            chkargsok(info[])
+            chknonsingular(info[])
+            A
+        end
+
+        #       SUBROUTINE DSYTRS_ROOK( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        #
+        #       .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        #       .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+        function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
+                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            chkuplo(uplo)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($sytrs), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
+            chklapackerror(info[])
+            B
+        end
+    end
+end
+
 ## (SY) hermitian matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
 for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
@@ -4152,6 +4274,123 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
     end
 end
 
+for (hesv, hetrf, hetri, hetrs, elty, relty) in
+    ((:zhesv_rook_,:zhetrf_rook_,:zhetri_rook_,:zhetrs_rook_,:Complex128, :Float64),
+     (:chesv_rook_,:chetrf_rook_,:chetri_rook_,:chetrs_rook_,:Complex64, :Float32))
+    @eval begin
+        #       SUBROUTINE ZHESV_ROOK( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function hesv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            chkuplo(uplo)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            ipiv  = similar(A, BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($hesv), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
+                      work, &lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            B, A, ipiv
+        end
+
+        #       SUBROUTINE ZHETRF_ROOK( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
+        function hetrf_rook!(uplo::Char, A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            ipiv  = similar(A, BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i in 1:2
+                ccall((@blasfunc($hetrf), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
+                chkargsok(info[])
+                chknonsingular(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            A, ipiv
+        end
+
+        #       SUBROUTINE ZHETRI_ROOK( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
+        function hetri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            work = Array($elty, n)
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($hetri), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
+            chklapackerror(info[])
+            A
+        end
+
+        #       SUBROUTINE ZHETRS_ROOK( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * )
+        function hetrs_rook!(uplo::Char, A::StridedMatrix{$elty},
+                             ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($hetrs), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
+            chklapackerror(info[])
+            B
+        end
+    end
+end
+
 for (sysv, sytrf, sytri, sytrs, elty, relty) in
     ((:zsysv_,:zsytrf_,:zsytri_,:zsytrs_,:Complex128, :Float64),
      (:csysv_,:csytrf_,:csytri_,:csytrs_,:Complex64, :Float32))
@@ -4287,6 +4526,129 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            chkuplo(uplo)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($sytrs), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
+            chklapackerror(info[])
+            B
+        end
+    end
+end
+
+for (sysv, sytrf, sytri, sytrs, elty, relty) in
+    ((:zsysv_rook_,:zsytrf_rook_,:zsytri_rook_,:zsytrs_rook_,:Complex128, :Float64),
+     (:csysv_rook_,:csytrf_rook_,:csytri_rook_,:csytrs_rook_,:Complex64, :Float32))
+    @eval begin
+        #       SUBROUTINE ZSYSV_ROOK(UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+        #      $                      LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function sysv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            n = chksquare(A)
+            chkuplo(uplo)
+            if n != size(B,1)
+                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+            end
+            ipiv  = similar(A, BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($sysv), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
+                      work, &lwork, info)
+                chkargsok(info[])
+                chknonsingular(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            B, A, ipiv
+        end
+
+        #       SUBROUTINE ZSYTRF_ROOK( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
+        function sytrf_rook!(uplo::Char, A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            ipiv = similar(A, BlasInt, n)
+            if n == 0
+                return A, ipiv
+            end
+            work  = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info  = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($sytrf), liblapack), Void,
+                      (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
+                chkargsok(info[])
+                chknonsingular(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            A, ipiv
+        end
+
+        #       SUBROUTINE ZSYTRI_ROOK( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
+        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            n = chksquare(A)
+            chkuplo(uplo)
+            work = Array($elty, n)
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($sytri), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
+            chklapackerror(info[])
+            A
+        end
+
+        #       SUBROUTINE ZSYTRS_ROOK( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, LDA, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * )
+        function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
+                             ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
             n = chksquare(A)
             chkuplo(uplo)
