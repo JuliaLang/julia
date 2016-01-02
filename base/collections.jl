@@ -93,7 +93,7 @@ end
 """
     heapify!(v, [ord])
 
-In-place [``heapify``](:func:`heapify`).
+In-place [`heapify`](:func:`heapify`).
 """
 function heapify!(xs::AbstractArray, o::Ordering=Forward)
     for i in heapparent(length(xs)):-1:1
@@ -131,13 +131,13 @@ end
 """
     PriorityQueue(K, V, [ord])
 
-Construct a new [``PriorityQueue``](:obj:`PriorityQueue`), with keys of type
-``K`` and values/priorites of type ``V``.
+Construct a new [`PriorityQueue`](:obj:`PriorityQueue`), with keys of type
+`K` and values/priorites of type `V`.
 If an order is not given, the priority queue is min-ordered using
-the default comparison for ``V``.
+the default comparison for `V`.
 
-A ``PriorityQueue`` acts like a ``Dict``, mapping values to their
-priorities, with the addition of a ``dequeue!`` function to remove the
+A `PriorityQueue` acts like a `Dict`, mapping values to their
+priorities, with the addition of a `dequeue!` function to remove the
 lowest priority element.
 """
 type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}

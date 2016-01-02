@@ -1287,9 +1287,9 @@ changed efficiently.
 
    .. Docstring generated from Julia source
 
-   Construct a new :obj:`PriorityQueue`, with keys of type ``K`` and values/priorites of
-   type ``V``. If an order is not given, the priority queue is min-ordered using
-   the default comparison for ``V``.
+   Construct a new :obj:`PriorityQueue`\ , with keys of type ``K`` and values/priorites of type ``V``\ . If an order is not given, the priority queue is min-ordered using the default comparison for ``V``\ .
+
+   A ``PriorityQueue`` acts like a ``Dict``\ , mapping values to their priorities, with the addition of a ``dequeue!`` function to remove the lowest priority element.
 
 .. function:: enqueue!(pq, k, v)
 
@@ -1343,19 +1343,19 @@ is used, so that elements popped from the heap are given in ascending order.
 
    .. Docstring generated from Julia source
 
-   Return a new vector in binary heap order, optionally using the given ordering.
+   Returns a new vector in binary heap order, optionally using the given ordering.
 
 .. function:: heapify!(v, [ord])
 
    .. Docstring generated from Julia source
 
-   In-place :func:`heapify`.
+   In-place :func:`heapify`\ .
 
 .. function:: isheap(v, [ord])
 
    .. Docstring generated from Julia source
 
-   Return ``true`` iff an array is heap-ordered according to the given order.
+   Return ``true`` if an array is heap-ordered according to the given order.
 
 .. function:: heappush!(v, x, [ord])
 
