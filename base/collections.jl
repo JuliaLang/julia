@@ -61,8 +61,12 @@ end
 
 percolate_up!{T}(xs::AbstractArray{T}, i::Integer, o::Ordering) = percolate_up!(xs, i, xs[i], o)
 
+"""
+    heappop!(v, [ord])
 
-# Binary min-heap pop.
+Given a binary heap-ordered array, remove and return the lowest ordered element.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
 function heappop!(xs::AbstractArray, o::Ordering=Forward)
     x = xs[1]
     y = pop!(xs)
@@ -72,8 +76,12 @@ function heappop!(xs::AbstractArray, o::Ordering=Forward)
     x
 end
 
+"""
+    heappush!(v, x, [ord])
 
-# Binary min-heap push.
+Given a binary heap-ordered array, push a new element `x`, preserving the heap property.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
 function heappush!(xs::AbstractArray, x, o::Ordering=Forward)
     push!(xs, x)
     percolate_up!(xs, length(xs), x, o)
@@ -82,6 +90,11 @@ end
 
 
 # Turn an arbitrary array into a binary min-heap in linear time.
+"""
+    heapify!(v, [ord])
+
+In-place [`heapify`](:func:`heapify`).
+"""
 function heapify!(xs::AbstractArray, o::Ordering=Forward)
     for i in heapparent(length(xs)):-1:1
         percolate_down!(xs, i, o)
@@ -89,10 +102,18 @@ function heapify!(xs::AbstractArray, o::Ordering=Forward)
     xs
 end
 
+"""
+    heapify(v, [ord])
+
+Returns a new vector in binary heap order, optionally using the given ordering.
+"""
 heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy(xs), o)
 
+"""
+    isheap(v, [ord])
 
-# Is an arbitrary array heap ordered?
+Return `true` if an array is heap-ordered according to the given order.
+"""
 function isheap(xs::AbstractArray, o::Ordering=Forward)
     for i in 1:div(length(xs), 2)
         if lt(o, xs[heapleft(i)], xs[i]) ||
@@ -107,9 +128,18 @@ end
 # PriorityQueue
 # -------------
 
-# A PriorityQueue that acts like a Dict, mapping values to their priorities,
-# with the addition of a dequeue! function to remove the lowest priority
-# element.
+"""
+    PriorityQueue(K, V, [ord])
+
+Construct a new [`PriorityQueue`](:obj:`PriorityQueue`), with keys of type
+`K` and values/priorites of type `V`.
+If an order is not given, the priority queue is min-ordered using
+the default comparison for `V`.
+
+A `PriorityQueue` acts like a `Dict`, mapping values to their
+priorities, with the addition of a `dequeue!` function to remove the
+lowest priority element.
+"""
 type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     # Binary heap of (element, priority) pairs.
     xs::Array{Pair{K,V}, 1}
@@ -168,8 +198,14 @@ PriorityQueue{K,V}(a::AbstractArray{Tuple{K,V}}, o::Ordering=Forward) = Priority
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
 haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
-peek(pq::PriorityQueue) = pq.xs[1]
 
+"""
+    peek(pq)
+
+Return the lowest priority key from a priority queue without removing that
+key from the queue.
+"""
+peek(pq::PriorityQueue) = pq.xs[1]
 
 function percolate_down!(pq::PriorityQueue, i::Integer)
     x = pq.xs[i]
@@ -246,7 +282,11 @@ function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
     value
 end
 
+"""
+    enqueue!(pq, k, v)
 
+Insert the a key `k` into a priority queue `pq` with priority `v`.
+"""
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     if haskey(pq, key)
         throw(ArgumentError("PriorityQueue keys must be unique"))
@@ -257,7 +297,11 @@ function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     pq
 end
 
+"""
+    dequeue!(pq)
 
+Remove and return the lowest priority key from a priority queue.
+"""
 function dequeue!(pq::PriorityQueue)
     x = pq.xs[1]
     y = pop!(pq.xs)

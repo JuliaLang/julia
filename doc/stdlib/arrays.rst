@@ -925,13 +925,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in
-   which the probability of any element being nonzero is independently given by
-   ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero
-   values are sampled from the distribution specified by ``rfn``. The uniform
-   distribution is used in case ``rfn`` is not specified. The optional ``rng``
-   argument specifies a random number generator, see :ref:`Random Numbers
-   <random-numbers>`.
+   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: sprandn(m[,n],p::AbstractFloat)
 
