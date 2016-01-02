@@ -18,6 +18,7 @@ $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(SRCDIR)/srccache/gmp-$(GMP_VER).t
 	cd $(dir $<) && $(TAR) jxf $<
 	touch -c $@
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure
+	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
 	echo 1 > $@
 $(BUILDDIR)/gmp-$(GMP_VER)/config.status: $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched
 	mkdir -p $(dir $@)
