@@ -127,6 +127,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `base64` is now `base64encode` [#9157](https://github.com/JuliaLang/julia/pull/9157)
 
+* `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

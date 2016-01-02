@@ -548,3 +548,6 @@ Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed b
 
 # JuliaLang/julia#12819
 @test Compat.Filesystem.JL_O_RDWR == Compat.Filesystem.JL_O_RDWR
+
+# JuliaLang/julia#14338
+@test supertype(Int) == Signed
