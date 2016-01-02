@@ -2,6 +2,5 @@
 
 import .Docs: keywords
 
-include("helpdb/Profile.jl")
 include("helpdb/Base.jl")
 include("helpdb/Dates.jl")
