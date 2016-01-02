@@ -158,9 +158,13 @@ for T in [Int128, UInt128]
     @test div(T(-7), T(-3)) === T(2)
 
     @test rem(T(7), T(3)) === T(1)
+    @test rem(T(-7), T(3)) === T(-1)
+    @test rem(T(-7), T(-3)) === T(-1)
+    @test rem(T(7), T(-3)) === T(1)
+
     @test T(3) << 2 === T(12)
     @test T(5) >> 2 === T(1)
-    @test T(4) >>> 2 === T128(1)
+    @test T(4) >>> 2 === T(1)
 
     @test (typemax(T) + 1) === typemin(T)
     @test (typemin(T) - 1) === typemax(T)
