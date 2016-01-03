@@ -207,8 +207,6 @@ static jl_value_t *full_list_of_lists(value_t e, int expronly)
     return (jl_value_t*)ar;
 }
 
-static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
-
 static jl_value_t *scm_to_julia(value_t e, int expronly)
 {
     int en = jl_gc_enable(0); // Might GC
@@ -328,7 +326,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 e = cdr_(e);
             }
             jl_lambda_info_t *nli = jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec, jl_current_module);
-            resolve_globals(nli->ast, nli);
+            jl_preresolve_globals(nli->ast, nli);
             return (jl_value_t*)nli;
         }
 
@@ -1023,7 +1021,7 @@ int jl_local_in_ast(jl_expr_t *ast, jl_sym_t *sym)
 
 extern jl_value_t *jl_builtin_getfield;
 
-static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
+jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
 {
     if (jl_is_symbol(expr)) {
         if (lam->module == NULL)
@@ -1033,12 +1031,12 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
     }
     else if (jl_is_lambda_info(expr)) {
         jl_lambda_info_t *l = (jl_lambda_info_t*)expr;
-        (void)resolve_globals(l->ast, l);
+        (void)jl_preresolve_globals(l->ast, l);
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == lambda_sym) {
-            (void)resolve_globals(jl_exprarg(e,2), lam);
+            (void)jl_preresolve_globals(jl_exprarg(e,2), lam);
         }
         else if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
                  e->head == global_sym || e->head == quote_sym || e->head == inert_sym ||
@@ -1070,7 +1068,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 e->head == bitstype_sym || e->head == module_sym)
                 i++;
             for(; i < jl_array_len(e->args); i++) {
-                jl_exprargset(e, i, resolve_globals(jl_exprarg(e,i), lam));
+                jl_exprargset(e, i, jl_preresolve_globals(jl_exprarg(e,i), lam));
             }
         }
     }
