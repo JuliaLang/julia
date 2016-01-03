@@ -1,5 +1,6 @@
 #include "llvm-version.h"
 #include <vector>
+#include <queue>
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Instructions.h>
@@ -42,7 +43,7 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 static bool record_usage(CallInst *callInst,
         std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
         std::map<BasicBlock*, SmallBitVector> &regs_used,
-        unsigned offset, bool commit=true)
+        unsigned &offset, bool commit=true)
 {
 /* record-usage(inst, bb-uses, regs-used, offset, commit=true)
  *     for (arg-offset, operand) in enumerate(arguments(inst))
@@ -80,7 +81,7 @@ static bool record_usage(CallInst *callInst,
             live_reg = bb_uses.begin(), e = bb_uses.end(); live_reg != e; ++live_reg) {
         BasicBlock *bb = live_reg->first;
         SmallBitVector &regs = regs_used[bb];
-        if (regs.size() < offset + arg_n)
+        if (offset + arg_n > regs.size())
             regs.resize(offset + arg_n);
         for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
             frame_register def(callInst, arg_offset);
@@ -93,8 +94,13 @@ static bool record_usage(CallInst *callInst,
             if (commit) {
                 assert(!conflict);
                 regs.set(index);
-            } else if (conflict) {
-                // TODO: updating offset to point to the next open register > index may help accelerate this loop and avoid unnecessary work
+            }
+            else if (conflict) {
+                // update the offset argument to point to the next open register beyond index
+                // to help avoid unnecessary work and accelerate the search
+                ++offset;
+                while (offset + arg_offset < regs.size() && regs.test(offset + arg_offset))
+                    ++offset;
                 return false;
             }
         }
@@ -115,8 +121,7 @@ static unsigned find_space_for(CallInst *callInst,
  *
  */
     unsigned n = 0;
-    while (!record_usage(callInst, bb_uses, regs_used, n, false))
-        ++n;
+    while (!record_usage(callInst, bb_uses, regs_used, n, false)) { }
     return n;
 }
 
@@ -162,6 +167,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
 
     std::vector<BasicBlock*> bb_queue;
     std::map<BasicBlock*, std::map<frame_register, liveness::id> > bb_uses;
+    std::priority_queue< std::pair<unsigned, CallInst*> > frames;
     for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
         // TODO: this assumes that the kill bb (aka the jlcall) is the same as the store and the frame allocation (aka jlcall_frame_func)
         // which is currently a safe assumption due to the specific behavior of `make_jlcall` and `emit_jlcall`, but may not be sufficiently general
@@ -172,6 +178,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
             if (CallInst* callInst = dyn_cast<CallInst>(i)) {
                 if (callInst->getCalledFunction() == jlcall_frame_func) {
                     unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
+                    frames.push(std::make_pair(arg_n, callInst));
                     for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
                         liveness::id &live = inuse_list[frame_register(callInst, arg_offset)];
                         if (!live)
@@ -478,29 +485,26 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
 
 /* # allocate space in temp-args for each jlcall frame
  * regs-used = zip(get-basic-blocks(), falses)
- * for bb in iterator(f)
- *     for inst in iterator(bb)
- *         if inst matches "a call to make-jlcall-frame"
- *             frame-offset = find-space-for(inst, bb-uses, regs-used)
- *             record-usage(inst, bb-uses, regs-used, frame-offset)
+ * for <frame-size, inst> in frames
+ *     frame-offset = find-space-for(inst, bb-uses, regs-used)
+ *     record-usage(inst, bb-uses, regs-used, frame-offset)
+ * # frame iterator allocates space in reverse size order
+ * # so that the large frames get allocated first
+ * # and the smaller frames just fill in the gaps
+ * # I believe this is likely to give good results (compact gc-frames)
  */
     std::map<BasicBlock*, SmallBitVector> regs_used;
-    std::map<CallInst*, unsigned> frames;
+    std::map<CallInst*, unsigned> frame_offsets;
     maxDepth = 0;
-    // TODO: it is probably more optimal to allocate these from largest to smallest
-    for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
-        for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ++i) {
-            if (CallInst* callInst = dyn_cast<CallInst>(&*i)) {
-                if (callInst->getCalledFunction() == jlcall_frame_func) {
-                    unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
-                    unsigned frame_offset = find_space_for(callInst, bb_uses, regs_used);
-                    record_usage(callInst, bb_uses, regs_used, frame_offset);
-                    frames[callInst] = frame_offset;
-                    if (frame_offset + arg_n > maxDepth)
-                        maxDepth = frame_offset + arg_n;
-                }
-            }
-        }
+    for (; !frames.empty(); frames.pop()) {
+        std::pair<unsigned, CallInst*> frame = frames.top();
+        unsigned arg_n = frame.first;
+        CallInst *callInst = frame.second;
+        unsigned frame_offset = find_space_for(callInst, bb_uses, regs_used);
+        record_usage(callInst, bb_uses, regs_used, frame_offset);
+        frame_offsets[callInst] = frame_offset;
+        if (frame_offset + arg_n > maxDepth)
+            maxDepth = frame_offset + arg_n;
     }
 
     // delete the now unused gckill information
@@ -533,7 +537,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
             frame_register def(
                     cast<CallInst>(callInst->getArgOperand(0)),
                     cast<ConstantInt>(callInst->getArgOperand(1))->getZExtValue());
-            unsigned frame_offset = frames.at(def.first);
+            unsigned frame_offset = frame_offsets.at(def.first);
             Value* offset[1] = {ConstantInt::get(T_int32, frame_offset + def.second)};
             GetElementPtrInst *frame = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
             frame->insertAfter(last_gcframe_inst);
@@ -586,7 +590,7 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
     tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
 
 /* finalize all of the frames by replacing them with the appropriate gep(tempslot) */
-    for (std::map<CallInst*, unsigned>::iterator frame = frames.begin(), framee = frames.end(); frame != framee; ++frame) {
+    for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
         Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
         GetElementPtrInst *gep = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
         ReplaceInstWithInst(frame->first, gep);
