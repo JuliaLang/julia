@@ -125,6 +125,8 @@ function write(s::IO, a::AbstractArray)
     end
     return nb
 end
+write(filename::AbstractString, data) = open(io->write(io, data), filename, "w")
+
 
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
