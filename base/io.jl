@@ -125,6 +125,7 @@ function write(s::IO, a::AbstractArray)
     end
     return nb
 end
+"""Write directly to a named file. Equivalent to `open(io->write(io,x), filename, "w")`."""
 write(filename::AbstractString, data) = open(io->write(io, data), filename, "w")
 
 
