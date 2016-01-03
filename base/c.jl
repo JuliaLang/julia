@@ -38,6 +38,16 @@ typealias Cfloat Float32
 typealias Cdouble Float64
 
 const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
+if OS_NAME !== :Windows
+    const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
+    if sizeof_mode_t == 2
+        typealias Cmode_t Int16
+    elseif sizeof_mode_t == 4
+        typealias Cmode_t Int32
+    elseif sizeof_mode_t == 8
+        typealias Cmode_t Int64
+    end
+end
 
 if sizeof_off_t === 4
     typealias FileOffset Int32
