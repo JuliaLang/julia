@@ -2655,7 +2655,7 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
         if (!pseq)
             pseq = (pi<plenr) && plenkind != JL_TUPLE_FIXED && jl_is_vararg_type(parent[pi]);
         if (ci >= clenf && !cseq)
-            return some_morespecific || pi>=plenf || (pseq && !invariant);
+            return 1;
         if (pi >= plenf && !pseq)
             return some_morespecific;
         if (ci < clenr) {
