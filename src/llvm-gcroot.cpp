@@ -22,7 +22,7 @@ public:
     };
 };
 
-#ifdef DEBUG // llvm debug build
+#ifdef DEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
 void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
 {
@@ -429,4 +429,15 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
         GetElementPtrInst *gep = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
         ReplaceInstWithInst(frame->first, gep);
     }
+
+#if 0
+    static struct {
+        unsigned count;
+        unsigned locals;
+        unsigned temp;
+    } gc_frame_stats = {0};
+    gc_frame_stats.count++;
+    gc_frame_stats.locals += argSpaceSize;
+    gc_frame_stats.temp += maxDepth;
+#endif
 }
