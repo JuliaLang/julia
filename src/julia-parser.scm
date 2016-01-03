@@ -509,20 +509,20 @@
 
 (define (syntax-deprecation s what instead)
   (if (or *depwarn* *deperror*)
-    (let ((msg (string
-		 #\newline
-		 (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
-	      (if (eq? current-filename 'none)
-		  ""
-		  (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
-	      "."
-	      (if (equal? instead "")
-		  ""
-		  (string #\newline "Use \"" instead "\" instead."))
-	      #\newline)))
-	  (if *deperror*
-	    (error msg)
-	    (io.write *stderr* msg)))))
+      (let ((msg (string
+                  #\newline
+                  (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
+                  (if (or (not s) (eq? current-filename 'none))
+                      ""
+                      (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
+                  "."
+                  (if (equal? instead "")
+                      ""
+                      (string #\newline "Use \"" instead "\" instead."))
+                  #\newline)))
+        (if *deperror*
+            (error msg)
+            (io.write *stderr* msg)))))
 
 ;; --- parser ---
 

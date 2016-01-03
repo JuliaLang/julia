@@ -1023,7 +1023,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
                 end
             end
             # non-constant function, but type is known
-            if isleaftype(ft) && !(ft <: Builtin) && !(ft <: IntrinsicFunction)
+            if (isleaftype(ft) || ft <: Type) && !(ft <: Builtin) && !(ft <: IntrinsicFunction)
                 return abstract_call_gf_by_type(nothing, Tuple{argtypes...}, e)
             end
             return Any

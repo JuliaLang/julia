@@ -2964,17 +2964,6 @@ So far only the second case can actually occur.
 		   (assq (cadr e) (cadr (lam:vinfo lam))))
 	       '(null)
 	       e))
-          ((macro)
-           (if (atom? (caddr e))
-               e
-               (let ((lam2 (caddr e)))
-                 `(macro ,(cadr e)
-                    (lambda ,(cadr lam2)
-                      (,(clear-capture-bits (car (lam:vinfo lam2)))
-                       ,@(cdr (lam:vinfo lam2)))
-                      ,(add-box-inits-to-body
-                        lam2
-                        (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))))))
 	  ((method)
            (let* ((name  (method-expr-name e))
                   (short (length= e 2))  ;; function f end
@@ -2994,9 +2983,8 @@ So far only the second case can actually occur.
              (if local?
                  (begin (if (memq name (lam:args lam))
                             (error (string "cannot add method to function argument " name)))
-                        (if (expr-contains-p (lambda (x) (and (assignment? x) (eq? (cadr x) name)))
-                                             (lam:body lam))
-                            (error (string "assignment to local function " name)))))
+                        (if (eqv? (string.char (string name) 0) #\@)
+                            (error "macro definition not allowed inside a local scope"))))
              (if (not local?) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)

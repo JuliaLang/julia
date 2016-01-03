@@ -360,8 +360,14 @@ function functionloc(f)
     m = methods(f)
     if length(m) > 1
         error("function has multiple methods; please specify a type signature")
+    elseif isempty(m)
+        if isa(f,Function)
+            error("function has no definitions")
+        else
+            error("object is not callable")
+        end
     end
-    functionloc(m.defs)
+    functionloc(first(m))
 end
 
 function function_module(f, types::ANY)
