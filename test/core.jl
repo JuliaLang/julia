@@ -3673,3 +3673,15 @@ const A14767 = f14767(false)
 # issue #10985
 f10985(::Any...) = 1
 @test f10985(1, 2, 3) == 1
+
+# a tricky case for closure conversion
+type _CaptureInCtor
+    yy
+    function _CaptureInCtor(list_file::AbstractString="")
+        y = 0
+        f = x->add_node(y)
+        new(f(2))
+    end
+    add_node(y) = y+1
+end
+@test _CaptureInCtor().yy == 1

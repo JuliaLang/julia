@@ -207,6 +207,7 @@ jl_expr_t *jl_lam_body(jl_expr_t *l);
 int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v);
 int jl_local_in_ast(jl_expr_t *ast, jl_sym_t *sym);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
+jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 void jl_add_constructors(jl_datatype_t *t);
