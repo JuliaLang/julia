@@ -229,19 +229,23 @@ Convert a system call error code to a descriptive string
 strerror(e::Integer) = bytestring(ccall(:strerror, Cstring, (Int32,), e))
 strerror() = strerror(errno())
 
-@windows_only begin
-    @doc """
-        GetLastError()
+"""
+    GetLastError()
 
-    Call the Win32 `GetLastError` function [only available on Windows].
-    """ ->
+Call the Win32 `GetLastError` function [only available on Windows].
+"""
+function GetLastError end
+
+"""
+    FormatMessage(n=GetLastError())
+
+Convert a Win32 system call error code to a descriptive string [only available on Windows].
+"""
+function FormatMessage end
+
+@windows_only begin
     GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
 
-    @doc """
-        FormatMessage(n=GetLastError())
-
-    Convert a Win32 system call error code to a descriptive string [only available on Windows].
-    """ ->
     function FormatMessage(e=GetLastError())
         const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
