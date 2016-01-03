@@ -156,8 +156,8 @@ end
 function test_linear(A, B)
     length(A) == length(B) || error("length mismatch")
     isgood = true
-    for (iA, iB) in zip(1:length(A), 1:length(B))
-        if A[iA] != B[iB]
+    for i = 1:length(A)
+        if A[i] != B[i]
             isgood = false
             break
         end
