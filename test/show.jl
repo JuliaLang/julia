@@ -414,7 +414,7 @@ begin
     test_mt(f3, "f3(x::Vararg{T<:Any})")   # FIXME? better as x::Vararg?
 #    test_mt(f4, "f4(x::Vararg{Any,3})")
     intstr = string(Int)
-    test_mt(f5, "f5{T,N}(A::AbstractArray{T,N},indexes::Vararg{$intstr,N})")
+    test_mt(f5, "f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{$intstr,N})")
 end
 
 # Issue #15525, printing of vcat
