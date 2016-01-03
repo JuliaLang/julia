@@ -332,14 +332,6 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
         }
     }
 
-    Instruction *tempSlot = GetElementPtrInst::Create(gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
-#ifdef JL_DEBUG_BUILD
-    tempSlot->setName("temproots");
-#endif
-    tempSlot->insertAfter(gcframe);
-    if (last_gcframe_inst == gcframe)
-        last_gcframe_inst = tempSlot;
-
 /* # allocate space in locals for the variables
  * TBD
  */
@@ -520,6 +512,20 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
         }
     }
 
+    Instruction *tempSlot;
+    if (frame_offsets.empty()) {
+        tempSlot = NULL;
+    }
+    else {
+        tempSlot = GetElementPtrInst::Create(gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
+#ifdef JL_DEBUG_BUILD
+        tempSlot->setName("temproots");
+#endif
+        tempSlot->insertAfter(gcframe);
+        if (last_gcframe_inst == gcframe)
+            last_gcframe_inst = tempSlot;
+    }
+
 /* replace all intermediate roots defs with the appropriate gep(gcroot) */
     /* for inst in entry-basic-block(function)
      *     if inst matches "jlcall_root_func" or "gc-root"
@@ -578,22 +584,31 @@ void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcfram
         }
     }
 
-    // Initialize the slots for temporary variables to NULL
-    for (int i = 0; i < maxDepth; i++) {
-        Instruction *argTempi = GetElementPtrInst::Create(tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
-        argTempi->insertAfter(last_gcframe_inst);
-        StoreInst *store = new StoreInst(V_null, argTempi);
-        store->insertAfter(argTempi);
-        last_gcframe_inst = store;
+    if (argSpaceSize + maxDepth == 0) {
+        // 0 roots; remove gc frame entirely
+        gcframe->eraseFromParent();
+        last_gcframe_inst = NULL;
     }
-    gcframe->setOperand(0, ConstantInt::get(T_int32, 2 + argSpaceSize + maxDepth)); // fix up the size of the gc frame
-    tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
+    else {
+        // Initialize the slots for temporary variables to NULL
+        for (int i = 0; i < maxDepth; i++) {
+            Instruction *argTempi = GetElementPtrInst::Create(tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
+            argTempi->insertAfter(last_gcframe_inst);
+            StoreInst *store = new StoreInst(V_null, argTempi);
+            store->insertAfter(argTempi);
+            last_gcframe_inst = store;
+        }
 
-/* finalize all of the frames by replacing them with the appropriate gep(tempslot) */
-    for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
-        Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
-        GetElementPtrInst *gep = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
-        ReplaceInstWithInst(frame->first, gep);
+        gcframe->setOperand(0, ConstantInt::get(T_int32, 2 + argSpaceSize + maxDepth)); // fix up the size of the gc frame
+        if (tempSlot)
+            tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
+
+        // finalize all of the frames by replacing them with the appropriate gep(tempslot)
+        for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
+            Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
+            GetElementPtrInst *gep = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
+            ReplaceInstWithInst(frame->first, gep);
+        }
     }
 
 #if 0

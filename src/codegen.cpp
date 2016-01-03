@@ -3700,19 +3700,21 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     unsigned maxDepth, argSpaceSize;
     jl_codegen_finalize_temp_arg(newgcframe, last_gcframe_inst, maxDepth, argSpaceSize);
 
-    builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
-    DebugLoc noDbg;
-    builder.SetCurrentDebugLocation(noDbg);
+    if (last_gcframe_inst) {
+        builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
+        DebugLoc noDbg;
+        builder.SetCurrentDebugLocation(noDbg);
 
-    builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
-                        builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
-    builder.CreateStore(builder.CreateLoad(emit_pgcstack(ctx)),
-                        builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
-    builder.CreateStore(newgcframe, emit_pgcstack(ctx));
+        builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
+                            builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
+        builder.CreateStore(builder.CreateLoad(emit_pgcstack(ctx)),
+                            builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
+        builder.CreateStore(newgcframe, emit_pgcstack(ctx));
 
-    // Finish allocating the real GC frame
-    // n_frames++;
-    emit_gcpops(ctx);
+        // Finish allocating the real GC frame
+        // n_frames++;
+        emit_gcpops(ctx);
+    }
 }
 
 // here argt does not include the leading function type argument
