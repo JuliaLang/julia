@@ -4,13 +4,17 @@
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 8
 #define LLVM38 1
+#define USE_ORCJIT
 #endif
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 7
 #define LLVM37 1
-// Experimental:
-//#define USE_ORCMCJIT
-//#define USE_ORCJIT
+
+// We enable ORCJIT only if we have our custom patches
+#ifndef SYSTEM_LLVM
+#define USE_ORCJIT
+#endif
+
 #endif
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
