@@ -499,27 +499,33 @@ else
 LLVM_MFLAGS += OPTIONAL_DIRS=
 endif
 
+ifeq ($(LLVM_VER),3.7.1)
+LLVM_SRC_URL := https://s3.amazonaws.com/llvm-3.7.1-sources
+else
+LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
+endif
+
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LIBCXX_TAR),)
 $(LLVM_LIBCXX_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LLDB_TAR),)
 $(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
@@ -671,6 +677,11 @@ $(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
 else ifeq ($(LLVM_VER),3.6.0)
 $(eval $(call LLVM_PATCH,zerosign-llvm-3.6.0))
 $(eval $(call LLVM_PATCH,win64-allocas-llvm-3.6.0))
+else ifeq ($(LLVM_VER),3.7.0)
+$(eval $(call LLVM_PATCH,llvm-3.7.0))
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
+else ifeq ($(LLVM_VER),3.7.1)
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
 endif # LLVM_VER
 
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)

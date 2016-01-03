@@ -13,6 +13,8 @@
 #include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
+#else
+#include <unistd.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
@@ -1391,7 +1393,14 @@ void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
         (jl_value_t*)f,
         args
     };
-    jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    if (jl_base_module) {
+        jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
+    } else {
+        jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base module was defined. Aborting...\n");
+        jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
+        jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
+        abort();
+    }
     // not reached
 }
 
