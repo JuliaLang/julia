@@ -69,6 +69,12 @@ end
 Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 
 # flush C stdio output from external libraries
+
+"""
+    flush_cstdio()
+
+Flushes the C `stdout` and `stderr` streams (which may have been written to by external C code).
+"""
 flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
 
 ## time-related functions ##
@@ -89,6 +95,12 @@ function TimeVal()
     return tv[]
 end
 
+"""
+    TmStruct([seconds])
+
+Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`,
+`hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
+"""
 type TmStruct
     sec::Int32
     min::Int32
@@ -118,6 +130,13 @@ type TmStruct
     end
 end
 
+"""
+    strftime([format], time)
+
+Convert time, given as a number of seconds since the epoch or a `TmStruct`, to a formatted
+string using the given format. Supported formats are the same as those in the standard C
+library.
+"""
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
@@ -130,6 +149,16 @@ function strftime(fmt::AbstractString, tm::TmStruct)
     bytestring(pointer(timestr), n)
 end
 
+"""
+    strptime([format], timestr)
+
+Parse a formatted time string into a `TmStruct` giving the seconds, minute, hour, date, etc.
+Supported formats are the same as those in the standard C library. On some platforms,
+timezones will not be parsed correctly. If the result of this function will be passed to
+`time` to convert it to seconds since the epoch, the `isdst` field should be filled in
+manually. Setting it to `-1` will tell the C library to use the current system settings to
+determine the timezone.
+"""
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
@@ -154,6 +183,12 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
 end
 
 # system date in seconds
+
+"""
+    time(t::TmStruct)
+
+Converts a `TmStruct` struct to a number of seconds since the epoch.
+"""
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
 time() = ccall(:jl_clock_now, Float64, ())
 
@@ -173,24 +208,44 @@ end
 
 ## system error handling ##
 
+"""
+    errno([code])
+
+Get the value of the C library's `errno`. If an argument is specified, it is used to set the
+value of `errno`.
+
+The value of `errno` is only valid immediately after a `ccall` to a C library routine that
+sets it. Specifically, you cannot call `errno` at the next prompt in a REPL, because lots of
+code is executed between prompts.
+"""
 errno() = ccall(:jl_errno, Cint, ())
 errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
+
+"""
+    strerror(n=errno())
+
+Convert a system call error code to a descriptive string
+"""
 strerror(e::Integer) = bytestring(ccall(:strerror, Cstring, (Int32,), e))
 strerror() = strerror(errno())
 
-@windows_only begin
-    @doc """
-        GetLastError()
+"""
+    GetLastError()
 
-    Call the Win32 `GetLastError` function [only available on Windows].
-    """ ->
+Call the Win32 `GetLastError` function [only available on Windows].
+"""
+function GetLastError end
+
+"""
+    FormatMessage(n=GetLastError())
+
+Convert a Win32 system call error code to a descriptive string [only available on Windows].
+"""
+function FormatMessage end
+
+@windows_only begin
     GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
 
-    @doc """
-        FormatMessage(n=GetLastError())
-
-    Convert a Win32 system call error code to a descriptive string [only available on Windows].
-    """ ->
     function FormatMessage(e=GetLastError())
         const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
@@ -213,10 +268,40 @@ end
 
 ## Memory related ##
 
+"""
+    free(addr::Ptr)
+
+Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
+on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+be freed by the free functions defined in that library, to avoid assertion failures if
+multiple `libc` libraries exist on the system.
+"""
 free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+
+"""
+    malloc(size::Integer) -> Ptr{Void}
+
+Call `malloc` from the C standard library.
+"""
 malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
+
+"""
+    realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+
+Call `realloc` from the C standard library.
+
+See warning in the documentation for `free` regarding only using this on memory originally
+obtained from `malloc`.
+"""
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
+
+"""
+    calloc(num::Integer, size::Integer) -> Ptr{Void}
+
+Call `calloc` from the C standard library.
+"""
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
