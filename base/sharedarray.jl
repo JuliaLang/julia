@@ -524,14 +524,14 @@ end
 
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-    systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
+    systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
 
     s = fdio(fd_mem, true)
 
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
-        rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
+        rc = ccall(:ftruncate, Cint, (Cint, Coff_t), fd_mem, prod(dims)*sizeof(T))
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
@@ -539,7 +539,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Cstring, Int, Int), shm_seg_name, oflags, permissions)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
 end # @unix_only
 
