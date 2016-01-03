@@ -2,7 +2,7 @@
 
 ##    Error messages for Unicode / UTF support
 
-const UTF_ERR_SHORT             = "invalid UTF-8 sequence starting at index <<1>> (0x<<2>>) missing one or more continuation bytes)"
+const UTF_ERR_SHORT             = "invalid UTF-8 sequence starting at index <<1>> (0x<<2>> missing one or more continuation bytes)"
 const UTF_ERR_CONT              = "invalid UTF-8 sequence starting at index <<1>> (0x<<2>> is not a continuation byte)"
 const UTF_ERR_LONG              = "invalid UTF-8 sequence, overlong encoding starting at index <<1>> (0x<<2>>)"
 const UTF_ERR_NOT_LEAD          = "not a leading Unicode surrogate code unit at index <<1>> (0x<<2>>)"
