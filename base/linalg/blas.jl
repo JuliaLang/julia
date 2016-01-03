@@ -58,8 +58,23 @@ const libblas = Base.libblas_name
 
 import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, chksquare, axpy!
 
+"""
+    blas_set_num_threads(n)
+
+Set the number of threads the BLAS library should use.
+"""
+blas_set_num_threads
+
 # Level 1
 ## copy
+
+"""
+    blascopy!(n, X, incx, Y, incy)
+
+Copy `n` elements of array `X` with stride `incx` to array `Y` with stride `incy`. Returns `Y`.
+"""
+function blascopy! end
+
 for (fname, elty) in ((:dcopy_,:Float64),
                       (:scopy_,:Float32),
                       (:zcopy_,:Complex128),
@@ -76,6 +91,21 @@ for (fname, elty) in ((:dcopy_,:Float64),
 end
 
 ## scal
+
+"""
+    scal!(n, a, X, incx)
+
+Overwrite `X` with `a*X`. Returns `X`.
+"""
+function scal! end
+
+"""
+    scal(n, a, X, incx)
+
+Returns `a*X`.
+"""
+function scal end
+
 for (fname, elty) in ((:dscal_,:Float64),
                       (:sscal_,:Float32),
                       (:zscal_,:Complex128),
@@ -93,6 +123,29 @@ end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 
 ## dot
+
+"""
+    dot(n, X, incx, Y, incy)
+
+Dot product of two vectors consisting of `n` elements of array `X` with stride `incx` and
+`n` elements of array `Y` with stride `incy`.
+"""
+function dot end
+
+"""
+    dotc(n, X, incx, U, incy)
+
+Dot function for two complex vectors conjugating the first vector.
+"""
+function dotc end
+
+"""
+    dotu(n, X, incx, Y, incy)
+
+Dot function for two complex vectors.
+"""
+function dotu end
+
 for (fname, elty) in ((:ddot_,:Float64),
                       (:sdot_,:Float32))
     @eval begin
@@ -168,6 +221,14 @@ function dotu{T<:BlasComplex}(DX::Union{DenseArray{T},StridedVector{T}}, DY::Uni
 end
 
 ## nrm2
+
+"""
+    nrm2(n, X, incx)
+
+2-norm of a vector consisting of `n` elements of array `X` with stride `incx`.
+"""
+function nrm2 end
+
 for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:snrm2_,:Float32,:Float32),
                                 (:dznrm2_,:Complex128,:Float64),
@@ -185,6 +246,14 @@ nrm2(x::StridedVector) = nrm2(length(x), pointer(x), stride(x,1))
 nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
 
 ## asum
+
+"""
+    asum(n, X, incx)
+
+Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
+"""
+function asum end
+
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:sasum_,:Float32,:Float32),
                                 (:dzasum_,:Complex128,:Float64),
@@ -202,6 +271,14 @@ asum(x::StridedVector) = asum(length(x), pointer(x), stride(x,1))
 asum(x::Array) = asum(length(x), pointer(x), 1)
 
 ## axpy
+
+"""
+    axpy!(a, X, Y)
+
+Overwrite `Y` with `a*X + Y`. Returns `Y`.
+"""
+function axpy! end
+
 for (fname, elty) in ((:daxpy_,:Float64),
                       (:saxpy_,:Float32),
                       (:zaxpy_,:Complex128),
@@ -304,7 +381,48 @@ for (fname, elty) in ((:dgemv_,:Float64),
     end
 end
 
+"""
+    gemv!(tA, alpha, A, x, beta, y)
+
+Update the vector `y` as `alpha*A*x + beta*y` or `alpha*A'x + beta*y` according to `tA`
+(transpose `A`). Returns the updated `y`.
+"""
+gemv!
+
+"""
+    gemv(tA, alpha, A, x)
+
+Returns `alpha*A*x` or `alpha*A'x` according to `tA` (transpose `A`).
+"""
+gemv(tA, alpha, A, x)
+
+"""
+    gemv(tA, A, x)
+
+Returns `A*x` or `A'x` according to `tA` (transpose `A`).
+"""
+gemv(tA, A, x)
+
 ### (GB) general banded matrix-vector multiplication
+
+"""
+    gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+
+Update vector `y` as `alpha*A*x + beta*y` or `alpha*A'*x + beta*y` according to `trans` ('N'
+or 'T'). The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl`
+sub-diagonals and `ku` super-diagonals. Returns the updated `y`.
+"""
+function gbmv! end
+
+"""
+    gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+
+Returns `alpha*A*x` or `alpha*A'*x` according to `trans` ('N' or 'T'). The matrix `A` is a
+general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
+super-diagonals.
+"""
+function gbmv end
+
 for (fname, elty) in ((:dgbmv_,:Float64),
                       (:sgbmv_,:Float32),
                       (:zgbmv_,:Complex128),
@@ -340,6 +458,15 @@ for (fname, elty) in ((:dgbmv_,:Float64),
 end
 
 ### symv
+
+"""
+    symv!(ul, alpha, A, x, beta, y)
+
+Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be symmetric. Only the `ul`
+triangle of `A` is used. Returns the updated `y`.
+"""
+function symv! end
+
 for (fname, elty) in ((:dsymv_,:Float64),
                       (:ssymv_,:Float32),
                       (:zsymv_,:Complex128),
@@ -381,6 +508,20 @@ for (fname, elty) in ((:dsymv_,:Float64),
         end
     end
 end
+
+"""
+    symv(ul, alpha, A, x)
+
+Returns `alpha*A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
+"""
+symv(ul, alpha, A, x)
+
+"""
+    symv(ul, A, x)
+
+Returns `A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
+"""
+symv(ul, A, x)
 
 ### hemv
 for (fname, elty) in ((:zhemv_,:Complex128),
@@ -449,6 +590,34 @@ for (fname, elty) in ((:dsbmv_,:Float64),
     end
 end
 
+"""
+    sbmv(uplo, k, alpha, A, x)
+
+Returns `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+super-diagonals stored in the argument `A`.
+"""
+sbmv(uplo, k, alpha, A, x)
+
+"""
+    sbmv(uplo, k, A, x)
+
+Returns `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
+super-diagonals stored in the argument `A`.
+"""
+sbmv(uplo, k, A, x)
+
+"""
+    sbmv!(uplo, k, alpha, A, x, beta, y)
+
+Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix of order
+`size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
+is described the reference BLAS module, level-2 BLAS at
+<http://www.netlib.org/lapack/explore-html/>.
+
+Returns the updated `y`.
+"""
+sbmv!
+
 ### hbmv, (HB) Hermitian banded matrix-vector multiplication
 for (fname, elty) in ((:zhbmv_,:Complex128),
                       (:chbmv_,:Complex64))
@@ -481,6 +650,26 @@ for (fname, elty) in ((:zhbmv_,:Complex128),
 end
 
 ### trmv, Triangular matrix-vector multiplication
+
+"""
+    trmv(side, ul, tA, dA, alpha, A, b)
+
+Returns `alpha*A*b` or one of the other three variants determined by `side` (`A` on left or
+right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if
+`A` is unit-triangular (the diagonal is assumed to be all ones).
+"""
+function trmv end
+
+"""
+    trmv!(side, ul, tA, dA, alpha, A, b)
+
+Update `b` as `alpha*A*b` or one of the other three variants determined by `side` (`A` on
+left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA`
+indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the
+updated `b`.
+"""
+function trmv! end
+
 for (fname, elty) in ((:dtrmv_,:Float64),
                         (:strmv_,:Float32),
                         (:ztrmv_,:Complex128),
@@ -509,7 +698,27 @@ for (fname, elty) in ((:dtrmv_,:Float64),
         end
     end
 end
+
 ### trsv, Triangular matrix-vector solve
+
+"""
+    trsv!(ul, tA, dA, A, b)
+
+Overwrite `b` with the solution to `A*x = b` or one of the other two variants determined by
+`tA` (transpose `A`) and `ul` (triangle of `A` used). `dA` indicates if `A` is
+unit-triangular (the diagonal is assumed to be all ones). Returns the updated `b`.
+"""
+function trsv! end
+
+"""
+    trsv(ul, tA, dA, A, b)
+
+Returns the solution to `A*x = b` or one of the other two variants determined by `tA`
+(transpose `A`) and `ul` (triangle of `A` is used.) `dA` indicates if `A` is unit-triangular
+(the diagonal is assumed to be all ones).
+"""
+function trsv end
+
 for (fname, elty) in ((:dtrsv_,:Float64),
                         (:strsv_,:Float32),
                         (:ztrsv_,:Complex128),
@@ -540,6 +749,14 @@ for (fname, elty) in ((:dtrsv_,:Float64),
 end
 
 ### ger
+
+"""
+    ger!(alpha, x, y, A)
+
+Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*y' + A`.
+"""
+function ger! end
+
 for (fname, elty) in ((:dger_,:Float64),
                       (:sger_,:Float32),
                       (:zgerc_,:Complex128),
@@ -563,6 +780,15 @@ for (fname, elty) in ((:dger_,:Float64),
 end
 
 ### syr
+
+"""
+    syr!(uplo, alpha, x, A)
+
+Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*x.' + A`. When `uplo`
+is 'U' the upper triangle of `A` is updated ('L' for lower triangle). Returns `A`.
+"""
+function syr! end
+
 for (fname, elty) in ((:dsyr_,:Float64),
                       (:ssyr_,:Float32),
                       (:zsyr_,:Complex128),
@@ -584,6 +810,16 @@ for (fname, elty) in ((:dsyr_,:Float64),
 end
 
 ### her
+
+"""
+    her!(uplo, alpha, x, A)
+
+Methods for complex arrays only. Rank-1 update of the Hermitian matrix `A` with vector `x`
+as `alpha*x*x' + A`. When `uplo` is 'U' the upper triangle of `A` is updated ('L' for lower
+triangle). Returns `A`.
+"""
+function her! end
+
 for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
                              (:cher_,:Complex64, :Float32))
     @eval begin
@@ -604,6 +840,15 @@ end
 
 # Level 3
 ## (GE) general matrix-matrix multiplication
+
+"""
+    gemm!(tA, tB, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or the other three variants according to `tA` (transpose
+`A`) and `tB`. Returns the updated `C`.
+"""
+function gemm! end
+
 for (gemm, elty) in
         ((:dgemm_,:Float64),
          (:sgemm_,:Float32),
@@ -647,6 +892,21 @@ for (gemm, elty) in
     end
 end
 
+"""
+    gemm(tA, tB, alpha, A, B)
+
+Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
+"""
+gemm(tA, tB, alpha, A, B)
+
+"""
+    gemm(tA, tB, A, B)
+
+Returns `A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
+"""
+gemm(tA, tB, A, B)
+
+
 ## (SY) symmetric matrix-matrix and matrix-vector multiplication
 for (mfname, elty) in ((:dsymm_,:Float64),
                        (:ssymm_,:Float32),
@@ -687,6 +947,37 @@ for (mfname, elty) in ((:dsymm_,:Float64),
     end
 end
 
+"""
+    symm(side, ul, alpha, A, B)
+
+Returns `alpha*A*B` or `alpha*B*A` according to `side`. `A` is assumed to be symmetric. Only
+the `ul` triangle of `A` is used.
+"""
+symm(side, ul, alpha, A, B)
+
+"""
+    symm(side, ul, A, B)
+
+Returns `A*B` or `B*A` according to `side`. `A` is assumed to be symmetric. Only the `ul`
+triangle of `A` is used.
+"""
+symm(side, ul, A, B)
+
+"""
+    symm(tA, tB, alpha, A, B)
+
+Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
+"""
+symm(tA::Char, tB::Char, alpha, A, B)
+
+"""
+    symm!(side, ul, alpha, A, B, beta, C)
+
+Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to `side`. `A` is
+assumed to be symmetric. Only the `ul` triangle of `A` is used. Returns the updated `C`.
+"""
+symm!
+
 ## (HE) Hermitian matrix-matrix and matrix-vector multiplication
 for (mfname, elty) in ((:zhemm_,:Complex128),
                        (:chemm_,:Complex64))
@@ -726,6 +1017,24 @@ for (mfname, elty) in ((:zhemm_,:Complex128),
 end
 
 ## syrk
+
+"""
+    syrk!(uplo, trans, alpha, A, beta, C)
+
+Rank-k update of the symmetric matrix `C` as `alpha*A*A.' + beta*C` or `alpha*A.'*A +
+beta*C` according to whether `trans` is 'N' or 'T'. When `uplo` is 'U' the upper triangle of
+`C` is updated ('L' for lower triangle). Returns `C`.
+"""
+function syrk! end
+
+"""
+    syrk(uplo, trans, alpha, A)
+
+Returns either the upper triangle or the lower triangle, according to `uplo` ('U' or 'L'),
+of `alpha*A*A.'` or `alpha*A.'*A`, according to `trans` ('N' or 'T').
+"""
+function syrk end
+
 for (fname, elty) in ((:dsyrk_,:Float64),
                       (:ssyrk_,:Float32),
                       (:zsyrk_,:Complex128),
@@ -762,6 +1071,24 @@ function syrk(uplo::Char, trans::Char, alpha::Number, A::StridedVecOrMat)
     syrk!(uplo, trans, convert(T,alpha), A, zero(T), similar(A, T, (n, n)))
 end
 syrk(uplo::Char, trans::Char, A::StridedVecOrMat) = syrk(uplo, trans, one(eltype(A)), A)
+
+"""
+    herk!(uplo, trans, alpha, A, beta, C)
+
+Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as `alpha*A*A' +
+beta*C` or `alpha*A'*A + beta*C` according to whether `trans` is 'N' or 'T'. When `uplo` is
+'U' the upper triangle of `C` is updated ('L' for lower triangle). Returns `C`.
+"""
+function herk! end
+
+"""
+    herk(uplo, trans, alpha, A)
+
+Methods for complex arrays only. Returns either the upper triangle or the lower triangle,
+according to `uplo` ('U' or 'L'), of `alpha*A*A'` or `alpha*A'*A`, according to `trans` ('N'
+or 'T').
+"""
+function herk end
 
 for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
                              (:cherk_, :Complex64, :Float32))
@@ -876,6 +1203,45 @@ for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Comple
 end
 
 ## (TR) Triangular matrix and vector multiplication and solution
+
+"""
+    trmm!(side, ul, tA, dA, alpha, A, B)
+
+Update `B` as `alpha*A*B` or one of the other three variants determined by `side` (`A` on
+left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA`
+indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the
+updated `B`.
+"""
+function trmm! end
+
+"""
+    trmm(side, ul, tA, dA, alpha, A, B)
+
+Returns `alpha*A*B` or one of the other three variants determined by `side` (`A` on left or
+right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if
+`A` is unit-triangular (the diagonal is assumed to be all ones).
+"""
+function trmm end
+
+"""
+    trsm!(side, ul, tA, dA, alpha, A, B)
+
+Overwrite `B` with the solution to `A*X = alpha*B` or one of the other three variants
+determined by `side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul`
+triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed
+to be all ones). Returns the updated `B`.
+"""
+function trsm! end
+
+"""
+    trsm(side, ul, tA, dA, alpha, A, B)
+
+Returns the solution to `A*X = alpha*B` or one of the other three variants determined by
+`side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A`
+is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
+"""
+function trsm end
+
 for (mmname, smname, elty) in
         ((:dtrmm_,:dtrsm_,:Float64),
          (:strmm_,:strsm_,:Float32),
