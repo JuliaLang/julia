@@ -1839,7 +1839,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
             if JLOptions().can_inline == 1
                 fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
                 # inlining can add variables
-                sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+                sv.vars = append_any(f_argnames(fulltree), map(vi->vi[1], fulltree.args[2][1]))
                 inbounds_meta_elim_pass(fulltree.args[3])
             end
             tuple_elim_pass(fulltree, sv)
