@@ -738,6 +738,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     if (!jl_is_lambda_info(f)) {
         assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
         f = jl_new_lambda_info((jl_value_t*)f, jl_emptysvec, jl_current_module);
+        jl_preresolve_globals(f->ast, f);
     }
 
     assert(jl_is_lambda_info(f));
