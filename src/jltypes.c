@@ -2059,6 +2059,11 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
 
     // always use original type constructor
     if (!istuple) {
+        if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
+            if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
+                jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
+            }
+        }
         if (tc != (jl_value_t*)dt)
             return (jl_value_t*)jl_apply_type_(tc, iparams, ntp);
     }
@@ -2162,7 +2167,9 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
     if (np == 1 && jl_is_vararg_type(p[0])) {
         jl_datatype_t *va = (jl_datatype_t*)p[0];
         if (jl_is_long(jl_tparam1(va))) {
-            size_t nt = jl_unbox_long(jl_tparam1(va));
+            ssize_t nt = jl_unbox_long(jl_tparam1(va));
+            if (nt < 0)
+                jl_errorf("size or dimension is negative: %zd", nt);
             return (jl_tupletype_t*)jl_tupletype_fill(nt, jl_tparam0(va));
         }
     }
@@ -2245,8 +2252,12 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     N = env[i+1];
             }
         }
-        if (T != NULL && N != NULL && jl_is_long(N))
-            return (jl_value_t*)jl_tupletype_fill(jl_unbox_long(N), T);
+        if (T != NULL && N != NULL && jl_is_long(N)) {
+            ssize_t nt = jl_unbox_long(N);
+            if (nt < 0)
+                jl_errorf("size or dimension is negative: %zd", nt);
+            return (jl_value_t*)jl_tupletype_fill(nt, T);
+        }
     }
     jl_value_t **iparams;
     int onstack = ntp < jl_page_size/sizeof(jl_value_t*);
