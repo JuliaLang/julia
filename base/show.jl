@@ -1017,7 +1017,7 @@ xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
 xdump(fn::Function, io::IO, args...) = throw(ArgumentError("invalid arguments to xdump"))
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
+xdump(args...) = xdump(xdump, IOContext(STDOUT::IO, :limit_output => true), args...)
 xdump(arg::IO) = xdump(xdump, STDOUT::IO, arg)
 
 # Here are methods specifically for dump:
@@ -1029,7 +1029,7 @@ dump(io::IO, x::AbstractString, n::Int, indent) =
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 dump(io::IO, args...) = throw(ArgumentError("invalid arguments to dump"))
 dump(arg::IO) = xdump(dump, STDOUT::IO, arg)
-dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
+dump(args...) = dump(IOContext(STDOUT::IO, :limit_output => true), args...)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(io, typeof(x), " len ", length(x))
