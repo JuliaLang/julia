@@ -863,7 +863,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
         method->linfo->specializations = spe;
         jl_gc_wb(method->linfo, method->linfo->specializations);
-        jl_type_infer(newmeth->linfo, type, method->linfo);
+        if (jl_symbol_name(newmeth->linfo->name)[0] != '@')  // don't bother with typeinf on macros
+            jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
     JL_UNLOCK(codegen);

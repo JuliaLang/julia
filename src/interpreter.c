@@ -454,23 +454,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == macro_sym) {
-        jl_sym_t *nm = (jl_sym_t*)args[0];
-        assert(jl_is_symbol(nm));
-        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl, ngensym);
-        JL_GC_PUSH1(&f);
-        assert(jl_is_function(f));
-        if (jl_boot_file_loaded &&
-            f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
-            jl_lambda_info_t *li = f->linfo;
-            li->ast = jl_compress_ast(li, li->ast);
-            jl_gc_wb(li, li->ast);
-            li->name = nm;
-        }
-        jl_set_global(jl_current_module, nm, (jl_value_t*)f);
-        JL_GC_POP();
-        return (jl_value_t*)jl_nothing;
-    }
     else if (ex->head == line_sym) {
         jl_lineno = jl_unbox_long(jl_exprarg(ex,0));
         return (jl_value_t*)jl_nothing;

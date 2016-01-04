@@ -138,6 +138,14 @@ function docstrings_equal(d1, d2)
     takebuf_string(io1) == takebuf_string(io2)
 end
 
+function docstring_startswith(d1, d2)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    writemime(io1, MIME"text/markdown"(), d1)
+    writemime(io2, MIME"text/markdown"(), d2)
+    startswith(takebuf_string(io1), takebuf_string(io2))
+end
+
 @test meta(DocsTest)[DocsTest] == doc"DocsTest"
 
 # Check that plain docstrings store a module reference.
@@ -342,13 +350,10 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc @m2_11993)
-    @test docstrings_equal(d, doc"""
+    @test docstring_startswith(d, doc"""
     No documentation found.
 
-    ```julia
-    @m2_11993()
-    ```
-    """)
+    `@m2_11993` is a macro.""")
 end
 
 @doc "Now @m2... should be documented" :@m2_11993

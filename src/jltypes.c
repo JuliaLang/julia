@@ -3570,7 +3570,6 @@ void jl_init_types(void)
     label_sym = jl_symbol("label");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
-    macro_sym = jl_symbol("macro");
     module_sym = jl_symbol("module");
     export_sym = jl_symbol("export");
     import_sym = jl_symbol("import");

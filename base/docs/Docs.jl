@@ -123,18 +123,6 @@ function write_lambda_signature(io::IO, lam::LambdaStaticData)
     return io
 end
 
-function macrosummary(name::Symbol, func::Function)
-    if !isdefined(func,:code) || func.code == nothing
-        return Markdown.parse("\n")
-    end
-    io  = IOBuffer()
-    write(io, "```julia\n")
-    write(io, name)
-    write_lambda_signature(io, func.code)
-    write(io, "\n```")
-    return Markdown.parse(takebuf_string(io))
-end
-
 function functionsummary(func::Function)
     io  = IOBuffer()
     write(io, "```julia\n")
@@ -182,7 +170,8 @@ function doc(b::Binding)
 
         No documentation found.
 
-        """), macrosummary(b.var, v))
+        `$(qualified_name(b))` is a macro.
+        """), functionsummary(v))
     elseif isa(v,Function)
         d = catdoc(Markdown.parse("""
 
