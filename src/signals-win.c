@@ -4,8 +4,6 @@
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 static BOOL (*pSetThreadStackGuarantee)(PULONG);
 
-JL_DLLEXPORT void gdblookup(ptrint_t ip);
-
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
@@ -220,7 +218,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
         static int recursion = 0;
