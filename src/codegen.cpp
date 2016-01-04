@@ -342,10 +342,10 @@ extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
 extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 #endif
 
+static Function *jltls_states_func;
 #ifndef JULIA_ENABLE_THREADING
 static GlobalVariable *jltls_states_var;
 #else
-static Function *jltls_states_func;
 // Imaging mode only
 static GlobalVariable *jltls_states_func_ptr = NULL;
 static size_t jltls_states_func_idx = 0;
@@ -544,12 +544,6 @@ typedef struct {
     jl_value_t *ty;
 } jl_arrayvar_t;
 
-struct jl_gcinfo_t {
-    AllocaInst *gcframe;
-    Value *ptlsStates;
-    bool hasframe;
-};
-
 // Keeps tracks of all functions and compile units created during this cycle
 // to be able to atomically add them to a module.
 typedef struct {
@@ -584,7 +578,7 @@ typedef struct {
     std::vector<bool> boundsCheck;
     std::vector<bool> inbounds;
 
-    jl_gcinfo_t gc;
+    CallInst *ptlsStates;
 
     llvm::DIBuilder *dbuilder;
     bool debug_enabled;
@@ -621,13 +615,14 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
-static void finalize_gc_frame(jl_codectx_t *ctx);
+static void finalize_gc_frame(Function *F);
+static void finalize_gc_frame(Module *m);
 
 // --- convenience functions for tagging llvm values with julia types ---
 
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
-    return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->gc.gcframe);
+    return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
 }
 static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 {
@@ -899,6 +894,8 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
     }
 #if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
+    finalize_gc_frame(f);
+    if (specf) finalize_gc_frame(specf);
 #ifdef JL_DEBUG_BUILD
     if (verifyFunction(*f, PrintMessageAction) ||
         (specf && verifyFunction(*specf, PrintMessageAction))) {
@@ -980,6 +977,7 @@ static void jl_finalize_module(Module *m)
         false, GlobalVariable::InternalLinkage,
         ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
 #endif
+    finalize_gc_frame(m);
     assert(jl_ExecutionEngine);
 #if defined(LLVM36) && !defined(USE_ORCJIT)
     jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
@@ -1036,6 +1034,7 @@ static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
             if(verifyFunction(F))
                 writeRecoveryFile(backup);
             #endif
+            finalize_gc_frame(&F);
             FPM->run(F);
             #ifdef JL_DEBUG_BUILD
             if(verifyFunction(F))
@@ -1998,8 +1997,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 // Emit a gc-root slot indicator
 static Value* emit_local_slot(jl_codectx_t *ctx)
 {
-    CallInst *newroot = CallInst::Create(gcroot_func, "", /*InsertBefore*/ctx->gc.gcframe);
-    ctx->gc.hasframe = true;
+    CallInst *newroot = CallInst::Create(prepare_call(gcroot_func), "", /*InsertBefore*/ctx->ptlsStates);
     return newroot;
 }
 
@@ -2007,7 +2005,7 @@ static Value* emit_local_slot(jl_codectx_t *ctx)
 static void mark_gc_use(const jl_cgval_t &v)
 {
     if (v.gcroot)
-        builder.CreateCall(gckill_func, v.gcroot);
+        builder.CreateCall(prepare_call(gckill_func), v.gcroot);
 }
 
 static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this function should be removed
@@ -2023,7 +2021,7 @@ static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 {
     // the temporary variables are after all local variables in the GC frame.
-    CallInst *largs = builder.CreateCall(jlcall_frame_func, ConstantInt::get(T_int32, args.size()));
+    CallInst *largs = builder.CreateCall(prepare_call(jlcall_frame_func), ConstantInt::get(T_int32, args.size()));
     int slot = 0;
     assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
@@ -2031,7 +2029,6 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
         Value *newroot = builder.CreateGEP(largs, ConstantInt::get(T_int32, slot));
         builder.CreateStore(arg, newroot);
     }
-    ctx->gc.hasframe = true;
     return largs;
 }
 
@@ -3638,83 +3635,75 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
 // gc frame emission
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
-    // allocate a placeholder gc frame
-    jl_gcinfo_t *gc = &ctx->gc;
-    gc->hasframe = false;
-
-#ifdef JULIA_ENABLE_THREADING
-    CallInst *calltls;
-    if (imaging_mode) {
-        Value *getter = tbaa_decorate(tbaa_const,
-                                      builder.CreateLoad(jltls_states_func_ptr));
-        FunctionType *functype = jltls_states_func->getFunctionType();
-        Value *func = builder.CreateBitCast(getter,
-                                            PointerType::get(functype, 0));
-        calltls = builder.CreateCall(func);
-    }
-    else {
-        calltls = builder.CreateCall(prepare_call(jltls_states_func));
-    }
-    calltls->setAttributes(jltls_states_func->getAttributes());
-    gc->ptlsStates = calltls;
-#else
-    gc->ptlsStates = prepare_global(jltls_states_var);
-#endif
-
-    gc->gcframe = builder.CreateAlloca(T_pjlvalue, ConstantInt::get(T_int32, 0));
-#ifdef JL_DEBUG_BUILD
-    gc->gcframe->setName("gcrootframe");
-#endif
+    // allocate a placeholder gc instruction
+    ctx->ptlsStates = builder.CreateCall(prepare_call(jltls_states_func));
 }
 
-static void
-emit_gcpops(jl_codectx_t *ctx)
+void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue);
+static void finalize_gc_frame(Function *F)
 {
-    Function *F = ctx->f;
-    for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
-        assert(I->getTerminator() != NULL);
-        if (isa<ReturnInst>(I->getTerminator())) {
-            builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
-            Instruction *gcpop =
-                (Instruction*)builder.CreateConstGEP1_32(ctx->gc.gcframe, 1);
-            builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
-                                                      T_ppjlvalue),
-                                emit_pgcstack(ctx));
+    Module *M = F->getParent();
+    M->getOrInsertFunction(gcroot_func->getName(), gcroot_func->getFunctionType());
+    M->getOrInsertFunction(gckill_func->getName(), gckill_func->getFunctionType());
+    M->getOrInsertFunction(jlcall_frame_func->getName(), jlcall_frame_func->getFunctionType());
+    M->getOrInsertFunction(jlcall_root_func->getName(), jlcall_root_func->getFunctionType());
+    Function *jl_get_ptls_states = M->getFunction("jl_get_ptls_states");
+
+    CallInst *ptlsStates = NULL;
+    for (BasicBlock::iterator i = F->getEntryBlock().begin(), e = F->getEntryBlock().end(); i != e; ++i) {
+        if (CallInst *callInst = dyn_cast<CallInst>(&*i)) {
+            if (callInst->getCalledFunction() == jl_get_ptls_states) {
+                ptlsStates = callInst;
+                break;
+            }
         }
     }
+    if (!ptlsStates)
+        return;
+
+    jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue);
+
+#ifdef JULIA_ENABLE_THREADING
+    if (imaging_mode) {
+        Value *getter = tbaa_decorate(tbaa_const, new LoadInst(jltls_states_func_ptr, "", ptlsStates));
+        ptlsStates->setCalledFunction(getter);
+    }
+    ptlsStates->setAttributes(jltls_states_func->getAttributes());
+#else
+    Module *destModule = F->getParent();
+    GlobalVariable *GV = destModule->getGlobalVariable(jltls_states_var->getName());
+    if (GV == NULL) {
+        GV = new GlobalVariable(*destModule,
+            jltls_states_var->getType()->getElementType(),
+            jltls_states_var->isConstant(),
+            GlobalVariable::ExternalLinkage,
+            NULL,
+            jltls_states_var->getName());
+        GV->copyAttributesFrom(jltls_states_var);
+    }
+    ptlsStates->replaceAllUsesWith(GV);
+    ptlsStates->eraseFromParent();
+#endif
 }
 
-void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcframe_inst, unsigned &argSpaceSize, unsigned &maxDepth);
-static void finalize_gc_frame(jl_codectx_t *ctx)
+static void finalize_gc_frame(Module *m)
 {
-    jl_gcinfo_t *gc = &ctx->gc;
-    AllocaInst *newgcframe = gc->gcframe;
-    if (!gc->hasframe) {
-        // 0 roots; remove gc frame entirely
-        newgcframe->eraseFromParent();
-        return;
+#if defined(USE_ORCJIT)
+    for (auto &F : m->functions()) {
+        if (F.isDeclaration())
+            continue;
+        finalize_gc_frame(&F);
     }
-    // Finalize the jlcall argument frames
-    // optimize the gcframe
-    Instruction *last_gcframe_inst;
-    unsigned maxDepth, argSpaceSize;
-    jl_codegen_finalize_temp_arg(newgcframe, last_gcframe_inst, maxDepth, argSpaceSize);
-
-    if (last_gcframe_inst) {
-        builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
-        DebugLoc noDbg;
-        builder.SetCurrentDebugLocation(noDbg);
-
-        builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
-                            builder.CreateBitCast(builder.CreateConstGEP1_32(newgcframe, 0), T_psize));
-        builder.CreateStore(builder.CreateLoad(emit_pgcstack(ctx)),
-                            builder.CreatePointerCast(builder.CreateConstGEP1_32(newgcframe, 1), PointerType::get(T_ppjlvalue,0)));
-        builder.CreateStore(newgcframe, emit_pgcstack(ctx));
-
-        // Finish allocating the real GC frame
-        // n_frames++;
-        emit_gcpops(ctx);
-    }
+#endif
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+#ifndef JULIA_ENABLE_THREADING
+    m->getFunction("jl_get_ptls_states")->eraseFromParent();
+#endif
+    m->getFunction("julia.gc_root_decl")->eraseFromParent();
+    m->getFunction("julia.gc_root_kill")->eraseFromParent();
+    m->getFunction("julia.jlcall_frame_decl")->eraseFromParent();
+    m->getFunction("julia.jlcall_root_decl")->eraseFromParent();
+#endif
 }
 
 // here argt does not include the leading function type argument
@@ -3822,8 +3811,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         theFptr = (Function*)lam->functionObjects.functionObject;
         specsig = false;
         jlfunc_sret = false;
-        myargs = builder.CreateCall(jlcall_frame_func, ConstantInt::get(T_int32, nargs));
-        ctx.gc.hasframe = true;
+        myargs = builder.CreateCall(prepare_call(jlcall_frame_func), ConstantInt::get(T_int32, nargs));
     }
     assert(theFptr);
 
@@ -3981,9 +3969,9 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         builder.CreateRetVoid();
     else
         builder.CreateRet(r);
-    finalize_gc_frame(&ctx);
 
 #if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
+    finalize_gc_frame(cw);
     FPM->run(*cw);
 #endif
 
@@ -4078,7 +4066,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     if (sret) { assert(!retboxed); }
     jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty, &ctx);
     builder.CreateRet(boxed(retval, &ctx));
-    finalize_gc_frame(&ctx);
 
     return w;
 }
@@ -4955,9 +4942,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 16. fix up size of stack root list
-    finalize_gc_frame(&ctx);
-
     // step 17, Apply LLVM level inlining
     for(std::vector<CallInst*>::iterator it = ctx.to_inline.begin(); it != ctx.to_inline.end(); ++it) {
         Function *inlinef = (*it)->getCalledFunction();
@@ -5295,13 +5279,16 @@ static void init_julia_llvm_env(Module *m)
 
 #ifndef JULIA_ENABLE_THREADING
     // For non-threading, we use the address of the global variable directly
-    size_t tls_states_size = LLT_ALIGN(sizeof(jl_tls_states_t),
-                                       sizeof(void*)) / sizeof(void*);
     jltls_states_var =
-        new GlobalVariable(*m, ArrayType::get(T_pint8, tls_states_size),
+        new GlobalVariable(*m, T_ppjlvalue,
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_tls_states");
     add_named_global(jltls_states_var, &jl_tls_states);
+    // placeholder function for keeping track of the end of the gcframe
+    jltls_states_func = Function::Create(FunctionType::get(jltls_states_var->getType(), false),
+                                         Function::ExternalLinkage,
+                                         "jl_get_ptls_states", m);
+    add_named_global(jltls_states_func, (void*)NULL, /*dllimport*/false);
 #else
     // For threading, we emit a call to the getter function.
     // In non-imaging mode, (i.e. the code will not be saved to disk), we
@@ -5311,7 +5298,7 @@ static void init_julia_llvm_env(Module *m)
     // variable to be filled (in `dump.c`) at initialization time of the sysimg.
     // This way we can by pass the extra indirection in `jl_get_ptls_states`
     // since we don't know which getter function to use ahead of time.
-    jltls_states_func = Function::Create(FunctionType::get(T_ppint8, false),
+    jltls_states_func = Function::Create(FunctionType::get(PointerType::get(T_ppjlvalue, 0), false),
                                          Function::ExternalLinkage,
                                          "jl_get_ptls_states", m);
     jltls_states_func->setAttributes(
@@ -5322,10 +5309,11 @@ static void init_julia_llvm_env(Module *m)
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
     add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
+        PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
         jltls_states_func_ptr =
-            new GlobalVariable(*m, T_ppint8,
+            new GlobalVariable(*m, pfunctype,
                                false, GlobalVariable::InternalLinkage,
-                               ConstantPointerNull::get((PointerType*)T_ppint8),
+                               ConstantPointerNull::get(pfunctype),
                                "jl_get_ptls_states.ptr");
         addComdat(jltls_states_func_ptr);
 #ifdef USE_MCJIT
@@ -5726,26 +5714,26 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_ppjlvalue, false),
                      Function::ExternalLinkage,
                      "julia.gc_root_decl", m);
-    add_named_global(gcroot_func, NULL, /*dllimport*/false);
+    add_named_global(gcroot_func, (void*)NULL, /*dllimport*/false);
 
     gckill_func =
         Function::Create(FunctionType::get(T_void, ArrayRef<Type*>(T_ppjlvalue), false),
                      Function::ExternalLinkage,
                      "julia.gc_root_kill", m);
-    add_named_global(gcroot_func, NULL, /*dllimport*/false);
+    add_named_global(gckill_func, (void*)NULL, /*dllimport*/false);
 
     jlcall_frame_func =
         Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
                      Function::ExternalLinkage,
                      "julia.jlcall_frame_decl", m);
-    add_named_global(jlcall_frame_func, NULL, /*dllimport*/false);
+    add_named_global(jlcall_frame_func, (void*)NULL, /*dllimport*/false);
 
     Type* jlcall_root_args[2] = { T_ppjlvalue, T_int32 };
     jlcall_root_func =
         Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_root_args),  false),
                      Function::ExternalLinkage,
                      "julia.jlcall_root_decl", m);
-    add_named_global(jlcall_root_func, NULL, /*dllimport*/false);
+    add_named_global(jlcall_root_func, (void*)NULL, /*dllimport*/false);
 
     // set up optimization passes
 #ifdef LLVM38
