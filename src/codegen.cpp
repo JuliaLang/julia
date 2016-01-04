@@ -5724,26 +5724,26 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_ppjlvalue, false),
                      Function::ExternalLinkage,
                      "julia.gc_root_decl", m);
-    add_named_global(gcroot_func, NULL);
+    add_named_global(gcroot_func, NULL, /*dllimport*/false);
 
     gckill_func =
         Function::Create(FunctionType::get(T_void, ArrayRef<Type*>(T_ppjlvalue), false),
                      Function::ExternalLinkage,
                      "julia.gc_root_kill", m);
-    add_named_global(gcroot_func, NULL);
+    add_named_global(gcroot_func, NULL, /*dllimport*/false);
 
     jlcall_frame_func =
         Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
                      Function::ExternalLinkage,
                      "julia.jlcall_frame_decl", m);
-    add_named_global(jlcall_frame_func, NULL);
+    add_named_global(jlcall_frame_func, NULL, /*dllimport*/false);
 
     Type* jlcall_root_args[2] = { T_ppjlvalue, T_int32 };
     jlcall_root_func =
         Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_root_args),  false),
                      Function::ExternalLinkage,
                      "julia.jlcall_root_decl", m);
-    add_named_global(jlcall_root_func, NULL);
+    add_named_global(jlcall_root_func, NULL, /*dllimport*/false);
 
     // set up optimization passes
 #ifdef LLVM38
