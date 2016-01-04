@@ -756,7 +756,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 }
 
 //for looking up functions from gdb:
-JL_DLLEXPORT void gdblookup(ptrint_t ip)
+JL_DLLEXPORT void jl_gdblookup(ptrint_t ip)
 {
     char *func_name;
     size_t line_num;
@@ -794,11 +794,11 @@ JL_DLLEXPORT void gdblookup(ptrint_t ip)
 JL_DLLEXPORT void jlbacktrace(void)
 {
     size_t n = jl_bt_size; // jl_bt_size > 40 ? 40 : jl_bt_size;
-    for(size_t i=0; i < n; i++)
-        gdblookup(jl_bt_data[i]);
+    for (size_t i=0; i < n; i++)
+        jl_gdblookup(jl_bt_data[i]);
 }
 
-JL_DLLEXPORT void gdbbacktrace(void)
+JL_DLLEXPORT void jl_gdbbacktrace(void)
 {
     record_backtrace();
     jlbacktrace();

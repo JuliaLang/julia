@@ -289,7 +289,7 @@ JL_DLLEXPORT void attach_exception_port(void);
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
-JL_DLLEXPORT void gdblookup(ptrint_t ip);
+JL_DLLEXPORT void jl_gdblookup(ptrint_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)
