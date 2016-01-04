@@ -432,6 +432,6 @@ function async_run_thunk(thunk)
 end
 
 macro async(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(async_run_thunk($(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(async_run_thunk($expr))
 end
