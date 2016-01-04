@@ -275,8 +275,15 @@ let mt = MersenneTwister()
     a = Array(Float64, 0)
     resize!(a, 1000) # could be 8-byte aligned
     b = Array(Float64, 1000) # should be 16-byte aligned
-    c8 = Array(UInt8, 8001)
-    c = pointer_to_array(Ptr{Float64}(pointer(c8, 2)), 1000) # Int(pointer(c)) % 16 == 1
+    c8 = Array(UInt64, 1001)
+    pc8 = pointer(c8)
+    if Int(pc8) % 16 == 0
+        # Make sure pc8 is not 16-byte aligned since that's what we want to test.
+        # It still has to be 8-byte aligned since it is otherwise invalid on
+        # certain architectures (e.g. ARM)
+        pc8 += 8
+    end
+    c = pointer_to_array(Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
 
     for A in (a, b, c)
         srand(mt, 0)
