@@ -3478,8 +3478,11 @@ let T=TypeVar(:T,true)
 end
 
 # issue 13855
-@eval @noinline function foo13855(x)
-    $(Expr(:localize, :(() -> () -> x)))
+macro m13855()
+    Expr(:localize, :(() -> x))
+end
+@noinline function foo13855(x)
+    @m13855()
 end
 @test foo13855(Base.AddFun())() == Base.AddFun()
 @test foo13855(Base.MulFun())() == Base.MulFun()
@@ -3625,3 +3628,19 @@ let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
     @test foo(1, nothing) === 1
     @test_throws MethodError foo(nothing, nothing)  # can't determine T
 end
+
+module TestMacroGlobalFunction
+macro makefn(f,g)
+    quote
+        global $(f)
+        function $(f)(x)
+            x+1
+        end
+        global $(g)
+        $(g)(x) = x+2
+    end
+end
+@makefn ff gg
+end
+@test TestMacroGlobalFunction.ff(1) == 2
+@test TestMacroGlobalFunction.gg(1) == 3
