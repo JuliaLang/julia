@@ -419,10 +419,10 @@ static Function *resetstkoflw_func;
 static Function *diff_gc_total_bytes_func;
 
 // placeholder functions
-Function *gcroot_func;
-Function *gckill_func;
-Function *jlcall_frame_func;
-Function *jlcall_root_func;
+static Function *gcroot_func;
+static Function *gckill_func;
+static Function *jlcall_frame_func;
+static Function *jlcall_root_func;
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
