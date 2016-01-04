@@ -755,6 +755,7 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
 
     // do the actual work
+    finalize_gc_frame(clone);
     PM.run(*clone);
     if (dump_as_bc)
         WriteBitcodeToFile(clone, FOS);
@@ -2277,20 +2278,9 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
     }
 }
 
-static Value *emit_pgcstack(jl_codectx_t *ctx)
-{
-    Value *addr =
-        emit_nthptr_addr(ctx->gc.ptlsStates,
-                         (ssize_t)(offsetof(jl_tls_states_t, pgcstack) / sizeof(void*)));
-    return builder.CreateBitCast(addr, PointerType::get(T_ppjlvalue, 0),
-                                 "jl_pgcstack");
-}
-
 static Value *emit_exc_in_transit(jl_codectx_t *ctx)
 {
-    Value *addr =
-        emit_nthptr_addr(ctx->gc.ptlsStates,
-                         (ssize_t)(offsetof(jl_tls_states_t,
-                                            exception_in_transit) / sizeof(void*)));
-    return builder.CreateBitCast(addr, T_ppjlvalue, "jl_exception_in_transit");
+    Value *pexc_in_transit = builder.CreateBitCast(ctx->ptlsStates, T_ppjlvalue);
+    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
+    return builder.CreateGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
 }

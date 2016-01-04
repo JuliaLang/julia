@@ -1,23 +1,36 @@
-#include "llvm-version.h"
-#include <vector>
-#include <queue>
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+
+#include <vector>
+#include <queue>
+
+#include "llvm-version.h"
+#include "julia.h"
+
+#ifdef LLVM37
+#define LLVM37_param(x) (x),
+#else
+#define LLVM37_param(x)
+#endif
 
 using namespace llvm;
 
 class JuliaGCAllocator {
 public:
-    JuliaGCAllocator(AllocaInst *gcframe) :
-        gcframe(gcframe),
-        F(*gcframe->getParent()->getParent()),
+    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue) :
+        F(*ptlsStates->getParent()->getParent()),
         M(*F.getParent()),
         T_int32(Type::getInt32Ty(F.getContext())),
-        V_null(Constant::getNullValue(gcframe->getType()->getPointerElementType())),
+        T_int64(Type::getInt64Ty(F.getContext())),
+        V_null(Constant::getNullValue(T_pjlvalue)),
+        ptlsStates(ptlsStates),
+        gcframe(new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0))),
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
@@ -29,15 +42,21 @@ public:
  *  Propagate liveness from each basic block to its predecessors
  *  Allocate argument slot for each jlcall frame
  */
-
+#ifdef JL_DEBUG_BUILD
+        gcframe->setName("gcrootframe");
+#endif
+        gcframe->insertAfter(ptlsStates);
+        assert(gcroot_func && gckill_func && jlcall_frame_func && jlcall_root_func);
     }
 
 private:
-AllocaInst *const gcframe;
 Function &F;
 Module &M;
 Type *const T_int32;
+Type *const T_int64;
 Value *const V_null;
+CallInst *const ptlsStates;
+AllocaInst *const gcframe;
 Function *const gcroot_func;
 Function *const gckill_func;
 Function *const jlcall_frame_func;
@@ -70,7 +89,17 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 }
 #endif
 
-void collapseRedundantFrames()
+Instruction *get_pgcstack(Instruction *ptlsStates)
+{
+    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
+    return GetElementPtrInst::Create(
+            LLVM37_param(NULL)
+            ptlsStates,
+            ArrayRef<Value*>(offset),
+            "jl_pgcstack");
+}
+
+void collapseRedundantFrames(bool deadOnly)
 {
     for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
@@ -83,7 +112,11 @@ void collapseRedundantFrames()
             LoadInst *theLoad = NULL;
             for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
                 // see if the gcroot uses consists of only the load and the store
+#ifdef LLVM35
+                User *user = use->getUser();
+#else
                 User *user = use.getUse().getUser();
+#endif
                 if (StoreInst *storeInst = dyn_cast<StoreInst>(user)) {
                     if (theStore) {
                         theStore = NULL;
@@ -111,15 +144,21 @@ void collapseRedundantFrames()
                     theStore->eraseFromParent();
                     callInst->eraseFromParent();
                 }
-                else if (theValue->hasNUses(theLoad ? 1 : 2)) {
+                else if (!deadOnly && theValue->hasNUses(theLoad ? 1 : 2)) {
                     StoreInst *theOther = NULL;
                     bool patternMatchSuccess = false;
                     // check if this value is only used for a store to another gcroot
                     User::use_iterator value_use = theValue->use_begin();
                     if (theLoad && *value_use == theStore)
                         ++value_use;
+#ifdef LLVM35
+                    theOther = dyn_cast<StoreInst>(value_use->getUser());
+                    unsigned OperandNo = value_use->getOperandNo();
+#else
                     theOther = dyn_cast<StoreInst>(value_use.getUse().getUser());
-                    if (theOther && value_use.getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                    unsigned OperandNo = value_use.getOperandNo();
+#endif
+                    if (theOther && OperandNo != StoreInst::getPointerOperandIndex()) {
                         // test whether this store is valid as a gc-root
                         CallInst *gcroot_other = dyn_cast<CallInst>(theOther->getPointerOperand());
                         unsigned arg_offset = 0;
@@ -299,10 +338,10 @@ unsigned find_space_for(CallInst *callInst,
 }
 
 public:
-void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, unsigned &maxDepth)
+void allocate_frame()
 {
-    last_gcframe_inst = gcframe;
-    collapseRedundantFrames();
+    Instruction *last_gcframe_inst = gcframe;
+    collapseRedundantFrames(true);
 
 /* bb-queue : queue<BB>
  * bb-uses : map<BB, map< pair<inst, arg-offset>, assign|live|kill > >
@@ -383,8 +422,14 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
                     }
                     else {
                         for (User::use_iterator use = gcroot->use_begin(), usee = gcroot->use_end(); use != usee; ++use) {
+#ifdef LLVM35
+                            User *user = use->getUser();
+                            unsigned OperandNo = use->getOperandNo();
+#else
                             User *user = use.getUse().getUser();
-                            if (user != loadInst && !(isa<StoreInst>(user) && use.getOperandNo() == StoreInst::getPointerOperandIndex())) {
+                            unsigned OperandNo = use.getOperandNo();
+#endif
+                            if (user != loadInst && !(isa<StoreInst>(user) && OperandNo == StoreInst::getPointerOperandIndex())) {
                                 gcroot = NULL;
                                 live |= liveness::assign;
                                 break;
@@ -501,7 +546,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
 /* # allocate space in locals for the variables
  * TBD
  */
-    collapseRedundantFrames();
+    collapseRedundantFrames(true);
 
 /* # allocate space in temp-args for each jlcall frame
  * regs-used = zip(get-basic-blocks(), falses)
@@ -515,7 +560,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
  */
     std::map<BasicBlock*, SmallBitVector> regs_used;
     std::map<CallInst*, unsigned> frame_offsets;
-    maxDepth = 0;
+    unsigned maxDepth = 0;
     for (; !frames.empty(); frames.pop()) {
         std::pair<unsigned, CallInst*> frame = frames.top();
         unsigned arg_n = frame.first;
@@ -545,7 +590,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
         tempSlot = NULL;
     }
     else {
-        tempSlot = GetElementPtrInst::Create(gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
+        tempSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
 #ifdef JL_DEBUG_BUILD
         tempSlot->setName("temproots");
 #endif
@@ -562,7 +607,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
      *         Replace(slot, newslot) -> at InsertPoint(gc-frame)
      *         CreateStore(NULL, newslot) -> at InsertPoint(gc-frame)
      */
-    argSpaceSize = 0;
+    unsigned argSpaceSize = 0;
     Instruction *argSlot = NULL;
     for(BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
@@ -573,7 +618,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
                     cast<ConstantInt>(callInst->getArgOperand(1))->getZExtValue());
             unsigned frame_offset = frame_offsets.at(def.first);
             Value* offset[1] = {ConstantInt::get(T_int32, frame_offset + def.second)};
-            GetElementPtrInst *frame = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
+            GetElementPtrInst *frame = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             frame->insertAfter(last_gcframe_inst);
             callInst->replaceAllUsesWith(frame);
             callInst->eraseFromParent();
@@ -581,7 +626,11 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
 
             // delete any associated StoreInst that aren't live
             for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
+#ifdef LLVM35
+                User *user = use->getUser();
+#else
                 User *user = use.getUse().getUser();
+#endif
                 if (StoreInst *storeInst = dyn_cast<StoreInst>(user)) {
                     std::map<frame_register, liveness::id> &inuse_list = bb_uses[storeInst->getParent()];
                     std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
@@ -593,7 +642,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
 
         if (callInst && callInst->getCalledFunction() == gcroot_func) {
             if (!argSlot) {
-                argSlot = GetElementPtrInst::Create(gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
+                argSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
 #ifdef JL_DEBUG_BUILD
                 argSlot->setName("locals");
 #endif
@@ -601,7 +650,7 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
                 if (last_gcframe_inst == gcframe)
                     last_gcframe_inst = argSlot;
             }
-            Instruction *argTempi = GetElementPtrInst::Create(argSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, argSpaceSize++)));
+            Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) argSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, argSpaceSize++)));
             argTempi->insertAfter(last_gcframe_inst);
             callInst->replaceAllUsesWith(argTempi);
             callInst->eraseFromParent();
@@ -615,12 +664,11 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
     if (argSpaceSize + maxDepth == 0) {
         // 0 roots; remove gc frame entirely
         gcframe->eraseFromParent();
-        last_gcframe_inst = NULL;
     }
     else {
         // Initialize the slots for temporary variables to NULL
         for (int i = 0; i < maxDepth; i++) {
-            Instruction *argTempi = GetElementPtrInst::Create(tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
+            Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
             argTempi->insertAfter(last_gcframe_inst);
             StoreInst *store = new StoreInst(V_null, argTempi);
             store->insertAfter(argTempi);
@@ -634,11 +682,41 @@ void allocate_frame(Instruction *&last_gcframe_inst, unsigned &argSpaceSize, uns
         // finalize all of the frames by replacing them with the appropriate gep(tempslot)
         for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
             Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
-            GetElementPtrInst *gep = GetElementPtrInst::Create(tempSlot, makeArrayRef(offset));
+            GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             ReplaceInstWithInst(frame->first, gep);
+        }
+
+        IRBuilder<> builder(F.getContext());
+        Type *T_ppjlvalue = V_null->getType()->getPointerTo();
+#ifdef _P64
+        Type *T_size = T_int64;
+#else
+        Type *T_size = T_int32;
+#endif
+        builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
+        DebugLoc noDbg;
+        builder.SetCurrentDebugLocation(noDbg);
+
+        builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
+                            builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
+        builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
+                            builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
+        builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));
+
+        // Finish by emitting the gc pops before any return
+        for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
+            if (isa<ReturnInst>(I->getTerminator())) {
+                builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
+                Instruction *gcpop =
+                    (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
+                builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
+                                                          T_ppjlvalue),
+                                    builder.Insert(get_pgcstack(ptlsStates)));
+            }
         }
     }
 }
+
 };
 
 #if 0
@@ -648,10 +726,10 @@ static struct {
     unsigned temp;
 } jl_gc_frame_stats = {0};
 #endif
-void jl_codegen_finalize_temp_arg(AllocaInst *gcframe, Instruction *&last_gcframe_inst, unsigned &argSpaceSize, unsigned &maxDepth)
+void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue)
 {
-    JuliaGCAllocator allocator(gcframe);
-    allocator.allocate_frame(last_gcframe_inst, argSpaceSize, maxDepth);
+    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue);
+    allocator.allocate_frame();
 
 #if 0
     jl_gc_frame_stats.count++;
