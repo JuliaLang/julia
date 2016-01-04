@@ -473,19 +473,24 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         int set_to_any = 0;
         int notcalled_func = (i>0 && i<=8 && !(method->called&(1<<(i-1))) &&
                               jl_subtype(elt,(jl_value_t*)jl_function_type,0));
-        if (decl_i == jl_ANY_flag || ((decl_i == (jl_value_t*)jl_any_type ||
-                                       decl_i == (jl_value_t*)jl_function_type) &&
-                                      notcalled_func)) {
+        if (decl_i == jl_ANY_flag ||
+            (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
+                                decl_i == (jl_value_t*)jl_function_type ||
+                                (!jl_is_typevar(decl_i) &&
+                                 jl_subtype((jl_value_t*)jl_function_type, decl_i, 0) &&
+                                 jl_subtype((jl_value_t*)jl_datatype_type, decl_i, 0) &&
+                                 jl_is_uniontype(decl_i) && jl_svec_len(((jl_uniontype_t*)decl_i)->types)==2)))) {
             // don't specialize on slots marked ANY
             jl_svecset(newparams, i, (jl_value_t*)jl_any_type);
             temp2 = (jl_value_t*)jl_svec_copy(newparams);
             temp2 = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)temp2);
             int nintr=0;
             jl_methlist_t *curr = mt->defs;
+            int specific_decl =
+                decl_i != (jl_value_t*)jl_any_type && decl_i != (jl_value_t*)jl_ANY_flag;
             // if this method is the only match even with the current slot
             // set to Any, then it is safe to cache it that way.
-            while (curr != (void*)jl_nothing && (curr->func != method ||
-                                                 decl_i == (jl_value_t*)jl_function_type)) {
+            while (curr != (void*)jl_nothing && (curr->func != method || specific_decl)) {
                 if (jl_type_intersection((jl_value_t*)curr->sig, (jl_value_t*)temp2) !=
                     (jl_value_t*)jl_bottom_type) {
                     nintr++;
@@ -501,7 +506,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             else {
                 set_to_any = 1;
                 if (nintr > 0) {
-                    if (decl_i == (jl_value_t*)jl_function_type)
+                    if (specific_decl)
                         cache_as_orig = 1;
                     else
                         need_guard_entries = 1;
