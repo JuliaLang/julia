@@ -105,15 +105,6 @@
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
 
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
-(define (assignment-like? e)
-  (and (pair? e) (is-prec-assignment? (car e))))
-
-(define (kwarg? e)
-  (and (pair? e) (eq? (car e) 'kw)))
-
 (define (dict-literal? l)
   (and (length= l 3) (eq? (car l) '=>)))
 

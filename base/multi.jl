@@ -1453,26 +1453,26 @@ spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawn_somewhere($(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawn_somewhere($expr))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnat($(esc(p)), $(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawnat($(esc(p)), $expr))
 end
 
 macro fetch(expr)
-    expr = localize_vars(:(()->($expr)), false)
+    expr = localize_vars(esc(:(()->($expr))), false)
     quote
-        thunk = $(esc(expr))
+        thunk = $expr
         remotecall_fetch(thunk, chooseproc(thunk))
     end
 end
 
 macro fetchfrom(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(remotecall_fetch($(esc(expr)), $(esc(p))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(remotecall_fetch($expr, $(esc(p))))
 end
 
 macro everywhere(ex)
@@ -1631,7 +1631,7 @@ function make_preduce_body(reducer, var, body, R)
             ac = $(esc(body))
             if lo != hi
                 for $(esc(var)) in ($R)[(lo+1):hi]
-                    ac = ($(esc(reducer)))(ac, $(esc(body)))
+                    ac = ($reducer)(ac, $(esc(body)))
                 end
             end
             ac
@@ -1667,11 +1667,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
+        localize_vars(quote therange = $(esc(r)); $thecall; end)
     else
-        thecall = :(preduce($(esc(reducer)),
-                            $(make_preduce_body(reducer, var, body, :therange)), length(therange)))
+        thecall = :(preduce(thereducer,
+                            $(make_preduce_body(:thereducer, var, body, :therange)), length(therange)))
+        localize_vars(quote thereducer = $(esc(reducer)); therange = $(esc(r)); $thecall; end)
     end
-    localize_vars(quote therange = $(esc(r)); $thecall; end)
 end
 
 
