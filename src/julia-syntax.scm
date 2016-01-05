@@ -2904,13 +2904,18 @@ So far only the second case can actually occur.
 
 (define (closure-convert e) (cl-convert e #f #f #f #f #f))
 
+(define (toplevel-preserving? e)
+  (and (pair? e) (memq (car e) '(if block body trycatch))))
+
 (define (map-cl-convert exprs fname lam namemap toplevel interp)
   (if toplevel
       (let loop ((exprs exprs)
 		 (stmts '()))
 	(if (null? exprs)
 	    (reverse! stmts)
-	    (let* ((x (lift-toplevel (cl-convert (car exprs) fname lam namemap #f interp))))
+	    (let* ((x (lift-toplevel (cl-convert (car exprs) fname lam namemap
+						 (and toplevel (toplevel-preserving? (car exprs)))
+						 interp))))
 	      (loop (cdr exprs)
 		    (cons (car x) (revappend (cdr x) stmts))))))
       (map (lambda (x) (cl-convert x fname lam namemap #f interp)) exprs)))
