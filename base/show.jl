@@ -63,8 +63,9 @@ get(io::IO, key, default) = default
 
 "    limit_output(io) -> Bool
 Output hinting for identifying contexts where the user requested a compact output"
-limit_output(::ANY) = false
-limit_output(io::IOContext) = get(io, :limit_output, false) === true
+limit_output(::ANY) = _limit_output::Bool
+limit_output(io::IOContext) = get(io, :limit_output, _limit_output::Bool) === true
+_limit_output = false # delete with with_output_limit deprecation
 
 iosize(io::IOContext) = haskey(io, :iosize) ? io[:iosize] : iosize(io.io)
 
