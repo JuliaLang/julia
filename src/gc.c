@@ -1714,6 +1714,24 @@ static int push_root(jl_value_t *v, int d, int bits)
     d++;
 
     // some values have special representations
+    if (vt == (jl_value_t*)jl_typename_type) {
+        jl_typename_t *tn = (jl_typename_t*)v;
+        MARK(v, bits = gc_setmark(v, sizeof(jl_typename_t), GC_MARKED_NOESC));
+        verify_parent1("typename", v, &tn->module, "module");
+        refyoung |= gc_push_root(tn->module, d);
+        verify_parent1("typename", v, &tn->module, "names");
+        refyoung |= gc_push_root(tn->names, d);
+        verify_parent1("typename", v, &tn->primary, "primary");
+        refyoung |= gc_push_root(tn->primary, d);
+        if (tn->cache) {
+            verify_parent1("typename", v, &tn->cache, "cache");
+            refyoung |= gc_push_root(tn->cache, d);
+        }
+        if (tn->linearcache) {
+            verify_parent1("typename", v, &tn->linearcache, "linearcache");
+            refyoung |= gc_push_root(tn->linearcache, d);
+        }
+    }
     if (vt == (jl_value_t*)jl_simplevector_type) {
         size_t l = jl_svec_len(v);
         MARK(v, bits = gc_setmark(v, l * sizeof(void*) +

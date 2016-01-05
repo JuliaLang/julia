@@ -874,7 +874,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 jl_serialize_value(s, t);
                 return;
             }
-            if (t->size <= 255) {
+            if (t == jl_typename_type) {
+                writetag(s, (jl_value_t*)SmallDataType_tag);
+                write_uint8(s, sizeof(jl_typename_t));
+            }
+            else if (t->size <= 255) {
                 writetag(s, (jl_value_t*)SmallDataType_tag);
                 write_uint8(s, t->size);
             }
@@ -913,6 +917,15 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                         jl_serialize_value(s, jl_get_nth_field(v, i));
                     }
                 }
+            }
+            if (mode != MODE_MODULE && mode != MODE_MODULE_POSTWORK && t == jl_typename_type) {
+                jl_typename_t* tn = (jl_typename_t*)v;
+                jl_serialize_value(s, tn->cache);
+                jl_serialize_value(s, tn->linearcache);
+                write_int32(s, tn->uid & 0xffffffff);
+#ifdef _P64
+                write_int32(s, tn->uid >> 32);
+#endif
             }
         }
     }
@@ -1545,6 +1558,17 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                     tn->uid = jl_assign_type_uid(); // make sure this has a new uid
                     tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
                     tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
+                }
+            }
+            else {
+                if (dt == jl_typename_type) {
+                    jl_typename_t* tn = (jl_typename_t*)v;
+                    tn->cache = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&tn->cache);
+                    tn->linearcache = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&tn->cache);
+                    tn->uid = (uint32_t)read_int32(s);
+#ifdef _P64
+                    tn->uid |= ((uint64_t)read_int32(s)) << 32;
+#endif
                 }
             }
         }
