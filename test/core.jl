@@ -3619,3 +3619,9 @@ end
 @test @m8846(a) === (:a, 0)
 @test @m8846(a,1) === (:a, 1)
 @test_throws MethodError eval(:(@m8846(a,b,c)))
+
+# a simple case of parametric dispatch with unions
+let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
+    @test foo(1, nothing) === 1
+    @test_throws MethodError foo(nothing, nothing)  # can't determine T
+end

@@ -369,9 +369,16 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
                                    cenv_t *penv, cenv_t *eqc, variance_t var)
 {
     int eq0 = eqc->n, co0 = penv->n;
-    jl_svec_t *t = jl_alloc_svec(jl_svec_len(a->types));
+    size_t i, l = jl_svec_len(a->types);
+    // shortcut an easy case: union contains type b
+    if (!jl_is_typevar(b)) {
+        for(i=0; i < l; i++) {
+            if (jl_svecref(a->types,i) == b)
+                return b;
+        }
+    }
+    jl_svec_t *t = jl_alloc_svec(l);
     JL_GC_PUSH1(&t);
-    size_t i, l=jl_svec_len(t);
     for(i=0; i < l; i++) {
         int eq_l = eqc->n, co_l = penv->n;
         jl_value_t *ti = jl_type_intersect(jl_svecref(a->types,i), b,
