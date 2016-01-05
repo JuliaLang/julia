@@ -1182,12 +1182,15 @@
        (cond ((and (pair? (cadr e))
                    (eq? (car (cadr e)) 'call)
                    (symbol? (cadr (cadr e))))
-              `(macro ,(symbol (string #\@ (cadr (cadr e))))
-                 ,(expand-binding-forms
-                   `(-> (tuple ,@(cddr (cadr e)))
-                        ,(caddr e)))))
-             ((symbol? (cadr e))  ;; already expanded
-              e)
+              (let ((anames (cddr (cadr e))))
+                (expand-binding-forms
+                 `(function (call ,(symbol (string #\@ (cadr (cadr e))))
+                                  ,@(map (lambda (v)
+                                           (if (symbol? v)
+                                               `(|::| ,v (top ANY))
+                                               v))
+                                         anames))
+                            ,@(cddr e)))))
              (else
               (error "invalid macro definition"))))
 

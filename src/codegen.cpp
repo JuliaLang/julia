@@ -3732,6 +3732,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
             mn = (jl_value_t*)jl_symbolnode_sym(mn);
         }
         assert(jl_is_symbol(mn));
+        if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
+            jl_errorf("macro definition not allowed inside a local scope");
         int last_depth = ctx->gc.argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
@@ -3926,9 +3928,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
             if (head == abstracttype_sym || head == compositetype_sym ||
                 head == bitstype_sym) {
                 jl_errorf("type definition not allowed inside a local scope");
-            }
-            else if (head == macro_sym) {
-                jl_errorf("macro definition not allowed inside a local scope");
             }
             else {
                 jl_errorf("unsupported or misplaced expression \"%s\" in function %s",
