@@ -1154,7 +1154,7 @@
      (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
      (let* ((paren (eqv? (require-token s) #\())
             (sig   (parse-call s)))
-       (if (and (eq? word 'function) (not paren) (symbol? sig))
+       (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
 	   (begin (if (not (eq? (require-token s) 'end))
 		      (error (string "expected \"end\" in definition of function \"" sig "\"")))
 		  (take-token s)
