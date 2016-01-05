@@ -6,9 +6,12 @@ writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
-        n = length(f.env)
+        mt = f.env
+        n = length(mt)
         m = n==1 ? "method" : "methods"
-        print(io, "$(f.env.name) (generic function with $n $m)")
+        ns = string(mt.name)
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, ns, " (", what, " with $n $m)")
     else
         show(io, f)
     end

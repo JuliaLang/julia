@@ -73,7 +73,8 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 
     JL_TRY {
         margs[0] = scm_to_julia(args[0], 1);
-        f = (jl_function_t*)jl_toplevel_eval(margs[0]);
+        margs[0] = jl_toplevel_eval(margs[0]);
+        f = (jl_function_t*)margs[0];
         assert(jl_is_func(f));
         result = jl_apply(f, &margs[1], nargs-1);
     }
@@ -93,8 +94,8 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     value_t scm = julia_to_scm(result);
     fl_gc_handle(&scm);
     value_t scmresult;
-    jl_module_t *defmod = f->linfo->module;
-    if (defmod == jl_current_module) {
+    jl_module_t *defmod = jl_gf_mtable(f)->module;
+    if (defmod == NULL || defmod == jl_current_module) {
         scmresult = fl_cons(scm, FL_F);
     }
     else {
@@ -1104,7 +1105,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
             }
             size_t i = 0;
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
-                e->head == bitstype_sym || e->head == macro_sym || e->head == module_sym)
+                e->head == bitstype_sym || e->head == module_sym)
                 i++;
             for(; i < jl_array_len(e->args); i++) {
                 jl_exprargset(e, i, resolve_globals(jl_exprarg(e,i), lam));

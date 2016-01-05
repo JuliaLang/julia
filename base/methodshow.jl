@@ -62,7 +62,9 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     n = length(mt)
     if header
         m = n==1 ? "method" : "methods"
-        print(io, "# $n $m for generic function \"$name\":")
+        ns = string(name)
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
     d = mt.defs
     n = rest = 0
@@ -156,7 +158,9 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
-    print(io, "$n $meths for generic function <b>$name</b>:<ul>")
+    ns = string(name)
+    what = startswith(ns, '@') ? "macro" : "generic function"
+    print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
     d = mt.defs
     while d !== nothing
         print(io, "<li> ")
