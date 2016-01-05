@@ -3611,3 +3611,11 @@ let T = TypeVar(:T, true)
     @test typeintersect(T, Type{Int8}) == Type{Int8}
     @test typeintersect(Tuple{T}, Tuple{Type{Int8}}) == Tuple{Type{Int8}}
 end
+
+# issue #8846, generic macros
+macro m8846(a, b=0)
+    a, b
+end
+@test @m8846(a) === (:a, 0)
+@test @m8846(a,1) === (:a, 1)
+@test_throws MethodError eval(:(@m8846(a,b,c)))
