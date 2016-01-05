@@ -14,6 +14,7 @@
     iswprint;
     jl_*;
     rec_backtrace;
+    rec_backtrace_ctx;
     julia_*;
     libsupport_init;
     localtime_r;
