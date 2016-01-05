@@ -83,3 +83,18 @@ let lock = Threads.RecursiveSpinLock()
     @test unlock!(lock) == 0
     @test unlock!(lock) == 1
 end
+
+# Make sure doing a GC while holding a lock doesn't cause dead lock
+# PR 14190. (This is only meaningful for threading)
+function threaded_gc_locked{LockT}(::Type{LockT})
+    lock = LockT()
+    @threads for i = 1:20
+        lock!(lock)
+        gc(false)
+        unlock!(lock)
+    end
+end
+
+threaded_gc_locked(SpinLock)
+threaded_gc_locked(Threads.RecursiveSpinLock)
+threaded_gc_locked(Mutex)

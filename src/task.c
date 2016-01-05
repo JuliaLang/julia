@@ -355,7 +355,6 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
-extern int jl_in_gc;
 JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     if (t == jl_current_task) {
@@ -368,13 +367,15 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
             jl_throw(t->exception);
         return t->result;
     }
-    if (jl_in_gc)
+    if (jl_in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_task_arg_in_transit = arg;
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
     jl_task_arg_in_transit = jl_nothing;
     throw_if_exception_set(jl_current_task);
+    jl_gc_unsafe_leave(gc_state);
     return val;
 }
 
@@ -481,6 +482,8 @@ static int frame_info_from_ip(char **func_name,
                               char **inlinedat_file, size_t *inlinedat_line,
                               size_t ip, int skipC, int skipInline)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     static const char *name_unknown = "???";
     int fromC = 0;
 
@@ -758,6 +761,8 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 //for looking up functions from gdb:
 JL_DLLEXPORT void jl_gdblookup(ptrint_t ip)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     char *func_name;
     size_t line_num;
     char *file_name;
@@ -808,6 +813,7 @@ JL_DLLEXPORT void jl_gdbbacktrace(void)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
+    jl_gc_unsafe_enter();
     assert(e != NULL);
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
@@ -884,8 +890,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    JL_GC_POP();
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    JL_GC_POP();
 #endif
 
     return t;
