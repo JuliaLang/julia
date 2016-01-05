@@ -314,3 +314,8 @@ end
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
 @test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
+
+# issue #14561 - generating 0-method generic function def
+let fname = :f
+    @test :(function $fname end) == Expr(:function, :f)
+end
