@@ -56,7 +56,7 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
     if (context)
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
     for(size_t i=0; i < n; i++)
-        gdblookup(bt_data[i]);
+        jl_gdblookup(bt_data[i]);
     gc_debug_print_status();
 }
 
