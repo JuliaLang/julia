@@ -25,9 +25,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-JL_DLLEXPORT int jl_lineno = 0;
+JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT const char *jl_filename = "no file";
+JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
 
 jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched

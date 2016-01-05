@@ -34,7 +34,40 @@ extern "C" {
 #endif
 
 JL_DEFINE_MUTEX(pagealloc)
+// Protect all access to `finalizer_list`, `finalizer_list_marked` and
+// `to_finalize`.
 JL_DEFINE_MUTEX(finalizers)
+
+/**
+ * Note about GC synchronization:
+ *
+ * When entering `jl_gc_collect()`, `jl_gc_running` is atomically changed from
+ * `0` to `1` to make sure that only one thread can be running the GC. Other
+ * threads that enters `jl_gc_collect()` at the same time (or later calling
+ * from unmanaged code) will wait in `jl_gc_collect()` until the GC is finished.
+ *
+ * Before starting the mark phase the GC thread calls `jl_gc_signal_begin()`
+ * to make sure all the thread are in a safe state for the GC. The function
+ * activates the safepoint and wait for all the threads to get ready for the
+ * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
+ * other thread will access them when the GC is running.
+ *
+ * During the mark and sweep phase of the GC, the threads that are not running
+ * the GC should either be running unmanaged code (or code section that does
+ * not have a GC critical region mainly including storing to the stack or
+ * another object) or paused at a safepoint and wait for the GC to finish.
+ * If a thread want to switch from running unmanaged code to running managed
+ * code, it has to perform a GC safepoint check after setting the `gc_state`
+ * flag (see `jl_gc_state_save_and_set()`. it is possible that the thread might
+ * have `gc_state == 0` in the middle of the GC transition back before entering
+ * the safepoint. This is fine since the thread won't be executing any GC
+ * critical region during that time).
+ *
+ * The finalizers are run after the GC finishes in normal mode (the `gc_state`
+ * when `jl_gc_collect` is called) with `jl_in_finalizer = 1`. (TODO:) When we
+ * have proper support of GC transition in codegen, we should execute the
+ * finalizers in unmanaged (GC safe) mode.
+ */
 
 // manipulating mark bits
 
@@ -313,7 +346,96 @@ NOINLINE static uintptr_t gc_get_stack_ptr(void)
 
 #include "gc-debug.c"
 
-int jl_in_gc; // referenced from switchto task.c
+// Only one thread can be doing the collection right now. That thread set
+// `jl_running_gc` to one on entering the GC and set it back afterward.
+static volatile uint64_t jl_gc_running = 0;
+
+#ifdef JULIA_ENABLE_THREADING
+JL_DLLEXPORT volatile size_t *jl_gc_signal_page = NULL;
+
+static void jl_wait_for_gc(void)
+{
+    while (jl_gc_running) {
+        jl_cpu_pause(); // yield?
+    }
+}
+
+void jl_gc_signal_wait(void)
+{
+    int8_t state = jl_get_ptls_states()->gc_state;
+    jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
+    jl_wait_for_gc();
+    jl_get_ptls_states()->gc_state = state;
+}
+
+static void jl_gc_wait_for_the_world(void)
+{
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
+        while (!ptls->gc_state) {
+            jl_cpu_pause(); // yield?
+        }
+    }
+}
+
+void jl_gc_signal_init(void)
+{
+    // jl_page_size isn't available yet.
+#ifdef _OS_WINDOWS_
+    jl_gc_signal_page = (size_t*)VirtualAlloc(NULL, jl_getpagesize(),
+                                              MEM_COMMIT, PAGE_READONLY);
+#else
+    jl_gc_signal_page = (size_t*)mmap(0, jl_getpagesize(), PROT_READ,
+                                      MAP_NORESERVE | MAP_PRIVATE |
+                                      MAP_ANONYMOUS, -1, 0);
+    if (jl_gc_signal_page == MAP_FAILED)
+        jl_gc_signal_page = NULL;
+#endif
+    if (jl_gc_signal_page == NULL) {
+        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
+        abort();
+    }
+}
+
+static void jl_gc_signal_begin(void)
+{
+#ifdef __APPLE__
+    // This needs to be after setting `jl_gc_running` so that only one thread
+    // can talk to the signal handler
+    jl_mach_gc_begin();
+#endif
+#ifdef _OS_WINDOWS_
+    DWORD old_prot;
+    VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
+                   PAGE_NOACCESS, &old_prot);
+#else
+    mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_NONE);
+#endif
+    jl_gc_wait_for_the_world();
+    JL_LOCK_NOGC(finalizers);
+}
+
+static void jl_gc_signal_end(void)
+{
+    JL_UNLOCK_NOGC(finalizers);
+#ifdef _OS_WINDOWS_
+    DWORD old_prot;
+    VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
+                   PAGE_READONLY, &old_prot);
+#else
+    mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_READ);
+#endif
+#ifdef __APPLE__
+    jl_mach_gc_end();
+#endif
+}
+#else
+
+#define jl_gc_signal_begin()
+#define jl_gc_signal_end()
+
+#endif
+
 static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #11956
 
 // malloc wrappers, aligned allocation
@@ -375,12 +497,15 @@ static void jl_gc_push_arraylist(arraylist_t *list)
     jl_pgcstack = (jl_gcframe_t*)list->items;
 }
 
-// Same assumption as `jl_gc_push_arraylist`
+// Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
+// to be hold for the current thread and will release the lock when the
+// function returns.
 static void jl_gc_run_finalizers_in_list(arraylist_t *list)
 {
     size_t len = list->len;
     jl_value_t **items = (jl_value_t**)list->items;
     jl_gc_push_arraylist(list);
+    JL_UNLOCK_NOGC(finalizers);
     for (size_t i = 2;i < len;i += 2) {
         run_finalizer(items[i], items[i + 1]);
     }
@@ -389,8 +514,11 @@ static void jl_gc_run_finalizers_in_list(arraylist_t *list)
 
 static void run_finalizers(void)
 {
-    if (to_finalize.len == 0)
+    JL_LOCK_NOGC(finalizers);
+    if (to_finalize.len == 0) {
+        JL_UNLOCK_NOGC(finalizers);
         return;
+    }
     arraylist_t copied_list;
     memcpy(&copied_list, &to_finalize, sizeof(copied_list));
     if (to_finalize.items == to_finalize._space) {
@@ -400,6 +528,7 @@ static void run_finalizers(void)
     // empty out the first two entries for the GC frame
     arraylist_push(&copied_list, copied_list.items[0]);
     arraylist_push(&copied_list, copied_list.items[1]);
+    // This releases the finalizers lock.
     jl_gc_run_finalizers_in_list(&copied_list);
     arraylist_free(&copied_list);
 }
@@ -408,10 +537,10 @@ void jl_gc_inhibit_finalizers(int state)
 {
     // NOTE: currently only called with the codegen lock held, but might need
     // more synchronization in the future
-    if (jl_gc_finalizers_inhibited && !state && !jl_in_gc) {
-        jl_in_gc = 1;
+    if (jl_gc_finalizers_inhibited && !state && !jl_in_finalizer) {
+        jl_in_finalizer = 1;
         run_finalizers();
-        jl_in_gc = 0;
+        jl_in_finalizer = 0;
     }
     jl_gc_finalizers_inhibited = state;
 }
@@ -430,22 +559,24 @@ static void schedule_all_finalizers(arraylist_t* flist)
 
 void jl_gc_run_all_finalizers(void)
 {
+    JL_LOCK_NOGC(finalizers);
     schedule_all_finalizers(&finalizer_list);
     schedule_all_finalizers(&finalizer_list_marked);
+    JL_UNLOCK_NOGC(finalizers);
     run_finalizers();
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
-    JL_LOCK(finalizers);
+    JL_LOCK_NOGC(finalizers);
     arraylist_push(&finalizer_list, (void*)v);
     arraylist_push(&finalizer_list, (void*)f);
-    JL_UNLOCK(finalizers);
+    JL_UNLOCK_NOGC(finalizers);
 }
 
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 {
-    JL_LOCK(finalizers);
+    JL_LOCK_NOGC(finalizers);
     // Copy the finalizers into a temporary list so that code in the finalizer
     // won't change the list as we loop through them.
     // This list is also used as the GC frame when we are running the finalizers
@@ -457,9 +588,12 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o)
     // still holding a reference to the object
     finalize_object(&finalizer_list, o, &copied_list);
     finalize_object(&finalizer_list_marked, o, &copied_list);
-    JL_UNLOCK(finalizers);
     if (copied_list.len > 2) {
+        // This releases the finalizers lock.
         jl_gc_run_finalizers_in_list(&copied_list);
+    }
+    else {
+        JL_UNLOCK_NOGC(finalizers);
     }
     arraylist_free(&copied_list);
 }
@@ -712,7 +846,7 @@ static NOINLINE void *malloc_page(void)
     int i;
     region_t* region;
     int region_i = 0;
-    JL_LOCK(pagealloc);
+    JL_LOCK_NOGC(pagealloc);
     while(region_i < REGION_COUNT) {
         region = regions[region_i];
         if (region == NULL) {
@@ -780,7 +914,7 @@ static NOINLINE void *malloc_page(void)
 #endif
     current_pg_count++;
     max_pg_count = max_pg_count < current_pg_count ? current_pg_count : max_pg_count;
-    JL_UNLOCK(pagealloc);
+    JL_UNLOCK_NOGC(pagealloc);
     return ptr;
 }
 
@@ -830,6 +964,7 @@ static inline int maybe_collect(void)
         jl_gc_collect(0);
         return 1;
     }
+    jl_gc_safepoint();
     return 0;
 }
 
@@ -1110,6 +1245,9 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
         //allocd_bytes -= osize;
         jl_gc_collect(0);
         //allocd_bytes += osize;
+    }
+    else {
+        jl_gc_safepoint();
     }
     gc_num.poolalloc++;
     // first try to use the freelist
@@ -1993,15 +2131,29 @@ static void post_mark(arraylist_t *list, int dryrun)
 }
 
 // collector entry point and control
+static volatile uint64_t jl_gc_disable_counter = 0;
 
-static int is_gc_enabled = 1;
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
-    int prev = is_gc_enabled;
-    is_gc_enabled = (on!=0);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, -1);
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint();
+    }
     return prev;
 }
-JL_DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
+JL_DLLEXPORT int jl_gc_is_enabled(void)
+{
+    return !jl_get_ptls_states()->disable_gc;
+}
 
 JL_DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
@@ -2066,24 +2218,9 @@ static int saved_mark_sp = 0;
 static int sweep_mask = GC_MARKED;
 #define MIN_SCAN_BYTES 1024*1024
 
-JL_DLLEXPORT void jl_gc_collect(int full)
+// Only one thread should be running in this function
+static void _jl_gc_collect(int full, char *stack_hi)
 {
-    if (!is_gc_enabled) return;
-    if (jl_in_gc) return;
-    char *stack_hi = (char*)gc_get_stack_ptr();
-    gc_debug_print();
-    JL_SIGATOMIC_BEGIN();
-
-#ifdef JULIA_ENABLE_THREADING
-    ti_threadgroup_barrier(tgworld, ti_tid);
-    if (ti_tid != 0) {
-        JL_SIGATOMIC_END();
-        ti_threadgroup_barrier(tgworld, ti_tid);
-        return;
-    }
-#endif
-
-    jl_in_gc = 1;
     uint64_t t0 = jl_hrtime();
     int recollect = 0;
 #if defined(GC_TIME)
@@ -2162,7 +2299,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     int64_t estimate_freed = -1;
 
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
-    uint64_t post_time = 0, finalize_time = 0;
+    uint64_t post_time = 0;
 #endif
     if (mark_sp == 0 || sweeping) {
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
@@ -2274,26 +2411,16 @@ JL_DLLEXPORT void jl_gc_collect(int full)
             allocd_bytes_since_sweep = 0;
             jl_gc_total_freed_bytes += freed_bytes;
             freed_bytes = 0;
-
-#if defined(GC_FINAL_STATS) || defined(GC_TIME)
-            finalize_time = jl_hrtime();
-#endif
-            if (!jl_gc_finalizers_inhibited) {
-                run_finalizers();
-            }
-#if defined(GC_FINAL_STATS) || defined(GC_TIME)
-            finalize_time = jl_hrtime() - finalize_time;
-#endif
         }
 #if defined(GC_FINAL_STATS) || defined(GC_TIME)
         uint64_t sweep_pause = jl_hrtime() - sweep_t0;
 #endif
 #ifdef GC_FINAL_STATS
-        total_sweep_time += sweep_pause - finalize_time - post_time;
-        total_fin_time += finalize_time + post_time;
+        total_sweep_time += sweep_pause - post_time;
+        total_fin_time += + post_time;
 #endif
 #ifdef GC_TIME
-        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark, %.2f ms in %d fin) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), NS2MS(finalize_time), n_finalized, inc_count, sweep_mask, -allocd_bytes/1024);
+        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), inc_count, sweep_mask, -allocd_bytes/1024);
 #endif
     }
     n_pause++;
@@ -2302,13 +2429,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 #ifdef GC_FINAL_STATS
     max_pause = max_pause < pause ? pause : max_pause;
 #endif
-    jl_in_gc = 0;
 
-#ifdef JULIA_ENABLE_THREADING
-    ti_threadgroup_barrier(tgworld, ti_tid);
-#endif
-
-    JL_SIGATOMIC_END();
 #ifdef GC_TIME
     if (estimate_freed != SAVE2) {
         // this should not happen but it does
@@ -2317,7 +2438,54 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 #endif
     if (recollect) {
         n_pause--;
-        jl_gc_collect(0);
+        _jl_gc_collect(0, stack_hi);
+    }
+}
+
+JL_DLLEXPORT void jl_gc_collect(int full)
+{
+    if (jl_gc_disable_counter)
+        return;
+    char *stack_hi = (char*)gc_get_stack_ptr();
+    gc_debug_print();
+    JL_SIGATOMIC_BEGIN();
+
+    int8_t old_state = jl_get_ptls_states()->gc_state;
+    jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
+    // In case multiple threads enter the GC at the same time, only allow
+    // one of them to actually run the collection. We can't just let the
+    // master thread do the GC since it might be running unmanaged code
+    // and can take arbitrarily long time before hitting a safe point.
+    if (JL_ATOMIC_COMPARE_AND_SWAP(jl_gc_running, 0, 1) != 0) {
+#ifdef JULIA_ENABLE_THREADING
+        JL_SIGATOMIC_END();
+        jl_wait_for_gc();
+        jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
+#else
+        // For single thread, GC should not call itself (in finalizers) before
+        // setting jl_gc_running to false so this should never happen.
+        assert(0 && "GC synchronization failure");
+#endif
+        return;
+    }
+    jl_gc_signal_begin();
+
+    if (!jl_gc_disable_counter)
+        _jl_gc_collect(full, stack_hi);
+
+    // Need to reset the page protection before resetting the flag since
+    // the thread will trigger a segfault immediately after returning from
+    // the signal handler.
+    jl_gc_signal_end();
+    jl_gc_running = 0;
+    JL_SIGATOMIC_END();
+    jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
+
+    if (!jl_gc_finalizers_inhibited) {
+        int8_t was_in_finalizer = jl_in_finalizer;
+        jl_in_finalizer = 1;
+        run_finalizers();
+        jl_in_finalizer = was_in_finalizer;
     }
 }
 
