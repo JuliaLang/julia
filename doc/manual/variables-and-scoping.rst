@@ -32,7 +32,7 @@ The constructs introducing such blocks are:
 
 Notably missing from this list are
 :ref:`begin blocks <man-compound-expressions>` and :ref:`if blocks <man-conditional-evaluation>`, which do
-*not* introduce new scope blocks.
+*not* introduce new scope blocks. Since the ``begin`` construct does not introduce a new block, it can be useful to use the zero-argument ``let`` to introduce a new scope block without creating any new bindings.
 
 Certain constructs introduce new variables into the current innermost
 scope. When a variable is introduced into a scope, it is also inherited
