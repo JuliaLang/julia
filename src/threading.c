@@ -143,15 +143,17 @@ struct _jl_thread_heap_t *jl_mk_thread_heap(void);
 
 static void ti_initthread(int16_t tid)
 {
-    ti_tid = tid;
-    jl_pgcstack = NULL;
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    ptls->tid = tid;
+    ptls->pgcstack = NULL;
+    ptls->gc_state = 0; // GC unsafe
 #ifdef JULIA_ENABLE_THREADING
     jl_all_heaps[tid] = jl_mk_thread_heap();
 #else
     jl_mk_thread_heap();
 #endif
 
-    jl_all_task_states[tid].ptls = jl_get_ptls_states();
+    jl_all_task_states[tid].ptls = ptls;
     jl_all_task_states[tid].signal_stack = jl_install_thread_signal_handler();
 }
 
