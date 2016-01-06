@@ -74,7 +74,13 @@ function find_docs(v)
     docs = []
     for mod in keys(mod_added)
         try
-            meta = Docs.meta(mod)[v]
+            m = Docs.meta(mod)
+            if haskey(m, v)
+                meta = m[v]
+            elseif isa(v, Docs.Binding)
+                obj = getfield(v.mod, v.var)
+                meta = m[obj]
+            end
             if isa(meta, Base.Docs.MultiDoc)
                 append!(docs, collect(values(meta.docs)))
             else
