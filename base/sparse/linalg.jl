@@ -815,7 +815,13 @@ function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
     C
 end
 
-scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC) = scale!(C, A, b)
+function scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
+    size(A)==size(C) || throw(DimensionMismatch())
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
+    scale!(C.nzval, b, A.nzval)
+    C
+end
 
 scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
 scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
