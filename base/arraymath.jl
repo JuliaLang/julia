@@ -414,8 +414,8 @@ function ctranspose(A::StridedMatrix)
 end
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
-transpose(x::StridedVector) = [ transpose(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::StridedVector{T}) = T[ ctranspose(x[j]) for i=1, j=1:size(x,1) ]
+transpose(x::StridedVector) = [ transpose(x[j]) for j=1:size(x,1) ]
+ctranspose{T}(x::StridedVector{T}) = T[ ctranspose(x[j]) for j=1:size(x,1) ]
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])
