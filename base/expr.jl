@@ -96,7 +96,7 @@ function localize_vars(expr, esca)
     if esca
         v = map(esc,v)
     end
-    Expr(:localize, :(()->($expr)), v...)
+    Expr(:localize, expr, v...)
 end
 
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)

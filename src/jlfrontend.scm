@@ -1,6 +1,8 @@
 (load "./flisp/aliases.scm")
 (load "utils.scm")
+(load "ast.scm")
 (load "match.scm")
+(load "macroexpand.scm")
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
 
