@@ -952,3 +952,11 @@ end
 #14555
 @deprecate_binding Coff_t Int64
 @deprecate_binding FileOffset Int64
+
+#14474
+macro boundscheck(yesno,blk)
+    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", symbol("@boundscheck"))
+    if yesno === true
+        :(@inbounds $(esc(blk)))
+    end
+end
