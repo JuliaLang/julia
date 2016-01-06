@@ -1,5 +1,24 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.Docs: meta
+
+# Test helpers.
+function docstrings_equal(d1, d2)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    writemime(io1, MIME"text/markdown"(), d1)
+    writemime(io2, MIME"text/markdown"(), d2)
+    takebuf_string(io1) == takebuf_string(io2)
+end
+
+function docstring_startswith(d1, d2)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    writemime(io1, MIME"text/markdown"(), d1)
+    writemime(io2, MIME"text/markdown"(), d2)
+    startswith(takebuf_string(io1), takebuf_string(io2))
+end
+
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
@@ -16,11 +35,11 @@ module ModuleMacroDoc
 macro m() end
 end
 
-@doc ("I am a module";) ModuleMacroDoc
-@doc ("I am a macro";)  :@ModuleMacroDoc.m
+@doc "I am a module" ModuleMacroDoc
+@doc "I am a macro"  :@ModuleMacroDoc.m
 
-@test (@doc ModuleMacroDoc)    == "I am a module"
-@test (@doc ModuleMacroDoc.@m) == "I am a macro"
+@test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
+@test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
 # General tests for docstrings.
 
@@ -76,8 +95,17 @@ end
 "TA"
 typealias TA Union{T, IT}
 
-"@mac"
+"@mac()"
 macro mac() end
+
+"@mac(x)"
+macro mac(x) end
+
+"@mac(x::Int, y::Expr, z = 0)"
+macro mac(x::Int, y::Expr, z = 0) end
+
+":@mac"
+:@mac
 
 "G"
 G = :G
@@ -126,24 +154,10 @@ end
 # value with no docs
 const val = Foo(1.0)
 
-end
+"doc multiple expressions"
+function multidoc  end,
+function multidoc! end
 
-import Base.Docs: meta
-
-function docstrings_equal(d1, d2)
-    io1 = IOBuffer()
-    io2 = IOBuffer()
-    writemime(io1, MIME"text/markdown"(), d1)
-    writemime(io2, MIME"text/markdown"(), d2)
-    takebuf_string(io1) == takebuf_string(io2)
-end
-
-function docstring_startswith(d1, d2)
-    io1 = IOBuffer()
-    io2 = IOBuffer()
-    writemime(io1, MIME"text/markdown"(), d1)
-    writemime(io2, MIME"text/markdown"(), d2)
-    startswith(takebuf_string(io1), takebuf_string(io2))
 end
 
 @test meta(DocsTest)[DocsTest] == doc"DocsTest"
@@ -206,7 +220,23 @@ end
 
 @test @doc(DocsTest.TA) == doc"TA"
 
-@test @doc(DocsTest.@mac) == doc"@mac"
+@test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()")
+@test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()")
+@test docstrings_equal(@doc(DocsTest.@mac(x)), doc"@mac(x)")
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)")
+@test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)")
+let m = doc"""
+        @mac(x)
+
+        @mac(x::Int, y::Expr, z = 0)
+
+        @mac()
+
+        :@mac
+        """
+    @test docstrings_equal(@doc(:@DocsTest.mac), m)
+    @test docstrings_equal(@doc(:(DocsTest.@mac)), m)
+end
 
 @test @doc(DocsTest.G) == doc"G"
 @test @doc(DocsTest.K) == doc"K"
@@ -234,6 +264,11 @@ end
 let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
     @test haskey(fields, :one) && fields[:one] == doc"one"
     @test haskey(fields, :two) && fields[:two] == doc"two"
+end
+
+let a = @doc(DocsTest.multidoc),
+    b = @doc(DocsTest.multidoc!)
+    @test docstrings_equal(a, b)
 end
 
 "BareModule"
@@ -336,7 +371,7 @@ end
 @test @doc(I) !== nothing
 
 # Issue #12700.
-@test @doc(DocsTest.@m) == doc"Inner.@m"
+@test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
 
 # issue 11993
 # Check if we are documenting the expansion of the macro
@@ -349,7 +384,7 @@ end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
-let d = (@doc @m2_11993)
+let d = (@doc :@m2_11993)
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -420,7 +455,7 @@ f12593_2() = 1
                         Docs.doc(getindex, Tuple{Type{Int64},Int}))
 
 # test that macro documentation works
-@test (Docs.@repl @assert) !== nothing
+@test (Docs.@repl :@assert) !== nothing
 
 @test (Docs.@repl 0) !== nothing
 
@@ -430,7 +465,7 @@ let t = @doc(DocsTest.t(::Int, ::Int))
 end
 
 # Issue #13467.
-@test (Docs.@repl @r_str) !== nothing
+@test (Docs.@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
 @test contains(sprint(apropos, "pearson"), "cor")
