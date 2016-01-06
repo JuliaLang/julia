@@ -424,7 +424,17 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (top typeof) ,mangled)) ,@vars ,@restkw ,@pargl ,@vararg)
+          `((|::| ,mangled (call (top typeof) ,mangled)) ,@vars ,@restkw
+            ;; strip type off function self argument if not needed for a static param.
+            ;; then it is ok for cl-convert to move this definition above the original def.
+            ,(if (decl? (car pargl))
+                 (if (any (lambda (sp)
+                            (expr-contains-eq (sparam-name sp) (caddr (car pargl))))
+                          positional-sparams)
+                     (car pargl)
+                     (decl-var (car pargl)))
+                 (car pargl))
+            ,@(cdr pargl) ,@vararg)
           `(block
             ,@(if (null? lno) '()
                   ;; TODO jb/functions get a better `name` for functions specified by type
@@ -3004,10 +3014,10 @@ So far only the second case can actually occur.
                                       (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))
                                   ,(last e))))
                        (else
-                        (let* ((newlam (to-goto-form
-                                        (renumber-jlgensym
-                                         (convert-lambda lam2 '|#anon| #t))))
-                               (vi (lam:vinfo newlam))
+                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t)))
+                               (top-stmts (cdr exprs))
+                               (newlam    (to-goto-form (renumber-jlgensym (car exprs))))
+                               (vi        (lam:vinfo newlam))
                                ;; insert `list` expression heads to make the lambda vinfo
                                ;; lists quotable
                                (newlam `(lambda (list ,@(cadr newlam))
@@ -3015,7 +3025,8 @@ So far only the second case can actually occur.
                                                              (car vi)))
                                                 (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
                                           ,@(cdddr newlam))))
-                          `(block
+                          `(toplevel-butlast
+                            ,@top-stmts
                             ,@sp-inits
                             (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
                                     ,(julia-expand-macros `(quote ,newlam))
@@ -3055,7 +3066,9 @@ So far only the second case can actually occur.
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
                                                     (if cv
-                                                        `(call (top getfield) ,fname (inert ,v))
+                                                        (if interp
+                                                            `($ (call (top QuoteNode) ,v))
+                                                            `(call (top getfield) ,fname (inert ,v)))
                                                         v)))
                                                 cvs))
                                 (P (filter identity (map (lambda (v ve)
@@ -3095,7 +3108,9 @@ So far only the second case can actually occur.
 	      (block
 	       ,@(map-cl-convert (cdr (lam:body e)) 'anon
 				 (lambda-optimize-vars! e)
-				 (table) #t interp))))
+				 (table)
+                                 (null? (cadr e)) ;; only toplevel thunks have 0 args
+                                 interp))))
 	  (else (cons (car e)
 		      (map-cl-convert (cdr e) fname lam namemap toplevel interp))))))))
 

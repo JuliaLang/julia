@@ -750,7 +750,7 @@ function findprev(testf::Function, A, start)
 end
 findlast(testf::Function, A) = findprev(testf, A, length(A))
 
-function find(testf, A::AbstractArray)
+function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)

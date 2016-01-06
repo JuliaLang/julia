@@ -746,8 +746,11 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     assert(jl_is_svec(tvars));
     assert(jl_nparams(argtypes)>0);
 
+    if (jl_is_tuple_type(argtypes) && jl_nparams(argtypes) > 0 && !jl_is_type(jl_tparam0(argtypes)))
+        jl_error("function type in method definition is not a type");
     jl_value_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
-    if (!(jl_is_type_type(ftype) ||
+    if (ftype == NULL ||
+        !(jl_is_type_type(ftype) ||
           (jl_is_datatype(ftype) &&
            (!((jl_datatype_t*)ftype)->abstract || jl_is_leaf_type(ftype)) &&
            ((jl_datatype_t*)ftype)->name->mt != NULL)))
