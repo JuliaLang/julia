@@ -41,7 +41,7 @@ eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
 
-ntuple(f, n::Integer) =
+ntuple(f::Function, n::Integer) =
     n<=0 ? () :
     n==1 ? (f(1),) :
     n==2 ? (f(1),f(2),) :

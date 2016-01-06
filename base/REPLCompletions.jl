@@ -10,7 +10,7 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
-function filtered_mod_names(ffunc, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = UTF8String[string(s) for s in ssyms]

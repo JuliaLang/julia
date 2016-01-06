@@ -976,7 +976,8 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuplet
         }
         ex = oldast;
     }
-    func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(m->func->module, (jl_value_t*)ex, 1); // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
+    // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
+    func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(m->func->module, (jl_value_t*)ex, 1);
     func->name = m->func->name;
     JL_GC_POP();
     return func;

@@ -126,7 +126,7 @@ end
 syntax_deprecation_warnings(warn::Bool) =
     ccall(:jl_parse_depwarn, Cint, (Cint,), warn) == 1
 
-function syntax_deprecation_warnings(f, warn::Bool)
+function syntax_deprecation_warnings(f::Function, warn::Bool)
     prev = syntax_deprecation_warnings(warn)
     try
         f()
