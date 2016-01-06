@@ -20,6 +20,21 @@ for elty in (Float16,Float32,Float64)
 end
 @test maxintfloat() == maxintfloat(Float64)
 
+# isinteger
+for elty in (Float16,Float32,Float64)
+    @test !isinteger(elty(1.2))
+    @test isinteger(elty(12))
+    @test isinteger(zero(elty))
+    @test isinteger(-zero(elty))
+    @test !isinteger(nextfloat(zero(elty)))
+    @test !isinteger(prevfloat(zero(elty)))
+    @test isinteger(maxintfloat(elty))
+    @test isinteger(-maxintfloat(elty))
+    @test !isinteger(elty(Inf))
+    @test !isinteger(-elty(Inf))
+    @test !isinteger(elty(NaN))
+end
+
 #num2hex
 for elty in (Float16,Float32,Float64)
     x = rand(elty)

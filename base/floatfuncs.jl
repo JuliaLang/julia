@@ -24,7 +24,7 @@ maxintfloat(::Type{Float16}) = Float16(2048f0)
 maxintfloat{T<:AbstractFloat}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::AbstractFloat) = (trunc(x)==x)&isfinite(x)
+isinteger(x::AbstractFloat) = x-trunc(x) == 0
 
 num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
 num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
