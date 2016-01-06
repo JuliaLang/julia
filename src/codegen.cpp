@@ -1161,9 +1161,16 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
 
     jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)sigt, NULL);
     if (li != NULL) {
-        if (!jl_types_equal((jl_value_t*)li->specTypes, sigt)) {
-            jl_errorf("cfunction: type signature of %s does not match specification",
-                      jl_symbol_name(li->name));
+        for(i=1; i < nargs+1; i++) {
+            jl_value_t *speci = jl_nth_slot_type(li->specTypes, i);
+            jl_value_t *sigi = jl_nth_slot_type((jl_tupletype_t*)sigt, i);
+            if ((isref & (2<<(i-1))) && speci == (jl_value_t*)jl_any_type) {
+                // specialized for Any => can accept any Ref
+            }
+            else if (!jl_types_equal(speci, sigi)) {
+                jl_errorf("cfunction: type signature of %s does not match specification",
+                          jl_symbol_name(li->name));
+            }
         }
         jl_value_t *astrt = jl_ast_rettype(li, li->ast);
         if (rt != NULL) {
