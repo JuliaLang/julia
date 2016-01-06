@@ -265,14 +265,10 @@ public:
 #ifdef JL_DEBUG_BUILD
             PM.add(createVerifierPass());
 #endif
-            // In imaging mode, we run the pass manager on creation
-            // to make sure it ends up optimized in the shadow module
-            if (!imaging_mode) {
-                addOptimizationPasses(&PM);
+            addOptimizationPasses(&PM);
 #ifdef JL_DEBUG_BUILD
-                PM.add(createVerifierPass());
+            PM.add(createVerifierPass());
 #endif
-            }
             if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
                 llvm_unreachable("Target does not support MC emission.");
 
