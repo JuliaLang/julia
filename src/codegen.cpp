@@ -1170,9 +1170,16 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
 
     jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)sigt, NULL);
     if (li != NULL) {
-        if (!jl_types_equal((jl_value_t*)li->specTypes, sigt)) {
-            jl_errorf("cfunction: type signature of %s does not match specification",
-                      jl_symbol_name(li->name));
+        for(i=1; i < nargs+1; i++) {
+            jl_value_t *speci = jl_nth_slot_type(li->specTypes, i);
+            jl_value_t *sigi = jl_nth_slot_type((jl_tupletype_t*)sigt, i);
+            if ((isref & (2<<(i-1))) && speci == (jl_value_t*)jl_any_type) {
+                // specialized for Any => can accept any Ref
+            }
+            else if (!jl_types_equal(speci, sigi)) {
+                jl_errorf("cfunction: type signature of %s does not match specification",
+                          jl_symbol_name(li->name));
+            }
         }
         jl_value_t *astrt = li->rettype;
         if (rt != NULL) {
@@ -2864,8 +2871,8 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
     return emit_jlcall(theFptr, theF, argStart, nargs, ctx);
 }
 
-static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, jl_cgval_t theF, Value *theFptr,
-                                            jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval_t &theF, Value *theFptr,
+                                            jl_value_t **args, size_t nargs, jl_value_t *callexpr, jl_codectx_t *ctx)
 {
     if (li->functionObjects.specFunctionObject != NULL) {
         // emit specialized call site
@@ -2941,7 +2948,8 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, jl_cgval_t the
         call->setAttributes(cf->getAttributes());
         return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty);
     }
-    return mark_julia_type(emit_jlcall(theFptr, boxed(theF,ctx), &args[1], nargs, ctx), true, jl_any_type); // (typ will be patched up by caller)
+    return mark_julia_type(emit_jlcall(theFptr, boxed(theF,ctx), &args[1], nargs, ctx), true,
+                           expr_type(callexpr, ctx));
 }
 
 static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_value_t *expr)
@@ -3007,13 +3015,12 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                         !jl_is_leaf_type(f)) {
                         jl_add_linfo_root(ctx->linfo, f);
                     }
-                    fval = mark_julia_type(literal_pointer_val((jl_value_t*)f), true, jl_typeof(f));
+                    fval = mark_julia_const((jl_value_t*)f);
                 }
                 else {
                     fval = emit_expr(args[0], ctx);
                 }
-                // TODO jb/functions - mark with expr_type(expr,ctx) ??
-                result = emit_call_function_object(li, fval, theFptr, args, nargs, ctx);
+                result = emit_call_function_object(li, fval, theFptr, args, nargs, expr, ctx);
                 ctx->gc.argDepth = argStart;
                 JL_GC_POP();
                 return result;

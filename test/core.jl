@@ -354,10 +354,10 @@ sptest1{T,S}(x::T, y::S) = 43
 sptest2{T}(x::T) = T
 @test is(sptest2(:a),Symbol)
 
-#sptest3{T}(x::T) = y->T
-#let m = sptest3(:a)
-#    @test is(m(0),Symbol)
-#end
+sptest3{T}(x::T) = y->T
+let m = sptest3(:a)
+    @test is(m(0),Symbol)
+end
 
 sptest4{T}(x::T, y::T) = 42
 sptest4{T}(x::T, y) = 44
@@ -812,8 +812,7 @@ let
     local my_func, a, c
     my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
     my_func{T}(x::T, P::Vector{T}) = 1
-    # todo: this gives an ambiguity warning
-    #my_func{T}(P::Vector{T}, x::T) = 2
+    my_func{T}(P::Vector{T}, x::T) = 2
     a = Int[3]
     c = Vector[a]
 
@@ -835,13 +834,13 @@ let
     boor(x) = 0
     boor(x::Union) = 1
     @test boor(StridedArray) == 0
-    #@test boor(StridedArray.body) == 1
+    @test boor(StridedArray.body) == 1
 
     # issue #1202
     foor(x::Union) = 1
     @test_throws MethodError foor(StridedArray)
     @test foor(StridedArray.body) == 1
-    #@test_throws MethodError foor(StridedArray)
+    @test_throws MethodError foor(StridedArray)
 end
 
 # issue #1153
@@ -894,9 +893,9 @@ let
     @test a2 == [101,102,909]
 end
 
-#@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
-#                                     x -> x+1, 314158)) == 314159
-#@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
+@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
+                                     x -> x+1, 314158)) == 314159
+@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
 let
     local a, aa
@@ -1067,10 +1066,10 @@ let
 end
 
 # issue #2169
-#let
-#    i2169{T}(a::Array{T}) = typemin(T)
-#    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
-#end
+let
+    i2169{T}(a::Array{T}) = typemin(T)
+    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
+end
 
 # issue #2365
 type B2365{T}
