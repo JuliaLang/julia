@@ -50,7 +50,7 @@ cd() = cd(homedir())
         systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
-@windows_only function cd(f, dir::AbstractString)
+@windows_only function cd(f::Function, dir::AbstractString)
     old = pwd()
     try
         cd(dir)
@@ -59,7 +59,7 @@ end
         cd(old)
     end
 end
-cd(f) = cd(f, homedir())
+cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)

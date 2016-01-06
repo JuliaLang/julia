@@ -130,7 +130,7 @@ lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 
 # Temporal Adjusters
 immutable DateFunction
-    f
+    f::Function
     # validate boolean, single-arg inner constructor
     function DateFunction(f::ANY,negate::Bool,dt::TimeType)
         try
