@@ -74,7 +74,15 @@ JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
-JL_DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence) { return lseek(fd, offset, whence); }
+JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
+JL_DLLEXPORT int jl_ftruncate(int fd, off_t length)
+{
+    return ftruncate(fd, length);
+}
+JL_DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence)
+{
+    return lseek(fd, offset, whence);
+}
 JL_DLLEXPORT ssize_t jl_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
     return pwrite(fd, buf, count, offset);
