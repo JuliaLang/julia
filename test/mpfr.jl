@@ -206,8 +206,17 @@ x = BigFloat(12)
 @test_throws DomainError setprecision(1)
 
 # isinteger
+@test !isinteger(BigFloat(1.2))
 @test isinteger(BigFloat(12))
-@test !isinteger(BigFloat(12.12))
+@test isinteger(zero(BigFloat))
+@test isinteger(-zero(BigFloat))
+@test !isinteger(nextfloat(zero(BigFloat)))
+@test !isinteger(prevfloat(zero(BigFloat)))
+@test isinteger(maxintfloat(BigFloat))
+@test isinteger(-maxintfloat(BigFloat))
+@test !isinteger(BigFloat(Inf))
+@test !isinteger(-BigFloat(Inf))
+@test !isinteger(BigFloat(NaN))
 
 # nextfloat / prevfloat
 setprecision(53) do
