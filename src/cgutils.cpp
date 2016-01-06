@@ -640,8 +640,9 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     realize_pending_globals();
 #endif
-    //shadow_module->dump();
+#ifdef JL_DEBUG_BUILD
     verifyModule(*shadow_module);
+#endif
 
 #ifdef LLVM36
     std::error_code err;
@@ -701,23 +702,23 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #else
     PassManager PM;
 #endif
-    if (!dump_as_bc) {
 #ifndef LLVM37
-        PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+    PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
 #else
-        PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+    PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
 #endif
 #ifdef LLVM37
-    // No DataLayout pass needed anymore.
+// No DataLayout pass needed anymore.
 #elif defined(LLVM36)
-        PM.add(new DataLayoutPass());
+    PM.add(new DataLayoutPass());
 #elif defined(LLVM35)
-        PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
+    PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
 #else
-        PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+    PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
 #endif
 
-
+    addOptimizationPasses(&PM);
+    if (!dump_as_bc) {
         if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
             jl_error("Could not generate obj file for this target");
         }
@@ -744,9 +745,8 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
 
     // do the actual work
-    if (!dump_as_bc)
-        PM.run(*clone);
-    else
+    PM.run(*clone);
+    if (dump_as_bc)
         WriteBitcodeToFile(clone, FOS);
     delete clone;
 }
