@@ -461,7 +461,7 @@ static int exec_program(char *program)
     return 0;
 }
 
-void jl_lisp_prompt();
+int jl_lisp_prompt(int argc, char *argv[]);
 
 #ifndef _WIN32
 int jl_repl_raise_sigtstp(void)
@@ -619,8 +619,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     libsupport_init();
     parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
-        jl_lisp_prompt();
-        return 0;
+        return jl_lisp_prompt(argc, argv);
     }
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
