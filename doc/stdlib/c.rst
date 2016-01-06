@@ -235,7 +235,7 @@
 
 .. data:: Coff_t
 
-   Equivalent to the native ``off_t`` c-type
+   Equivalent to the native ``off_t`` c-type. Note that julia defines ``_FILE_OFFSET_BITS=64`` so this may not be the same as the default value on 32bits Linux.
 
 .. data:: Cwchar_t
 
