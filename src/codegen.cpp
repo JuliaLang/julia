@@ -4037,6 +4037,7 @@ emit_gcpops(jl_codectx_t *ctx)
 {
     Function *F = ctx->f;
     for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
+        assert(I->getTerminator() != NULL);
         if (isa<ReturnInst>(I->getTerminator())) {
             builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
             Instruction *gcpop =
@@ -4056,7 +4057,6 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         clear_gc_frame(gc);
         return;
     }
-    BasicBlock::iterator bbi(gc->gcframe);
     AllocaInst *newgcframe = gc->gcframe;
     builder.SetInsertPoint(&*++gc->last_gcframe_inst); // set insert *before* point, e.g. after the gcframe
     // Allocate the real GC frame
