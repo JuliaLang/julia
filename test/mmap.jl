@@ -236,9 +236,9 @@ n = read(s, Int)
 A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
 @test A == A2
 seek(s, 0)
-A3 = Mmap.mmap(s, Matrix{Int}, (m,n), convert(FileOffset,2*sizeof(Int)))
+A3 = Mmap.mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
-A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(FileOffset,(2+150*m)*sizeof(Int)))
+A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)
 finalize(A2); finalize(A3); finalize(A4)

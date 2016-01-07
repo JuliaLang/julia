@@ -191,7 +191,7 @@ static char *_buf_realloc(ios_t *s, size_t sz)
             return NULL;
         s->ownbuf = 1;
         if (s->size > 0)
-            memcpy(temp, s->buf, s->size);
+            memcpy(temp, s->buf, (size_t)s->size);
     }
 
     s->buf = temp;
@@ -213,12 +213,12 @@ static size_t _write_grow(ios_t *s, const char *data, size_t n)
         if (s->bpos + n > s->maxsize) {
             /* TODO: here you might want to add a mechanism for limiting
                the growth of the stream. */
-            newsize = s->maxsize ? s->maxsize * 2 : 8;
+            newsize = (size_t)(s->maxsize ? s->maxsize * 2 : 8);
             while (s->bpos + n > newsize)
                 newsize *= 2;
             if (_buf_realloc(s, newsize) == NULL) {
                 /* no more space; write as much as we can */
-                amt = s->maxsize - s->bpos;
+                amt = (size_t)(s->maxsize - s->bpos);
                 if (amt > 0) {
                     memcpy(&s->buf[s->bpos], data, amt);
                 }
@@ -250,7 +250,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
     s->state = bst_rd;
 
     while (n > 0) {
-        avail = s->size - s->bpos;
+        avail = (size_t)(s->size - s->bpos);
 
         if (avail > 0) {
             size_t ncopy = (avail >= n) ? n : avail;
@@ -292,7 +292,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
         }
         else {
             // refill buffer
-            if (_os_read(s->fd, s->buf, s->maxsize, &got)) {
+            if (_os_read(s->fd, s->buf, (size_t)s->maxsize, &got)) {
                 s->_eof = 1;
                 return tot;
             }
@@ -324,7 +324,7 @@ size_t ios_readprep(ios_t *s, size_t n)
         ios_flush(s);
         s->bpos = s->size = 0;
     }
-    size_t space = s->size - s->bpos;
+    size_t space = (size_t)(s->size - s->bpos);
     s->state = bst_rd;
     if (space >= n || s->bm == bm_mem || s->fd == -1)
         return space;
@@ -337,17 +337,17 @@ size_t ios_readprep(ios_t *s, size_t n)
             s->bpos = 0;
         }
         else {
-            if (_buf_realloc(s, s->bpos + n)==NULL)
+            if (_buf_realloc(s, (size_t)(s->bpos + n))==NULL)
                 return space;
         }
     }
     size_t got;
     s->fpos = -1;
-    int result = _os_read(s->fd, s->buf+s->size, s->maxsize - s->size, &got);
+    int result = _os_read(s->fd, s->buf+s->size, (size_t)(s->maxsize - s->size), &got);
     if (result)
         return space;
     s->size += got;
-    return s->size - s->bpos;
+    return (size_t)(s->size - s->bpos);
 }
 
 static void _write_update_pos(ios_t *s)
@@ -360,7 +360,7 @@ static void _write_update_pos(ios_t *s)
 JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
 {
     char *data = src->buf;
-    size_t n = src->size;
+    size_t n = (size_t)src->size;
     size_t nwr;
     dest->fpos = -1;
     _os_write_all(dest->fd, data, n, &nwr);
@@ -378,7 +378,7 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
         ios_seek(s, ios_pos(s));
     }
     s->state = bst_wr;
-    space = s->maxsize - s->bpos;
+    space = (size_t)(s->maxsize - s->bpos);
 
     if (s->bm == bm_mem) {
         wrote = _write_grow(s, data, n);
@@ -420,18 +420,18 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
 // Returns 0 on success,
 //        -1 on error which set errno, and
 //        -2 on error which doesn't set errno.
-off_t ios_seek(ios_t *s, off_t pos)
+int64_t ios_seek(ios_t *s, int64_t pos)
 {
     s->_eof = 0;
     if (s->bm == bm_mem) {
-        if ((size_t)pos > s->size)
+        if (pos > s->size)
             return -2;
         s->bpos = pos;
     }
     else {
         ios_flush(s);
-        off_t fdpos = lseek(s->fd, pos, SEEK_SET);
-        if (fdpos == (off_t)-1)
+        int64_t fdpos = lseek(s->fd, (off_t)pos, SEEK_SET);
+        if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
         s->bpos = s->size = 0;
@@ -439,7 +439,7 @@ off_t ios_seek(ios_t *s, off_t pos)
     return 0;
 }
 
-off_t ios_seek_end(ios_t *s)
+int64_t ios_seek_end(ios_t *s)
 {
     s->_eof = 1;
     if (s->bm == bm_mem) {
@@ -447,8 +447,8 @@ off_t ios_seek_end(ios_t *s)
     }
     else {
         ios_flush(s);
-        off_t fdpos = lseek(s->fd, 0, SEEK_END);
-        if (fdpos == (off_t)-1)
+        int64_t fdpos = lseek(s->fd, 0, SEEK_END);
+        if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
         s->bpos = s->size = 0;
@@ -459,11 +459,11 @@ off_t ios_seek_end(ios_t *s)
 // Returns 0 on success,
 //        -1 on error which set errno, and
 //        -2 on error which doesn't set errno.
-off_t ios_skip(ios_t *s, off_t offs)
+int64_t ios_skip(ios_t *s, int64_t offs)
 {
     if (offs != 0) {
         if (offs > 0) {
-            if (offs <= (off_t)(s->size-s->bpos)) {
+            if (offs <= (s->size - s->bpos)) {
                 s->bpos += offs;
                 return 0;
             }
@@ -473,7 +473,7 @@ off_t ios_skip(ios_t *s, off_t offs)
             }
         }
         else if (offs < 0) {
-            if (-offs <= (off_t)s->bpos) {
+            if (-offs <= (int64_t)s->bpos) {
                 s->bpos += offs;
                 s->_eof = 0;
                 return 0;
@@ -487,8 +487,8 @@ off_t ios_skip(ios_t *s, off_t offs)
             offs += s->bpos;
         else if (s->state == bst_rd)
             offs -= (s->size - s->bpos);
-        off_t fdpos = lseek(s->fd, offs, SEEK_CUR);
-        if (fdpos == (off_t)-1)
+        int64_t fdpos = lseek(s->fd, (off_t)offs, SEEK_CUR);
+        if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
         s->bpos = s->size = 0;
@@ -497,15 +497,15 @@ off_t ios_skip(ios_t *s, off_t offs)
     return 0;
 }
 
-off_t ios_pos(ios_t *s)
+int64_t ios_pos(ios_t *s)
 {
     if (s->bm == bm_mem)
-        return (off_t)s->bpos;
+        return s->bpos;
 
-    off_t fdpos = s->fpos;
-    if (fdpos == (off_t)-1) {
+    int64_t fdpos = s->fpos;
+    if (fdpos == (int64_t)-1) {
         fdpos = lseek(s->fd, 0, SEEK_CUR);
-        if (fdpos == (off_t)-1)
+        if (fdpos == (int64_t)-1)
             return fdpos;
         s->fpos = fdpos;
     }
@@ -540,7 +540,7 @@ int ios_trunc(ios_t *s, size_t size)
     else {
         ios_flush(s);
         if (s->state == bst_rd) {
-            off_t p = ios_pos(s);
+            int64_t p = ios_pos(s);
             if (size < p + (s->size - s->bpos))
                 s->size -= (p + (s->size - s->bpos) - size);
         }
@@ -605,18 +605,18 @@ int ios_flush(ios_t *s)
     // todo: try recovering from some kinds of errors (e.g. retry)
 
     if (s->state == bst_rd) {
-        if (lseek(s->fd, s->size - nw, SEEK_CUR) == (off_t)-1) {
+        if (lseek(s->fd, (off_t)(s->size - nw), SEEK_CUR) == (off_t)-1) {
         }
     }
     else if (s->state == bst_wr) {
         if (s->bpos != nw &&
-            lseek(s->fd, (off_t)s->bpos - (off_t)nw, SEEK_CUR) == (off_t)-1) {
+            lseek(s->fd, (off_t)(s->bpos - nw), SEEK_CUR) == (off_t)-1) {
         }
         // now preserve the invariant that data to write
         // begins at the beginning of the buffer, and s->size refers
         // to how much valid file data is stored in the buffer.
         if (s->size > s->ndirty) {
-            size_t delta = s->size - s->ndirty;
+            size_t delta = (size_t)(s->size - s->ndirty);
             memmove(s->buf, s->buf + s->ndirty, delta);
         }
         s->size -= s->ndirty;
@@ -672,15 +672,15 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        buf = (char*)LLT_ALLOC(s->size+1);
+        buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
         if (s->size)
-            memcpy(buf, s->buf, s->size);
+            memcpy(buf, s->buf, (size_t)s->size);
     }
     else {
         if (s->buf == NULL)
-            buf = (char*)LLT_ALLOC(s->size+1);
+            buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         else
             buf = s->buf;
     }
@@ -699,7 +699,7 @@ int ios_setbuf(ios_t *s, char *buf, size_t size, int own)
     ios_flush(s);
     size_t nvalid=0;
 
-    nvalid = (size < s->size) ? size : s->size;
+    nvalid = (size_t)((size < s->size) ? size : s->size);
     if (nvalid > 0)
         memcpy(buf, s->buf, nvalid);
     if (s->bpos > nvalid) {
@@ -786,7 +786,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
 {
-    size_t total = 0, avail=from->size - from->bpos;
+    size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
         if (avail == 0) {
             avail = ios_readprep(from, LINE_CHUNK_SIZE);
@@ -1126,7 +1126,7 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
 #endif /* _OS_WINDOWS_ */
 
     if (s->state == bst_wr && s->bpos < s->maxsize && s->bm != bm_none) {
-        size_t avail = s->maxsize - s->bpos;
+        size_t avail = (size_t)(s->maxsize - s->bpos);
         char *start = s->buf + s->bpos;
         c = vsnprintf(start, avail, format, args);
         if (c < 0) {

@@ -46,7 +46,7 @@ function truncate(s::IOStream, n::Integer)
 end
 
 function seek(s::IOStream, n::Integer)
-    ret = ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)
+    ret = ccall(:ios_seek, Int64, (Ptr{Void}, Int64), s.ios, n)
     systemerror("seek", ret == -1)
     ret < -1 && error("seek failed")
     return s
@@ -55,19 +55,19 @@ end
 seekstart(s::IO) = seek(s,0)
 
 function seekend(s::IOStream)
-    systemerror("seekend", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
+    systemerror("seekend", ccall(:ios_seek_end, Int64, (Ptr{Void},), s.ios) != 0)
     return s
 end
 
 function skip(s::IOStream, delta::Integer)
-    ret = ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)
+    ret = ccall(:ios_skip, Int64, (Ptr{Void}, Int64), s.ios, delta)
     systemerror("skip", ret == -1)
     ret < -1 && error("skip failed")
     return s
 end
 
 function position(s::IOStream)
-    pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+    pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
     systemerror("position", pos == -1)
     return pos
 end
@@ -92,7 +92,7 @@ function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff:
                       (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
                       s.ios, fname, rd, wr, cr, tr) == C_NULL)
     if ff
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
+        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Void},), s.ios) != 0)
     end
     return s
 end
@@ -245,7 +245,7 @@ function readbytes(s::IOStream)
     sz = 0
     try # filesize is just a hint, so ignore if it fails
         sz = filesize(s)
-        pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+        pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
         if pos > 0
             sz -= pos
         end

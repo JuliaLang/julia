@@ -58,7 +58,7 @@ function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
     if filelen < offset + len
-        failure = ccall(:jl_ftruncate, Cint, (Cint, Coff_t), fd(io), offset+len)
+        failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
     end
     seek(io, pos)
@@ -108,7 +108,7 @@ function mmap{T,N}(io::IO,
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
 
     # shift `offset` to start of page boundary
-    offset_page::FileOffset = div(offset, PAGESIZE) * PAGESIZE
+    offset_page::Int64 = div(offset, PAGESIZE) * PAGESIZE
     # add (offset - offset_page) to `len` to get total length of memory-mapped region
     mmaplen = (offset - offset_page) + len
 
@@ -118,7 +118,7 @@ function mmap{T,N}(io::IO,
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
-        ptr = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+        ptr = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int,ptr) == -1)
     end # @unix_only
 
@@ -165,7 +165,7 @@ mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), 
 function mmap{T<:BitArray,N}(io::IOStream,
                              ::Type{T},
                              dims::NTuple{N,Integer},
-                             offset::FileOffset=position(io); grow::Bool=true, shared::Bool=true)
+                             offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)

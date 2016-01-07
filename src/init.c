@@ -750,16 +750,16 @@ static void julia_save(void)
                 ios_t f;
                 if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
                     jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
-                ios_write(&f, (const char*)s->buf, s->size);
+                ios_write(&f, (const char*)s->buf, (size_t)s->size);
                 ios_close(&f);
             }
         }
 
         if (jl_options.outputbc)
-            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, s->size);
+            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, (size_t)s->size);
 
         if (jl_options.outputo)
-            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, (size_t)s->size);
     }
     JL_GC_POP();
 }

@@ -37,7 +37,6 @@ typealias Culonglong UInt64
 typealias Cfloat Float32
 typealias Cdouble Float64
 
-const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
 if OS_NAME !== :Windows
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
@@ -48,14 +47,6 @@ if OS_NAME !== :Windows
         typealias Cmode_t Int64
     end
 end
-
-if sizeof_off_t === 4
-    typealias FileOffset Int32
-else
-    typealias FileOffset Int64
-end
-
-typealias Coff_t FileOffset
 
 # C NUL-terminated string pointers; these can be used in ccall
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce

@@ -531,11 +531,11 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
-        rc = ccall(:jl_ftruncate, Cint, (Cint, Coff_t), fd_mem, prod(dims)*sizeof(T))
+        rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset); grow=false)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
@@ -549,7 +549,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset))
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
 end
 
 # no-op in windows
