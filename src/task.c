@@ -304,6 +304,15 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         // set up global state for new task
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
+#ifdef JULIA_ENABLE_THREADING
+        // If the current task is not holding any locks, free the locks list
+        // so that it can be GC'd without leaking memory
+        arraylist_t *locks = &jl_current_task->locks;
+        if (locks->len == 0 && locks->items != locks->_space) {
+            arraylist_free(locks);
+            arraylist_new(locks, 0);
+        }
+#endif
 
         // restore task's current module, looking at parent tasks
         // if it hasn't set one.
@@ -894,6 +903,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     JL_GC_POP();
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&t->locks, 0);
+#endif
     return t;
 }
 
@@ -976,6 +988,9 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
     jl_current_task->tid = ti_tid;
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&jl_current_task->locks, 0);
+#endif
 
     jl_root_task = jl_current_task;
 
