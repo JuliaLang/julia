@@ -483,7 +483,7 @@ void to_sized_ptr(fl_context_t *fl_ctx, value_t v, char *fname, char **pdata, si
         ios_t *x = value2c(ios_t*,v);
         if (cv_class(pcv) == fl_ctx->iostreamtype && (x->bm == bm_mem)) {
             *pdata = x->buf;
-            *psz = x->size;
+            *psz = (size_t)x->size;
             return;
         }
         else if (cv_isPOD(pcv)) {
