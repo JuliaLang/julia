@@ -17,6 +17,10 @@ end
 macro _pure_meta()
     Expr(:meta, :pure)
 end
+# another version of inlining that propagates an inbounds context
+macro _propagate_inbounds_meta()
+    Expr(:meta, :inline, :propagate_inbounds)
+end
 
 
 # constructors for Core types in boot.jl

@@ -2415,6 +2415,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
 
     body = Expr(:block)
     body.args = ast.args[3].args::Array{Any,1}
+    propagate_inbounds, _ = popmeta!(body, :propagate_inbounds)
     cost::Int = 1000
     if incompletematch
         cost *= 4
@@ -2774,6 +2775,12 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         end
     end
 
+    if !isempty(stmts) && !propagate_inbounds
+        # inlined statements are out-of-bounds by default
+        unshift!(stmts, Expr(:inbounds, false))
+        push!(stmts, Expr(:inbounds, :pop))
+    end
+
     if isa(expr,Expr)
         old_t = e.typ
         if old_t <: expr.typ
@@ -2987,9 +2994,6 @@ function inlining_pass(e::Expr, sv, ast)
         res = inlineable(f, e, atype, sv, ast)
         if isa(res,Tuple)
             if isa(res[2],Array) && !isempty(res[2])
-                # inlined statements are out-of-bounds by default
-                unshift!(res[2], Expr(:inbounds, false))
-                push!(res[2], Expr(:inbounds, :pop))
                 append!(stmts,res[2])
             end
             res = res[1]
