@@ -70,3 +70,9 @@ debug && println("Non-symmetric generalized eigenproblem")
     @test d == f[:values]
     @test v == f[:vectors]
 end
+
+# test a matrix larger than 140-by-140 for #14174
+let a = rand(200, 200)
+    f = eigfact(a)
+    @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
+end
