@@ -921,18 +921,30 @@ export isreadable, iswritable, isexecutable
 @deprecate RemoteRef RemoteChannel
 
 function tty_size()
-    depwarn("tty_size is deprecated. use `iosize(io)` as a replacement", :tty_size)
+    depwarn("tty_size is deprecated. use `displaysize(io)` as a replacement", :tty_size)
     if isdefined(Base, :active_repl)
         os = REPL.outstream(Base.active_repl)
         if isa(os, Terminals.TTYTerminal)
-            return iosize(os)
+            return displaysize(os)
         end
     end
     if isdefined(Base, :STDOUT)
-        return iosize(STDOUT)
+        return displaysize(STDOUT)
     end
-    return iosize()
+    return displaysize()
 end
 
 #14335
 @deprecate super(T::DataType) supertype(T)
+
+function with_output_limit(thk, lim=true) # thk is usually show()
+    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit_output => lim)` as a replacement", :with_output_limit)
+    global _limit_output
+    last = _limit_output
+    _limit_output::Bool = lim
+    try
+        thk()
+    finally
+        _limit_output = last
+    end
+end

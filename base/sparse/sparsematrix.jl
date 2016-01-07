@@ -85,7 +85,7 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
 
     limit::Bool = Base.limit_output(io)
     if limit
-        rows = iosize(io)[1]
+        rows = displaysize(io)[1]
         half_screen_rows = div(rows - 8, 2)
     else
         half_screen_rows = typemax(Int)
