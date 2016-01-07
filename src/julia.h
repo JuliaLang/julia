@@ -117,11 +117,16 @@ JL_DLLEXPORT void jl_threading_profile(void);
 #define FORCE_ELF
 #define JL_DEFINE_MUTEX(m)                                                \
     uint64_t volatile m ## _mutex = 0;                                    \
-    int32_t m ## _lock_count = 0;
+    int32_t m ## _lock_count = 0;                                         \
+    void jl_unlock_## m ## _func(void)                                    \
+    {                                                                     \
+        JL_UNLOCK_RAW(m);                                                 \
+    }
 
 #define JL_DEFINE_MUTEX_EXT(m)                                            \
     extern uint64_t volatile m ## _mutex;                                 \
-    extern int32_t m ## _lock_count;
+    extern int32_t m ## _lock_count;                                      \
+    void jl_unlock_## m ## _func(void);
 
 #define JL_LOCK_WAIT(m, wait_ex) do {                                   \
         if (m ## _mutex == uv_thread_self()) {                          \
@@ -141,27 +146,40 @@ JL_DLLEXPORT void jl_threading_profile(void);
         }                                                               \
     } while (0)
 
-#define JL_UNLOCK(m) do {                                               \
+#define JL_UNLOCK_RAW(m) do {                                           \
         if (m ## _mutex == uv_thread_self()) {                          \
             --m ## _lock_count;                                         \
             if (m ## _lock_count == 0) {                                \
                 JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
             }                                                           \
         }                                                               \
+        else {                                                          \
+            assert(0 && "Unlocking a lock in a different thread.");     \
+        }                                                               \
     } while (0)
-#else
-#define JL_DEFINE_MUTEX(m)
-#define JL_DEFINE_MUTEX_EXT(m)
-#define JL_LOCK_WAIT(m, wait_ex) do {} while (0)
-#define JL_UNLOCK(m) do {} while (0)
-#endif
 
 // JL_LOCK is a GC safe point while JL_LOCK_NOGC is not
 // Always use JL_LOCK unless no one holding the lock can trigger a GC or GC
 // safepoint. JL_LOCK_NOGC should only be needed for GC internal locks.
-#define JL_LOCK(m) JL_LOCK_WAIT(m, jl_gc_safepoint())
+#define JL_LOCK(m) do {                                 \
+        JL_LOCK_WAIT(m, jl_gc_safepoint());             \
+        jl_lock_frame_push(jl_unlock_## m ## _func);    \
+    } while (0)
+#define JL_UNLOCK(m) do {                       \
+        JL_UNLOCK_RAW(m);                       \
+        if (__likely(jl_current_task))          \
+            jl_current_task->locks.len--;       \
+    } while (0)
 #define JL_LOCK_NOGC(m) JL_LOCK_WAIT(m, )
-#define JL_UNLOCK_NOGC(m) JL_UNLOCK(m)
+#define JL_UNLOCK_NOGC(m) JL_UNLOCK_RAW(m)
+#else
+#define JL_DEFINE_MUTEX(m)
+#define JL_DEFINE_MUTEX_EXT(m)
+#define JL_LOCK(m) do {} while (0)
+#define JL_UNLOCK(m) do {} while (0)
+#define JL_LOCK_NOGC(m) do {} while (0)
+#define JL_UNLOCK_NOGC(m) do {} while (0)
+#endif
 
 // core data types ------------------------------------------------------------
 
@@ -1419,6 +1437,9 @@ typedef struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
+#ifdef JULIA_ENABLE_THREADING
+    size_t locks_len;
+#endif
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1448,6 +1469,10 @@ typedef struct _jl_task_t {
     // id of owning thread
     // does not need to be defined until the task runs
     int16_t tid;
+#ifdef JULIA_ENABLE_THREADING
+    // This is statically initialized when the task is not holding any locks
+    arraylist_t locks;
+#endif
 } jl_task_t;
 
 #define JL_MAX_BT_SIZE 80000
@@ -1534,6 +1559,21 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
 #define jl_gc_unsafe_leave(state) jl_gc_state_set((state), 0)
 #define jl_gc_safe_enter() jl_gc_state_save_and_set(JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(state) jl_gc_state_set((state), JL_GC_STATE_SAFE)
+STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
+{
+    // For early bootstrap
+    if (__unlikely(!jl_current_task))
+        return;
+    arraylist_t *locks = &jl_current_task->locks;
+    size_t len = locks->len;
+    if (__unlikely(len >= locks->max)) {
+        arraylist_grow(locks, 1);
+    }
+    else {
+        locks->len = len + 1;
+    }
+    locks->items[len] = (void*)unlock_func;
+}
 #endif // ifndef JULIA_ENABLE_THREADING
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
@@ -1542,6 +1582,14 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
     jl_gc_state_save_and_set(eh->gc_state);
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_t *locks = &jl_current_task->locks;
+    if (locks->len > eh->locks_len) {
+        for (size_t i = locks->len;i > eh->locks_len;i--)
+            ((void(*)(void))locks->items[i - 1])();
+        locks->len = eh->locks_len;
+    }
+#endif
     JL_SIGATOMIC_END();
 }
 
