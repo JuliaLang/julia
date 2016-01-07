@@ -897,6 +897,34 @@
                  (break ,bb)))
         (else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
+(define (replace-loop-exits e bb breakval)
+  (cond ((atom? e) e)
+        ((or (eq? (car e) 'lambda)
+             (eq? (car e) 'function)
+             (eq? (car e) 'stagedfunction)
+             (eq? (car e) '->)
+             (eq? (car e) 'for)
+             (eq? (car e) 'while)
+             (eq? (car e) 'do)) e)
+        ((and breakval (atom? (cdr e)) (eq? (car e) 'break))
+         `(block (= ,breakval #t) ; break to the finally block and set exit
+                 (break ,bb)))
+        ((and breakval (atom? (cdr e)) (eq? (car e) 'continue))
+         `(break ,bb)) ; break to the finally block but don't exit
+        ((quoted? e) e)
+        (else (map (lambda (x) (replace-loop-exits x bb breakval)) e))))
+
+(define (has-loop-exit? e)
+  (cond ((or (atom? e)
+             (eq? (car e) 'for)
+             (eq? (car e) 'while)
+             (eq? (car e) 'do)
+             (eq? (car e) 'try)) #f)
+        ((and (eq? (car e) 'break) (atom? (cdr e))) #t)
+        ((and (eq? (car e) 'continue) (atom? (cdr e))) #t)
+        (else (any (lambda (y) (eq? #t y))
+                   (map (lambda (x) (and (pair? x) (has-loop-exit? x))) e)))))
+
 (define (expand-binding-forms e)
   (cond
    ((atom? e) e)
@@ -1047,7 +1075,9 @@
              (if (has-unmatched-symbolic-goto? tryb)
                  (error "goto from a try/finally block is not permitted"))
              (let ((hasret (or (contains return? tryb)
-                               (contains return? catchb))))
+                               (contains return? catchb)))
+                   (hasbreak (or (has-loop-exit? tryb)
+                                 (has-loop-exit? catchb))))
                (let ((err (gensy))
                      (ret (and hasret
                                (or (not (block-returns? tryb))
@@ -1055,15 +1085,17 @@
                                         (not (block-returns? catchb))))
                                (gensy)))
                      (retval (if hasret (gensy) #f))
+                     (breakval (if hasbreak (gensy) #f))
                      (bb  (gensy))
 		     (finally-exception (gensy))
                      (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
-                 (let ((tryb   (replace-return tryb bb ret retval))
-                       (catchb (replace-return catchb bb ret retval)))
+                 (let ((tryb   (replace-loop-exits (replace-return tryb bb ret retval) bb breakval))
+                       (catchb (replace-loop-exits (replace-return catchb bb ret retval) bb breakval)))
                    (expand-binding-forms
                     `(scope-block
                       (block
                        ,@(if hasret `((local ,retval)) '())
+                       ,@(if hasbreak `((local ,breakval) (= ,breakval false)) '())
                        (local ,val)
 		       (local ,finally-exception)
                        (= ,err false)
@@ -1076,8 +1108,8 @@
                                      tryb))
                              #f
                              (= ,err true)))
-		       (= ,finally-exception (the_exception))
-                       ,finalb
+                       (= ,finally-exception (the_exception))
+                       ,(if hasbreak `(block ,finalb (if ,breakval (break))) finalb)
                        (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
                        ,(if hasret
                             (if ret
