@@ -439,8 +439,8 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               jl_svec_data(ctx->sp),
-                                               jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             jl_rethrow_with_add("error interpreting cglobal type");
@@ -504,8 +504,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall argument tuple");
@@ -514,8 +514,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall return type");
@@ -524,8 +524,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting IR argument");
@@ -964,8 +964,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                                jl_svec_data(ctx->sp),
-                                                jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             static_rt = false;
@@ -1027,9 +1027,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     {
         JL_TRY {
-            at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                                jl_svec_data(ctx->sp),
-                                                jl_svec_len(ctx->sp)/2);
+            at = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             //jl_rethrow_with_add("error interpreting ccall argument tuple");

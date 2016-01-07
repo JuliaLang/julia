@@ -188,7 +188,10 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
     jl_module_export(inm, sym);
 }
 
-extern "C" jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
+#ifdef __cplusplus
+extern "C"
+#endif
+jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
 
 #ifdef __cplusplus
 extern "C"

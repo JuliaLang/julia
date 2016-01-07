@@ -240,21 +240,21 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m)
+static int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym) {
-        jl_value_t *sv = jl_static_eval(e0, NULL, m, (jl_value_t*)jl_emptysvec, ast, 0, 0);
+        jl_value_t *sv = jl_static_eval(e0, NULL, m, li, 0, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics(ast, (jl_expr_t*)a, m))
+        if (jl_is_expr(a) && jl_has_intrinsics(li, (jl_expr_t*)a, m))
             return 1;
     }
     return 0;
@@ -262,7 +262,7 @@ int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, jl_module_t *m)
+static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_expr_t *expr, int compileloops, jl_module_t *m)
 {
     assert(jl_is_expr(expr));
     if (expr->head==body_sym && compileloops) {
@@ -306,7 +306,7 @@ int jl_eval_with_compiler_p(jl_expr_t *ast, jl_expr_t *expr, int compileloops, j
             }
         }
     }
-    if (jl_has_intrinsics(ast, expr, m)) return 1;
+    if (jl_has_intrinsics(li, expr, m)) return 1;
     return 0;
 }
 
@@ -518,7 +518,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             thk->ast = jl_uncompress_ast(thk, thk->ast);
             jl_gc_wb(thk, thk->ast);
         }
-        ewc = jl_eval_with_compiler_p((jl_expr_t*)thk->ast, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(thk, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
     }
     else {
         if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {
@@ -726,6 +726,31 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
+static jl_lambda_info_t* expr_to_lambda(jl_lambda_info_t *f)
+{
+    // this occurs when there is a closure being added to an out-of-scope function
+    // the user should only do this at the toplevel
+    // the result is that the closure variables get interpolated directly into the AST
+    jl_svec_t *tvar_syms = NULL;
+    JL_GC_PUSH2(&f, &tvar_syms);
+    assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
+    // move tvar symbol array from args[1][4] to linfo
+    jl_array_t *le = (jl_array_t*)jl_exprarg(f, 1);
+    assert(jl_is_array(le) && jl_array_len(le) == 4);
+    jl_array_t *tvar_syms_arr = (jl_array_t*)jl_cellref(le, 3);
+    jl_array_del_end(le, 1);
+    size_t i, l = jl_array_len(tvar_syms_arr);
+    tvar_syms = jl_alloc_svec_uninit(l);
+    for (i = 0; i < l; i++) {
+        jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
+    }
+    // wrap in a LambdaInfo
+    f = jl_new_lambda_info((jl_value_t*)f, tvar_syms, jl_emptysvec, jl_current_module);
+    jl_preresolve_globals(f->ast, f);
+    JL_GC_POP();
+    return f;
+}
+
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
     // argdata is svec({types...}, svec(typevars...))
@@ -735,11 +760,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_sym_t *name;
     JL_GC_PUSH1(&f);
 
-    if (!jl_is_lambda_info(f)) {
-        assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
-        f = jl_new_lambda_info((jl_value_t*)f, jl_emptysvec, jl_current_module);
-        jl_preresolve_globals(f->ast, f);
-    }
+    if (!jl_is_lambda_info(f))
+        f = expr_to_lambda(f);
 
     assert(jl_is_lambda_info(f));
     assert(jl_is_tuple_type(argtypes));
