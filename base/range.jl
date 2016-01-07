@@ -266,7 +266,7 @@ function print_range(io::IO, r::Range,
     # This function borrows from print_matrix() in show.jl
     # and should be called by writemime (replutil.jl) and by display()
     limit = limit_output(io)
-    sz = iosize(io)
+    sz = displaysize(io)
     screenheight, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
     postsp = ""
