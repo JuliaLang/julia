@@ -13,7 +13,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
         end
         $t(A::$t) = A
         function $t(A::AbstractMatrix)
-            Base.LinAlg.chksquare(A)
+            Base.LinAlg.checksquare(A)
             return $t{eltype(A), typeof(A)}(A)
         end
 
@@ -319,7 +319,7 @@ function copy!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::T, B::T)
 end
 
 function scale!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::UpperTriangular, B::T, c::Number)
-    n = chksquare(B)
+    n = checksquare(B)
     for j = 1:n
         if isa(B, UnitUpperTriangular)
             @inbounds A[j,j] = c
@@ -331,7 +331,7 @@ function scale!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::UpperTriangul
     return A
 end
 function scale!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::LowerTriangular, B::T, c::Number)
-    n = chksquare(B)
+    n = checksquare(B)
     for j = 1:n
         if isa(B, UnitLowerTriangular)
             @inbounds A[j,j] = c
@@ -410,7 +410,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
 
         # Condition numbers
         function cond{T<:BlasFloat,S}(A::$t{T,S}, p::Real=2)
-            chksquare(A)
+            checksquare(A)
             if p == 1
                 return inv(LAPACK.trcon!('O', $uploc, $isunitc, A.data))
             elseif p == Inf
@@ -1231,7 +1231,7 @@ end
 logm(A::LowerTriangular) = logm(A.').'
 
 function sqrtm{T}(A::UpperTriangular{T})
-    n = chksquare(A)
+    n = checksquare(A)
     realmatrix = false
     if isreal(A)
         realmatrix = true
@@ -1261,7 +1261,7 @@ function sqrtm{T}(A::UpperTriangular{T})
     return UpperTriangular(R)
 end
 function sqrtm{T}(A::UnitUpperTriangular{T})
-    n = chksquare(A)
+    n = checksquare(A)
     TT = typeof(sqrt(zero(T)))
     R = zeros(TT, n, n)
     for j = 1:n

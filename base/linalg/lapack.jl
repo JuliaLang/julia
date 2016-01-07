@@ -8,7 +8,7 @@ const liblapack = Base.liblapack_name
 import Base.@blasfunc
 
 import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
-    DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
+    DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
 
 const VERSION = Ref{VersionNumber}()
 
@@ -198,7 +198,7 @@ for (gebal, gebak, elty, relty) in
         #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
         function gebal!(job::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             ihi = Array(BlasInt, 1)
             ilo = Array(BlasInt, 1)
@@ -224,7 +224,7 @@ for (gebal, gebak, elty, relty) in
             chkstride1(V)
             chkside(side)
             chkfinite(V) # balancing routines don't support NaNs and Infs
-            n = chksquare(V)
+            n = checksquare(V)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gebak), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -900,7 +900,7 @@ for (gels, gesv, getrs, getri, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function gesv!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
-            n = chksquare(A)
+            n = checksquare(A)
             if size(B,1) != n
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
             end
@@ -924,7 +924,7 @@ for (gels, gesv, getrs, getri, elty) in
         function getrs!(trans::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chktrans(trans)
             chkstride1(A, B)
-            n = chksquare(A)
+            n = checksquare(A)
             if n != size(B, 1)
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
             end
@@ -946,7 +946,7 @@ for (gels, gesv, getrs, getri, elty) in
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function getri!(A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             if n != length(ipiv)
                 throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs $n"))
             end
@@ -1036,9 +1036,9 @@ for (gesvx, elty) in
                         AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
                         R::Vector{$elty}, C::Vector{$elty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
-            n    = chksquare(A)
+            n    = checksquare(A)
             lda  = stride(A,2)
-            n    = chksquare(AF)
+            n    = checksquare(AF)
             ldaf = stride(AF,2)
             nrhs = size(B,2)
             ldb  = stride(B,2)
@@ -1104,9 +1104,9 @@ for (gesvx, elty, relty) in
                         AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
                         R::Vector{$relty}, C::Vector{$relty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
-            n   = chksquare(A)
+            n   = checksquare(A)
             lda = stride(A,2)
-            n   = chksquare(AF)
+            n   = checksquare(AF)
             ldaf = stride(AF,2)
             nrhs = size(B,2)
             ldb = stride(B,2)
@@ -1471,7 +1471,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #      $                   WI( * ), WORK( * ), WR( * )
         function geev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lvecs = jobvl == 'V'
             rvecs = jobvr == 'V'
@@ -1935,7 +1935,7 @@ for (geevx, ggev, elty) in
         #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
         function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lda = max(1,stride(A,2))
             wr = similar(A, $elty, n)
@@ -2014,7 +2014,7 @@ for (geevx, ggev, elty) in
         #      $                   VR( LDVR, * ), WORK( * )
         function ggev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
-            n, m = chksquare(A,B)
+            n, m = checksquare(A,B)
             if n != m
                 throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
@@ -2086,7 +2086,7 @@ for (geevx, ggev, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   W( * ), WORK( * )
         function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lda = max(1,stride(A,2))
             w = similar(A, $elty, n)
@@ -2160,7 +2160,7 @@ for (geevx, ggev, elty, relty) in
         #      $                   WORK( * )
         function ggev!(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
-            n, m = chksquare(A, B)
+            n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
@@ -2924,7 +2924,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function posv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if size(B,1) != n
                 throw(DimensionMismatch("First dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
@@ -2947,7 +2947,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       DOUBLE PRECISION   A( LDA, * )
         function potrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            chksquare(A)
+            checksquare(A)
             chkuplo(uplo)
             lda = max(1,stride(A,2))
             if lda == 0
@@ -2990,7 +2990,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function potrs!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             nrhs = size(B,2)
             if size(B,1) != n
@@ -3021,7 +3021,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       INTEGER            PIV( N )
         function pstrf!(uplo::Char, A::StridedMatrix{$elty}, tol::Real)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             piv  = similar(A, BlasInt, n)
             rank = Array(BlasInt, 1)
@@ -3247,7 +3247,7 @@ for (trtri, trtrs, elty) in
         #      DOUBLE PRECISION   A( LDA, * )
         function trtri!(uplo::Char, diag::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             chkdiag(diag)
             lda = max(1,stride(A, 2))
@@ -3271,7 +3271,7 @@ for (trtri, trtrs, elty) in
             chktrans(trans)
             chkdiag(diag)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
@@ -3326,7 +3326,7 @@ for (trcon, trevc, trrfs, elty) in
         function trcon!(norm::Char, uplo::Char, diag::Char, A::StridedMatrix{$elty})
             chkstride1(A)
             chkdiag(diag)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             rcond = Array($elty, 1)
             work  = Array($elty, 3n)
@@ -3359,7 +3359,7 @@ for (trcon, trevc, trrfs, elty) in
             if side ∉ ['L','R','B']
                 throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
             end
-            n, mm = chksquare(T), size(VL, 2)
+            n, mm = checksquare(T), size(VL, 2)
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
             # Check
@@ -3453,7 +3453,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         # COMPLEX*16         A( LDA, * ), WORK( * )
         function trcon!(norm::Char, uplo::Char, diag::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             chkdiag(diag)
             rcond = Array($relty, 1)
@@ -3485,7 +3485,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                         VL::StridedMatrix{$elty} = similar(T),
                         VR::StridedMatrix{$elty} = similar(T))
             # Extract
-            n, mm = chksquare(T), size(VL, 2)
+            n, mm = checksquare(T), size(VL, 2)
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
             # Check
@@ -3822,7 +3822,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -3844,7 +3844,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
         function sysv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -3878,7 +3878,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             if n == 0
@@ -3911,7 +3911,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
 #         function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
-#             n = chksquare(A)
+#             n = checksquare(A)
 #             chkuplo(uplo)
 #             work  = Array($elty, 1)
 #             lwork = BlasInt(-1)
@@ -3940,7 +3940,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -3964,7 +3964,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -3995,7 +3995,7 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), WORK( * )
         function sysv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4029,7 +4029,7 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytrf_rook!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             if n == 0
@@ -4062,7 +4062,7 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4086,7 +4086,7 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4119,7 +4119,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
        #        COMPLEX*16         A( LDA, * ), WORK( * )
         function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4141,7 +4141,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function hesv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4175,7 +4175,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
@@ -4206,7 +4206,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), WORK( * )
 #         function hetri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
-#             n = chksquare(A)
+#             n = checksquare(A)
 #             chkuplo(uplo)
 #             work  = Array($elty, 1)
 #             lwork = BlasInt(-1)
@@ -4236,7 +4236,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4259,7 +4259,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         function hetrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
@@ -4288,7 +4288,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function hesv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4322,7 +4322,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetrf_rook!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
@@ -4353,7 +4353,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4376,7 +4376,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         function hetrs_rook!(uplo::Char, A::StridedMatrix{$elty},
                              ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
@@ -4406,7 +4406,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sysv!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4441,7 +4441,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytrf!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv = similar(A, BlasInt, n)
             if n == 0
@@ -4475,7 +4475,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), WORK( * )
 #         function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
 #             chkstride1(A)
-#             n = chksquare(A)
+#             n = checksquare(A)
 #             chkuplo(uplo)
 #             work  = Array($elty, 1)
 #             lwork = BlasInt(-1)
@@ -4504,7 +4504,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4527,7 +4527,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
                        ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4558,7 +4558,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sysv_rook!(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4593,7 +4593,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytrf_rook!(uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             ipiv = similar(A, BlasInt, n)
             if n == 0
@@ -4627,7 +4627,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
             info = Ref{BlasInt}()
@@ -4650,7 +4650,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
                              ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
             chkstride1(A,B)
-            n = chksquare(A)
+            n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4773,7 +4773,7 @@ for (syev, syevr, sygvd, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
         function syev!(jobz::Char, uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             W     = similar(A, $elty, n)
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -4806,7 +4806,7 @@ for (syev, syevr, sygvd, elty) in
         function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
                 throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu = $iu), which must be between 1 and n = $n"))
             end
@@ -4867,7 +4867,7 @@ for (syev, syevr, sygvd, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
         function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
-            n, m = chksquare(A, B)
+            n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("Dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
@@ -4917,7 +4917,7 @@ for (syev, syevr, sygvd, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function syev!(jobz::Char, uplo::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             W     = similar(A, $relty, n)
             work  = Array($elty, 1)
             lwork = BlasInt(-1)
@@ -4953,7 +4953,7 @@ for (syev, syevr, sygvd, elty, relty) in
         function syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
                 throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu=$iu), which must be between 1 and n = $n"))
             end
@@ -5019,7 +5019,7 @@ for (syev, syevr, sygvd, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sygvd!(itype::Integer, jobz::Char, uplo::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
-            n, m = chksquare(A, B)
+            n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("Dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
@@ -5245,7 +5245,7 @@ for (gecon, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function gecon!(normtype::Char, A::StridedMatrix{$elty}, anorm::$elty)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             lda = max(1, stride(A, 2))
             rcond = Array($elty, 1)
             work = Array($elty, 4n)
@@ -5279,7 +5279,7 @@ for (gecon, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function gecon!(normtype::Char, A::StridedMatrix{$elty}, anorm::$relty)
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             lda = max(1, stride(A, 2))
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
@@ -5321,7 +5321,7 @@ for (gehrd, elty) in
         #       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
         function gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             work = Array($elty, 1)
@@ -5370,7 +5370,7 @@ for (orghr, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             if n - length(tau) != 1
                 throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
             end
@@ -5418,7 +5418,7 @@ for (gees, gges, elty) in
         #    $                   WR( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             sdim = Array(BlasInt, 1)
             wr = similar(A, $elty, n)
             wi = similar(A, $elty, n)
@@ -5457,7 +5457,7 @@ for (gees, gges, elty) in
         #      $                   VSR( LDVSR, * ), WORK( * )
         function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
-            n, m = chksquare(A, B)
+            n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("Dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
@@ -5511,7 +5511,7 @@ for (gees, gges, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = chksquare(A)
+            n = checksquare(A)
             sort = 'N'
             sdim = BlasInt(0)
             w = similar(A, $elty, n)
@@ -5552,7 +5552,7 @@ for (gees, gges, elty, relty) in
         #      $                   WORK( * )
         function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A, B)
-            n, m = chksquare(A, B)
+            n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("Dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
@@ -5628,7 +5628,7 @@ for (trexc, trsen, tgsen, elty) in
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
-            n = chksquare(T)
+            n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             work = Array($elty, n)
@@ -5660,7 +5660,7 @@ for (trexc, trsen, tgsen, elty) in
         function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
-            n = chksquare(T)
+            n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             wr = similar(T, $elty, n)
@@ -5713,7 +5713,7 @@ for (trexc, trsen, tgsen, elty) in
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                         Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
             chkstride1(S, T, Q, Z)
-            n, nt, nq, nz = chksquare(S, T, Q, Z)
+            n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
                 throw(DimensionMismatch("Dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
             end
@@ -5778,7 +5778,7 @@ for (trexc, trsen, tgsen, elty) in
         #      DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
-            n = chksquare(T)
+            n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             info = Ref{BlasInt}()
@@ -5808,7 +5808,7 @@ for (trexc, trsen, tgsen, elty) in
         function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q)
-            n = chksquare(T)
+            n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             w = similar(T, $elty, n)
@@ -5856,7 +5856,7 @@ for (trexc, trsen, tgsen, elty) in
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                         Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
             chkstride1(S, T, Q, Z)
-            n, nt, nq, nz = chksquare(S, T, Q, Z)
+            n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
                 throw(DimensionMismatch("Dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
             end
@@ -5949,7 +5949,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
         function trsyl!(transa::Char, transb::Char, A::StridedMatrix{$elty},
                         B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
             chkstride1(A, B, C)
-            m, n = chksquare(A, B)
+            m, n = checksquare(A, B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)

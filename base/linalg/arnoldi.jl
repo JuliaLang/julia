@@ -122,7 +122,7 @@ function _eigs(A, B;
               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
               ritzvec::Bool=true)
 
-    n = chksquare(A)
+    n = checksquare(A)
 
     T = eltype(A)
     iscmplx = T <: Complex
