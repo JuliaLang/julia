@@ -131,7 +131,7 @@ checkbounds(::Type{Bool}, sz::Integer, i) = throw(ArgumentError("unable to check
 checkbounds(::Type{Bool}, sz::Integer, i::Real) = 1 <= i <= sz
 checkbounds(::Type{Bool}, sz::Integer, ::Colon) = true
 function checkbounds(::Type{Bool}, sz::Integer, r::Range)
-    @_inline_meta
+    @_propagate_inbounds_meta
     isempty(r) || (checkbounds(Bool, sz, minimum(r)) && checkbounds(Bool, sz, maximum(r)))
 end
 checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray{Bool}) = length(I) == sz
@@ -350,8 +350,8 @@ function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(jr_dest),")")))
     end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
+    @boundscheck checkbounds(B, ir_dest, jr_dest)
+    @boundscheck checkbounds(A, ir_src, jr_src)
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
@@ -374,8 +374,8 @@ function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_de
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(ir_src)," and ",length(jr_dest),")")))
     end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
+    @boundscheck checkbounds(B, ir_dest, jr_dest)
+    @boundscheck checkbounds(A, ir_src, jr_src)
     idest = first(ir_dest)
     for jsrc in jr_src
         jdest = first(jr_dest)
@@ -476,27 +476,27 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 # unsafe method.
 
 function getindex(A::AbstractArray, I...)
-    @_inline_meta
+    @_propagate_inbounds_meta
     _getindex(linearindexing(A), A, I...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
-    @_inline_meta
+    @_propagate_inbounds_meta
     _unsafe_getindex(linearindexing(A), A, I...)
 end
 ## Internal defitions
 # 0-dimensional indexing is defined to prevent ambiguities. LinearFast is easy:
-_getindex(::LinearFast, A::AbstractArray) = (@_inline_meta; getindex(A, 1))
+_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, 1))
 # But LinearSlow must take into account the dimensionality of the array:
 _getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = error("indexing not defined for ", typeof(A))
-_getindex(::LinearSlow, A::AbstractVector) = (@_inline_meta; getindex(A, 1))
-_getindex(l::LinearSlow, A::AbstractArray) = (@_inline_meta; _getindex(l, A, 1))
+_getindex(::LinearSlow, A::AbstractVector) = (@_propagate_inbounds_meta; getindex(A, 1))
+_getindex(l::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; _getindex(l, A, 1))
 _unsafe_getindex(::LinearFast, A::AbstractArray) = (@_inline_meta; unsafe_getindex(A, 1))
 _unsafe_getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = error("indexing not defined for ", typeof(A))
 _unsafe_getindex(::LinearSlow, A::AbstractVector) = (@_inline_meta; unsafe_getindex(A, 1))
 _unsafe_getindex(l::LinearSlow, A::AbstractArray) = (@_inline_meta; _unsafe_getindex(l, A, 1))
 
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
-_unsafe_getindex(::LinearIndexing, A::AbstractArray, I...) = (@_inline_meta; getindex(A, I...))
+_unsafe_getindex(::LinearIndexing, A::AbstractArray, I...) = (@_propagate_inbounds_meta; getindex(A, I...))
 
 ## LinearFast Scalar indexing
 _getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined for ", typeof(A))
@@ -504,7 +504,7 @@ function _getindex(::LinearFast, A::AbstractArray, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_getindex
     J = to_indexes(I...)
-    checkbounds(A, J...)
+    @boundscheck checkbounds(A, J...)
     unsafe_getindex(A, sub2ind(size(A), J...))
 end
 _unsafe_getindex(::LinearFast, A::AbstractArray, I::Real) = (@_inline_meta; getindex(A, I))
@@ -520,14 +520,14 @@ end
         if all(x->x===Int, I)
             :(error("indexing not defined for ", typeof(A)))
         else
-            :($(Expr(:meta, :inline)); getindex(A, to_indexes(I...)...))
+            :($(Expr(:meta, :inline, :propagate_inbounds)); getindex(A, to_indexes(I...)...))
         end
     elseif N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             (&)($(Osplat...)) || throw_boundserror(A, I)
             getindex(A, $(Isplat...))
         end
@@ -542,7 +542,7 @@ end
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             # ind2sub requires all dimensions to be > 0:
             (&)($(szcheck...)) || throw_boundserror(A, I)
             s = ind2sub($sz, to_index(I[$N]))
@@ -553,12 +553,12 @@ end
 @generated function _unsafe_getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
     N = length(I)
     if N == AN
-        :($(Expr(:meta, :inline)); getindex(A, I...))
+        :($(Expr(:meta, :inline, :propagate_inbounds)); getindex(A, I...))
     elseif N > AN
         # Drop trailing dimensions (unchecked)
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             unsafe_getindex(A, $(Isplat...))
         end
     else
@@ -570,7 +570,7 @@ end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             s = ind2sub($sz, to_index(I[$N]))
             unsafe_getindex(A, $(Isplat...))
         end
@@ -580,25 +580,25 @@ end
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
 function setindex!(A::AbstractArray, v, I...)
-    @_inline_meta
+    @_propagate_inbounds_meta
     _setindex!(linearindexing(A), A, v, I...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
-    @_inline_meta
+    @_propagate_inbounds_meta
     _unsafe_setindex!(linearindexing(A), A, v, I...)
 end
 ## Internal defitions
-_setindex!(::LinearFast, A::AbstractArray, v) = (@_inline_meta; setindex!(A, v, 1))
+_setindex!(::LinearFast, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
 _setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defined for ", typeof(A))
-_setindex!(::LinearSlow, A::AbstractVector, v) = (@_inline_meta; setindex!(A, v, 1))
-_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_inline_meta; _setindex!(l, A, v, 1))
+_setindex!(::LinearSlow, A::AbstractVector, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
+_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_propagate_inbounds_meta; _setindex!(l, A, v, 1))
 _unsafe_setindex!(::LinearFast, A::AbstractArray, v) = (@_inline_meta; unsafe_setindex!(A, v, 1))
 _unsafe_setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defined for ", typeof(A))
 _unsafe_setindex!(::LinearSlow, A::AbstractVector, v) = (@_inline_meta; unsafe_setindex!(A, v, 1))
 _unsafe_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_inline_meta; _unsafe_setindex!(l, A, v, 1))
 
 _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
-_unsafe_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = (@_inline_meta; setindex!(A, v, I...))
+_unsafe_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
 
 ## LinearFast Scalar indexing
 _setindex!(::LinearFast, A::AbstractArray, v, I::Int) = error("indexed assignment not defined for ", typeof(A))
@@ -606,7 +606,7 @@ function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
     @_inline_meta
     # We must check bounds for sub2ind; so we can then call unsafe_setindex!
     J = to_indexes(I...)
-    checkbounds(A, J...)
+    @boundscheck checkbounds(A, J...)
     unsafe_setindex!(A, v, sub2ind(size(A), J...))
 end
 _unsafe_setindex!(::LinearFast, A::AbstractArray, v, I::Real) = (@_inline_meta; setindex!(A, v, I))
@@ -622,14 +622,14 @@ end
         if all(x->x===Int, I)
             :(error("indexing not defined for ", typeof(A)))
         else
-            :($(Expr(:meta, :inline)); setindex!(A, v, to_indexes(I...)...))
+            :($(Expr(:meta, :inline, :propagate_inbounds)); setindex!(A, v, to_indexes(I...)...))
         end
     elseif N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             (&)($(Osplat...)) || throw_boundserror(A, I)
             setindex!(A, v, $(Isplat...))
         end
@@ -644,7 +644,7 @@ end
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             # ind2sub requires all dimensions to be > 0:
             (&)($(szcheck...)) || throw_boundserror(A, I)
             s = ind2sub($sz, to_index(I[$N]))
@@ -660,7 +660,7 @@ end
         # Drop trailing dimensions (unchecked)
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             unsafe_setindex!(A, v, $(Isplat...))
         end
     else
@@ -672,7 +672,7 @@ end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=N:AN]
         quote
-            $(Expr(:meta, :inline))
+            $(Expr(:meta, :inline, :propagate_inbounds))
             s = ind2sub($sz, to_index(I[$N]))
             unsafe_setindex!(A, v, $(Isplat...))
         end
