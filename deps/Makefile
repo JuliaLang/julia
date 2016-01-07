@@ -499,11 +499,7 @@ else
 LLVM_MFLAGS += OPTIONAL_DIRS=
 endif
 
-ifeq ($(LLVM_VER),3.7.1)
-LLVM_SRC_URL := https://s3.amazonaws.com/llvm-3.7.1-sources
-else
 LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
-endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
