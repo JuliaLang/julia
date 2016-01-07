@@ -624,7 +624,7 @@ Text I/O
 
    Decodes the base64-encoded ``string`` and returns a ``Vector{UInt8}`` of the decoded bytes.
 
-.. function:: iosize(io) -> (lines, columns)
+.. function:: displaysize(io) -> (lines, columns)
 
    .. Docstring generated from Julia source
 

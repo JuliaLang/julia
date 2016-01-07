@@ -383,15 +383,15 @@ end
     ispty(s::IO) = false
 end
 
-"    iosize(io) -> (lines, columns)
+"    displaysize(io) -> (lines, columns)
 Return the nominal size of the screen that may be used for rendering output to this io object"
-iosize(io::IO) = iosize()
-iosize() = (parse(Int, get(ENV, "LINES",   "24")),
-            parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
+displaysize(io::IO) = displaysize()
+displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
+                 parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
-function iosize(io::TTY)
+function displaysize(io::TTY)
     local h::Int, w::Int
-    default_size = iosize()
+    default_size = displaysize()
 
     @windows_only if ispty(io)
         # io is actually a libuv pipe but a cygwin/msys2 pty
