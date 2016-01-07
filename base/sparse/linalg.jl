@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.LinAlg: chksquare
+import Base.LinAlg: checksquare
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -171,7 +171,7 @@ end
 function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     nrowB, ncolB  = size(B, 1), size(B, 2)
-    ncol = LinAlg.chksquare(A)
+    ncol = LinAlg.checksquare(A)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
@@ -216,7 +216,7 @@ end
 function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
     nrowB, ncolB = size(B, 1), size(B, 2)
-    ncol = LinAlg.chksquare(A)
+    ncol = LinAlg.checksquare(A)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
@@ -523,7 +523,7 @@ end
 function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
-    n = chksquare(A)
+    n = checksquare(A)
     F = factorize(A)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))

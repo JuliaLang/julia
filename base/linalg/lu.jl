@@ -152,7 +152,7 @@ Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) =
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
 function det{T,S}(A::LU{T,S})
-    n = chksquare(A)
+    n = checksquare(A)
     A.info > 0 && return zero(typeof(A.factors[1]))
     P = one(T)
     c = 0
@@ -167,7 +167,7 @@ function det{T,S}(A::LU{T,S})
 end
 
 function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
-    n = chksquare(A)
+    n = checksquare(A)
     c = 0
     P = one(real(T))
     abs_det = zero(real(T))
@@ -194,7 +194,7 @@ end
 _mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
 _mod2pi(x) = mod2pi(x)
 function logdet{T<:Complex,S}(A::LU{T,S})
-    n = chksquare(A)
+    n = checksquare(A)
     s = zero(T)
     c = 0
     @inbounds for i = 1:n
