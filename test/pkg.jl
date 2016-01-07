@@ -26,6 +26,14 @@ temp_pkg_dir() do
     @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
     @test !isempty(Pkg.available())
 
+    # check that versioninfo(io, true) doesn't error and produces some output
+    # (done here since it calls Pkg.status which might error or clone metadata)
+    buf = PipeBuffer()
+    versioninfo(buf, true)
+    ver = readall(buf)
+    @test startswith(ver, "Julia Version $VERSION")
+    @test contains(ver, "Environment:")
+
     # Check that setprotocol! works.
     begin
         try
