@@ -670,3 +670,22 @@ let x = Binding(Main, :bindingdoesnotexist)
     @test x.defined == false
     @test @var(bindingdoesnotexist) == x
 end
+
+# Docs.helpmode tests: we test whether the correct expressions are being generated here,
+# rather than complete integration with Julia's REPL mode system.
+for (line, expr) in Pair[
+    "sin"          => :sin,
+    "Base.sin"     => :(Base.sin),
+    "@time(x)"     => :(@time(x)),
+    "@time"        => :(:@time),
+    ":@time"       => :(:@time),
+    "@time()"      => :(@time),
+    "Base.@time()" => :(Base.@time),
+    "ccall"        => :ccall, # keyword
+    "while       " => :while, # keyword, trailing spaces should be stripped.
+    "0"            => 0,
+    "\"...\""      => "...",
+    "r\"...\""     => :(r"..."),
+    ]
+    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+end
