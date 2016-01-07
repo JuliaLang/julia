@@ -27,12 +27,18 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
                                                        jl_value_t *e,
-                                                       jl_value_t **locals,
-                                                       size_t nl)
+                                                       jl_svec_t *local_syms,
+                                                       jl_svec_t *local_vals)
 {
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
+    size_t i, nl = jl_svec_len(local_syms);
+    jl_value_t **locals = (jl_value_t**)alloca(sizeof(jl_value_t*) * 2 * nl);
+    for (i = 0; i < nl; i++) {
+        locals[2 * i] = jl_svecref(local_syms, i);
+        locals[2 * i + 1] = jl_svecref(local_vals, i);
+    }
     JL_TRY {
         jl_current_task->current_module = jl_current_module = m;
         v = eval(e, locals, nl, 0);
@@ -68,8 +74,6 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
         jl_undefined_var_error(e);
     return v;
 }
-
-int jl_has_intrinsics(jl_expr_t *ast, jl_expr_t *e, jl_module_t *m);
 
 extern int jl_boot_file_loaded;
 extern int inside_typedef;

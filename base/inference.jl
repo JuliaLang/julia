@@ -54,7 +54,7 @@ inference_stack = EmptyCallStack()
 function is_static_parameter(sv::StaticVarInfo, s::Symbol)
     sp = sv.sp
     for i=1:2:length(sp)
-        if is(sp[i].name,s)
+        if is(sp[i],s)
             return true
         end
     end
@@ -85,8 +85,8 @@ _iisconst(x::Expr) = false
 _iisconst(x::ANY) = true
 
 _ieval(x::ANY) =
-    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Ptr{Void}, Csize_t),
-          (inference_stack::CallStack).mod, x, C_NULL, 0)
+    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Any, Any),
+          (inference_stack::CallStack).mod, x, svec(), svec())
 _iisdefined(x::ANY) = isdefined((inference_stack::CallStack).mod, x)
 
 function _topmod()
@@ -428,7 +428,7 @@ const apply_type_tfunc = function (A::ANY, args...)
                     s = A[i]
                     found = false
                     for j=1:2:length(sp)
-                        if is(sp[j].name,s)
+                        if is(sp[j],s)
                             # static parameter
                             val = sp[j+1]
                             if valid_tparam(val)
@@ -1151,7 +1151,7 @@ function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo
     if is(t,NF)
         sp = sv.sp
         for i=1:2:length(sp)
-            if is(sp[i].name,s)
+            if is(sp[i],s)
                 # static parameter
                 val = sp[i+1]
                 if isa(val,TypeVar)
@@ -1365,11 +1365,11 @@ f_argnames(ast) =
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
+function typeinf_ext(linfo, atypes::ANY, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, sparams, def, true, true)
+    result = typeinf(linfo, atypes, svec(), def, true, true)
     inference_stack = last
     return result
 end
@@ -1547,8 +1547,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     #if dbg print("typeinf ", linfo.name, " ", atypes, "\n") end
 
     if cop
-        sparams = svec(sparams..., linfo.sparams...)
-        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo, sparams)::Expr
+        ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
     else
         ast = linfo.ast
     end
@@ -1633,7 +1632,24 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     gensym_init = Any[ NF for i = 1:length(gensym_uses) ]
     gensym_types = copy(gensym_init)
 
-    sv = StaticVarInfo(sparams, vars, gensym_types, vinflist, length(labels), ObjectIdDict())
+    sp = Any[]
+    if length(linfo.sparam_vals) > 0
+        for i = 1:length(linfo.sparam_syms)
+            push!(sp, linfo.sparam_syms[i])
+            push!(sp, linfo.sparam_vals[i])
+        end
+    else
+        for i = 1:2:length(sparams)
+            push!(sp, sparams[i].name)
+            push!(sp, sparams[i+1])
+        end
+        for i = 1:length(linfo.sparam_syms)
+            sym = linfo.sparam_syms[i]
+            push!(sp, sym)
+            push!(sp, TypeVar(sym, Any, true))
+        end
+    end
+    sv = StaticVarInfo(svec(sp...), vars, gensym_types, vinflist, length(labels), ObjectIdDict())
     frame.sv = sv
 
     recpts = IntSet()  # statements that depend recursively on our value
@@ -2218,7 +2234,6 @@ end
 function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_ast::Expr)
     local linfo,
         metharg::Type,
-        methsp::SimpleVector,
         atypes = atype.parameters,
         argexprs = copy(e.args),
         incompletematch = false
@@ -2259,15 +2274,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     end
     meth = meth[1]::SimpleVector
     metharg = meth[1]
+    methsp = meth[2]
     linfo = try
-        func_for_method(meth[3],metharg,meth[2])
+        func_for_method(meth[3],metharg,methsp)
     catch
         NF
     end
     if linfo === NF
         return NF
     end
-    methsp = meth[2]
     methfunc = meth[3].func
     methsig = meth[3].sig
     if !(atype <: metharg)
@@ -2280,7 +2295,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     end
     linfo = linfo::LambdaStaticData
 
-    sp = svec(methsp..., linfo.sparams...)
+    sp = Any[]
+    for i = 1:length(linfo.sparam_vals)
+        push!(sp, linfo.sparam_syms[i])
+        push!(sp, linfo.sparam_vals[i])
+    end
+    for i = 1:2:length(methsp)
+        push!(sp, methsp[i].name)
+        push!(sp, methsp[i+1])
+    end
 
     ## This code tries to limit the argument list length only when it is
     ## growing due to recursion.
@@ -2377,7 +2400,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     body.args = filter(x->!(isa(x,Expr) && x.head === :meta && isempty(x.args)),
                        body.args)
 
-    spnames = Any[ sp[i].name for i=1:2:length(sp) ]
+    spnames = Any[ sp[i] for i=1:2:length(sp) ]
     enc_vinflist = enclosing_ast.args[2][1]::Array{Any,1}
     enc_locllist = ast_localvars(enclosing_ast)
     locllist = ast_localvars(ast)
