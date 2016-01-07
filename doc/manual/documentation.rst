@@ -206,6 +206,23 @@ Adds docstring ``"..."`` to ``Method`` ``f(::Any)``.
 
 Adds docstring ``"..."`` to two ``Method``\ s, namely ``f(::Any)`` and ``f(::Any, ::Any)``.
 
+Macros
+~~~~~~
+
+.. code-block:: julia
+
+    "..."
+    macro m(x) end
+
+Adds docstring ``"..."`` to the ``@m(::Any)`` macro definition.
+
+.. code-block:: julia
+
+    "..."
+    :(@m)
+
+Adds docstring ``"..."`` to the macro named ``@m``.
+
 Types
 ~~~~~
 
@@ -244,20 +261,6 @@ Adds docstring ``"..."`` to the ``Binding`` ``A``.
 
 ``Binding``\ s are used to store a reference to a particular ``Symbol`` in a ``Module``
 without storing the referenced value itself.
-
-Macros
-~~~~~~
-
-.. code-block:: julia
-
-    "..."
-    macro m() end
-
-    "..."
-    :(@m)
-
-Adds docstring ``"..."`` to the ``Binding`` ``@m``. Adding documentation at the definition
-is the preferred approach.
 
 Modules
 ~~~~~~~
