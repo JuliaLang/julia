@@ -782,7 +782,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, li->ast);
         jl_serialize_value(s, li->rettype);
-        jl_serialize_value(s, (jl_value_t*)li->sparams);
+        jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
+        jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
         if (li->module == jl_core_module) {
@@ -917,10 +918,7 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
             write_int8(s, iskw);
             jl_serialize_value(s, ml->sig);
             jl_serialize_value(s, ml->func);
-            if (jl_is_svec(ml->tvars))
-                jl_serialize_value(s, ml->tvars);
-            else
-                jl_serialize_value(s, jl_svec1(ml->tvars));
+            jl_serialize_value(s, ml->tvars);
             write_int8(s, ml->isstaged);
         }
         ml = ml->next;
@@ -1363,8 +1361,10 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->ast);
         li->rettype = jl_deserialize_value(s, &li->rettype);
         jl_gc_wb(li, li->rettype);
-        li->sparams = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparams);
-        jl_gc_wb(li, li->sparams);
+        li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
+        jl_gc_wb(li, li->sparam_syms);
+        li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
+        jl_gc_wb(li, li->sparam_vals);
         li->tfunc = jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
         jl_gc_wb(li, li->tfunc);
         li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);

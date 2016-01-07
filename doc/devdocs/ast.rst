@@ -177,6 +177,10 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 LambdaStaticData
 ~~~~~~~~~~~~~~~~
 
+``sparam_syms`` - The names (symbols) of static parameters.
+
+``sparam_vals`` - The values of the static parameters (once known), indexed by ``sparam_syms``.
+
 Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
 ``Expr`` has the following layout:
 
@@ -205,8 +209,6 @@ Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
 
     ``args[2][3]`` - The types of variables represented by ``GenSym`` objects.
     Given ``GenSym`` ``g``, its type will be at ``args[2][3][g.id+1]``.
-
-    ``args[2][4]`` - The names (symbols) of static parameters.
 
 ``args[3]``
     an ``Expr`` with head ``body`` whose arguments are the statements
