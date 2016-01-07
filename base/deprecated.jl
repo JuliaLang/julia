@@ -606,10 +606,10 @@ export mmap
         throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
     end
     # Set the offset to a page boundary
-    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
+    offset_page::Int64 = floor(Integer,offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
-    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, len_page, prot, flags, fd, offset_page)
     systemerror("memory mapping failed", reinterpret(Int,p) == -1)
     # Also return a pointer that compensates for any adjustment in the offset
     return p, Int(offset-offset_page)
@@ -659,7 +659,7 @@ type SharedMemSpec
     create :: Bool
 end
 export mmap_array
-@noinline function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::FileOffset)
+@noinline function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::Int64)
     depwarn("`mmap_array` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
     if isa(s,SharedMemSpec)
         a = Mmap.Anonymous(s.name, s.readonly, s.create)
@@ -670,7 +670,7 @@ export mmap_array
 end
 end
 
-@deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset=position(s)) mmap(s, BitArray, dims, offset)
+@deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::Int64=position(s)) mmap(s, BitArray, dims, offset)
 @deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)
 
 # T[a:b] and T[a:s:b]
@@ -948,3 +948,7 @@ function with_output_limit(thk, lim=true) # thk is usually show()
         _limit_output = last
     end
 end
+
+#14555
+@deprecate_binding Coff_t Int64
+@deprecate_binding FileOffset Int64

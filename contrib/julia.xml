@@ -113,7 +113,6 @@
       <item> Exception </item>
       <item> Expr </item>
       <item> FileMonitor </item>
-      <item> FileOffset </item>
       <item> Filter </item>
       <item> AbstractFloat </item>
       <item> Float16 </item>
@@ -252,7 +251,6 @@
       <item> Culonglong </item>
       <item> Cintmax_t </item>
       <item> Cuintmax_t </item>
-      <item> Coff_t </item>
       <item> Cfloat </item>
       <item> Cdouble </item>
       <item> Cwchar_t </item>

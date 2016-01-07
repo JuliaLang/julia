@@ -215,7 +215,7 @@ value_t fl_ioseek(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     argcount(fl_ctx, "io.seek", nargs, 2);
     ios_t *s = toiostream(fl_ctx, args[0], "io.seek");
     size_t pos = tosize(fl_ctx, args[1], "io.seek");
-    off_t res = ios_seek(s, (off_t)pos);
+    int64_t res = ios_seek(s, pos);
     if (res < 0)
         return fl_ctx->F;
     return fl_ctx->T;
@@ -225,7 +225,7 @@ value_t fl_iopos(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
 {
     argcount(fl_ctx, "io.pos", nargs, 1);
     ios_t *s = toiostream(fl_ctx, args[0], "io.pos");
-    off_t res = ios_pos(s);
+    int64_t res = ios_pos(s);
     if (res == -1)
         return fl_ctx->F;
     return size_wrap(fl_ctx, (size_t)res);
@@ -375,7 +375,7 @@ value_t stream_to_string(fl_context_t *fl_ctx, value_t *ps)
     size_t n;
     ios_t *st = value2c(ios_t*,*ps);
     if (st->buf == &st->local[0]) {
-        n = st->size;
+        n = (size_t)st->size;
         str = cvalue_string(fl_ctx, n);
         st = value2c(ios_t*,*ps); // reload after allocating str
         memcpy(cvalue_data(str), st->buf, n);
