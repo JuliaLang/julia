@@ -89,7 +89,7 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
 end
 
 function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
-    n = chksquare(A)
+    n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B,A)
     @inbounds for i = 1:n
@@ -99,7 +99,7 @@ function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
 end
 
 function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
-    n = chksquare(A)
+    n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B, A)
     @inbounds for i = 1:n
@@ -108,7 +108,7 @@ function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     B
 end
 function (-){TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
-    n = chksquare(A)
+    n = checksquare(A)
     B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ

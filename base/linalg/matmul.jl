@@ -201,7 +201,7 @@ Ac_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_m
 # Supporting functions for matrix multiplication
 
 function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
-    n = chksquare(A)
+    n = checksquare(A)
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
             A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
@@ -235,7 +235,7 @@ function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T
 end
 
 function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T})
-    nC = chksquare(C)
+    nC = checksquare(C)
     if tA == 'T'
         (nA, mA) = size(A,1), size(A,2)
         tAt = 'N'
@@ -263,7 +263,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
 end
 
 function herk_wrapper!{T<:BlasReal}(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::Char, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}})
-    nC = chksquare(C)
+    nC = checksquare(C)
     if tA == 'C'
         (nA, mA) = size(A,1), size(A,2)
         tAt = 'N'

@@ -56,7 +56,7 @@ export
 
 const libblas = Base.libblas_name
 
-import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, chksquare, axpy!
+import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, axpy!
 
 """
     blas_set_num_threads(n)
@@ -682,7 +682,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trmv!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             if n != length(x)
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
@@ -731,7 +731,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 #       .. Array Arguments ..
                 #       DOUBLE PRECISION A(LDA,*),X(*)
         function trsv!(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             if n != length(x)
                 throw(DimensionMismatch("size of A is $n != length(x) = $(length(x))"))
             end
@@ -795,7 +795,7 @@ for (fname, elty) in ((:dsyr_,:Float64),
                       (:csyr_,:Complex64))
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
@@ -824,7 +824,7 @@ for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
                              (:cher_,:Complex64, :Float32))
     @eval begin
         function her!(uplo::Char, α::$relty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
-            n = chksquare(A)
+            n = checksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
@@ -922,7 +922,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
         function symm!(side::Char, uplo::Char, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, beta::($elty), C::StridedMatrix{$elty})
             m, n = size(C)
-            j = chksquare(A)
+            j = checksquare(A)
             if j != (side == 'L' ? m : n)
                 throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
             end
@@ -991,7 +991,7 @@ for (mfname, elty) in ((:zhemm_,:Complex128),
              #     DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
         function hemm!(side::Char, uplo::Char, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, beta::($elty), C::StridedMatrix{$elty})
             m, n = size(C)
-            j = chksquare(A)
+            j = checksquare(A)
             if j != (side == 'L' ? m : n)
                 throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
             end
@@ -1050,7 +1050,7 @@ for (fname, elty) in ((:dsyrk_,:Float64),
        function syrk!(uplo::Char, trans::Char,
                       alpha::($elty), A::StridedVecOrMat{$elty},
                       beta::($elty), C::StridedMatrix{$elty})
-           n = chksquare(C)
+           n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
@@ -1103,7 +1103,7 @@ for (fname, elty, relty) in ((:zherk_, :Complex128, :Float64),
        #       COMPLEX A(LDA,*),C(LDC,*)
        function herk!(uplo::Char, trans::Char, α::$relty, A::StridedVecOrMat{$elty},
                       β::$relty, C::StridedMatrix{$elty})
-           n = chksquare(C)
+           n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n
                throw(DimensionMismatch("the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
@@ -1144,7 +1144,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
         function syr2k!(uplo::Char, trans::Char,
                         alpha::($elty), A::StridedVecOrMat{$elty}, B::StridedVecOrMat{$elty},
                         beta::($elty), C::StridedMatrix{$elty})
-            n = chksquare(C)
+            n = checksquare(C)
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
@@ -1181,7 +1181,7 @@ for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Comple
        function her2k!(uplo::Char, trans::Char, alpha::($elty1),
                        A::StridedVecOrMat{$elty1}, B::StridedVecOrMat{$elty1},
                        beta::($elty2), C::StridedMatrix{$elty1})
-           n = chksquare(C)
+           n = checksquare(C)
            nn = size(A, trans == 'N' ? 1 : 2)
            if nn != n throw(DimensionMismatch("C has size ($n,$n), corresponding dimension of A is $nn")) end
            k  = size(A, trans == 'N' ? 2 : 1)
@@ -1258,7 +1258,7 @@ for (mmname, smname, elty) in
         function trmm!(side::Char, uplo::Char, transa::Char, diag::Char, alpha::Number,
                        A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             m, n = size(B)
-            nA = chksquare(A)
+            nA = checksquare(A)
             if nA != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A, $(size(A)), doesn't match $side size of B with dims, $(size(B))"))
             end
@@ -1283,7 +1283,7 @@ for (mmname, smname, elty) in
         function trsm!(side::Char, uplo::Char, transa::Char, diag::Char,
                        alpha::$elty, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             m, n = size(B)
-            k = chksquare(A)
+            k = checksquare(A)
             if k != (side == 'L' ? m : n)
                 throw(DimensionMismatch("size of A is $n, size(B)=($m,$n) and transa='$transa'"))
             end
