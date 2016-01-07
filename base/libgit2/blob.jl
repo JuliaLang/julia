@@ -5,7 +5,7 @@ function content(blob::GitBlob)
 end
 
 function Base.length(blob::GitBlob)
-    return ccall((:git_blob_rawsize, :libgit2), Coff_t, (Ptr{Void},), blob.ptr)
+    return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)
 end
 
 function lookup(repo::GitRepo, oid::Oid)

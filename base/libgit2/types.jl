@@ -241,7 +241,7 @@ immutable DiffOptionsStruct
     context_lines::UInt32
     interhunk_lines::UInt32
     id_abbrev::UInt16
-    max_size::Coff_t
+    max_size::Int64
     old_prefix::Cstring
     new_prefix::Cstring
 end
@@ -253,7 +253,7 @@ DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
                     context_lines::UInt32 = UInt32(3),
                     interhunk_lines::UInt32 = zero(UInt32),
                     id_abbrev::UInt16 = UInt16(7),
-                    max_size::Coff_t = Coff_t(512*1024*1024), #zero(Coff_t), #512Mb
+                    max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
                     old_prefix::Cstring = Cstring_NULL,
                     new_prefix::Cstring = Cstring_NULL
 )=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
@@ -273,11 +273,11 @@ DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
 immutable DiffFile
     id::Oid
     path::Cstring
-    size::Coff_t
+    size::Int64
     flags::Cuint
     mode::UInt16
 end
-DiffFile()=DiffFile(Oid(),Cstring_NULL,Coff_t(0),Cuint(0),UInt16(0))
+DiffFile()=DiffFile(Oid(),Cstring_NULL,Int64(0),Cuint(0),UInt16(0))
 
 immutable DiffDelta
     status::Cint
@@ -339,7 +339,7 @@ immutable IndexEntry
     mode::Cuint
     uid::Cuint
     gid::Cuint
-    file_size::Coff_t
+    file_size::Int64
 
     id::Oid
 
@@ -355,7 +355,7 @@ IndexEntry() = IndexEntry(IndexTime(),
                           Cuint(0),
                           Cuint(0),
                           Cuint(0),
-                          Coff_t(0),
+                          Int64(0),
                           Oid(),
                           UInt16(0),
                           UInt16(0),
