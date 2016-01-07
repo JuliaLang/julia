@@ -555,7 +555,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 }
 
 // repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len, void *ctx)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
@@ -567,7 +567,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
     JL_TRY {
         // handle syntax error
         while (1) {
-            form = jl_parse_next();
+            form = jl_parse_next(ctx);
             if (form == NULL)
                 break;
             if (jl_is_expr(form)) {
@@ -582,7 +582,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
         }
     }
     JL_CATCH {
-        jl_stop_parsing();
+        jl_stop_parsing(ctx);
         fn = jl_pchar_to_string(fname, len);
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
@@ -595,7 +595,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
                                            jl_exception_in_transit));
         }
     }
-    jl_stop_parsing();
+    jl_stop_parsing(ctx);
     jl_lineno = last_lineno;
     jl_filename = last_filename;
     JL_GC_POP();
@@ -615,10 +615,11 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
-    if (jl_start_parsing_file(fpath) != 0) {
+    void *ctx = jl_start_parsing_file(fpath);
+    if (!ctx) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_value_t *result = jl_parse_eval_all(fpath, len);
+    jl_value_t *result = jl_parse_eval_all(fpath, len, ctx);
     if (fpath != fname) free(fpath);
     return result;
 }

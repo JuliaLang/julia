@@ -33,6 +33,14 @@ int HTNAME##_has(htable_t *h, void *key);                       \
 int HTNAME##_remove(htable_t *h, void *key);                    \
 void **HTNAME##_bp(htable_t *h, void *key);
 
+#define HTPROT_R(HTNAME)                                                \
+void *HTNAME##_get_r(htable_t *h, void *key, void *ctx);                \
+void HTNAME##_put_r(htable_t *h, void *key, void *val, void *ctx);      \
+void HTNAME##_adjoin_r(htable_t *h, void *key, void *val, void *ctx);   \
+int HTNAME##_has_r(htable_t *h, void *key, void *ctx);                  \
+int HTNAME##_remove_r(htable_t *h, void *key, void *ctx);               \
+void **HTNAME##_bp_r(htable_t *h, void *key, void *ctx);
+
 #ifdef __cplusplus
 }
 #endif
