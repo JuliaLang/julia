@@ -121,6 +121,9 @@ end
 immutable NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
+immutable Type4Union end
+func4union(::Union{Type4Union,Int}) = ()
+@test !isempty(methodswith(Type4Union))
 
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
