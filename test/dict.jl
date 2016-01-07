@@ -257,7 +257,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(Base.IOContext(s, :limit_output => true), :iosize => (rows, cols))
+        io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
         Base.showdict(io, d)
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
@@ -267,7 +267,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(Base.IOContext(s, :limit_output => true), :iosize => (rows, cols))
+            io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
             Base.showkv(io, f(d))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
@@ -287,7 +287,7 @@ end
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(Base.IOContext(sbuff, :limit_output => true), :iosize => (10, 20))
+    io = Base.IOContext(Base.IOContext(sbuff, :limit_output => true), :displaysize => (10, 20))
 
     Base.showdict(io, Dict(Alpha()=>1))
     @test !contains(bytestring(sbuff), "…")
