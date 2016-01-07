@@ -296,7 +296,8 @@ end
 function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t)
+            !isleaftype(t) && x <: t) ||
+           (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
 end
 
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
