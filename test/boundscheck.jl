@@ -43,8 +43,7 @@ function A2_notinlined()
     return r
 end
 
-function A2_propagate_inbounds()
-    Base.@_propagate_inbounds_meta()
+Base.@propagate_inbounds function A2_propagate_inbounds()
     r = A1()+1
     return r
 end

@@ -66,6 +66,21 @@ macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
+"""
+    @propagate_inbounds(ex)
+
+Tells the compiler to inline a function while retaining the caller's inbounds context.
+"""
+macro propagate_inbounds(ex)
+    if isa(ex, Expr)
+        pushmeta!(ex, :inline)
+        pushmeta!(ex, :propagate_inbounds)
+        esc(ex)
+    else
+        esc(ex)
+    end
+end
+
 ## some macro utilities ##
 
 find_vars(e) = find_vars(e, [])
