@@ -316,7 +316,8 @@ function serialize(s::SerializationState, linfo::LambdaStaticData)
     else
         serialize(s, Any[])
     end
-    serialize(s, linfo.sparams)
+    serialize(s, linfo.sparam_syms)
+    serialize(s, linfo.sparam_vals)
     serialize(s, linfo.inferred)
     serialize(s, linfo.module)
     serialize(s, linfo.name)
@@ -529,13 +530,14 @@ function deserialize(s::SerializationState, ::Type{LambdaStaticData})
         linfo = known_lambda_data[lnumber]::LambdaStaticData
         makenew = false
     else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL)::LambdaStaticData
+        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)::LambdaStaticData
         makenew = true
     end
     deserialize_cycle(s, linfo)
     ast = deserialize(s)::Expr
     roots = deserialize(s)::Vector{Any}
-    sparams = deserialize(s)::SimpleVector
+    sparam_syms = deserialize(s)::SimpleVector
+    sparam_vals = deserialize(s)::SimpleVector
     infr = deserialize(s)::Bool
     mod = deserialize(s)::Module
     name = deserialize(s)
@@ -544,7 +546,8 @@ function deserialize(s::SerializationState, ::Type{LambdaStaticData})
     pure = deserialize(s)
     if makenew
         linfo.ast = ast
-        linfo.sparams = sparams
+        linfo.sparam_syms = sparam_syms
+        linfo.sparam_vals = sparam_vals
         linfo.inferred = infr
         linfo.module = mod
         linfo.roots = roots

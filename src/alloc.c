@@ -278,8 +278,8 @@ JL_DLLEXPORT jl_fptr_t jl_linfo_fptr(jl_lambda_info_t *linfo)
 }
 
 JL_DLLEXPORT
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
-                                     jl_module_t *ctx)
+jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
+        jl_svec_t *tvars, jl_svec_t *sparams, jl_module_t *ctx)
 {
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
@@ -314,7 +314,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
         li->called = called;
     }
     li->module = ctx;
-    li->sparams = sparams;
+    li->sparam_syms = tvars;
+    li->sparam_vals = sparams;
     li->tfunc = jl_nothing;
     li->fptr = NULL;
     li->roots = NULL;
@@ -337,7 +338,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
 jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 {
     jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparams, linfo->module);
+        jl_new_lambda_info(linfo->ast, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
     new_linfo->rettype = linfo->rettype;
     new_linfo->tfunc = linfo->tfunc;
     new_linfo->name = linfo->name;

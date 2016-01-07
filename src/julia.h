@@ -295,8 +295,9 @@ typedef struct _jl_lambda_info_t {
     // (different environments) of a closure.
     jl_value_t *ast;
     jl_value_t *rettype;
-    // sparams is a vector (symbol, value, symbol, value, ...)
-    jl_svec_t *sparams;
+    // sparams is a vector of values indexed by symbols
+    jl_svec_t *sparam_syms;
+    jl_svec_t *sparam_vals;
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
@@ -1041,6 +1042,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                                            jl_lambda_info_t *li);
 JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
+                                                  jl_svec_t *tvars,
                                                   jl_svec_t *sparams,
                                                   jl_module_t *ctx);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...);
@@ -1337,14 +1339,14 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
                                                        jl_value_t *e,
-                                                       jl_value_t **locals,
-                                                       size_t nl);
+                                                       jl_svec_t *local_syms,
+                                                       jl_svec_t *local_vals);
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams);
+JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li);
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);

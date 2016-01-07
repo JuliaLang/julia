@@ -313,6 +313,22 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int expronly);
 
+static jl_svec_t *full_svec(fl_context_t *fl_ctx, value_t e, int expronly)
+{
+    size_t ln = llength(e);
+    if (ln == 0) return jl_emptysvec;
+    jl_svec_t *ar = jl_alloc_svec_uninit(ln);
+    JL_GC_PUSH1(&ar);
+    size_t i=0;
+    while (iscons(e)) {
+        jl_svecset(ar, i, scm_to_julia_(fl_ctx, car_(e), expronly));
+        e = cdr_(e);
+        i++;
+    }
+    JL_GC_POP();
+    return ar;
+}
+
 static jl_value_t *full_list(fl_context_t *fl_ctx, value_t e, int expronly)
 {
     size_t ln = llength(e);
@@ -438,16 +454,17 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         size_t i;
         if (sym == lambda_sym) {
             jl_expr_t *ex = jl_exprn(lambda_sym, n);
+            jl_svec_t *tvars = NULL;
             jl_array_t *vinf = NULL;
             jl_lambda_info_t *nli = NULL;
-            JL_GC_PUSH3(&ex, &vinf, &nli);
+            JL_GC_PUSH4(&ex, &tvars, &vinf, &nli);
             e = cdr_(e);
             value_t largs = car_(e);
             jl_cellset(ex->args, 0, full_list(fl_ctx, largs, eo));
             e = cdr_(e);
 
             value_t ee = car_(e);
-            vinf = jl_alloc_cell_1d(4);
+            vinf = jl_alloc_cell_1d(3);
             jl_cellset(vinf, 0, full_list_of_lists(fl_ctx, car_(ee), eo));
             ee = cdr_(ee);
             jl_cellset(vinf, 1, full_list_of_lists(fl_ctx, car_(ee), eo));
@@ -456,7 +473,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                        jl_box_long(numval(car_(ee))) :
                        full_list(fl_ctx,car_(ee),eo));
             ee = cdr_(ee);
-            jl_cellset(vinf, 3, full_list(fl_ctx, car_(ee), eo));
+            tvars = full_svec(fl_ctx, car_(ee), eo);
             assert(!iscons(cdr_(ee)));
             jl_cellset(ex->args, 1, vinf);
             e = cdr_(e);
@@ -466,7 +483,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 jl_cellset(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
                 e = cdr_(e);
             }
-            nli = jl_new_lambda_info((jl_value_t*)ex, jl_emptysvec, jl_current_module);
+            nli = jl_new_lambda_info((jl_value_t*)ex, tvars, jl_emptysvec, jl_current_module);
             jl_preresolve_globals(nli->ast, nli);
             JL_GC_POP();
             return (jl_value_t*)nli;
@@ -866,11 +883,10 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     JL_GC_PUSH3(&le, &vi, &bo);
     le = jl_exprn(lambda_sym, 3);
     jl_cellset(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_cell_1d(4);
+    vi = (jl_value_t*)jl_alloc_cell_1d(3);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
     jl_cellset(vi, 2, jl_box_long(jl_max_jlgensym_in(expr)+1));
-    jl_cellset(vi, 3, mt);
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -879,7 +895,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
-    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_emptysvec, jl_current_module);
+    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_emptysvec, jl_emptysvec, jl_current_module);
     JL_GC_POP();
     return li;
 }
@@ -925,19 +941,8 @@ jl_value_t *jl_lam_gensyms(jl_expr_t *l)
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
-    assert(jl_array_len(le) == 4);
+    assert(jl_array_len(le) == 3);
     return jl_cellref(le, 2);
-}
-
-// get array of static parameter symbols
-jl_array_t *jl_lam_staticparams(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_array(le));
-    assert(jl_array_len(le) == 4);
-    assert(jl_is_array(jl_cellref(le, 3)));
-    return (jl_array_t*)jl_cellref(le, 3);
 }
 
 // get array of body forms
@@ -970,27 +975,15 @@ JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
     return ((jl_sym_t*)jl_exprarg(atype,1)) == vararg_sym;
 }
 
-static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
+static jl_value_t *copy_ast(jl_value_t *expr)
 {
-    if (jl_is_symbol(expr)) {
-        if (!do_sp) return expr;
-        // pre-evaluate certain static parameters to help type inference
-        for(int i=0; i < jl_svec_len(sp); i+=2) {
-            assert(jl_is_typevar(jl_svecref(sp,i)));
-            if ((jl_sym_t*)expr == ((jl_tvar_t*)jl_svecref(sp,i))->name) {
-                jl_value_t *spval = jl_svecref(sp,i+1);
-                if (jl_is_long(spval))
-                    return spval;
-            }
-        }
-    }
-    else if (jl_typeis(expr,jl_array_any_type)) {
+    if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
         jl_array_t *na = jl_alloc_cell_1d(jl_array_len(a));
         JL_GC_PUSH1(&na);
         size_t i;
         for(i=0; i < jl_array_len(a); i++)
-            jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp, do_sp));
+            jl_cellset(na, i, copy_ast(jl_cellref(a,i)));
         JL_GC_POP();
         return (jl_value_t*)na;
     }
@@ -999,17 +992,17 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH1(&ne);
         if (e->head == lambda_sym) {
-            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
-            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 0));
-            jl_exprargset(ne, 2, copy_ast(jl_exprarg(e,2), sp, 1));
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0)));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1)));
+            jl_exprargset(ne, 2, copy_ast(jl_exprarg(e,2)));
         }
         else if (e->head == assign_sym) {
-            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
-            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 1));
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0)));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1)));
         }
         else {
             for(size_t i=0; i < jl_array_len(e->args); i++) {
-                jl_exprargset(ne, i, copy_ast(jl_exprarg(e,i), sp, 1));
+                jl_exprargset(ne, i, copy_ast(jl_exprarg(e,i)));
             }
         }
         JL_GC_POP();
@@ -1066,25 +1059,25 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
+static jl_value_t *dont_copy_ast(jl_value_t *expr)
 {
     if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {
-        return copy_ast(expr, sp, do_sp);
+        return copy_ast(expr);
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == lambda_sym) {
-            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
-            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 0));
-            jl_exprargset(e, 2, dont_copy_ast(jl_exprarg(e,2), sp, 1));
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0)));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1)));
+            jl_exprargset(e, 2, dont_copy_ast(jl_exprarg(e,2)));
         }
         else if (e->head == assign_sym) {
-            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
-            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 1));
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0)));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1)));
         }
         else {
             for(size_t i=0; i < jl_array_len(e->args); i++) {
-                jl_exprargset(e, i, dont_copy_ast(jl_exprarg(e,i), sp, 1));
+                jl_exprargset(e, i, dont_copy_ast(jl_exprarg(e,i)));
             }
         }
         return (jl_value_t*)e;
@@ -1092,63 +1085,22 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_svec_t *sp, int do_sp)
     return expr;
 }
 
-static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_svec_t *spenv)
-{
-    size_t i, l = jl_array_len(vi);
-    for(i=0; i < l; i++) {
-        jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
-        assert(jl_array_len(v) > 1);
-        jl_value_t *ty = jl_static_eval(jl_cellref(v,1), NULL, jl_current_module,
-                                        (jl_value_t*)spenv, (jl_expr_t*)ast, 1, 1);
-        if (ty != NULL && (jl_is_type(ty) || jl_is_typevar(ty))) {
-            jl_cellset(v, 1, ty);
-        }
-        else {
-            jl_cellset(v, 1, (jl_value_t*)jl_any_type);
-        }
-    }
-}
-
-jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t)
-{
-    jl_svec_t *s = jl_alloc_svec_uninit(jl_svec_len(t));
-    size_t i;
-    for(i=0; i < jl_svec_len(s); i+=2) {
-        assert(jl_is_typevar(jl_svecref(t,i)));
-        jl_svecset(s, i, (jl_value_t*)((jl_tvar_t*)jl_svecref(t,i))->name);
-        jl_svecset(s, i+1, jl_svecref(t,i+1));
-    }
-    return s;
-}
-
 // given a new lambda_info with static parameter values, make a copy
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
 // this tree can then be further mutated by optimization passes.
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
+JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
 {
-    jl_svec_t *spenv = NULL;
     jl_value_t *ast = li->ast;
     if (ast == NULL) return NULL;
-    JL_GC_PUSH2(&spenv, &ast);
-    spenv = jl_svec_tvars_to_symbols(sparams);
+    JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
         ast = jl_uncompress_ast(li, ast);
-        ast = dont_copy_ast(ast, sparams, 1);
+        ast = dont_copy_ast(ast);
     }
     else {
-        ast = copy_ast(ast, sparams, 1);
+        ast = copy_ast(ast);
     }
-    jl_module_t *last_m = jl_current_module;
-    JL_TRY {
-        jl_current_module = li->module;
-        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), ast, spenv);
-    }
-    JL_CATCH {
-        jl_current_module = last_m;
-        jl_rethrow();
-    }
-    jl_current_module = last_m;
     JL_GC_POP();
     return ast;
 }
@@ -1195,8 +1147,7 @@ int has_meta(jl_array_t *body, jl_sym_t *sym)
     return 0;
 }
 
-
-int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
+static int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
 {
     size_t i, l=jl_array_len(a);
     for(i=0; i<l; i++) {
@@ -1206,20 +1157,20 @@ int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
     return 0;
 }
 
-int jl_in_sym_array(jl_array_t *a, jl_sym_t *v)
+static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
 {
-    size_t i, l=jl_array_len(a);
+    size_t i, l = jl_svec_len(a);
     for(i=0; i<l; i++) {
-        if (jl_cellref(a,i) == (jl_value_t*)v)
+        if (jl_svecref(a,i) == (jl_value_t*)v)
             return 1;
     }
     return 0;
 }
 
-int jl_local_in_ast(jl_expr_t *ast, jl_sym_t *sym)
+int jl_local_in_linfo(jl_lambda_info_t *linfo, jl_sym_t *sym)
 {
-    return jl_in_vinfo_array(jl_lam_vinfo(ast), sym) ||
-        jl_in_sym_array(jl_lam_staticparams(ast), sym);
+    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast), sym) ||
+        jl_in_sym_svec(linfo->sparam_syms, sym);
 }
 
 extern jl_value_t *jl_builtin_getfield;
@@ -1229,7 +1180,7 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
     if (jl_is_symbol(expr)) {
         if (lam->module == NULL)
             return expr;
-        if (!jl_local_in_ast((jl_expr_t*)lam->ast, (jl_sym_t*)expr))
+        if (!jl_local_in_linfo(lam, (jl_sym_t*)expr))
             return jl_module_globalref(lam->module, (jl_sym_t*)expr);
     }
     else if (jl_is_lambda_info(expr)) {
@@ -1252,14 +1203,13 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
                 jl_value_t *fe = jl_exprarg(e,0);
                 if (jl_is_symbol(s) && jl_is_topnode(fe)) {
-                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module,
-                                                   NULL, (jl_expr_t*)lam->ast, 0, 0);
+                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module, lam, 0, 0);
                     if (f == jl_builtin_getfield) {
                         jl_value_t *me = jl_exprarg(e,1);
                         if (jl_is_topnode(me) ||
                             (jl_is_symbol(me) && jl_binding_resolved_p(lam->module,(jl_sym_t*)me))) {
                             jl_value_t *m = jl_static_eval(me, NULL, lam->module,
-                                                           NULL, (jl_expr_t*)lam->ast, 0, 0);
+                                                           lam, 0, 0);
                             if (m && jl_is_module(m))
                                 return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
                         }

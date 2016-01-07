@@ -1503,10 +1503,11 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
-                for(size_t i=0; i < jl_svec_len(ctx->sp); i+=2) {
-                    assert(jl_is_symbol(jl_svecref(ctx->sp, i)));
-                    if (e == jl_svecref(ctx->sp, i)) {
-                        e = jl_svecref(ctx->sp, i+1);
+                jl_svec_t *sp = ctx->linfo->sparam_syms;
+                for(size_t i=0; i < jl_svec_len(sp); i++) {
+                    assert(jl_is_symbol(jl_svecref(sp, i)));
+                    if (e == jl_svecref(sp, i)) {
+                        e = jl_svecref(ctx->linfo->sparam_vals, i);
                         goto type_of_constant;
                     }
                 }

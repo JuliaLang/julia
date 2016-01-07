@@ -565,7 +565,6 @@ typedef struct {
     std::map<int, Value*> *handlers;
     jl_module_t *module;
     jl_expr_t *ast;
-    jl_svec_t *sp;
     jl_lambda_info_t *linfo;
     Value *argArray;
     Value *argCount;
@@ -1691,7 +1690,7 @@ static void cg_bdw(jl_binding_t *b, jl_codectx_t *ctx)
 // try to statically evaluate, NULL if not possible
 extern "C"
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_value_t *sp, jl_expr_t *ast, int sparams, int allow_alloc)
+                           jl_lambda_info_t *linfo, int sparams, int allow_alloc)
 {
     jl_codectx_t *ctx = (jl_codectx_t*)ctx_;
     if (jl_is_symbolnode(ex))
@@ -1702,16 +1701,16 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         if (ctx) {
             isglob = is_global(sym, ctx);
         }
-        else if (ast) {
-            isglob = !jl_local_in_ast(ast, sym);
+        else if (linfo) {
+            isglob = !jl_local_in_linfo(linfo, sym);
         }
         if (isglob) {
             size_t i;
             if (sparams) {
-                for(i=0; i < jl_svec_len(sp); i+=2) {
-                    if (sym == (jl_sym_t*)jl_svecref(sp, i)) {
+                for(i=0; i < jl_svec_len(linfo->sparam_syms); i++) {
+                    if (sym == (jl_sym_t*)jl_svecref(linfo->sparam_syms, i)) {
                         // static parameter
-                        return jl_svecref(sp, i+1);
+                        return jl_svecref(linfo->sparam_vals, i);
                     }
                 }
             }
@@ -1750,11 +1749,11 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym) {
-            jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,sp,ast,sparams,allow_alloc);
+            jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,linfo,sparams,allow_alloc);
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
-                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,sp,ast,sparams,allow_alloc);
-                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
+                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,linfo,sparams,allow_alloc);
+                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,linfo,sparams,allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
@@ -1772,7 +1771,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                     jl_value_t **v;
                     JL_GC_PUSHARGS(v, n);
                     for (i = 0; i < n; i++) {
-                        v[i] = jl_static_eval(jl_exprarg(e,i+1),ctx,mod,sp,ast,sparams,allow_alloc);
+                        v[i] = jl_static_eval(jl_exprarg(e,i+1),ctx,mod,linfo,sparams,allow_alloc);
                         if (v[i] == NULL) {
                             JL_GC_POP();
                             return NULL;
@@ -1801,7 +1800,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
 static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
                                bool allow_alloc)
 {
-    return jl_static_eval(ex, ctx, ctx->module, (jl_value_t*)ctx->sp, ctx->ast,
+    return jl_static_eval(ex, ctx, ctx->module, ctx->linfo,
                           sparams, allow_alloc);
 }
 
@@ -1913,7 +1912,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             simple_escape_analysis(f, esc, ctx);
             if (expr_is_symbol(f)) {
                 if (is_constant(f, ctx, false)) {
-                    jl_value_t *fv = jl_interpret_toplevel_expr_in(ctx->module, f, NULL, 0);
+                    jl_value_t *fv = jl_interpret_toplevel_expr_in(ctx->module, f, jl_emptysvec, jl_emptysvec);
                     if (jl_typeis(fv, jl_intrinsic_type)) {
                         esc = false;
                         JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
@@ -3137,11 +3136,11 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx, bool isboxed)
     bool isglobal = is_global(sym, ctx);
     if (isglobal) {
         // look for static parameter
-        for(size_t i=0; i < jl_svec_len(ctx->sp); i+=2) {
-            assert(jl_is_symbol(jl_svecref(ctx->sp, i)));
-            if (sym == (jl_sym_t*)jl_svecref(ctx->sp, i)) {
-                jl_value_t *sp = jl_svecref(ctx->sp, i+1);
-                return mark_julia_const(sp);
+        jl_svec_t *sp = ctx->linfo->sparam_syms;
+        for(size_t i=0; i < jl_svec_len(sp); i++) {
+            assert(jl_is_symbol(jl_svecref(sp, i)));
+            if (sym == (jl_sym_t*)jl_svecref(sp, i)) {
+                return mark_julia_const(jl_svecref(ctx->linfo->sparam_vals, i));
             }
         }
         jl_binding_t *jbp=NULL;
@@ -3722,8 +3721,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
 
 // --- generate function bodies ---
 
-extern "C" jl_svec_t *jl_svec_tvars_to_symbols(jl_svec_t *t);
-
 // gc frame emission
 static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
 {
@@ -4205,13 +4202,11 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 
     // step 1. unpack AST and allocate codegen context for this function
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
-    jl_svec_t *sparams = NULL;
-    JL_GC_PUSH2(&ast, &sparams);
+    JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
         ast = (jl_expr_t*)jl_uncompress_ast(lam, (jl_value_t*)ast);
     }
     assert(jl_is_expr(ast));
-    sparams = jl_svec_tvars_to_symbols(lam->sparams);
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
     std::map<jl_sym_t*, jl_arrayvar_t> arrayvars;
@@ -4223,7 +4218,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.handlers = &handlers;
     ctx.module = lam->module;
     ctx.ast = ast;
-    ctx.sp = sparams;
     ctx.linfo = lam;
     ctx.funcName = jl_symbol_name(lam->name);
     ctx.vaName = NULL;
@@ -4241,9 +4235,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     size_t vinfoslen = jl_array_dim0(vinfos);
     size_t nreq = largslen;
     int va = 0;
-
-    if ((jl_array_len(jl_lam_staticparams(ast)) == 0) != (jl_svec_len(sparams) == 0)) // TODO: more accurate check
-        jl_error("wrong number of static parameters on LambdaStaticData");
 
     if (!lam->specTypes)  // TODO jb/functions
         lam->specTypes = jl_anytuple_type;
