@@ -43,11 +43,18 @@ function A2_notinlined()
     return r
 end
 
+function A2_propagate_inbounds()
+    Base.@_propagate_inbounds_meta()
+    r = A1()+1
+    return r
+end
+
 @test A2() == 2
 @test A2_inbounds() == 1
 @test A2_notinlined() == 2
+@test A2_propagate_inbounds() == 2
 
-# test boundscheck NOT eliminated two layers deep
+# test boundscheck NOT eliminated two layers deep, unless propagated
 
 function A3()
     r = A2()+1
@@ -59,8 +66,14 @@ function A3_inbounds()
     return r
 end
 
+function A3_inbounds2()
+    @inbounds r = A2_propagate_inbounds()+1
+    return r
+end
+
 @test A3() == 3
 @test A3_inbounds() == 3
+@test A3_inbounds2() == 2
 
 # swapped nesting order of @boundscheck and @inbounds
 function A1_nested()
