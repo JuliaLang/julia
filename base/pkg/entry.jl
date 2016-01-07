@@ -490,7 +490,7 @@ function resolve(
 end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
-    cols = Base.iosize(STDERR)[2]
+    cols = Base.displaysize(STDERR)[2]
     warn(prefix="", Base.cpad(label,cols,"="))
     println(STDERR)
     warn(prefix=prefix, msg...)

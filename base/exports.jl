@@ -1146,7 +1146,7 @@ export
     htol,
     hton,
     IOContext,
-    iosize,
+    displaysize,
     ismarked,
     isopen,
     isreadonly,

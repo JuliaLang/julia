@@ -67,7 +67,7 @@ limit_output(::ANY) = _limit_output::Bool
 limit_output(io::IOContext) = get(io, :limit_output, _limit_output::Bool) === true
 _limit_output = false # delete with with_output_limit deprecation
 
-iosize(io::IOContext) = haskey(io, :iosize) ? io[:iosize] : iosize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
 
 show(io::IO, x::ANY) = show_default(io, x)
@@ -1197,7 +1197,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     if !limit_output(io)
         screenheight = screenwidth = typemax(Int)
     else
-        sz = iosize(io)
+        sz = displaysize(io)
         screenheight, screenwidth = sz[1] - 4, sz[2]
     end
     screenwidth -= length(pre) + length(post)

@@ -81,7 +81,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = ge
         combine = true,
         maxdepth::Int = typemax(Int),
         sortedby::Symbol = :filefuncline)
-    cols = Base.iosize(io)[2]
+    cols = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, C, combine, cols, maxdepth)
     elseif format == :flat
