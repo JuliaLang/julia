@@ -159,8 +159,12 @@ function symdiff!(s::IntSet, ns)
 end
 
 function copy!(to::IntSet, from::IntSet)
-    empty!(to)
-    union!(to, from)
+    if is(to, from)
+        return to
+    else
+        empty!(to)
+        return union!(to, from)
+    end
 end
 
 in(n, s::IntSet) = n < 0 ? false : (n > typemax(Int) ? s.fill1s : in(convert(Int, n), s))
