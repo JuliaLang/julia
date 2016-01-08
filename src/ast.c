@@ -65,6 +65,10 @@ typedef struct _jl_ast_context_t {
     jl_ast_context_list_t list;
     int ref;
     jl_task_t *task;
+    // use a pointer to a stack slot so that we can detect if
+    // `jl_ast_preserve` is called in the wrong context.
+    // If `roots` is not NULL, it always points to a rooted stack slot.
+    jl_array_t **roots;
 } jl_ast_context_t;
 
 static jl_ast_context_t jl_ast_main_ctx;
@@ -72,6 +76,29 @@ static jl_ast_context_t jl_ast_main_ctx;
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
 #define jl_ast_context_list_item(node)          \
     container_of(node, jl_ast_context_t, list)
+
+#define JL_AST_PRESERVE_PUSH(ctx, _roots, old_roots)    \
+    jl_array_t *_roots = NULL;                          \
+    jl_array_t **old_roots = ctx->roots;                \
+    ctx->roots = &_roots;                               \
+    JL_GC_PUSH1(&_roots)
+#define JL_AST_PRESERVE_POP(ctx, old_roots)     \
+    JL_GC_POP();                                \
+    ctx->roots = old_roots
+
+static void jl_ast_preserve(fl_context_t *fl_ctx, jl_value_t *obj)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+    assert(ctx->roots);
+    jl_array_t *roots = *ctx->roots;
+    if (!roots) {
+        roots = *ctx->roots = jl_alloc_cell_1d(1);
+        jl_cellset(roots, 0, obj);
+    }
+    else {
+        jl_cell_1d_push(roots, obj);
+    }
+}
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, int expronly);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
@@ -102,7 +129,8 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
     jl_function_t *f = NULL;
     jl_value_t **margs;
-    JL_GC_PUSHARGS(margs, nargs);
+    // Reserve one more slot for the result
+    JL_GC_PUSHARGS(margs, nargs + 1);
     int i;
     for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
@@ -112,7 +140,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         margs[0] = jl_toplevel_eval(margs[0]);
         f = (jl_function_t*)margs[0];
         assert(jl_is_func(f));
-        result = jl_apply(f, &margs[1], nargs-1);
+        margs[nargs] = result = jl_apply(f, &margs[1], nargs-1);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -123,10 +151,10 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     // protect result from GC, otherwise it could be freed during future
     // macro expansions, since it will be referenced only from scheme and
     // not julia.
-    // all calls to invoke-julia-macro happen under a single call to jl_expand,
-    // so the preserved value stack is popped there.
+    // all calls to invoke-julia-macro happen under `jl_macroexpand`,
+    // `jl_expand` or `jl_parse_next` so the preserved array is rooted there.
     assert(result != NULL);
-    jl_gc_preserve(result);
+    jl_ast_preserve(fl_ctx, result);
     value_t scm = julia_to_scm(fl_ctx, result);
     fl_gc_handle(fl_ctx, &scm);
     value_t scmresult;
@@ -211,11 +239,13 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         ctx = jl_ast_context_list_item(node);
         ctx->ref = 1;
         ctx->task = jl_current_task;
+        ctx->roots = NULL;
         JL_UNLOCK_NOGC(flisp);
         return ctx;
     }
     // Construct a new one if we can't find any
     ctx = (jl_ast_context_t*)calloc(1, sizeof(jl_ast_context_t));
+    // ctx->roots is NULL already due to calloc.
     ctx->ref = 1;
     ctx->task = jl_current_task;
     node = &ctx->list;
@@ -252,8 +282,10 @@ JL_DLLEXPORT void jl_lisp_prompt(void)
 {
     jl_init_frontend();
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     fl_context_t *fl_ctx = &ctx->fl;
     fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "__start")), fl_cons(fl_ctx, fl_ctx->NIL,fl_ctx->NIL));
+    JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
 }
 
@@ -662,7 +694,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     return result;
 }
 
-void *jl_start_parsing_file(const char *fname)
+jl_ast_context_t *jl_start_parsing_file(const char *fname)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -671,12 +703,11 @@ void *jl_start_parsing_file(const char *fname)
         jl_ast_ctx_leave(ctx);
         return NULL;
     }
-    return (void*)ctx;
+    return ctx;
 }
 
-void jl_stop_parsing(void *_ctx)
+void jl_stop_parsing(jl_ast_context_t *ctx)
 {
-    jl_ast_context_t *ctx = (jl_ast_context_t*)_ctx;
     fl_context_t *fl_ctx = &ctx->fl;
     fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-close-stream")));
     jl_ast_ctx_leave(ctx);
@@ -704,16 +735,20 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
     return prev == fl_ctx->T ? 1 : 0;
 }
 
-jl_value_t *jl_parse_next(void *_ctx)
+jl_value_t *jl_parse_next(jl_ast_context_t *ctx)
 {
-    jl_ast_context_t *ctx = (jl_ast_context_t*)_ctx;
     fl_context_t *fl_ctx = &ctx->fl;
+    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t c = fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-next")));
-    if (c == fl_ctx->FL_EOF)
+    if (c == fl_ctx->FL_EOF) {
+        JL_AST_PRESERVE_POP(ctx, old_roots);
         return NULL;
+    }
     if (iscons(c)) {
-        if (cdr_(c) == fl_ctx->FL_EOF)
+        if (cdr_(c) == fl_ctx->FL_EOF) {
+            JL_AST_PRESERVE_POP(ctx, old_roots);
             return NULL;
+        }
         value_t a = car_(c);
         if (isfixnum(a)) {
             jl_lineno = numval(a);
@@ -724,7 +759,9 @@ jl_value_t *jl_parse_next(void *_ctx)
     // for error, get most recent line number
     if (iscons(c) && car_(c) == jl_ast_ctx(fl_ctx)->error_sym)
         jl_lineno = numval(fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-current-lineno"))));
-    return scm_to_julia(fl_ctx, c, 0);
+    jl_value_t *res = scm_to_julia(fl_ctx, c, 0);
+    JL_AST_PRESERVE_POP(ctx, old_roots);
+    return res;
 }
 
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
@@ -738,7 +775,7 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
     f = cvalue_static_cstrn(fl_ctx, filename, namelen);
     fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string-stream")), t, f);
     fl_free_gc_handles(fl_ctx, 1);
-    return jl_parse_eval_all(filename, namelen, (void*)ctx);
+    return jl_parse_eval_all(filename, namelen, ctx);
 }
 
 // returns either an expression or a thunk
@@ -746,14 +783,12 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
-    int np = jl_gc_n_preserved_values();
+    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), arg);
     jl_value_t *result = scm_to_julia(fl_ctx, e, 0);
+    JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
     return result;
 }
 
@@ -761,15 +796,13 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
-    int np = jl_gc_n_preserved_values();
+    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-macroexpand")), arg);
     jl_value_t *result;
     result = scm_to_julia(fl_ctx, e, 0);
+    JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
     return result;
 }
 
