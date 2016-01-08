@@ -1,18 +1,21 @@
+;; ignored variable name. TODO replace with _?
+(define UNUSED '|#unused#|)
+
 ;; allow (:: T) => (:: #gensym T) in formal argument lists
-(define (fill-missing-argname a)
+(define (fill-missing-argname a unused)
   (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-      `(|::| ,(gensy) ,(cadr a))
+      `(|::| ,(if unused UNUSED (gensy)) ,(cadr a))
       a))
-(define (fix-arglist l)
+(define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
       (error "invalid ... on non-final argument"))
   (map (lambda (a)
          (cond ((and (pair? a) (eq? (car a) 'kw))
-                `(kw ,(fill-missing-argname (cadr a)) ,(caddr a)))
+                `(kw ,(fill-missing-argname (cadr a) unused) ,(caddr a)))
                ((and (pair? a) (eq? (car a) '...))
-                `(... ,(fill-missing-argname (cadr a))))
+                `(... ,(fill-missing-argname (cadr a) unused)))
                (else
-                (fill-missing-argname a))))
+                (fill-missing-argname a unused))))
        l))
 
 (define (effect-free? e)
@@ -307,11 +310,11 @@
    (names bounds) (sparam-name-bounds sparams '() '())
    (begin
      (let ((anames (llist-vars argl)))
-       (if (has-dups anames)
+       (if (has-dups (filter (lambda (x) (not (eq? x UNUSED))) anames))
            (error "function argument names not unique"))
        (if (has-dups names)
            (error "function static parameter names not unique"))
-       (if (any (lambda (x) (memq x names)) anames)
+       (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
            (error "function argument and static parameter names must be distinct")))
      (if (and name (not (sym-ref? name)))
          (error (string "invalid method name \"" (deparse name) "\"")))
@@ -448,7 +451,7 @@
            (lambda (s) (let ((name (if (symbol? s) s (cadr s))))
                          (expr-contains-eq name (cons 'list argl))))
            positional-sparams)
-          `((|::| ,(gensy) (call (|.| Core 'kwftype) ,ftype)) (:: ,kw (top Array)) ,@pargl ,@vararg)
+          `((|::| ,UNUSED (call (|.| Core 'kwftype) ,ftype)) (:: ,kw (top Array)) ,@pargl ,@vararg)
           `(block
             (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
@@ -932,14 +935,20 @@
                        (name    (if has-sp (cadr head) head))
                        (sparams (if has-sp (cddr head) '()))
                        (isstaged (eq? (car e) 'stagedfunction))
+                       (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
+                                                 `(|::| |#self#| ,(cadr n))
+                                                 n)))
                        ;; fill in first (closure) argument
                        (farg    (if (decl? name)
-                                    name
-                                    `(|::| (call (|.| Core 'Typeof) ,name))))
+                                    (adj-decl name)
+                                    `(|::| |#self#| (call (|.| Core 'Typeof) ,name))))
                        (argl    (fix-arglist
                                  (if (and (not (decl? name)) (eq? (undot-name name) 'call))
-                                     argl
-                                     (arglist-unshift argl farg))))
+                                     (cons (adj-decl (car argl)) (cdr argl))
+                                     (arglist-unshift argl farg))
+                                 (and (not (any kwarg? argl)) (not (and (pair? argl)
+                                                                        (pair? (car argl))
+                                                                        (eq? (caar argl) 'parameters))))))
                        (name    (if (decl? name) #f name)))
                   (expand-binding-forms
                    (method-def-expr name sparams argl (caddr e) isstaged))))
@@ -2658,7 +2667,8 @@ So far only the second case can actually occur.
 (define (filter2 f a b) (append (filter f a) (filter f b)))
 
 (define (analyze-vars-lambda e env captvars sp new-sp)
-  (let* ((args (lam:args e))
+  (let* ((args (filter (lambda (v) (not (eq? (arg-name v) UNUSED)))
+                       (lam:args e)))
 	 (locl (cdr (caddr e)))
 	 (allv (nconc (map arg-name args) locl))
 	 (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
@@ -2691,7 +2701,7 @@ So far only the second case can actually occur.
     ;; mark all the vars we capture as captured
     (for-each (lambda (v) (vinfo:set-capt! v #t))
 	      cv)
-    `(lambda ,args
+    `(lambda ,(lam:args e)
        (,vi ,cv 0 ,new-sp)
        ,bod)))
 
