@@ -11,13 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef _OS_WINDOWS_
-#include <malloc.h>
-#else
-#include <unistd.h>
-#endif
 #include "julia.h"
 #include "julia_internal.h"
+#ifndef _OS_WINDOWS_
+#include <unistd.h>
+#endif
 
 // ::ANY has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 10
