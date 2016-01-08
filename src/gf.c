@@ -763,32 +763,12 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         return newmeth;
     }
     else {
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF &&
-                method->unspecialized == NULL) {
-            jl_lambda_info_t *unspec = method->unspecialized;
-            (void)jl_method_cache_insert(mt, type, unspec);
-            JL_GC_POP();
-            JL_UNLOCK(codegen);
-            return unspec;
-        }
         jl_svec_t *sparam_vals = jl_svec_len(sparams) == 0 ? jl_emptysvec : jl_alloc_svec_uninit(jl_svec_len(sparams)/2);
         for (int i = 0; i < jl_svec_len(sparam_vals); i++) {
             jl_svecset(sparam_vals, i, jl_svecref(sparams, i * 2 + 1));
         }
         newmeth = jl_add_static_parameters(method, sparam_vals, type);
     }
-
-    /* "method" itself should never get compiled,
-      for example, if an unspecialized method is needed,
-      the slow compiled code should be associated with
-      method->linfo->unspecialized, not method */
-    assert(!newmeth->ast ||
-           (newmeth->specTypes == method->specTypes) ||
-           (newmeth->fptr == NULL &&
-            newmeth->functionObjects.functionObject == NULL &&
-            newmeth->functionObjects.specFunctionObject == NULL &&
-            newmeth->functionID == 0 &&
-            newmeth->specFunctionID == 0));
 
     if (cache_as_orig)
         (void)jl_method_cache_insert(mt, origtype, newmeth);
@@ -819,8 +799,9 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         }
         method->specializations = spe;
         jl_gc_wb(method, method->specializations);
-        if (jl_symbol_name(newmeth->name)[0] != '@')  // don't bother with typeinf on macros
-            jl_type_infer(newmeth, type, method);
+        if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) // don't bother with typeinf if compile is off
+            if (jl_symbol_name(newmeth->name)[0] != '@')  // don't bother with typeinf on macros
+                jl_type_infer(newmeth, type, method);
     }
     JL_GC_POP();
     JL_UNLOCK(codegen);
@@ -1523,7 +1504,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
     return (jl_tupletype_t*)tt;
 }
 
-/*
 static int tupletype_any_bottom(jl_value_t *sig)
 {
     jl_svec_t *types = ((jl_tupletype_t*)sig)->types;
@@ -1535,232 +1515,181 @@ static int tupletype_any_bottom(jl_value_t *sig)
     return 0;
 }
 
-static void dbg_print_progress(uv_stream_t *s, size_t i, size_t l)
+static int _compile_all_tvar_union(jl_methlist_t *meth)
 {
-    char meter[81] = "###############################################################################\r";
-    int z, pct = 80 * i / l;
-    if (pct > 79) pct = 79;
-    for (z = 0; z < pct; z++)
-        meter[z] = '#';
-    for (; z < 79; z++)
-        meter[z] = '-';
-    jl_printf(s, "%s", meter);
+    // f{T<:Union{...}}(...) is a common pattern
+    // and expanding the Union may give a leaf function
+    jl_tvar_t **tvs;
+    int tvarslen;
+    if (jl_is_typevar(meth->tvars)) {
+        tvs = (jl_tvar_t**)&meth->tvars;
+        tvarslen = 1;
+    }
+    else {
+        tvs = (jl_tvar_t**)jl_svec_data(meth->tvars);
+        tvarslen = jl_svec_len(meth->tvars);
+    }
+
+    int complete = 0;
+    if (tvarslen == 1) {
+        jl_tvar_t *tv = (jl_tvar_t*)meth->tvars;
+        if (jl_is_uniontype(tv->ub)) {
+			complete = 1;
+            jl_uniontype_t *ub = (jl_uniontype_t*)tv->ub;
+            size_t i, l = jl_svec_len(ub->types);
+            for (i = 0; i < l + 1; i++) { // add Union{} to the end of the list, since T<:Union{} is always a valid option
+                jl_value_t *ty = (i == l ? jl_bottom_type : jl_svecref(ub->types, i));
+                if (i == l || jl_is_leaf_type(ty)) {
+                    jl_value_t *env[2] = {(jl_value_t*)tv, ty};
+                    jl_value_t *sig;
+                    JL_TRY {
+                        sig = (jl_value_t*)
+                            jl_instantiate_type_with((jl_value_t*)meth->sig, env, 1);
+                    }
+                    JL_CATCH {
+                        continue; // sigh, we found an invalid type signature. should we warn the user?
+                    }
+                    assert(jl_is_tuple_type(sig));
+                    if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
+                        continue; // signature wouldn't be callable / is invalid -- skip it
+                    }
+                    if (jl_is_leaf_type(sig)) {
+                        if (jl_get_specialization1((jl_tupletype_t*)sig, NULL)) {
+                            if (!jl_has_typevars((jl_value_t*)sig)) continue;
+                        }
+                    }
+                }
+                complete = 0;
+            }
+        }
+    }
+
+    return complete;
 }
 
 static void _compile_all_deq(jl_array_t *found)
 {
     size_t found_i, found_l = jl_array_len(found);
-    jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)(found_l / 2));
-    for (found_i = 0; found_i < found_l; found_i += 2) {
-        dbg_print_progress(JL_STDERR, found_i + 2, found_l);
-        jl_value_t *thunk = jl_cellref(found, found_i);
+    jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
+    for (found_i = 0; found_i < found_l; found_i++) {
+        jl_printf(JL_STDERR, " %zd / %zd\r", found_i + 1, found_l);
+        jl_methlist_t *meth = (jl_methlist_t*)jl_cellref(found, found_i);
 
-        if (jl_is_lambda_info(thunk)) {
-            // anonymous or specialized function
-            jl_lambda_info_t *li = (jl_lambda_info_t*)thunk;
-            assert(!jl_cellref(found, found_i + 1));
-            jl_trampoline_compile_linfo(li, 1);
-            assert(li->functionID > 0);
-            continue;
-        }
-
-        jl_function_t *func = (jl_function_t*)thunk;
-        jl_methlist_t *meth = (jl_methlist_t*)jl_cellref(found, found_i + 1);
-        assert(!func->linfo);
-
+        // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the unspecialized function)
+        int complete = 0;
         if (jl_is_leaf_type((jl_value_t*)meth->sig)) {
             // usually can create a specialized version of the function,
             // if the signature is already a leaftype
-            jl_function_t *spec = jl_get_specialization(func, meth->sig, NULL);
+            jl_lambda_info_t *spec = jl_get_specialization1(meth->sig, NULL);
             if (spec && !jl_has_typevars((jl_value_t*)meth->sig)) {
                 // replace unspecialized func with specialized version
-                // if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
+                // but if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
                 // that might cause a different method to match at runtime
                 meth->func = spec;
                 jl_gc_wb(meth, spec);
-                continue;
+                complete = 1;
             }
         }
 
-        if (jl_is_typevar(meth->tvars)) {
-            // f{T<:Union{...}}(...) is a common pattern
-            // and expanding the Union may give a leaf function
-            jl_tvar_t *tv = (jl_tvar_t*)meth->tvars;
-            if (jl_is_uniontype(tv->ub)) {
-                int complete = 1; // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the unspecialized function)
-                // TODO: remove the "complete" check once runtime-intrinsics are fully active
-                jl_uniontype_t *ub = (jl_uniontype_t*)tv->ub;
-                size_t i, l = jl_svec_len(ub->types);
-                for (i = 0; i < l + 1; i++) { // add Union{} to the end of the list, since T<:Union{} is always a valid option
-                    jl_value_t *ty = (i == l ? jl_bottom_type : jl_svecref(ub->types, i));
-                    if (i == l || jl_is_leaf_type(ty)) {
-                        jl_value_t *env[2] = {(jl_value_t*)tv, ty};
-                        jl_value_t *sig;
-                        JL_TRY {
-                            sig = (jl_value_t*)
-                                jl_instantiate_type_with((jl_value_t*)meth->sig, env, 1);
-                        }
-                        JL_CATCH {
-                            continue; // sigh, we found an invalid type signature. should we warn the user?
-                        }
-                        assert(jl_is_tuple_type(sig));
-                        if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
-                            continue; // signature wouldn't be callable / is invalid -- skip it
-                        }
-                        if (jl_is_leaf_type(sig)) {
-                            if (jl_get_specialization(func, (jl_tupletype_t*)sig, NULL)) {
-                                if (!jl_has_typevars((jl_value_t*)sig)) continue;
-                            }
-                        }
-                    }
-                    complete = 0;
-                }
-                if (complete) {
-                    meth->func->linfo->functionID = -1; // indicate that this method doesn't need a functionID
-                    continue;
-                }
-            }
-        }
+        if (!complete)
+            complete = _compile_all_tvar_union(meth);
+            // TODO: remove this "complete" check once runtime-intrinsics are fully active
 
-        jl_lambda_info_t *unspec = meth->func->unspecialized;
-        if (unspec == NULL) {
-            unspec = jl_add_static_parameters(meth->func, jl_emptysvec, meth->sig);
-            meth->func->unspecialized = unspec;
-            jl_gc_wb(meth->func, unspec);
+        if (complete) {
+            if (!meth->func->functionID)
+                meth->func->functionID = -1; // indicate that this method doesn't need a functionID because it was fully covered above
         }
-        jl_trampoline_compile_linfo(unspec, 1);
-        assert(unspec->functionID > 0);
-        meth->func->functionID = -1; // indicate that this method doesn't need a functionID
+        else {
+            if (!meth->func->inferred) // not necessarily valid to run type inference twice (due to inlining a non-gensym into a type_goto, for example), nor is it useful
+                jl_type_infer(meth->func, meth->sig, meth->func);
+            jl_compile_linfo(meth->func, NULL);
+            assert(meth->func->functionID > 0);
+        }
     }
     jl_printf(JL_STDERR, "\n");
 }
 
-static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_function_t *in_gf)
+static void _compile_all_enq_mt(jl_methtable_t *mt, jl_array_t *found);
+static void _compile_all_enq_ml(jl_methlist_t *ml, jl_array_t *found)
 {
-    // scan through all content reachable from 'v' and record all jl_function_t objects found
-    // with awareness of whether the reachability path indicates that the object is  gf
-    if (v == NULL) return;
-    if (!ptrhash_has(h, v)) {
-        ptrhash_put(h, v, v);
-        if (jl_is_gf(v)) {
-            jl_function_t *gf = (jl_function_t*)v;
-            _compile_all_enq(gf->env, h, found, gf);
-            // fast return and skip linfo, it is supposed to be null here
-            return;
+    if (ml == NULL || (jl_value_t*)ml == jl_nothing) return;
+    if (ml->func != NULL && ml->func->fptr == NULL && !ml->func->functionID) {
+        // found a method (not a placeholder guard) that has not been compiled
+        if (!ml->isstaged)
+            jl_cell_1d_push(found, (jl_value_t*)ml);
+    }
+    _compile_all_enq_mt(ml->invokes, found);
+    _compile_all_enq_ml(ml->next, found);
+}
+
+static void _compile_all_enq_mt(jl_methtable_t *mt, jl_array_t *found)
+{
+    jl_array_t *a;
+    if (mt == NULL || (jl_value_t*)mt == jl_nothing) return;
+    _compile_all_enq_ml(mt->defs, found);
+    _compile_all_enq_ml(mt->cache, found);
+
+    a = mt->cache_arg1;
+    if ((jl_value_t*)a != jl_nothing) {
+        size_t i, l = jl_array_len(a);
+        for (i = 0; i < l; i++) {
+            _compile_all_enq_ml((jl_methlist_t*)jl_cellref(a, i), found);
         }
-        else if (jl_is_function(v)) {
-            jl_function_t *f = (jl_function_t*)v;
-            _compile_all_enq(f->env, h, found, 0);
-            _compile_all_enq((jl_value_t*)f->linfo, h, found, in_gf);
-            return;
+    }
+
+    a = mt->cache_targ;
+    if ((jl_value_t*)a != jl_nothing) {
+        size_t i, l = jl_array_len(a);
+        for (i = 0; i < l; i++) {
+            _compile_all_enq_ml((jl_methlist_t*)jl_cellref(a, i), found);
         }
-        else if (jl_is_mtable(v)) {
-            if (!in_gf) {
-                // found an methtable not in a gf, skip it for now -- hopefully we see this again in the gf
-                ptrhash_remove(h, v);
-                return;
-            }
-            jl_methtable_t *mt = (jl_methtable_t*)v;
-            _compile_all_enq((jl_value_t*)mt->defs, h, found, in_gf);
-            _compile_all_enq((jl_value_t*)mt->cache, h, found, in_gf);
-            _compile_all_enq((jl_value_t*)mt->cache_arg1, h, found, in_gf);
-            _compile_all_enq((jl_value_t*)mt->cache_targ, h, found, in_gf);
-        }
-        else if (jl_typeis(v, jl_method_type)) {
-            if (!in_gf) {
-                // found an methtable not in a gf, skip it for now -- hopefully we see this again in the gf
-                ptrhash_remove(h, v);
-                return;
-            }
-            jl_methlist_t *meth = (jl_methlist_t*)v;
-            int use_mtable = (meth->func->linfo && !meth->func->linfo->specTypes) && !(meth->isstaged);
-            _compile_all_enq((jl_value_t*)meth->invokes, h, found, in_gf);
-            _compile_all_enq((jl_value_t*)meth->next, h, found, in_gf);
-            _compile_all_enq((jl_value_t*)meth->func, h, found, in_gf);
-            if (use_mtable && meth->func->fptr == jl_trampoline && !meth->func->linfo->functionID) {
-                jl_cell_1d_push(found, (jl_value_t*)in_gf);
-                jl_cell_1d_push(found, (jl_value_t*)meth);
-            }
-        }
-        else if (jl_is_lambda_info(v)) {
-            jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-            // if in_gf and !specTypes, the lambda will be compiled from the method table
-            if (!in_gf && !li->specTypes && li->unspecialized) {
-                // naked lambda from a gf: compile via unspecialized
-                li = li->unspecialized->linfo;
-            }
-            if (li->specTypes && li->fptr == jl_trampoline && !li->functionID) {
-                jl_cell_1d_push(found, (jl_value_t*)li);
-                jl_cell_1d_push(found, (jl_value_t*)NULL);
-            }
-        }
-        else if (jl_is_array(v)) {
-            jl_array_t *a = (jl_array_t*)v;
-            if (a->ptrarray) {
-                size_t i, l = jl_array_len(a);
-                for (i = 0; i < l; i++) {
-                    _compile_all_enq(jl_cellref(a, i), h, found, in_gf);
-                }
-            }
-        }
-        else if (jl_is_module(v)) {
-            jl_module_t *m = (jl_module_t*)v;
-            size_t i;
-            size_t sz = m->bindings.size;
-            for(i=1; i < sz; i+=2) {
-                if (m->bindings.table[i] != HT_NOTFOUND) {
-                    jl_binding_t *b = (jl_binding_t*)m->bindings.table[i];
-                    jl_value_t *v = b->value;
-                    if (v != NULL) {
-                        _compile_all_enq(v, h, found, 0);
+    }
+}
+
+static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
+{
+    // scan through all types reachable from 'v' and
+    // record all jl_lambda_info_t objects and signatures in their method tables
+    size_t i, sz = m->bindings.size;
+    for(i=1; i < sz; i+=2) {
+        if (m->bindings.table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)m->bindings.table[i];
+            if (b->owner == m && b->value && b->constp) {
+                jl_value_t *v = b->value;
+                if (jl_is_datatype(v)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)v)->name;
+                    if (tn->module == m && tn->name == b->name) {
+                        _compile_all_enq_mt(tn->mt, found);
                     }
                 }
-                else {
-                    jl_compile_all_defs((jl_function_t*)v);
+                else if (jl_is_module(v)) {
+                    jl_module_t *child = (jl_module_t*)b->value;
+                    if (child != m && child->parent == m && child->name == b->name) {
+                        // this is the original/primary binding for the submodule
+                        _compile_all_enq_module(child, found);
+                    }
                 }
-            }
-            if (m->constant_table != NULL) {
-                for(i=0; i < jl_array_len(m->constant_table); i++) {
-                    jl_value_t *v = jl_cellref(m->constant_table, i);
-                    _compile_all_enq(v, h, found, 0);
-                }
-            }
-        }
-        jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
-        size_t i, nf = jl_datatype_nfields(dt);
-        for (i = 0; i < nf; i++) {
-            if (jl_field_isptr(dt, i)) {
-                jl_value_t **slot = (jl_value_t**)
-                    ((char*)v + jl_field_offset(dt, i));
-                jl_value_t *fld = *slot;
-                _compile_all_enq(fld, h, found, 0);
             }
         }
     }
 }
-*/
+
 void jl_compile_all(void)
 {
-    htable_t h;
-    htable_new(&h, 0);
     // this "found" array will contain
     // LambdaStaticDatas that need to be compiled
     // and (generic-function, method) pairs that may be optimized (and need to be compiled)
     jl_array_t *m = jl_alloc_cell_1d(0);
     JL_GC_PUSH1(&m);
-    /*
     while (1) {
-        _compile_all_enq((jl_value_t*)jl_main_module, &h, m, 0);
+        _compile_all_enq_module(jl_main_module, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
         _compile_all_deq(m);
-        htable_reset(&h, h.size);
         jl_array_del_end(m, changes);
     }
-    */
     JL_GC_POP();
-    htable_free(&h);
 }
 
 JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
