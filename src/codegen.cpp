@@ -5384,6 +5384,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         builder.CreateUnreachable();
     }
 
+    // patch up dangling BasicBlocks from skipped labels
+    for (std::map<int,BasicBlock*>::iterator it = labels.begin(); it != labels.end(); ++it) {
+        if (it->second->getTerminator() == NULL) {
+            builder.SetInsertPoint(it->second);
+            builder.CreateUnreachable();
+        }
+    }
+
     // step 16. fix up size of stack root list
     finalize_gc_frame(&ctx);
 
