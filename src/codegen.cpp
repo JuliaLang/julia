@@ -4920,14 +4920,15 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 addr.push_back(i * sizeof(void*));
                 addr.push_back(llvm::dwarf::DW_OP_deref);
                 prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
+                ctx.dbuilder->insertDbgValueIntrinsic(
+                    argArray,
+                    0,
+                    ctx.vars[s].dinfo,
+                    ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr),
-                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
-#else
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
+                    builder.getCurrentDebugLocation().get(),
 #endif
+                    builder.GetInsertBlock());
             }
         }
 #endif
