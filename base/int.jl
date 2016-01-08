@@ -215,7 +215,7 @@ convert{Tf<:Union{Float32,Float64}}(T::BitSigned64T, x::Tf) =
 convert{Tf<:Union{Float32,Float64}}(T::BitUnsigned64T, x::Tf) =
     box(T,checked_fptoui(T,unbox(Tf,x)))
 
-convert{Tf<:Union{Float32,Float64}}(T::Union{Type{Int128},Type{UInt128}},x::Tf) =
+convert{Tf<:Union{Float32,Float64}}(T::Union{Type{Int128},Type{UInt128}}, x::Tf) =
     (isinteger(x) || throw(InexactError()) ; trunc(T,x))
 
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
