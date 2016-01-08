@@ -182,15 +182,7 @@ end
 """
     LinAlg.checksquare(A)
 
-Check that a matrix is square, then return its common dimension.
-
-Input:
-
-- a matrix (or multiple matrices)
-
-Output:
-
-- the common dimension (a vector for multiple arguments)
+Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
 """
 function checksquare(A)
     m,n = size(A)
