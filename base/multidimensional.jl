@@ -247,18 +247,25 @@ end
 end
 
 # checksize ensures the output array A is the correct size for the given indices
-@noinline throw_checksize_error(arr, dim, idx) = throw(DimensionMismatch("index $d selects $(length(I[d])) elements, but size(A, $d) = $(size(A,d))"))
+@noinline throw_checksize_error(A, dim, idx) = throw(DimensionMismatch("index $dim selects $(length(idx)) elements, but size(A, $dim) = $(size(A,dim))"))
+@noinline throw_checksize_error(A, dim, idx::AbstractArray{Bool}) = throw(DimensionMismatch("index $dim selects $(sum(idx)) elements, but size(A, $dim) = $(size(A,dim))"))
 
 checksize(A::AbstractArray, I::AbstractArray) = size(A) == size(I) || throw_checksize_error(A, 1, I)
 checksize(A::AbstractArray, I::AbstractArray{Bool}) = length(A) == sum(I) || throw_checksize_error(A, 1, I)
 
-checksize(A::AbstractArray, I...) = _checksize(A, 1, I...)
+@inline checksize(A::AbstractArray, I...) = _checksize(A, 1, I...)
 _checksize(A::AbstractArray, dim) = true
-# Skip scalars
-_checksize(A::AbstractArray, dim, ::Real, J...) = _checksize(A, dim, J...)
-_checksize(A::AbstractArray, dim, I, J...) = (size(A, dim) == length(I) || throw_checksize_error(A, dim, I); _checksize(A, dim+1, J...))
-_checksize(A::AbstractArray, dim, I::AbstractVector{Bool}, J...) = (size(A, dim) == sum(I) || throw_checksize_error(A, dim, I); _checksize(A, dim+1, J...))
-_checksize(A::AbstractArray, dim, ::Colon, J...) = _checksize(A, dim+1, J...)
+# Drop dimensions indexed by scalars, ignore colons
+@inline _checksize(A::AbstractArray, dim, ::Real, J...) = _checksize(A, dim, J...)
+@inline _checksize(A::AbstractArray, dim, ::Colon, J...) = _checksize(A, dim+1, J...)
+@inline function _checksize(A::AbstractArray, dim, I, J...)
+    size(A, dim) == length(I) || throw_checksize_error(A, dim, I)
+    _checksize(A, dim+1, J...)
+end
+@inline function _checksize(A::AbstractArray, dim, I::AbstractVector{Bool}, J...)
+    size(A, dim) == sum(I) || throw_checksize_error(A, dim, I)
+    _checksize(A, dim+1, J...)
+end
 
 @inline unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 @inline unsafe_setindex!(v::BitArray, x, ind::Real) = (Base.unsafe_bitsetindex!(v.chunks, convert(Bool, x), to_index(ind)); v)
