@@ -651,7 +651,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // compressing tree
         if (!is_ast_node(v)) {
             writetag(s, (jl_value_t*)LiteralVal_tag);
-            write_uint16(s, literal_val_id(v));
+            int id = literal_val_id(v);
+            assert(id >= 0 && id < UINT16_MAX);
+            write_uint16(s, id);
             return;
         }
     }
