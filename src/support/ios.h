@@ -35,12 +35,12 @@ typedef struct {
     bufmode_t bm;     //
     bufstate_t state;
 
-    off_t maxsize;    // space allocated to buffer
-    off_t size;       // length of valid data in buf, >=ndirty
-    off_t bpos;       // current position in buffer
-    off_t ndirty;     // # bytes at &buf[0] that need to be written
+    int64_t maxsize;    // space allocated to buffer
+    int64_t size;       // length of valid data in buf, >=ndirty
+    int64_t bpos;       // current position in buffer
+    int64_t ndirty;     // # bytes at &buf[0] that need to be written
 
-    off_t fpos;       // cached file pos
+    int64_t fpos;       // cached file pos
     size_t lineno;    // current line number
 
     // pointer-size integer to support platforms where it might have
@@ -74,10 +74,10 @@ typedef struct {
 JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n);
-JL_DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
-JL_DLLEXPORT off_t ios_seek_end(ios_t *s);
-JL_DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
-JL_DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
+JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos);   // absolute seek
+JL_DLLEXPORT int64_t ios_seek_end(ios_t *s);
+JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
+JL_DLLEXPORT int64_t ios_pos(ios_t *s);  // get current position
 JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size);
 JL_DLLEXPORT int ios_eof(ios_t *s);
 JL_DLLEXPORT int ios_eof_blocking(ios_t *s);

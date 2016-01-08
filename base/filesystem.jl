@@ -187,7 +187,7 @@ const SEEK_END = Int32(2)
 
 function position(f::File)
     check_open(f)
-    ret = ccall(:jl_lseek, Coff_t, (Int32, Coff_t, Int32), f.handle, 0, SEEK_CUR)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, 0, SEEK_CUR)
     systemerror("lseek", ret == -1)
     return ret
 end
