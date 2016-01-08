@@ -1528,42 +1528,68 @@ static int _compile_all_tvar_union(jl_methlist_t *meth)
     else {
         tvs = (jl_tvar_t**)jl_svec_data(meth->tvars);
         tvarslen = jl_svec_len(meth->tvars);
+        if (tvarslen == 0)
+            return 0;
     }
 
-    int complete = 0;
-    if (tvarslen == 1) {
-        jl_tvar_t *tv = (jl_tvar_t*)meth->tvars;
-        if (jl_is_uniontype(tv->ub)) {
-			complete = 1;
-            jl_uniontype_t *ub = (jl_uniontype_t*)tv->ub;
-            size_t i, l = jl_svec_len(ub->types);
-            for (i = 0; i < l + 1; i++) { // add Union{} to the end of the list, since T<:Union{} is always a valid option
-                jl_value_t *ty = (i == l ? jl_bottom_type : jl_svecref(ub->types, i));
-                if (i == l || jl_is_leaf_type(ty)) {
-                    jl_value_t *env[2] = {(jl_value_t*)tv, ty};
-                    jl_value_t *sig;
-                    JL_TRY {
-                        sig = (jl_value_t*)
-                            jl_instantiate_type_with((jl_value_t*)meth->sig, env, 1);
-                    }
-                    JL_CATCH {
-                        continue; // sigh, we found an invalid type signature. should we warn the user?
-                    }
-                    assert(jl_is_tuple_type(sig));
-                    if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
-                        continue; // signature wouldn't be callable / is invalid -- skip it
-                    }
-                    if (jl_is_leaf_type(sig)) {
-                        if (jl_get_specialization1((jl_tupletype_t*)sig, NULL)) {
-                            if (!jl_has_typevars((jl_value_t*)sig)) continue;
-                        }
-                    }
+    int complete = 1;
+    jl_value_t **env;
+    JL_GC_PUSHARGS(env, 2 * tvarslen);
+    int *idx = (int*)alloca(sizeof(int) * tvarslen);
+    int i;
+    for (i = 0; i < tvarslen; i++) {
+        idx[i] = 0;
+        env[2 * i] = (jl_value_t*)tvs[i];
+        env[2 * i + 1] = jl_bottom_type; // initialize the list with Union{}, since T<:Union{} is always a valid option
+    }
+
+    for (i = 0; i < tvarslen; /* incremented by inner loop */) {
+        jl_value_t *sig;
+        JL_TRY {
+            sig = (jl_value_t*)
+                jl_instantiate_type_with((jl_value_t*)meth->sig, env, tvarslen);
+        }
+        JL_CATCH {
+            goto getnext; // sigh, we found an invalid type signature. should we warn the user?
+        }
+        assert(jl_is_tuple_type(sig));
+        if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
+            goto getnext; // signature wouldn't be callable / is invalid -- skip it
+        }
+        if (jl_is_leaf_type(sig)) {
+            if (jl_get_specialization1((jl_tupletype_t*)sig, NULL)) {
+                if (!jl_has_typevars((jl_value_t*)sig)) goto getnext; // success
+            }
+        }
+        complete = 0;
+
+getnext:
+        for (i = 0; i < tvarslen; i++) {
+            jl_tvar_t *tv = tvs[i];
+            if (jl_is_uniontype(tv->ub)) {
+                jl_uniontype_t *ub = (jl_uniontype_t*)tv->ub;
+                size_t l = jl_svec_len(ub->types);
+                size_t j = idx[i];
+                if (j == l) {
+                    env[2 * i + 1] = jl_bottom_type;
+                    idx[i] = 0;
                 }
+                else {
+                    jl_value_t *ty = jl_svecref(ub->types, j);
+                    if (!jl_is_leaf_type(ty))
+                        ty = (jl_value_t*)jl_new_typevar(tv->name, tv->lb, ty);
+                    env[2 * i + 1] = ty;
+                    idx[i] = j + 1;
+                    break;
+                }
+            }
+            else {
+                env[2 * i + 1] = (jl_value_t*)tv;
                 complete = 0;
             }
         }
     }
-
+    JL_GC_POP();
     return complete;
 }
 
