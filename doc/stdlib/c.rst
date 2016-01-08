@@ -233,10 +233,6 @@
 
    Equivalent to the native ``ptrdiff_t`` c-type (Int)
 
-.. data:: Coff_t
-
-   Equivalent to the native ``off_t`` c-type. Note that julia defines ``_FILE_OFFSET_BITS=64`` so this may not be the same as the default value on 32bits Linux.
-
 .. data:: Cwchar_t
 
    Equivalent to the native ``wchar_t`` c-type (Int32)
