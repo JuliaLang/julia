@@ -227,9 +227,6 @@ static int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
 
 // Variables that become fields of a thread-local struct in the thread-safe version.
 typedef struct _jl_thread_heap_t {
-    // variable for tracking preserved values.
-    arraylist_t preserved_values;
-
     // variable for tracking weak references
     arraylist_t weak_refs;
 
@@ -301,7 +298,6 @@ static jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
 #endif
 
 #define HEAP(x) (current_heap->x)
-#define preserved_values HEAP(preserved_values)
 #define weak_refs HEAP(weak_refs)
 #define big_objects HEAP(big_objects)
 #define mallocarrays HEAP(mallocarrays)
@@ -966,31 +962,6 @@ static inline int maybe_collect(void)
     }
     jl_gc_safepoint();
     return 0;
-}
-
-
-// preserved values
-
-JL_DLLEXPORT int jl_gc_n_preserved_values(void)
-{
-    int len = 0;
-    FOR_CURRENT_HEAP ()
-        len = preserved_values.len;
-    return len;
-}
-
-JL_DLLEXPORT void jl_gc_preserve(jl_value_t *v)
-{
-    FOR_CURRENT_HEAP () {
-        arraylist_push(&preserved_values, (void*)v);
-    }
-}
-
-JL_DLLEXPORT void jl_gc_unpreserve(void)
-{
-    FOR_CURRENT_HEAP () {
-        (void)arraylist_pop(&preserved_values);
-    }
 }
 
 // weak references
@@ -2062,13 +2033,6 @@ static void pre_mark(void)
     if (jl_module_init_order != NULL)
         gc_push_root(jl_module_init_order, 0);
 
-    // stuff randomly preserved
-    FOR_EACH_HEAP () {
-        for(i=0; i < preserved_values.len; i++) {
-            gc_push_root((jl_value_t*)preserved_values.items[i], 0);
-        }
-    }
-
     // objects currently being finalized
     for(i=0; i < to_finalize.len; i++) {
         gc_push_root(to_finalize.items[i], 0);
@@ -2657,7 +2621,6 @@ jl_thread_heap_t *jl_mk_thread_heap(void)
             p[i].newpages = NULL;
             p[i].end_offset = GC_POOL_END_OFS(szc[i]);
         }
-        arraylist_new(&preserved_values, 0);
         arraylist_new(&weak_refs, 0);
         mallocarrays = NULL;
         mafreelist = NULL;
