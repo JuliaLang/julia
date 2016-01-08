@@ -4253,7 +4253,9 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;
-        ctx.vaName = jl_decl_var(jl_cellref(largs,nreq));
+        jl_sym_t *vn = jl_decl_var(jl_cellref(largs,nreq));
+        if (vn != unused_sym)
+            ctx.vaName = vn;
     }
     ctx.nReqArgs = nreq;
 
@@ -4261,12 +4263,13 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     for(i=0; i < nreq; i++) {
         jl_value_t *arg = jl_cellref(largs,i);
         jl_sym_t *argname = jl_decl_var(arg);
+        if (argname == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.vars[argname];
         varinfo.isArgument = true;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         varinfo.value = mark_julia_type((Value*)NULL, false, ty);
     }
-    if (va) {
+    if (va && ctx.vaName) {
         jl_varinfo_t &varinfo = ctx.vars[ctx.vaName];
         varinfo.isArgument = true;
         varinfo.value = mark_julia_type((Value*)NULL, false, jl_tuple_type);
@@ -4543,6 +4546,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         // Go over all arguments and local variables and initialize their debug information
         for(i=0; i < nreq; i++) {
             jl_sym_t *argname = jl_decl_var(jl_cellref(largs,i));
+            if (argname == unused_sym) continue;
             jl_varinfo_t &varinfo = ctx.vars[argname];
 #ifdef LLVM38
             varinfo.dinfo = ctx.dbuilder->createParameterVariable(
@@ -4566,7 +4570,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 ctx.sret + i + 1);                   // Argument number (1-based)
 #endif
         }
-        if (va) {
+        if (va && ctx.vaName) {
 #ifdef LLVM38
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
@@ -4636,6 +4640,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         // before we get to loading local variables
         for(i=0; i < nreq; i++) {
             jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+            if (s == unused_sym) continue;
             if (ctx.vars[s].dinfo != (MDNode*)NULL) {
                 SmallVector<int64_t, 9> addr;
                 addr.push_back(llvm::dwarf::DW_OP_plus);
@@ -4674,6 +4679,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     int n_roots = 0;
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.vars[s];
         if (varinfo.value.isghost) {
             // no need to explicitly load/store a ghost value
@@ -4728,6 +4734,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     int varnum = 0;
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.vars[s];
         assert(!varinfo.memloc); // arguments shouldn't also have memory locs
         if (varinfo.value.isghost) {
@@ -4788,13 +4795,17 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         AI++; // skip sret slot
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+        bool isboxed;
+        Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
+        if (s == unused_sym) {
+            if (specsig && !type_is_ghost(llvmArgType)) AI++;
+            continue;
+        }
         jl_varinfo_t &vi = ctx.vars[s];
         jl_cgval_t theArg;
         if (!vi.value.isghost) {
             if (specsig) {
-                jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
-                bool isboxed;
-                Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
                 if (type_is_ghost(llvmArgType)) // this argument is not actually passed
                     theArg = ghostValue(argType);
                 else if (llvmArgType->isAggregateType())
@@ -4845,7 +4856,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
 
     // step 13. allocate rest argument if necessary
-    if (va) {
+    if (va && ctx.vaName) {
         jl_sym_t *argname = ctx.vaName;
         jl_varinfo_t &vi = ctx.vars[argname];
         if (!vi.escapes && !vi.isAssigned) {
