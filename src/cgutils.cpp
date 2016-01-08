@@ -751,12 +751,21 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     delete clone;
 }
 
-static int32_t jl_assign_functionID(Function *functionObject)
+static int32_t jl_assign_functionID(Function *functionObject, int specsig)
 {
     // give the function an index in the constant lookup table
     if (!imaging_mode)
         return 0;
-    jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(functionObject, T_pvoidfunc));
+    Constant *c;
+    if (!specsig && functionObject->getFunctionType() != jl_func_sig)
+        c = ConstantExpr::getIntToPtr(
+                ConstantExpr::getAdd(
+                    ConstantExpr::getPtrToInt(functionObject, T_size),
+                    ConstantInt::get(T_size, 1)),
+                T_pvoidfunc);
+    else
+        c = ConstantExpr::getBitCast(functionObject, T_pvoidfunc);
+    jl_sysimg_fvars.push_back(c);
     return jl_sysimg_fvars.size();
 }
 
@@ -1504,9 +1513,11 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
                 jl_svec_t *sp = ctx->linfo->sparam_syms;
-                for(size_t i=0; i < jl_svec_len(sp); i++) {
+                for (size_t i=0; i < jl_svec_len(sp); i++) {
                     assert(jl_is_symbol(jl_svecref(sp, i)));
                     if (e == jl_svecref(sp, i)) {
+                        if (jl_svec_len(ctx->linfo->sparam_vals) == 0)
+                            return (jl_value_t*)jl_any_type;
                         e = jl_svecref(ctx->linfo->sparam_vals, i);
                         goto type_of_constant;
                     }
