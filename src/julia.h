@@ -670,9 +670,6 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void);
 
 JL_DLLEXPORT void jl_gc_collect(int);
-JL_DLLEXPORT void jl_gc_preserve(jl_value_t *v);
-JL_DLLEXPORT void jl_gc_unpreserve(void);
-JL_DLLEXPORT int jl_gc_n_preserved_values(void);
 
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
