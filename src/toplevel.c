@@ -555,7 +555,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 }
 
 // repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len, void *ctx)
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len, jl_ast_context_t *ctx)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
@@ -615,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
-    void *ctx = jl_start_parsing_file(fpath);
+    jl_ast_context_t *ctx = jl_start_parsing_file(fpath);
     if (!ctx) {
         jl_errorf("could not open file %s", fpath);
     }
