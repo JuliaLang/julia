@@ -141,13 +141,10 @@ type the following into the Julia prompt::
      0.153756  0.368514
      1.15119   0.918912
 
-    julia> @spawn rand2(2,2)
-    Future(2,1,4,Nullable{Any}())
+    julia> fetch(@spawn rand2(2,2))
+    ERROR: On worker 2:
+    function rand2 not defined on process 2
 
-    julia> @spawn rand2(2,2)
-    Future(3,1,5,Nullable{Any}())
-
-    julia> exception on 2: in anonymous: rand2 not defined
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
