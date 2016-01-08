@@ -134,13 +134,9 @@ type the following into the Julia prompt::
      0.153756  0.368514
      1.15119   0.918912
 
-    julia> @spawn rand2(2,2)
-    RemoteRef(1,1,1)
-
-    julia> @spawn rand2(2,2)
-    RemoteRef(2,1,2)
-
-    julia> exception on 2: in anonymous: rand2 not defined
+    julia> fetch(@spawn rand2(2,2))
+    ERROR: On worker 2:
+    function rand2 not defined on process 2
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
