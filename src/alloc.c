@@ -100,6 +100,7 @@ jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
+jl_sym_t *unused_sym;
 
 typedef struct {
     int64_t a;
@@ -298,13 +299,20 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
         jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
-        size_t narg = jl_array_len(jl_lam_args((jl_expr_t*)li->ast));
+        jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
+        size_t narg = jl_array_len(args);
         uint8_t called=0;
-        int i;
+        int i, j=0;
         for(i=1; i < narg && i <= 8; i++) {
-            if (jl_unbox_long(jl_cellref(jl_cellref(vis,i),2))&64) {
+            jl_value_t *ai = jl_cellref(args,i);
+            if (ai == (jl_value_t*)unused_sym || !jl_is_symbol(ai)) continue;
+            jl_value_t *vj;
+            do {
+                vj = jl_cellref(vis, j++);
+            } while (jl_cellref(vj,0) != ai);
+
+            if (jl_unbox_long(jl_cellref(vj,2))&64)
                 called |= (1<<(i-1));
-            }
         }
         li->called = called;
     }
