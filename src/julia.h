@@ -275,6 +275,7 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 }
 
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 

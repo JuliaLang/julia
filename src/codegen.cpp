@@ -229,7 +229,7 @@ static Type *T_pjlvalue;
 static Type *T_ppjlvalue;
 static Type* jl_parray_llvmt;
 static FunctionType *jl_func_sig;
-static Type *jl_pfptr_llvmt;
+static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
 
 static IntegerType *T_int1;
@@ -566,6 +566,7 @@ typedef struct {
     jl_module_t *module;
     jl_expr_t *ast;
     jl_lambda_info_t *linfo;
+    Value *spvals_ptr;
     Value *argArray;
     Value *argCount;
     std::string funcName;
@@ -847,9 +848,9 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         #endif
         f = (llvm::Function*)definitions.functionObject;
         specf = (llvm::Function*)definitions.specFunctionObject;
-        li->functionID = jl_assign_functionID(f);
+        li->functionID = jl_assign_functionID(f, 0);
         if (specf)
-            li->specFunctionID = jl_assign_functionID(specf);
+            li->specFunctionID = jl_assign_functionID(specf, 1);
         //n_emit++;
     }
     JL_CATCH {
@@ -1060,6 +1061,10 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
         #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction((Function*)li->functionObjects.functionObject);
         #endif
+        if (((Function*)li->functionObjects.functionObject)->getFunctionType() != jl_func_sig) {
+            // mark the pointer as jl_fptr_sparam_t calling convention
+            li->fptr = (jl_fptr_t)(((uintptr_t)li->fptr) | 1);
+        }
 
         assert(li->fptr != NULL);
 #ifndef KEEP_BODIES
@@ -1707,10 +1712,13 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         if (isglob) {
             size_t i;
             if (sparams) {
-                for(i=0; i < jl_svec_len(linfo->sparam_syms); i++) {
+                for (i=0; i < jl_svec_len(linfo->sparam_syms); i++) {
                     if (sym == (jl_sym_t*)jl_svecref(linfo->sparam_syms, i)) {
                         // static parameter
-                        return jl_svecref(linfo->sparam_vals, i);
+                        if (jl_svec_len(ctx->linfo->sparam_vals) > 0)
+                            return jl_svecref(linfo->sparam_vals, i);
+                        else
+                            return NULL;
                     }
                 }
             }
@@ -3140,7 +3148,16 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx, bool isboxed)
         for(size_t i=0; i < jl_svec_len(sp); i++) {
             assert(jl_is_symbol(jl_svecref(sp, i)));
             if (sym == (jl_sym_t*)jl_svecref(sp, i)) {
-                return mark_julia_const(jl_svecref(ctx->linfo->sparam_vals, i));
+                if (jl_svec_len(ctx->linfo->sparam_vals) > 0) {
+                    return mark_julia_const(jl_svecref(ctx->linfo->sparam_vals, i));
+                }
+                else {
+                    assert(ctx->spvals_ptr != NULL);
+                    Value *bp = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_pjlvalue)
+                            builder.CreateBitCast(ctx->spvals_ptr, T_ppjlvalue),
+                            i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
+                    return mark_julia_type(tbaa_decorate(tbaa_const, builder.CreateLoad(bp)), true, jl_any_type);
+                }
             }
         }
         jl_binding_t *jbp=NULL;
@@ -3911,6 +3928,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_value_t *jlrettype, 
     ctx.f = cw;
     ctx.linfo = lam;
     ctx.sret = false;
+    ctx.spvals_ptr = NULL;
     allocate_gc_frame(0, b0, &ctx);
 
     // Save the Function object reference
@@ -4145,6 +4163,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     ctx.f = w;
     ctx.linfo = lam;
     ctx.sret = false;
+    ctx.spvals_ptr = NULL;
     allocate_gc_frame(0, b0, &ctx);
 
     size_t nargs = jl_array_dim0(jl_lam_args(ast));
@@ -4225,6 +4244,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.inbounds.push_back(false);
     ctx.boundsCheck.push_back(false);
     ctx.cyclectx = cyclectx;
+    ctx.spvals_ptr = NULL;
 
     // step 2. process var-info lists to see what vars need boxing
     jl_value_t *gensym_types = jl_lam_gensyms(ast);
@@ -4296,7 +4316,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     Function *f = NULL;
 
     bool specsig = false;
-    if (!va && lam->specTypes != jl_anytuple_type && lam->inferred) {
+    bool needsparams = jl_svec_len(lam->sparam_syms) != jl_svec_len(lam->sparam_vals);
+    if (!va && !needsparams && lam->specTypes != jl_anytuple_type && lam->inferred) {
         // not vararg, consider specialized signature
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
             if (isbits_spec(jl_tparam(lam->specTypes, i))) { // assumes !va
@@ -4320,7 +4341,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     funcName << "_" << globalUnique++;
 
     ctx.sret = false;
-    if (specsig) { // assumes !va
+    if (specsig) { // assumes !va and !needsparams
         std::vector<Type*> fsig(0);
         Type *rt;
         bool retboxed;
@@ -4363,7 +4384,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             declarations->functionObject = function_proto(fwrap);
     }
     else {
-        f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+        f = Function::Create(needsparams ? jl_func_sig_sparams : jl_func_sig,
+                             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), builtins_module);
         addComdat(f);
 #ifdef LLVM37
@@ -4614,6 +4636,9 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
+        if (needsparams) {
+            ctx.spvals_ptr = &*AI++;
+        }
         fArg = &*AI++;
         argArray = &*AI++;
         argCount = &*AI++;
@@ -5164,19 +5189,23 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             if (sret)
                 f->addAttribute(1, Attribute::StructRet);
 
-        if (lam->functionObjects.specFunctionObject == NULL) {
-            lam->functionObjects.specFunctionObject = (void*)f;
-            lam->specFunctionID = jl_assign_functionID(f);
+            if (lam->functionObjects.specFunctionObject == NULL) {
+                lam->functionObjects.specFunctionObject = (void*)f;
             }
             add_named_global(f, (void*)fptr);
         }
         else {
-            Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
-            if (lam->functionObjects.functionObject == NULL) {
-                lam->functionObjects.functionObject = (void*)f;
-                lam->functionID = jl_assign_functionID(f);
+            if (((uintptr_t)fptr) & 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since it would never be used)
                 assert(lam->fptr == NULL);
                 lam->fptr = (jl_fptr_t)fptr;
+            }
+            else {
+                Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
+                if (lam->functionObjects.functionObject == NULL) {
+                    lam->functionObjects.functionObject = (void*)f;
+                    assert(lam->fptr == NULL);
+                    lam->fptr = (jl_fptr_t)fptr;
+                }
             }
         }
     }
@@ -5308,13 +5337,17 @@ static void init_julia_llvm_env(Module *m)
     three_pvalue_llvmt.push_back(T_pjlvalue);
     three_pvalue_llvmt.push_back(T_pjlvalue);
     V_null = Constant::getNullValue(T_pjlvalue);
+
     std::vector<Type*> ftargs(0);
-    ftargs.push_back(T_pjlvalue);
-    ftargs.push_back(T_ppjlvalue);
-    ftargs.push_back(T_int32);
+    ftargs.push_back(T_pjlvalue);  // linfo->sparam_vals
+    ftargs.push_back(T_pjlvalue);  // function
+    ftargs.push_back(T_ppjlvalue); // args[]
+    ftargs.push_back(T_int32);     // nargs
+    jl_func_sig_sparams = FunctionType::get(T_pjlvalue, ftargs, false);
+    assert(jl_func_sig_sparams != NULL);
+    ftargs.erase(ftargs.begin());  // drop linfo->sparams_vals argument
     jl_func_sig = FunctionType::get(T_pjlvalue, ftargs, false);
     assert(jl_func_sig != NULL);
-    jl_pfptr_llvmt = PointerType::get(PointerType::get(jl_func_sig, 0), 0);
 
     Type* vaelts[] = {T_pint8
 #ifdef STORE_ARRAY_LEN
