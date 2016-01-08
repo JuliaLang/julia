@@ -83,4 +83,24 @@ end
 
 @test A1_nested() == 1
 
+# elide a throw
+cb(x) = x > 0 || throw("cb:error")
+
+function B1()
+    y = [1,2,3]
+    @inbounds begin
+        @boundscheck cb(0)
+    end
+    return 0
+end
+
+cond(x) = x > 0 ? x : -x
+function B2()
+    y = [1,2,3]
+    @inbounds begin
+        @boundscheck cond(0)
+    end
+    return 0
+end
+
 end
