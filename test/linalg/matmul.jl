@@ -189,3 +189,23 @@ for elty in [Float32,Float64,Complex128,Complex64]
     A = rand(elty,3,3)
     @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
 end
+
+# Number types that lack conversion to the destination type (#14293)
+immutable RootInt
+    i::Int
+end
+import Base: *
+(*)(x::RootInt, y::RootInt) = x.i*y.i
+
+a = [RootInt(3)]
+C = [0]
+A_mul_Bt!(C, a, a)
+@test C[1] == 9
+a = [RootInt(2),RootInt(10)]
+C = Array(Int, 2, 2)
+A_mul_Bt!(C, a, a)
+@test C == [4 20; 20 100]
+A = [RootInt(3) RootInt(5)]
+C = Array(Int, 1)
+A_mul_B!(C, A, a)
+@test C == [56]
