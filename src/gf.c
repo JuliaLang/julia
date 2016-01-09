@@ -1515,9 +1515,9 @@ static int tupletype_any_bottom(jl_value_t *sig)
     return 0;
 }
 
-static int _compile_all_tvar_union(jl_methlist_t *meth)
+static int _compile_all_tvar_union(jl_methlist_t *meth, jl_tupletype_t *methsig)
 {
-    // f{T<:Union{...}}(...) is a common pattern
+    // f{<:Union{...}}(...) is a common pattern
     // and expanding the Union may give a leaf function
     jl_tvar_t **tvs;
     int tvarslen;
@@ -1528,8 +1528,24 @@ static int _compile_all_tvar_union(jl_methlist_t *meth)
     else {
         tvs = (jl_tvar_t**)jl_svec_data(meth->tvars);
         tvarslen = jl_svec_len(meth->tvars);
-        if (tvarslen == 0)
+        if (tvarslen == 0) {
+            if (jl_is_leaf_type((jl_value_t*)methsig)) {
+                // usually can create a specialized version of the function,
+                // if the signature is already a leaftype
+                jl_lambda_info_t *spec = jl_get_specialization1(methsig, NULL);
+                if (spec && !jl_has_typevars((jl_value_t*)methsig)) {
+                    if (methsig == meth->sig) {
+                        // replace unspecialized func with specialized version
+                        // but if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
+                        // that might cause a different method to match at runtime
+                        meth->func = spec;
+                        jl_gc_wb(meth, spec);
+                    }
+                    return 1;
+                }
+            }
             return 0;
+        }
     }
 
     int complete = 1;
@@ -1547,7 +1563,7 @@ static int _compile_all_tvar_union(jl_methlist_t *meth)
         jl_value_t *sig;
         JL_TRY {
             sig = (jl_value_t*)
-                jl_instantiate_type_with((jl_value_t*)meth->sig, env, tvarslen);
+                jl_instantiate_type_with((jl_value_t*)methsig, env, tvarslen);
         }
         JL_CATCH {
             goto getnext; // sigh, we found an invalid type signature. should we warn the user?
@@ -1593,6 +1609,72 @@ getnext:
     return complete;
 }
 
+static int _compile_all_union(jl_methlist_t *meth)
+{
+    // f(::Union{...}, ...) is a common pattern
+    // and expanding the Union may give a leaf function
+    jl_tupletype_t *sig = meth->sig;
+    int complete = 1;
+    size_t count_unions = 0;
+    size_t i, l = jl_svec_len(sig->parameters);
+    jl_svec_t *p = NULL;
+    jl_tupletype_t *methsig = NULL;
+
+    for (i = 0; i < l; i++) {
+        jl_value_t *ty = jl_svecref(sig->parameters, i);
+        if (jl_is_uniontype(ty)) {
+            jl_svec_t *utypes = ((jl_uniontype_t*)ty)->types;
+            size_t l = jl_svec_len(utypes);
+            if (l == 0)
+                return 1; // why does this method exist?
+            ++count_unions;
+        }
+    }
+
+    if (count_unions == 0)
+        return _compile_all_tvar_union(meth, sig);
+
+    int *idx = (int*)alloca(sizeof(int) * count_unions);
+    for (i = 0; i < count_unions; i++) {
+        idx[i] = 0;
+    }
+
+    JL_GC_PUSH2(&p, &methsig);
+    int idx_ctr = 0, incr = 0;
+    while (!incr) {
+        jl_svec_t *p = jl_alloc_svec_uninit(l);
+        for (i = 0, idx_ctr = 0, incr = 1; i < l; i++) {
+            jl_value_t *ty = jl_svecref(sig->parameters, i);
+            if (jl_is_uniontype(ty)) {
+                jl_svec_t *utypes = ((jl_uniontype_t*)ty)->types;
+                size_t l = jl_svec_len(utypes);
+                size_t j = idx[idx_ctr];
+                jl_svecset(p, i, jl_svecref(utypes, j));
+                ++j;
+                if (incr) {
+                    if (j == l) {
+                        idx[idx_ctr] = 0;
+                    }
+                    else {
+                        idx[idx_ctr] = j;
+                        incr = 0;
+                    }
+                }
+                ++idx_ctr;
+            }
+            else {
+                jl_svecset(p, i, ty);
+            }
+        }
+        methsig = jl_apply_tuple_type(p);
+        if (!_compile_all_tvar_union(meth, methsig))
+            complete = 0;
+    }
+
+    JL_GC_POP();
+    return complete;
+}
+
 static void _compile_all_deq(jl_array_t *found)
 {
     size_t found_i, found_l = jl_array_len(found);
@@ -1602,24 +1684,7 @@ static void _compile_all_deq(jl_array_t *found)
         jl_methlist_t *meth = (jl_methlist_t*)jl_cellref(found, found_i);
 
         // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the unspecialized function)
-        int complete = 0;
-        if (jl_is_leaf_type((jl_value_t*)meth->sig)) {
-            // usually can create a specialized version of the function,
-            // if the signature is already a leaftype
-            jl_lambda_info_t *spec = jl_get_specialization1(meth->sig, NULL);
-            if (spec && !jl_has_typevars((jl_value_t*)meth->sig)) {
-                // replace unspecialized func with specialized version
-                // but if there are no bound type vars (e.g. `call{K,V}(Dict{K,V})` vs `call(Dict)`)
-                // that might cause a different method to match at runtime
-                meth->func = spec;
-                jl_gc_wb(meth, spec);
-                complete = 1;
-            }
-        }
-
-        if (!complete)
-            complete = _compile_all_tvar_union(meth);
-            // TODO: remove this "complete" check once runtime-intrinsics are fully active
+        int complete = _compile_all_union(meth);
 
         if (complete) {
             if (!meth->func->functionID)
