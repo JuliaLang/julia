@@ -533,11 +533,17 @@ end
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
-    rv = lookup_ref(id)
-    delete!(rv.clientset, client)
-    if isempty(rv.clientset)
-        delete!(pg.refs, id)
-        #print("$(myid()) collected $id\n")
+# As a workaround to issue https://github.com/JuliaLang/julia/issues/14445
+# the dict/set updates are executed asynchronously so that they do
+# not occur in the midst of a gc. The `@async` prefix must be removed once
+# 14445 is fixed and backported.
+    @async begin
+        rv = lookup_ref(id)
+        delete!(rv.clientset, client)
+        if isempty(rv.clientset)
+            delete!(pg.refs, id)
+            #print("$(myid()) collected $id\n")
+        end
     end
     nothing
 end
