@@ -134,6 +134,12 @@ Basic functions
 
    The inverse of ``ind2sub``\ , returns the linear index corresponding to the provided subscripts.
 
+.. function:: LinAlg.checksquare(A)
+
+   .. Docstring generated from Julia source
+
+   Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
+
 Constructors
 ------------
 

@@ -34,7 +34,7 @@ end
 chol!(A::StridedMatrix) = chol!(A, UpperTriangular)
 
 function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
-    n = chksquare(A)
+    n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
@@ -54,7 +54,7 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
     return UpperTriangular(A)
 end
 function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
-    n = chksquare(A)
+    n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
