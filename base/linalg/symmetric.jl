@@ -5,13 +5,13 @@ immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
+Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 immutable Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
-    n = chksquare(A)
+    n = checksquare(A)
     for i=1:n
         isreal(A[i, i]) || throw(ArgumentError(
             "Cannot construct Hermitian from matrix with nonreal diagonals"))
@@ -190,7 +190,7 @@ function expm(A::Symmetric)
     return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
 end
 function expm{T}(A::Hermitian{T})
-    n = chksquare(A)
+    n = checksquare(A)
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp(F.values))) * F.vectors'
     if T <: Real
@@ -218,7 +218,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
         end
 
         function ($funm){T}(A::Hermitian{T})
-            n = chksquare(A)
+            n = checksquare(A)
             F = eigfact(A)
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'

@@ -142,7 +142,7 @@ end
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
 function trace{T}(A::Matrix{T})
-    n = chksquare(A)
+    n = checksquare(A)
     t = zero(T)
     for i=1:n
         t += A[i,i]
@@ -175,7 +175,7 @@ function ^(A::Matrix, p::Number)
     if isinteger(p)
         return A^Integer(real(p))
     end
-    chksquare(A)
+    checksquare(A)
     v, X = eig(A)
     any(v.<0) && (v = complex(v))
     Xinv = ishermitian(A) ? X' : inv(X)
@@ -190,7 +190,7 @@ expm(x::Number) = exp(x)
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
 function expm!{T<:BlasFloat}(A::StridedMatrix{T})
-    n = chksquare(A)
+    n = checksquare(A)
     if ishermitian(A)
         return full(expm(Hermitian(A)))
     end
@@ -308,7 +308,7 @@ function logm(A::StridedMatrix)
     end
 
     # Use Schur decomposition
-    n = chksquare(A)
+    n = checksquare(A)
     if istriu(A)
         retmat = full(logm(UpperTriangular(complex(A))))
         d = diag(A)
@@ -343,7 +343,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issym(A)
         return full(sqrtm(Symmetric(A)))
     end
-    n = chksquare(A)
+    n = checksquare(A)
     if istriu(A)
         return full(sqrtm(UpperTriangular(A)))
     else
@@ -356,7 +356,7 @@ function sqrtm{T<:Complex}(A::StridedMatrix{T})
     if ishermitian(A)
         return full(sqrtm(Hermitian(A)))
     end
-    n = chksquare(A)
+    n = checksquare(A)
     if istriu(A)
         return full(sqrtm(UpperTriangular(A)))
     else
@@ -511,7 +511,7 @@ function cond(A::AbstractMatrix, p::Real=2)
         maxv = maximum(v)
         return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
-        chksquare(A)
+        checksquare(A)
         return cond(lufact(A), p)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))

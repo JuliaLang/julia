@@ -334,7 +334,7 @@ end
 rank(x::Number) = x==0 ? 0 : 1
 
 function trace(A::AbstractMatrix)
-    chksquare(A)
+    checksquare(A)
     sum(diag(A))
 end
 trace(x::Number) = x
@@ -347,7 +347,7 @@ trace(x::Number) = x
 inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, checksquare(A)))
 end
 
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)

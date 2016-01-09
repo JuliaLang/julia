@@ -179,14 +179,18 @@ function chkstride1(A...)
     end
 end
 
-# Check that matrix is square
-function chksquare(A)
+"""
+    LinAlg.checksquare(A)
+
+Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
+"""
+function checksquare(A)
     m,n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square"))
     m
 end
 
-function chksquare(A...)
+function checksquare(A...)
     sizes = Int[]
     for a in A
         size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
