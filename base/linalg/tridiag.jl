@@ -196,6 +196,12 @@ end
 getindex( a::ZeroOffsetVector, i) = a.data[i+1]
 setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
 
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::SymTridiagonal,i::Integer,j::Integer,s::AbstractString)
+    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+end
+
 #Implements the inverse using the recurrence relation between principal minors
 # a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
 # a tridiagonal matrix.
@@ -373,6 +379,12 @@ function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     else
         return zero(T)
     end
+end
+
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
+    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
 #tril and triu

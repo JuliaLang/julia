@@ -51,6 +51,13 @@ function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
     D
 end
 
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
+    i==j ? s : Base.replace_with_centered_mark(s)
+end
+
+
 ishermitian{T<:Real}(D::Diagonal{T}) = true
 ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
 issym(D::Diagonal) = true

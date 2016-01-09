@@ -1127,6 +1127,17 @@ function alignment(
 end
 
 """
+Unexported convenience function used in body of `replace_in_print_matrix`
+methods. By default returns a string of the same width as original with a
+centered cdot, used in printing of structural zeros of structured matrices.
+Accept keyword args `c` for alternate single character marker.
+"""
+function replace_with_centered_mark(s::AbstractString;c::Char = '⋅')
+    N = length(s)
+    return join(setindex!([utf8(" ") for i=1:N],string(c),ceil(Int,N/2)))
+end
+
+"""
 `print_matrix_row(io, X, A, i, cols, sep)` produces the aligned output for
 a single matrix row X[i, cols] where the desired list of columns is given.
 The corresponding alignment A is used, and the separation between elements
@@ -1135,8 +1146,7 @@ is specified as string sep.
 """
 function print_matrix_row(io::IO,
     X::AbstractVecOrMat, A::Vector,
-    i::Integer, cols::AbstractVector, sep::AbstractString
-)
+    i::Integer, cols::AbstractVector, sep::AbstractString)
     for k = 1:length(A)
         j = cols[k]
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -1149,7 +1159,8 @@ function print_matrix_row(io::IO,
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
         r = repeat(" ", A[k][2]-a[2])
-        print(io, l, sx, r)
+        prettysx = replace_in_print_matrix(X,i,j,sx)
+        print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
     end
 end
