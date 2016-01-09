@@ -159,6 +159,16 @@ function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     return A
 end
 
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::UpperTriangular,i::Integer,j::Integer,s::AbstractString)
+    i<=j ? s : Base.replace_with_centered_mark(s)
+end
+function Base.replace_in_print_matrix(A::LowerTriangular,i::Integer,j::Integer,s::AbstractString)
+    i>=j ? s : Base.replace_with_centered_mark(s)
+end
+
+
 istril(A::LowerTriangular) = true
 istril(A::UnitLowerTriangular) = true
 istriu(A::UpperTriangular) = true
