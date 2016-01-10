@@ -654,6 +654,8 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     sock.status = StatusConnecting
 end
 
+connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
+
 # Default Host to localhost
 connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
 connect(port::Integer) = connect(IPv4(127,0,0,1),port)
