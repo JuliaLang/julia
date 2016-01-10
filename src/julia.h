@@ -1065,7 +1065,7 @@ typedef enum {
     JL_VARARG_INT     = 1,
     JL_VARARG_BOUND   = 2,
     JL_VARARG_UNBOUND = 3
-} JL_VARARG_KIND;
+} jl_vararg_kind_t;
 
 STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
 {
@@ -1073,7 +1073,7 @@ STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
             ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
 }
 
-STATIC_INLINE JL_VARARG_KIND jl_vararg_kind(jl_value_t *v)
+STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v)
 {
     if (!jl_is_vararg_type(v))
         return JL_VARARG_NONE;
@@ -1092,7 +1092,7 @@ STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
     return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
 }
 
-STATIC_INLINE JL_VARARG_KIND jl_va_tuple_kind(jl_datatype_t *t)
+STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t)
 {
     assert(jl_is_tuple_type(t));
     size_t l = jl_svec_len(t->parameters);
