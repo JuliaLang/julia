@@ -675,6 +675,7 @@ $(eval $(call LLVM_PATCH,llvm-3.7.0))
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
 else ifeq ($(LLVM_VER),3.7.1)
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
+$(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
