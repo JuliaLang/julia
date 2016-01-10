@@ -268,3 +268,34 @@ let
     end
     [close(s) for s in [a, b, c]]
 end
+
+
+# test the method matching connect!(::TCPSocket, ::Base.InetAddr{T<:Base.IPAddr})
+let
+  addr = Base.InetAddr(ip"127.0.0.1", 4444)
+
+  function test_connect(addr::Base.InetAddr)
+    srv = listen(addr)
+
+    @async try c = accept(srv); close(c) catch end
+    yield()
+
+    t0 = TCPSocket()
+    t = t0
+    @assert is(t,t0)
+
+    try
+      t = connect(addr)
+    finally
+      close(srv)
+    end
+
+    test = !is(t,t0)
+    close(t)
+
+    return test
+  end
+
+  @test test_connect(addr)
+end
+
