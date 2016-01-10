@@ -232,6 +232,30 @@ create_serialization_stream() do s # slices
     @test deserialize(s) == slc2
 end
 
+# Objects that have a SubArray as a type in a type-parameter list
+module ArrayWrappers
+
+immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+    data::A
+end
+Base.size(A::ArrayWrapper) = size(A.data)
+Base.size(A::ArrayWrapper, d) = size(A.data, d)
+Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
+
+end
+
+let A = rand(3,4)
+    for B in (sub(A, :, 2:4), slice(A, 2, 1:3))
+        C = ArrayWrappers.ArrayWrapper{Float64,2,typeof(B)}(B)
+        io = IOBuffer()
+        serialize(io, C)
+        seek(io, 0)
+        Cd = deserialize(io)
+        @test size(Cd) == size(C)
+        @test Cd == B
+    end
+end
+
 # Function
 serialize_test_function() = 1
 serialize_test_function2 = ()->1
