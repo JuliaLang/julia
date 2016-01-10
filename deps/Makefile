@@ -347,29 +347,22 @@ LLVM_OBJ_SOURCE := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/
 endif
 LLVM_OBJ_TARGET := $(build_libdir)/$(LLVM_LIB_FILE)
 
-ifneq ($(LLVM_VER),svn)
 ifeq ($(LLVM_VER), 3.3)
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER).src.tar.gz
+LLVM_TAR_EXT:=$(LLVM_VER).src.tar.gz
 else
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER).src.tar.xz
-endif
+LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
+endif # LLVM_VER == 3.3
+
+ifneq ($(LLVM_VER),svn)
+LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_TAR_EXT)
 
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(LLVM_VER), 3.3)
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_VER).src.tar.gz
-else
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_VER).src.tar.xz
-endif # LLVM_VER == 3.3
+LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-ifeq ($(LLVM_VER), 3.3)
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_VER).src.tar.gz
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_VER).src.tar.gz
-else
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_VER).src.tar.xz
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_VER).src.tar.xz
-endif # LLVM_VER
+LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
+LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
 LLVM_COMPILER_RT_TAR:=
@@ -377,7 +370,7 @@ LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_VER).src.tar.gz
+LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
