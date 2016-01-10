@@ -2208,11 +2208,6 @@ jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np)
     return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, 0, NULL, NULL, 0);
 }
 
-static jl_datatype_t *inst_tupletype_unchecked_uncached(jl_svec_t *p)
-{
-    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 0, 1, NULL, NULL, 0);
-}
-
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
                            jl_typestack_t *stack, int check)
 {
