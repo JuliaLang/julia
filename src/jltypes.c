@@ -422,11 +422,11 @@ In general, lenf >= lenr-1. The lower bound is achieved only for a Vararg of len
 typedef enum {
     JL_TUPLE_FIXED = 0,
     JL_TUPLE_VAR   = 1
-} JL_TUPLE_LENKIND;
+} jl_tuple_lenkind_t;
 
 // Set the parameters for a single tuple
 // returns lenf, sets kind and lenkind
-static size_t data_vararg_params(jl_value_t **data, size_t lenr, cenv_t *eqc, JL_VARARG_KIND *kind, JL_TUPLE_LENKIND *lenkind)
+static size_t data_vararg_params(jl_value_t **data, size_t lenr, cenv_t *eqc, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
 {
     size_t lenf = lenr;
     int i;
@@ -457,7 +457,7 @@ static size_t data_vararg_params(jl_value_t **data, size_t lenr, cenv_t *eqc, JL
     return lenf;
 }
 
-static size_t tuple_vararg_params(jl_svec_t *a, cenv_t *eqc, JL_VARARG_KIND *kind, JL_TUPLE_LENKIND *lenkind)
+static size_t tuple_vararg_params(jl_svec_t *a, cenv_t *eqc, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
 {
     return data_vararg_params(jl_svec_data(a), jl_svec_len(a), eqc, kind, lenkind);
 }
@@ -530,8 +530,8 @@ static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
     jl_svec_t *ap = a->parameters, *bp = b->parameters;
     size_t alenr = jl_svec_len(ap), blenr = jl_svec_len(bp);
     size_t alenf, blenf;
-    JL_VARARG_KIND akind, bkind;
-    JL_TUPLE_LENKIND alenkind, blenkind;
+    jl_vararg_kind_t akind, bkind;
+    jl_tuple_lenkind_t alenkind, blenkind;
     int bottom = 0;
     size_t n;
     // Stage 1
@@ -2422,8 +2422,8 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t clenr,
     size_t plenr = jl_nparams(pdt);
     jl_value_t **parent = jl_svec_data(pdt->parameters);
     size_t plenf, clenf;
-    JL_VARARG_KIND ckind, pkind;
-    JL_TUPLE_LENKIND clenkind, plenkind;
+    jl_vararg_kind_t ckind, pkind;
+    jl_tuple_lenkind_t clenkind, plenkind;
     int bottom = 0;
     // Stage 1
     clenf = data_vararg_params(child, clenr, NULL, &ckind, &clenkind);
@@ -2641,8 +2641,8 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
     size_t plenr = jl_nparams(pdt);
     jl_value_t **parent = jl_svec_data(pdt->parameters);
     size_t plenf, clenf;
-    JL_VARARG_KIND ckind, pkind;
-    JL_TUPLE_LENKIND clenkind, plenkind;
+    jl_vararg_kind_t ckind, pkind;
+    jl_tuple_lenkind_t clenkind, plenkind;
     clenf = tuple_vararg_params(cdt->parameters, NULL, &ckind, &clenkind);
     plenf = tuple_vararg_params(pdt->parameters, NULL, &pkind, &plenkind);
     size_t ci=0, pi=0;
@@ -2860,8 +2860,8 @@ static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
     size_t clenr = jl_nparams(child);
     size_t plenr = jl_nparams(parent);
     size_t plenf, clenf;
-    JL_VARARG_KIND ckind, pkind;
-    JL_TUPLE_LENKIND clenkind, plenkind;
+    jl_vararg_kind_t ckind, pkind;
+    jl_tuple_lenkind_t clenkind, plenkind;
     clenf = tuple_vararg_params(child->parameters, NULL, &ckind, &clenkind);
     plenf = tuple_vararg_params(parent->parameters, NULL, &pkind, &plenkind);
     int cseq=0, pseq=0;
