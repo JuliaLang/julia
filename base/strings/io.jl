@@ -46,7 +46,9 @@ sprint(f::Function, args...) = sprint(0, f, args...)
 function print_to_string(xs...; env=nothing)
     # specialized for performance reasons
     s = IOBuffer(Array(UInt8,isa(xs[1],AbstractString) ? endof(xs[1]) : 0), true, true)
-    truncate(s,0)
+    # specialized version of truncate(s,0)
+    s.size = 0
+    s.ptr = 1
     if env !== nothing
         env_io = IOContext(s, env)
         for x in xs
@@ -59,7 +61,7 @@ function print_to_string(xs...; env=nothing)
     end
     d = s.data
     resize!(d,s.size)
-    bytestring(d)
+    return isvalid(ASCIIString, d) ? ASCIIString(d) : UTF8String(d)
 end
 
 string_with_env(env, xs...) = print_to_string(xs...; env=env)
