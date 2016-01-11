@@ -245,7 +245,7 @@ static int bits_equal(void *a, void *b, int sz)
 // The solution is to keep the code in jl_egal simple and split out the
 // (more) complex cases into their own functions which are marked with
 // NOINLINE.
-static int NOINLINE compare_svec(jl_value_t *a, jl_value_t *b)
+static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 {
     size_t l = jl_svec_len(a);
     if (l != jl_svec_len(b))
@@ -297,13 +297,12 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
     if (ta != (jl_value_t*)jl_typeof(b))
         return 0;
     if (jl_is_svec(a))
-        return compare_svec(a, b);
+        return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
     jl_datatype_t *dt = (jl_datatype_t*)ta;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
-        return dta->name == dtb->name &&
-            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+        return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
     }
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
@@ -1128,19 +1127,24 @@ static uptrint_t bits_hash(void *b, size_t sz)
     }
 }
 
+static uptrint_t NOINLINE hash_svec(jl_svec_t *v)
+{
+    uptrint_t h = 0;
+    size_t l = jl_svec_len(v);
+    for(size_t i = 0; i < l; i++) {
+        jl_value_t *x = jl_svecref(v,i);
+        uptrint_t u = x==NULL ? 0 : jl_object_id(x);
+        h = bitmix(h, u);
+    }
+    return h;
+}
+
 static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
 {
     if (tv == (jl_value_t*)jl_sym_type)
         return ((jl_sym_t*)v)->hash;
-    if (tv == (jl_value_t*)jl_simplevector_type) {
-        uptrint_t h = 0;
-        size_t l = jl_svec_len(v);
-        for(size_t i = 0; i < l; i++) {
-            uptrint_t u = jl_object_id(jl_svecref(v,i));
-            h = bitmix(h, u);
-        }
-        return h;
-    }
+    if (tv == (jl_value_t*)jl_simplevector_type)
+        return hash_svec((jl_svec_t*)v);
     jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
@@ -1151,8 +1155,7 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
         // avoided simply by hashing name->primary specially here.
         if (jl_egal(dtv->name->primary, v))
             return bitmix(bitmix(h, dtv->name->uid), 0xaa5566aa);
-        return bitmix(bitmix(h, dtv->name->uid),
-                      jl_object_id((jl_value_t*)dtv->parameters));
+        return bitmix(bitmix(h, dtv->name->uid), hash_svec(dtv->parameters));
     }
     if (dt == jl_typename_type)
         return bitmix(((jl_typename_t*)v)->uid, 0xa1ada1ad);
