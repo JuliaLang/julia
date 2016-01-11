@@ -47,6 +47,9 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         end
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
+        if eltya <: Real
+            @test_approx_eq logdet(bc2) log(det(bc2))
+        end
         @test_approx_eq inv(bc2) * apd eye(n)
         @test_approx_eq_eps apd * (bc2\b) b 150000ε
         @test ishermitian(bc2) == !issym(bc2)

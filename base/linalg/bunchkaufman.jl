@@ -75,6 +75,74 @@ function det(F::BunchKaufman)
     return d
 end
 
+function logabsdet(F::BunchKaufman)
+    M = F.LD
+    p = F.ipiv
+    n = size(F.LD, 1)
+
+    s = one(real(eltype(F)))
+    i = 1
+    abs_det = zero(real(eltype(F)))
+    while i <= n
+        if p[i] > 0
+            elm = M[i,i]
+            s *= sign(elm)
+            abs_det += log(abs(elm))
+            i += 1
+        else
+            if F.uplo == 'U'
+                elm = M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] - (issym(F) ? M[i, i + 1] : conj(M[i, i + 1])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
+            else
+                elm = M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] - (issym(F) ? M[i + 1, i] : conj(M[i + 1, i])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
+            end
+            i += 2
+        end
+    end
+    return abs_det, s
+end
+
+function logdet{T<:Real}(F::BunchKaufman{T})
+    d, s = logabsdet(F)
+    if s < 0
+        throw(DomainError())
+    end
+    d
+end
+
+_mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
+_mod2pi(x) = mod2pi(x)
+function logdet{T<:Complex}(F::BunchKaufman{T})
+    M = F.LD
+    p = F.ipiv
+    n = size(F.LD, 1)
+
+    i = 1
+    det = zero(T)
+    while i <= n
+        if p[i] > 0
+            det += log(abs(M[i,i]))
+            i += 1
+        else
+            if F.uplo == 'U'
+                det += log(abs(M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] -
+(issym(F) ? M[i, i + 1] : conj(M[i, i + 1])))))
+            else
+                det += log(abs(M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] -
+(issym(F) ? M[i + 1, i] : conj(M[i + 1, i])))))
+            end
+            i += 2
+        end
+    end
+    det = Complex(real(det) + imag(det)+n)
+    r, a = reim(det)
+    a = n - _mod2pi(n - a)
+    complex(r, a)
+end
+
 ## reconstruct the original matrix
 ## TODO: understand the procedure described at
 ## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf
