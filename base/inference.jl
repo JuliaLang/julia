@@ -2311,14 +2311,25 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     end
     linfo = linfo::LambdaStaticData
 
-    sp = Any[]
-    for i = 1:length(linfo.sparam_vals)
-        push!(sp, linfo.sparam_syms[i])
-        push!(sp, linfo.sparam_vals[i])
+    spnames = Any[s for s in linfo.sparam_syms]
+    if length(linfo.sparam_vals) > 0
+        spvals = Any[x for x in linfo.sparam_vals]
+    else
+        spvals = Any[]
+        for i = 1:length(spnames)
+            methsp[2 * i - 1].name === spnames[i] || error("sp env in the wrong order")
+            si = methsp[2 * i]
+            if isa(si, TypeVar)
+                return NF
+            end
+            push!(spvals, si)
+        end
     end
-    for i = 1:2:length(methsp)
-        push!(sp, methsp[i].name)
-        push!(sp, methsp[i+1])
+    for i=1:length(spvals)
+        si = spvals[i]
+        if isa(si,Symbol) || isa(si,GenSym)
+            spvals[i] = QuoteNode(si)
+        end
     end
 
     ## This code tries to limit the argument list length only when it is
@@ -2346,17 +2357,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     #         st = st.prev
     #     end
     # end
-
-    spvals = Any[ sp[i] for i in 2:2:length(sp) ]
-    for i=1:length(spvals)
-        si = spvals[i]
-        if isa(si, TypeVar)
-            return NF
-        end
-        if isa(si,Symbol) || isa(si,GenSym)
-            spvals[i] = QuoteNode(si)
-        end
-    end
 
     methargs = metharg.parameters
     nm = length(methargs)
@@ -2394,8 +2394,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
             # all the fiddly details
             numarg = length(argexprs)
             newnames = unique_names(ast,numarg)
-            methsp = sp
-            sp = svec()
+            spnames = []
             spvals = []
             locals = []
             newcall = Expr(:call, e.args[1])
@@ -2417,7 +2416,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enc
     body.args = filter(x->!(isa(x,Expr) && x.head === :meta && isempty(x.args)),
                        body.args)
 
-    spnames = Any[ sp[i] for i=1:2:length(sp) ]
     enc_vinflist = enclosing_ast.args[2][1]::Array{Any,1}
     enc_locllist = ast_localvars(enclosing_ast)
     locllist = ast_localvars(ast)
