@@ -1300,24 +1300,13 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
             }
         }
     }
-    if (linfo && !linfo->specTypes) {
-        jl_printf(JL_STDERR,
-                  "WARNING: Returned code may not match what actually runs.\n");
-        if (linfo->unspecialized) {
-            linfo = linfo->unspecialized;
-        }
-        else {
-            // linfo can't be compiled directly,
-            // but we can compile a throw-away copy
-            // by leaking a bit of memory
-            // (since the compiled code is not usable)
-            linfo = jl_copy_lambda_info(linfo);
-            linfo->specTypes = tt;
-        }
-    }
     if (linfo == NULL) {
         JL_GC_POP();
         return NULL;
+    }
+    if (!linfo->specTypes) {
+        jl_printf(JL_STDERR, "WARNING: Returned code may not match what actually runs.\n");
+        linfo = jl_get_unspecialized(linfo);
     }
 
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
@@ -4256,13 +4245,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     size_t nreq = largslen;
     int va = 0;
 
-    if (!lam->specTypes)  // TODO jb/functions
-        lam->specTypes = jl_anytuple_type;
-    //assert(lam->specTypes); // this could happen if the user tries to compile a generic-function
+    assert(lam->specTypes); // this could happen if the user tries to compile a generic-function
                             // without specializing (or unspecializing) it first
                             // compiling this would cause all specializations to inherit
                             // this code and could create an broken compile / function cache
-                            // if the method has static parameters
 
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;

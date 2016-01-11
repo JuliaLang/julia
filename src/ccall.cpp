@@ -969,6 +969,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         JL_CATCH {
             static_rt = false;
+            rt = NULL;
             if (jl_is_type_type(rtt_)) {
                 if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
                     // substitute Ptr{Void} for statically-unknown pointer type
@@ -978,6 +979,24 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     // `Array` used as return type just returns a julia object reference
                     rt = (jl_value_t*)jl_any_type;
                     static_rt = true;
+                }
+            }
+            if (rt == NULL) {
+                if (jl_is_expr(args[2])) {
+                    jl_expr_t *rtexpr = (jl_expr_t*)args[2];
+                    if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 4 &&
+                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_array_type) {
+                        // `Array` used as return type just returns a julia object reference
+                        rt = (jl_value_t*)jl_any_type;
+                        static_rt = true;
+                    }
+                    else if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 3 &&
+                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_pointer_type) {
+                        // substitute Ptr{Void} for statically-unknown pointer type
+                        rt = (jl_value_t*)jl_voidpointer_type;
+                    }
                 }
             }
             if (rt == NULL) {
