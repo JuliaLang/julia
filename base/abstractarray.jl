@@ -1324,6 +1324,17 @@ function map(f, A::AbstractArray)
     return map_to!(f, 2, dest, A)
 end
 
+function pmap(f, A::AbstractArray; err_retry=true, err_stop=false, pids = workers())
+    if isempty(A)
+        return isa(f,Type) ? similar(A,f) : similar(A)
+    end
+    results = pmap(f, rest(A, start(A)), err_retry=err_retry, err_stop=err_stop, pids=pids)
+    first = results[1]
+    dest = similar(A, typeof(first))
+    dest[1] = first
+    return map_to!(identity, 2, dest, results)
+end
+
 ## 2 argument
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     for i = 1:length(A)
@@ -1357,6 +1368,18 @@ function map(f, A::AbstractArray, B::AbstractArray)
     dest = similar(A, typeof(first), shp)
     dest[1] = first
     return map_to!(f, 2, dest, A, B)
+end
+
+function pmap(f, A::AbstractArray, B::AbstractArray; err_retry=true, err_stop=false, pids = workers())
+    shp = promote_shape(size(A),size(B))
+    if prod(shp) == 0
+        return similar(A, promote_type(eltype(A),eltype(B)), shp)
+    end
+    results = pmap(f, rest(A, start(A)), rest(B, start(B)), err_retry=err_retry, err_stop=err_stop, pids=pids)
+    first = results[1]
+    dest = similar(A, typeof(first), shp)
+    dest[1] = first
+    return map_to!(identity, 2, dest, results)
 end
 
 ## N argument
@@ -1399,6 +1422,18 @@ function map(f, As::AbstractArray...)
     dest = similar(As[1], typeof(first), shape)
     dest[1] = first
     return map_to_n!(f, 2, dest, As)
+end
+
+function pmap(f, As::AbstractArray...; err_retry=true, err_stop=false, pids = workers())
+    shape = mapreduce(size, promote_shape, As)
+    if prod(shape) == 0
+        return similar(As[1], promote_eltype(As...), shape)
+    end
+    results = pmap(f, [rest(A,start(A)) for A in As]..., err_retry=err_retry, err_stop=err_stop, pids=pids)
+    first = results[1]
+    dest = similar(As[1], typeof(first), shape)
+    dest[1] = first
+    return map_to!(identity, 2, dest, results)
 end
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)

@@ -424,6 +424,22 @@ function test_map(::Type{TestAbstractArray})
     @test map(f, Int[], Int[], Complex{Int}[]) == Number[]
 end
 
+#test pmap array methods for compatibility with map array methods
+A = B = C = 1:8
+#single arg
+mA,mpA = map(string,A), pmap(string,A)
+@test mA == mpA
+@test typeof(mA) == typeof(mpA)
+#double arg
+mAB,mpAB = map(string,A,B), pmap(string,A,B)
+@test mAB == mpAB
+@test typeof(mAB) == typeof(mpAB)
+#n arg
+mABC,mpABC = map(string,A,B,C), pmap(string,A,B,C)
+@test mABC == mpABC
+@test typeof(mABC) == typeof(mpABC)
+
+
 function test_map_promote(::Type{TestAbstractArray})
     A = [1:10...]
     f(x) = iseven(x) ? 1.0 : 1
