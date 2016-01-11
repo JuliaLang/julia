@@ -219,7 +219,8 @@ function show(io::IO, l::LambdaStaticData)
     print(io, ")")
 end
 
-function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, i1=1, l=length(itr))
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
+                          i1=1, l=length(itr))
     print(io, op)
     newline = true
     first = true
