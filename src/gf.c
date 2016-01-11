@@ -1205,6 +1205,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
     while (l != (void*)jl_nothing) {
         if (((l->tvars==jl_emptysvec) == (tvars==jl_emptysvec)) &&
             sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig, 1)) {
+            if (method == NULL)  // don't overwrite with guard entries
+                return l;
             // method overwritten
             if (check_amb && l->func && method) {
                 jl_module_t *newmod = method->module;
@@ -1228,8 +1230,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
             l->va = jl_is_va_tuple(type);
             l->isstaged = isstaged;
             l->invokes = (struct _jl_methtable_t *)jl_nothing;
-            if (l->func)                  // TODO jb/functions
-                jl_gc_preserve((jl_value_t*)l->func);  // keep roots for replaced method
+            // TODO: `l->func` or `l->func->roots` might need to be rooted
             l->func = method;
             if (l->func)
                 jl_gc_wb(l, l->func);
