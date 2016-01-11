@@ -863,19 +863,6 @@ function indexin(a::AbstractArray, b::AbstractArray)
     [get(bdict, i, 0) for i in a]
 end
 
-# findin (the index of intersection)
-function findin(a, b::UnitRange)
-    ind = Array(Int, 0)
-    f = first(b)
-    l = last(b)
-    for i = 1:length(a)
-        if f <= a[i] <= l
-            push!(ind, i)
-        end
-    end
-    ind
-end
-
 function findin(a, b)
     ind = Array(Int, 0)
     bset = Set(b)
