@@ -138,69 +138,6 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
     return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
 end
 
-## Transpose and apply f
-
-# Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
-# Section 2.5: Transpose
-# http://www.cise.ufl.edu/research/sparse/CSparse/
-function ftranspose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti}, f)
-    (mS, nS) = size(S)
-    nnzS = nnz(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
-    nzval_S = S.nzval
-
-    (mT, nT) = size(T)
-    colptr_T = T.colptr
-    rowval_T = T.rowval
-    nzval_T = T.nzval
-
-    fill!(colptr_T, 0)
-    colptr_T[1] = 1
-    for i=1:nnzS
-        @inbounds colptr_T[rowval_S[i]+1] += 1
-    end
-    cumsum!(colptr_T, colptr_T)
-
-    w = copy(colptr_T)
-    @inbounds for j = 1:nS, p = colptr_S[j]:(colptr_S[j+1]-1)
-        ind = rowval_S[p]
-        q = w[ind]
-        w[ind] += 1
-        rowval_T[q] = j
-        nzval_T[q] = f(nzval_S[p])
-    end
-
-    return T
-end
-
-function ftranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, f)
-    (nT, mT) = size(S)
-    nnzS = nnz(S)
-    colptr_T = Array(Ti, nT+1)
-    rowval_T = Array(Ti, nnzS)
-    nzval_T = Array(Tv, nnzS)
-
-    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-    return ftranspose!(T, S, f)
-end
-
-function transpose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
-    ftranspose!(T, S, IdFun())
-end
-
-function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    ftranspose(S, IdFun())
-end
-
-function ctranspose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
-    ftranspose!(T, S, ConjFun())
-end
-
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    ftranspose(S, ConjFun())
-end
-
 # Compute the elimination tree of A using triu(A) returning the parent vector.
 # A root node is indicated by 0. This tree may actually be a forest in that
 # there may be more than one root, indicating complete separability.
