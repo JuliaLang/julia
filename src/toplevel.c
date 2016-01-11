@@ -679,7 +679,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
     if (bnd)
         bnd->constp = 1;
     if (*bp == NULL) {
-        jl_module_t *module = (bnd ? bnd->owner : NULL);
+        jl_module_t *module = (bnd ? bnd->owner : jl_current_module);
         gf = (jl_value_t*)jl_new_generic_function(name, module);
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);
