@@ -102,6 +102,7 @@
 (define (lam:vars x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
+(define (lam:sp x) (cadddr (lam:vinfo x)))
 
 (define (bad-formal-argument v)
   (error (string #\" (deparse v) #\" " is not a valid function argument name")))

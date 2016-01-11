@@ -15,6 +15,9 @@
         ((memq (car s1) s2) (diff (cdr s1) s2))
         (else               (cons (car s1) (diff (cdr s1) s2)))))
 
+(define (intersect s1 s2)
+  (filter (lambda (x) (memq x s2)) s1))
+
 (define (has-dups lst)
   (if (null? lst)
       #f
