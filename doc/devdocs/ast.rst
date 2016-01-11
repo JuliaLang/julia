@@ -300,6 +300,7 @@ x"y"                     (macrocall @x_str "y")
 x"y"z                    (macrocall @x_str "y" "z")
 "x = $x"                 (string "x = " x)
 \`a b c\`                (macrocall @cmd "a b c")
+x ~ distr                (macrocall @~ x distr)
 =======================  ====================================
 
 Doc string syntax::
