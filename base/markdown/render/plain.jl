@@ -20,9 +20,12 @@ function plain{l}(io::IO, header::Header{l})
 end
 
 function plain(io::IO, code::Code)
-    println(io, "```", code.language)
+    # If the code includes a fenced block this will break parsing,
+    # so it must be enclosed by a longer ````-sequence.
+    n = mapreduce(length, max, 2, matchall(r"^`+"m, code.code)) + 1
+    println(io, "`" ^ n, code.language)
     println(io, code.code)
-    println(io, "```")
+    println(io, "`" ^ n)
 end
 
 function plain(io::IO, p::Paragraph)
