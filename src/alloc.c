@@ -272,11 +272,6 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-JL_DLLEXPORT jl_fptr_t jl_linfo_fptr(jl_lambda_info_t *linfo)
-{
-    return linfo->fptr;
-}
-
 JL_DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
         jl_svec_t *tvars, jl_svec_t *sparams, jl_module_t *ctx)
@@ -318,6 +313,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
     li->sparam_vals = sparams;
     li->tfunc = jl_nothing;
     li->fptr = NULL;
+    li->jlcall_api = 0;
     li->roots = NULL;
     li->functionObjects.functionObject = NULL;
     li->functionObjects.specFunctionObject = NULL;
@@ -350,6 +346,7 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;
     new_linfo->fptr = linfo->fptr;
+    new_linfo->jlcall_api = linfo->jlcall_api;
     new_linfo->functionObjects.functionObject = linfo->functionObjects.functionObject;
     new_linfo->functionObjects.specFunctionObject = linfo->functionObjects.specFunctionObject;
     new_linfo->functionID = linfo->functionID;

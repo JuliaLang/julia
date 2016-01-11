@@ -756,16 +756,7 @@ static int32_t jl_assign_functionID(Function *functionObject, int specsig)
     // give the function an index in the constant lookup table
     if (!imaging_mode)
         return 0;
-    Constant *c;
-    if (!specsig && functionObject->getFunctionType() != jl_func_sig)
-        c = ConstantExpr::getIntToPtr(
-                ConstantExpr::getAdd(
-                    ConstantExpr::getPtrToInt(functionObject, T_size),
-                    ConstantInt::get(T_size, 1)),
-                T_pvoidfunc);
-    else
-        c = ConstantExpr::getBitCast(functionObject, T_pvoidfunc);
-    jl_sysimg_fvars.push_back(c);
+    jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(functionObject, T_pvoidfunc));
     return jl_sysimg_fvars.size();
 }
 

@@ -296,6 +296,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
       method->unspecialized, not method */
     assert(!nli->ast ||
            (nli->fptr == NULL &&
+            nli->jlcall_api == 0 &&
             nli->functionObjects.functionObject == NULL &&
             nli->functionObjects.specFunctionObject == NULL &&
             nli->functionObjects.cFunctionList == NULL &&
@@ -306,6 +307,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
         jl_lambda_info_t *unspec = l->unspecialized;
         if (unspec != NULL) {
             nli->fptr = unspec->fptr;
+            nli->jlcall_api = unspec->jlcall_api;
             nli->functionObjects.functionObject = unspec->functionObjects.functionObject;
             nli->functionObjects.specFunctionObject = unspec->functionObjects.specFunctionObject;
             nli->functionID = unspec->functionID;
@@ -904,13 +906,10 @@ static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_
         jl_generate_fptr(meth);
     }
     assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
-    jl_fptr_t fptr = meth->fptr;
-    uintptr_t fptr_int = (uintptr_t)fptr;
-    uintptr_t mask = 1;
-    if (__likely((fptr_int & mask) == 0))
-        return fptr(args[0], &args[1], nargs-1);
+    if (__likely(meth->jlcall_api == 0))
+        return meth->fptr(args[0], &args[1], nargs-1);
     else
-        return ((jl_fptr_sparam_t)(fptr_int & ~mask))(sparam_vals, args[0], &args[1], nargs-1);
+        return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
 }
 
 JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator, jl_tupletype_t *tt, jl_svec_t *env)

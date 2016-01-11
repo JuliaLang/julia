@@ -1063,7 +1063,7 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
         #endif
         if (((Function*)li->functionObjects.functionObject)->getFunctionType() != jl_func_sig) {
             // mark the pointer as jl_fptr_sparam_t calling convention
-            li->fptr = (jl_fptr_t)(((uintptr_t)li->fptr) | 1);
+            li->jlcall_api = 1;
         }
 
         assert(li->fptr != NULL);
