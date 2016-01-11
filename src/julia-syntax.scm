@@ -1878,9 +1878,9 @@
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
-                  (boundscheck false)
+                  (inbounds false)
                   (call (top setindex!) ,result ,oneresult ,ri)
-                  (boundscheck pop)
+                  (inbounds pop)
                   (= ,ri (call (top +) ,ri 1)))
           `(block
             (= ,(car states) (call (top start) ,(car rv)))
