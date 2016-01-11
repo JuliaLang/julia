@@ -3684,3 +3684,9 @@ type _CaptureInCtor
     add_node(y) = y+1
 end
 @test _CaptureInCtor().yy == 1
+
+# issue #14610
+let sometypes = (Int,Int8)
+    f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
+    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+end

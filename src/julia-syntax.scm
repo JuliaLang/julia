@@ -276,9 +276,13 @@
 
 (define (method-expr-static-parameters m)
   (if (eq? (car (caddr m)) 'block)
-      (map (lambda (x)
-	     (cadr (caddr (caddr x))))
-	   (butlast (cdr (caddr m))))
+      (let ((lst '()))
+        (pattern-replace
+         (pattern-set
+          (pattern-lambda (= v (call (top (-/ TypeVar)) (quote T) y z))
+                          (begin (set! lst (cons T lst)) __)))
+         (butlast (cdr (caddr m))))
+        (reverse! lst))
       '()))
 
 (define (sym-ref? e)
@@ -964,7 +968,8 @@
 	       ;; this as a local variable name.
 	       (name (symbol (string "#" (current-julia-module-counter)))))
            (expand-binding-forms
-	    `(function (call ,name ,@argl) ,body)))))
+	    `(block (local ,name)
+                    (function (call ,name ,@argl) ,body))))))
 
       ((let)
        (let ((ex (cadr e))
@@ -2345,12 +2350,12 @@
                (cons (car ex)
                      (append fu (cdr ex))))
              (let ((ex (if (length= e 2)
-			   e
-			   ;; leave the block in the type argument in place; its
-			   ;; statements are lifted to the top level by cl-convert.
-			   `(method ,(cadr e) ,(caddr e)
-				    ,(car (to-lff (cadddr e) #f #f))
-				    ,(last e)))))
+                           e
+                           ;; leave the block in the type argument in place; its
+                           ;; statements are lifted to the top level by cl-convert.
+                           `(method ,(cadr e) ,(to-blk (to-lff (caddr e) #f #f))
+                                    ,(car (to-lff (cadddr e) #f #f))
+                                    ,(last e)))))
                (cons (if tail `(return ,ex) ex)
                      '()))))
 
@@ -2401,9 +2406,11 @@ So far only the second case can actually occur.
         ((lambda scope-block module)  '())
         ((method)
          (let ((v (decl-var (method-expr-name e))))
-           (if (or (not (symbol? v)) (memq v env))
-               '()
-               (list v))))
+           (append!
+            (if (length= e 2) '() (find-assigned-vars (caddr e) env))
+            (if (or (not (symbol? v)) (memq v env))
+                '()
+                (list v)))))
         ((=)
          (let ((v (decl-var (cadr e))))
 	   (if (or (jlgensym? v) (memq v env))
@@ -2664,8 +2671,6 @@ So far only the second case can actually occur.
 (define (free-vars e)
   (table.keys (free-vars- e (table) *free-vars-secret-value*)))
 
-(define (filter2 f a b) (append (filter f a) (filter f b)))
-
 (define (analyze-vars-lambda e env captvars sp new-sp)
   (let* ((args (filter (lambda (v) (not (eq? (arg-name v) UNUSED)))
                        (lam:args e)))
@@ -2684,11 +2689,14 @@ So far only the second case can actually occur.
 		(map (lambda (decl) (make-var-info (decl-var decl)))
 		     args)
 		(map make-var-info locl)))
-	 ;; captured vars: vars from the environment that occur
-	 ;; in our set of free variables (fv).
-	 (cv    (filter2 (lambda (v) (and (memq (vinfo:name v) fv)
-					  (not (memq (vinfo:name v) glo))))
-			 env (map make-var-info sp)))
+         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo))))
+                          sp))
+         ;; captured vars: vars from the environment that occur
+         ;; in our set of free variables (fv).
+         (cv    (append (filter (lambda (v) (and (memq (vinfo:name v) fv)
+                                                 (not (memq (vinfo:name v) glo))))
+                                env)
+                        (map make-var-info capt-sp)))
 	 (bod   (analyze-vars
 		 (flatten-blocks (lam:body e))
 		 (append vi
@@ -2702,7 +2710,7 @@ So far only the second case can actually occur.
     (for-each (lambda (v) (vinfo:set-capt! v #t))
 	      cv)
     `(lambda ,(lam:args e)
-       (,vi ,cv 0 ,new-sp)
+       (,vi ,cv 0 ,(delete-duplicates (append new-sp capt-sp)))
        ,bod)))
 
 ;; convert each lambda's (locals ...) to
@@ -2855,19 +2863,22 @@ So far only the second case can actually occur.
 	t)))
 
 ;; replace leading (function) argument type with `typ`
-(define (fix-function-arg-type te typ iskw namemap)
+(define (fix-function-arg-type te typ iskw namemap type-sp)
   (let* ((typapp (caddr te))
          (types  (pattern-replace
 		  (pattern-set
 		   (pattern-lambda (call (call (top (-/ getfield)) (-/ Core) (quote (-/ Typeof))) name)
 				   (get namemap name __)))
 		  (cdddr typapp)))
+         (closure-type (if (null? type-sp)
+                           typ
+                           `(call (top apply_type) ,typ ,@type-sp)))
          (newtypes
           (if iskw
-              `(,(car types) ,(cadr types) ,typ ,@(cdddr types))
-              `(,typ ,@(cdr types)))))
+              `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
+              `(,closure-type ,@(cdr types)))))
     `(call (top svec) (call (top apply_type) Tuple ,@newtypes)
-	   ,(cadddr te))))
+	   (call (top svec) ,@(append (cddr (cadddr te)) type-sp)))))
 
 (define (lift-toplevel e)
   (if (atom? e) (cons e '())
@@ -2950,6 +2961,7 @@ So far only the second case can actually occur.
 	(let ((vi (assq e (car  (lam:vinfo lam))))
 	      (cv (assq e (cadr (lam:vinfo lam)))))
 	  (cond ((eq? e fname) e)
+                ((memq e (lam:sp lam)) e)
 		(cv
 		 (let ((access (if interp
                                    `($ (call (top QuoteNode) ,e))
@@ -2999,9 +3011,10 @@ So far only the second case can actually occur.
                                (or (assq name (car  (lam:vinfo lam)))
                                    (assq name (cadr (lam:vinfo lam))))))
                   (sig      (and (not short) (caddr e)))
-                  (sp-inits (if short '() (if (eq? (car sig) 'block)
-                                              (butlast (cdr sig))
-                                              '())))
+                  (sp-inits (if (or short (not (eq? (car sig) 'block)))
+                                '()
+                                (map-cl-convert (butlast (cdr sig))
+                                                fname lam namemap toplevel interp)))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
@@ -3046,32 +3059,39 @@ So far only the second case can actually occur.
                         (tname  (or exists
                                     (and name
                                          (symbol (string "#" name "#" (current-julia-module-counter))))))
+                        (alldefs (expr-find-all
+                                  (lambda (ex) (and (eq? (car ex) 'method)
+                                                    (not (eq? ex e))
+                                                    (length> ex 2)
+                                                    (eq? (method-expr-name ex) name)))
+                                  (lam:body lam)
+                                  identity
+                                  (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda))))))
                         (cvs   (delete-duplicates
-                                (apply append
-                                       ;; merge captured vars from all definitions
+                                (apply append  ;; merge captured vars from all definitions
                                        cvs
                                        (map (lambda (methdef)
                                               (map car (cadr (lam:vinfo (cadddr methdef)))))
-                                            (expr-find-all
-                                             (lambda (ex)
-                                               (and (eq? (car ex) 'method)
-                                                    (not (eq? ex e))
-                                                    (length> ex 2)
-                                                    (eq? (method-expr-name ex)
-                                                         name)))
-                                             (lam:body lam)
-                                             identity
-                                             (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))))
+                                            alldefs))))
+                        (sps   (delete-duplicates  ;; static params from all definitions
+                                (apply append
+                                       (lam:sp lam2)
+                                       (map (lambda (methdef) (lam:sp (cadddr methdef)))
+                                            alldefs))))
+                        (capt-sp (intersect cvs sps))
+                        (capt-vars (diff cvs capt-sp))
+                        (method-sp (map (lambda (s) (make-jlgensym)) capt-sp))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
 						   (if (is-var-boxed? v lam)
 						       'Any ;; TODO
 						       (gensy)))
-						 cvs))
-				(para (filter (lambda (v) (not (eq? v 'Any))) fieldtypes)))
+						 capt-vars))
+				(para (append capt-sp
+                                              (filter (lambda (v) (not (eq? v 'Any))) fieldtypes))))
 			   (if (null? para)
-			       (type-for-closure tname cvs '(top Function))
-			       (type-for-closure-parameterized tname para cvs fieldtypes '(top Function)))))
+			       (type-for-closure tname capt-vars '(top Function))
+			       (type-for-closure-parameterized tname para capt-vars fieldtypes '(top Function)))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
@@ -3080,12 +3100,14 @@ So far only the second case can actually occur.
                                                             `($ (call (top QuoteNode) ,v))
                                                             `(call (top getfield) ,fname (inert ,v)))
                                                         v)))
-                                                cvs))
-                                (P (filter identity (map (lambda (v ve)
-                                                           (if (is-var-boxed? v lam)
-                                                               #f
-                                                               `(call (top typeof) ,ve)))
-                                                         cvs var-exprs))))
+                                                capt-vars))
+                                (P (append
+                                    capt-sp
+                                    (filter identity (map (lambda (v ve)
+                                                            (if (is-var-boxed? v lam)
+                                                                #f
+                                                                `(call (top typeof) ,ve)))
+                                                          capt-vars var-exprs)))))
                            `(new ,(if (null? P)
                                       tname
                                       `(call (top apply_type) ,tname ,@P))
@@ -3099,9 +3121,11 @@ So far only the second case can actually occur.
                             (begin (and name (put! namemap name tname))
                                    typedef)))
                      ,@sp-inits
+                     ,@(map (lambda (gs tvar) (make-assignment gs `(call (top TypeVar) ',tvar (top Any) true)))
+                            method-sp capt-sp)
                      ,@(if short '()
                            `((method #f
-                                     ,(fix-function-arg-type sig tname iskw namemap)
+                                     ,(fix-function-arg-type sig tname iskw namemap method-sp)
                                      ,(convert-lambda lam2
                                                       (if iskw
                                                           (caddr (lam:args lam2))
