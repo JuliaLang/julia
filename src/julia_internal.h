@@ -59,19 +59,10 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
         jl_compile_linfo(meth, NULL);
         jl_generate_fptr(meth);
     }
-    jl_fptr_t fptr = meth->fptr;
-    uintptr_t fptr_int = (uintptr_t)fptr;
-    uintptr_t mask = 1;
-    if (__likely((fptr_int & mask) == 0))
-        return fptr(args[0], &args[1], nargs-1);
+    if (meth->jlcall_api == 0)
+        return meth->fptr(args[0], &args[1], nargs-1);
     else
-        return ((jl_fptr_sparam_t)(fptr_int & ~mask))(meth->sparam_vals, args[0], &args[1], nargs-1);
-
-
-    if (__likely((((uintptr_t)fptr) & 1) == 0))
-        return fptr(args[0], &args[1], nargs-1);
-    else
-        return ((jl_fptr_sparam_t)fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
+        return ((jl_fptr_sparam_t)meth->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
 }
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);
