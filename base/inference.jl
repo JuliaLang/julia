@@ -645,8 +645,8 @@ let stagedcache=Dict{Any,Any}()
     function func_for_method(m::Method, tt, env)
         if !m.isstaged
             return m.func
-        elseif haskey(stagedcache,(m,tt,env))
-            return stagedcache[(m,tt,env)]
+        elseif haskey(stagedcache, (m, tt))
+            return stagedcache[(m, tt)]
         else
             if !isleaftype(tt)
                 # don't call staged functions on abstract types.
@@ -654,8 +654,8 @@ let stagedcache=Dict{Any,Any}()
                 # we can't guarantee that their type behavior is monotonic.
                 return NF
             end
-            f = ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
-            stagedcache[(m,tt,env)] = f
+            f = ccall(:jl_instantiate_staged, Any, (Any, Any, Any), m.func, tt, env)
+            stagedcache[(m, tt)] = f
             return f
         end
     end
