@@ -240,7 +240,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
+int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
@@ -540,9 +540,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         }
     }
 
+    thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
         if (!jl_in_inference) {
-            jl_type_infer(thk, (jl_tupletype_t*)jl_typeof(jl_emptytuple), thk);
+            jl_type_infer(thk, thk);
         }
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);
