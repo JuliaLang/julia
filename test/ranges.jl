@@ -45,6 +45,8 @@ r = 5:-1:1
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
 
+@test findin([5.2, 3.3], 3:20) == findin([5.2, 3.3], collect(3:20))
+
 let
     span = 5:20
     r = -7:3:42
