@@ -122,6 +122,8 @@ include("socket.jl")
 include("filesystem.jl")
 importall .Filesystem
 include("process.jl")
+include("strings/encoder.jl")
+importall .StringEncoder
 include("multimedia.jl")
 importall .Multimedia
 include("grisu.jl")
