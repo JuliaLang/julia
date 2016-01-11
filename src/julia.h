@@ -316,9 +316,9 @@ typedef struct _jl_lambda_info_t {
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
 
     // hidden fields:
-    // flag telling if inference is running on this function
-    // used to avoid infinite recursion
-    uint8_t inInference : 1;
+    uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
+    uint8_t inInference : 1;    // flags to tell if inference is running on this function
+                                // used to avoid infinite recursion
     uint8_t inCompile : 1;
     jl_fptr_t fptr;             // jlcall entry point
 
