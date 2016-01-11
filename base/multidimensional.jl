@@ -563,13 +563,13 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-@inline function _unsafe_getindex!(X::BitArray, ::LinearFast, B::BitArray, I0::Union{UnitRange{Int}, Colon})
+@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int}, Colon})
     copy_chunks!(X.chunks, 1, B.chunks, first(I0), index_lengths(B, I0)[1])
     return X
 end
 
 # Optimization where the inner dimension is contiguous improves perf dramatically
-@generated function _unsafe_getindex!(X::BitArray, ::LinearFast, B::BitArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+@generated function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
     quote
         $(Expr(:meta, :inline))
@@ -606,7 +606,7 @@ end
 # in the general multidimensional non-scalar case, can we do about 10% better
 # in most cases by manually hoisting the bitarray chunks access out of the loop
 # (This should really be handled by the compiler or with an immutable BitArray)
-@generated function _unsafe_getindex!(X::BitArray, ::LinearFast, B::BitArray, I::Union{Int,AbstractVector{Int},Colon}...)
+@generated function _unsafe_getindex!(X::BitArray, B::BitArray, I::Union{Int,AbstractVector{Int},Colon}...)
     N = length(I)
     quote
         $(Expr(:meta, :inline))
