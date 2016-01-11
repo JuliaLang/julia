@@ -47,6 +47,14 @@ foo
 ```
 """ == MD(LaTeX("..."))
 
+code_in_code = md"""
+````
+```
+````
+"""
+@test code_in_code == MD(Code("```"))
+@test plain(code_in_code) == "````\n```\n````\n"
+
 @test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
 
 @test md"[^foo]: footnote" == MD(Paragraph([Footnote("foo", Any[" footnote"])]))
