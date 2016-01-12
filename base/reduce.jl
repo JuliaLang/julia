@@ -277,9 +277,6 @@ end
 prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
-prod(A::AbstractArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
-
 ## maximum & minimum
 
 function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
