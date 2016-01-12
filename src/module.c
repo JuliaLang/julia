@@ -25,7 +25,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = NULL;
-    m->constant_table = NULL;
     m->call_func = NULL;
     m->istopmod = 0;
     m->std_imports = 0;

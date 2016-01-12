@@ -591,7 +591,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
         }
     }
-    jl_serialize_value(s, m->constant_table);
     write_uint8(s, m->istopmod);
     write_uint8(s, m->std_imports);
     write_uint64(s, m->uuid);
@@ -1456,8 +1455,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             m->usings.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->usings.items[i]);
             i++;
         }
-        m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
-        if (m->constant_table != NULL) jl_gc_wb(m, m->constant_table);
         m->istopmod = read_uint8(s);
         m->std_imports = read_uint8(s);
         m->uuid = read_uint64(s);
@@ -1964,11 +1961,11 @@ JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     JL_LOCK(dump); // Might GC
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
-    if (li->module->constant_table == NULL) {
-        li->module->constant_table = jl_alloc_cell_1d(0);
-        jl_gc_wb(li->module, li->module->constant_table);
+    if (li->def->roots == NULL) {
+        li->def->roots = jl_alloc_cell_1d(0);
+        jl_gc_wb(li->def, li->def->roots);
     }
-    tree_literal_values = li->module->constant_table;
+    tree_literal_values = li->def->roots;
     ios_t src;
     jl_array_t *bytes = (jl_array_t*)ast;
     ios_mem(&src, 0);
@@ -1996,11 +1993,11 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_module_t *last_tem = tree_enclosing_module;
     int en = jl_gc_enable(0); // Might GC
 
-    if (li->module->constant_table == NULL) {
-        li->module->constant_table = jl_alloc_cell_1d(0);
-        jl_gc_wb(li->module, li->module->constant_table);
+    if (li->def->roots == NULL) {
+        li->def->roots = jl_alloc_cell_1d(0);
+        jl_gc_wb(li->def, li->def->roots);
     }
-    tree_literal_values = li->module->constant_table;
+    tree_literal_values = li->def->roots;
     tree_enclosing_module = li->module;
     li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
     jl_gc_wb(li, li->capt);
@@ -2013,7 +2010,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0 && last_tlv == NULL) {
-        li->module->constant_table = NULL;
+        li->def->roots = NULL;
     }
     tree_literal_values = last_tlv;
     tree_enclosing_module = last_tem;
@@ -2032,7 +2029,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *dat
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     jl_array_t *bytes = (jl_array_t*)data;
-    tree_literal_values = li->module->constant_table;
+    tree_literal_values = li->def->roots;
     tree_enclosing_module = li->module;
     ios_t src;
     ios_mem(&src, 0);
