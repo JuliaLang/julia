@@ -7,9 +7,9 @@
 #     Jonathan Sorenson, "An analysis of two prime number sieves", Computer Science Technical Report Vol. 1028, 1991
 const wheel         = [4,  2,  4,  2,  4,  6,  2,  6]
 const wheel_primes  = [7, 11, 13, 17, 19, 23, 29, 31]
-const wheel_indices = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7 ]
+const wheel_indices = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7]
 
-@inline wheel_index(n) = ( (d, r) = divrem(n - 1, 30); return 8d + wheel_indices[r+1] )
+@inline wheel_index(n) = ( (d, r) = divrem(n - 1, 30); return 8d + wheel_indices[r+2] )
 @inline wheel_prime(n) = ( (d, r) = ((n - 1) >>> 3, (n - 1) & 7); return 30d + wheel_primes[r+1] )
 
 function _primesmask(limit::Int)
@@ -37,37 +37,23 @@ function _primesmask(lo::Int, hi::Int)
     wlo, whi = wheel_index(lo - 1), wheel_index(hi)
     m = wheel_prime(whi)
     sieve = ones(Bool, whi - wlo)
-    small_primes = primes(isqrt(hi))
-    @inbounds for i in 4:length(small_primes)
-        p = small_primes[i]
-        j = wheel_index(2 * div(lo - p - 1, 2p) + 1)
-        q = p * wheel_prime(j + 1); j = j & 7 + 1
-        while q ≤ m
-            sieve[wheel_index(q)-wlo] = false
-            q = q + wheel[j] * p
-            j = j & 7 + 1
+    hi < 49 && return sieve
+    small_sieve = _primesmask(isqrt(hi))
+    @inbounds for i in eachindex(small_sieve)
+        if small_sieve[i]; p = wheel_prime(i)
+            j = wheel_index(2 * div(lo - p - 1, 2p) + 1)
+            q = p * wheel_prime(j + 1); j = j & 7 + 1
+            while q ≤ m
+                sieve[wheel_index(q)-wlo] = false
+                q = q + wheel[j] * p
+                j = j & 7 + 1
+            end
         end
     end
     return sieve
 end
 
-# Sieve of the primes up to limit represented as an array of booleans
-function primesmask(limit::Int)
-    limit < 1 && throw(ArgumentError("limit must be at least 1, got $limit"))
-    sieve = falses(limit)
-    limit < 2 && return sieve; sieve[2] = true
-    limit < 3 && return sieve; sieve[3] = true
-    limit < 5 && return sieve; sieve[5] = true
-    limit < 7 && return sieve
-    wheel_sieve = _primesmask(limit)
-    @inbounds for i in eachindex(wheel_sieve)
-        Base.unsafe_setindex!(sieve, wheel_sieve[i], wheel_prime(i))
-    end
-    return sieve
-end
-primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
-    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
-
+# Sieve of the primes from lo up to hi represented as an array of booleans
 function primesmask(lo::Int, hi::Int)
     0 < lo ≤ hi || throw(ArgumentError("the condition 0 < lo ≤ hi must be met"))
     sieve = falses(hi - lo + 1)
@@ -86,19 +72,9 @@ end
 primesmask{T<:Integer}(lo::T, hi::T) = lo <= hi <= typemax(Int) ? primesmask(Int(lo), Int(hi)) :
     throw(ArgumentError("both endpoints of the interval to sieve must be ≤ $(typemax(Int)), got $lo and $hi"))
 
-function primes(n::Int)
-    list = Int[]
-    n < 2 && return list; push!(list, 2)
-    n < 3 && return list; push!(list, 3)
-    n < 5 && return list; push!(list, 5)
-    n < 7 && return list
-    sizehint!(list, floor(Int, n / log(n)))
-    sieve = _primesmask(n)
-    @inbounds for i in eachindex(sieve)
-        sieve[i] && push!(list, wheel_prime(i))
-    end
-    return list
-end
+primesmask(limit::Int) = primesmask(1, limit)
+primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
+    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
 function primes(lo::Int, hi::Int)
     lo ≤ hi || throw(ArgumentError("the condition lo ≤ hi must be met"))
@@ -107,6 +83,7 @@ function primes(lo::Int, hi::Int)
     lo ≤ 3 ≤ hi && push!(list, 3)
     lo ≤ 5 ≤ hi && push!(list, 5)
     hi < 7 && return list
+    sizehint!(list, floor(Int, hi / log(hi)))
     sieve = _primesmask(max(7, lo), hi)
     lwi = wheel_index(lo - 1)
     @inbounds for i in eachindex(sieve)
@@ -114,6 +91,7 @@ function primes(lo::Int, hi::Int)
     end
     return list
 end
+primes(n::Int) = primes(1, n)
 
 const PRIMES = primes(2^16)
 
