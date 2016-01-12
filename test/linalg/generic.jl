@@ -205,3 +205,6 @@ let
     @test norm(w) === 1.0
     @test norm(normalize!(v) - w, Inf) < eps()
 end
+
+# Issue 14657
+@test det([true false; false true]) == det(eye(Int, 2))
