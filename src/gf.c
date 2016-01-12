@@ -1812,12 +1812,6 @@ static void _compile_all_enq(jl_value_t *v, htable_t *h, jl_array_t *found, jl_f
                     }
                 }
             }
-            if (m->constant_table != NULL) {
-                for(i=0; i < jl_array_len(m->constant_table); i++) {
-                    jl_value_t *v = jl_cellref(m->constant_table, i);
-                    _compile_all_enq(v, h, found, 0);
-                }
-            }
         }
         jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
         size_t i, nf = jl_datatype_nfields(dt);
