@@ -909,7 +909,7 @@ function decode_dec(x::SmallFloatingPoint)
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), false)
     end
-    len,pt,neg,buffer = grisu(x,Grisu.FIXED,0)
+    len,pt,neg = grisu(x,Grisu.FIXED,0)
     if len == 0
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), false)
@@ -935,7 +935,7 @@ fix_dec(x::Integer, n::Int) = decode_dec(x)
 
 function fix_dec(x::SmallFloatingPoint, n::Int)
     if n > length(DIGITS)-1; n = length(DIGITS)-1; end
-    len,pt,neg,buffer = grisu(x,Grisu.FIXED,n)
+    len,pt,neg = grisu(x,Grisu.FIXED,n)
     if len == 0
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), neg)
@@ -989,7 +989,7 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
-        len,pt,neg,buffer = grisu(x,Grisu.PRECISION,n)
+        len,pt,neg = grisu(x,Grisu.PRECISION,n)
     end
     return Int32(len), Int32(pt), neg
 end
