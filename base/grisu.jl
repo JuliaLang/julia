@@ -32,13 +32,13 @@ function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITS,bignums=BIGN
     if mode == PRECISION && requested_digits == 0
         buffer[1] = 0x00
         len = 0
-        return 0, 0, neg, buffer
+        return 0, 0, neg
     end
     if v == 0.0
         buffer[1] = 0x30
         buffer[2] = 0x00
         len = point = 1
-        return len, point, neg, buffer
+        return len, point, neg
     end
     if mode == SHORTEST
         status,len,point = fastshortest(v,buffer)
@@ -47,9 +47,9 @@ function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITS,bignums=BIGN
     elseif mode == PRECISION
         status,len,point = fastprecision(v,requested_digits,buffer)
     end
-    status && return len-1, point, neg, buffer
+    status && return len-1, point, neg
     status, len, point = bignumdtoa(v,mode,requested_digits,buffer,bignums)
-    return len-1, point, neg, buffer
+    return len-1, point, neg
 end
 
 _show(io::IO, x::AbstractFloat, mode, n::Int, t) =
@@ -67,7 +67,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
         return
     end
     typed && isa(x,Float16) && write(io, "Float16(")
-    len,pt,neg,buffer = grisu(x,mode,n)
+    (len,pt,neg),buffer = grisu(x,mode,n),DIGITS
     pdigits = pointer(buffer)
     if mode == PRECISION
         while len > 1 && buffer[len] == 0x30
@@ -138,7 +138,7 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     isnan(x) && return write(io, "NaN")
     x < 0 && write(io,'-')
     isinf(x) && return write(io, "Inf")
-    len,pt,neg,buffer = grisu(x,mode,n)
+    (len,pt,neg),buffer = grisu(x,mode,n),DIGITS
     pdigits = pointer(buffer)
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
