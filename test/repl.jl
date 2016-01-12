@@ -131,7 +131,7 @@ end
 function buffercontents(buf::IOBuffer)
     p = position(buf)
     seek(buf,0)
-    c = readall(buf)
+    c = readstring(buf)
     seek(buf,p)
     c
 end
@@ -388,6 +388,6 @@ end
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
-    @test readall(outs) == "1\n"
+    @test readstring(outs) == "1\n"
 end
 end

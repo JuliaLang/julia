@@ -93,7 +93,7 @@ less(file, line::Integer) = error("could not find source file for function")
             print(io, x)
         end
     end
-    clipboard() = readall(`pbpaste`)
+    clipboard() = readstring(`pbpaste`)
 end
 
 @linux_only begin
@@ -120,7 +120,7 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
             error("unexpected clipboard command: $c")
-        readall(pipeline(cmd, stderr=STDERR))
+        readstring(pipeline(cmd, stderr=STDERR))
     end
 end
 
@@ -181,7 +181,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if verbose
         lsb = ""
         @linux_only try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
-        @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
+        @windows_only try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
         end
@@ -416,7 +416,7 @@ function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
         buf = PipeBuffer()
         versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(readall(buf))")
+              "including error messages above and the output of versioninfo():\n$(readstring(buf))")
     end
 end
 

@@ -53,7 +53,7 @@ For example, to read a simple byte array, we could do::
 However, since this is slightly cumbersome, there are several convenience methods provided. For example, we could have written the
 above as::
 
-    julia> readbytes(STDIN,4)
+    julia> read(STDIN,4)
     abcd
     4-element Array{UInt8,1}:
      0x61
@@ -142,7 +142,7 @@ as its first argument and filename as its second, opens the file, calls the func
 an argument, and then closes it again. For example, given a function::
 
     function read_and_capitalize(f::IOStream)
-        return uppercase(readall(f))
+        return uppercase(readstring(f))
     end
 
 You can call::
@@ -156,7 +156,7 @@ To avoid even having to define a named function, you can use the ``do`` syntax, 
 function on the fly::
 
     julia> open("hello.txt") do f
-              uppercase(readall(f))
+              uppercase(readstring(f))
            end
     "HELLO AGAIN."
 

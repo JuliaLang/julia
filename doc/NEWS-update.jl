@@ -3,7 +3,7 @@
 
 NEWS = get(ARGS, 1, "NEWS.md")
 
-s = readall(NEWS)
+s = readstring(NEWS)
 
 s = s[1:match(r"\[#[0-9]+\]:", s).offset-1];
 

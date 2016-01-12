@@ -263,7 +263,7 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(readall(path),'\n'; keep=false)
+    for line in split(readstring(path),'\n'; keep=false)
         s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
             cnt = isnumber(s[1]) ? parse(Int,s[1]) : symbol(s[1])
@@ -331,7 +331,7 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(Main,parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readstring(STDIN)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)

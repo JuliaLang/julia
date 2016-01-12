@@ -129,7 +129,7 @@ temp_dir() do dir
                 LibGit2.GitRemote(repo, branch, repo_url) |> finalize
 
                 config = joinpath(cache_repo, ".git", "config")
-                lines = split(open(readall, config, "r"), "\n")
+                lines = split(open(readstring, config, "r"), "\n")
                 @test any(map(x->x == "[remote \"upstream\"]", lines))
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
@@ -330,7 +330,7 @@ temp_dir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test readall(joinpath(test_repo, test_file)) == readall(joinpath(cache_repo, test_file))
+            @test readstring(joinpath(test_repo, test_file)) == readstring(joinpath(cache_repo, test_file))
         end
 
         @testset "tags & branches" begin

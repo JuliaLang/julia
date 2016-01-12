@@ -2,15 +2,15 @@
 
 let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --version
-    let v = split(readall(`$exename -v`), "julia version ")[end]
+    let v = split(readstring(`$exename -v`), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
     end
-    @test readall(`$exename -v`) == readall(`$exename --version`)
+    @test readstring(`$exename -v`) == readstring(`$exename --version`)
 
     # --help
     let header = "julia [switches] -- [programfile] [args...]"
-        @test startswith(readall(`$exename -h`), header)
-        @test startswith(readall(`$exename --help`), header)
+        @test startswith(readstring(`$exename -h`), header)
+        @test startswith(readstring(`$exename --help`), header)
     end
 
     # --quiet
@@ -29,8 +29,8 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test !success(`$exename --eval`)
 
     # --print
-    @test readall(`$exename -E "1+1"`) == "2\n"
-    @test readall(`$exename --print="1+1"`) == "2\n"
+    @test readstring(`$exename -E "1+1"`) == "2\n"
+    @test readstring(`$exename --print="1+1"`) == "2\n"
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
@@ -182,7 +182,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
             wait(proc)
             close(out.in)
             @test success(proc)
-            @test isempty(readall(out))
+            @test isempty(readstring(out))
         end
     end
 

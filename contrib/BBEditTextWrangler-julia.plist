@@ -842,10 +842,9 @@
               <string>rationalize</string>
               <string>read</string>
               <string>read!</string>
-              <string>readall</string>
+              <string>readstring</string>
               <string>readandwrite</string>
               <string>readavailable</string>
-              <string>readbytes</string>
               <string>readbytes!</string>
               <string>readchomp</string>
               <string>readcsv</string>

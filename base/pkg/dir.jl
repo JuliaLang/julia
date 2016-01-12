@@ -70,9 +70,7 @@ end
 
 function getmetabranch()
     try
-        open(joinpath(path(),"META_BRANCH")) do io
-          chomp(readuntil(io, "/n"))
-        end
+        chomp(readline(joinpath(path(),"META_BRANCH")))
     catch err
         META_BRANCH
     end

@@ -76,7 +76,7 @@ function wordcount_files(result_file,inputs...)
     text = ""
     for file in inputs
         open(file) do f
-            text *= readall(f)
+            text *= readstring(f)
         end
     end
     wc = parallel_wordcount(text)
