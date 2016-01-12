@@ -8,40 +8,6 @@
 
 .. currentmodule:: Base
 
-.. function:: stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTraces.StackTrace
-
-   .. Docstring generated from Julia source
-
-   Returns a stack trace in the form of a vector of ``StackFrame``\ s. (By default stacktrace doesn't return C functions, but this can be enabled.) When called without specifying a trace, ``stacktrace`` first calls ``backtrace``\ .
-
-.. function:: catch_stacktrace([c_funcs::Bool=false]) -> StackTraces.StackTrace
-
-   .. Docstring generated from Julia source
-
-   Returns the stack trace for the most recent error thrown, rather than the current execution context.
-
-.. function:: show_stacktrace([io::IO,] [stack::StackTrace]; full_path::Bool=false)
-
-   .. Docstring generated from Julia source
-
-   An analogue of ``Base.show_backtrace`` that prints the stacktrace to the specified IO stream. Only the base name of the ``file`` and ``inlined_file`` fields are displayed unless the optional ``full_path`` keyword argument is set to ``true``\ .
-
-.. function:: format_stackframe(frame::StackFrame; full_path::Bool=false) -> str
-
-   .. Docstring generated from Julia source
-
-   Returns a string representation of a ``StackFrame`` for display purposes. Only the base name of the ``file`` and ``inlined_file`` fields are displayed unless the optional ``full_path`` keyword argument is set to ``true``\ .
-
-.. function:: format_stacktrace(stack::StackTrace, separator::AbstractString, [start::AbstractString="", finish::AbstractString=""]; full_path::Bool=false) -> str
-
-   .. Docstring generated from Julia source
-
-   Returns a string representation of a ``StackTrace`` for display purposes. Only the base name of the ``file`` and ``inlined_file`` fields are displayed unless the optional ``full_path`` keyword argument is set to ``true``\ .
-
-.. currentmodule:: Base.StackTraces
-
-The following methods and types in :mod:`Base.StackTraces` are not exported and need to be called e.g. as ``StackTraces.lookup(ptr)``.
-
 .. data:: StackFrame
 
     Stack information representing execution context, with the following fields:
@@ -72,7 +38,23 @@ The following methods and types in :mod:`Base.StackTraces` are not exported and 
     An alias for ``Vector{StackFrame}`` provided for convenience; returned by calls to
     ``stacktrace`` and ``catch_stacktrace``.
 
-.. function:: lookup(pointer::Union{Ptr{Void}, UInt}) -> StackTraces.StackFrame
+.. function:: stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
+
+   .. Docstring generated from Julia source
+
+   Returns a stack trace in the form of a vector of ``StackFrame``\ s. (By default stacktrace doesn't return C functions, but this can be enabled.) When called without specifying a trace, ``stacktrace`` first calls ``backtrace``\ .
+
+.. function:: catch_stacktrace([c_funcs::Bool=false]) -> StackTrace
+
+   .. Docstring generated from Julia source
+
+   Returns the stack trace for the most recent error thrown, rather than the current execution context.
+
+.. currentmodule:: Base.StackTraces
+
+The following methods and types in :mod:`Base.StackTraces` are not exported and need to be called e.g. as ``StackTraces.lookup(ptr)``.
+
+.. function:: lookup(pointer::Union{Ptr{Void}, UInt}) -> StackFrame
 
    .. Docstring generated from Julia source
 

@@ -2,54 +2,39 @@
 
 .. currentmodule:: Base
 
+************
 Stack Traces
-============
+************
 
-The :mod:`StackTraces` module provides simple stack traces that are both human readable and easy to use programmatically.
+The :mod:`StackTraces` module provides simple stack traces that are both human readable and
+easy to use programmatically.
 
 Viewing a stack trace
 ---------------------
 
 The primary function used to obtain a stack trace is :func:`stacktrace`::
 
-    julia> using StackTraces
-
     julia> stacktrace()
-    2-element Array{StackTraces.StackFrame,1}:
-     StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13041465684)
-     StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,1304140086)
+    3-element Array{StackFrame,1}:
+     eval at boot.jl:265
+     [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
+     [inlined code from REPL.jl:92] anonymous at task.jl:63
 
-Calling :func:`stacktrace` returns a vector of :obj:`StackFrame` s. For ease of use, the alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``.
+Calling :func:`stacktrace` returns a vector of :obj:`StackFrame` s. For ease of use, the
+alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``.
 
-::
+.. doctest::
 
     julia> example() = stacktrace()
     example (generic function with 1 method)
 
     julia> example()
-    3-element Array{StackTraces.StackFrame,1}:
-     StackTraces.StackFrame(:example,:none,1,symbol(""),-1,false,13041535346)
-     StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13041465684)
-     StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,13041400866)
+    ...-element Array{StackFrame,1}:
+     example at none:1
+     eval at boot.jl:265
+     ...
 
-If you'd like the output to be a little more human-readable, replace calls to :func:`stacktrace` (which returns a vector of :obj:`StackFrame` s) with :func:`show_stacktrace` (which prints the stacktrace to an IO stream).
-
-::
-
-    julia> example() = show_stacktrace()
-    example (generic function with 1 method)
-
-    julia> example()
-    StackTrace with 3 StackFrames:
-      example at none:1
-      eval_user_input at REPL.jl:62
-      [inlined code from REPL.jl:92] anonymous at task.jl:63
-
-Note that when calling :func:`stacktrace` from the REPL you'll always have those last two frames in the stack from ``REPL.jl`` (including the anonymous function from ``task.jl``).
-
-::
-
-    julia> @noinline child() = show_stacktrace()
+    julia> @noinline child() = stacktrace()
     child (generic function with 1 method)
 
     julia> @noinline parent() = child()
@@ -59,29 +44,48 @@ Note that when calling :func:`stacktrace` from the REPL you'll always have those
     grandparent (generic function with 1 method)
 
     julia> grandparent()
-    StackTrace with 5 StackFrames:
-      child at none:1
-      parent at none:1
-      grandparent at none:1
-      eval_user_input at REPL.jl:62
-      [inlined code from REPL.jl:92] anonymous at task.jl:63
+    ...-element Array{StackFrame,1}:
+     child at none:1
+     parent at none:1
+     grandparent at none:1
+     eval at boot.jl:265
+     ...
+
+Note that when calling :func:`stacktrace` you'll typically see a frame with
+``eval at boot.jl``. When calling :func:`stacktrace` from the REPL you'll also have a few
+extra frames in the stack from ``REPL.jl``, usually looking something like this::
+
+    julia> example() = show_stacktrace()
+    example (generic function with 1 method)
+
+    julia> example()
+    4-element Array{StackFrame,1}:
+     example at none:1
+     eval at boot.jl:265
+     [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
+     [inlined code from REPL.jl:92] anonymous at task.jl:63
 
 Extracting useful information
 -----------------------------
 
-Each :obj:`StackFrame` contains the function name, file name, line number, file and line information for inlined functions, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by :func:`backtrace`::
+Each :obj:`StackFrame` contains the function name, file name, line number, file and line
+information for inlined functions, a flag indicating whether it is a C function (by default
+C functions do not appear in the stack trace), and an integer representation of the pointer
+returned by :func:`backtrace`:
+
+.. doctest::
 
     julia> top_frame = stacktrace()[1]
-    StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false, 13203085684)
+    eval at boot.jl:265
 
     julia> top_frame.func
-    :eval_user_input
+    :eval
 
     julia> top_frame.file
-    symbol("REPL.jl")
+    symbol("./boot.jl")
 
     julia> top_frame.line
-    62
+    265
 
     julia> top_frame.inlined_file
     symbol("")
@@ -91,52 +95,66 @@ Each :obj:`StackFrame` contains the function name, file name, line number, file 
 
     julia> top_frame.from_c
     false
-
+::
     julia> top_frame.pointer
     13203085684
 
-This makes stack trace information available programmatically without having to capture and parse the output from something like ``Base.show_backtrace(io, backtrace())``.
+This makes stack trace information available programmatically for logging, error handling,
+and more.
 
 Error handling
 --------------
 
-While having easy access to information about the current state of the callstack can be helpful in many places, the most obvious application is in error handling and debugging.
+While having easy access to information about the current state of the callstack can be
+helpful in many places, the most obvious application is in error handling and debugging.
 
-::
+.. doctest::
 
-    julia> example() = try
-               error("Oh no!")
+    julia> bad_function() = undeclared_variable + 1
+
+    julia> @noinline example() = try
+               bad_function()
            catch
-               show_stacktrace()
+               stacktrace()
            end
     example (generic function with 1 method)
 
     julia> example()
-    StackTrace with 3 StackFrames:
-      example at none:4
-      eval_user_input at REPL.jl:62
-      [inlined code from REPL.jl:92] anonymous at task.jl:63
+    ...-element Array{StackFrame,1}:
+     example at none:2
+     eval at boot.jl:265
+     ...
 
-You may notice that in the example above the first stack frame points points at line 4, where :func:`stacktrace` is called, rather than line 2, where the error occurred. While in this example it's trivial to track down the actual source of the error, things can get misleading pretty quickly if the stack trace doesn't even point to the right function.
+You may notice that in the example above the first stack frame points points at line 4,
+where :func:`stacktrace` is called, rather than line 2, where `bad_function` is called, and
+``bad_function``'s frame is missing entirely. This is understandable, given that
+:func:`stacktrace` is called from the context of the `catch`. While in this example it's
+fairly easy to find the actual source of the error, in complex cases tracking down the
+source of the error becomes nontrivial.
 
-This can be remedied by calling :func:`catch_stacktrace` instead of :func:`stacktrace`. Instead of returning callstack information for the current context, :func:`catch_stacktrace` returns stack information for the context of the most recent error::
+This can be remedied by calling :func:`catch_stacktrace` instead of :func:`stacktrace`.
+Instead of returning callstack information for the current context, :func:`catch_stacktrace`
+returns stack information for the context of the most recent exception:
 
-    julia> example() = try
-               error("Oh no!")
+.. doctest::
+
+    julia> @noinline example() = try
+               bad_function()
            catch
-               show_stacktrace(catch_stacktrace())
+               catch_stacktrace()
            end
     example (generic function with 1 method)
 
     julia> example()
-    StackTrace with 3 StackFrames:
-      example at none:2
-      eval_user_input at REPL.jl:62
-      [inlined code from REPL.jl:92] anonymous at task.jl:63
+    ...-element Array{StackFrame,1}:
+     bad_function at none:1
+     example at none:2
+     eval at boot.jl:265
+     ...
 
-Notice that the stack trace now indicates the appropriate line number.
+Notice that the stack trace now indicates the appropriate line number and the missing frame.
 
-::
+.. doctest::
 
     julia> @noinline child() = error("Whoops!")
     child (generic function with 1 method)
@@ -144,70 +162,86 @@ Notice that the stack trace now indicates the appropriate line number.
     julia> @noinline parent() = child()
     parent (generic function with 1 method)
 
-    julia> function grandparent()
+    julia> @noinline function grandparent()
                try
                    parent()
                catch err
                    println("ERROR: ", err.msg)
-                   show_stacktrace(catch_stacktrace())
+                   catch_stacktrace()
                end
            end
     grandparent (generic function with 1 method)
 
     julia> grandparent()
     ERROR: Whoops!
-    StackTrace with 5 StackFrames:
-      child at none:1
-      parent at none:1
-      grandparent at none:3
-      eval_user_input at REPL.jl:62
-      [inlined code from REPL.jl:92] anonymous at task.jl:63
+    ...-element Array{StackFrame,1}:
+     child at none:1
+     parent at none:1
+     grandparent at none:3
+     eval at boot.jl:265
+     ...
 
-Comparison with ``backtrace``
------------------------------
+Comparison with :func:`backtrace`
+---------------------------------
 
-A call to :func:`backtrace` returns a vector of ``Ptr{Void}``, which may then be passed into :func:`stacktrace` for translation::
+A call to :func:`backtrace` returns a vector of ``Ptr{Void}``, which may then be passed into
+:func:`stacktrace` for translation::
 
-    julia> stack = backtrace()
+    julia> trace = backtrace()
     15-element Array{Ptr{Void},1}:
-     Ptr{Void} @0x000000010e9562ed
-     Ptr{Void} @0x0000000312f95f20
-     Ptr{Void} @0x0000000312f95ea0
-     Ptr{Void} @0x000000010e8e5776
-     Ptr{Void} @0x000000010e950c04
-     Ptr{Void} @0x000000010e94f2a8
-     Ptr{Void} @0x000000010e94f137
-     Ptr{Void} @0x000000010e95070d
-     Ptr{Void} @0x000000010e95053f
-     Ptr{Void} @0x000000010e963348
-     Ptr{Void} @0x000000010e8edd67
-     Ptr{Void} @0x0000000312f71974
-     Ptr{Void} @0x0000000312f715c7
-     Ptr{Void} @0x0000000312f65c22
-     Ptr{Void} @0x000000010e95708f
+     Ptr{Void} @0x000000010527895e
+     Ptr{Void} @0x0000000309bf6220
+     Ptr{Void} @0x0000000309bf61a0
+     Ptr{Void} @0x00000001052733b4
+     Ptr{Void} @0x0000000105271a0e
+     Ptr{Void} @0x000000010527189d
+     Ptr{Void} @0x0000000105272e6d
+     Ptr{Void} @0x0000000105272cef
+     Ptr{Void} @0x0000000105285b88
+     Ptr{Void} @0x000000010526b50e
+     Ptr{Void} @0x000000010663cc28
+     Ptr{Void} @0x0000000309bbc20f
+     Ptr{Void} @0x0000000309bbbde7
+     Ptr{Void} @0x0000000309bb0262
+     Ptr{Void} @0x000000010527980e
 
-    julia> stacktrace(stack)
-    3-element Array{StackTraces.StackFrame,1}:
-     StackTraces.StackFrame(:backtrace,symbol("error.jl"),26,symbol(""),-1,false,13203234592)
-     StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13203085684)
-     StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,13203037218)
+    julia> stacktrace(trace)
+    4-element Array{StackFrame,1}:
+     backtrace at error.jl:26
+     eval at boot.jl:265
+     [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
+     [inlined code from REPL.jl:92] anonymous at task.jl:63
 
 Notice that the vector returned by :func:`backtrace` had 15 pointers, while the vector returned by :func:`stacktrace` only has 3. This is because, by default, :func:`stacktrace` removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this::
 
     julia> stacktrace(stack, true)
-    15-element Array{StackTraces.StackFrame,1}:
-     StackTraces.StackFrame(:rec_backtrace,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/task.c"),644,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/task.c"),703,true,4539638509)
-     StackTraces.StackFrame(:backtrace,symbol("error.jl"),26,symbol(""),-1,false,13203234592)
-     StackTraces.StackFrame(:jlcall_backtrace_21483,symbol(""),-1,symbol(""),-1,true,13203234464)
-     StackTraces.StackFrame(:jl_apply,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/gf.c"),1691,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/gf.c"),1708,true,4539176822)
-     StackTraces.StackFrame(:jl_apply,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),55,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),65,true,4539616260
-     StackTraces.StackFrame(:eval,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),213,symbol(""),-1,true,4539609768)
-     StackTraces.StackFrame(:eval,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),219,symbol(""),-1,true,4539609399)
-     StackTraces.StackFrame(:eval_body,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),592,symbol(""),-1,true,4539614989)
-     StackTraces.StackFrame(:jl_toplevel_eval_body,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/interpreter.c"),527,symbol(""),-1,true,4539614527)
-     StackTraces.StackFrame(:jl_toplevel_eval_flex,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/toplevel.c"),521,symbol(""),-1,true,4539691848)
-     StackTraces.StackFrame(:jl_toplevel_eval_in,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/builtins.c"),579,symbol(""),-1,true,4539211111)
-     StackTraces.StackFrame(:eval_user_input,symbol("REPL.jl"),62,symbol(""),-1,false,13203085684)
-     StackTraces.StackFrame(:jlcall_eval_user_input_21232,symbol(""),-1,symbol(""),-1,true,13203084743)
-     StackTraces.StackFrame(:anonymous,symbol("REPL.jl"),92,symbol("task.jl"),63,false,13203037218)
-     StackTraces.StackFrame(:jl_apply,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/task.c"),241,symbol("/private/tmp/julia20151107-44794-o1d6wy/src/task.c"),240,true,4539641999)
+    15-element Array{StackFrame,1}:
+     [inlined code from task.c:651] rec_backtrace at task.c:711
+     backtrace at error.jl:26
+     jlcall_backtrace_23146 at :-1
+     [inlined code from interpreter.c:55] jl_apply at interpreter.c:65
+     eval at interpreter.c:214
+     eval at interpreter.c:220
+     eval_body at interpreter.c:601
+     jl_toplevel_eval_body at interpreter.c:534
+     jl_toplevel_eval_flex at toplevel.c:525
+     jl_toplevel_eval_in_warn at builtins.c:590
+     eval at boot.jl:265
+     [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
+     jlcall_eval_user_input_22658 at :-1
+     [inlined code from REPL.jl:92] anonymous at task.jl:63
+     [inlined code from julia.h:1352] jl_apply at task.c:246
+
+Individual pointers returned by :func:`backtrace` can be translated into :obj:`StackFrame` s
+by passing them into :func:`StackTraces.lookup`:
+
+.. doctest::
+
+    julia> pointer = backtrace()[1]
+    Ptr{Void} @0x...
+
+    julia> frame = StackTraces.lookup(pointer)
+    [inlined code from task.c:651] rec_backtrace at task.c:711
+
+    julia> println("The top frame is from $(frame.func)!")
+    The top frame is from rec_backtrace!
