@@ -134,6 +134,10 @@ General I/O
        write(stream, x, y...)
        write(stream, x) + write(stream, y...)
 
+.. function:: write(filename, x)
+
+   Write directly to a named file. Equivalent to ``open(io->write(io,x), filename, "w")``\ .
+
 .. function:: read(stream, type)
 
    .. Docstring generated from Julia source
