@@ -50,7 +50,7 @@ end
 let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
 @test readline(io) == "hamster\n"
-@test readall(io) == "guinea pig\nturtle"
+@test readstring(io) == "guinea pig\nturtle"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
@@ -106,7 +106,7 @@ skip(io,3)
 @test write(io,"apples".data) == 3
 skip(io,71)
 @test write(io,'y') == 1
-@test readall(io) == "happy"
+@test readstring(io) == "happy"
 @test eof(io)
 write(io,zeros(UInt8,73))
 write(io,'a')
@@ -163,22 +163,22 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test read(io, Char) == 'ω'
     @test_throws EOFError read(io,UInt8)
     skip(io, -3)
-    @test readall(io) == "dω"
+    @test readstring(io) == "dω"
     @test bytestring(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
     @test takebuf_array(io) == b"αhelloworldω"
     seek(io, 2)
     seekend(io2)
     write(io2, io)
-    @test readall(io) == ""
-    @test readall(io2) == ""
+    @test readstring(io) == ""
+    @test readstring(io2) == ""
     @test takebuf_string(io) == "αhelloworldω"
     seek(io2, 0)
     truncate(io2, io2.size - 2)
-    @test readall(io2) == "goodnightmoonhelloworld"
+    @test readstring(io2) == "goodnightmoonhelloworld"
     seek(io2, 0)
     write(io2, io2)
-    @test readall(io2) == ""
+    @test readstring(io2) == ""
     @test bytestring(io2) == "goodnightmoonhelloworld"
 end
 

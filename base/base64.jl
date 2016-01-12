@@ -200,7 +200,7 @@ close(b::Base64DecodePipe) = nothing
 function base64decode(s)
     b = IOBuffer(s)
     try
-        return readbytes(Base64DecodePipe(b))
+        return read(Base64DecodePipe(b))
     finally
         close(b)
     end

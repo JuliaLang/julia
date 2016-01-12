@@ -961,4 +961,9 @@ macro boundscheck(yesno,blk)
     end
 end
 
+
 @deprecate parseip(str::AbstractString) parse(IPAddr, str)
+
+#https://github.com/JuliaLang/julia/issues/14608
+@deprecate readall readstring
+@deprecate readbytes read

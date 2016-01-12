@@ -594,7 +594,7 @@ if DoFullTest
     (strm, proc) = open(pipeline(cmd, stderr=STDERR))
     wait(proc)
     if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-        println(readall(strm))
+        println(readstring(strm))
         error("Topology tests failed : $cmd")
     end
 

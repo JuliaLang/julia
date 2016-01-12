@@ -45,7 +45,7 @@ read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(pipe_reader(io), bytes)
 read{T<:AbstractPipe}(io::T, args...) = read(pipe_reader(io), args...)
 read!{T<:AbstractPipe}(io::T, args...) = read!(pipe_reader(io), args...)
 readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
-readbytes(io::AbstractPipe) = readbytes(pipe_reader(io))
+read(io::AbstractPipe) = read(pipe_reader(io))
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -58,6 +58,18 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_rea
 nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
 eof(io::AbstractPipe) = eof(pipe_reader(io))
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+
+
+# Exception-safe wrappes. (io = open(); try f(io) finally close(io))
+
+write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+
+read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+readstring(filename::AbstractString) = open(readstring, filename)
+readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+readline(filename::AbstractString) = open(readline, filename)
+readlines(filename::AbstractString) = open(readlines, filename)
 
 
 ## byte-order mark, ntoh & hton ##
@@ -159,6 +171,13 @@ function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
     return write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
 end
+
+function write(to::IO, from::IO)
+    while !eof(from)
+        write(to, readavailable(from))
+    end
+end
+
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
 
@@ -285,7 +304,7 @@ end
 
 readline() = readline(STDIN)
 readline(s::IO) = readuntil(s, '\n')
-readchomp(x) = chomp!(readall(x))
+readchomp(x) = chomp!(readstring(x))
 
 # read up to nb bytes into nb, returning # bytes read
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
@@ -307,7 +326,7 @@ function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
 end
 
 # read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
-function readbytes(s::IO, nb=typemax(Int))
+function read(s::IO, nb=typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
     b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
@@ -315,11 +334,10 @@ function readbytes(s::IO, nb=typemax(Int))
     resize!(b, nr)
 end
 
-function readall(s::IO)
-    b = readbytes(s)
+function readstring(s::IO)
+    b = read(s)
     return isvalid(ASCIIString, b) ? ASCIIString(b) : UTF8String(b)
 end
-readall(filename::AbstractString) = open(readall, filename)
 
 ## high-level iterator interfaces ##
 
@@ -330,6 +348,7 @@ type EachLine
     EachLine(stream, ondone) = new(stream, ondone)
 end
 eachline(stream::IO) = EachLine(stream)
+eachline(filename::AbstractString) = EachLine(open(filename), close)
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)

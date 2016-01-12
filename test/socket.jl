@@ -86,7 +86,7 @@ tsk = @async begin
     close(sock)
 end
 wait(port)
-@test readall(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
+@test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
 wait(tsk)
 
 mktempdir() do tmpdir
@@ -102,7 +102,7 @@ mktempdir() do tmpdir
             close(sock)
         end
         wait(c)
-        @test readall(connect(socketname)) == "Hello World\n"
+        @test readstring(connect(socketname)) == "Hello World\n"
         wait(tsk)
     end
 end

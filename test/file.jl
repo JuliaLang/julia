@@ -231,7 +231,7 @@ path = tempname()
 print(f, "Here is some text")
 close(f)
 @test isfile(p) == true
-@test readall(p) == "Here is some text"
+@test readstring(p) == "Here is some text"
 rm(p)
 
 let
@@ -299,7 +299,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
                 # copied_path must also be a file.
                 @test isfile(copied_path)
                 # copied_path must have same content
-                @test readall(orig_path) == readall(copied_path)
+                @test readstring(orig_path) == readstring(copied_path)
             end
         end
     elseif isdir(orig_path)
@@ -308,7 +308,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
         # copied_path must also be a file.
         @test isfile(copied_path)
         # copied_path must have same content
-        @test readall(orig_path) == readall(copied_path)
+        @test readstring(orig_path) == readstring(copied_path)
     end
 end
 
@@ -645,7 +645,7 @@ end
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
-        @test readall(s) == readall(d) == file_txt
+        @test readstring(s) == readstring(d) == file_txt
     end
 
     function mv_check(s, d, d_mv, file_txt; remove_destination=true)
@@ -663,7 +663,7 @@ end
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain the same
-        @test readall(s) == readall(d_mv) == file_txt
+        @test readstring(s) == readstring(d_mv) == file_txt
         # d => d_mv same file/dir
         @test Base.samefile(stat_d, stat_d_mv)
     end
@@ -709,7 +709,7 @@ end
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
             @test isfile(d) && !islink(d)
             # all should contain otherfile_content
-            @test readall(d) == otherfile_content
+            @test readstring(d) == otherfile_content
         end
     end
     # mv ----------------------------------------------------
@@ -772,7 +772,7 @@ end
         rel_dl = "rel_linkto_targetdir"
         rel_dir = joinpath("..", "targetdir")
         symlink(rel_dir, rel_dl)
-        rel_file_read_txt = readall(rel_file)
+        rel_file_read_txt = readstring(rel_file)
         cd(pwd_)
         # Setup copytodir
         copytodir = joinpath(tmpdir, "copytodir")
@@ -996,10 +996,10 @@ let n = tempname()
     w = open(n, "a")
     io = open(n)
     write(w, "A"); flush(w)
-    @test readbytes(io) == UInt8[0x41]
-    @test readbytes(io) == UInt8[]
+    @test read(io) == UInt8[0x41]
+    @test read(io) == UInt8[]
     write(w, "A"); flush(w)
-    @test readbytes(io) == UInt8[0x41]
+    @test read(io) == UInt8[0x41]
     close(io); close(w)
     rm(n)
 end
@@ -1108,9 +1108,9 @@ end
 test_read_nbyte()
 
 let s = "qwerty"
-    @test readbytes(IOBuffer(s)) == s.data
-    @test readbytes(IOBuffer(s), 10) == s.data
-    @test readbytes(IOBuffer(s), 1) == s.data[1:1]
+    @test read(IOBuffer(s)) == s.data
+    @test read(IOBuffer(s), 10) == s.data
+    @test read(IOBuffer(s), 1) == s.data[1:1]
 
     # Test growing output array
     x = UInt8[]

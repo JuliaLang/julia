@@ -65,7 +65,7 @@ General I/O
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
-   **Example**: ``open(readall, "file.txt")``
+   **Example**: ``open(readstring, "file.txt")``
 
 .. function:: IOBuffer() -> IOBuffer
 
@@ -121,11 +121,11 @@ General I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream, x)
+.. function:: write(stream or filename, x)
 
    .. Docstring generated from Julia source
 
-   Write the canonical binary representation of a value to the given stream. Returns the number of bytes written into the stream.
+   Write the canonical binary representation of a value to the given stream or file. Returns the number of bytes written into the stream.
 
    You can write multiple values with the same :func:``write`` call. i.e. the following are equivalent:
 
@@ -146,7 +146,7 @@ General I/O
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
 
-.. function:: read!(stream, array::Array)
+.. function:: read!(stream or filename, array::Array)
 
    .. Docstring generated from Julia source
 
@@ -158,9 +158,9 @@ General I/O
 
    Read at most ``nb`` bytes from the stream into ``b``\ , returning the number of bytes read (increasing the size of ``b`` as needed).
 
-   See ``readbytes`` for a description of the ``all`` option.
+   See ``read`` for a description of the ``all`` option.
 
-.. function:: readbytes(stream, nb=typemax(Int); all=true)
+.. function:: read(stream, nb=typemax(Int); all=true)
 
    .. Docstring generated from Julia source
 
@@ -330,7 +330,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read the entirety of ``x`` as a string but remove trailing newlines. Equivalent to ``chomp(readall(x))``\ .
+   Read the entirety of ``x`` as a string but remove trailing newlines. Equivalent to ``chomp(readstring(x))``\ .
 
 .. function:: truncate(file,n)
 
@@ -493,41 +493,35 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readall(stream::IO)
+.. function:: readstring(stream or filename)
 
    .. Docstring generated from Julia source
 
-   Read the entire contents of an I/O stream as a string.
+   Read the entire contents of an I/O stream or a file as a string.
 
-.. function:: readall(filename::AbstractString)
-
-   .. Docstring generated from Julia source
-
-   Open ``filename``\ , read the entire contents as a string, then close the file. Equivalent to ``open(readall, filename)``\ .
-
-.. function:: readline(stream=STDIN)
+.. function:: readline(stream=STDIN or filename)
 
    .. Docstring generated from Julia source
 
-   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given ``stream`` (defaults to ``STDIN``\ ),
+   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given stream or file (defaults to ``STDIN``\ ),
 
-.. function:: readuntil(stream, delim)
+.. function:: readuntil(stream or filename, delim)
 
    .. Docstring generated from Julia source
 
    Read a string, up to and including the given delimiter byte.
 
-.. function:: readlines(stream)
+.. function:: readlines(stream or filename)
 
    .. Docstring generated from Julia source
 
    Read all lines as an array.
 
-.. function:: eachline(stream)
+.. function:: eachline(stream or filename)
 
    .. Docstring generated from Julia source
 
-   Create an iterable object that will yield each line from a stream.
+   Create an iterable object that will yield each line.
 
 .. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 

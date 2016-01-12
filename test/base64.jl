@@ -18,7 +18,7 @@ end
 
 open(fname, "r") do f
     ipipe = Base64DecodePipe(f)
-    @test readall(ipipe) == inputText
+    @test readstring(ipipe) == inputText
     close(ipipe)
 end
 rm(fname)
@@ -28,16 +28,16 @@ rm(fname)
 
 # Decode with max line chars = 76 and padding
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))
-@test readall(ipipe) == inputText
+@test readstring(ipipe) == inputText
 
 # Decode with max line chars = 76 and no padding
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-1]))
-@test readall(ipipe) == inputText
+@test readstring(ipipe) == inputText
 
 # Decode with two padding characters ("==")
 ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end-2],"==")))
-@test readall(ipipe) == inputText[1:end-1]
+@test readstring(ipipe) == inputText[1:end-1]
 
 # Test incorrect format
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-3]))
-@test_throws ArgumentError readall(ipipe)
+@test_throws ArgumentError readstring(ipipe)
