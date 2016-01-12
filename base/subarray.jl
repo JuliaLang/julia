@@ -383,6 +383,8 @@ function stride1expr(Atype::Type, Itypes, Aexpr, Isym, LD, Jsym=Isym, Iindex_lin
         I = Itypes[d]
         if I <: Real
             ex = :($ex * size($Aexpr, $d))
+        elseif I <: Range && d < LD && any(x->x<:Union{Range,Colon}, Itypes[d+1:LD])
+            ex = :($ex * ifelse(length($Isym[$d]) == 1, size($Aexpr, $d), step($Isym[$d])))
         else
             if d == Iindex_lin
                 ex = :($ex * step_sa($Jsym[$Jindex_lin]))

@@ -404,8 +404,8 @@ The following examples show the different forms.
 
     julia> round(Int8,127.6)
     ERROR: InexactError()
-     in trunc at float.jl:357
-     in round at float.jl:177
+     in trunc at float.jl:374
+     in round at float.jl:181
 
 See :ref:`man-conversion-and-promotion` for how to define your own
 conversions and promotions.

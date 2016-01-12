@@ -175,7 +175,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if lsb != ""
             println(io,     "           ", lsb)
         end
-        println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        @unix_only println(io,         "  uname: ",readchomp(`uname -mprsv`))
         println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
         try println(io,     "Uptime: $(Sys.uptime()) sec") end
         print(io,           "Load Avg: ")

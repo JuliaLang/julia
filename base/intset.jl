@@ -157,8 +157,12 @@ function symdiff!(s::IntSet, ns)
 end
 
 function copy!(to::IntSet, from::IntSet)
-    empty!(to)
-    union!(to, from)
+    if is(to, from)
+        return to
+    else
+        empty!(to)
+        return union!(to, from)
+    end
 end
 
 function in(n::Integer, s::IntSet)

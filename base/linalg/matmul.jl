@@ -38,8 +38,9 @@ function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     end
     C
 end
-scale(A::Matrix, b::Vector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
-scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
+
+scale(A::AbstractMatrix, b::AbstractVector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
+scale(b::AbstractVector, A::AbstractMatrix) = scale!(similar(b, promote_type(eltype(b),eltype(A)), size(A)), b, A)
 
 # Dot products
 
@@ -342,6 +343,7 @@ function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::UnitRange{Int}, jr_dest::Un
         Base.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(B)
     end
+    B
 end
 
 function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat{S}, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
@@ -429,7 +431,22 @@ const Abuf = Array(UInt8, tilebufsize)
 const Bbuf = Array(UInt8, tilebufsize)
 const Cbuf = Array(UInt8, tilebufsize)
 
-function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S})
+function generic_matmatmul!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+
+    if mA == nA == nB == 2
+        return matmul2x2!(C, tA, tB, A, B)
+    end
+    if mA == nA == nB == 3
+        return matmul3x3!(C, tA, tB, A, B)
+    end
+    _generic_matmatmul!(C, tA, tB, A, B)
+end
+
+generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) = _generic_matmatmul!(C, tA, tB, A, B)
+
+function _generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
@@ -439,19 +456,15 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA, $nB)"))
     end
 
-    if mA == nA == nB == 2
-        return matmul2x2!(C, tA, tB, A, B)
+    tile_size = 0
+    if isbits(R) && isbits(T) && isbits(S)
+        tile_size = floor(Int,sqrt(tilebufsize/max(sizeof(R),sizeof(S),sizeof(T))))
     end
-    if mA == nA == nB == 3
-        return matmul3x3!(C, tA, tB, A, B)
-    end
-
     @inbounds begin
-    if isbits(R)
-        tile_size = floor(Int,sqrt(tilebufsize/sizeof(R)))
+    if tile_size > 0
         sz = (tile_size, tile_size)
-        Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
-        Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
+        Atile = pointer_to_array(convert(Ptr{T}, pointer(Abuf)), sz)
+        Btile = pointer_to_array(convert(Ptr{S}, pointer(Bbuf)), sz)
 
         z = zero(R)
 

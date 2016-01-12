@@ -568,7 +568,7 @@ Test.with_handler
 
 doc"""
 ```rst
-..  print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+..  print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols(), maxdepth = typemax(Int), sortedby = :filefuncline)
 
 Prints profiling results to ``io`` (by default, ``STDOUT``). If you
 do not supply a ``data`` vector, the internal buffer of accumulated
@@ -576,19 +576,24 @@ backtraces will be used.  ``format`` can be ``:tree`` or
 ``:flat``. If ``C==true``, backtraces from C and Fortran code are
 shown. ``combine==true`` merges instruction pointers that
 correspond to the same line of code.  ``cols`` controls the width
-of the display.
+of the display. ``maxdepth`` can be used to limit the depth of printing in ``:tree``
+format, while ``sortedby`` can be used to control the order in ``:flat``
+format (``:filefuncline`` sorts by the source line, whereas ``:count``
+sorts in order of number of collected samples).
 ```
 """
 Profile.print(io::IO = STDOUT, data::Vector=?)
 
 doc"""
 ```rst
-..  print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+..  print([io::IO = STDOUT,] data::Vector, lidict::Dict; kwargs)
 
 Prints profiling results to ``io``. This variant is used to examine
 results exported by a previous call to :func:`retrieve`.
 Supply the vector ``data`` of backtraces and a dictionary
 ``lidict`` of line information.
+
+See ``Profile.print([io], data)`` for an explanation of the valid keyword arguments.
 ```
 """
 Profile.print(io::IO = STDOUT, data::Vector = ?, lidict::Dict = ?)
@@ -3112,13 +3117,6 @@ with empty collections (see ``reduce(op, itr)``).
 mapreduce(f, op, itr)
 
 doc"""
-    quantile!(v, p)
-
-Like `quantile`, but overwrites the input vector.
-"""
-quantile!
-
-doc"""
     accept(server[,client])
 
 Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
@@ -3490,29 +3488,30 @@ Creates an iterable object for visiting each index of an AbstractArray `A` in an
 
 Example for a sparse 2-d array:
 
-    julia> A = sprand(2, 3, 0.5)
-    2x3 sparse matrix with 4 Float64 entries:
-        [1, 1]  =  0.598888
-        [1, 2]  =  0.0230247
-        [1, 3]  =  0.486499
-        [2, 3]  =  0.809041
+```jldoctest
+julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
+2x3 sparse matrix with 3 Int64 entries:
+        [1, 1]  =  1
+        [2, 1]  =  -5
+        [1, 3]  =  2
 
-    julia> for iter in eachindex(A)
-               @show iter.I_1, iter.I_2
-               @show A[iter]
-           end
-    (iter.I_1,iter.I_2) = (1,1)
-    A[iter] = 0.5988881393454597
-    (iter.I_1,iter.I_2) = (2,1)
-    A[iter] = 0.0
-    (iter.I_1,iter.I_2) = (1,2)
-    A[iter] = 0.02302469881746183
-    (iter.I_1,iter.I_2) = (2,2)
-    A[iter] = 0.0
-    (iter.I_1,iter.I_2) = (1,3)
-    A[iter] = 0.4864987874354343
-    (iter.I_1,iter.I_2) = (2,3)
-    A[iter] = 0.8090413606455655
+julia> for iter in eachindex(A)
+           @show iter.I[1], iter.I[2]
+           @show A[iter]
+       end
+(iter.I[1],iter.I[2]) = (1,1)
+A[iter] = 1
+(iter.I[1],iter.I[2]) = (2,1)
+A[iter] = -5
+(iter.I[1],iter.I[2]) = (1,2)
+A[iter] = 0
+(iter.I[1],iter.I[2]) = (2,2)
+A[iter] = 0
+(iter.I[1],iter.I[2]) = (1,3)
+A[iter] = 2
+(iter.I[1],iter.I[2]) = (2,3)
+A[iter] = 0
+```
 
 If you supply more than one ``AbstractArray`` argument, ``eachindex``
 will create an iterable object that is fast for all arguments (a
@@ -9227,17 +9226,6 @@ doc"""
 Equivalent to `stat(file).mtime`
 """
 mtime
-
-doc"""
-    SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
-
-Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified by `pids` - all of which have to be on the same host.
-
-If `pids` is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, `localindexes` and `indexpids` will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.
-
-If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all the participating workers.
-"""
-SharedArray
 
 doc"""
     logspace(start, stop, n=50)

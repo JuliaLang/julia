@@ -538,18 +538,18 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
-    b = a + sizeof(searchdata) - 1
-    if !skip_current && (0 < a <= b <= response_buffer.size) &&
-       searchdata == bytestring(response_buffer.data[a:b])
-        return true
-    end
+    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata)))
 
-    searchfunc,delta = backwards ? (rsearch,0) : (search,1)
+    !skip_current && searchdata == response_str[a:b] && return true
+
+    searchfunc, searchstart, skipfunc = backwards ? (rsearch, b, prevind) :
+                                                    (search,  a, nextind)
+    skip_current && (searchstart = skipfunc(response_str, searchstart))
 
     # Start searching
     # First the current response buffer
-    if 1 <= a+delta <= length(response_str)
-        match = searchfunc(response_str, searchdata, a+delta)
+    if 1 <= searchstart <= endof(response_str)
+        match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match)-1)
             return true

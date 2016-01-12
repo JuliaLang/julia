@@ -51,31 +51,30 @@ Basic functions
 
    Example for a sparse 2-d array:
 
-   .. code-block:: julia
+   .. doctest::
 
-       julia> A = sprand(2, 3, 0.5)
-       2x3 sparse matrix with 4 Float64 entries:
-           [1, 1]  =  0.598888
-           [1, 2]  =  0.0230247
-           [1, 3]  =  0.486499
-           [2, 3]  =  0.809041
+       julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
+       2x3 sparse matrix with 3 Int64 entries:
+               [1, 1]  =  1
+               [2, 1]  =  -5
+               [1, 3]  =  2
 
        julia> for iter in eachindex(A)
-                  @show iter.I_1, iter.I_2
+                  @show iter.I[1], iter.I[2]
                   @show A[iter]
               end
-       (iter.I_1,iter.I_2) = (1,1)
-       A[iter] = 0.5988881393454597
-       (iter.I_1,iter.I_2) = (2,1)
-       A[iter] = 0.0
-       (iter.I_1,iter.I_2) = (1,2)
-       A[iter] = 0.02302469881746183
-       (iter.I_1,iter.I_2) = (2,2)
-       A[iter] = 0.0
-       (iter.I_1,iter.I_2) = (1,3)
-       A[iter] = 0.4864987874354343
-       (iter.I_1,iter.I_2) = (2,3)
-       A[iter] = 0.8090413606455655
+       (iter.I[1],iter.I[2]) = (1,1)
+       A[iter] = 1
+       (iter.I[1],iter.I[2]) = (2,1)
+       A[iter] = -5
+       (iter.I[1],iter.I[2]) = (1,2)
+       A[iter] = 0
+       (iter.I[1],iter.I[2]) = (2,2)
+       A[iter] = 0
+       (iter.I[1],iter.I[2]) = (1,3)
+       A[iter] = 2
+       (iter.I[1],iter.I[2]) = (2,3)
+       A[iter] = 0
 
    If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a CartesianRange otherwise).  If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
 

@@ -273,6 +273,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     Triple TheTriple(Triple::normalize(TripleName));
 
     std::string MCPU = sys::getHostCPUName();
+#ifdef _CPU_ARM_
+    // The Raspberry Pi CPU is misdetected by LLVM (at least of version
+    // 3.6); correct this.
+    if (MCPU == "arm1176jz-s")
+        MCPU = "arm1176jzf-s";
+#endif
     SubtargetFeatures Features;
     Features.getDefaultSubtargetFeatures(TheTriple);
 
