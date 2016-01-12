@@ -96,7 +96,7 @@ end
 let x = [0.1 0.3 0.5], io = IOBuffer()
     writedlm(io, x, ", ")
     seek(io, 0)
-    @test readall(io) == "0.1, 0.3, 0.5\n"
+    @test readstring(io) == "0.1, 0.3, 0.5\n"
 end
 
 let x = [0.1 0.3 0.5], io = IOBuffer()

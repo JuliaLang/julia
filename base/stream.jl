@@ -414,7 +414,7 @@ function displaysize(io::TTY)
     @windows_only if ispty(io)
         # io is actually a libuv pipe but a cygwin/msys2 pty
         try
-            h, w = map(x -> parse(Int, x), split(readall(open(Base.Cmd(ByteString["stty", "size"]), "r", io)[1])))
+            h, w = map(x -> parse(Int, x), split(readstring(open(Base.Cmd(ByteString["stty", "size"]), "r", io)[1])))
             h > 0 || (h = default_size[1])
             w > 0 || (w = default_size[2])
             return h, w
@@ -902,7 +902,7 @@ function readbytes!(s::LibuvStream, b::AbstractArray{UInt8}, nb=length(b))
     return nr
 end
 
-function readbytes(stream::LibuvStream)
+function read(stream::LibuvStream)
     wait_readnb(stream, typemax(Int))
     return takebuf_array(stream.buffer)
 end

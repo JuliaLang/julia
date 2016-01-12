@@ -54,7 +54,7 @@ m = Mmap.mmap(file,Vector{UInt8},12)
 m[:] = "Hello World\n".data
 Mmap.sync!(m)
 finalize(m); m=nothing; gc()
-@test open(readall,file) == "Hello World\n"
+@test open(readstring,file) == "Hello World\n"
 
 s = open(file, "r")
 close(s)

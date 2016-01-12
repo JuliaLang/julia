@@ -69,7 +69,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
             break
         end
     end
-    data = collect(readall(input))
+    data = collect(readstring(input))
     # delete the newlines and convert to upper case
     i, j = 1, 1
     while i <= length(data)

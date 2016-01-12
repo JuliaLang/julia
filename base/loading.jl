@@ -146,9 +146,9 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
         recompile_stale(mod, path_to_try)
         # broadcast top-level import/using from node 1 (only)
         if node == myid()
-            content = open(readbytes, path_to_try)
+            content = open(read, path_to_try)
         else
-            content = remotecall_fetch(open, node, readbytes, path_to_try)
+            content = remotecall_fetch(open, node, read, path_to_try)
         end
         restored = _include_from_serialized(content)
         if restored !== nothing
@@ -164,7 +164,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
         myid() == 1 && recompile_stale(mod, path_to_try)
         restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
     else
-        content = remotecall_fetch(open, node, readbytes, path_to_try)
+        content = remotecall_fetch(open, node, read, path_to_try)
         restored = _include_from_serialized(content)
     end
     # otherwise, continue search
@@ -401,7 +401,7 @@ function include_from_node1(_path::AbstractString)
             result = Core.include(path)
             nprocs()>1 && sleep(0.005)
         else
-            result = include_string(remotecall_fetch(readall, 1, path), path)
+            result = include_string(remotecall_fetch(readstring, 1, path), path)
         end
     finally
         if prev === nothing
@@ -493,14 +493,14 @@ function cache_dependencies(f::IO)
         n = ntoh(read(f, Int32))
         n == 0 && break
         push!(modules,
-              (symbol(readbytes(f, n)), # module symbol
+              (symbol(read(f, n)), # module symbol
                ntoh(read(f, UInt64)))) # module UUID (timestamp)
     end
     read(f, Int64) # total bytes for file dependencies
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(files, (bytestring(readbytes(f, n)), ntoh(read(f, Float64))))
+        push!(files, (bytestring(read(f, n)), ntoh(read(f, Float64))))
     end
     return modules, files
 end

@@ -52,7 +52,7 @@ test_have_color(buf, color, no_color)
 
 # Test for the method error in issue #8651
 Base.show_method_candidates(buf, MethodError(readline,("",)))
-test_have_color(buf, "", "")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  readline(::AbstractString)\e[0m", "\nClosest candidates are:\n  readline(::AbstractString)")
 
 method_c4(::Type{Float64}) = true
 Base.show_method_candidates(buf, MethodError(method_c4,(Float64,)))
