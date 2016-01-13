@@ -13,6 +13,10 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
     print(io, ns, " (", what, " with $n $m)")
 end
 
+function writemime(io::IO, ::MIME"text/plain", f::Builtin)
+    print(io, typeof(f).name.mt.name, " (built-in function)")
+end
+
 # writemime for ranges, e.g.
 #  3-element UnitRange{Int64,Int}
 #   1,2,3
