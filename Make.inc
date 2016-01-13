@@ -801,7 +801,7 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
