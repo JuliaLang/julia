@@ -29,8 +29,8 @@ matrix:
             - bar
             - g++-5
             - gfortran-5
-    - os: osx
-      env: ARCH="x86_64"
+#    - os: osx # TODO: turn this back on once it's fast enough to not time out
+#      env: ARCH="x86_64"
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps/srccache
@@ -68,7 +68,7 @@ before_install:
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
-        echo JCXXFLAGS:='-pipe -fPIC -fno-rtti -DUSE_ORCJIT' >> Make.user;
+        export CXXFLAGS=-DUSE_ORCJIT;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
