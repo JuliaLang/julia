@@ -45,9 +45,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --load
     let testfile = tempname()
         try
-            open(testfile, "w") do io
-                println(io, "testvar = :test")
-            end
+            write(testfile, "testvar = :test\n")
             @test split(readchomp(`$exename --load=$testfile -P "println(testvar)"`), '\n')[end] == "test"
             @test split(readchomp(`$exename -P "println(testvar)" -L $testfile`), '\n')[end] == "test"
         finally
@@ -210,10 +208,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     let testfile = tempname()
         try
             # write a julia source file that just prints ARGS to STDOUT and exits
-            open(testfile, "w") do io
-                println(io, "println(ARGS)")
-                println(io, "exit(0)")
-            end
+            write(testfile, """
+                println(ARGS)
+                exit(0)
+            """)
             @test readchomp(`$exename $testfile foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
             @test readchomp(`$exename $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
             @test readchomp(`$exename -L $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"

@@ -337,9 +337,7 @@ bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
 cfile = joinpath(dir, "c.txt")
-open(cfile, "w") do cf
-    write(cf, "This is longer than the contents of afile")
-end
+write(cfile, "This is longer than the contents of afile")
 cp(afile, cfile; remove_destination=true)
 
 a_stat = stat(afile)
@@ -410,13 +408,9 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
 
         cfile = joinpath(srcdir, "c.txt")
         file_txt = "This is some text with unicode - 这是一个文件"
-        open(cfile, "w") do cf
-            write(cf, file_txt)
-        end
+        write(cfile, file_txt)
         hidden_cfile = joinpath(hidden_srcsubdir, "c.txt")
-        open(hidden_cfile, "w") do cf
-            write(cf, file_txt)
-        end
+        write(hidden_cfile, file_txt)
 
         abs_dirlink_cp = joinpath(tmpdir, "abs_dirlink_cp")
         hidden_srcsubdir_cp = joinpath(tmpdir, ".hidden_srcsubdir_cp")
@@ -543,12 +537,9 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         mkdir(subdir1)
 
         cfile = abspath(joinpath(maindir, "c.txt"))
-        open(cfile, "w") do cf
-            write(cf, "This is c.txt - 这是一个文件")
-        end
-        open(abspath(joinpath(targetdir, "file1.txt")), "w") do cf
-            write(cf, "This is file1.txt - 这是一个文件")
-        end
+        write(cfile, "This is c.txt - 这是一个文件")
+        write(abspath(joinpath(targetdir, "file1.txt")),
+              "This is file1.txt - 这是一个文件")
 
         abs_dl = joinpath(maindir, "abs_linkto_targetdir")
         symlink(targetdir, abs_dl)
@@ -616,12 +607,8 @@ end
         srcfile_new = joinpath(tmpdir, "srcfile_new.txt")
         hidden_srcfile_new = joinpath(tmpdir, ".hidden_srcfile_new.txt")
         file_txt = "This is some text with unicode - 这是一个文件"
-        open(srcfile, "w") do f
-            write(f, file_txt)
-        end
-        open(hidden_srcfile, "w") do f
-            write(f, file_txt)
-        end
+        write(srcfile, file_txt)
+        write(hidden_srcfile, file_txt)
         abs_filelink = joinpath(tmpdir, "abs_filelink")
         symlink(abspath(srcfile), abs_filelink)
         cd(tmpdir)
@@ -701,9 +688,7 @@ end
         # Test remove the existing path first and copy an other file
         otherfile = joinpath(tmpdir, "otherfile.txt")
         otherfile_content = "This is otherfile.txt with unicode - 这是一个文件"
-        open(otherfile, "w") do f
-            write(f, otherfile_content)
-        end
+        write(otherfile, otherfile_content)
         for d in test_new_paths1
             cp(otherfile, d; remove_destination=true, follow_symlinks=false)
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
@@ -753,12 +738,9 @@ end
         mkdir(subdir1)
 
         cfile = abspath(joinpath(maindir, "c.txt"))
-        open(cfile, "w") do cf
-            write(cf, "This is c.txt - 这是一个文件")
-        end
-        open(abspath(joinpath(targetdir, "file1.txt")), "w") do cf
-            write(cf, "This is file1.txt - 这是一个文件")
-        end
+        write(cfile, "This is c.txt - 这是一个文件")
+        write(abspath(joinpath(targetdir, "file1.txt")),
+                      "This is file1.txt - 这是一个文件")
 
         abs_fl = joinpath(maindir, "abs_linkto_c.txt")
         symlink(cfile, abs_fl)

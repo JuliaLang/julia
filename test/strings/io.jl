@@ -172,23 +172,22 @@ else
     close(f)
     @test str1 == str2
 
-    @test str1 == open(joinpath(unicodedir,"UTF-16LE.unicode")) do f
-        utf16(read(f, UInt16, 2160641)[2:end])
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
+                             UInt16, 2160641)[2:end])
 
-    @test str1 == open(joinpath(unicodedir,"UTF-16LE.unicode")) do f
-        utf16(read(f, UInt8, 2160641*2))
-    end
-    @test str1 == open(joinpath(unicodedir,"UTF-16BE.unicode")) do f
-        utf16(read(f, UInt8, 2160641*2))
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
+                             UInt8, 2160641*2))
 
-    @test str1 == open(joinpath(unicodedir,"UTF-32LE.unicode")) do f
-        utf32(read(f, UInt8, 1112065*4))
-    end
-    @test str1 == open(joinpath(unicodedir,"UTF-32BE.unicode")) do f
-        utf32(read(f, UInt8, 1112065*4))
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16BE.unicode"),
+                             UInt8, 2160641*2))
+
+
+    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32LE.unicode"),
+                             UInt8, 1112065*4))
+
+    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32BE.unicode"),
+                             UInt8, 1112065*4))
+
 
     str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
     str2 = UTF32String(UInt32[

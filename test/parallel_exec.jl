@@ -248,9 +248,7 @@ d = SharedArray(Float64, (2,3))
 
 # Mapping an existing file
 fn = tempname()
-open(fn, "w") do io
-    write(io, 1:30)
-end
+write(fn, 1:30)
 sz = (6,5)
 Atrue = reshape(1:30, sz)
 
@@ -267,9 +265,7 @@ end
 check_pids_all(S)
 
 filedata = similar(Atrue)
-open(fn, "r") do io
-    read!(io, filedata)
-end
+read!(fn, filedata)
 @test filedata == sdata(S)
 
 # Error for write-only files
@@ -283,23 +279,17 @@ fn2 = tempname()
 S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
-open(fn2, "r") do io
-    read!(io, filedata2)
-end
+read!(fn2, filedata2)
 @test filedata == filedata2
 
 # Appending to a file
 fn3 = tempname()
-open(fn3, "w") do io
-    write(io, ones(UInt8, 4))
-end
+write(fn3, ones(UInt8, 4))
 S = SharedArray(fn3, UInt8, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Array(UInt8, len)
-open(fn3, "r") do io
-    read!(io, filedata)
-end
+read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
 
