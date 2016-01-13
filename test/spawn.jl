@@ -298,9 +298,7 @@ end
 
 # issue #8529
 let fname = tempname()
-    open(fname, "w") do f
-        println(f, "test")
-    end
+    write(fname, "test\n")
     code = """
     for line in eachline(STDIN)
         run(pipeline(`echo asdf`,`cat`))

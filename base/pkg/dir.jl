@@ -51,10 +51,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
             end
             touch("REQUIRE")
             touch("META_BRANCH")
-            open("META_BRANCH", "w") do io
-                write(io, branch)
-                close(io)
-            end
+            write("META_BRANCH", branch)
         end
         #Move TEMP to METADATA
         Base.mv(joinpath(temp_dir,"METADATA"), metadata_dir)
