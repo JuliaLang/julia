@@ -442,7 +442,6 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    jl_array_t *constant_table;
     jl_function_t *call_func;  // cached lookup of `call` within this module
     uint8_t istopmod;
     uint8_t std_imports;  // only for temporarily deprecating `importall Base.Operators`

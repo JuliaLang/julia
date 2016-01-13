@@ -1711,10 +1711,6 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     for(i=0; i < m->usings.len; i++) {
         refyoung |= gc_push_root(m->usings.items[i], d);
     }
-    if (m->constant_table) {
-        verify_parent1("module", m, &m->constant_table, "constant_table");
-        refyoung |= gc_push_root(m->constant_table, d);
-    }
 
     if (m->parent) {
         refyoung |= gc_push_root(m->parent, d);
