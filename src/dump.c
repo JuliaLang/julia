@@ -804,6 +804,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         writetag(s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, li->ast);
+        jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparams);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
@@ -819,9 +820,12 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 size_t i, l = jl_array_len(tf);
                 for(i=0; i < l; i += 3) {
                     if (!jl_is_leaf_type(jl_cellref(tf,i))) {
-                        jl_value_t *ast = jl_cellref(tf,i+1);
-                        if (ast && jl_is_array(ast) && jl_array_len(ast) > 500)
-                            jl_cellset(tf, i+1, jl_ast_rettype(li, (jl_value_t*)ast));
+                        jl_value_t *ret = jl_cellref(tf,i+1);
+                        if (jl_is_tuple(ret)) {
+                            jl_value_t *ast = jl_fieldref(ret, 0);
+                            if (jl_is_array(ast) && jl_array_len(ast) > 500)
+                                jl_cellset(tf, i+1, jl_fieldref(ret,1));
+                        }
                     }
                 }
             }
@@ -1365,6 +1369,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             arraylist_push(&backref_list, li);
         li->ast = jl_deserialize_value(s, &li->ast);
         jl_gc_wb(li, li->ast);
+        li->rettype = jl_deserialize_value(s, &li->rettype);
+        jl_gc_wb(li, li->rettype);
         li->sparams = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparams);
         jl_gc_wb(li, li->sparams);
         li->tfunc = jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
@@ -1952,35 +1958,6 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
-{
-    if (jl_is_expr(ast))
-        return jl_lam_body((jl_expr_t*)ast)->etype;
-    assert(jl_is_array(ast));
-    JL_SIGATOMIC_BEGIN();
-    JL_LOCK(dump); // Might GC
-    DUMP_MODES last_mode = mode;
-    mode = MODE_AST;
-    if (li->def->roots == NULL) {
-        li->def->roots = jl_alloc_cell_1d(0);
-        jl_gc_wb(li->def, li->def->roots);
-    }
-    tree_literal_values = li->def->roots;
-    ios_t src;
-    jl_array_t *bytes = (jl_array_t*)ast;
-    ios_mem(&src, 0);
-    ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
-    src.size = jl_array_len(bytes);
-    int en = jl_gc_enable(0); // Might GC
-    jl_value_t *rt = jl_deserialize_value(&src, NULL);
-    jl_gc_enable(en);
-    tree_literal_values = NULL;
-    mode = last_mode;
-    JL_UNLOCK(dump);
-    JL_SIGATOMIC_END();
-    return rt;
-}
-
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     JL_SIGATOMIC_BEGIN();
@@ -2003,7 +1980,6 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_gc_wb(li, li->capt);
     if (jl_array_len(li->capt) == 0)
         li->capt = NULL;
-    jl_serialize_value(&dest, jl_lam_body((jl_expr_t*)ast)->etype);
     jl_serialize_value(&dest, ast);
 
     //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
@@ -2036,7 +2012,6 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *dat
     ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
     int en = jl_gc_enable(0); // Might GC
-    (void)jl_deserialize_value(&src, NULL); // skip ret type
     jl_value_t *v = jl_deserialize_value(&src, NULL);
     jl_gc_enable(en);
     tree_literal_values = NULL;

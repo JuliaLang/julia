@@ -297,6 +297,7 @@ typedef struct _jl_lambda_info_t {
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
     jl_value_t *ast;
+    jl_value_t *rettype;
     // sparams is a vector (symbol, value, symbol, value, ...)
     jl_svec_t *sparams;
     jl_value_t *tfunc;
@@ -1348,7 +1349,6 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 
 // AST access
-JL_DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams);
