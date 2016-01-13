@@ -1406,8 +1406,8 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def, cop, needtree)
-    if linfo.module === Core
+function typeinf(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
+    if linfo.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
     #dbg =
