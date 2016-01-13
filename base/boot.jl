@@ -325,4 +325,25 @@ convert{T}(::Type{T}, x::T) = x
 cconvert(T::Type, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
 
+# primitive array constructors
+(::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,1}}){T}(m::Int) =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
+(::Type{Array{T,2}}){T}(m::Int, n::Int) =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
+(::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+
+(::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
+(::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
+(::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
+(::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
+
+# TODO: possibly turn these into deprecations
+Array{T}(::Type{T}, d::Int...) = Array{T}(d)
+Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
+Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
+Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
+
 ccall(:jl_set_istopmod, Void, (Bool,), true)

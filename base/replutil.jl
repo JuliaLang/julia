@@ -241,9 +241,6 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, "\n")
 end
 
-const UNSHOWN_METHODS = ObjectIdDict(
-    which(Type, Tuple{Vararg{Any}}) => true
-)
 function show_method_candidates(io::IO, ex::MethodError)
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
@@ -270,7 +267,6 @@ function show_method_candidates(io::IO, ex::MethodError)
 
     for (func,arg_types_param) in funcs
         for method in func.name.mt
-            haskey(UNSHOWN_METHODS, method) && continue
             buf = IOBuffer()
             s1 = method.sig.parameters[1]
             sig = method.sig.parameters[2:end]
