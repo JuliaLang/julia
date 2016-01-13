@@ -44,8 +44,8 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
 
 // Whether a type is a homogeneous floating-point aggregates (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the number of members.
-// We only handle HFA of HP, SP and DP here since these are the only ones we
-// have (no QP).
+// We only handle HFA of HP, SP, DP and QP here since these are the only ones we
+// have (no vectors).
 static size_t isHFAorHVA(jl_datatype_t *dt)
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
@@ -63,6 +63,9 @@ static size_t isHFAorHVA(jl_datatype_t *dt)
     jl_value_t *ftype = jl_field_type(dt, 0);
     if (!get_llvm_fptype((jl_datatype_t*)ftype))
         return 0;
+    // This assumes that there's only one Julia type corresponding to
+    // each machine fp types, which should be valid as long as no one
+    // create two 128bits FP types and put them in the same structure.
     for (size_t i = 1;i < members;i++) {
         if (ftype != jl_field_type(dt, i)) {
             return 0;
