@@ -781,6 +781,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     mt = ((jl_datatype_t*)ftype)->name->mt;
     name = mt->name;
 
+    if (jl_subtype(ftype, jl_builtin_type, 0))
+        jl_error("cannot add methods to a builtin function");
+
     jl_check_static_parameter_conflicts(f, tvars, name);
 
     // TODO
