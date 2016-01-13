@@ -168,11 +168,7 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    open(filename) do io
-        a = Array(UInt32, Int(n))
-        read!(io, a)
-        a
-    end
+    read!(filename, Array(UInt32, Int(n)))
 end
 
 ## srand()
