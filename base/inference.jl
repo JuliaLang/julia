@@ -1454,8 +1454,7 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
                         return (nothing, code)
                     end
                 else
-                    curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)::Type
-                    return (code, curtype)
+                    return code  # else code is a tuple (ast, type)
                 end
             end
         end
@@ -1489,10 +1488,10 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
         tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        tfarr[idx+1] = rec ? result : fulltree
+        tfarr[idx+1] = rec ? result : (fulltree,result)
         tfarr[idx+2] = rec
     else
-        def.tfunc[tfunc_idx] = rec ? result : fulltree
+        def.tfunc[tfunc_idx] = rec ? result : (fulltree,result)
         def.tfunc[tfunc_idx+1] = rec
     end
 

@@ -1170,7 +1170,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
             jl_errorf("cfunction: type signature of %s does not match specification",
                       jl_symbol_name(li->name));
         }
-        jl_value_t *astrt = jl_ast_rettype(li, li->ast);
+        jl_value_t *astrt = li->rettype;
         if (rt != NULL) {
             if (astrt == (jl_value_t*)jl_bottom_type) {
                 if (rt != (jl_value_t*)jl_void_type) {
@@ -3006,7 +3006,7 @@ static jl_cgval_t emit_call_function_object(jl_function_t *f, Value *theF, Value
 {
     if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->functionObjects.specFunctionObject != NULL) {
         // emit specialized call site
-        jl_value_t *jlretty = jl_ast_rettype(f->linfo, f->linfo->ast);
+        jl_value_t *jlretty = f->linfo->rettype;
         bool retboxed;
         (void)julia_type_to_llvm(jlretty, &retboxed);
         Function *cf = (Function*)f->linfo->functionObjects.specFunctionObject;
@@ -4394,7 +4394,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     CallInst *call = builder.CreateCall(prepare_call(f), ArrayRef<Value*>(&args[0], nfargs));
     call->setAttributes(f->getAttributes());
 
-    jl_value_t *jlretty = jl_ast_rettype(lam, (jl_value_t*)ast);
+    jl_value_t *jlretty = lam->rettype;
     bool retboxed;
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
@@ -4534,7 +4534,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     mark_volatile_vars(stmts, ctx.vars);
 
     // step 4. determine function signature
-    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
+    jl_value_t *jlrettype = lam->rettype;
     Function *f = NULL;
 
     bool specsig = false;
@@ -5441,7 +5441,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         funcName = "julia_" + funcName;
         if (specsig) { // assumes !va
             std::vector<Type*> fsig(0);
-            jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
+            jl_value_t *jlrettype = lam->rettype;
             bool retboxed;
             Type *rt;
             if (jlrettype == (jl_value_t*)jl_void_type) {

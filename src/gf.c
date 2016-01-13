@@ -445,6 +445,8 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_fieldref(newast, 0);
         jl_gc_wb(li, li->ast);
+        li->rettype = jl_fieldref(newast, 1);
+        jl_gc_wb(li, li->rettype);
         li->inferred = 1;
 #endif
         li->inInference = 0;

@@ -3459,9 +3459,9 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaStaticData"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(15, jl_symbol("ast"), jl_symbol("sparams"),
-                                jl_symbol("tfunc"), jl_symbol("name"),
-                                jl_symbol("roots"),
+                        jl_svec(16, jl_symbol("ast"), jl_symbol("rettype"),
+                                jl_symbol("sparams"), jl_symbol("tfunc"),
+                                jl_symbol("name"), jl_symbol("roots"),
                                 /* jl_symbol("specTypes"),
                                    jl_symbol("unspecialized"),
                                    jl_symbol("specializations")*/
@@ -3471,7 +3471,8 @@ void jl_init_types(void)
                                 jl_symbol("file"), jl_symbol("line"),
                                 jl_symbol("inferred"),
                                 jl_symbol("pure")),
-                        jl_svec(15, jl_any_type, jl_simplevector_type,
+                        jl_svec(16, jl_any_type, jl_any_type,
+                                jl_simplevector_type,
                                 jl_any_type, jl_sym_type,
                                 jl_any_type, jl_any_type,
                                 jl_any_type, jl_array_any_type,
