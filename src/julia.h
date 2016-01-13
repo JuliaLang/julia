@@ -46,16 +46,13 @@ extern "C" {
 #if defined(__GNUC__)
 #  define JL_NORETURN __attribute__ ((noreturn))
 #  define JL_CONST_FUNC __attribute__((const))
-#  define JL_MARK_INITIALIZED(var) asm("" : "=rm" (var))
 #elif defined(_COMPILER_MICROSOFT_)
 #  define JL_NORETURN __declspec(noreturn)
 // This is the closest I can find for __attribute__((const))
 #  define JL_CONST_FUNC __declspec(noalias)
-#  define JL_MARK_INITIALIZED(var) do {} while (0)
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
-#  define JL_MARK_INITIALIZED(var) do {} while (0)
 #endif
 
 #define container_of(ptr, type, member) \

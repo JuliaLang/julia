@@ -4675,7 +4675,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.dbuilder = &dbuilder;
 #ifdef LLVM37
     DIFile *topfile = NULL;
-    DISubprogram *SP;
+    DISubprogram *SP = NULL;
     DICompileUnit *CU;
 #else
     DIFile topfile;
@@ -4697,7 +4697,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         ctx.debug_enabled = false;
         do_coverage = false;
         do_malloc_log = false;
-        JL_MARK_INITIALIZED(SP);
     }
     else {
         // TODO: Fix when moving to new LLVM version
