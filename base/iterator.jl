@@ -2,6 +2,7 @@
 
 isempty(itr) = done(itr, start(itr))
 
+
 # enumerate
 
 immutable Enumerate{I}
@@ -223,3 +224,15 @@ next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
 repeated(x, n::Int) = take(repeated(x), n)
+
+# Infinite-length Iterators
+
+typealias InfiniteIterator Union{Cycle,Repeated,Count} # TODO: we should do this with traits once we have #13222
+
+# Zips with infinite-length components
+
+length{I<:InfiniteIterator,Z<:AbstractZipIterator}(z::Zip{I,Z}) = length(z.z)
+length{I1<:InfiniteIterator,I2<:InfiniteIterator}(z::Zip2{I1,I2}) = length(z.b) # inherit behaviour, error
+length{I1,I2<:InfiniteIterator}(z::Zip2{I1,I2}) = length(z.a)
+length{I1<:InfiniteIterator,I2}(z::Zip2{I1,I2}) = length(z.b)
+
