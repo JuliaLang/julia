@@ -863,12 +863,20 @@ struct math_builder {
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
             FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
+#ifdef LLVM38
+            builder.setFastMathFlags(fmf);
+#else
             builder.SetFastMathFlags(fmf);
+#endif
         }
     }
     IRBuilder<>& operator()() const { return builder; }
     ~math_builder() {
+#ifdef LLVM38
+        builder.setFastMathFlags(old_fmf);
+#else
         builder.SetFastMathFlags(old_fmf);
+#endif
     }
 };
 
