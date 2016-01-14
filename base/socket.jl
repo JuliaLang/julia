@@ -454,7 +454,7 @@ end
 
 function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
     if sock.status == StatusUninit
-        error("Cannot set options on unitialized socket")
+        error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
         uv_error("multicast_loop",ccall(:uv_udp_set_multicast_loop,Cint,(Ptr{Void},Cint),sock.handle,multicast_loop) < 0)
