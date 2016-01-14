@@ -4049,13 +4049,6 @@ itself). For matrices, returns an identity matrix of the appropriate size and ty
 one
 
 """
-    parseip(addr)
-
-Parse a string specifying an IPv4 or IPv6 ip address.
-"""
-parseip
-
-"""
     rationalize([Type=Int,] x; tol=eps(x))
 
 Approximate floating point number `x` as a Rational number with components of the given
