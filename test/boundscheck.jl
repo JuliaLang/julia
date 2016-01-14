@@ -94,7 +94,11 @@ function B1()
     return 0
 end
 
+@test B1() == 0
+
+# elide a simple branch
 cond(x) = x > 0 ? x : -x
+
 function B2()
     y = [1,2,3]
     @inbounds begin
@@ -102,5 +106,7 @@ function B2()
     end
     return 0
 end
+
+@test B2() == 0
 
 end
