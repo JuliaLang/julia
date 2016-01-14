@@ -154,7 +154,7 @@ end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
-    h += hashs_seed
+    h = hash(hashs_seed, h)
     for x in s
         h $= hash(x)
     end

@@ -94,3 +94,5 @@ x.nzval[1] = 0
 let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
+
+@test hash(Dict(),hash(Set())) != hash(Set(),hash(Dict()))
