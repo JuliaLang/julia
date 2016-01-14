@@ -420,11 +420,15 @@ function serialize_any(s::SerializationState, x)
     else
         t.mutable && serialize_cycle(s, x) && return
         serialize_type(s, t)
-        for i in 1:nf
-            if isdefined(x, i)
-                serialize(s, getfield(x, i))
-            else
-                writetag(s.io, UNDEFREF_TAG)
+        if t.pointerfree && ccall(:jl_datatype_haspadding, Cint, (Any,), t)==0
+            write(s.io, pointer_from_objref(x), sizeof(x))
+        else
+            for i in 1:nf
+                if isdefined(x, i)
+                    serialize(s, getfield(x, i))
+                else
+                    writetag(s.io, UNDEFREF_TAG)
+                end
             end
         end
     end
@@ -674,6 +678,11 @@ function deserialize(s::SerializationState, t::DataType)
     end
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
+    elseif t.pointerfree && ccall(:jl_datatype_haspadding, Cint, (Any,), t)==0
+        x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
+        a_ = pointer_to_array(convert(Ptr{UInt8},pointer_from_objref(x)), sizeof(t))
+        read!(s.io, a_)
+        return x
     elseif isbits(t)
         if nf == 1
             return ccall(:jl_new_struct, Any, (Any,Any...), t, deserialize(s))

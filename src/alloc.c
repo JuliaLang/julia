@@ -237,6 +237,11 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
     return 1;
 }
 
+JL_DLLEXPORT int jl_datatype_haspadding(jl_datatype_t *dt)
+{
+    return dt->haspadding;
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 {
     if (type->instance != NULL) return type->instance;
