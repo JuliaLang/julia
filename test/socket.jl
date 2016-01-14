@@ -268,3 +268,24 @@ let
     end
     [close(s) for s in [a, b, c]]
 end
+
+let P = Pipe()
+    Base.link_pipe(P)
+    write(P, "hello")
+    @test nb_available(P) == 0
+    @test !eof(P)
+    @test read(P, Char) === 'h'
+    @test !eof(P)
+    @test read(P, Char) === 'e'
+    @test isopen(P)
+    close(P.in)
+    @test isopen(P)
+    @test !eof(P)
+    @test readuntil(P, 'o') == "llo"
+    @test isopen(P)
+    @test eof(P)
+    @test !isopen(P)
+    close(P)
+    @test !isopen(P)
+    @test eof(P)
+end
