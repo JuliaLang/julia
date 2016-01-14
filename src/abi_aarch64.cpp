@@ -42,11 +42,75 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
     return jl_is_floattype((jl_value_t*)dt) ? lltype : NULL;
 }
 
+struct ElementType {
+    Type *type;
+    size_t sz;
+    ElementType() : type(nullptr), sz(0) {};
+};
+
 // Whether a type is a homogeneous floating-point aggregates (HFA) or a
-// homogeneous short-vector aggregates (HVA). Returns the number of members.
+// homogeneous short-vector aggregates (HVA). Returns the element type.
 // We only handle HFA of HP, SP, DP and QP here since these are the only ones we
 // have (no vectors).
-static size_t isHFAorHVA(jl_datatype_t *dt)
+// An Homogeneous Aggregate is a Composite Type where all of the Fundamental
+// Data Types of the members that compose the type are the same.
+// Note that it is the fundamental types that are important and not the member
+// types.
+static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele)
+{
+    // Assume:
+    //     dt is a pointerfree type, (all members are isbits)
+    //     dsz == dt->size > 0
+    //     0 <= nele <= 3
+
+    // We ignore zero sized member here. This isn't really consistent with
+    // GCC for zero-sized array members. GCC seems to treat structs with
+    // zero sized array members as non-HFA and non-HVA. Clang (3.7 and 3.8)
+    // handles this slightly differently.
+    // Ref https://llvm.org/bugs/show_bug.cgi?id=26162
+    while (size_t nfields = jl_datatype_nfields(dt)) {
+        // For composite types, find the first non zero sized member
+        size_t i;
+        size_t fieldsz;
+        for (i = 0;i < nfields;i++) {
+            if ((fieldsz = jl_field_size(dt, i))) {
+                break;
+            }
+        }
+        assert(i < nfields);
+        // If there's only one non zero sized member, try again on this member
+        if (fieldsz == dsz) {
+            dt = (jl_datatype_t*)jl_field_type(dt, i);
+            continue;
+        }
+        // Otherwise, process each members
+        for (;i < nfields;i++) {
+            size_t fieldsz = jl_field_size(dt, i);
+            if (fieldsz == 0)
+                continue;
+            jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, i);
+            // Check element count.
+            // This needs to be done after the zero size member check
+            if (nele > 3 || !isHFAorHVA(fieldtype, fieldsz, nele, ele)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    // For bitstypes
+    if (ele.sz && dsz != ele.sz)
+        return false;
+    Type *new_type = get_llvm_fptype(dt);
+    if (new_type && (!ele.type || ele.type == new_type)) {
+        ele.type = new_type;
+        ele.sz = dsz;
+        nele++;
+        return true;
+    }
+    return false;
+}
+
+static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
@@ -56,22 +120,15 @@ static size_t isHFAorHVA(jl_datatype_t *dt)
     // An Homogeneous Short-Vector Aggregate (HVA) is an Homogeneous Aggregate
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
-    size_t members = jl_datatype_nfields(dt);
-    if (members < 1 || members > 4)
-        return 0;
-    // There's at least one member
-    jl_value_t *ftype = jl_field_type(dt, 0);
-    if (!get_llvm_fptype((jl_datatype_t*)ftype))
-        return 0;
-    // This assumes that there's only one Julia type corresponding to
-    // each machine fp types, which should be valid as long as no one
-    // create two 128bits FP types and put them in the same structure.
-    for (size_t i = 1;i < members;i++) {
-        if (ftype != jl_field_type(dt, i)) {
-            return 0;
-        }
-    }
-    return members;
+    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
+    size_t dsz = dt->size;
+    if (dsz > 64 || !dt->pointerfree || dt->haspadding)
+        return NULL;
+    nele = 0;
+    ElementType eltype;
+    if (isHFAorHVA(dt, dsz, nele, eltype))
+        return eltype.type;
+    return NULL;
 }
 
 void needPassByRef(AbiState*, jl_value_t *ty, bool *byRef, bool*)
@@ -81,7 +138,8 @@ void needPassByRef(AbiState*, jl_value_t *ty, bool *byRef, bool*)
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
-    if (isHFAorHVA(dt))
+    size_t size;
+    if (isHFAorHVA(dt, size))
         return;
     // B.3
     //   If the argument type is a Composite Type that is larger than 16 bytes,
@@ -112,8 +170,8 @@ bool need_private_copy(jl_value_t*, bool)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
-                         bool *need_rewrite)
+static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
+                          size_t *rewrite_len)
 {
     // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
     jl_datatype_t *dt = (jl_datatype_t*)ty;
@@ -129,7 +187,7 @@ static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // don't really have those types.
     if (get_llvm_fptype(dt)) {
         *fpreg = true;
-        return;
+        return NULL;
     }
 
     // C.2
@@ -139,10 +197,12 @@ static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     //   Floating-point Registers (with one register per member of the HFA
     //   or HVA). The NSRN is incremented by the number of registers used.
     //   The argument has now been allocated.
-    if (isHFAorHVA(dt)) { // HFA and HVA have <= 4 members
+    if (Type *eltype = isHFAorHVA(dt, *rewrite_len)) {
+        assert(*rewrite_len > 0 && *rewrite_len <= 4);
+        // HFA and HVA have <= 4 members
         *fpreg = true;
-        *need_rewrite = true;
-        return;
+        // Rewrite to [n x eltype] where n is the number of fundamental types.
+        return eltype;
     }
 
     // Check if the argument needs to be passed by reference. This should be
@@ -151,7 +211,7 @@ static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // See `needPassByRef` above.
     if (dt->size > 16) {
         *onstack = true;
-        return;
+        return NULL;
     }
 
     // C.3
@@ -184,7 +244,7 @@ static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     if (jl_is_immutable(dt) && jl_datatype_nfields(dt) == 0 &&
         (dt->size == 1 || dt->size == 2 || dt->size == 4 ||
          dt->size == 8 || dt->size == 16))
-        return;
+        return NULL;
 
     // C.8
     //   If the argument has an alignment of 16 then the NGRN is rounded up to
@@ -211,7 +271,11 @@ static void classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // with weird size as a black box composite type.
     // The type can fit in 8 x 8 bytes since it is handled by
     // need_pass_by_ref otherwise.
-    *need_rewrite = true;
+    // 0-size types (Void) won't be rewritten and that is what we want
+    assert(dt->size <= 16); // Should be pass by reference otherwise
+    *rewrite_len = (dt->size + 7) >> 3;
+    // Rewrite to [n x Int64] where n is the **size in dword**
+    return dt->size ? T_int64 : NULL;
 
     // C.11
     //   The NGRN is set to 8.
@@ -249,8 +313,8 @@ bool use_sret(AbiState*, jl_value_t *ty)
     // such an argument.
     bool fpreg = false;
     bool onstack = false;
-    bool need_rewrite = false;
-    classify_arg(ty, &fpreg, &onstack, &need_rewrite);
+    size_t rewrite_len = 0;
+    classify_arg(ty, &fpreg, &onstack, &rewrite_len);
     return onstack;
 }
 
@@ -263,23 +327,10 @@ Type *preferred_llvm_type(jl_value_t *ty, bool)
         return fptype;
     bool fpreg = false;
     bool onstack = false;
-    bool need_rewrite = false;
-    classify_arg(ty, &fpreg, &onstack, &need_rewrite);
-    if (!need_rewrite)
-        return NULL;
-    if (fpreg) {
-        // Rewrite to [n x fptype] where n is the number of field
-        // This only happens for isHFAorHVA
-        size_t members = jl_datatype_nfields(dt);
-        assert(members > 0 && members <= 4);
-        jl_datatype_t *eltype = (jl_datatype_t*)jl_field_type(dt, 0);
-        return ArrayType::get(get_llvm_fptype(eltype), members);
-    }
-    else {
-        // Rewrite to [n x Int64] where n is the **size in dword**
-        assert(dt->size <= 16); // Should be pass by reference otherwise
-        return ArrayType::get(T_int64, (dt->size + 7) >> 3);
-    }
+    size_t rewrite_len = 0;
+    if (Type *rewrite_ty = classify_arg(ty, &fpreg, &onstack, &rewrite_len))
+        return ArrayType::get(rewrite_ty, rewrite_len);
+    return NULL;
 }
 
 }
