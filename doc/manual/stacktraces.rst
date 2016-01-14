@@ -21,7 +21,8 @@ The primary function used to obtain a stack trace is :func:`stacktrace`::
      [inlined code from REPL.jl:92] anonymous at task.jl:63
 
 Calling :func:`stacktrace` returns a vector of :obj:`StackFrame` s. For ease of use, the
-alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``.
+alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Examples with
+``...`` indicate that output may vary depending on how the code is run.)
 
 .. doctest::
 
@@ -55,7 +56,7 @@ Note that when calling :func:`stacktrace` you'll typically see a frame with
 ``eval at boot.jl``. When calling :func:`stacktrace` from the REPL you'll also have a few
 extra frames in the stack from ``REPL.jl``, usually looking something like this::
 
-    julia> example() = show_stacktrace()
+    julia> example() = stacktrace()
     example (generic function with 1 method)
 
     julia> example()
@@ -95,7 +96,9 @@ returned by :func:`backtrace`:
 
     julia> top_frame.from_c
     false
+
 ::
+
     julia> top_frame.pointer
     13203085684
 
@@ -110,7 +113,8 @@ helpful in many places, the most obvious application is in error handling and de
 
 .. doctest::
 
-    julia> bad_function() = undeclared_variable + 1
+    julia> @noinline bad_function() = undeclared_variable
+    bad_function (generic function with 1 method)
 
     julia> @noinline example() = try
                bad_function()
@@ -121,7 +125,7 @@ helpful in many places, the most obvious application is in error handling and de
 
     julia> example()
     ...-element Array{StackFrame,1}:
-     example at none:2
+     example at none:4
      eval at boot.jl:265
      ...
 
@@ -137,6 +141,9 @@ Instead of returning callstack information for the current context, :func:`catch
 returns stack information for the context of the most recent exception:
 
 .. doctest::
+
+    julia> @noinline bad_function() = undeclared_variable
+    bad_function (generic function with 1 method)
 
     julia> @noinline example() = try
                bad_function()
@@ -241,7 +248,7 @@ by passing them into :func:`StackTraces.lookup`:
     Ptr{Void} @0x...
 
     julia> frame = StackTraces.lookup(pointer)
-    [inlined code from task.c:651] rec_backtrace at task.c:711
+    [inlined code from task.c:663] rec_backtrace at task.c:723
 
     julia> println("The top frame is from $(frame.func)!")
     The top frame is from rec_backtrace!
