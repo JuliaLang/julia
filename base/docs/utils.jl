@@ -91,6 +91,27 @@ end
 
 # REPL help
 
+function helpmode(line::AbstractString)
+    line = strip(line)
+    expr =
+        if haskey(keywords, symbol(line))
+            # Docs for keywords must be treated separately since trying to parse a single
+            # keyword such as `function` would throw a parse error due to the missing `end`.
+            symbol(line)
+        else
+            x = Base.syntax_deprecation_warnings(false) do
+                parse(line, raise = false)
+            end
+            # Retrieving docs for macros requires us to make a distinction between the text
+            # `@macroname` and `@macroname()`. These both parse the same, but are used by
+            # the docsystem to return different results. The first returns all documentation
+            # for `@macroname`, while the second returns *only* the docs for the 0-arg
+            # definition if it exists.
+            (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
+        end
+    :(Base.Docs.@repl $expr)
+end
+
 function repl_search(io::IO, s)
     pre = "search:"
     print(io, pre)
