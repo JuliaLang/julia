@@ -242,6 +242,10 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #  else
 #    include "abi_x86.cpp"
 #  endif
+#elif defined _CPU_ARM_
+#  include "abi_arm.cpp"
+#elif defined _CPU_AARCH64_
+#    include "abi_aarch64.cpp"
 #else
 #  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
 #  include "abi_llvm.cpp"
@@ -1263,12 +1267,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             Value *mem = emit_static_alloca(lrt, ctx);
             builder.CreateStore(result, mem);
             result = mem;
-            argvals[0] = result;
         }
         else {
-            // XXX: result needs a GC root here if result->getType() == jl_pvalue_llvmt
-            argvals[0] = builder.CreateBitCast(result, fargt_sig[0]);
+            // XXX: result needs a GC root here if result->getType() == T_pjlvalue
+            result = sret_val.V;
         }
+        argvals[0] = builder.CreateBitCast(result, fargt_sig.at(0));
+        sretboxed = sret_val.isboxed;
     }
 
     // save argument depth until after we're done emitting arguments
