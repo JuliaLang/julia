@@ -141,6 +141,8 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
 #  else
 #    include "abi_x86.cpp"
 #  endif
+#elif defined _CPU_ARM_
+#  include "abi_arm.cpp"
 #elif defined _CPU_AARCH64_
 #    include "abi_aarch64.cpp"
 #else
@@ -1231,13 +1233,12 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             Value *mem = emit_static_alloca(lrt, ctx);
             builder.CreateStore(sret_val.V, mem);
             result = mem;
-            argvals[0] = result;
         }
         else {
             // XXX: result needs a GC root here if result->getType() == T_pjlvalue
             result = sret_val.V;
-            argvals[0] = builder.CreateBitCast(result, fargt_sig.at(0));
         }
+        argvals[0] = builder.CreateBitCast(result, fargt_sig.at(0));
         sretboxed = sret_val.isboxed;
     }
 
