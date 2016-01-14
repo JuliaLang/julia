@@ -44,9 +44,7 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_1, catch_backtrace())
-    if is(lkup, nothing)
-        throw(Test.Failure("Missing backtrace in inlining test"))
-    end
+    @test lkup !== nothing || "Missing backtrace in inlining test"
 
     fname, file, line, inlinedfile, inlinedline, fromC = lkup
     @test endswith(string(inlinedfile), "backtrace.jl")
@@ -57,9 +55,7 @@ try
     error("unexpected")
 catch err
     lkup = get_bt_frame(:test_inline_2, catch_backtrace())
-    if is(lkup, nothing)
-        throw(Test.Failure("Missing backtrace in inlining test"))
-    end
+    @test lkup !== nothing || "Missing backtrace in inlining test"
 
     fname, file, line, inlinedfile, inlinedline, fromC = lkup
     @test string(file) == absfilepath
