@@ -347,9 +347,6 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
-    success(pipeline(`which tput`, DevNull)) || error("tput not found, " *
-        "install ncurses (or ncurses-bin or ncurses-utils) package")
-
     const O_RDWR = Base.Filesystem.JL_O_RDWR
     const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
