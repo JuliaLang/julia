@@ -389,7 +389,7 @@ function connect_to_worker(host::AbstractString, port::Integer)
         bind_addr = "127.0.0.1"
     else
         try
-            bind_addr = string(parseip(host))
+            bind_addr = string(parse(IPAddr,host))
         catch
             bind_addr = string(getaddrinfo(host))
         end

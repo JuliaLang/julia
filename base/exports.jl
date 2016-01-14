@@ -1123,9 +1123,9 @@ export
 
 # IP address stuff
     @ip_str,
+    IPAddr,
     IPv4,
     IPv6,
-    parseip,
 
 # I/O and events
     accept,
