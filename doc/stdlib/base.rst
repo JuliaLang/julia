@@ -1050,7 +1050,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   The asserted condition did not evalutate to ``true``\ . Optional argument ``msg`` is a descriptive error string.
+   The asserted condition did not evaluate to ``true``\ . Optional argument ``msg`` is a descriptive error string.
 
 .. function:: BoundsError([a],[i])
 
