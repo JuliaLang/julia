@@ -282,7 +282,7 @@ end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::Associative, h::UInt)
-    h += hasha_seed
+    h = hash(hasha_seed, h)
     for (k,v) in a
         h $= hash(k, hash(v))
     end
