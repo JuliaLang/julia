@@ -3717,7 +3717,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     size_t FParamIndex = 0;
     if (jlfunc_sret) {
         if (sret)
-            result = sretPtr;
+            result = builder.CreateBitCast(sretPtr, theFptr->getFunctionType()->getParamType(0));
         else
             result = builder.CreateAlloca(theFptr->getFunctionType()->getParamType(0)->getContainedType(0));
         args.push_back(result);
@@ -5695,9 +5695,10 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
   std::string cpu = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
   if (cpu.empty() || cpu == "generic") {
     jl_printf(JL_STDERR, "WARNING: unable to determine host cpu name.\n");
-#ifdef _CPU_ARM_
+#if defined(_CPU_ARM_) && defined(__ARM_PCS_VFP)
     // Check if this is required when you have read the features directly from the processor
-    // the processors that don't have VFP are old and (hopefully) rare. this affects the platform calling convention.
+    // This affects the platform calling convention.
+    // TODO: enable vfp3 for ARMv7+ (but adapt the ABI)
     HostFeatures["vfp2"] = true;
 #endif
   }
