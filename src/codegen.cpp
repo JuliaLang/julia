@@ -580,6 +580,7 @@ typedef struct {
     bool sret;
     int nReqArgs;
     std::vector<bool> boundsCheck;
+    std::vector<bool> inbounds;
 
     jl_gcinfo_t gc;
 
@@ -3875,9 +3876,31 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
 #endif
         builder.SetInsertPoint(tryblk);
     }
+    else if (head == inbounds_sym) {
+        // manipulate inbounds stack
+        // note that when entering an inbounds context, we must also update
+        // the boundsCheck context to be false
+        if (jl_array_len(ex->args) > 0) {
+            jl_value_t *arg = args[0];
+            if (arg == jl_true) {
+                ctx->inbounds.push_back(true);
+                ctx->boundsCheck.push_back(false);
+            }
+            else if (arg == jl_false) {
+                ctx->inbounds.push_back(false);
+                ctx->boundsCheck.push_back(false);
+            }
+            else {
+                if (!ctx->inbounds.empty())
+                    ctx->inbounds.pop_back();
+                if (!ctx->boundsCheck.empty())
+                    ctx->boundsCheck.pop_back();
+            }
+        }
+        return ghostValue(jl_void_type);
+    }
     else if (head == boundscheck_sym) {
-        if (jl_array_len(ex->args) > 0 &&
-            jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_DEFAULT) {
+        if (jl_array_len(ex->args) > 0) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
                 ctx->boundsCheck.push_back(true);
@@ -4014,6 +4037,7 @@ emit_gcpops(jl_codectx_t *ctx)
 {
     Function *F = ctx->f;
     for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
+        assert(I->getTerminator() != NULL);
         if (isa<ReturnInst>(I->getTerminator())) {
             builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
             Instruction *gcpop =
@@ -4033,7 +4057,6 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         clear_gc_frame(gc);
         return;
     }
-    BasicBlock::iterator bbi(gc->gcframe);
     AllocaInst *newgcframe = gc->gcframe;
     builder.SetInsertPoint(&*++gc->last_gcframe_inst); // set insert *before* point, e.g. after the gcframe
     // Allocate the real GC frame
@@ -4436,7 +4459,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.funcName = jl_symbol_name(lam->name);
     ctx.vaName = NULL;
     ctx.vaStack = false;
-    ctx.boundsCheck.push_back(true);
+    ctx.inbounds.push_back(false);
+    ctx.boundsCheck.push_back(false);
     ctx.cyclectx = cyclectx;
 
     // step 2. process var-info lists to see what vars are captured, need boxing
@@ -4896,14 +4920,15 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 addr.push_back(i * sizeof(void*));
                 addr.push_back(llvm::dwarf::DW_OP_deref);
                 prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
+                ctx.dbuilder->insertDbgValueIntrinsic(
+                    argArray,
+                    0,
+                    ctx.vars[s].dinfo,
+                    ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr),
-                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
-#else
-                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
-                ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
+                    builder.getCurrentDebugLocation().get(),
 #endif
+                    builder.GetInsertBlock());
             }
         }
 #endif
@@ -5342,8 +5367,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 builder.SetInsertPoint(bb);
             }
         }
-        else {
-            (void)emit_expr(stmt, &ctx, false, false);
+        else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == boundscheck_sym) {
+            // always emit expressions that update the boundscheck stack
+            emit_expr(stmt, &ctx, false, false);
+        }
+        else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx)) {
+            // elide bounds check blocks
+        } else {
+            emit_expr(stmt, &ctx, false, false);
         }
     }
 
@@ -5352,6 +5383,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     // sometimes we have dangling labels after the end
     if (builder.GetInsertBlock()->getTerminator() == NULL) {
         builder.CreateUnreachable();
+    }
+
+    // patch up dangling BasicBlocks from skipped labels
+    for (std::map<int,BasicBlock*>::iterator it = labels.begin(); it != labels.end(); ++it) {
+        if (it->second->getTerminator() == NULL) {
+            builder.SetInsertPoint(it->second);
+            builder.CreateUnreachable();
+        }
     }
 
     // step 16. fix up size of stack root list
