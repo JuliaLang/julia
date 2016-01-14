@@ -29,6 +29,8 @@ immutable StackFrame
     pointer::Int64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
+StackFrame(func, file, line) = StackFrame(func, file, line, symbol(""), -1, false, 0)
+
 """
     StackTrace
 
@@ -36,6 +38,9 @@ An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 `stacktrace` and `catch_stacktrace`.
 """
 typealias StackTrace Vector{StackFrame}
+
+
+const UNKNOWN = StackFrame(symbol("???"), symbol("???"), 0, symbol(""), -1, true, 0)
 
 
 #=

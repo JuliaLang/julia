@@ -2,7 +2,7 @@
 
 module Profile
 
-import Base.StackTraces: StackFrame, lookup
+import Base.StackTraces: lookup, UNKNOWN
 
 export @profile
 
@@ -210,8 +210,6 @@ end
 #@unix_only const btskip = 2
 #@windows_only const btskip = 0
 const btskip = 0
-
-const UNKNOWN = StackFrame(symbol("???"), symbol("???"), 0, symbol(""), -1, true, 0)
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
