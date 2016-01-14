@@ -22,3 +22,4 @@
    llvm
    stdio
    promote-op
+   boundscheck

@@ -1861,6 +1861,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
                 fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
                 # inlining can add variables
                 sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+                inbounds_meta_elim_pass(fulltree.args[3])
             end
             tuple_elim_pass(fulltree, sv)
             getfield_elim_pass(fulltree.args[3], sv)
@@ -2414,6 +2415,7 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
 
     body = Expr(:block)
     body.args = ast.args[3].args::Array{Any,1}
+    propagate_inbounds, _ = popmeta!(body, :propagate_inbounds)
     cost::Int = 1000
     if incompletematch
         cost *= 4
@@ -2773,6 +2775,12 @@ function inlineable(f::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_as
         end
     end
 
+    if !isempty(stmts) && !propagate_inbounds
+        # inlined statements are out-of-bounds by default
+        unshift!(stmts, Expr(:inbounds, false))
+        push!(stmts, Expr(:inbounds, :pop))
+    end
+
     if isa(expr,Expr)
         old_t = e.typ
         if old_t <: expr.typ
@@ -2985,7 +2993,7 @@ function inlining_pass(e::Expr, sv, ast)
         end
         res = inlineable(f, e, atype, sv, ast)
         if isa(res,Tuple)
-            if isa(res[2],Array)
+            if isa(res[2],Array) && !isempty(res[2])
                 append!(stmts,res[2])
             end
             res = res[1]
@@ -3263,6 +3271,16 @@ function occurs_outside_getfield(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::In
         end
     end
     return false
+end
+
+# removes inbounds metadata if we never encounter an inbounds=true or
+# boundscheck context in the method body
+function inbounds_meta_elim_pass(e::Expr)
+    if findfirst(x -> isa(x, Expr) &&
+                      ((x.head === :inbounds && x.args[1] == true) || x.head === :boundscheck),
+                 e.args) == 0
+        filter!(x -> !(isa(x, Expr) && x.head === :inbounds), e.args)
+    end
 end
 
 # replace getfield(tuple(exprs...), i) with exprs[i]
