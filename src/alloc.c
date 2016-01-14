@@ -301,7 +301,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *sparams,
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
                                   NWORDS(sizeof(jl_lambda_info_t)));
     li->ast = ast;
-    li->rettype = jl_any_type;
+    li->rettype = (jl_value_t*)jl_any_type;
     li->file = null_sym;
     li->line = 0;
     li->pure = 0;
