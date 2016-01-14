@@ -88,7 +88,7 @@ nb_available(s::LibuvStream) = nb_available(s.buffer)
 
 function eof(s::LibuvStream)
     if isopen(s) # fast path
-        nb_available(s) > 0 && return true
+        nb_available(s) > 0 && return false
     else
         return nb_available(s) <= 0
     end
@@ -1232,17 +1232,17 @@ write(s::BufferStream, c::Char) = write(s, string(c))
 function write{T}(s::BufferStream, a::Array{T})
     rv=write(s.buffer, a)
     !(s.buffer_writes) && notify(s.r_c; all=true);
-    rv
+    return rv
 end
 function write(s::BufferStream, p::Ptr, nb::Integer)
     rv=write(s.buffer, p, nb)
     !(s.buffer_writes) && notify(s.r_c; all=true);
-    rv
+    return rv
 end
 
-function eof(s::LibuvStream)
+function eof(s::BufferStream)
     wait_readnb(s,1)
-    !isopen(s) && nb_available(s)<=0
+    return !isopen(s) && nb_available(s)<=0
 end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
