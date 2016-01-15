@@ -875,12 +875,6 @@ Network I/O
 
    Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
-.. function:: parseip(addr)
-
-   .. Docstring generated from Julia source
-
-   Parse a string specifying an IPv4 or IPv6 ip address.
-
 .. function:: IPv4(host::Integer) -> IPv4
 
    .. Docstring generated from Julia source
