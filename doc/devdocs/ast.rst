@@ -142,7 +142,7 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``inbounds``
     controls turning bounds checks on or off. A stack is maintained; if the
     first argument of this expression is true or false (``true`` means bounds
-    checks are enabled), it is pushed onto the stack. If the first argument is
+    checks are disabled), it is pushed onto the stack. If the first argument is
     ``:pop``, the stack is popped.
 
 ``boundscheck``
