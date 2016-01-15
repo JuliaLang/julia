@@ -960,3 +960,5 @@ macro boundscheck(yesno,blk)
         :(@inbounds $(esc(blk)))
     end
 end
+
+@deprecate parseip(str::AbstractString) parse(IPAddr, str)
