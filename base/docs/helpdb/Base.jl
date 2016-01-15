@@ -10663,7 +10663,7 @@ DivideError
 """
     AssertionError([msg])
 
-The asserted condition did not evalutate to `true`.
+The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
 """
 AssertionError
