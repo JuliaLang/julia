@@ -755,7 +755,6 @@
               <string>parse</string>
               <string>parsefloat</string>
               <string>parseint</string>
-              <string>parseip</string>
               <string>partitions</string>
               <string>peakflops</string>
               <string>permutations</string>
