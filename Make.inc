@@ -603,7 +603,6 @@ JCFLAGS += -fsigned-char
 
 LLVM_ASSERTIONS=1
 #LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-LLVM_VER:=3.7.1
 
 override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
