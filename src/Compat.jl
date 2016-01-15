@@ -712,4 +712,9 @@ else
     import Base.Filesystem
 end
 
+if VERSION < v"0.5.0-dev+1946"
+    const supertype = super
+    export supertype
+end
+
 end # module
