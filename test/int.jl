@@ -142,3 +142,7 @@ end
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
+
+# issue #3596
+@test Int128(1)<<0 == 1
+@test repr(Int128(1)<<1) == "2"
