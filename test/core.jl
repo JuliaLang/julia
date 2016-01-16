@@ -3647,3 +3647,7 @@ end
 
 # issue #14564
 @test isa(object_id(Tuple.name.cache), Integer)
+
+# issue #14691
+type T14691; a::UInt; end
+@test (T14691(0).a = 0) === 0
