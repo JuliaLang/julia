@@ -28,6 +28,9 @@
 
 #if defined(JL_USE_INTEL_JITEVENTS)
 unsigned sig_stack_size = SIGSTKSZ;
+#elif defined(_CPU_AARCH64_)
+// The default SIGSTKSZ causes stack overflow in libunwind.
+#define sig_stack_size (1 << 16)
 #else
 #define sig_stack_size SIGSTKSZ
 #endif
@@ -287,10 +290,23 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 #endif
 #endif // HAVE_MACH
 
+static void *alloc_sigstack(size_t size)
+{
+    size_t pagesz = jl_getpagesize();
+    // Add one guard page to catch stack overflow in the signal handler
+    size = LLT_ALIGN(size, pagesz) + pagesz;
+    void *stackbuff = mmap(0, size, PROT_READ | PROT_WRITE,
+                           MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (stackbuff == MAP_FAILED)
+        jl_errorf("fatal error allocating signal stack: mmap: %s",
+                  strerror(errno));
+    mprotect(stackbuff, pagesz, PROT_NONE);
+    return (void*)((char*)stackbuff + pagesz);
+}
 
 void *jl_install_thread_signal_handler(void)
 {
-    void *signal_stack = malloc(sig_stack_size);
+    void *signal_stack = alloc_sigstack(sig_stack_size);
     stack_t ss;
     ss.ss_flags = 0;
     ss.ss_size = sig_stack_size;
