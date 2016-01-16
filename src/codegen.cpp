@@ -1249,11 +1249,6 @@ void *jl_function_ptr_by_llvm_name(char* name) {
     return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
 }
 
-extern "C" JL_DLLEXPORT void *jl_global_address_by_name(char *name)
-{
-    return (void*)jl_ExecutionEngine->getPointerToGlobal(jl_Module->getGlobalVariable(name,true));
-}
-
 // export a C-callable entry point for a function, with a given name
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
