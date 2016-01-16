@@ -84,6 +84,11 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base) {
     // so use that definition of legality (section 6.1.2.1)
 
     if (jl_is_structtype(dt)) {
+        // Fast path checks before descending the type hierarchy
+        // (4 x 128b vector == 64B max size)
+        if (dt->size > 64 || !dt->pointerfree || dt->haspadding)
+            return 0;
+
         base = NULL;
         size_t total_members = 0;
 
