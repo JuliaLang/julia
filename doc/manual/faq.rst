@@ -59,10 +59,16 @@ I passed an argument ``x`` to a function, modified it inside that function, but 
 Suppose you call a function like this::
 
 	julia> x = 10
-	julia> function change_value!(y) # Create a new function
+        10
+
+	julia> function change_value!(y)
 	           y = 17
 	       end
+        change_value! (generic function with 1 method)
+
 	julia> change_value!(x)
+        17
+
 	julia> x # x is unchanged!
 	10
 
@@ -76,10 +82,14 @@ But here is a thing you should pay attention to: suppose ``x`` is bound to an Ar
 	2
 	3
 
-	julia> function change_array!(A) # Create a new function
+	julia> function change_array!(A)
 	           A[1] = 5
 	       end
+        change_array! (generic function with 1 method)
+
 	julia> change_array!(x)
+        5
+
 	julia> x
 	3-element Array{Int64,1}:
 	5
