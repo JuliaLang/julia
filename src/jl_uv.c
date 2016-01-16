@@ -339,9 +339,12 @@ JL_DLLEXPORT int jl_fs_read_byte(int handle)
     buf[0].len = 1;
     int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
-    if (ret == -1)
-        return ret;
-    return (int)c;
+    switch (ret) {
+        case -1: return ret;
+        case  0: jl_eof_error();
+        case  1: return (int)c;
+        default: assert(0);
+    }
 }
 
 JL_DLLEXPORT int jl_fs_close(int handle)
