@@ -148,19 +148,8 @@ end
 
 for T in [Int128, UInt128]
     @test *(T(2), T(3)) === T(6)
-    @test *(T(2), T(-3)) === T(-6)
-    @test *(T(-2), T(3)) === T(-6)
-    @test *(T(-2), T(-3)) === T(6)
-
     @test div(T(7), T(3)) === T(2)
-    @test div(T(7), T(-3)) === T(-2)
-    @test div(T(-7), T(3)) === T(-2)
-    @test div(T(-7), T(-3)) === T(2)
-
     @test rem(T(7), T(3)) === T(1)
-    @test rem(T(-7), T(3)) === T(-1)
-    @test rem(T(-7), T(-3)) === T(-1)
-    @test rem(T(7), T(-3)) === T(1)
 
     @test T(3) << 2 === T(12)
     @test T(5) >> 2 === T(1)
@@ -169,3 +158,15 @@ for T in [Int128, UInt128]
     @test (typemax(T) + 1) === typemin(T)
     @test (typemin(T) - 1) === typemax(T)
 end
+
+@test *(Int128(2), Int128(-3)) === Int128(-6)
+@test *(Int128(-2), Int128(3)) === Int128(-6)
+@test *(Int128(-2), Int128(-3)) === Int128(6)
+
+@test div(Int128(7), Int128(-3)) === Int128(-2)
+@test div(Int128(-7), Int128(3)) === Int128(-2)
+@test div(Int128(-7), Int128(-3)) === Int128(2)
+
+@test rem(Int128(7), Int128(-3)) === Int128(-1)
+@test rem(Int128(-7), Int128(3)) === Int128(-1)
+@test rem(Int128(-7), Int128(-3)) === Int128(1)
