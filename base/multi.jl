@@ -1608,31 +1608,32 @@ function splitrange(N::Int, np::Int)
     return chunks
 end
 
-function preduce(reducer, f, N::Int)
+function preduce(reducer, f, R)
+    N = length(R)
     chunks = splitrange(N, nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
     for (idx,pid) in enumerate(all_w)
-        t = Task(()->remotecall_fetch(f, pid, first(chunks[idx]), last(chunks[idx])))
+        t = Task(()->remotecall_fetch(f, pid, reducer, R, first(chunks[idx]), last(chunks[idx])))
         schedule(t)
         push!(w_exec, t)
     end
     reduce(reducer, [wait(t) for t in w_exec])
 end
 
-function pfor(f, N::Int)
-    [@spawn f(first(c), last(c)) for c in splitrange(N, nworkers())]
+function pfor(f, R)
+    [@spawn f(R, first(c), last(c)) for c in splitrange(length(R), nworkers())]
 end
 
-function make_preduce_body(reducer, var, body, R)
+function make_preduce_body(var, body)
     quote
-        function (lo::Int, hi::Int)
-            $(esc(var)) = ($R)[lo]
+        function (reducer, R, lo::Int, hi::Int)
+            $(esc(var)) = R[lo]
             ac = $(esc(body))
             if lo != hi
-                for $(esc(var)) in ($R)[(lo+1):hi]
-                    ac = ($reducer)(ac, $(esc(body)))
+                for $(esc(var)) in R[(lo+1):hi]
+                    ac = reducer(ac, $(esc(body)))
                 end
             end
             ac
@@ -1640,10 +1641,10 @@ function make_preduce_body(reducer, var, body, R)
     end
 end
 
-function make_pfor_body(var, body, R)
+function make_pfor_body(var, body)
     quote
-        function (lo::Int, hi::Int)
-            for $(esc(var)) in ($R)[lo:hi]
+        function (R, lo::Int, hi::Int)
+            for $(esc(var)) in R[lo:hi]
                 $(esc(body))
             end
         end
@@ -1667,13 +1668,11 @@ macro parallel(args...)
     r = loop.args[1].args[2]
     body = loop.args[2]
     if na==1
-        thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
-        localize_vars(quote therange = $(esc(r)); $thecall; end)
+        thecall = :(pfor($(make_pfor_body(var, body)), $(esc(r))))
     else
-        thecall = :(preduce(thereducer,
-                            $(make_preduce_body(:thereducer, var, body, :therange)), length(therange)))
-        localize_vars(quote thereducer = $(esc(reducer)); therange = $(esc(r)); $thecall; end)
+        thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
+    localize_vars(thecall)
 end
 
 

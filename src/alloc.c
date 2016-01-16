@@ -535,7 +535,7 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s)
     return jl_symbol_n(&n[1], len);
 }
 
-jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
+JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
     jl_methtable_t *mt = (jl_methtable_t*)jl_gc_allocobj(sizeof(jl_methtable_t));
     jl_set_typeof(mt, jl_methtable_type);

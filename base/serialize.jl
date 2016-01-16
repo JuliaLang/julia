@@ -358,7 +358,14 @@ function serialize(s::SerializationState, t::TypeName)
     serialize(s, t.primary.mutable)
     serialize(s, t.primary.ninitialized)
     if isdefined(t, :mt)
-        serialize(s, t.mt)
+        serialize(s, t.mt.name)
+        serialize(s, t.mt.defs)
+        serialize(s, t.mt.max_args)
+        if isdefined(t.mt, :kwsorter)
+            serialize(s, t.mt.kwsorter)
+        else
+            writetag(s.io, UNDEFREF_TAG)
+        end
     else
         writetag(s.io, UNDEFREF_TAG)
     end
@@ -633,14 +640,27 @@ function deserialize(s::SerializationState, ::Type{Union})
     Union{types...}
 end
 
+module __deserialized_types__
+end
+
 function deserialize(s::SerializationState, ::Type{TypeName})
     number = deserialize(s)
     name = deserialize(s)
     mod = deserialize(s)
     if haskey(known_object_data, number)
         tn = known_object_data[number]::TypeName
+        name = tn.name
+        mod = tn.module
+        makenew = false
+    elseif isdefined(mod, name)
+        tn = getfield(mod, name).name
+        # TODO: confirm somehow that the types match
+        name = tn.name
+        mod = tn.module
         makenew = false
     else
+        name = gensym()
+        mod = __deserialized_types__
         tn = ccall(:jl_new_typename_in, Any, (Any, Any), name, mod)
         makenew = true
     end
@@ -661,41 +681,42 @@ function deserialize(s::SerializationState, ::Type{TypeName})
                            tn, super, parameters, names, types,
                            abstr, mutable, ninitialized)
         known_object_data[number] = tn
+        ty = tn.primary
+        ccall(:jl_set_const, Void, (Any, Any, Any), mod, name, ty)
+        if !isdefined(ty,:instance)
+            if isempty(parameters) && !abstr && size == 0 && (!mutable || isempty(names))
+                setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any,Any...), ty))
+            end
+        end
     end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
-        mt = handle_deserialize(s, tag)
+        mtname = handle_deserialize(s, tag)
+        defs = deserialize(s)
+        maxa = deserialize(s)
         if makenew
-            tn.mt = mt
+            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+            tn.mt.name = mtname
+            tn.mt.defs = defs
+            tn.mt.max_args = maxa
+        end
+        tag = Int32(read(s.io, UInt8)::UInt8)
+        if tag != UNDEFREF_TAG
+            kws = handle_deserialize(s, tag)
+            if makenew
+                tn.mt.kwsorter = kws
+            end
         end
     end
 
     return tn
 end
 
-module __deserialized_types__
-end
-
 function deserialize_datatype(s::SerializationState)
     form = read(s.io, UInt8)::UInt8
     if (form&2) != 0
         tname = deserialize(s)::TypeName
-        if isdefined(tname.module, tname.name)
-            # TODO: confirm somehow that the types match
-            ty = getfield(tname.module, tname.name)
-        else
-            ty = tname.primary
-            # assign to a new name inside a special module, reset tname.module and tname.name
-            newname = gensym()
-            tname.module = __deserialized_types__
-            tname.name = newname
-            ccall(:jl_set_const, Void, (Any, Any, Any), __deserialized_types__, newname, ty)
-            if !isdefined(ty,:instance)
-                if isempty(ty.parameters) && !ty.abstract && ty.size == 0 && (!ty.mutable || isempty(tname.names))
-                    setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any,Any...), ty))
-                end
-            end
-        end
+        ty = tname.primary
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
