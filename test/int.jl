@@ -26,8 +26,8 @@ for T in (Int8,Int16,Int32,Int64,Int128,BigInt,
               Rational{Int},Rational{BigInt},
               UInt8,UInt16,UInt32,UInt64,UInt128,
               Float16,Float32,Float64)
-#        @test typeof(copysign(T(3), U(4))) === T
-#        @test typeof(flipsign(T(3), U(4))) === T
+        @test typeof(copysign(T(3), U(4))) === T
+        @test typeof(flipsign(T(3), U(4))) === T
     end
 end
 
