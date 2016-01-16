@@ -271,7 +271,7 @@
 
            ((localize)
             (let ((expr (cadr e))
-                  (lvars (cddr e)))
+                  (lvars (map unescape (cddr e))))
               (let ((vs (delete-duplicates
 			 (expr-find-all (lambda (v)
 					  (and (symbol? v) (or (memq v lvars)
