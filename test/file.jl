@@ -1115,3 +1115,36 @@ end
 @test copy(DevNull) === DevNull
 @test eof(DevNull)
 @test print(DevNull, "go to /dev/null") === nothing
+
+# Filesystem.File
+tmpdir = mktempdir() do d
+    f = joinpath(d, "test.txt")
+    open(io->write(io, "123"), f, "w")
+    f1 = open(f)
+    f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test read(f1, UInt8) == read(f2, UInt8)
+    @test read(f1, UInt8) == read(f2, UInt8)
+    @test read(f1, UInt8) == read(f2, UInt8)
+    @test_throws EOFError read(f1, UInt8)
+    @test_throws EOFError read(f2, UInt8)
+    close(f1)
+    close(f2)
+
+    a = UInt8[0,0,0]
+    f1 = open(f)
+    f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test read!(f1, a) == read!(f2, a)
+    @test_throws EOFError read!(f1, a)
+    @test_throws EOFError read!(f2, a)
+    close(f1)
+    close(f2)
+
+    a = UInt8[0,0,0,0]
+    f1 = open(f)
+    f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test_throws EOFError read!(f1, a)
+    @test_throws EOFError read!(f2, a)
+    close(f1)
+    close(f2)
+end
+
