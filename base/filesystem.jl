@@ -158,19 +158,26 @@ function read!(f::File, a::Vector{UInt8}, nel=length(a))
     end
     ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
                 f.handle, a, nel)
+    if ret < nel
+        throw(EOFError())
+    end
     uv_error("read",ret)
     return a
 end
 
 nb_available(f::File) = filesize(f) - position(f)
 
+eof(f::File) = nb_available(f) == 0
+
 function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     nr = min(nb, nb_available(f))
     if length(b) < nr
         resize!(b, nr)
     end
-    read!(f, b, nr)
-    return nr
+    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+                f.handle, b, nr)
+    uv_error("read",ret)
+    return ret
 end
 read(io::File) = read!(io, Array(UInt8, nb_available(io)))
 read(io::File, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))

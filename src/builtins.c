@@ -182,6 +182,14 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs,
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
+{
+    jl_datatype_t *eof_error =
+        (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
+    assert(eof_error != NULL);
+    jl_exceptionf(eof_error, "");
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
