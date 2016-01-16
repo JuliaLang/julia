@@ -60,7 +60,7 @@ eof(io::AbstractPipe) = eof(pipe_reader(io))
 reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
 
 
-# Exception-safe wrappes. (io = open(); try f(io) finally close(io))
+# Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
 write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
 
