@@ -1403,16 +1403,19 @@
             ;; a.b =
             (let ((a (cadr (cadr e)))
                   (b (caddr (cadr e)))
-                  (rhs (caddr e)))
+                  (rhs (expand-forms (caddr e))))
               (let ((aa (if (atom? a) a (make-jlgensym)))
-                    (bb (if (or (atom? b) (quoted? b)) b (make-jlgensym))))
+                    (bb (if (or (atom? b) (quoted? b)) b (make-jlgensym)))
+                    (rr (if (atom? rhs) rhs (make-jlgensym))))
                 `(block
-                  ,.(if (eq? aa a) '() `((= ,aa ,(expand-forms a))))
-                  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
+                  ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
+                  ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
+                  ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
                   (call (top setfield!) ,aa ,bb
                         (call (top convert)
                               (call (top fieldtype) (call (top typeof) ,aa) ,bb)
-                              ,(expand-forms rhs)))))))
+                              ,rr))
+                  ,rr))))
 
            ((tuple)
             ;; multiple assignment
