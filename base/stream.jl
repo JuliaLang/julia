@@ -931,7 +931,7 @@ function read!(s::LibuvStream, a::Array{UInt8, 1})
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
-                start_reading(x) # resume reading iff there are currently other read clients of the stream
+                start_reading(s) # resume reading iff there are currently other read clients of the stream
             end
         end
     end
