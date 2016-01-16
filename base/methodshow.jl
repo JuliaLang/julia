@@ -43,7 +43,10 @@ function arg_decl_parts(m::Method)
 end
 
 function show(io::IO, m::Method)
-    print(io, m.func.code.name)
+    sig = m.sig.parameters
+    use_constructor_syntax = !isempty(sig) && isa(sig[1], DataType) &&
+                             !isempty(sig[1].parameters) && isa(sig[1].parameters[1], DataType)
+    print(io, use_constructor_syntax ? sig[1].parameters[1].name : m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
     if !isempty(tv)
         show_delim_array(io, tv, '{', ',', '}', false)
