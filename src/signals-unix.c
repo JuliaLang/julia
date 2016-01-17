@@ -69,41 +69,42 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     // fall-through return to re-execute faulting statement (but without the error handler)
 }
 
+static void jl_unblock_signal(int sig)
+{
+    // Put in a separate function to save some stack space since
+    // sigset_t can be pretty big.
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+}
+
 #if defined(HAVE_MACH)
 #include <signals-mach.c>
 #else
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
-    sigset_t sset;
     assert(sig == SIGSEGV);
 
 #ifdef JULIA_ENABLE_THREADING
     if (info->si_addr == jl_gc_signal_page) {
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_unblock_signal(SIGSEGV);
         jl_gc_signal_wait();
         return;
     }
 #endif
     if (jl_in_jl_ || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_unblock_signal(SIGSEGV);
         jl_throw(jl_stackovf_exception);
     }
     else if (info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_unblock_signal(SIGSEGV);
         jl_throw(jl_readonlymemory_exception);
     }
     else {
 #ifdef SEGV_EXCEPTION
-        sigemptyset(&sset);
-        sigaddset(&sset, SIGSEGV);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_unblock_signal(SIGSEGV);
         jl_throw(jl_segv_exception);
 #else
         sigdie_handler(sig, info, context);
@@ -166,7 +167,6 @@ static inline void wait_barrier(void)
 }
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
-    sigset_t sset;
     ucontext_t *context = (ucontext_t*)ctx;
     if ((remote_sig > 0 && waiting_for < 0) || waiting_for == ti_tid) {
         int realsig = remote_sig;
@@ -188,9 +188,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
             }
             else {
                 jl_signal_pending = 0;
-                sigemptyset(&sset);
-                sigaddset(&sset, sig);
-                sigprocmask(SIG_UNBLOCK, &sset, NULL);
+                jl_unblock_signal(sig);
                 jl_throw(jl_interrupt_exception);
             }
         }
@@ -477,11 +475,7 @@ void restore_signals(void)
 void fpe_handler(int arg)
 {
     (void)arg;
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGFPE);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
+    jl_unblock_signal(SIGFPE);
     jl_throw(jl_diverror_exception);
 }
 
