@@ -3690,3 +3690,9 @@ let sometypes = (Int,Int8)
     f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
     @test method_exists(f, (Union{Type{Int},Type{Int8}},))
 end
+
+let
+    b=()->c
+    c=1
+    @test b() == 1
+end
