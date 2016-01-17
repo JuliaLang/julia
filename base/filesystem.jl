@@ -40,6 +40,7 @@ export File,
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
             write, read, read!, isopen, show,
+            seek, seekend, skip, eof,
             check_open, _sizeof_uv_fs, uv_error, UVError
 
 include("path.jl")
@@ -185,6 +186,24 @@ read(io::File, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)
 const SEEK_END = Int32(2)
+
+function seek(f::File, n::Integer)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, n, SEEK_SET)
+    systemerror("seek", ret == -1)
+    return f
+end
+
+function seekend(f::File)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, 0, SEEK_END)
+    systemerror("seekend", ret == -1)
+    return f
+end
+
+function skip(f::File, n::Integer)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, n, SEEK_CUR)
+    systemerror("skip", ret == -1)
+    return f
+end
 
 function position(f::File)
     check_open(f)
