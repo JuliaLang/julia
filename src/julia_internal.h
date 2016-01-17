@@ -169,14 +169,13 @@ jl_function_t *jl_module_call_func(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
 typedef struct _jl_ast_context_t jl_ast_context_t;
-jl_ast_context_t *jl_start_parsing_file(const char *fname);
-void jl_stop_parsing(jl_ast_context_t *ctx);
-jl_value_t *jl_parse_next(jl_ast_context_t *ctx);
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len, jl_ast_context_t *ctx);
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
+                              const char *content, size_t contentlen);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl);
