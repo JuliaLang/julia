@@ -352,7 +352,9 @@
            mdef)))))
 
 (define (const-default? x)
-  (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))))
+  (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))
+      (eq? x 'true) (eq? x 'false)))
+(define simple-atom? const-default?)
 
 (define (keywords-method-def-expr name sparams argl body isstaged)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
@@ -2918,23 +2920,39 @@ So far only the second case can actually occur.
 
 ;; clear capture bit for vars assigned once at the top
 (define (lambda-optimize-vars! lam)
+  (define (expr-uses-var ex v)
+    (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
+          ((eq? (car ex) 'method)
+           (and (length> ex 2)
+                (assq v (cadr (lam:vinfo (cadddr ex))))))
+          (else #f)))
   (assert (eq? (car lam) 'lambda))
   (let ((vi (car (lam:vinfo lam))))
     (if (and (any vinfo:capt vi)
-	     (any vinfo:sa vi))
-	(let ((leading
-	       (map cadr
-		    (filter assignment?
-			    (take-while (lambda (e)
-					  (or (atom? e)
-					      (memq (car e) '(quote top line inert local
-								    implicit-global global
-								    const newvar = null method))))
-					(lam:body lam))))))
-	  (for-each (lambda (v)
-		      (if (and (vinfo:sa v) (memq (car v) leading))
-			  (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
-		    vi)))
+             (any vinfo:sa vi))
+        (let* ((leading
+                (filter (lambda (x) (and (pair? x) (or (eq? (car x) 'method)
+                                                       (eq? (car x) '=))))
+                        (take-while (lambda (e)
+                                      (or (atom? e)
+                                          (memq (car e) '(quote top line inert local
+                                                                implicit-global global
+                                                                const newvar = null method))))
+                                    (lam:body lam))))
+               (unused (map cadr leading))
+               (def (table)))
+          ;; TODO: reorder leading statements to put assignments where the RHS is
+          ;; `simple-atom?` at the top.
+          (for-each (lambda (e)
+                      (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
+                                           unused))
+                      (if (memq (cadr e) unused)
+                          (put! def (cadr e) #t)))
+                    leading)
+          (for-each (lambda (v)
+                      (if (and (vinfo:sa v) (has? def (car v)))
+                          (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+                    vi)))
     lam))
 
 (define (is-var-boxed? v lam)
