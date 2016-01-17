@@ -33,8 +33,6 @@ jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
 jl_module_t *jl_internal_main_module = NULL;
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
-
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     assert(jl_base_module != NULL);
@@ -554,54 +552,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
     return jl_toplevel_eval_flex(v, 1);
 }
 
-// repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len, jl_ast_context_t *ctx)
-{
-    //jl_printf(JL_STDERR, "***** loading %s\n", fname);
-    int last_lineno = jl_lineno;
-    const char *last_filename = jl_filename;
-    jl_lineno = 0;
-    jl_filename = fname;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
-    JL_GC_PUSH4(&fn, &ln, &form, &result);
-    JL_TRY {
-        // handle syntax error
-        while (1) {
-            form = jl_parse_next(ctx);
-            if (form == NULL)
-                break;
-            if (jl_is_expr(form)) {
-                if (((jl_expr_t*)form)->head == jl_incomplete_sym) {
-                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
-                }
-                if (((jl_expr_t*)form)->head == error_sym) {
-                    jl_interpret_toplevel_expr(form);
-                }
-            }
-            result = jl_toplevel_eval_flex(form, 1);
-        }
-    }
-    JL_CATCH {
-        jl_stop_parsing(ctx);
-        fn = jl_pchar_to_string(fname, len);
-        ln = jl_box_long(jl_lineno);
-        jl_lineno = last_lineno;
-        jl_filename = last_filename;
-        if (jl_loaderror_type == NULL) {
-            jl_rethrow();
-        }
-        else {
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                           jl_exception_in_transit));
-        }
-    }
-    jl_stop_parsing(ctx);
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
-    JL_GC_POP();
-    return result;
-}
-
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
     if (jl_current_module->istopmod) {
@@ -615,13 +565,7 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_ast_context_t *ctx = jl_start_parsing_file(fpath);
-    if (!ctx) {
-        jl_errorf("could not open file %s", fpath);
-    }
-    jl_value_t *result = jl_parse_eval_all(fpath, len, ctx);
-    if (fpath != fname) free(fpath);
-    return result;
+    return jl_parse_eval_all(fpath, len, NULL, 0);
 }
 
 // load from filename given as a ByteString object

@@ -152,7 +152,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     // macro expansions, since it will be referenced only from scheme and
     // not julia.
     // all calls to invoke-julia-macro happen under `jl_macroexpand`,
-    // `jl_expand` or `jl_parse_next` so the preserved array is rooted there.
+    // `jl_expand` or `jl_parse_eval_all` so the preserved array is rooted there.
     assert(result != NULL);
     jl_ast_preserve(fl_ctx, result);
     value_t scm = julia_to_scm(fl_ctx, result);
@@ -694,23 +694,85 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     return result;
 }
 
-jl_ast_context_t *jl_start_parsing_file(const char *fname)
+// parse and eval a whole file, possibly reading from a string (`content`)
+jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
+                              const char *content, size_t contentlen)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
-    value_t s = cvalue_static_cstring(fl_ctx, fname);
-    if (fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-file")), s) == fl_ctx->F) {
-        jl_ast_ctx_leave(ctx);
-        return NULL;
+    value_t f, ast;
+    f = cvalue_static_cstring(fl_ctx, fname);
+    fl_gc_handle(fl_ctx, &f);
+    if (content != NULL) {
+        value_t t = cvalue_static_cstrn(fl_ctx, content, contentlen);
+        fl_gc_handle(fl_ctx, &t);
+        ast = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string-stream")), t, f);
+        fl_free_gc_handles(fl_ctx, 1);
     }
-    return ctx;
+    else {
+        ast = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-file")), f);
+    }
+    fl_free_gc_handles(fl_ctx, 1);
+    if (ast == fl_ctx->F) {
+        jl_ast_ctx_leave(ctx);
+        jl_errorf("could not open file %s", fname);
+    }
+    fl_gc_handle(fl_ctx, &ast);
+
+    int last_lineno = jl_lineno;
+    const char *last_filename = jl_filename;
+    jl_lineno = 0;
+    jl_filename = fname;
+    jl_array_t *roots = NULL;
+    jl_array_t **old_roots = ctx->roots;
+    ctx->roots = &roots;
+    jl_value_t *form=NULL, *result=jl_nothing;
+    int err = 0;
+    JL_GC_PUSH3(&roots, &form, &result);
+    JL_TRY {
+        assert(iscons(ast) && car_(ast) == symbol(fl_ctx,"toplevel"));
+        ast = cdr_(ast);
+        while (iscons(ast)) {
+            value_t expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
+            form = scm_to_julia(fl_ctx, expansion, 0);
+            jl_sym_t *head = NULL;
+            if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
+            if (head == jl_incomplete_sym)
+                jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
+            else if (head == error_sym)
+                jl_interpret_toplevel_expr(form);
+            else if (head == line_sym)
+                jl_lineno = jl_unbox_long(jl_exprarg(form,0));
+            else
+                result = jl_toplevel_eval_flex(form, 1);
+            ast = cdr_(ast);
+        }
+    }
+    JL_CATCH {
+        form = jl_pchar_to_string(fname, len);
+        result = jl_box_long(jl_lineno);
+        err = 1;
+    }
+    jl_lineno = last_lineno;
+    jl_filename = last_filename;
+    fl_free_gc_handles(fl_ctx, 1);
+    ctx->roots = old_roots;
+    jl_ast_ctx_leave(ctx);
+    if (err) {
+        if (jl_loaderror_type == NULL)
+            jl_rethrow();
+        else
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
+                                           jl_exception_in_transit));
+    }
+    JL_GC_POP();
+    return result;
 }
 
-void jl_stop_parsing(jl_ast_context_t *ctx)
+JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
+                                             char *filename, size_t namelen)
 {
-    fl_context_t *fl_ctx = &ctx->fl;
-    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-close-stream")));
-    jl_ast_ctx_leave(ctx);
+    return jl_parse_eval_all(filename, namelen, text, len);
 }
 
 JL_DLLEXPORT int jl_parse_depwarn(int warn)
@@ -733,49 +795,6 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
     value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-deperror")),
                              err ? fl_ctx->T : fl_ctx->F);
     return prev == fl_ctx->T ? 1 : 0;
-}
-
-jl_value_t *jl_parse_next(jl_ast_context_t *ctx)
-{
-    fl_context_t *fl_ctx = &ctx->fl;
-    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
-    value_t c = fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-next")));
-    if (c == fl_ctx->FL_EOF) {
-        JL_AST_PRESERVE_POP(ctx, old_roots);
-        return NULL;
-    }
-    if (iscons(c)) {
-        if (cdr_(c) == fl_ctx->FL_EOF) {
-            JL_AST_PRESERVE_POP(ctx, old_roots);
-            return NULL;
-        }
-        value_t a = car_(c);
-        if (isfixnum(a)) {
-            jl_lineno = numval(a);
-            //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
-            c = cdr_(c);
-        }
-    }
-    // for error, get most recent line number
-    if (iscons(c) && car_(c) == jl_ast_ctx(fl_ctx)->error_sym)
-        jl_lineno = numval(fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "jl-parser-current-lineno"))));
-    jl_value_t *res = scm_to_julia(fl_ctx, c, 0);
-    JL_AST_PRESERVE_POP(ctx, old_roots);
-    return res;
-}
-
-JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
-                                             char *filename, size_t namelen)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    fl_context_t *fl_ctx = &ctx->fl;
-    value_t t, f;
-    t = cvalue_static_cstrn(fl_ctx, text, len);
-    fl_gc_handle(fl_ctx, &t);
-    f = cvalue_static_cstrn(fl_ctx, filename, namelen);
-    fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string-stream")), t, f);
-    fl_free_gc_handles(fl_ctx, 1);
-    return jl_parse_eval_all(filename, namelen, ctx);
 }
 
 // returns either an expression or a thunk
