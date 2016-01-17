@@ -190,9 +190,9 @@ static bool imaging_mode = false;
 #include "jitlayers.cpp"
 
 #ifdef USE_ORCJIT
-JL_DLLEXPORT JuliaOJIT *jl_ExecutionEngine;
+JuliaOJIT *jl_ExecutionEngine;
 #else
-JL_DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
+ExecutionEngine *jl_ExecutionEngine;
 #endif
 
 #ifdef USE_MCJIT

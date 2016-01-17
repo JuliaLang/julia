@@ -156,6 +156,11 @@ extern JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                       const object::ObjectFile &debugObj,
                                       const RuntimeDyld::LoadedObjectInfo &L);
 
+#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
+#define CUSTOM_MEMORY_MANAGER 1
+extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
+#endif
+
 namespace {
 
 using namespace llvm;
@@ -237,13 +242,6 @@ public:
         }
     }
 };
-
-}
-
-#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
-#define CUSTOM_MEMORY_MANAGER 1
-extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
-#endif
 
 class JuliaOJIT {
 public:
@@ -396,4 +394,6 @@ private:
     std::unique_ptr<CompileLayerT> CompileLayer;
     GlobalSymbolTableT GlobalSymbolTable;
 };
+
+}
 #endif
