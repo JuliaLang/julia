@@ -23,7 +23,7 @@ function choosetests(choices = [])
         "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall", "parse", "loading",
         "bigint", "sorting", "statistics", "spawn", "backtrace",
-        "priorityqueue", "file", "mmap", "version", "resolve",
+        "priorityqueue", "file", "read", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "datafmt", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "rounding", "ranges", "mod2pi",
