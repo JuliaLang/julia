@@ -317,7 +317,8 @@ end
 
 function readall(s::IO)
     b = readbytes(s)
-    return isvalid(ASCIIString, b) ? ASCIIString(b) : UTF8String(b)
+    return isvalid(ASCIIString, b) ? ASCIIString(b) :
+           isvalid(UTF8String, b)  ? UTF8String(b)  : b
 end
 readall(filename::AbstractString) = open(readall, filename)
 
