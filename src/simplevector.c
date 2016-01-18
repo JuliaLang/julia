@@ -13,9 +13,8 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
     if (n == 0) return jl_emptysvec;
     va_start(args, n);
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
-    for(size_t i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++)
         jl_svecset(jv, i, va_arg(args, jl_value_t*));
-    }
     va_end(args);
     return jv;
 }
@@ -51,20 +50,17 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n)
 {
     if (n == 0) return jl_emptysvec;
     jl_svec_t *jv = jl_alloc_svec_uninit(n);
-    for(size_t i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++)
         jl_svecset(jv, i, NULL);
-    }
     return jv;
 }
 
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
-    jl_svec_t *c = jl_alloc_svec_uninit(jl_svec_len(a));
-    size_t i=0, j;
-    for(j=0; j < jl_svec_len(a); j++) {
-        jl_svecset(c, i, jl_svecref(a,j));
-        i++;
-    }
+    size_t i, n=jl_svec_len(a);
+    jl_svec_t *c = jl_alloc_svec_uninit(n);
+    for(i=0; i < n; i++)
+        jl_svecset(c, i, jl_svecref(a,i));
     return c;
 }
 
@@ -72,8 +68,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 {
     if (n==0) return jl_emptysvec;
     jl_svec_t *v = jl_alloc_svec_uninit(n);
-    for(size_t i=0; i < n; i++) {
+    for(size_t i=0; i < n; i++)
         jl_svecset(v, i, x);
-    }
     return v;
 }
