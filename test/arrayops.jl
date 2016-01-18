@@ -1454,7 +1454,7 @@ end
 
 # make sure @inbounds isn't used too much
 type OOB_Functor{T}; a::T; end
-call(f::OOB_Functor, i::Int) = f.a[i]
+(f::OOB_Functor)(i::Int) = f.a[i]
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
