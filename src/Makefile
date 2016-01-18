@@ -103,14 +103,15 @@ libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
 	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS))
 
+julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
-$(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
+$(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
 $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
-		$(FLISP_EXECUTABLE)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE)) \
+		$(FLISP_EXECUTABLE_release)
+	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 # additional dependency links
@@ -200,4 +201,4 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support
 
-.PHONY: default all debug release clean cleanall clean-* libccalltest
+.PHONY: default all debug release clean cleanall clean-* libccalltest julia_flisp.boot.inc.phony
