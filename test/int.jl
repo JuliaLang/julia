@@ -125,15 +125,15 @@ for T in (UInt8, UInt16, UInt32, UInt64)
     @test_throws InexactError convert(T, -1)
 end
 
-@test widen(UInt8(3)) === UInt32(3)
-@test widen(UInt16(3)) === UInt32(3)
+@test widen(UInt8(3)) === UInt64(3)
+@test widen(UInt16(3)) === UInt64(3)
 @test widen(UInt32(3)) === UInt64(3)
 @test widen(UInt64(3)) === UInt128(3)
 @test widen(UInt128(3)) == 3
 @test typeof(widen(UInt128(3))) == BigInt
 
-@test widen(Int8(-3)) === Int32(-3)
-@test widen(Int16(-3)) === Int32(-3)
+@test widen(Int8(-3)) === Int64(-3)
+@test widen(Int16(-3)) === Int64(-3)
 @test widen(Int32(-3)) === Int64(-3)
 @test widen(Int64(-3)) === Int128(-3)
 @test widen(Int128(-3)) == -3
@@ -142,3 +142,31 @@ end
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
+@test widemul(Int64(2), Int64(3)) === Int128(6)
+@test widemul(Int64(2), Int64(-3)) === Int128(-6)
+@test widemul(Int64(-2), Int64(-3)) === Int128(6)
+
+for T in [Int128, UInt128]
+    @test *(T(2), T(3)) === T(6)
+    @test div(T(7), T(3)) === T(2)
+    @test rem(T(7), T(3)) === T(1)
+
+    @test T(3) << 2 === T(12)
+    @test T(5) >> 2 === T(1)
+    @test T(4) >>> 2 === T(1)
+
+    @test (typemax(T) + 1) === typemin(T)
+    @test (typemin(T) - 1) === typemax(T)
+end
+
+@test *(Int128(2), Int128(-3)) === Int128(-6)
+@test *(Int128(-2), Int128(3)) === Int128(-6)
+@test *(Int128(-2), Int128(-3)) === Int128(6)
+
+@test div(Int128(7), Int128(-3)) === Int128(-2)
+@test div(Int128(-7), Int128(3)) === Int128(-2)
+@test div(Int128(-7), Int128(-3)) === Int128(2)
+
+@test rem(Int128(7), Int128(-3)) === Int128(1)
+@test rem(Int128(-7), Int128(3)) === Int128(-1)
+@test rem(Int128(-7), Int128(-3)) === Int128(-1)
