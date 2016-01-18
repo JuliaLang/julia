@@ -1905,6 +1905,9 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     int gs_ctr = read_int32(f);
     jl_module_init_order = jl_finalize_deserializer(f); // done with f
 
+    jl_set_t_uid_ctr(uid_ctr);
+    jl_set_gs_ctr(gs_ctr);
+
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
         jl_value_t *v = jl_cellref(datatype_list, i);
@@ -1919,9 +1922,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     }
     jl_boot_file_loaded = 1;
     jl_init_box_caches();
-
-    jl_set_t_uid_ctr(uid_ctr);
-    jl_set_gs_ctr(gs_ctr);
 
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
