@@ -160,6 +160,7 @@ function test_monitor_wait(tval)
         close(f)
     end
     fname, events = wait(fm)
+    close(fm)
     @test fname == basename(file)
     @test events.changed
 end
@@ -173,6 +174,7 @@ function test_monitor_wait_poll()
         close(f)
     end
     (old, new) = wait(pfw)
+    close(pfw)
     @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
 end
 
