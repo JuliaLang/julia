@@ -42,7 +42,18 @@ function StaticVarInfo(linfo::LambdaStaticData, ast=linfo.ast)
     end
     gensym_types = Any[ NF for i = 1:(ngs::Int) ]
     nl = label_counter(body)+1
-    StaticVarInfo(linfo.sparams, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
+    if length(linfo.sparam_vals) > 0
+        n = length(linfo.sparam_syms)
+        sp = Array(Any, n*2)
+        for i = 1:n
+            sp[i*2-1] = linfo.sparam_syms[i]
+            sp[i*2  ] = linfo.sparam_vals[i]
+        end
+        sp = svec(sp...)
+    else
+        sp = svec()
+    end
+    StaticVarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
 end
 
 type VarState
@@ -1564,13 +1575,10 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
 
     sv = StaticVarInfo(linfo, ast)
 
-    sp = Any[]
     if length(linfo.sparam_vals) > 0
-        for i = 1:length(linfo.sparam_syms)
-            push!(sp, linfo.sparam_syms[i])
-            push!(sp, linfo.sparam_vals[i])
-        end
+        # handled by StaticVarInfo constructor
     else
+        sp = Any[]
         for i = 1:2:length(sparams)
             push!(sp, sparams[i].name)
             push!(sp, sparams[i+1])
@@ -1580,9 +1588,8 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
             push!(sp, sym)
             push!(sp, TypeVar(sym, Any, true))
         end
+        sv.sp = svec(sp...)
     end
-
-    sv.sp = svec(sp...)
 
     args = f_argnames(ast)
     la = length(args)
@@ -2980,7 +2987,7 @@ function inlining_pass(e::Expr, sv, ast)
             # now try to inline the simplified call
             f = isconstantfunc(e.args[1], sv)
             if !is(f,false)
-                f = _ieval(f); ft = abstract_eval_constant(f)
+                f = _ieval(f,sv); ft = abstract_eval_constant(f)
             else
                 f = nothing
                 ft = exprtype(e.args[1], sv)
