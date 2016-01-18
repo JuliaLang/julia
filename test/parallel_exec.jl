@@ -387,14 +387,17 @@ workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
     rr2 = Channel()
     rr3 = Channel()
 
+    callback() = all(map(isready, [rr1, rr2, rr3]))
+    # precompile functions which will be tested for execution time
+    @test !callback()
+    @test timedwait(callback, 0.0) === :timed_out
+
     @async begin sleep(0.5); put!(rr1, :ok) end
     @async begin sleep(1.0); put!(rr2, :ok) end
     @async begin sleep(2.0); put!(rr3, :ok) end
 
     tic()
-    timedwait(1.0) do
-        all(map(isready, [rr1, rr2, rr3]))
-    end
+    timedwait(callback, 1.0)
     et=toq()
     # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
     try
