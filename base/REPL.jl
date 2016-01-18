@@ -574,8 +574,10 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 end
 
 function history_reset_state(hist::REPLHistoryProvider)
-    hist.last_idx = hist.cur_idx
-    hist.cur_idx = length(hist.history) + 1
+    if hist.cur_idx != length(hist.history) + 1
+        hist.last_idx = hist.cur_idx
+        hist.cur_idx = length(hist.history) + 1
+    end
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 

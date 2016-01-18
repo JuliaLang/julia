@@ -123,6 +123,26 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     readline(stdout_read)
     readline(stdout_read)
 
+    # Test down arrow to go back to history
+    # populate history with a trivial input
+
+    t = Timer(10) do t
+        isopen(t) || return
+        error("Stuck waiting for history test")
+    end
+    s1 = "12345678"; s2 = "23456789";
+    write(stdin_write, s1, '\n')
+    readuntil(stdout_read, s1)
+    write(stdin_write, s2, '\n')
+    readuntil(stdout_read, s2)
+    # Two up arrow, enter, should get back to 1
+    write(stdin_write, "\e[A\e[A\n")
+    readuntil(stdout_read, s1)
+    # Now, down arrow, enter, should get us back to 2
+    write(stdin_write, "\e[B\n")
+    readuntil(stdout_read, s2)
+    close(t)
+
     # Close REPL ^D
     write(stdin_write, '\x04')
     wait(repltask)
