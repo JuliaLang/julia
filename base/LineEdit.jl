@@ -1100,6 +1100,7 @@ function reset_state(s::PrefixSearchState)
         s.response_buffer.size = 0
         s.response_buffer.ptr = 1
     end
+    reset_state(s.histprompt.hp)
 end
 
 function transition(f::Function, s::PrefixSearchState, mode)
