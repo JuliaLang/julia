@@ -343,29 +343,3 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 eltype(::Type{EachLine}) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))
-
-# IOStream Marking
-
-# Note that these functions expect that io.mark exists for
-# the concrete IO type.  This may not be true for IO types
-# not in base.
-
-function mark(io::IO)
-    io.mark = position(io)
-end
-
-function unmark(io::IO)
-    !ismarked(io) && return false
-    io.mark = -1
-    return true
-end
-
-function reset{T<:IO}(io::T)
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
-    m = io.mark
-    seek(io, m)
-    io.mark = -1 # must be after seek, or seek may fail
-    return m
-end
-
-ismarked(io::IO) = io.mark >= 0
