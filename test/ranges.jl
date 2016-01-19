@@ -345,7 +345,7 @@ for T = (Float32, Float64)
     @test [linspace(u,-u,4);][3] === -z
     v = [linspace(-u,u,12);]
     @test length(v) == 12
-    @test issorted(v) && unique(v) == [-u,0,0,u]
+    @test issorted(v) && collect(unique(v)) == [-u,0,0,u]
     @test [-3u:u:3u;] == [linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
@@ -705,3 +705,7 @@ for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
     # these calls to similar must not throw:
     @test size(similar(r, size(r))) == size(similar(r, length(r)))
 end
+
+# Issue #14649
+@test unique(1:3) == 1:3
+@test unique(range(1,.0,4)) == range(1,.0,1)
