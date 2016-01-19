@@ -32,7 +32,7 @@ function IPv4(host::Integer)
 end
 
 # constructor: ("1.2.3.4")
-IPv4(ipstr::AbstractString) = parseipv4(ipstr)
+IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
@@ -75,7 +75,7 @@ function IPv6(host::Integer)
     end
 end
 
-IPv6(ipstr::AbstractString) = parseipv6(ipstr)
+IPv6(str::AbstractString) = parse(IPv6, str)
 
 # Suppress leading '0's and "0x"
 print_ipv6_field(io,field::UInt16) = print(io,hex(field))
@@ -138,7 +138,7 @@ end
 
 # Parsing
 
-function parseipv4(str)
+function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
     ret = 0
@@ -199,7 +199,7 @@ function parseipv6fields(fields,num_fields)
 end
 parseipv6fields(fields) = parseipv6fields(fields,8)
 
-function parseipv6(str)
+function parse(::Type{IPv6}, str::AbstractString)
     fields = split(str,':')
     if length(fields) > 8
         throw(ArgumentError("too many fields in IPv6 address"))
@@ -207,7 +207,7 @@ function parseipv6(str)
         return IPv6(parseipv6fields(fields))
     elseif in('.',fields[end])
         return IPv6((parseipv6fields(fields[1:(end-1)],6))
-            | parseipv4(fields[end]).host )
+            | parse(IPv4, fields[end]).host )
     else
         return IPv6(parseipv6fields(fields))
     end
@@ -219,18 +219,16 @@ end
 # of the appropriate size and should use the appropriate constructor
 #
 
-function parseip(str)
-    if in(':',str)
-        # IPv6 Address
-        return parseipv6(str)
+function parse(::Type{IPAddr}, str::AbstractString)
+    if ':' in str
+        return parse(IPv6, str)
     else
-        # IPv4 Address
-        return parseipv4(str)
+        return parse(IPv4, str)
     end
 end
 
 macro ip_str(str)
-    return parseip(str)
+    return parse(IPAddr, str)
 end
 
 immutable InetAddr{T<:IPAddr}
@@ -370,6 +368,8 @@ function UDPSocket()
     this
 end
 
+show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
+
 function uvfinalize(uv::Union{TTY,PipeEndpoint,PipeServer,TCPServer,TCPSocket,UDPSocket})
     if (uv.status != StatusUninit && uv.status != StatusInit)
         close(uv)
@@ -446,7 +446,7 @@ bind(sock::TCPServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
 
 function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
     if sock.status == StatusUninit
-        error("Cannot set options on unitialized socket")
+        error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
         uv_error("multicast_loop",ccall(:uv_udp_set_multicast_loop,Cint,(Ptr{Void},Cint),sock.handle,multicast_loop) < 0)
@@ -653,6 +653,8 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
                              sock.handle,&hton(host.host),hton(UInt16(port)),uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
 end
+
+connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
 # Default Host to localhost
 connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)

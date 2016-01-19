@@ -40,7 +40,7 @@ end
 cd() = cd(homedir())
 
 @unix_only function cd(f::Function, dir::AbstractString)
-    fd = ccall(:open,Int32,(Ptr{UInt8},Int32),".",0)
+    fd = ccall(:open,Int32,(Cstring,Int32),:.,0)
     systemerror(:open, fd == -1)
     try
         cd(dir)
@@ -88,19 +88,26 @@ end
 mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
-function rm(path::AbstractString; recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
-        @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
-        unlink(path)
+        try
+            @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
+            unlink(path)
+        catch err
+            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+                return
+            end
+            rethrow()
+        end
     else
         if recursive
             for p in readdir(path)
-                rm(joinpath(path, p), recursive=true)
+                rm(joinpath(path, p), force=force, recursive=true)
             end
         end
         @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
         @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
-        systemerror(:rmdir, ret != 0)
+        systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
 
@@ -177,7 +184,7 @@ end
 # Obtain a temporary filename.
 function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Ptr{UInt8}, (Ptr{UInt8},Ptr{UInt8}), d, "julia")
+    p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
     systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
     Libc.free(p)
@@ -190,7 +197,7 @@ tempdir() = dirname(tempname())
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
+    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
@@ -198,7 +205,7 @@ end
 # Create and return the name of a temporary directory
 function mktempdir(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8},), b)
+    p = ccall(:mkdtemp, Cstring, (Cstring,), b)
     systemerror(:mktempdir, p == C_NULL)
     return bytestring(p)
 end
@@ -281,7 +288,7 @@ function readdir(path::AbstractString)
     offset = 0
 
     for i = 1:file_count
-        entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{UInt8},
+        entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Cstring,
                                  (Ptr{UInt8}, Int32), uv_readdir_req, offset))
         push!(entries, entry)
         offset += sizeof(entry) + 1   # offset to the next entry

@@ -3,6 +3,7 @@
 module Serializer
 
 import Base: GMP, Bottom, svec, unsafe_convert, uncompressed_ast
+using Base: ViewIndex, dimsize
 
 export serialize, deserialize
 
@@ -134,7 +135,7 @@ function serialize(s::SerializationState, x::Symbol)
         return write_as_tag(s.io, tag)
     end
     pname = unsafe_convert(Ptr{UInt8}, x)
-    ln = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
+    ln = Int(ccall(:strlen, Csize_t, (Cstring,), pname))
     if ln <= 255
         writetag(s.io, SYMBOL_TAG)
         write(s.io, UInt8(ln))
@@ -191,14 +192,26 @@ function serialize(s::SerializationState, a::Array)
 end
 
 function serialize{T,N,A<:Array}(s::SerializationState, a::SubArray{T,N,A})
-    if !isbits(T) || stride(a,1)!=1
-        return serialize(s, copy(a))
-    end
-    writetag(s.io, ARRAY_TAG)
-    serialize(s, T)
-    serialize(s, size(a))
-    serialize_array_data(s.io, a)
+    b = trimmedsubarray(a)
+    serialize_any(s, b)
 end
+
+function trimmedsubarray{T,N,A<:Array}(V::SubArray{T,N,A})
+    dest = Array(eltype(V), trimmedsize(V))
+    copy!(dest, V)
+    _trimmedsubarray(dest, V, (), V.indexes...)
+end
+
+trimmedsize(V) = _trimmedsize(V, (), V.indexes...)
+_trimmedsize(V, trimsz) = trimsz
+_trimmedsize(V, trimsz, index, indexes...) = _trimmedsize(V, (trimsz..., dimsize(V.parent, length(trimsz)+1, index)), indexes...)
+
+_trimmedsubarray{T,N,P,I,LD}(A, V::SubArray{T,N,P,I,LD}, newindexes) = SubArray{T,N,P,I,LD}(A, newindexes, size(V), 1, 1)
+_trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubarray(A, V, (newindexes..., trimmedindex(V.parent, length(newindexes)+1, index)), indexes...)
+
+trimmedindex(P, d, i::Real) = oftype(i, 1)
+trimmedindex(P, d, i::Colon) = i
+trimmedindex(P, d, i::AbstractVector) = oftype(i, 1:length(i))
 
 function serialize{T<:AbstractString}(s::SerializationState, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss

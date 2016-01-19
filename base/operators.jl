@@ -4,7 +4,7 @@
 
 const (<:) = issubtype
 
-super(T::DataType) = T.super
+supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
@@ -148,11 +148,17 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 const % = rem
 .%(x::Real, y::Real) = x%y
 const ÷ = div
+.÷(x::Real, y::Real) = x÷y
 
-# mod returns in [0,y) whereas mod1 returns in (0,y]
+# mod returns in [0,y) or (y,0] (for negative y),
+# whereas mod1 returns in (0,y] or [y,0)
 mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
-rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
-fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
+fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+# efficient version for integers
+mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
 transpose(x) = x
@@ -187,7 +193,7 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
-eltype(t::DataType) = eltype(super(t))
+eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
 # copying immutable things
@@ -445,7 +451,7 @@ isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.fi
                                                              isless(p.second,q.second))
 getindex(p::Pair,i::Int) = getfield(p,i)
 getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
-reverse(p::Pair) = Pair(p.second, p.first)
+reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 
@@ -463,6 +469,8 @@ export
     $,
     %,
     .%,
+    ÷,
+    .÷,
     &,
     *,
     +,
@@ -505,7 +513,6 @@ export
     |>,
     <|,
     ~,
-    ÷,
     ⋅,
     ×,
     ∈,
@@ -529,10 +536,10 @@ export
     ctranspose,
     call
 
-import ..this_module: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose, call,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end

@@ -209,3 +209,9 @@ let A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
 end
+
+# Unary minus for Symmetric matrices
+let A = Symmetric(randn(5,5))
+    B = -A
+    @test A + B ≈ zeros(5,5)
+end

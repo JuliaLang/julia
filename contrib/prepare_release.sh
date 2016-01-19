@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # script to prepare binaries and source tarballs for a Julia release
 # aka "bucket dance" julianightlies -> julialang
 set -e # stop on failure

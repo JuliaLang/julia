@@ -141,13 +141,10 @@ type the following into the Julia prompt::
      0.153756  0.368514
      1.15119   0.918912
 
-    julia> @spawn rand2(2,2)
-    Future(2,1,4,Nullable{Any}())
+    julia> fetch(@spawn rand2(2,2))
+    ERROR: On worker 2:
+    function rand2 not defined on process 2
 
-    julia> @spawn rand2(2,2)
-    Future(3,1,5,Nullable{Any}())
-
-    julia> exception on 2: in anonymous: rand2 not defined
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
@@ -369,7 +366,7 @@ called *parallel map*, implemented in Julia as the :func:`pmap` function.
 For example, we could compute the singular values of several large
 random matrices in parallel as follows::
 
-    M = {rand(1000,1000) for i=1:10}
+    M = Matrix{Float64}[rand(1000,1000) for i=1:10]
     pmap(svd, M)
 
 Julia's :func:`pmap` is designed for the case where each function call does
@@ -405,7 +402,7 @@ they finish their current tasks.
 As an example, consider computing the singular values of matrices of
 different sizes::
 
-    M = {rand(800,800), rand(600,600), rand(800,800), rand(600,600)}
+    M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)]
     pmap(svd, M)
 
 If one process handles both 800x800 matrices and another handles both
@@ -457,7 +454,7 @@ points: in this case, when :func:`remotecall_fetch` is called.
 Channels
 --------
 Channels provide for a fast means of inter-task communication. A
-``Channel(T::Type, n::Int)`` is a shared queue of maximum length ``n``
+``Channel{T}(n::Int)`` is a shared queue of maximum length ``n``
 holding objects of type ``T``. Multiple readers can read off the channel
 via ``fetch`` and ``take!``. Multiple writers can add to the channel via
 ``put!``. ``isready`` tests for the presence of any object in

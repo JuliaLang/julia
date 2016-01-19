@@ -3,69 +3,33 @@ using Base.Threads
 
 # threading constructs
 
-# parallel call form
-function threaded_call(A)
-    tid = threadid()
-    A[tid] = tid
-end
-
-function test_threaded_call()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    @threads all threaded_call(arr)
-    @test arr == expected
-end
-
-test_threaded_call()
-
-# parallel loop form
-function threaded_loop(A)
-    @threads all for i = 1:nthreads()
-        tid = threadid()
-        A[i] = tid
+# parallel loop with parallel atomic addition
+function threaded_loop(a, r, x)
+    @threads for i in r
+        a[i] = 1 + atomic_add!(x, 1)
     end
 end
 
-function test_threaded_loop()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    threaded_loop(arr)
-    @test arr == expected
-end
-
-test_threaded_loop()
-
-# parallel block form
-function threaded_block(A)
-    @threads all begin
-        tid = threadid()
-        A[tid] = tid
-    end
-end
-
-function test_threaded_block()
-    expected = collect(1:nthreads())
-    arr = zeros(Int16, nthreads())
-    threaded_block(arr)
-    @test arr == expected
-end
-
-test_threaded_block()
-
-# parallel atomic addition
-function threaded_atomic_add(x, n)
-    @threads all for i = 1:n
-        atomic_add!(x, 1)
-    end
-end
-
-function test_threaded_atomic_add()
+function test_threaded_loop_and_atomic_add()
     x = Atomic()
-    threaded_atomic_add(x, 10000)
+    a = zeros(Int,10000)
+    threaded_loop(a,1:10000,x)
+    found = zeros(Bool,10000)
+    was_inorder = true
+    for i=1:length(a)
+        was_inorder &= a[i]==i
+        found[a[i]] = true
+    end
     @test x[] == 10000
+    # Next test checks that al loop iterations ran,
+    # and were unique (via pigeon-hole principle).
+    @test findfirst(found,false) == 0
+    if was_inorder
+        println(STDERR, "Warning: threaded loop executed in order")
+    end
 end
 
-test_threaded_atomic_add()
+test_threaded_loop_and_atomic_add()
 
 # Helper for test_threaded_atomic_minmax that verifies sequential consistency.
 function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Ordering)
@@ -83,7 +47,7 @@ function test_threaded_atomic_minmax{T}(m::T,n::T)
     y = Atomic{T}(mid)
     oldx = Array(T,n-m+1)
     oldy = Array(T,n-m+1)
-    @threads all for i = m:n
+    @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
     end
@@ -97,41 +61,40 @@ end
 test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
 test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
-# spin locks
-function threaded_add_using_spinlock(s, x, n)
-    @threads all for i = 1:n
-        lock!(s)
+function threaded_add_locked{LockT}(::Type{LockT}, x, n)
+    lock = LockT()
+    @threads for i = 1:n
+        lock!(lock)
         x = x + 1
-        unlock!(s)
+        unlock!(lock)
     end
     return x
 end
 
-function test_spinlock()
-    s = SpinLock()
-    x = 0
-    x = threaded_add_using_spinlock(s, x, 10000)
-    @test x == 10000
+@test threaded_add_locked(SpinLock, 0, 10000) == 10000
+@test threaded_add_locked(Threads.RecursiveSpinLock, 0, 10000) == 10000
+@test threaded_add_locked(Mutex, 0, 10000) == 10000
+
+# Check if the recursive lock can be locked and unlocked correctly.
+let lock = Threads.RecursiveSpinLock()
+    @test lock!(lock) == 0
+    @test lock!(lock) == 0
+    @test unlock!(lock) == 0
+    @test unlock!(lock) == 0
+    @test unlock!(lock) == 1
 end
 
-test_spinlock()
-
-# mutexes
-function threaded_add_using_mutex(m, x, n)
-    @threads all for i = 1:n
-        lock!(m)
-        x = x + 1
-        unlock!(m)
+# Make sure doing a GC while holding a lock doesn't cause dead lock
+# PR 14190. (This is only meaningful for threading)
+function threaded_gc_locked{LockT}(::Type{LockT})
+    lock = LockT()
+    @threads for i = 1:20
+        lock!(lock)
+        gc(false)
+        unlock!(lock)
     end
-    return x
 end
 
-function test_mutex()
-    m = Mutex()
-    x = 0
-    x = threaded_add_using_mutex(m, x, 10000)
-    @test x == 10000
-end
-
-test_mutex()
-
+threaded_gc_locked(SpinLock)
+threaded_gc_locked(Threads.RecursiveSpinLock)
+threaded_gc_locked(Mutex)

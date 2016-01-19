@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, Table, Code, LaTeX
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, Table, Code, LaTeX, Footnote
 import Base: writemime
 
 # Basics
@@ -38,8 +38,26 @@ h2
 foo
 ```
 """ == MD(Code("julia", "foo"))
-@test md"``code```more code``" == MD(Any[Paragraph(Any[Code("","code```more code")])])
-@test md"``code``````more code``" == MD(Any[Paragraph(Any[Code("","code``````more code")])])
+
+@test md"foo ``bar`` baz" == MD(Paragraph(["foo ", LaTeX("bar"), " baz"]))
+
+@test md"""
+```math
+...
+```
+""" == MD(LaTeX("..."))
+
+code_in_code = md"""
+````
+```
+````
+"""
+@test code_in_code == MD(Code("```"))
+@test plain(code_in_code) == "````\n```\n````\n"
+
+@test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
+
+@test md"[^foo]: footnote" == MD(Paragraph([Footnote("foo", Any[" footnote"])]))
 
 @test md"""
 * one
@@ -64,7 +82,7 @@ foo
 @test md"""Hello
 
 ---
-World""" |> plain == "Hello\n\n–––\n\nWorld\n"
+World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test md"[*a*](b)" |> plain == "[*a*](b)\n"
 @test md"""
 > foo

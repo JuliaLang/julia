@@ -35,14 +35,14 @@ unsigned sig_stack_size = SIGSTKSZ;
 static pthread_t signals_thread;
 static volatile int remote_sig;
 
-static int is_addr_on_stack(void *addr)
+static int is_addr_on_stack(jl_tls_states_t *ptls, void *addr)
 {
 #ifdef COPY_STACKS
-    return ((char*)addr > (char*)jl_stack_lo-3000000 &&
-            (char*)addr < (char*)jl_stack_hi);
+    return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
+            (char*)addr < (char*)ptls->stack_hi);
 #else
-    return ((char*)addr > (char*)jl_current_task->stkbuf &&
-            (char*)addr < (char*)jl_current_task->stkbuf + jl_current_task->ssize);
+    return ((char*)addr > (char*)ptls->current_task->stkbuf &&
+            (char*)addr < (char*)ptls->current_task->stkbuf + ptls->current_task->ssize);
 #endif
 }
 
@@ -70,13 +70,21 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 #include <signals-mach.c>
 #else
 
-extern int in_jl_;
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
     assert(sig == SIGSEGV);
 
-    if (in_jl_ || is_addr_on_stack(info->si_addr)) { // stack overflow, or restarting jl_
+#ifdef JULIA_ENABLE_THREADING
+    if (info->si_addr == jl_gc_signal_page) {
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_gc_signal_wait();
+        return;
+    }
+#endif
+    if (jl_in_jl_ || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -189,7 +197,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
 #if defined(HAVE_SIGTIMEDWAIT)
 
 static struct timespec timeoutprof;
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     timeoutprof.tv_sec = nsecprof/GIGA;
     timeoutprof.tv_nsec = nsecprof%GIGA;
@@ -197,7 +205,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     pthread_kill(signals_thread, SIGUSR2);
 }
@@ -210,7 +218,7 @@ DLLEXPORT void jl_profile_stop_timer(void)
 static timer_t timerprof;
 static struct itimerspec itsprof;
 
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -236,7 +244,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running)
         timer_delete(timerprof);
@@ -249,7 +257,7 @@ DLLEXPORT void jl_profile_stop_timer(void)
 #include <sys/time.h>
 struct itimerval timerprof;
 
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = nsecprof/GIGA;
     timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
@@ -263,7 +271,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
         memset(&timerprof, 0, sizeof(timerprof));
@@ -474,6 +482,9 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGPIPE");
     }
+    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGTRAP");
+    }
 
     allocate_segv_handler();
 
@@ -509,7 +520,7 @@ void jl_install_default_signal_handlers(void)
 #endif
 }
 
-DLLEXPORT void jl_install_sigint_handler(void)
+JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     // TODO: ?
 }

@@ -118,11 +118,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.3-$ARCH-w64-mingw32-juliadeps.7z
-  # The MinGW binary version of LLVM doesn't include libgtest or libgtest_main
-  mkdir -p usr/lib
-  $AR cr usr/lib/libgtest.a
-  $AR cr usr/lib/libgtest_main.a
+  f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r03.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -197,6 +193,7 @@ else
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
 fi
+echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
 make VERBOSE=1

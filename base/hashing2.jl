@@ -135,8 +135,8 @@ function decompose(x::BigFloat)
     x == 0 && return big(0), 0, Int(x.sign)
     s = BigInt()
     ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, x.prec)
-    s.size = -fld(-x.prec,(sizeof(Culong)<<3))
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, s.size*sizeof(Culong))
+    s.size = -fld(-x.prec,(sizeof(GMP.Limb)<<3))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, s.size*sizeof(GMP.Limb))
     s, Int(x.exp - x.prec), Int(x.sign)
 end
 

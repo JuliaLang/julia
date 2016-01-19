@@ -39,10 +39,14 @@
 extern "C" {
 #endif
 
-DLLEXPORT char *dirname( char *path )
+JL_DLLEXPORT char *dirname( char *path )
 {
     size_t len;
-    static char *retfail = NULL;
+#  if !defined(_COMPILER_MICROSOFT_)
+    static __thread char *retfail = NULL;
+#  else
+    static __declspec(thread) char *retfail = NULL;
+#  endif
 
     /* to handle path names for files in multibyte character locales,
      * we need to set up LC_CTYPE to match the host file system locale.

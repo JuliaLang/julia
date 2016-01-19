@@ -9,17 +9,12 @@ Simple unit testing functionality:
 All tests belong to a *test set*. There is a default, task-level
 test set that throws on the first failure. Users can choose to wrap
 their tests in (possibly nested) test sets that will store results
-and summarize them at the end of the test set. See:
-
-* `@testset`
-* `@testloop`
-
-for more information.
+and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
 export @test, @test_throws
-export @testset, @testloop
+export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq, @test_approx_eq_eps, @inferred
 
@@ -48,21 +43,21 @@ end
 function Base.show(io::IO, t::Pass)
     print_with_color(:green, io, "Test Passed\n")
     print(io, "  Expression: ", t.orig_expr)
-    if !isa(t.expr, Expr)
+    if t.test_type == :test_throws
+        # The correct type of exception was thrown
+        print(io, "\n      Thrown: ", typeof(t.value))
+    elseif !isa(t.expr, Expr)
         # Maybe just a constant, like true
         print(io, "\n   Evaluated: ", t.expr)
     elseif t.test_type == :test && t.expr.head == :comparison
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.expr)
-    elseif t.test_type == :test_throws
-        # The correct type of exception was thrown
-        print(io, "\n      Thrown: ", typeof(t.value))
     end
 end
 
 """
-    Pass
+    Fail
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -76,10 +71,14 @@ end
 function Base.show(io::IO, t::Fail)
     print_with_color(:red, io, "Test Failed\n")
     print(io, "  Expression: ", t.orig_expr)
-    if t.test_type == :test_throws
-        # Either no exception, or wrong exception
+    if t.test_type == :test_throws_wrong
+        # An exception was thrown, but it was of the wrong type
         print(io, "\n    Expected: ", t.expr)
         print(io, "\n      Thrown: ", typeof(t.value))
+    elseif t.test_type == :test_throws_nothing
+        # An exception was expected, but no exception was thrown
+        print(io, "\n    Expected: ", t.expr)
+        print(io, "\n  No exception thrown")
     elseif !isa(t.expr, Expr)
         # Maybe just a constant, like false
         print(io, "\n   Evaluated: ", t.expr)
@@ -141,7 +140,7 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 """
 macro test(ex)
     # If the test is a comparison
-    if typeof(ex) == Expr && ex.head == :comparison
+    if isa(ex, Expr) && ex.head == :comparison
         # Generate a temporary for every term in the expression
         n = length(ex.args)
         terms = [gensym() for i in 1:n]
@@ -217,14 +216,14 @@ function do_test_throws(predicate, orig_expr, bt, extype)
     try
         predicate()
         # If we hit this line, no exception was thrown. We treat
-        # this as equivalent to the wrong exception being thrown.
-        Fail(:test_throws, orig_expr, extype, nothing)
+        # this a failure equivalent to the wrong exception being thrown.
+        Fail(:test_throws_nothing, orig_expr, extype, nothing)
     catch err
         # Check the right type of exception was thrown
         if isa(err, extype)
             Pass(:test_throws, orig_expr, extype, err)
         else
-            Fail(:test_throws, orig_expr, extype, err)
+            Fail(:test_throws_wrong, orig_expr, extype, err)
         end
     end)
 end
@@ -293,7 +292,6 @@ record(ts::FallbackTestSet, t::Pass) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
     error("There was an error during testing")
-    t
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -321,7 +319,9 @@ record(ts::DefaultTestSet, t::Pass) = (push!(ts.results, t); t)
 function record(ts::DefaultTestSet, t::Union{Fail,Error})
     print_with_color(:white, ts.description, ": ")
     print(t)
-    Base.show_backtrace(STDOUT, backtrace())
+    # don't print the backtrace for Errors because it gets printed in the show
+    # method
+    isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
     println()
     push!(ts.results, t)
     t
@@ -490,25 +490,51 @@ end
 
 """
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
+    @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
+    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
 
-Starts a new test set. If no custom testset type is given it defaults to creating
-a `DefaultTestSet`. `DefaultTestSet` records all the results and, and if there
-are any `Fail`s or `Error`s, throws an exception at the end of the
-top-level (non-nested) test set, along with a summary of the test results.
+Starts a new test set, or multiple test sets if a `for` loop is provided.
+
+If no custom testset type is given it defaults to creating a `DefaultTestSet`.
+`DefaultTestSet` records all the results and, and if there are any `Fail`s or
+`Error`s, throws an exception at the end of the top-level (non-nested) test set,
+along with a summary of the test results.
 
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
-also be used for any nested `@testset` or `@testloop` invocations. The given
-options are only applied to the test set where they are given. The default test
-set type does not take any options.
+also be used for any nested `@testset` invocations. The given options are only
+applied to the test set where they are given. The default test set type does
+not take any options.
+
+The description string accepts interpolation from the loop indices.
+If no description is provided, one is constructed based on the variables.
 
 By default the `@testset` macro will return the testset object itself, though
-this behavior can be customized in other testset types.
+this behavior can be customized in other testset types. If a `for` loop is used
+then the macro collects and returns a list of the return values of the `finish`
+method, which by default will return a list of the testset objects used in
+each iteration.
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
 
     tests = args[end]
 
+    # Determine if a single block or for-loop style
+    if !isa(tests,Expr) || (tests.head != :for && tests.head != :block)
+        error("Expected begin/end block or for loop as argument to @testset")
+    end
+
+    if tests.head == :for
+        return testset_forloop(args, tests)
+    else
+        return testset_beginend(args, tests)
+    end
+end
+
+"""
+Generate the code for a `@testset` with a `begin`/`end` argument
+"""
+function testset_beginend(args, tests)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc == nothing
         desc = "test set"
@@ -540,27 +566,9 @@ end
 
 
 """
-    @testloop [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-    @testloop [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-
-Starts a new test set for each iteration of the loop. The description string
-accepts interpolation from the loop indices. If no description is provided, one
-is constructed based on the variables.
-
-Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
-also be used for any nested `@testset` or `@testloop` invocations. The given
-options are only applied to the test sets where they are given. The default test
-set type does not take any options.
-
-The `@testloop` macro collects and returns a list of the return values of the
-`finish` method, which by default will return a list of the testset objects used
-in each iteration.
+Generate the code for a `@testset` with a `for` loop argument
 """
-macro testloop(args...)
-    isempty(args) && error("no arguments to @testloop")
-
-    testloop = args[end]
-    isa(testloop,Expr) && testloop.head == :for || error("Unexpected argument to @testloop")
+function testset_forloop(args, testloop)
     # pull out the loop variables. We might need them for generating the
     # description and we'll definitely need them for generating the
     # comprehension expression at the end
@@ -572,7 +580,7 @@ macro testloop(args...)
             push!(loopvars, loopvar)
         end
     else
-        error("Unexpected argument to @testloop")
+        error("Unexpected argument to @testset")
     end
 
     desc, testsettype, options = parse_testset_args(args[1:end-1])
@@ -612,10 +620,9 @@ macro testloop(args...)
 end
 
 """
-Parse the arguments to the `@testset` or `@testloop` macro to pull out
-the description, Testset Type, and options. Generally this should be called
-with all the macro arguments except the last one, which is the test expression
-itself.
+Parse the arguments to the `@testset` macro to pull out the description,
+Testset Type, and options. Generally this should be called with all the macro
+arguments except the last one, which is the test expression itself.
 """
 function parse_testset_args(args)
     desc = nothing

@@ -33,7 +33,7 @@
 
 # sum
 
-@test sum(Int8[]) === 0
+@test sum(Int8[]) === Int32(0)
 @test sum(Int[]) === Int(0)
 @test sum(Float64[]) === 0.0
 
@@ -41,7 +41,7 @@
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([Int8(3)]) === 3
+@test sum([Int8(3)]) === Int32(3)
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -62,14 +62,14 @@ fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0
-@test sumabs([Int8(-2)]) === 2
+@test sumabs([Int8(-2)]) === Int32(2)
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
 @test_approx_eq sumabs(a) sum(abs(a))
 @test_approx_eq sumabs(b) sum(abs(b))
 
 @test sumabs2(Float64[]) === 0.0
-@test sumabs2([Int8(-2)]) === 4
+@test sumabs2([Int8(-2)]) === Int32(4)
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
 @test_approx_eq sumabs2(a) sum(abs2(a))
@@ -105,11 +105,11 @@ end
 # prod
 
 @test prod(Int[]) === 1
-@test prod(Int8[]) === 1
+@test prod(Int8[]) === Int32(1)
 @test prod(Float64[]) === 1.0
 
 @test prod([3]) === 3
-@test prod([Int8(3)]) === 3
+@test prod([Int8(3)]) === Int32(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -118,14 +118,14 @@ end
 @test prod(1:big(16)) == big(20922789888000)
 @test prod(big(typemax(Int64)):big(typemax(Int64))+16) == parse(BigInt,"25300281663413827620486300433089141956148633919452440329174083959168114253708467653081909888307573358090001734956158476311046124934597861626299416732205795533726326734482449215730132757595422510465791525610410023802664753402501982524443370512346073948799084936298007821432734720004795146875180123558814648586972474376192000")
 
-@test_throws ErrorException prod(bitunpack(trues(10)))
+@test typeof(prod(bitunpack(trues(10)))) == Bool
 
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int32
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int32
 
 # maximum & minimum & extrema
 

@@ -34,18 +34,15 @@ end
 function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
     nf = nfields(T)
     (isbits(T) || nf == 0) && return x
+    y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     if T.mutable
-        y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
-        for i in 1:nf
-            if isdefined(x,i)
-                y.(i) = deepcopy_internal(x.(i), stackdict)
-            end
+    end
+    for i in 1:nf
+        if isdefined(x,i)
+            ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), y, i-1,
+                  deepcopy_internal(getfield(x,i), stackdict))
         end
-    else
-        fields = Any[deepcopy_internal(x.(i), stackdict) for i in 1:nf]
-        y = ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32),
-                  T, pointer(fields), length(fields))
     end
     return y::T
 end

@@ -440,7 +440,7 @@ backslash:
     I have $100 in my account.
 
 Triple-Quoted String Literals
-------------------------------
+-----------------------------
 
 When strings are created using triple-quotes (``"""..."""``) they have some
 special behavior that can be useful for creating longer blocks of text. First,

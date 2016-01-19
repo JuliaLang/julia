@@ -49,4 +49,3 @@ int  ti_threadgroup_destroy(ti_threadgroup_t *tg);
 extern ti_threadgroup_t *tgworld;
 
 #endif  /* THREADGROUP_H */
-

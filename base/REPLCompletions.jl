@@ -133,7 +133,7 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         return UTF8String[], 0:-1, false
     end
 
-    matches = UTF8String[]
+    matches = Set{UTF8String}()
     for file in files
         if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
@@ -184,12 +184,12 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         end
     end
 
-    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
+    matchList = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
-    return matches, startpos:pos, !isempty(matches)
+    return matchList, startpos:pos, !isempty(matchList)
 end
 
 # Determines whether method_complete should be tried. It should only be done if

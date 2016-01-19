@@ -99,6 +99,7 @@ from Julia's root directory. Sometimes errors only show up in one of them, so if
 Existing docstrings now live primarily in `base/docs/helpdb.jl`.
 It is a goal over time to move the docstrings inline to their respective method definitions.
 If you want to edit the body of a method docstring, run the `doc/genstdlib.jl` script to regenerate the restructured text files **after** you have already rebuilt Julia.
+(From the top-level source directory, you can do this with `make julia-genstdlib`.)
 If you want to edit an existing docstring signature, you **first** have to change the signature in the `doc/stdlib` `..function` or `..data` definition (not the auto-generated content) and *then*
 edit the helpdb.jl or inline method docstrings.  The existing signatures in the `doc/stdlib/*.rst` files are pattern matched to base docstrings and the new content overwrites the content in `doc/stdlib/`.
 The signature definitions **must** be in sync or else the pattern match will fail and documentation will be lost in the result.
@@ -107,6 +108,8 @@ To add entirely new methods to the `stdlib` documentation, first add the signatu
 It is encouraged to write all new docstrings in Markdown markup.  If you need to write a more complicated docstring that contains cross-references or citations it can be written in a restructured text codeblock.
 Many of the existing docstrings are currently restructured text codeblocks and these will be transitioned to Markdown over time.  RST codeblocks are delineated with the triple-quote (\`\`\`rst  \`\`\`) Makdown codeblock syntax.
 The content of the codeblock is spliced directly into the final restructured text document unmodified.
+
+For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
 
 ### Contributing to core functionality or base libraries
 
@@ -149,6 +152,8 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - try to adhere to a 92 character line length limit
  - use upper camel case convention for modules, type names
  - use lower case with underscores for method names
+ - it is generally preferred to use ASCII operators and identifiers over
+   Unicode equivalents whenever possible
 
 #### General Formatting Guidelines For C code contributions
 

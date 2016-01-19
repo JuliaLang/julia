@@ -25,17 +25,15 @@ extern "C" {
 #endif
 
 // current line number in a file
-DLLEXPORT int jl_lineno = 0;
+JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is TLS
 // current file name
-DLLEXPORT const char *jl_filename = "no file";
+JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
 
 jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
 jl_module_t *jl_internal_main_module = NULL;
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
-
-void jl_add_standard_imports(jl_module_t *m)
+JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     assert(jl_base_module != NULL);
     // using Base
@@ -45,7 +43,7 @@ void jl_add_standard_imports(jl_module_t *m)
     m->std_imports = 1;
 }
 
-jl_module_t *jl_new_main_module(void)
+JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 {
     if (jl_generating_output() && jl_options.incremental)
         jl_error("cannot call workspace() in incremental compile mode");
@@ -81,7 +79,7 @@ void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_cell_1d(0);
         jl_cell_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f) jl_get_specialization(f, (jl_tupletype_t*)jl_typeof(jl_emptytuple));
+        if (f) jl_get_specialization(f, (jl_tupletype_t*)jl_typeof(jl_emptytuple), NULL);
     }
     else {
         jl_module_run_initializer(m);
@@ -228,7 +226,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base
-DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
+JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 {
     while (m != m->parent) {
         if (m->istopmod)
@@ -549,60 +547,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     return result;
 }
 
-jl_value_t *jl_toplevel_eval(jl_value_t *v)
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
     return jl_toplevel_eval_flex(v, 1);
 }
 
-// repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len)
-{
-    //jl_printf(JL_STDERR, "***** loading %s\n", fname);
-    int last_lineno = jl_lineno;
-    const char *last_filename = jl_filename;
-    jl_lineno = 0;
-    jl_filename = fname;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
-    JL_GC_PUSH4(&fn, &ln, &form, &result);
-    JL_TRY {
-        // handle syntax error
-        while (1) {
-            form = jl_parse_next();
-            if (form == NULL)
-                break;
-            if (jl_is_expr(form)) {
-                if (((jl_expr_t*)form)->head == jl_incomplete_sym) {
-                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
-                }
-                if (((jl_expr_t*)form)->head == error_sym) {
-                    jl_interpret_toplevel_expr(form);
-                }
-            }
-            result = jl_toplevel_eval_flex(form, 1);
-        }
-    }
-    JL_CATCH {
-        jl_stop_parsing();
-        fn = jl_pchar_to_string(fname, len);
-        ln = jl_box_long(jl_lineno);
-        jl_lineno = last_lineno;
-        jl_filename = last_filename;
-        if (jl_loaderror_type == NULL) {
-            jl_rethrow();
-        }
-        else {
-            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                           jl_exception_in_transit));
-        }
-    }
-    jl_stop_parsing();
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
-    JL_GC_POP();
-    return result;
-}
-
-jl_value_t *jl_load(const char *fname, size_t len)
+JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
@@ -615,16 +565,11 @@ jl_value_t *jl_load(const char *fname, size_t len)
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
-    if (jl_start_parsing_file(fpath) != 0) {
-        jl_errorf("could not open file %s", fpath);
-    }
-    jl_value_t *result = jl_parse_eval_all(fpath, len);
-    if (fpath != fname) free(fpath);
-    return result;
+    return jl_parse_eval_all(fpath, len, NULL, 0);
 }
 
 // load from filename given as a ByteString object
-DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
+JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
     return jl_load(jl_string_data(str), jl_string_len(str));
 }
@@ -683,8 +628,9 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 // empty generic function def
 // TODO: maybe have jl_method_def call this
-DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
-                                              jl_binding_t *bnd)
+JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
+                                                 jl_value_t *bp_owner,
+                                                 jl_binding_t *bnd)
 {
     jl_value_t *gf=NULL;
 
@@ -708,10 +654,11 @@ DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, j
     return gf;
 }
 
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
-                                    jl_binding_t *bnd,
-                                    jl_svec_t *argdata, jl_function_t *f, jl_value_t *isstaged,
-                                    jl_value_t *call_func, int iskw)
+JL_DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                                       jl_value_t *bp_owner, jl_binding_t *bnd,
+                                       jl_svec_t *argdata, jl_function_t *f,
+                                       jl_value_t *isstaged,
+                                       jl_value_t *call_func, int iskw)
 {
     jl_module_t *module = (bnd ? bnd->owner : NULL);
     // argdata is svec({types...}, svec(typevars...))

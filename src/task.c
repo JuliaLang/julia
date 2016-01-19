@@ -193,7 +193,7 @@ void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 
 static jl_function_t *task_done_hook_func=NULL;
 
-static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
+static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 {
     if (t->exception != jl_nothing)
         t->state = failed_sym;
@@ -231,7 +231,7 @@ static void throw_if_exception_set(jl_task_t *t)
 }
 
 static void record_backtrace(void);
-static void NOINLINE NORETURN start_task(void)
+static void NOINLINE JL_NORETURN start_task(void)
 {
     // this runs the first time we switch to a task
     jl_task_t *t = jl_current_task;
@@ -267,7 +267,7 @@ void NOINLINE jl_set_base_ctx(char *__stk)
 }
 #endif
 
-DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
+JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 { // keep this function small, since we want to keep the stack frame
   // leading up to this also quite small
     _julia_init(rel);
@@ -304,6 +304,15 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         // set up global state for new task
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
+#ifdef JULIA_ENABLE_THREADING
+        // If the current task is not holding any locks, free the locks list
+        // so that it can be GC'd without leaking memory
+        arraylist_t *locks = &jl_current_task->locks;
+        if (locks->len == 0 && locks->items != locks->_space) {
+            arraylist_free(locks);
+            arraylist_new(locks, 0);
+        }
+#endif
 
         // restore task's current module, looking at parent tasks
         // if it hasn't set one.
@@ -355,8 +364,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
-extern int jl_in_gc;
-DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
+JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     if (t == jl_current_task) {
         throw_if_exception_set(t);
@@ -368,13 +376,15 @@ DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
             jl_throw(t->exception);
         return t->result;
     }
-    if (jl_in_gc)
+    if (jl_in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
+    int8_t gc_state = jl_gc_unsafe_enter();
     jl_task_arg_in_transit = arg;
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
     jl_task_arg_in_transit = jl_nothing;
     throw_if_exception_set(jl_current_task);
+    jl_gc_unsafe_leave(gc_state);
     return val;
 }
 
@@ -481,6 +491,8 @@ static int frame_info_from_ip(char **func_name,
                               char **inlinedat_file, size_t *inlinedat_line,
                               size_t ip, int skipC, int skipInline)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     static const char *name_unknown = "???";
     int fromC = 0;
 
@@ -555,14 +567,15 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
-DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
+JL_DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
     RtlCaptureContext(&Context);
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
-DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context)
+JL_DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize,
+                                      CONTEXT *Context)
 {
     if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
         jl_in_stackwalk = 1;
@@ -644,13 +657,14 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
 }
 #else
 // stacktrace using libunwind
-DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
+JL_DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     unw_context_t uc;
     unw_getcontext(&uc);
     return rec_backtrace_ctx(data, maxsize, &uc);
 }
-DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
+JL_DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize,
+                                      unw_context_t *uc)
 {
 #if !defined(_CPU_ARM_) && !defined(_CPU_PPC64_)
     unw_cursor_t cursor;
@@ -696,7 +710,7 @@ static void record_backtrace(void)
 }
 
 static jl_value_t *array_ptr_void_type = NULL;
-DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
+JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 {
     jl_svec_t *tp = NULL;
     jl_array_t *bt = NULL;
@@ -713,7 +727,7 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
     return (jl_value_t*)bt;
 }
 
-DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
+JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     char *func_name;
     size_t line_num;
@@ -738,7 +752,7 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return r;
 }
 
-DLLEXPORT jl_value_t *jl_get_backtrace(void)
+JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
     jl_svec_t *tp = NULL;
     jl_array_t *bt = NULL;
@@ -754,38 +768,51 @@ DLLEXPORT jl_value_t *jl_get_backtrace(void)
 }
 
 //for looking up functions from gdb:
-DLLEXPORT void gdblookup(ptrint_t ip)
+JL_DLLEXPORT void jl_gdblookup(ptrint_t ip)
 {
+    // This function is not allowed to reference any TLS variables since
+    // it can be called from an unmanaged thread on OSX.
     char *func_name;
     size_t line_num;
     char *file_name;
     size_t inlinedat_line;
     char *inlinedat_file;
     frame_info_from_ip(&func_name, &file_name, &line_num, &inlinedat_file, &inlinedat_line, ip,
-                      /* skipC */ 0, /* skipInline */ 1);
+                      /* skipC */ 0, /* skipInline */ 0);
     if (line_num == ip) {
         jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
     }
-    else if (line_num == -1) {
-        jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
-    }
     else {
-        jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, file_name,
-                       (uintptr_t)line_num);
+        if (line_num != -1) {
+            jl_safe_printf("%s at %s:%" PRIuPTR "\n", inlinedat_file ? "[inline]" : func_name, file_name,
+                           (uintptr_t)line_num);
+        }
+        else {
+            jl_safe_printf("%s at %s (unknown line)\n", inlinedat_file ? "[inline]" : func_name, file_name);
+        }
+        if (inlinedat_file) {
+            if (inlinedat_line != -1) {
+                jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, inlinedat_file,
+                               (uintptr_t)inlinedat_line);
+            }
+            else {
+                jl_safe_printf("%s at %s (unknown line)\n", func_name, inlinedat_file);
+            }
+        }
     }
     free(func_name);
     free(file_name);
     free(inlinedat_file);
 }
 
-DLLEXPORT void jlbacktrace(void)
+JL_DLLEXPORT void jlbacktrace(void)
 {
     size_t n = jl_bt_size; // jl_bt_size > 40 ? 40 : jl_bt_size;
-    for(size_t i=0; i < n; i++)
-        gdblookup(jl_bt_data[i]);
+    for (size_t i=0; i < n; i++)
+        jl_gdblookup(jl_bt_data[i]);
 }
 
-DLLEXPORT void gdbbacktrace(void)
+JL_DLLEXPORT void jl_gdbbacktrace(void)
 {
     record_backtrace();
     jlbacktrace();
@@ -793,8 +820,9 @@ DLLEXPORT void gdbbacktrace(void)
 
 
 // yield to exception handler
-void NORETURN throw_internal(jl_value_t *e)
+void JL_NORETURN throw_internal(jl_value_t *e)
 {
+    jl_gc_unsafe_enter();
     assert(e != NULL);
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
@@ -811,24 +839,24 @@ void NORETURN throw_internal(jl_value_t *e)
 }
 
 // record backtrace and raise an error
-DLLEXPORT void jl_throw(jl_value_t *e)
+JL_DLLEXPORT void jl_throw(jl_value_t *e)
 {
     assert(e != NULL);
     record_backtrace();
     throw_internal(e);
 }
 
-DLLEXPORT void jl_rethrow(void)
+JL_DLLEXPORT void jl_rethrow(void)
 {
     throw_internal(jl_exception_in_transit);
 }
 
-DLLEXPORT void jl_rethrow_other(jl_value_t *e)
+JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
 {
     throw_internal(e);
 }
 
-DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
@@ -871,10 +899,13 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    JL_GC_POP();
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    JL_GC_POP();
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&t->locks, 0);
+#endif
     return t;
 }
 
@@ -890,7 +921,7 @@ JL_CALLABLE(jl_unprotect_stack)
     return jl_nothing;
 }
 
-DLLEXPORT jl_value_t *jl_get_current_task(void)
+JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
     return (jl_value_t*)jl_current_task;
 }
@@ -940,7 +971,6 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->bufsz = 0;
     jl_current_task->stkbuf = NULL;
 #else
-    // TODO update for threads
     jl_current_task->ssize = ssize;
     jl_current_task->stkbuf = stack;
 #endif
@@ -958,6 +988,9 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
     jl_current_task->tid = ti_tid;
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&jl_current_task->locks, 0);
+#endif
 
     jl_root_task = jl_current_task;
 
@@ -965,7 +998,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_task_arg_in_transit = (jl_value_t*)jl_nothing;
 }
 
-DLLEXPORT int jl_is_task_started(jl_task_t *t)
+JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
 {
     return t->started;
 }

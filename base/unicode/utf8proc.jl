@@ -3,7 +3,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
+import Base: show, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
 
 export isgraphemebreak
 
@@ -73,7 +73,7 @@ function utf8proc_map(s::ByteString, flags::Integer)
     result = ccall(:utf8proc_map, Cssize_t,
                    (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
                    s, sizeof(s), p, flags)
-    result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{UInt8},
+    result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
     pointer_to_string(p[], result, true)::ByteString
 end

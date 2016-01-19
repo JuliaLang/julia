@@ -1,6 +1,25 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base: *
 using Base.Test
+
+# A custom Quaternion type with minimal defined interface and methods.
+# Used to test scale and scale! methods to show non-commutativity.
+immutable Quaternion{T<:Real} <: Number
+    s::T
+    v1::T
+    v2::T
+    v3::T
+    norm::Bool
+end
+Quaternion(s::Real, v1::Real, v2::Real, v3::Real, n::Bool = false) =
+    Quaternion( promote(s, v1, v2, v3)..., n)
+Quaternion(a::Vector) = Quaternion(0, a[1], a[2], a[3])
+(*)(q::Quaternion, w::Quaternion) = Quaternion(q.s*w.s - q.v1*w.v1 - q.v2*w.v2 - q.v3*w.v3,
+                                               q.s*w.v1 + q.v1*w.s + q.v2*w.v3 - q.v3*w.v2,
+                                               q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
+                                               q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s,
+                                               q.norm && w.norm)
 
 debug = false
 
@@ -22,11 +41,13 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
     debug && println("element type: $elty")
 
     @test_approx_eq logdet(A) log(det(A))
+    @test_approx_eq logabsdet(A)[1] log(abs(det(A)))
+    @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
     if elty <: Real
-        @test_approx_eq logabsdet(A)[1] log(abs(det(A)))
-        @test logabsdet(A)[2] == sign(abs(det(A)))
+        @test logabsdet(A)[2] == sign(det(A))
         @test_throws DomainError logdet(convert(Matrix{elty}, -eye(n)))
-        @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
+    else
+        @test logabsdet(A)[2] ≈ sign(det(A))
     end
 end
 
@@ -77,6 +98,8 @@ a = reshape([1.:6;], (2,3))
 @test scale(a, [1; 2; 3]) == a.*[1 2 3]
 @test scale([1; 2], a) == a.*[1; 2]
 @test scale(eye(Int, 2), 0.5) == 0.5*eye(2)
+@test scale([1; 2], sub(a, :, :)) == a.*[1; 2]
+@test scale(sub([1; 2], :), a) == a.*[1; 2]
 @test_throws DimensionMismatch scale(a, ones(2))
 @test_throws DimensionMismatch scale(ones(3), a)
 
@@ -114,6 +137,12 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 @test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
+
+# test scale and scale! for non-commutative multiplication
+q = Quaternion([0.44567, 0.755871, 0.882548, 0.423612])
+qmat = []
+push!(qmat, Quaternion([0.015007, 0.355067, 0.418645, 0.318373]))
+@test scale!(q, copy(qmat)) != scale!(copy(qmat), q)
 
 # test ops on Numbers
 for elty in [Float32,Float64,Complex64,Complex128]
@@ -176,3 +205,6 @@ let
     @test norm(w) === 1.0
     @test norm(normalize!(v) - w, Inf) < eps()
 end
+
+# Issue 14657
+@test det([true false; false true]) == det(eye(Int, 2))

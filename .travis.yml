@@ -1,14 +1,40 @@
 language: cpp
-os:
-    - linux
-    - osx
-env:
-    - ARCH="i686"
-    - ARCH="x86_64"
+sudo: false
 matrix:
-  exclude:
-    - os: osx
+  include:
+    - os: linux
       env: ARCH="i686"
+      compiler: "g++-5 -m32"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - bar
+            - binutils:i386
+            - gcc-5:i386
+            - g++-5:i386
+            - make:i386
+            - cpp-5:i386
+            - libssl-dev:i386
+            - gfortran-5:i386
+    - os: linux
+      env: ARCH="x86_64"
+      compiler: "g++-5 -m64"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - bar
+            - g++-5
+            - gfortran-5
+#    - os: osx # TODO: turn this back on once it's fast enough to not time out
+#      env: ARCH="x86_64"
+cache:
+  directories:
+    - $TRAVIS_BUILD_DIR/deps/srccache
+    - $TRAVIS_BUILD_DIR/deps/build
 notifications:
     email: false
     irc:
@@ -23,42 +49,35 @@ notifications:
 before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
-        sudo apt-get install jq -y;
         contrib/travis_fastfail.sh || exit 1;
-        BUILDOPTS="-j3 USEGCC=1 LLVM_CONFIG=llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
-        for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR OPENLIBM; do
-            export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
-        done;
-        sudo add-apt-repository ppa:staticfloat/julia-deps -y;
-        sudo apt-get update -qq -y;
-        if [ "$ARCH" = "i686" ]; then
-          export BUILDOPTS="$BUILDOPTS MARCH=pentium4";
-          sudo apt-get remove libblas3gf liblapack3gf libarmadillo2 -y;
-          sudo apt-get install binutils:i386 -y;
-          sudo apt-get install gcc:i386 g++:i386 make:i386 cpp:i386 g++-4.6:i386 gcc-4.6:i386 libssl-dev:i386 patchelf:i386 gfortran:i386 llvm-3.3-dev:i386 libsuitesparse-dev:i386 libopenblas-dev:i386 libopenblas-base:i386 libblas-dev:i386 liblapack-dev:i386 liblapack3:i386 libarpack2-dev:i386 libarpack2:i386 libfftw3-dev:i386 libgmp-dev:i386 libpcre3-dev:i386 libopenlibm-dev:i386 libmpfr-dev:i386 -y;
-        else
-          export JULIA_TEST_MAXRSS_MB="500";
-          sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libopenlibm-dev libmpfr-dev -y;
-        fi;
+        mkdir -p $HOME/bin;
+        ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/g++;
+        ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
+        gcc --version;
+        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
       elif [ `uname` = "Darwin" ]; then
+        brew update;
+        brew install -v jq bar;
+        contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
-        brew update;
-        brew install -v jq;
-        contrib/travis_fastfail.sh || exit 1;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
+        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm37-julia)/bin/llvm-config-3.7.1 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
+        export CXXFLAGS=-DUSE_ORCJIT;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
-script:
-    - make $BUILDOPTS -C base version_git.jl.phony
     - git clone -q git://git.kitenet.net/moreutils
+script:
+    - make -C moreutils mispipe
+    - make $BUILDOPTS -C base version_git.jl.phony
+    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
     - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - if [ `uname` = "Darwin" ]; then
         for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
@@ -69,6 +88,6 @@ script:
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd - && mv julia2 julia
-    - sudo dmesg
-    - echo "Ready for packaging..."
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/build/julia-env
+# uncomment the following if failures are suspected to be due to the out-of-memory killer
+#    - dmesg

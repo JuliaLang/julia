@@ -579,13 +579,18 @@ end
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
-    rv = get(pg.refs, id, false)
-
-    if rv != false
-        delete!(rv.clientset, client)
-        if isempty(rv.clientset)
-            delete!(pg.refs, id)
-            #print("$(myid()) collected $id\n")
+# As a workaround to issue https://github.com/JuliaLang/julia/issues/14445
+# the dict/set updates are executed asynchronously so that they do
+# not occur in the midst of a gc. The `@async` prefix must be removed once
+# 14445 is fixed.
+    @async begin
+        rv = get(pg.refs, id, false)
+        if rv != false
+            delete!(rv.clientset, client)
+            if isempty(rv.clientset)
+                delete!(pg.refs, id)
+                #print("$(myid()) collected $id\n")
+            end
         end
     end
     nothing
@@ -608,11 +613,7 @@ end
 function send_del_client(rr)
     if rr.where == myid()
         del_client(remoteref_id(rr), myid())
-    else
-        if in(rr.where, map_del_wrkr)
-            # for a removed worker, don't bother
-            return
-        end
+    elseif rr.where in procs() # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
@@ -621,7 +622,6 @@ function send_del_client(rr)
 end
 
 function add_client(id, client)
-    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -636,12 +636,11 @@ end
 function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
         add_client(remoteref_id(rr), i)
-    elseif i != rr.where
+    elseif (i != rr.where) && (rr.where in procs())
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        #println("$(myid()) adding $((remoteref_id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (remoteref_id(rr), i))
         w.gcflag = true
         notify(any_gc_flag)
@@ -1454,26 +1453,26 @@ spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawn_somewhere($(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawn_somewhere($expr))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnat($(esc(p)), $(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawnat($(esc(p)), $expr))
 end
 
 macro fetch(expr)
-    expr = localize_vars(:(()->($expr)), false)
+    expr = localize_vars(esc(:(()->($expr))), false)
     quote
-        thunk = $(esc(expr))
+        thunk = $expr
         remotecall_fetch(thunk, chooseproc(thunk))
     end
 end
 
 macro fetchfrom(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(remotecall_fetch($(esc(expr)), $(esc(p))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(remotecall_fetch($expr, $(esc(p))))
 end
 
 macro everywhere(ex)
@@ -1632,7 +1631,7 @@ function make_preduce_body(reducer, var, body, R)
             ac = $(esc(body))
             if lo != hi
                 for $(esc(var)) in ($R)[(lo+1):hi]
-                    ac = ($(esc(reducer)))(ac, $(esc(body)))
+                    ac = ($reducer)(ac, $(esc(body)))
                 end
             end
             ac
@@ -1668,11 +1667,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
+        localize_vars(quote therange = $(esc(r)); $thecall; end)
     else
-        thecall = :(preduce($(esc(reducer)),
-                            $(make_preduce_body(reducer, var, body, :therange)), length(therange)))
+        thecall = :(preduce(thereducer,
+                            $(make_preduce_body(:thereducer, var, body, :therange)), length(therange)))
+        localize_vars(quote thereducer = $(esc(reducer)); therange = $(esc(r)); $thecall; end)
     end
-    localize_vars(quote therange = $(esc(r)); $thecall; end)
 end
 
 

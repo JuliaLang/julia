@@ -139,11 +139,16 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``leave``
     pop exception handlers. ``args[1]`` is the number of handlers to pop.
 
-``boundscheck``
+``inbounds``
     controls turning bounds checks on or off. A stack is maintained; if the
     first argument of this expression is true or false (``true`` means bounds
-    checks are enabled), it is pushed onto the stack. If the first argument is
+    checks are disabled), it is pushed onto the stack. If the first argument is
     ``:pop``, the stack is popped.
+
+``boundscheck``
+    indicates the beginning or end of a section of code that performs a bounds
+    check. Like ``inbounds``, a stack is maintained, and the second argument
+    can be one of: ``true``, ``false``, or ``:pop``.
 
 ``copyast``
     part of the implementation of quasi-quote. The argument is a surface syntax

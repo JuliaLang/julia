@@ -22,10 +22,10 @@ size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz);
 size_t u8_wc_toutf8(char *dest, uint32_t ch);
 
 /* character number to byte offset */
-DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
+JL_DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 
 /* byte offset to character number */
-DLLEXPORT size_t u8_charnum(const char *str, size_t offset);
+JL_DLLEXPORT size_t u8_charnum(const char *str, size_t offset);
 
 /* return next character, updating an index variable */
 uint32_t u8_nextchar(const char *s, size_t *i);
@@ -86,7 +86,7 @@ char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn);
 char *u8_memrchr(const char *s, uint32_t ch, size_t sz);
 
 /* number of columns occupied by a string */
-DLLEXPORT size_t u8_strwidth(const char *s);
+JL_DLLEXPORT size_t u8_strwidth(const char *s);
 
 /* printf where the format string and arguments may be in UTF-8.
    you can avoid this function and just use ordinary printf() if the current
@@ -95,7 +95,7 @@ size_t u8_vprintf(const char *fmt, va_list ap);
 size_t u8_printf(const char *fmt, ...);
 
 /* determine whether a sequence of bytes is valid UTF-8. length is in bytes */
-DLLEXPORT int u8_isvalid(const char *str, size_t length);
+JL_DLLEXPORT int u8_isvalid(const char *str, size_t length);
 
 #ifdef __cplusplus
 }

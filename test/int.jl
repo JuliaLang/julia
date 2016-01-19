@@ -17,6 +17,26 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
+# Result type must be type of first argument
+for T in (Int8,Int16,Int32,Int64,Int128,BigInt,
+          UInt8,UInt16,UInt32,UInt64,UInt128,
+          Rational{Int},Rational{BigInt},
+          Float16,Float32,Float64)
+    for U in (Int8,Int16,Int32,Int64,Int128,BigInt,
+              Rational{Int},Rational{BigInt},
+              UInt8,UInt16,UInt32,UInt64,UInt128,
+              Float16,Float32,Float64)
+        @test typeof(copysign(T(3), U(4))) === T
+        @test typeof(flipsign(T(3), U(4))) === T
+    end
+end
+
+for s1 in (-1,+1), s2 in (-1,+1)
+    @test flipsign(Int16(3s1), Float16(3s2)) === Int16(3s1*s2)
+    @test flipsign(Int32(3s1), Float32(3s2)) === Int32(3s1*s2)
+    @test flipsign(Int64(3s1), Float64(3s2)) === Int64(3s1*s2)
+end
+
 @test signed(3) == 3
 @test signed(UInt(3)) == 3
 @test isa(signed(UInt(3)), Int)
@@ -105,62 +125,20 @@ for T in (UInt8, UInt16, UInt32, UInt64)
     @test_throws InexactError convert(T, -1)
 end
 
-for i in 1:length(UItypes)-1
-    T = UItypes[i]
-    S = UItypes[i+1]
-    R = sizeof(S) < sizeof(UInt) ? S : UInt
-    @test widen(T(3)) == R(3)
-end
+@test widen(UInt8(3)) === UInt32(3)
+@test widen(UInt16(3)) === UInt32(3)
+@test widen(UInt32(3)) === UInt64(3)
+@test widen(UInt64(3)) === UInt128(3)
+@test widen(UInt128(3)) == 3
+@test typeof(widen(UInt128(3))) == BigInt
 
-for i in 1:length(SItypes)-1
-    T = SItypes[i]
-    S = SItypes[i+1]
-    R = sizeof(S) < sizeof(Int) ? S : Int
-    @test widen(T(3)) == R(3)
-end
+@test widen(Int8(-3)) === Int32(-3)
+@test widen(Int16(-3)) === Int32(-3)
+@test widen(Int32(-3)) === Int64(-3)
+@test widen(Int64(-3)) === Int128(-3)
+@test widen(Int128(-3)) == -3
+@test typeof(widen(Int128(-3))) == BigInt
 
 @test widemul(false, false) == false
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
-
-# checked operations
-
-import Base: checked_add, checked_sub, checked_mul, checked_abs
-@test checked_sub(UInt(4), UInt(3)) === UInt(1)
-@test_throws OverflowError checked_sub(UInt(5), UInt(6))
-@test checked_mul(UInt(4), UInt(3)) === UInt(12)
-
-@test checked_sub(Int128(-1),Int128(-2)) === Int128(1)
-
-if WORD_SIZE == 32
-    @test_throws OverflowError checked_mul(UInt(2)^30, UInt(2)^2)
-else
-    @test_throws OverflowError checked_mul(UInt(2)^62, UInt(2)^2)
-end
-
-for T in SItypes
-    @test checked_abs(-one(T)) == one(T)
-    @test_throws OverflowError checked_abs(typemin(T))
-end
-
-for T in UItypes
-    @test checked_abs(one(T)) == one(T)
-end
-
-@test checked_abs(BigInt(-1)) == BigInt(1)
-
-# Checked operations on UInt128 are currently broken
-# FIXME: #4905
-
-@test checked_add(UInt128(1), UInt128(2)) === UInt128(3)
-#@test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)
-@test checked_add(UInt128(2)^127, UInt128(2)^127) === UInt128(0)  # broken
-
-@test checked_sub(UInt128(2), UInt128(1)) === UInt128(1)
-#@test_throws OverflowError checked_sub(UInt128(3), UInt128(4))
-@test checked_sub(UInt128(3), UInt128(4)) === UInt128(0) - 1  # broken
-
-@test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
-#@test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
-@test checked_mul(UInt128(2)^127, UInt128(2)) === UInt128(0)
-# broken

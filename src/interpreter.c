@@ -25,8 +25,10 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
     return eval(e, NULL, 0, 0);
 }
 
-DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                                    jl_value_t **locals, size_t nl)
+JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
+                                                       jl_value_t *e,
+                                                       jl_value_t **locals,
+                                                       size_t nl)
 {
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
@@ -452,23 +454,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == macro_sym) {
-        jl_sym_t *nm = (jl_sym_t*)args[0];
-        assert(jl_is_symbol(nm));
-        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl, ngensym);
-        JL_GC_PUSH1(&f);
-        assert(jl_is_function(f));
-        if (jl_boot_file_loaded &&
-            f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
-            jl_lambda_info_t *li = f->linfo;
-            li->ast = jl_compress_ast(li, li->ast);
-            jl_gc_wb(li, li->ast);
-            li->name = nm;
-        }
-        jl_set_global(jl_current_module, nm, (jl_value_t*)f);
-        JL_GC_POP();
-        return (jl_value_t*)jl_nothing;
-    }
     else if (ex->head == line_sym) {
         jl_lineno = jl_unbox_long(jl_exprarg(ex,0));
         return (jl_value_t*)jl_nothing;
@@ -484,6 +469,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_throw(args[0]);
     }
     else if (ex->head == boundscheck_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == inbounds_sym) {
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == fastmath_sym) {
@@ -537,9 +525,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
                              int start, int toplevel)
 {
     jl_handler_t __eh;
-    size_t i=start;
+    size_t i=start, ns = jl_array_len(stmts);
 
     while (1) {
+        if (i >= ns)
+            jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
             i = label_idx(jl_gotonode_label(stmt), stmts);

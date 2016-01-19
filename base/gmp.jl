@@ -439,8 +439,8 @@ function powermod(x::BigInt, p::BigInt, m::BigInt)
           &r, &x, &p, &m)
     return m < 0 && r > 0 ? r + m : r # choose sign conistent with mod(x^p, m)
 end
-powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
-powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
+
+powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
@@ -516,7 +516,7 @@ hex(n::BigInt) = base(16, n)
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    len = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
+    len = Int(ccall(:strlen, Csize_t, (Cstring,), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
 
@@ -549,8 +549,14 @@ prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << 
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
 Base.checked_abs(x::BigInt) = abs(x)
+Base.checked_neg(x::BigInt) = -x
 Base.checked_add(a::BigInt, b::BigInt) = a + b
 Base.checked_sub(a::BigInt, b::BigInt) = a - b
 Base.checked_mul(a::BigInt, b::BigInt) = a * b
+Base.checked_div(a::BigInt, b::BigInt) = div(a, b)
+Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
+Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
+Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
+Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
 
 end # module

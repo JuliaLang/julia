@@ -469,6 +469,13 @@ function test_13315(::Type{TestAbstractArray})
     @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
 end
 
+# checksquare
+function test_checksquare()
+    @test LinAlg.checksquare(zeros(2,2)) == 2
+    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
+    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
+end
+
 #----- run tests -------------------------------------------------------------#
 
 for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
@@ -489,6 +496,7 @@ test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
 test_vcat_depwarn(TestAbstractArray)
 test_13315(TestAbstractArray)
+test_checksquare()
 
 A = TSlowNIndexes(rand(2,2))
 @test_throws ErrorException A[1]

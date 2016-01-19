@@ -13,7 +13,6 @@
     ADD_I(udiv_int, 2) \
     ADD_I(srem_int, 2) \
     ADD_I(urem_int, 2) \
-    ADD_I(smod_int, 2) \
     ADD_I(neg_float, 1) \
     ADD_I(add_float, 2) \
     ADD_I(sub_float, 2) \
@@ -75,12 +74,16 @@
     ADD_I(checked_trunc_uint, 2) \
     ADD_I(check_top_bit, 1) \
     /*  checked arithmetic */ \
-    ADD_I(checked_sadd, 2) \
-    ADD_I(checked_uadd, 2) \
-    ADD_I(checked_ssub, 2) \
-    ADD_I(checked_usub, 2) \
-    ADD_I(checked_smul, 2) \
-    ADD_I(checked_umul, 2) \
+    ADD_I(checked_sadd_int, 2) \
+    ADD_I(checked_uadd_int, 2) \
+    ADD_I(checked_ssub_int, 2) \
+    ADD_I(checked_usub_int, 2) \
+    ADD_I(checked_smul_int, 2) \
+    ADD_I(checked_umul_int, 2) \
+    ADD_I(checked_sdiv_int, 2) \
+    ADD_I(checked_udiv_int, 2) \
+    ADD_I(checked_srem_int, 2) \
+    ADD_I(checked_urem_int, 2) \
     ADD_I(nan_dom_err, 2) \
     /*  functions */ \
     ADD_I(abs_float, 1) \

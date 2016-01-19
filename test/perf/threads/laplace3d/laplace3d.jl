@@ -48,7 +48,7 @@ function l3d_threadfun(u1, u3, nx, ny, nz)
     end
 end
 
-## @threads 'block' form
+#= @threads 'block' form no longer supported
 function l3d_threadblock(u1, u3, nx, ny, nz)
     @threads all begin
 	tid = threadid()
@@ -72,10 +72,11 @@ function l3d_threadblock(u1, u3, nx, ny, nz)
 	end
     end
 end
+=#
 
 ## @threads 'for' form
 function l3d_threadfor(u1, u3, nx, ny, nz)
-    @threads all for k_3=2:nz-1
+    @threads for k_3=2:nz-1
         for k_2 = 2:ny-1
             @simd for k_1 = 2:nx-1
                 @inbounds u3[k_1, k_2, k_3] = stencil3d(u1, k_1, k_2, k_3)

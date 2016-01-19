@@ -347,29 +347,22 @@ LLVM_OBJ_SOURCE := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/
 endif
 LLVM_OBJ_TARGET := $(build_libdir)/$(LLVM_LIB_FILE)
 
-ifneq ($(LLVM_VER),svn)
 ifeq ($(LLVM_VER), 3.3)
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER).src.tar.gz
+LLVM_TAR_EXT:=$(LLVM_VER).src.tar.gz
 else
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER).src.tar.xz
-endif
+LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
+endif # LLVM_VER == 3.3
+
+ifneq ($(LLVM_VER),svn)
+LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_TAR_EXT)
 
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(LLVM_VER), 3.3)
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_VER).src.tar.gz
-else
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_VER).src.tar.xz
-endif # LLVM_VER == 3.3
+LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-ifeq ($(LLVM_VER), 3.3)
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_VER).src.tar.gz
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_VER).src.tar.gz
-else
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_VER).src.tar.xz
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_VER).src.tar.xz
-endif # LLVM_VER
+LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
+LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
 LLVM_COMPILER_RT_TAR:=
@@ -377,7 +370,7 @@ LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_VER).src.tar.gz
+LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
@@ -387,7 +380,8 @@ LLVM_LDFLAGS := $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_BUILDTYPE)" -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
-LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
+LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS)
+LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
@@ -499,27 +493,29 @@ else
 LLVM_MFLAGS += OPTIONAL_DIRS=
 endif
 
+LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
+
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LIBCXX_TAR),)
 $(LLVM_LIBCXX_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LLDB_TAR),)
 $(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
@@ -668,10 +664,23 @@ $(eval $(call LLVM_PATCH,instcombine-llvm-3.3))
 $(eval $(call LLVM_PATCH,int128-vector.llvm-3.3))
 $(eval $(call LLVM_PATCH,osx-10.10.llvm-3.3))
 $(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
-else ifeq ($(LLVM_VER),3.6.0)
-$(eval $(call LLVM_PATCH,zerosign-llvm-3.6.0))
-$(eval $(call LLVM_PATCH,win64-allocas-llvm-3.6.0))
+else ifeq ($(LLVM_VER),3.7.0)
+$(eval $(call LLVM_PATCH,llvm-3.7.0))
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
+else ifeq ($(LLVM_VER),3.7.1)
+$(eval $(call LLVM_PATCH,llvm-3.7.1))
+$(eval $(call LLVM_PATCH,llvm-3.7.1_2))
+$(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
 endif # LLVM_VER
+
+ifeq ($(LLVM_VER),3.7.1)
+ifeq ($(BUILD_LLDB),1)
+$(eval $(call LLVM_PATCH,lldb-3.7.1))
+endif
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
+endif
+endif
 
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
 ifneq ($(LLVM_USE_CMAKE),)
@@ -851,7 +860,7 @@ ifneq ($(OS),WINNT)
 endif
 endif
 	echo 1 > $@
-$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) $(BUILDDIR)/pcre2-$(PCRE_VER)/checked
+$(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET)
 	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $@
 	touch -c $@
@@ -1127,6 +1136,9 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
+ifeq ($(OS),WINNT)
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/openblas-win64.patch
+endif
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $<.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
@@ -1371,8 +1383,6 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
 endif
 	echo 1 > $@
-# XXX: bug_1315 ARPACK tests fail stochastically
-#$(ARPACK_OBJ_TARGET): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
 	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
 ifeq ($(OS), WINNT)
@@ -1457,7 +1467,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) $(BUILDDIR)/fftw-$(FFTW_VER)-single/checked
+$(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET)
 	$(call make-install,fftw-$(FFTW_VER)-single,)
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
@@ -1480,7 +1490,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) $(BUILDDIR)/fftw-$(FFTW_VER)-double/checked
+$(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET)
 	$(call make-install,fftw-$(FFTW_VER)-double,)
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
@@ -1518,9 +1528,7 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: check-fftw-single check-fftw-double # do these serially, to prevent write conflicts
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-single
-	@$(MAKE) -s -f $(JULIAHOME)/deps/Makefile install-fftw-double
+install-fftw: install-fftw-single install-fftw-double
 
 get-fftw-single: $(SRCDIR)/srccache/fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: $(BUILDDIR)/fftw-$(FFTW_VER)-single/config.status
@@ -1785,6 +1793,10 @@ ifeq ($(SANITIZE),1)
 GMP_CONFIGURE_OPTS += --disable-assembly
 endif
 
+ifeq ($(BUILD_OS),WINNT)
+GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCDIR)/srccache/gmp-$(GMP_VER)))"
+endif
+
 $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
@@ -1806,7 +1818,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) $(BUILDDIR)/gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
+$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) | $(build_shlibdir) $(build_includedir)
 	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
 	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
@@ -1874,7 +1886,7 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
-$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) $(BUILDDIR)/mpfr-$(MPFR_VER)/checked
+$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET)
 	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
 	touch -c $@
@@ -1918,7 +1930,7 @@ ifeq ($(OS),$(BUILD_OS))
 	#$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
-$(PATCHELF_TARGET): $(PATCHELF_SOURCE) $(BUILDDIR)/patchelf-$(PATCHELF_VER)/checked
+$(PATCHELF_TARGET): $(PATCHELF_SOURCE)
 	$(call make-install,patchelf-$(PATCHELF_VER),)
 	touch -c $@
 
@@ -1957,7 +1969,7 @@ $(GIT_SOURCE): $(BUILDDIR)/git-$(GIT_VER)/config.status
 	touch -c $@
 $(BUILDDIR)/git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
-$(GIT_TARGET): $(GIT_SOURCE) $(BUILDDIR)/git-$(GIT_VER)/checked
+$(GIT_TARGET): $(GIT_SOURCE)
 	$(call make-install,git-$(GIT_VER),NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)")
 	touch -c $@
 
@@ -1988,7 +2000,7 @@ $(VIRTUALENV_SOURCE): $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
 	"$(shell $(SRCDIR)/find_python2)" $< $@
 ifeq ($(BUILD_OS), WINNT)
-	-[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J $@\\bin $@\\Scripts
+	-[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J `echo $@/bin $@/Scripts | sed -e 's#/#\\\\#g'`
 endif
 	touch -c $@
 

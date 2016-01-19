@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-HTPROT(equalhash)
+HTPROT_R(equalhash)
 
 #ifdef __cplusplus
 }

@@ -34,7 +34,7 @@ end
 chol!(A::StridedMatrix) = chol!(A, UpperTriangular)
 
 function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
-    n = chksquare(A)
+    n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
@@ -54,7 +54,7 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
     return UpperTriangular(A)
 end
 function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
-    n = chksquare(A)
+    n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
@@ -78,10 +78,11 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
     return LowerTriangular(A)
 end
 
-doc"""
+"""
     chol(A::AbstractMatrix) -> U
 
-Compute the Cholesky factorization of a positive definite matrix `A` and return the UpperTriangular matrix `U` such that `A = U'U`.
+Compute the Cholesky factorization of a positive definite matrix `A`
+and return the UpperTriangular matrix `U` such that `A = U'U`.
 """
 function chol{T}(A::AbstractMatrix{T})
     S = promote_type(typeof(chol(one(T))), Float32)
@@ -95,7 +96,7 @@ function chol!(x::Number, uplo)
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
-doc"""
+"""
     chol(x::Number) -> y
 
 Compute the square root of a non-negative number `x`.
@@ -121,6 +122,12 @@ function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
+
+"""
+    cholfact!(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+
+The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+"""
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     if uplo == :U
         Cholesky(chol!(A, UpperTriangular).data, 'U')
@@ -128,13 +135,45 @@ function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
         Cholesky(chol!(A, LowerTriangular).data, 'L')
     end
 end
-cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) = throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
+
+"""
+    cholfact!(A::StridedMatrix, uplo::Symbol, Val{true}) -> PivotedCholesky
+
+The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+"""
+cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
+    throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
 cholfact!(A::StridedMatrix, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
 
+"""
+    cholfact(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+
+Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
+and return a `Cholesky` factorization.
+The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
+The default is to use `:U`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The following functions are available for `Cholesky` objects: `size`, `\`, `inv`, `det`.
+A `PosDefException` exception is thrown in case the matrix is not positive definite.
+"""
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
     cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{false})
+
+"""
+    cholfact(A::StridedMatrix, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
+
+Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
+and return a `CholeskyPivoted` factorization.
+The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
+The default is to use `:U`.
+The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
+The following functions are available for `PivotedCholesky` objects: `size`, `\`, `inv`, `det`, and `rank`.
+The argument `tol` determines the tolerance for determining the rank.
+For negative values, the tolerance is the machine precision.
+"""
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
     cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{true}; tol = tol)
+
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol = :U) = cholfact(A, uplo, Val{false})
 
 function cholfact(x::Number, uplo::Symbol=:U)
@@ -264,3 +303,110 @@ end
 chkfullrank(C::CholeskyPivoted) = C.rank < size(C.factors, 1) && throw(RankDeficientException(C.info))
 
 rank(C::CholeskyPivoted) = C.rank
+
+"""
+    lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
+"""
+function lowrankupdate!(C::Cholesky, v::StridedVector)
+    A = C.factors
+    n = length(v)
+    if size(C, 1) != n
+        throw(DimensionMismatch("updating vector must fit size of factorization"))
+    end
+    if C.uplo == 'U'
+        conj!(v)
+    end
+
+    for i = 1:n
+
+        # Compute Givens rotation
+        c, s, r = givensAlgorithm(A[i,i], v[i])
+
+        # Store new diagonal element
+        A[i,i] = r
+
+        # Update remaining elements in row/column
+        if C.uplo == 'U'
+            for j = i + 1:n
+                Aij = A[i,j]
+                vj  = v[j]
+                A[i,j]  =   c*Aij + s*vj
+                v[j]    = -s'*Aij + c*vj
+            end
+        else
+            for j = i + 1:n
+                Aji = A[j,i]
+                vj  = v[j]
+                A[j,i]  =   c*Aji + s*vj
+                v[j]    = -s'*Aji + c*vj
+            end
+        end
+    end
+    return C
+end
+
+"""
+    lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
+"""
+function lowrankdowndate!(C::Cholesky, v::StridedVector)
+    A = C.factors
+    n = length(v)
+    if size(C, 1) != n
+        throw(DimensionMismatch("updating vector must fit size of factorization"))
+    end
+    if C.uplo == 'U'
+        conj!(v)
+    end
+
+    for i = 1:n
+
+        Aii = A[i,i]
+
+        # Compute Givens rotation
+        s = conj(v[i]/Aii)
+        s2 = abs2(s)
+        if s2 > 1
+            throw(LinAlg.PosDefException(i))
+        end
+        c = sqrt(1 - abs2(s))
+
+        # Store new diagonal element
+        A[i,i] = c*Aii
+
+        # Update remaining elements in row/column
+        if C.uplo == 'U'
+            for j = i + 1:n
+                vj = v[j]
+                Aij = (A[i,j] - s*vj)/c
+                A[i,j] = Aij
+                v[j] = -s'*Aij + c*vj
+            end
+        else
+            for j = i + 1:n
+                vj = v[j]
+                Aji = (A[j,i] - s*vj)/c
+                A[j,i] = Aji
+                v[j] = -s'*Aji + c*vj
+            end
+        end
+    end
+    return C
+end
+
+"""
+    lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations.
+"""
+lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
+
+"""
+    lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations.
+"""
+lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))

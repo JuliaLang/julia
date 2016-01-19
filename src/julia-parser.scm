@@ -105,15 +105,6 @@
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
 
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
-(define (assignment-like? e)
-  (and (pair? e) (is-prec-assignment? (car e))))
-
-(define (kwarg? e)
-  (and (pair? e) (eq? (car e) 'kw)))
-
 (define (dict-literal? l)
   (and (length= l 3) (eq? (car l) '=>)))
 
@@ -1154,7 +1145,7 @@
      (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
      (let* ((paren (eqv? (require-token s) #\())
             (sig   (parse-call s)))
-       (if (and (eq? word 'function) (not paren) (symbol? sig))
+       (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
 	   (begin (if (not (eq? (require-token s) 'end))
 		      (error (string "expected \"end\" in definition of function \"" sig "\"")))
 		  (take-token s)
@@ -1414,7 +1405,8 @@
                       r)
                      ((eq? r ':)
                       r)
-                     ((and (length= r 4) (eq? (car r) 'comparison) (eq? (caddr r) 'in))
+                     ((and (length= r 4) (eq? (car r) 'comparison)
+                           (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
                       `(= ,(cadr r) ,(cadddr r)))
                      (else
                       (error "invalid iteration specification")))))

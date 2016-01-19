@@ -16,6 +16,8 @@ function lgamma_r(x::Float32)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))
+lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
+"`lgamma_r(x)`: return L,s such that `gamma(x) = s * exp(L)`" lgamma_r
 
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
@@ -406,7 +408,7 @@ function beta(x::Number, w::Number)
     yx, sx = lgamma_r(x)
     yw, sw = lgamma_r(w)
     yxw, sxw = lgamma_r(x+w)
-    return copysign(exp(yx + yw - yxw), sx*sw*sxw)
+    return exp(yx + yw - yxw) * (sx*sw*sxw)
 end
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 @vectorize_2arg Number beta

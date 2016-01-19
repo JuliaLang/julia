@@ -126,19 +126,19 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Byte-swap an integer
+   Byte-swap an integer.
 
 .. function:: num2hex(f)
 
    .. Docstring generated from Julia source
 
-   Get a hexadecimal string of the binary representation of a floating point number
+   Get a hexadecimal string of the binary representation of a floating point number.
 
 .. function:: hex2num(str)
 
    .. Docstring generated from Julia source
 
-   Convert a hexadecimal string to the floating point number it represents
+   Convert a hexadecimal string to the floating point number it represents.
 
 .. function:: hex2bytes(s::ASCIIString)
 
@@ -223,7 +223,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether a floating point number is subnormal
+   Test whether a floating point number is subnormal.
 
 .. function:: isfinite(f) -> Bool
 
@@ -235,19 +235,19 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether a number is infinite
+   Test whether a number is infinite.
 
 .. function:: isnan(f) -> Bool
 
    .. Docstring generated from Julia source
 
-   Test whether a floating point number is not a number (NaN)
+   Test whether a floating point number is not a number (NaN).
 
 .. function:: inf(f)
 
    .. Docstring generated from Julia source
 
-   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``\ .
 
 .. function:: nan(f)
 
@@ -259,13 +259,13 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Get the next floating point number in lexicographic order
+   Get the next floating point number in lexicographic order.
 
 .. function:: prevfloat(f) -> AbstractFloat
 
    .. Docstring generated from Julia source
 
-   Get the previous floating point number in lexicographic order
+   Get the previous floating point number in lexicographic order.
 
 .. function:: isinteger(x) -> Bool
 
@@ -277,7 +277,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether ``x`` or all its elements are numerically equal to some real number
+   Test whether ``x`` or all its elements are numerically equal to some real number.
 
 .. function:: Float32(x [, mode::RoundingMode])
 
@@ -315,57 +315,41 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
-   that can be converted to an ``Int``).  The usual mathematical operators are
-   defined for this type, and results are promoted to a ``BigInt``.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``\ ).  The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``\ .
 
-   Instances can be constructed from strings via :func:`parse`, or using the
-   ``big`` string literal.
+   Instances can be constructed from strings via :func:`parse`\ , or using the ``big`` string literal.
 
 .. function:: BigFloat(x)
 
    .. Docstring generated from Julia source
 
-   Create an arbitrary precision floating point number. ``x`` may be
-   an ``Integer``, a ``Float64`` or a ``BigInt``. The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a ``BigFloat``.
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``\ , a ``Float64`` or a ``BigInt``\ . The usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``\ .
 
-   Note that because decimal literals are converted to floating point numbers
-   when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead
-   prefer to initialize constants from strings via :func:`parse`, or using the
-   ``big`` string literal.
+   Note that because decimal literals are converted to floating point numbers when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead prefer to initialize constants from strings via :func:`parse`\ , or using the ``big`` string literal.
 
    .. doctest::
 
-      julia> BigFloat(2.1)
-      2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+       julia> BigFloat(2.1)
+       2.100000000000000088817841970012523233890533447265625000000000000000000000000000
 
-      julia> big"2.1"
-      2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+       julia> big"2.1"
+       2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
 .. function:: rounding(T)
 
    .. Docstring generated from Julia source
 
-   Get the current floating point rounding mode for type ``T``, controlling
-   the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
-   :func:`*`, :func:`/` and :func:`sqrt`) and type conversion.
+   Get the current floating point rounding mode for type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
 
-   Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
-   ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
+   Valid modes are ``RoundNearest``\ , ``RoundToZero``\ , ``RoundUp``\ , ``RoundDown``\ , and ``RoundFromZero`` (``BigFloat`` only).
 
 .. function:: setrounding(T, mode)
 
    .. Docstring generated from Julia source
 
-   Set the rounding mode of floating point type ``T``, controlling the
-   rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
-   :func:`/` and :func:`sqrt`) and type conversion.
+   Set the rounding mode of floating point type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
 
-   Note that this may affect other types, for instance changing the rounding
-   mode of ``Float64`` will change the rounding mode of ``Float32``. See
-   ``rounding`` for available modes
+   Note that this may affect other types, for instance changing the rounding mode of ``Float64`` will change the rounding mode of ``Float32``\ . See ``rounding`` for available modes
 
 .. function:: setrounding(f::Function, T, mode)
 
@@ -608,7 +592,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
    Pick a random element or array of random elements from the set of values specified by ``S``\ ; ``S`` can be
 
    * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
-   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for   integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
 
    ``S`` defaults to ``Float64``\ .
 

@@ -80,22 +80,24 @@ is that a 1-tuple must be written with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
-    julia> path = ccall((:getenv, "libc"), Ptr{UInt8}, (Ptr{UInt8},), "SHELL")
-    Ptr{UInt8} @0x00007fff5fbffc45
+    julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
+    Cstring(@0x00007fff5fbffc45)
 
     julia> bytestring(path)
     "/bin/bash"
 
-Note that the argument type tuple must be written as ``(Ptr{UInt8},)``,
-rather than ``(Ptr{UInt8})``. This is because ``(Ptr{UInt8})`` is just
-the expression ``Ptr{UInt8}`` surrounded by parentheses, rather than
-a 1-tuple containing ``Ptr{UInt8}``::
+Note that the argument type tuple must be written as ``(Cstring,)``,
+rather than ``(Cstring)``. This is because ``(Cstring)`` is just
+the expression ``Cstring`` surrounded by parentheses, rather than
+a 1-tuple containing ``Cstring``:
 
-    julia> (Ptr{UInt8})
-    Ptr{UInt8}
+.. doctest::
 
-    julia> (Ptr{UInt8},)
-    (Ptr{UInt8},)
+    julia> (Cstring)
+    Cstring
+
+    julia> (Cstring,)
+    (Cstring,)
 
 In practice, especially when providing reusable functionality, one
 generally wraps ``ccall`` uses in Julia functions that set up arguments
@@ -103,13 +105,13 @@ and then check for errors in whatever manner the C or Fortran function
 indicates them, propagating to the Julia caller as exceptions. This is
 especially important since C and Fortran APIs are notoriously
 inconsistent about how they indicate error conditions. For example, the
-``getenv`` C library function is wrapped in the following Julia function
-in
+``getenv`` C library function is wrapped in the following Julia function,
+which is a simplified version of the actual definition from
 `env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
 
     function getenv(var::AbstractString)
       val = ccall((:getenv, "libc"),
-                  Ptr{UInt8}, (Ptr{UInt8},), var)
+                  Cstring, (Cstring,), var)
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
@@ -148,6 +150,10 @@ C libraries to use this pattern of requiring the caller to allocate
 memory to be passed to the callee and filled in. Allocation of memory
 from Julia like this is generally accomplished by creating an
 uninitialized array and passing a pointer to its data to the C function.
+This is why we don't use the ``Cstring`` type here: as the array is
+uninitialized, it could contain NUL bytes. Converting to a ``Cstring`` as
+part of the ``ccall`` checks for contained NUL bytes and could therefore
+throw a conversion error.
 
 Creating C-Compatible Julia Function Pointers
 ---------------------------------------------
@@ -421,6 +427,8 @@ error if the Julia string contains any embedded NUL characters (which would caus
 truncated if the C routine treats NUL as the terminator).  If you are passing a ``char*`` to a C routine that
 does not assume NUL termination (e.g. because you pass an explicit string length), or if you know for certain that
 your Julia string does not contain NUL and want to skip the check, you can use ``Ptr{UInt8}`` as the argument type.
+``Cstring`` can also be used as the `ccall` return type, but in that case it obviously does not introduce any extra
+checks and is only meant to improve readability of the call.
 
 **System-dependent:**
 

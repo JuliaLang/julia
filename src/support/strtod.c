@@ -28,12 +28,12 @@ locale_t get_c_locale(void)
   return c_locale;
 }
 
-DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
+JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 {
   return strtod_l(nptr, endptr, get_c_locale());
 }
 
-DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
+JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 {
   return strtof_l(nptr, endptr, get_c_locale());
 }
@@ -98,7 +98,7 @@ double parse_inf_or_nan(const char *p, char **endptr)
 }
 
 
-DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
+JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 {
     char *fail_pos;
     double val;
@@ -285,7 +285,7 @@ DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 }
 
 
-DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
+JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 {
   return (float) jl_strtod_c(nptr, endptr);
 }

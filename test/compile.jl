@@ -3,6 +3,7 @@
 using Base.Test
 
 dir = mktempdir()
+dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -71,6 +72,16 @@ try
     end
     Base.compilecache("FooBar")
     sleep(2)
+    @test isfile(joinpath(dir, "FooBar.ji"))
+
+    touch(FooBar_file)
+    insert!(Base.LOAD_CACHE_PATH, 1, dir2)
+    Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
+    sleep(2)
+    @test isfile(joinpath(dir2, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
+
     open(FooBar_file, "w") do f
         print(f, """
               __precompile__(true)
@@ -83,9 +94,10 @@ try
     @test_throws ErrorException Base.require(:FooBar)
 
 finally
-    splice!(Base.LOAD_CACHE_PATH, 1)
+    splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
+    rm(dir2, recursive=true)
 end
 
 # test --compilecache=no command line option

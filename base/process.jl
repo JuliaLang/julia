@@ -30,7 +30,7 @@ immutable Cmd <: AbstractCmd
     end
 end
 
-doc"""
+"""
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide,
                   env, dir)
 
@@ -49,7 +49,7 @@ keyword arguments:
   arguments are sent to a program as a single "command-line" string, and
   programs are responsible for parsing it into arguments.  By default,
   empty arguments and arguments with spaces or tabs are quoted with double
-  quotes `"` in the command line, and `\` or `"` are preceded by backslashes.
+  quotes `"` in the command line, and `\\` or `"` are preceded by backslashes.
   `windows_verbatim=true` is useful for launching programs that parse their
   command line in nonstandard ways.)  Has no effect on non-Windows systems.
 * `windows_hide::Bool`: If `true` (defaults to `false`), then on Windows no
@@ -71,6 +71,10 @@ backticks, e.g.
     Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 """
 Cmd
+
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
+==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
+                     x.dir == y.dir && isequal(x.flags, y.flags)
 
 immutable OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -299,6 +303,8 @@ type Process <: AbstractPipe
         this
     end
 end
+pipe_reader(p::Process) = p.out
+pipe_writer(p::Process) = p.in
 
 immutable ProcessChain <: AbstractPipe
     processes::Vector{Process}
@@ -307,6 +313,8 @@ immutable ProcessChain <: AbstractPipe
     err::Redirectable
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
 end
+pipe_reader(p::ProcessChain) = p.out
+pipe_writer(p::ProcessChain) = p.in
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)

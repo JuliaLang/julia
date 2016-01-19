@@ -23,7 +23,7 @@
 extern "C" {
 #endif
 
-DLLEXPORT void libsupport_init(void);
+JL_DLLEXPORT void libsupport_init(void);
 
 #ifdef __cplusplus
 }

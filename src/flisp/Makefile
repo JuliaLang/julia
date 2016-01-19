@@ -48,7 +48,7 @@ release: $(BUILDDIR)/$(EXENAME)
 debug: $(BUILDDIR)/$(EXENAME)-debug
 
 $(BUILDDIR):
-	mkdir $(BUILDDIR)
+	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
@@ -68,7 +68,6 @@ $(LLT_debug): $(LLTDIR)/*.h $(LLTDIR)/*.c
 $(BUILDDIR)/$(LIBTARGET)-debug.a: $(DOBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(DOBJS))
-	ln -sf $@ $(LIBTARGET).a
 
 $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
@@ -80,8 +79,8 @@ else
 CCLD := $(LD)
 endif
 
-$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+$(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
 $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))

@@ -200,7 +200,9 @@ function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
             write(out, '0')
             ndigits += 1
         end
-        write(out, trailingzeros ? '.' : ' ')
+        if trailingzeros
+            write(out, '.')
+        end
     else # 0 < pt < ndigits
         # dd.dd0000
         ndigits -= pt
@@ -411,7 +413,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char, inside_g
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
     push!(blk.args, :(exp = pt-1))
-    expmark = c=='E' ? "E" : "e"
+    expmark = isupper(c) ? "E" : "e"
     if precision==0 && '#' in flags
         expmark = string(".",expmark)
     end
@@ -680,6 +682,17 @@ function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
 end
 
 function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print to fixed trailing precision
+    #  [g]: lower case e on scientific
+    #  [G]: Upper case e on scientific
+    #
+    # flags
+    #  (#): always print a decimal point
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    #
     x, ex, blk = special_handler(flags,width)
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,length(DIGITS)-1)
@@ -709,14 +722,9 @@ function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(width = $width))
     # need to compute value before left-padding since trailing zeros are elided
     push!(blk.args, :(tmpout = IOBuffer()))
-    push!(blk.args, :(if fprec > 0
-                          print_fixed(tmpout,fprec,pt,len,$('#' in flags))
-                      else
-                          write(tmpout, pointer(DIGITS), len)
-                          while pt >= (len+=1) write(tmpout,'0') end
-                      end))
+    push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
     push!(blk.args, :(tmpstr = takebuf_string(tmpout)))
-    push!(blk.args, :(if fprec > 0 width -= length(tmpstr); end ))
+    push!(blk.args, :(width -= length(tmpstr)))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
     else
@@ -856,7 +864,7 @@ function decode(b::Int, x::BigInt)
     pt = Base.ndigits(x, abs(b))
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
-    ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
+    ccall((:__gmpz_get_str, :libgmp), Cstring,
           (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
@@ -876,7 +884,7 @@ function decode_0ct(x::BigInt)
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
     p = convert(Ptr{UInt8}, DIGITS) + 1
-    ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
+    ccall((:__gmpz_get_str, :libgmp), Cstring,
           (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
@@ -901,7 +909,7 @@ function decode_dec(x::SmallFloatingPoint)
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), false)
     end
-    len,pt,neg,buffer = grisu(x,Grisu.FIXED,0)
+    len,pt,neg = grisu(x,Grisu.FIXED,0)
     if len == 0
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), false)
@@ -927,7 +935,7 @@ fix_dec(x::Integer, n::Int) = decode_dec(x)
 
 function fix_dec(x::SmallFloatingPoint, n::Int)
     if n > length(DIGITS)-1; n = length(DIGITS)-1; end
-    len,pt,neg,buffer = grisu(x,Grisu.FIXED,n)
+    len,pt,neg = grisu(x,Grisu.FIXED,n)
     if len == 0
         DIGITS[1] = '0'
         return (Int32(1), Int32(1), neg)
@@ -981,7 +989,7 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(1), signbit(x)
     else
-        len,pt,neg,buffer = grisu(x,Grisu.PRECISION,n)
+        len,pt,neg = grisu(x,Grisu.PRECISION,n)
     end
     return Int32(len), Int32(pt), neg
 end

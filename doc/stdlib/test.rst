@@ -106,35 +106,29 @@ Working with Test Sets
 Typically a large of number of tests are used to make sure functions
 work correctly over a range of inputs. In the event a test fails, the
 default behavior is to throw an exception immediately. However, it is
-normally preferrable to run the rest of the tests first to get a
+normally preferable to run the rest of the tests first to get a
 better picture of how many errors there are in the code being tested.
 
-The :func:`@testset` and :func:`@testloop` macros can be used to
-group tests into *sets*. All the tests in a test set will be run,
-and at the end of the test set a summary will be printed. If any of
-the tests failed, or could not be evaluated due to an error, the
-test set will then throw a ``TestSetException``.
+The :func:`@testset` macro can be used to group tests into *sets*.
+All the tests in a test set will be run, and at the end of the test set
+a summary will be printed. If any of the tests failed, or could not be
+evaluated due to an error, the test set will then throw a ``TestSetException``.
 
 .. function:: @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
+              @testset [CustomTestSet] [option=val  ...] ["description $v"] for v in (...) ... end
+              @testset [CustomTestSet] [option=val  ...] ["description $v, $w"] for v in (...), w in (...) ... end
 
    .. Docstring generated from Julia source
 
-   Starts a new test set. If no custom testset type is given it defaults to creating a ``DefaultTestSet``\ . ``DefaultTestSet`` records all the results and, and if there are any ``Fail``\ s or ``Error``\ s, throws an exception at the end of the top-level (non-nested) test set, along with a summary of the test results.
+   Starts a new test set, or multiple test sets if a ``for`` loop is provided.
 
-   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` or ``@testloop`` invocations. The given options are only applied to the test set where they are given. The default test set type does not take any options.
+   If no custom testset type is given it defaults to creating a ``DefaultTestSet``\ . ``DefaultTestSet`` records all the results and, and if there are any ``Fail``\ s or ``Error``\ s, throws an exception at the end of the top-level (non-nested) test set, along with a summary of the test results.
 
-   By default the ``@testset`` macro will return the testset object itself, though this behavior can be customized in other testset types.
+   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` invocations. The given options are only applied to the test set where they are given. The default test set type does not take any options.
 
-.. function:: @testloop [CustomTestSet] [option=val  ...] ["description $v"] for v in (...) ... end
-              @testloop [CustomTestSet] [option=val  ...] ["description $v, $w"] for v in (...), w in (...) ... end
+   The description string accepts interpolation from the loop indices. If no description is provided, one is constructed based on the variables.
 
-   .. Docstring generated from Julia source
-
-   Starts a new test set for each iteration of the loop. The description string accepts interpolation from the loop indices. If no description is provided, one is constructed based on the variables.
-
-   Any custom testset type (subtype of ``AbstractTestSet``\ ) can be given and it will also be used for any nested ``@testset`` or ``@testloop`` invocations. The given options are only applied to the test sets where they are given. The default test set type does not take any options.
-
-   The ``@testloop`` macro collects and returns a list of the return values of the ``finish`` method, which by default will return a list of the testset objects used in each iteration.
+   By default the ``@testset`` macro will return the testset object itself, though this behavior can be customized in other testset types. If a ``for`` loop is used then the macro collects and returns a list of the return values of the ``finish`` method, which by default will return a list of the testset objects used in each iteration.
 
 We can put our tests for the ``foo(x)`` function in a test set::
 
@@ -153,7 +147,7 @@ Test sets can all also be nested::
                    @test foo("cat") == 9
                    @test foo("dog") == foo("cat")
                end
-               @testloop "Arrays $i" for i in 1:3
+               @testset "Arrays $i" for i in 1:3
                    @test foo(zeros(i)) == i^2
                    @test foo(ones(i)) == i^2
                end

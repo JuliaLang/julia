@@ -48,6 +48,8 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 include("functors.jl")
+include("checked.jl")
+importall .Checked
 
 # array structures
 include("abstractarray.jl")
@@ -222,6 +224,7 @@ include("i18n.jl")
 using .I18n
 
 # frontend
+include("initdefs.jl")
 include("Terminals.jl")
 include("LineEdit.jl")
 include("REPLCompletions.jl")
@@ -298,6 +301,7 @@ include("docs/basedocs.jl")
 
 # threads
 include("threads.jl")
+include("threadcall.jl")
 
 function __init__()
     # Base library init
@@ -306,6 +310,7 @@ function __init__()
     early_init()
     init_load_path()
     init_parallel()
+    init_threadcall()
 end
 
 include = include_from_node1

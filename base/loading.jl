@@ -380,6 +380,15 @@ end
 
 macro __FILE__() source_path() end
 
+"""
+    include(path::AbstractString)
+
+Evaluate the contents of a source file in the current context. During including, a
+task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. All paths refer to files on node 1 when running
+in parallel, and files will be fetched from node 1. This function is typically used to load
+source interactively, or to combine files in packages that are broken into multiple source files.
+"""
 function include_from_node1(_path::AbstractString)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
@@ -415,7 +424,7 @@ end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
-    isfile(output) && rm(output)
+    rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
@@ -540,13 +549,10 @@ end
 function recompile_stale(mod, cachefile)
     path = find_in_path(string(mod), nothing)
     if path === nothing
-        rm(cachefile)
-        error("module $mod not found in current path; removed orphaned cache file $cachefile")
+        error("module $mod not found in current path; you should rm(\"$(escape_string(cachefile))\") to remove the orphaned cache file")
     end
     if stale_cachefile(path, cachefile)
         info("Recompiling stale cache file $cachefile for module $mod.")
-        if !success(create_expr_cache(path, cachefile))
-            error("Failed to precompile $mod to $cachefile")
-        end
+        compilecache(mod)
     end
 end

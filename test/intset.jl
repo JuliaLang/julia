@@ -86,6 +86,8 @@ k = IntSet([4, 5])
 copy!(k, i)
 @test k == i
 @test !(k === i)
+copy!(k, k)
+@test k == i
 
 # unions
 i = IntSet([1, 2, 3])

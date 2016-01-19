@@ -147,8 +147,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
+   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 
 .. function:: addprocs() -> List of process identifiers
 
@@ -156,48 +155,43 @@ General Parallel Computing Support
 
    Equivalent to ``addprocs(CPU_CORES)``
 
-   Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state
-   (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
+   Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
 .. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
 
    .. Docstring generated from Julia source
 
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
 
    ``machines`` is a vector of machine specifications.  Worker are started for each specification.
 
-   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
+   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``\ .
 
-   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
+   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``\ . ``user`` defaults to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other workers will connect to this worker at the specified ``bind_addr`` and ``port``\ .
 
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
-   it will launch as many workers as the number of cores on the specific host.
-
+   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto`` it will launch as many workers as the number of cores on the specific host.
 
    Keyword arguments:
 
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
+   ``tunnel``\ : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
 
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
+   ``sshflags``\ : specifies additional ssh options, e.g.
 
-   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
+   .. code-block:: julia
 
-   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
+       sshflags=`-i /home/foo/bar.pem`
 
-   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
+   ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``exeflags`` :  additional flags passed to the worker processes.
+   ``dir``\ : specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``\ )
+
+   ``exename``\ : name of the julia executable. Defaults to ``"$JULIA_HOME/julia"`` or ``"$JULIA_HOME/julia-debug"`` as the case may be.
+
+   ``exeflags``\ : additional flags passed to the worker processes.
 
    Environment variables :
 
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
-   the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-   variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
-   the number of seconds a newly launched worker waits for connection establishment.
+   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it a fatal situation and terminates. This timeout can be controlled via environment variable ``JULIA_WORKER_TIMEOUT``\ . The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies the number of seconds a newly launched worker waits for connection establishment.
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
@@ -205,10 +199,9 @@ General Parallel Computing Support
 
    Launches worker processes via the specified cluster manager.
 
-   For example Beowulf clusters are  supported via a custom cluster manager implemented in package ``ClusterManagers``.
+   For example Beowulf clusters are  supported via a custom cluster manager implemented in package ``ClusterManagers``\ .
 
-   The number of seconds a newly launched worker waits for connection establishment from the master can be
-   specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
+   The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
 .. function:: nprocs()
 
@@ -256,13 +249,9 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Transform collections ``lsts`` by applying ``f`` to each element in parallel.
-   (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.)
-   If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
-   All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
+   Transform collections ``lsts`` by applying ``f`` to each element in parallel. (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.) If ``nprocs() > 1``\ , the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers, or on the processes specified by ``pids``\ .
 
-   If ``err_retry`` is ``true``, it retries a failed application of ``f`` on a different worker.
-   If ``err_stop`` is ``true``, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   If ``err_retry`` is ``true``\ , it retries a failed application of ``f`` on a different worker. If ``err_stop`` is ``true``\ , it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
 
 .. function:: remotecall(func, id, args...)
 
@@ -312,8 +301,8 @@ General Parallel Computing Support
    * ``Future`` : Wait for a value to become available for the specified future.
    * ``Channel``\ : Wait for a value to be appended to the channel.
    * ``Condition``\ : Wait for ``notify`` on a condition.
-   * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
-   * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
+   * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process   can be used to determine success or failure.
+   * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an   exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
    * ``RawFD``\ : Wait for changes on a file descriptor (see ``poll_fd`` for keyword arguments and return code)
 
    If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ .
@@ -326,8 +315,8 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``\ . Does not remove the item fetched:
 
-   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
-   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
+   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally.   Further calls to ``fetch`` on the same reference return the cached value. If the remote value   is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
+   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are   same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
 .. function:: remotecall_wait(func, id, args...)
@@ -489,8 +478,8 @@ General Parallel Computing Support
 
    A low-level API which given a ``IO`` connection, returns the pid of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
 
-Shared Arrays (Experimental, UNIX-only feature)
------------------------------------------------
+Shared Arrays
+-------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
@@ -502,23 +491,47 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, it is called on all the participating workers.
 
+.. function:: SharedArray(filename::AbstractString, T::Type, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+
+   .. Docstring generated from Julia source
+
+   Construct a ``SharedArray`` backed by the file ``filename``\ , with element type ``T`` (must be a ``bitstype``\ ) and size ``dims``\ , across the processes specified by ``pids`` - all of which have to be on the same host. This file is mmapped into the host memory, with the following consequences:
+
+   * The array data must be represented in binary format (e.g., an ASCII   format like CSV cannot be supported)
+
+   * Any changes you make to the array values (e.g., ``A[3] = 0``\ ) will   also change the values on disk
+
+   If ``pids`` is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, ``localindexes`` and ``indexpids`` will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.
+
+   ``mode`` must be one of ``"r"``\ , ``"r+"``\ , ``"w+"``\ , or ``"a+"``\ , and defaults to ``"r+"`` if the file specified by ``filename`` already exists, or ``"w+"`` if not. If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, it is called on all the participating workers. You cannot specify an ``init`` function if the file is not writable.
+
+   ``offset`` allows you to skip the specified number of bytes at the beginning of the file.
+
 .. function:: procs(S::SharedArray)
 
    .. Docstring generated from Julia source
 
-   Get the vector of processes that have mapped the shared array
+   Get the vector of processes that have mapped the shared array.
 
 .. function:: sdata(S::SharedArray)
 
    .. Docstring generated from Julia source
 
-   Returns the actual ``Array`` object backing ``S``
+   Returns the actual ``Array`` object backing ``S``\ .
 
 .. function:: indexpids(S::SharedArray)
 
    .. Docstring generated from Julia source
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping the SharedArray
+
+.. function:: localindexes(S::SharedArray)
+
+   .. Docstring generated from Julia source
+
+   Returns a range describing the "default" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of ``1:length(S)``\ .  In multi-process contexts, returns an empty range in the parent process (or any process for which ``indexpids`` returns 0).
+
+   It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish.  For a SharedArray, all indexes should be equally fast for each worker process.
 
 Cluster Manager Interface
 -------------------------
@@ -538,15 +551,11 @@ between processes. It is possible for Cluster Managers to provide a different tr
 
    .. Docstring generated from Julia source
 
-   Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
-   with appropriate ``op`` values:
+   Implemented by cluster managers. It is called on the master process, during a worker's lifetime, with appropriate ``op`` values:
 
-   - with ``:register``/``:deregister`` when a worker is added / removed
-     from the Julia worker pool.
-   - with ``:interrupt`` when ``interrupt(workers)`` is called. The
-     :class:`ClusterManager` should signal the appropriate worker with an
-     interrupt signal.
-   - with ``:finalize`` for cleanup purposes.
+   * with ``:register``\ /``:deregister`` when a worker is added / removed from the Julia worker pool.
+   * with ``:interrupt`` when ``interrupt(workers)`` is called. The :class:`ClusterManager`   should signal the appropriate worker with an interrupt signal.
+   * with ``:finalize`` for cleanup purposes.
 
 .. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
 

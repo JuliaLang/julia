@@ -14,17 +14,17 @@
 @test_throws InexactError Int16(IPv4("1.2.3.4"))
 @test_throws InexactError Int64(IPv6("2001:1::2"))
 
-let ipv = parseip("127.0.0.1")
+let ipv = parse(IPAddr, "127.0.0.1")
     @test isa(ipv, IPv4)
     @test ipv == ip"127.0.0.1"
 end
 
-@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFF")
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFFFF")
 @test_throws ArgumentError IPv4(192,255,255,-1)
 @test_throws ArgumentError IPv4(192,255,255,256)
 
-@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFFFF")
-@test_throws ArgumentError Base.parseipv4("192.")
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFFFFFF")
+@test_throws ArgumentError parse(IPv4, "192.")
 
 @test ip"::1" == IPv6(1)
 @test ip"2605:2700:0:3::4713:93e3" == IPv6(parse(UInt128,"260527000000000300000000471393e3",16))
@@ -33,7 +33,7 @@ end
 
 @test ip"0:0:0:0:0:ffff:127.0.0.1" == IPv6(0xffff7f000001)
 
-let ipv = parseip("0:0:0:0:0:ffff:127.0.0.1")
+let ipv = parse(IPAddr, "0:0:0:0:0:ffff:127.0.0.1")
     @test isa(ipv, IPv6)
     @test ipv == ip"0:0:0:0:0:ffff:127.0.0.1"
 end
@@ -63,6 +63,9 @@ end
 @test repr(ip"2001:db8::1:1:1:1:1") == "ip\"2001:db8:0:1:1:1:1:1\""
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
 @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
+
+# test show() function for UDPSocket()
+@test repr(UDPSocket()) == "UDPSocket(init)"
 
 port = Channel(1)
 defaultport = rand(2000:4000)
@@ -239,19 +242,80 @@ begin
     close(sock)
 end
 
-# Local-machine multicast
-
+# Local-machine broadcast
 let
+    # (Mac OS X's loopback interface doesn't support broadcasts)
+    bcastdst = @osx ? ip"255.255.255.255" : ip"127.255.255.255"
+
     function create_socket()
         s = UDPSocket()
         bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
         s
     end
     a, b, c = [create_socket() for i = 1:3]
-    @sync begin
-        recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
-        send(c, ip"255.255.255.255", 2000, "hello")
-        map(wait, recvs)
+    try
+        @sync begin
+            send(c, bcastdst, 2000, "hello")
+            recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
+            map(wait, recvs)
+        end
+    catch e
+        if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
+            warn("UDP broadcast test skipped (permission denied upon send, restrictive firewall?)")
+        else
+            rethrow()
+        end
     end
     [close(s) for s in [a, b, c]]
 end
+
+let P = Pipe()
+    Base.link_pipe(P)
+    write(P, "hello")
+    @test nb_available(P) == 0
+    @test !eof(P)
+    @test read(P, Char) === 'h'
+    @test !eof(P)
+    @test read(P, Char) === 'e'
+    @test isopen(P)
+    close(P.in)
+    @test isopen(P)
+    @test !eof(P)
+    @test readuntil(P, 'o') == "llo"
+    @test isopen(P)
+    @test eof(P)
+    @test !isopen(P)
+    close(P)
+    @test !isopen(P)
+    @test eof(P)
+end
+
+# test the method matching connect!(::TCPSocket, ::Base.InetAddr{T<:Base.IPAddr})
+let
+    addr = Base.InetAddr(ip"127.0.0.1", 4444)
+
+    function test_connect(addr::Base.InetAddr)
+        srv = listen(addr)
+
+        @async try c = accept(srv); close(c) catch end
+        yield()
+
+        t0 = TCPSocket()
+        t = t0
+        @assert is(t,t0)
+
+        try
+            t = connect(addr)
+        finally
+           close(srv)
+        end
+
+        test = !is(t,t0)
+        close(t)
+
+        return test
+    end
+
+    @test test_connect(addr)
+end
+

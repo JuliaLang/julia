@@ -35,6 +35,20 @@ call{T}(::Type{SharedArray{T}}, m::Integer, n::Integer; kwargs...) =
 call{T}(::Type{SharedArray{T}}, m::Integer, n::Integer, o::Integer; kwargs...) =
     SharedArray(T, m, n, o; kwargs...)
 
+"""
+    SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+
+Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified
+by `pids` - all of which have to be on the same host.
+
+If `pids` is left unspecified, the shared array will be mapped across all processes on the
+current host, including the master. But, `localindexes` and `indexpids` will only refer to
+worker processes. This facilitates work distribution code to use workers for actual
+computation with the master process acting as a driver.
+
+If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
+the participating workers.
+"""
 function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
@@ -96,7 +110,36 @@ end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
-# Create a SharedArray from a disk file
+"""
+    SharedArray(filename::AbstractString, T::Type, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+
+Construct a `SharedArray` backed by the file `filename`, with element
+type `T` (must be a `bitstype`) and size `dims`, across the processes
+specified by `pids` - all of which have to be on the same host. This
+file is mmapped into the host memory, with the following consequences:
+
+- The array data must be represented in binary format (e.g., an ASCII
+  format like CSV cannot be supported)
+
+- Any changes you make to the array values (e.g., `A[3] = 0`) will
+  also change the values on disk
+
+If `pids` is left unspecified, the shared array will be mapped across
+all processes on the current host, including the master. But,
+`localindexes` and `indexpids` will only refer to worker
+processes. This facilitates work distribution code to use workers for
+actual computation with the master process acting as a driver.
+
+`mode` must be one of `"r"`, `"r+"`, `"w+"`, or `"a+"`, and defaults
+to `"r+"` if the file specified by `filename` already exists, or
+`"w+"` if not. If an `init` function of the type
+`initfn(S::SharedArray)` is specified, it is called on all the
+participating workers. You cannot specify an `init` function if the
+file is not writable.
+
+`offset` allows you to skip the specified number of bytes at the
+beginning of the file.
+"""
 function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
     isabspath(filename) || throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
@@ -211,6 +254,20 @@ indexpids(S::SharedArray) = S.pidx
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
+"""
+    localindexes(S::SharedArray)
+
+Returns a range describing the "default" indexes to be handled by the
+current process.  This range should be interpreted in the sense of
+linear indexing, i.e., as a sub-range of `1:length(S)`.  In
+multi-process contexts, returns an empty range in the parent process
+(or any process for which `indexpids` returns 0).
+
+It's worth emphasizing that `localindexes` exists purely as a
+convenience, and you can partition work on the array among workers any
+way you wish.  For a SharedArray, all indexes should be equally fast
+for each worker process.
+"""
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
@@ -467,22 +524,22 @@ end
 
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-    systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
+    systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
 
     s = fdio(fd_mem, true)
 
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
-        rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
+        rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset); grow=false)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Cstring, Int, Int), shm_seg_name, oflags, permissions)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
 end # @unix_only
 
@@ -492,7 +549,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(FileOffset))
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
 end
 
 # no-op in windows

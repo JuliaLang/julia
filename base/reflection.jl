@@ -100,7 +100,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     for s in names(m,true)
         if isdefined(m,s)
             t = eval(m,s)
-            if isa(t, DataType) && t.name.name == s && super(t).name == x.name
+            if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
                 ti = typeintersect(t, x)
                 ti != Bottom && push!(sts, ti)
             elseif isa(t, Module) && !in(t, visited)
@@ -213,7 +213,7 @@ uncompressed_ast(l::LambdaStaticData) =
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
     t = to_tuple_type(t)
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, wrapper, native)
 
     if llvmf == C_NULL
         error("no method found for the specified argument types")

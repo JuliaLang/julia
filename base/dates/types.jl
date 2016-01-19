@@ -77,6 +77,11 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
 ### CONSTRUCTORS ###
 # Core constructors
+"""
+    DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+
+Construct a `DateTime` type by parts. Arguments must be convertible to `Int64`.
+"""
 function DateTime(y::Int64,m::Int64=1,d::Int64=1,
                   h::Int64=0,mi::Int64=0,s::Int64=0,ms::Int64=0)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
@@ -88,6 +93,12 @@ function DateTime(y::Int64,m::Int64=1,d::Int64=1,
     rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
     return DateTime(UTM(rata))
 end
+
+"""
+    Date(y, [m, d]) -> Date
+
+Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
+"""
 function Date(y::Int64,m::Int64=1,d::Int64=1)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y,m)))"))
@@ -105,6 +116,13 @@ end
 Date(y::Year,m::Month=Month(1),d::Day=Day(1)) = Date(value(y),value(m),value(d))
 
 # To allow any order/combination of Periods
+
+"""
+    DateTime(periods::Period...) -> DateTime
+
+Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
+parts not provided will default to the value of `Dates.default(period)`.
+"""
 function DateTime(periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
@@ -119,6 +137,13 @@ function DateTime(periods::Period...)
     end
     return DateTime(y,m,d,h,mi,s,ms)
 end
+
+"""
+    Date(period::Period...) -> Date
+
+Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
+not provided will default to the value of `Dates.default(period)`.
+"""
 function Date(periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     for p in periods
@@ -138,8 +163,18 @@ Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
+
+"""
+    eps(::DateTime) -> Millisecond
+    eps(::Date) -> Day
+
+Returns `Millisecond(1)` for `DateTime` values and `Day(1)` for `Date` values.
+"""
+Base.eps
+
 Base.eps(dt::DateTime) = Millisecond(1)
 Base.eps(dt::Date) = Day(1)
+
 Base.typemax(::Union{DateTime,Type{DateTime}}) = DateTime(146138512,12,31,23,59,59)
 Base.typemin(::Union{DateTime,Type{DateTime}}) = DateTime(-146138511,1,1,0,0,0)
 Base.typemax(::Union{Date,Type{Date}}) = Date(252522163911149,12,31)

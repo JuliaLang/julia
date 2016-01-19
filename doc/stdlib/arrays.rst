@@ -13,7 +13,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns the number of dimensions of ``A``
+   Returns the number of dimensions of ``A``\ .
 
 .. function:: size(A, [dim...])
 
@@ -51,31 +51,30 @@ Basic functions
 
    Example for a sparse 2-d array:
 
-   .. code-block:: julia
+   .. doctest::
 
-       julia> A = sprand(2, 3, 0.5)
-       2x3 sparse matrix with 4 Float64 entries:
-           [1, 1]  =  0.598888
-           [1, 2]  =  0.0230247
-           [1, 3]  =  0.486499
-           [2, 3]  =  0.809041
+       julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
+       2x3 sparse matrix with 3 Int64 entries:
+               [1, 1]  =  1
+               [2, 1]  =  -5
+               [1, 3]  =  2
 
        julia> for iter in eachindex(A)
-                  @show iter.I_1, iter.I_2
+                  @show iter.I[1], iter.I[2]
                   @show A[iter]
               end
-       (iter.I_1,iter.I_2) = (1,1)
-       A[iter] = 0.5988881393454597
-       (iter.I_1,iter.I_2) = (2,1)
-       A[iter] = 0.0
-       (iter.I_1,iter.I_2) = (1,2)
-       A[iter] = 0.02302469881746183
-       (iter.I_1,iter.I_2) = (2,2)
-       A[iter] = 0.0
-       (iter.I_1,iter.I_2) = (1,3)
-       A[iter] = 0.4864987874354343
-       (iter.I_1,iter.I_2) = (2,3)
-       A[iter] = 0.8090413606455655
+       (iter.I[1],iter.I[2]) = (1,1)
+       A[iter] = 1
+       (iter.I[1],iter.I[2]) = (2,1)
+       A[iter] = -5
+       (iter.I[1],iter.I[2]) = (1,2)
+       A[iter] = 0
+       (iter.I[1],iter.I[2]) = (2,2)
+       A[iter] = 0
+       (iter.I[1],iter.I[2]) = (1,3)
+       A[iter] = 2
+       (iter.I[1],iter.I[2]) = (2,3)
+       A[iter] = 0
 
    If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a CartesianRange otherwise).  If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
 
@@ -101,7 +100,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Convert an array to its complex conjugate in-place
+   Convert an array to its complex conjugate in-place.
 
 .. function:: stride(A, k)
 
@@ -113,7 +112,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns a tuple of the memory strides in each dimension
+   Returns a tuple of the memory strides in each dimension.
 
 .. function:: ind2sub(dims, index) -> subscripts
 
@@ -127,13 +126,19 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
+   Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``\ .
 
 .. function:: sub2ind(dims, i, j, k...) -> index
 
    .. Docstring generated from Julia source
 
-   The inverse of ``ind2sub``\ , returns the linear index corresponding to the provided subscripts
+   The inverse of ``ind2sub``\ , returns the linear index corresponding to the provided subscripts.
+
+.. function:: LinAlg.checksquare(A)
+
+   .. Docstring generated from Julia source
+
+   Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
 
 Constructors
 ------------
@@ -148,7 +153,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``. Element values can be specified using ``Type[a,b,c,...]``.
+   Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``\ . Element values can be specified using ``Type[a,b,c,...]``\ .
 
 .. function:: cell(dims)
 
@@ -184,13 +189,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create a ``BitArray`` with all values set to ``true``
+   Create a ``BitArray`` with all values set to ``true``\ .
 
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
 
-   Create a ``BitArray`` with all values set to ``false``
+   Create a ``BitArray`` with all values set to ``false``\ .
 
 .. function:: fill(x, dims)
 
@@ -256,13 +261,13 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   ``n``\ -by-``n`` identity matrix
+   ``n``\ -by-``n`` identity matrix.
 
 .. function:: eye(m, n)
 
    .. Docstring generated from Julia source
 
-   ``m``\ -by-``n`` identity matrix
+   ``m``\ -by-``n`` identity matrix.
 
 .. function:: eye(A)
 
@@ -270,7 +275,7 @@ Constructors
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
 
-.. function:: linspace(start, stop, n=100)
+.. function:: linspace(start, stop, n=50)
 
    .. Docstring generated from Julia source
 
@@ -324,25 +329,25 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Returns a subset of array ``A`` as specified by ``inds``, where each ``ind`` may be an ``Int``, a ``Range``, or a ``Vector``. See the manual section on :ref:`array indexing <man-array-indexing>` for details.
+   Returns a subset of array ``A`` as specified by ``inds``\ , where each ``ind`` may be an ``Int``\ , a ``Range``\ , or a ``Vector``\ . See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
 .. function:: sub(A, inds...)
 
    .. Docstring generated from Julia source
 
-   Like :func:`getindex`, but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
+   Like :func:`getindex`\ , but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
 .. function:: parent(A)
 
    .. Docstring generated from Julia source
 
-   Returns the "parent array" of an array view type (e.g., ``SubArray``\ ), or the array itself if it is not a view
+   Returns the "parent array" of an array view type (e.g., ``SubArray``\ ), or the array itself if it is not a view.
 
 .. function:: parentindexes(A)
 
    .. Docstring generated from Julia source
 
-   From an array view ``A``\ , returns the corresponding indexes in the parent
+   From an array view ``A``\ , returns the corresponding indexes in the parent.
 
 .. function:: slicedim(A, d, i)
 
@@ -354,7 +359,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Returns a view of array ``A`` with the given indices like :func:`sub`, but drops all dimensions indexed with scalars.
+   Returns a view of array ``A`` with the given indices like :func:`sub`\ , but drops all dimensions indexed with scalars.
 
 .. function:: setindex!(A, X, inds...)
 
@@ -384,13 +389,13 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Concatenate along dimension 1
+   Concatenate along dimension 1.
 
 .. function:: hcat(A...)
 
    .. Docstring generated from Julia source
 
-   Concatenate along dimension 2
+   Concatenate along dimension 2.
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -545,7 +550,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Like :func:`permutedims`, except the inverse of the given permutation is applied.
+   Like :func:`permutedims`\ , except the inverse of the given permutation is applied.
 
 .. function:: permutedims!(dest, src, perm)
 
@@ -602,10 +607,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   Cumulative product along a dimension ``dim`` (defaults to 1).
-   See also :func:`cumprod!` to use a preallocated output array,
-   both for performance and to control the precision of the
-   output (e.g. to avoid overflow).
+   Cumulative product along a dimension ``dim`` (defaults to 1). See also :func:`cumprod!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -617,10 +619,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   Cumulative sum along a dimension ``dim`` (defaults to 1).
-   See also :func:`cumsum!` to use a preallocated output array,
-   both for performance and to control the precision of the
-   output (e.g. to avoid overflow).
+   Cumulative sum along a dimension ``dim`` (defaults to 1). See also :func:`cumsum!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
 
 .. function:: cumsum!(B, A, [dim])
 
@@ -727,8 +726,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Construct a random permutation of length ``n``. The optional ``rng`` argument
-   specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
+   Construct a random permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: invperm(v)
 
@@ -760,23 +758,19 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Construct a random cyclic permutation of length ``n``. The optional ``rng``
-   argument specifies a random number generator, see :ref:`Random Numbers
-   <random-numbers>`.
+   Construct a random cyclic permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: shuffle([rng,] v)
 
    .. Docstring generated from Julia source
 
-   Return a randomly permuted copy of ``v``. The optional ``rng`` argument
-   specifies a random number generator, see :ref:`Random Numbers
-   <random-numbers>`.
+   Return a randomly permuted copy of ``v``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: shuffle!([rng,] v)
 
    .. Docstring generated from Julia source
 
-   In-place version of :func:`shuffle`.
+   In-place version of :func:`shuffle`\ .
 
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
@@ -794,7 +788,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   In-place version of :func:`reverse`.
+   In-place version of :func:`reverse`\ .
 
 BitArrays
 ---------
@@ -803,19 +797,19 @@ BitArrays
 
    .. Docstring generated from Julia source
 
-   Converts a numeric array to a packed boolean array
+   Converts a numeric array to a packed boolean array.
 
 .. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
 
    .. Docstring generated from Julia source
 
-   Converts a packed boolean array to an array of booleans
+   Converts a packed boolean array to an array of booleans.
 
 .. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
 
    .. Docstring generated from Julia source
 
-   Performs a bitwise not operation on ``B``. See :ref:`~ operator <~>`.
+   Performs a bitwise not operation on ``B``\ . See :ref:`~ operator <~>`\ .
 
 .. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
@@ -937,13 +931,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in
-   which the probability of any element being nonzero is independently given by
-   ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero
-   values are sampled from the distribution specified by ``rfn``. The uniform
-   distribution is used in case ``rfn`` is not specified. The optional ``rng``
-   argument specifies a random number generator, see :ref:`Random Numbers
-   <random-numbers>`.
+   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: sprandn(m[,n],p::AbstractFloat)
 

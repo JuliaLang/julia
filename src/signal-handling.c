@@ -20,8 +20,8 @@ static volatile u_int64_t nsecprof = 0;
 static volatile int running = 0;
 static const    u_int64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
-DLLEXPORT void jl_profile_stop_timer(void);
-DLLEXPORT int jl_profile_start_timer(void);
+JL_DLLEXPORT void jl_profile_stop_timer(void);
+JL_DLLEXPORT int jl_profile_start_timer(void);
 
 
 volatile sig_atomic_t jl_signal_pending = 0;
@@ -29,10 +29,10 @@ volatile sig_atomic_t jl_defer_signal = 0;
 
 
 int exit_on_sigint = 0;
-DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
+JL_DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
 
 // what to do on SIGINT
-DLLEXPORT void jl_sigint_action(void)
+JL_DLLEXPORT void jl_sigint_action(void)
 {
     if (exit_on_sigint) jl_exit(130); // 128+SIGINT
     jl_throw(jl_interrupt_exception);
@@ -49,6 +49,9 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
 // what to do on a critical error
 static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size)
 {
+    // This function is not allowed to reference any TLS variables.
+    // We need to explicitly pass in the TLS buffer pointer when
+    // we make `jl_filename` and `jl_lineno` thread local.
     size_t n = *bt_size;
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
@@ -56,7 +59,7 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
     if (context)
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
     for(size_t i=0; i < n; i++)
-        gdblookup(bt_data[i]);
+        jl_gdblookup(bt_data[i]);
     gc_debug_print_status();
 }
 
@@ -64,7 +67,7 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
 ///////////////////////
 // Utility functions //
 ///////////////////////
-DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
+JL_DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
@@ -77,32 +80,32 @@ DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-DLLEXPORT u_int8_t *jl_profile_get_data(void)
+JL_DLLEXPORT u_int8_t *jl_profile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }
 
-DLLEXPORT size_t jl_profile_len_data(void)
+JL_DLLEXPORT size_t jl_profile_len_data(void)
 {
     return bt_size_cur;
 }
 
-DLLEXPORT size_t jl_profile_maxlen_data(void)
+JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
     return bt_size_max;
 }
 
-DLLEXPORT u_int64_t jl_profile_delay_nsec(void)
+JL_DLLEXPORT u_int64_t jl_profile_delay_nsec(void)
 {
     return nsecprof;
 }
 
-DLLEXPORT void jl_profile_clear_data(void)
+JL_DLLEXPORT void jl_profile_clear_data(void)
 {
     bt_size_cur = 0;
 }
 
-DLLEXPORT int jl_profile_is_running(void)
+JL_DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
 }

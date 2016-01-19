@@ -1,13 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fallback text/plain representation of any type:
-writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
+writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
+writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
-        n = length(f.env)
+        mt = f.env
+        n = length(mt)
         m = n==1 ? "method" : "methods"
-        print(io, "$(f.env.name) (generic function with $n $m)")
+        ns = string(mt.name)
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, ns, " (", what, " with $n $m)")
     else
         show(io, f)
     end
@@ -22,7 +26,7 @@ function writemime(io::IO, ::MIME"text/plain", r::Range)
     print(io, summary(r))
     if !isempty(r)
         println(io, ":")
-        with_output_limit(()->print_range(io, r))
+        print_range(IOContext(io, :limit_output => true), r)
     end
 end
 
@@ -30,22 +34,17 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     print(io, summary(v))
     if !isempty(v)
         println(io, ":")
-        with_output_limit(()->print_matrix(io, v))
+        print_matrix(IOContext(io, :limit_output => true), v)
     end
 end
 
 writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
-    with_output_limit(()->showarray(io, v, header=true, repr=false))
+    showarray(IOContext(io, :limit_output => true), v, header=true, repr=false)
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
     # TODO: maybe show constructor info?
 end
-
-writemime(io::IO, ::MIME"text/plain", t::Associative) =
-    showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union{KeyIterator, ValueIterator}) =
-    showkv(io, t, limit=true)
 
 function writemime(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
@@ -168,16 +167,26 @@ function showerror(io::IO, ex::MethodError)
         f = ex.f
     end
     name = isgeneric(f) ? f.env.name : :anonymous
-    if isa(f, DataType)
-        print(io, "`$(f)` has no method matching $(f)(")
+    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+        # See #13033
+        T = striptype(ex.args[1])
+        if T == nothing
+            print(io, "First argument to `convert` must be a Type, got $(ex.args[1])")
+        else
+            print(io, "Cannot `convert` an object of type $(arg_types_param[2]) to an object of type $T")
+        end
     else
-        print(io, "`$(name)` has no method matching $(name)(")
+        if isa(f, DataType)
+            print(io, "`$(f)` has no method matching $(f)(")
+        else
+            print(io, "`$(name)` has no method matching $(name)(")
+        end
+        for (i, typ) in enumerate(arg_types_param)
+            print(io, "::$typ")
+            i == length(arg_types_param) || print(io, ", ")
+        end
+        print(io, ")")
     end
-    for (i, typ) in enumerate(arg_types_param)
-        print(io, "::$typ")
-        i == length(arg_types_param) || print(io, ", ")
-    end
-    print(io, ")")
     # Check for local functions that shadow methods in Base
     if isdefined(Base, name)
         basef = eval(Base, name)
@@ -217,6 +226,9 @@ function showerror(io::IO, ex::MethodError)
         warn(io, "Error showing method candidates, aborted")
     end
 end
+
+striptype{T}(::Type{T}) = T
+striptype(::Any) = nothing
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.

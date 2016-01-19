@@ -51,6 +51,7 @@ end
 function cflags()
     arg1 = replace(initDir(),"\\","\\\\\\\\");
     arg2 = replace(includeDir(),"\\","\\\\");
+    @unix_only return """-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
     return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
 end
 

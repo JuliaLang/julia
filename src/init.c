@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #ifdef _MSC_VER
-DLLEXPORT char * dirname(char *);
+JL_DLLEXPORT char * dirname(char *);
 #else
 #include <libgen.h>
 #endif
@@ -86,19 +86,88 @@ jl_options_t jl_options = { 0,    // quiet
 };
 
 int jl_boot_file_loaded = 0;
-char *jl_stack_lo;
-char *jl_stack_hi;
 size_t jl_page_size;
+
+void jl_init_stack_limits(int ismaster)
+{
+#ifdef _OS_WINDOWS_
+    (void)ismaster;
+#  ifdef _COMPILER_MICROSOFT_
+#    ifdef _P64
+    void **tib = (void**)__readgsqword(0x30);
+#    else
+    void **tib = (void**)__readfsdword(0x18);
+#    endif
+#  else
+    void **tib;
+#    ifdef _P64
+    __asm__("movq %%gs:0x30, %0" : "=r" (tib) : : );
+#    else
+    __asm__("movl %%fs:0x18, %0" : "=r" (tib) : : );
+#    endif
+#  endif
+    // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
+    jl_stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
+    jl_stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
+#else
+#  ifdef JULIA_ENABLE_THREADING
+    // Only use pthread_*_np functions to get stack address for non-master
+    // threads since it seems to return bogus values for master thread on Linux
+    // and possibly OSX.
+    if (!ismaster) {
+#    if defined(_OS_LINUX_)
+        pthread_attr_t attr;
+        pthread_getattr_np(pthread_self(), &attr);
+        void *stackaddr;
+        size_t stacksize;
+        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+        pthread_attr_destroy(&attr);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    elif defined(_OS_DARWIN_)
+        extern void *pthread_get_stackaddr_np(pthread_t thread);
+        extern size_t pthread_get_stacksize_np(pthread_t thread);
+        pthread_t thread = pthread_self();
+        void *stackaddr = pthread_get_stackaddr_np(thread);
+        size_t stacksize = pthread_get_stacksize_np(thread);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    elif defined(_OS_FREEBSD_)
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_get_np(pthread_self(), &attr);
+        void *stackaddr;
+        size_t stacksize;
+        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
+        pthread_attr_destroy(&attr);
+        jl_stack_lo = (char*)stackaddr;
+        jl_stack_hi = (char*)stackaddr + stacksize;
+        return;
+#    else
+#      warning "Getting stack size for thread is not supported."
+#    endif
+    }
+#  else
+    (void)ismaster;
+#  endif
+    struct rlimit rl;
+    getrlimit(RLIMIT_STACK, &rl);
+    size_t stack_size = rl.rlim_cur;
+    jl_stack_hi = (char*)&stack_size;
+    jl_stack_lo = jl_stack_hi - stack_size;
+#endif
+}
 
 static void jl_find_stack_bottom(void)
 {
-    size_t stack_size;
-#ifndef _OS_WINDOWS_
+#if !defined(_OS_WINDOWS_) && defined(__has_feature)
+#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
     struct rlimit rl;
 
-    // When using the sanitizers, increase stack size because they bloat stack usage
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
+    // When using the sanitizers, increase stack size because they bloat
+    // stack usage
     const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
     int result;
 
@@ -114,14 +183,7 @@ static void jl_find_stack_bottom(void)
     }
 #endif
 #endif
-
-    getrlimit(RLIMIT_STACK, &rl);
-    stack_size = rl.rlim_cur;
-#else
-    stack_size = 262144;  // guess
-#endif
-    jl_stack_hi = (char*)&stack_size;
-    jl_stack_lo = jl_stack_hi - stack_size;
+    jl_init_stack_limits(1);
 }
 
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
@@ -154,7 +216,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-DLLEXPORT void jl_atexit_hook(int exitcode)
+JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     if (exitcode == 0) julia_save();
     jl_print_gc_stats(JL_STDERR);
@@ -250,10 +312,10 @@ DLLEXPORT void jl_atexit_hook(int exitcode)
 
 void jl_get_builtin_hooks(void);
 
-DLLEXPORT void *jl_dl_handle;
+JL_DLLEXPORT void *jl_dl_handle;
 void *jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
-DLLEXPORT void *jl_exe_handle;
+JL_DLLEXPORT void *jl_exe_handle;
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
@@ -466,6 +528,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
+    jl_gc_signal_init();
 #endif
     libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
@@ -614,6 +677,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
             jl_current_module;
     }
 
+    // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 
@@ -633,7 +697,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
 extern int asprintf(char **str, const char *fmt, ...);
 
-DLLEXPORT int jl_generating_output(void)
+JL_DLLEXPORT int jl_generating_output(void)
 {
     return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
 }
@@ -686,23 +750,23 @@ static void julia_save(void)
                 ios_t f;
                 if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
                     jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
-                ios_write(&f, (const char*)s->buf, s->size);
+                ios_write(&f, (const char*)s->buf, (size_t)s->size);
                 ios_close(&f);
             }
         }
 
         if (jl_options.outputbc)
-            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, s->size);
+            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, (size_t)s->size);
 
         if (jl_options.outputo)
-            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, s->size);
+            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, (size_t)s->size);
     }
     JL_GC_POP();
 }
 
 jl_function_t *jl_typeinf_func=NULL;
 
-DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
+JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
 {
     if (!jl_is_function(f))
         jl_error("jl_set_typeinf_func must set a jl_function_t*");
@@ -739,6 +803,7 @@ void jl_get_builtin_hooks(void)
     jl_uint32_type  = (jl_datatype_t*)core("UInt32");
     jl_uint64_type  = (jl_datatype_t*)core("UInt64");
 
+    jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
@@ -771,7 +836,7 @@ void jl_get_builtin_hooks(void)
                                         jl_svec2(jl_uint8_type, jl_box_long(1)));
 }
 
-DLLEXPORT void jl_get_system_hooks(void)
+JL_DLLEXPORT void jl_get_system_hooks(void)
 {
     if (jl_errorexception_type) return; // only do this once
 

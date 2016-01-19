@@ -20,7 +20,7 @@ let err = nothing
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test takebuf_string(io) == "SystemError (with $file): mkdir: File exists"
+        @test startswith(takebuf_string(io), "SystemError (with $file): mkdir:")
     end
 end
 
@@ -99,6 +99,7 @@ cp(newfile, c_file)
 @test isdir(c_subdir)
 @test isfile(c_file)
 @test_throws SystemError rm(c_tmpdir)
+@test_throws SystemError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
@@ -113,6 +114,10 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
+@test_throws Base.UVError rm(c_tmpdir)
+@test rm(c_tmpdir, force=true) === nothing
+@test_throws Base.UVError rm(c_tmpdir, recursive=true)
+@test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 
 #######################################################################
@@ -155,6 +160,7 @@ function test_monitor_wait(tval)
         close(f)
     end
     fname, events = wait(fm)
+    close(fm)
     @test fname == basename(file)
     @test events.changed
 end
@@ -168,6 +174,7 @@ function test_monitor_wait_poll()
         close(f)
     end
     (old, new) = wait(pfw)
+    close(pfw)
     @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
 end
 
@@ -1101,6 +1108,18 @@ function test_read_nbyte()
     rm(fn)
 end
 test_read_nbyte()
+
+let s = "qwerty"
+    @test readbytes(IOBuffer(s)) == s.data
+    @test readbytes(IOBuffer(s), 10) == s.data
+    @test readbytes(IOBuffer(s), 1) == s.data[1:1]
+
+    # Test growing output array
+    x = UInt8[]
+    n = readbytes!(IOBuffer(s), x, 10)
+    @test x == s.data
+    @test n == length(x)
+end
 
 # DevNull
 @test !isreadable(DevNull)

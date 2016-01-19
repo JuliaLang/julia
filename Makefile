@@ -51,6 +51,9 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
 
+julia_flisp.boot.inc.phony: julia-deps
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
+
 # Build the HTML docs (skipped if already exists, notably in tarballs)
 $(BUILDROOT)/doc/_build/html:
 	@$(MAKE) -C $(BUILDROOT)/doc html
@@ -83,7 +86,7 @@ julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/jul
 julia-libccalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libccalltest
 
-julia-src-release julia-src-debug : julia-src-% : julia-deps
+julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libjulia-$*
 
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
@@ -371,8 +374,6 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
-	# Copy in standalone executable build script
-	$(INSTALL_M) $(JULIAHOME)/contrib/build_executable.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in standalone julia-config script
 	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well

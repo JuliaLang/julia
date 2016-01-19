@@ -1,10 +1,64 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## core stream types ##
+# Generic IO stubs
 
-# the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
+lock(::IO) = nothing
+unlock(::IO) = nothing
+reseteof(x::IO) = nothing
 
-# Generic IO functions
+const SZ_UNBUFFERED_IO = 65536
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+
+function isopen end
+function close end
+function flush end
+function wait_connected end
+function wait_readnb end
+function wait_readbyte end
+function wait_close end
+function nb_available end
+function readavailable end
+function isreadable end
+function iswritable end
+function copy end
+function eof end
+
+# all subtypes should implement this
+read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
+
+# Generic wrappers around other IO objects
+abstract AbstractPipe <: IO
+function pipe_reader end
+function pipe_writer end
+
+write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
+write(io::AbstractPipe, bytes::Vector{UInt8}) = write(pipe_writer(io), bytes)
+write{T<:AbstractPipe}(io::T, args...) = write(pipe_writer(io), args...)
+write{S<:AbstractPipe}(io::S, a::Array) = write(pipe_writer(io), a)
+buffer_or_write(io::AbstractPipe, p::Ptr, n::Integer) = buffer_or_write(pipe_writer(io), p, n)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io))
+
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
+read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(pipe_reader(io), bytes)
+read{T<:AbstractPipe}(io::T, args...) = read(pipe_reader(io), args...)
+read!{T<:AbstractPipe}(io::T, args...) = read!(pipe_reader(io), args...)
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+readbytes(io::AbstractPipe) = readbytes(pipe_reader(io))
+readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+
+isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
+isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
+close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
+wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
+wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
+nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io))
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+
 
 ## byte-order mark, ntoh & hton ##
 
@@ -38,7 +92,7 @@ function write(io::IO, xs...)
 end
 
 if ENDIAN_BOM == 0x01020304
-    function write(s::IO, x::Integer)
+    function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128})
         sz = sizeof(x)
         local written::Int = 0
         for n = sz:-1:1
@@ -47,7 +101,7 @@ if ENDIAN_BOM == 0x01020304
         return written
     end
 else
-    function write(s::IO, x::Integer)
+    function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128})
         sz = sizeof(x)
         local written::Int = 0
         for n = 1:sz
@@ -103,12 +157,12 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    return write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
 end
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
 
-function read{T <: Integer}(s::IO, ::Type{T})
+function read{T <: Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}}(s::IO, ::Type{T})
     x = zero(T)
     for n = 1:sizeof(x)
         x |= (convert(T,read(s,UInt8))<<((n-1)<<3))
@@ -254,6 +308,8 @@ end
 
 # read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
 function readbytes(s::IO, nb=typemax(Int))
+    # Let readbytes! grow the array progressively by default
+    # instead of taking of risk of over-allocating
     b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     resize!(b, nr)
@@ -287,56 +343,3 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 eltype(::Type{EachLine}) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))
-
-# IOStream Marking
-
-# Note that these functions expect that io.mark exists for
-# the concrete IO type.  This may not be true for IO types
-# not in base.
-
-function mark(io::IO)
-    io.mark = position(io)
-end
-
-function unmark(io::IO)
-    !ismarked(io) && return false
-    io.mark = -1
-    return true
-end
-
-function reset{T<:IO}(io::T)
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
-    m = io.mark
-    seek(io, m)
-    io.mark = -1 # must be after seek, or seek may fail
-    return m
-end
-
-ismarked(io::IO) = io.mark >= 0
-
-# Generic IO stubs
-
-lock(::IO) = nothing
-unlock(::IO) = nothing
-reseteof(x::IO) = nothing
-
-const SZ_UNBUFFERED_IO = 65536
-buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
-
-function isopen end
-function close end
-function flush end
-function wait_connected end
-function wait_readnb end
-function wait_readbyte end
-function wait_close end
-function nb_available end
-function readavailable end
-function isreadable end
-function iswritable end
-function copy end
-function eof end
-
-# all subtypes should implement this
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")

@@ -2,7 +2,7 @@
 
 # editing files
 
-doc"""
+"""
     editor()
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
@@ -35,7 +35,7 @@ function edit(path::AbstractString, line::Integer=0)
     line_unsupported = false
     if startswith(name, "emacs") || name == "gedit"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
-    elseif name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+    elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
     elseif name == "textmate" || name == "mate" || name == "kate"
@@ -185,7 +185,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if lsb != ""
             println(io,     "           ", lsb)
         end
-        println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        @unix_only println(io,         "  uname: ",readchomp(`uname -mprsv`))
         println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
         try println(io,     "Uptime: $(Sys.uptime()) sec") end
         print(io,           "Load Avg: ")
@@ -220,23 +220,19 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 # displaying type-ambiguity warnings
 
 function code_warntype(io::IO, f, t::ANY)
-    task_local_storage(:TYPEEMPHASIZE, true)
-    try
-        ct = code_typed(f, t)
-        for ast in ct
-            println(io, "Variables:")
-            vars = ast.args[2][1]
-            for v in vars
-                print(io, "  ", v[1])
-                show_expr_type(io, v[2])
-                print(io, '\n')
-            end
-            print(io, "\nBody:\n  ")
-            show_unquoted(io, ast.args[3], 2)
-            print(io, '\n')
+    emph_io = IOContext(io, :TYPEEMPHASIZE => true)
+    ct = code_typed(f, t)
+    for ast in ct
+        println(emph_io, "Variables:")
+        vars = ast.args[2][1]
+        for v in vars
+            print(emph_io, "  ", v[1])
+            show_expr_type(emph_io, v[2], true)
+            print(emph_io, '\n')
         end
-    finally
-        task_local_storage(:TYPEEMPHASIZE, false)
+        print(emph_io, "\nBody:\n  ")
+        show_unquoted(emph_io, ast.args[3], 2)
+        print(emph_io, '\n')
     end
     nothing
 end
@@ -300,7 +296,8 @@ end
 function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t)
+            !isleaftype(t) && x <: t) ||
+           (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
 end
 
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
@@ -426,7 +423,7 @@ end
 # testing
 
 
-doc"""
+"""
     whos([io,] [Module,] [pattern::Regex])
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
@@ -434,7 +431,7 @@ Print information about exported global variables in a module, optionally restri
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
 function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
-    maxline = tty_size()[2]
+    maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
     for v in sort!(names(m))
@@ -450,8 +447,6 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
                     @printf(head, "%6d KB     ", bytes ÷ (1024))
                 end
                 print(head, summary(value))
-                print(head, " : ")
-                show(head, value)
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end

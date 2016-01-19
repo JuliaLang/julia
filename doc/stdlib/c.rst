@@ -233,10 +233,6 @@
 
    Equivalent to the native ``ptrdiff_t`` c-type (Int)
 
-.. data:: Coff_t
-
-   Equivalent to the native ``off_t`` c-type
-
 .. data:: Cwchar_t
 
    Equivalent to the native ``wchar_t`` c-type (Int32)

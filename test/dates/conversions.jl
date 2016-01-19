@@ -47,6 +47,11 @@
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
 
+@osx_only withenv("TZ" => "UTC") do
+    @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
+end
+@test abs(Dates.now() - now(Dates.UTC)) < Dates.Hour(16)
+
 # Issue #9171, #9169
 let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minute(14*24*60), Dates.Second(14*24*60*60), Dates.Millisecond(14*24*60*60*1000)]
     for i = 1:length(t)

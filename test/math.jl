@@ -15,6 +15,16 @@
 @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
 @test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
 
+@test !(pi == e)
+@test !(e == 1//2)
+@test 1//2 <= e
+@test big(1//2) < e
+@test e < big(20//6)
+@test e^pi == exp(pi)
+@test e^2 == exp(2)
+@test e^2.4 == exp(2.4)
+@test e^(2//3) == exp(2//3)
+
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
     clamp!(x, 1, 3)
@@ -109,6 +119,7 @@ for T in (Float32, Float64)
     @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
     @test isequal(hypot(T(3),T(4)), T(5))
     @test isequal(log(T(1)), T(0))
+    @test isequal(log(e,T(1)), T(0))
     @test_approx_eq_eps log(T(e)) T(1) eps(T)
     @test isequal(log10(T(1)), T(0))
     @test isequal(log10(T(10)), T(1))
@@ -169,6 +180,7 @@ for T in (Float32, Float64)
 end
 @test_approx_eq exp10(5) exp10(5.0)
 @test_approx_eq exp2(Float16(2.)) exp2(2.)
+@test log(e) == 1
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
@@ -439,9 +451,13 @@ end
 @test_approx_eq beta(3,5) 1/105
 @test_approx_eq lbeta(5,4) log(beta(5,4))
 @test_approx_eq beta(5,4) beta(4,5)
-@test_approx_eq beta(-1/2, 3) -16/3
+@test beta(-1/2, 3) ≈ beta(-1/2 + 0im, 3 + 0im) ≈ -16/3
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 @test beta(Float32(5),Float32(4)) == beta(Float32(4),Float32(5))
+@test beta(3,5) ≈ beta(3+0im,5+0im)
+@test(beta(3.2+0.1im,5.3+0.3im) ≈ exp(lbeta(3.2+0.1im,5.3+0.3im)) ≈
+      0.00634645247782269506319336871208405439180447035257028310080 -
+      0.00169495384841964531409376316336552555952269360134349446910im)
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"

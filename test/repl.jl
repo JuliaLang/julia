@@ -29,103 +29,123 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
-stdin_write, stdout_read, stderr_read, repl = fake_repl()
+    stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
-repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.history_file = false
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    repl.history_file = false
 
-repltask = @async begin
-    Base.REPL.run_repl(repl)
-end
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
 
-sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+    sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
 
-inc = false
-b = Condition()
-c = Condition()
-sendrepl("\"Hello REPL\"")
-inc=true
-begin
-    notify(b)
-    wait(c)
-end
-# Latex completions
-write(stdin_write, "\x32\\alpha\t")
-readuntil(stdout_read, "α")
-# Bracketed paste in search mode
-write(stdin_write, "\e[200~paste here ;)\e[201~")
-# Abort search (^C)
-write(stdin_write, '\x03')
-# Test basic completion in main mode
-write(stdin_write, "Base.REP\t")
-readuntil(stdout_read, "Base.REPL")
-write(stdin_write, '\x03')
-write(stdin_write, "\\alpha\t")
-readuntil(stdout_read,"α")
-write(stdin_write, '\x03')
-# Test cd feature in shell mode.  We limit to 40 characters when
-# calling readuntil() to suppress the warning it (currently) gives for
-# long strings.
-origpwd = pwd()
-tmpdir = mktempdir()
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd $(escape_string(tmpdir))\n")
-readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == realpath(tmpdir)
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd -\n")
-readuntil(stdout_read, origpwd[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == origpwd
-write(stdin_write, ";")
-readuntil(stdout_read, "shell> ")
-write(stdin_write, "cd\n")
-readuntil(stdout_read, homedir()[max(1,end-39):end])
-readuntil(stdout_read, "\n")
-readuntil(stdout_read, "\n")
-@test pwd() == homedir()
-rm(tmpdir)
-cd(origpwd)
+    inc = false
+    b = Condition()
+    c = Condition()
+    sendrepl("\"Hello REPL\"")
+    inc=true
+    begin
+        notify(b)
+        wait(c)
+    end
+    # Latex completions
+    write(stdin_write, "\x32\\alpha\t")
+    readuntil(stdout_read, "α")
+    # Bracketed paste in search mode
+    write(stdin_write, "\e[200~paste here ;)\e[201~")
+    # Abort search (^C)
+    write(stdin_write, '\x03')
+    # Test basic completion in main mode
+    write(stdin_write, "Base.REP\t")
+    readuntil(stdout_read, "Base.REPL")
+    write(stdin_write, '\x03')
+    write(stdin_write, "\\alpha\t")
+    readuntil(stdout_read,"α")
+    write(stdin_write, '\x03')
+    # Test cd feature in shell mode.  We limit to 40 characters when
+    # calling readuntil() to suppress the warning it (currently) gives for
+    # long strings.
+    origpwd = pwd()
+    tmpdir = mktempdir()
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd $(escape_string(tmpdir))\n")
+    readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+    readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    @test pwd() == realpath(tmpdir)
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd -\n")
+    readuntil(stdout_read, origpwd[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    @test pwd() == origpwd
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "cd\n")
+    readuntil(stdout_read, homedir()[max(1,end-39):end])
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+    @test pwd() == homedir()
+    rm(tmpdir)
+    cd(origpwd)
 
-# Test that accepting a REPL result immediately shows up, not
-# just on the next keystroke
-write(stdin_write, "1+1\n") # populate history with a trivial input
-readline(stdout_read)
-write(stdin_write, "\e[A\n")
-t = Timer(10) do t
-    isopen(t) || return
-    error("Stuck waiting for the repl to write `1+1`")
-end
-# yield make sure this got processed
-readuntil(stdout_read, "1+1")
-close(t)
+    # Test that accepting a REPL result immediately shows up, not
+    # just on the next keystroke
+    write(stdin_write, "1+1\n") # populate history with a trivial input
+    readline(stdout_read)
+    write(stdin_write, "\e[A\n")
+    t = Timer(10) do t
+        isopen(t) || return
+        error("Stuck waiting for the repl to write `1+1`")
+    end
+    # yield make sure this got processed
+    readuntil(stdout_read, "1+1")
+    close(t)
 
-# Issue #10222
-# Test ignoring insert key in standard and prefix search modes
-write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-@test search(readline(stdout_read), "[2h") == 0:-1
-readline(stdout_read)
-write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-@test search(readline(stdout_read), "[2~") == 0:-1
-readline(stdout_read)
-write(stdin_write, "1+1\n") # populate history with a trivial input
-readline(stdout_read)
-write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
-readline(stdout_read)
-readline(stdout_read)
-write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
-readline(stdout_read)
-readline(stdout_read)
+    # Issue #10222
+    # Test ignoring insert key in standard and prefix search modes
+    write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
+    @test search(readline(stdout_read), "[2h") == 0:-1
+    readline(stdout_read)
+    write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
+    @test search(readline(stdout_read), "[2~") == 0:-1
+    readline(stdout_read)
+    write(stdin_write, "1+1\n") # populate history with a trivial input
+    readline(stdout_read)
+    write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
+    readline(stdout_read)
+    readline(stdout_read)
+    write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
+    readline(stdout_read)
+    readline(stdout_read)
 
-# Close REPL ^D
-write(stdin_write, '\x04')
-wait(repltask)
+    # Test down arrow to go back to history
+    # populate history with a trivial input
+
+    t = Timer(10) do t
+        isopen(t) || return
+        error("Stuck waiting for history test")
+    end
+    s1 = "12345678"; s2 = "23456789";
+    write(stdin_write, s1, '\n')
+    readuntil(stdout_read, s1)
+    write(stdin_write, s2, '\n')
+    readuntil(stdout_read, s2)
+    # Two up arrow, enter, should get back to 1
+    write(stdin_write, "\e[A\e[A\n")
+    readuntil(stdout_read, s1)
+    # Now, down arrow, enter, should get us back to 2
+    write(stdin_write, "\e[B\n")
+    readuntil(stdout_read, s2)
+    close(t)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
 end
 
 function buffercontents(buf::IOBuffer)
@@ -178,6 +198,12 @@ end
 # it is important not to have the """ code reindent this line,
 # possibly converting \t to spaces.
 fakehistory = """
+# time: 2014-06-29 20:44:29 EDT
+# mode: julia
+\té
+# time: 2014-06-29 21:44:29 EDT
+# mode: julia
+\téé
 # time: 2014-06-30 17:32:49 EDT
 # mode: julia
 \tshell
@@ -281,6 +307,27 @@ begin
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
 
+    # Test that searching backwards with a one-letter query doesn't
+    # return indefinitely the same match (#9352)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.history_next_result(s, ss)
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "shell"
+
+    # Test that searching backwards doesn't skip matches (#9352)
+    # (for a search with multiple one-byte characters, or UTF-8 characters)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "é") # matches right-most "é" in "éé"
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test buffercontents(LineEdit.buffer(s)) == "éé"
+
     # Issue #7551
     # Enter search mode and try accepting an empty result
     REPL.history_reset_state(hp)
@@ -313,6 +360,46 @@ begin
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
 end
+# Simple non-standard REPL tests
+if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    panel = LineEdit.Prompt("test";
+        prompt_prefix="\e[38;5;166m",
+        prompt_suffix=Base.text_colors[:white],
+        on_enter = s->true)
+
+    hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
+    search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
+    REPL.history_reset_state(hp)
+
+    panel.hist = hp
+    panel.keymap_dict = LineEdit.keymap(Dict{Any,Any}[skeymap,
+        LineEdit.default_keymap, LineEdit.escape_defaults])
+
+    c = Condition()
+    panel.on_done = (s,buf,ok)->begin
+        if !ok
+            LineEdit.transition(s,:abort)
+        end
+        line = strip(takebuf_string(buf))
+        LineEdit.reset_state(s)
+        return notify(c,line)
+    end
+
+    repltask = @async Base.REPL.run_interface(repl.t, LineEdit.ModalInterface([panel,search_prompt]))
+
+    write(stdin_write,"a\n")
+    @test wait(c) == "a"
+    # Up arrow enter should recall history even at the start
+    write(stdin_write,"\e[A\n")
+    @test wait(c) == "a"
+    # And again
+    write(stdin_write,"\e[A\n")
+    @test wait(c) == "a"
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
+end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
@@ -320,41 +407,40 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
+    const O_RDWR = Base.Filesystem.JL_O_RDWR
+    const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
-const O_RDWR = Base.Filesystem.JL_O_RDWR
-const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
+    fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR|O_NOCTTY)
+    fdm == -1 && error("Failed to open PTY master")
+    rc = ccall(:grantpt, Cint, (Cint,), fdm)
+    rc != 0 && error("grantpt failed")
+    rc = ccall(:unlockpt, Cint, (Cint,), fdm)
+    rc != 0 && error("unlockpt")
 
-fdm = ccall(:posix_openpt,Cint,(Cint,),O_RDWR|O_NOCTTY)
-fdm == -1 && error("Failed to open PTY master")
-rc = ccall(:grantpt,Cint,(Cint,),fdm)
-rc != 0 && error("grantpt failed")
-rc = ccall(:unlockpt,Cint,(Cint,),fdm)
-rc != 0 && error("unlockpt")
+    fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
+        ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR|O_NOCTTY)
 
-fds = ccall(:open,Cint,(Ptr{UInt8},Cint),ccall(:ptsname,Ptr{UInt8},(Cint,),fdm), O_RDWR|O_NOCTTY)
+    # slave
+    slave   = RawFD(fds)
+    master = Base.TTY(RawFD(fdm); readable = true)
 
-# slave
-slave   = RawFD(fds)
-master = Base.TTY(RawFD(fdm); readable = true)
+    nENV = copy(ENV)
+    nENV["TERM"] = "dumb"
+    p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+    output = readuntil(master,"julia> ")
+    if ccall(:jl_running_on_valgrind,Cint,()) == 0
+        # If --trace-children=yes is passed to valgrind, we will get a
+        # valgrind banner here, not just the prompt.
+        @test output == "julia> "
+    end
+    write(master,"1\nquit()\n")
 
-nENV = copy(ENV)
-nENV["TERM"] = "dumb"
-p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-output = readuntil(master,"julia> ")
-if ccall(:jl_running_on_valgrind,Cint,()) == 0
-    # If --trace-children=yes is passed to valgrind, we will get a
-    # valgrind banner here, not just the prompt.
-    @test output == "julia> "
-end
-write(master,"1\nquit()\n")
-
-wait(p)
-output = readuntil(master,' ')
-@test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-@test nb_available(master) == 0
-ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
-close(master)
-
+    wait(p)
+    output = readuntil(master,' ')
+    @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+    @test nb_available(master) == 0
+    ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
+    close(master)
 end
 
 # Test stream mode

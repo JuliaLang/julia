@@ -77,15 +77,15 @@ convenient iterating over a sparse matrix :
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
-                   header::Bool=true, limit::Bool=Base._limit_output,
-                   rows = Base.tty_size()[1], repr=false)
+                   header::Bool=true, repr=false)
     # TODO: repr?
-
     if header
         print(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " entries:")
     end
 
+    limit::Bool = Base.limit_output(io)
     if limit
+        rows = displaysize(io)[1]
         half_screen_rows = div(rows - 8, 2)
     else
         half_screen_rows = typemax(Int)
@@ -97,7 +97,7 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
             print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
             if isassigned(S.nzval, k)
-                showcompact(io, S.nzval[k])
+                Base.showcompact_lim(io, S.nzval[k])
             else
                 print(io, Base.undef_ref_str)
             end
@@ -350,6 +350,120 @@ function sparse(B::Bidiagonal)
     return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 
+## Transposition methods
+
+# qftranspose! is the parent method on which the others are built.
+"""
+    qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+
+Column-permute and transpose `A` (`(AQ)^T`), applying `f` to each element of `A` in the
+  process, and store the result in preallocated `C`. Permutation vector `q` defines the
+  column-permutation `Q`. The number of columns of `C` (`C.n`) must match the number of
+  rows of `A` (`A.m`). The number of rows of `C` (`C.m`) must match the number of columns
+  of `A` (`A.n`). The length of `C`'s internal row-index (`length(C.rowval)`) and
+  entry-value (`length(C.nzval)`) arrays must be at least the number of allocated entries
+  in `A` (`nnz(A)`). The length of the permutation vector `q` (`length(q)`) must match the
+  number of columns of `A` (`A.n`).
+
+This method implements the HALFPERM algorithm described in F. Gustavson, "Two fast
+  algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS
+  4(3), 250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no
+  space beyond that passed in.
+
+Performance note: As of January 2016, `f` should be a functor for this method to perform
+  well. This caveat may disappear when the work in `jb/functions` lands.
+"""
+function qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    # Attach source matrix
+    Am, An = A.m, A.n
+    Acolptr = A.colptr
+    Arowval = A.rowval
+    Anzval = A.nzval
+    Annz = Acolptr[end]-1
+
+    # Attach destination matrix
+    Cm, Cn = C.m, C.n
+    Ccolptr = C.colptr
+    Crowval = C.rowval
+    Cnzval = C.nzval
+
+    # Check compatibility of source and destination
+    if !(Cm == An)
+        throw(DimensionMismatch("the number of rows of the first argument, C.m = $(Cm),"
+            * "must match the number of columns of the second argument, A.n = $(An)") )
+    elseif !(Cn == Am)
+        throw(DimensionMismatch("the number of columns of the first argument, C.n = $(Cn),"
+            * "must match the number of rows of the second argument, A.m = $(Am)") )
+    elseif !(length(q) == A.n)
+        throw(DimensionMismatch("the length of the permtuation vector, length(q) = "
+            * "$(length(q)), must match the number of columns of the second argument,"
+            * "A.n = $(An)") )
+    elseif !(length(Crowval) >= Annz)
+        throw(ArgumentError("the first argument's row-index array's length,"
+            * "length(C.rowval) = $(length(Crowval)), must be at least the number of"
+            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
+    elseif !(length(Cnzval) >= Annz)
+        throw(ArgumentError("the first argument's entry-value array's length,"
+            * "length(C.nzval) = $(length(Cnzval)), must be at least the number of"
+            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
+    end
+
+    # Compute the column counts of C and store them shifted forward by one in Ccolptr
+    Ccolptr[1:end] = 0
+    @inbounds for k in 1:Annz
+        Ccolptr[Arowval[k]+1] += 1
+    end
+
+    # From these column counts, compute C's column pointers
+    # and store them shifted forward by one in Ccolptr
+    countsum = 1
+    @inbounds for k in 2:(Cn+1)
+        overwritten = Ccolptr[k]
+        Ccolptr[k] = countsum
+        countsum += overwritten
+    end
+
+    # Distribution-sort the row indices and nonzero values into Crowval and Cnzval,
+    # tracking write positions in Ccolptr
+    @inbounds for Aj in 1:An
+        qAj = q[Aj]
+        for Ak in Acolptr[qAj]:(Acolptr[qAj+1]-1)
+            Ai = Arowval[Ak]
+            Ck = Ccolptr[Ai+1]
+            Crowval[Ck] = qAj
+            Cnzval[Ck] = f(Anzval[Ak])
+            Ccolptr[Ai+1] += 1
+        end
+    end
+
+    # Tracking write positions in Ccolptr as in the last block fixes the colptr shift,
+    # but the first colptr remains incorrect
+    Ccolptr[1] = 1
+
+    C
+end
+transpose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, Base.IdFun())
+ctranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, Base.ConjFun())
+"See `qftranspose!`" ftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose!(C, A, 1:A.n, f)
+
+"""
+    qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+
+Return-allocating version of `qftranspose!`. See `qftranspose!` for documentation.
+"""
+function qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    Cm, Cn, Cnnz = A.n, A.m, nnz(A)
+    Ccolptr = zeros(Ti, Cn+1)
+    Crowval = Array{Ti}(Cnnz)
+    Cnzval = Array{Tv}(Cnnz)
+    qftranspose!(SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval), A, q, f)
+end
+transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.IdFun())
+ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.ConjFun())
+"See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
+
+## Find methods
+
 function find(S::SparseMatrixCSC)
     sz = size(S)
     I, J = findn(S)
@@ -446,17 +560,14 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
 end
 
 """
-```rst
-..  sprand([rng],m,[n],p::AbstractFloat,[rfn])
+    sprand([rng],m,[n],p::AbstractFloat,[rfn])
 
-Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in
+Create a random length `m` sparse vector or `m` by `n` sparse matrix, in
 which the probability of any element being nonzero is independently given by
-``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero
-values are sampled from the distribution specified by ``rfn``. The uniform
-distribution is used in case ``rfn`` is not specified. The optional ``rng``
-argument specifies a random number generator, see :ref:`Random Numbers
-<random-numbers>`.
-```
+`p` (and hence the mean density of nonzeros is also exactly `p`). Nonzero
+values are sampled from the distribution specified by `rfn`. The uniform
+distribution is used in case `rfn` is not specified. The optional `rng`
+argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
 """
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))

@@ -36,10 +36,9 @@ const fourths = tuple([ 6, 8, 9,12,13], [ 7,10,11,14,15],
                       [ 2,12,14,16,18], [ 3,13,15,17,19])
 
 
-function relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU)
-    tid = threadid()
-    outerrange = Base.splitrange(nx, nthreads())
-    for i = outerrange[tid]
+function relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid, nchunk)
+    outerrange = Base.splitrange(nx, nchunk)
+    for i = outerrange[chunkid]
     #@threads all for i = 1:nx
         for j = 1:ny
             for k = 1:nz
@@ -72,10 +71,9 @@ function relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU)
 end
 
 
-function calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega)
-    tid = threadid()
-    outerrange = Base.splitrange(nx, nthreads())
-    for i = outerrange[tid]
+function calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega, chunkid, nchunk)
+    outerrange = Base.splitrange(nx, nchunk)
+    for i = outerrange[chunkid]
     #@threads all for i = 1:nx
         #tid = threadid()
         for j = 1:ny
@@ -91,22 +89,22 @@ function calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omeg
                 FEQ[i,j,k,6] = t2D[i,j,k,1] * (1 + 3*UX[i,j,k,1] + 9/2*UX[i,j,k,1]^2 - sSQU[i,j,k,1])
                 FEQ[i,j,k,7] = t2D[i,j,k,1] * (1 - 3*UX[i,j,k,1] + 9/2*UX[i,j,k,1]^2 - sSQU[i,j,k,1])
 
-                U[1,tid]  = UX[i,j,k,1] + UY[i,j,k,1]
-                U[2,tid]  = UX[i,j,k,1] - UY[i,j,k,1]
-                U[3,tid]  = -UX[i,j,k,1] + UY[i,j,k,1]
-                U[4,tid]  = -U[1,tid]
-                U[5,tid]  = UX[i,j,k,1] + UZ[i,j,k,1]
-                U[6,tid]  = UX[i,j,k,1] - UZ[i,j,k,1]
-                U[7,tid]  = -U[6,tid]
-                U[8,tid]  = -U[5,tid]
-                U[9,tid]  = UY[i,j,k,1] + UZ[i,j,k,1]
-                U[10,tid] = UY[i,j,k,1] - UZ[i,j,k,1]
-                U[11,tid] = -U[10,tid]
-                U[12,tid] = -U[9,tid]
+                U[1,chunkid]  = UX[i,j,k,1] + UY[i,j,k,1]
+                U[2,chunkid]  = UX[i,j,k,1] - UY[i,j,k,1]
+                U[3,chunkid]  = -UX[i,j,k,1] + UY[i,j,k,1]
+                U[4,chunkid]  = -U[1,chunkid]
+                U[5,chunkid]  = UX[i,j,k,1] + UZ[i,j,k,1]
+                U[6,chunkid]  = UX[i,j,k,1] - UZ[i,j,k,1]
+                U[7,chunkid]  = -U[6,chunkid]
+                U[8,chunkid]  = -U[5,chunkid]
+                U[9,chunkid]  = UY[i,j,k,1] + UZ[i,j,k,1]
+                U[10,chunkid] = UY[i,j,k,1] - UZ[i,j,k,1]
+                U[11,chunkid] = -U[10,chunkid]
+                U[12,chunkid] = -U[9,chunkid]
 
                 # next-nearest neighbors
                 for l = 1:12
-                    FEQ[i,j,k,l+7] = t3D[i,j,k,1] * (1 + 3*U[l,tid] + 9/2*(U[l,tid]^2) - sSQU[i,j,k,1])
+                    FEQ[i,j,k,l+7] = t3D[i,j,k,1] * (1 + 3*U[l,chunkid] + 9/2*(U[l,chunkid]^2) - sSQU[i,j,k,1])
                 end
 
                 for l = 1:19
@@ -126,6 +124,10 @@ function lbm3d(n)
     const nz = nx
     const omega = 1.0
     const density = 1.0
+
+    # Implementation note: setting nchunk to nthreads() is a hack
+    # to simulate the previous implementation's use of parallel regions.
+    nchunk = nthreads()
 
     tprop = 0
     trelax = 0
@@ -154,7 +156,7 @@ function lbm3d(n)
     UX = Array(Float64,nx,ny,nz)
     UY = Array(Float64,nx,ny,nz)
     UZ = Array(Float64,nx,ny,nz)
-    U  = Array(Float64,12,nthreads())
+    U  = Array(Float64,12,nchunk)
     t1D = Array(Float64,nx,ny,nz)
     t2D = Array(Float64,nx,ny,nz)
     t3D = Array(Float64,nx,ny,nz)
@@ -180,7 +182,9 @@ function lbm3d(n)
         tic()
 
         # Relax; calculate equilibrium state (FEQ) with equivalent speed and density to F
-        @threads all relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU)
+        @threads for chunk=1:nchunk
+            relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid, nchunk)
+        end
         for o in ON
             UX[o] = UY[o] = UZ[o] = t1D[o] = t2D[o] = t3D[o] = sSQU[o] = 0.0
         end
@@ -189,7 +193,9 @@ function lbm3d(n)
         tic()
 
         # Calculate equilibrium distribution: stationary
-        @threads all calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega)
+        @threads for chunk=1:nchunk
+            calc_equi!(F, FEQ, t1D, t2D, t3D, U, UX, UY, UZ, sSQU, nx, ny, nz, omega)
+        end
 
         tequi = tequi + toq()
 

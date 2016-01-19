@@ -24,8 +24,6 @@ ifeq ($(USE_SYSTEM_LLVM),1)
 LLVM_CONFIG=llvm-config-3.5
 else
 LLVM_ASSERTIONS=1
-LLVM_VER=3.6.0
-LLVM_ASSERTIONS=1
 endif
 
 # On a newly allocated machine, you'll need the following dependencies:

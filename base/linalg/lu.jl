@@ -13,7 +13,9 @@ LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,t
 
 # StridedMatrix
 function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
-    pivot==Val{false} && return generic_lufact!(A, pivot)
+    if pivot === Val{false}
+        return generic_lufact!(A, pivot)
+    end
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
@@ -150,7 +152,7 @@ Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) =
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
 function det{T,S}(A::LU{T,S})
-    n = chksquare(A)
+    n = checksquare(A)
     A.info > 0 && return zero(typeof(A.factors[1]))
     P = one(T)
     c = 0
@@ -164,11 +166,11 @@ function det{T,S}(A::LU{T,S})
     return P * s
 end
 
-function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
-    n = chksquare(A)
+function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+    n = checksquare(A)
     c = 0
-    P = one(T)
-    abs_det = zero(T)
+    P = one(real(T))
+    abs_det = zero(real(T))
     @inbounds for i = 1:n
         dg_ii = A.factors[i,i]
         P *= sign(dg_ii)
@@ -177,7 +179,7 @@ function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
         end
         abs_det += log(abs(dg_ii))
     end
-    s = (isodd(c) ? -one(T) : one(T)) * P
+    s = (isodd(c) ? -one(real(T)) : one(real(T))) * P
     abs_det, s
 end
 
@@ -192,7 +194,7 @@ end
 _mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
 _mod2pi(x) = mod2pi(x)
 function logdet{T<:Complex,S}(A::LU{T,S})
-    n = chksquare(A)
+    n = checksquare(A)
     s = zero(T)
     c = 0
     @inbounds for i = 1:n
@@ -233,7 +235,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -256,7 +258,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         if n > 1
             i = n-1
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact

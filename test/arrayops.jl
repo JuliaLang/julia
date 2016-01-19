@@ -24,6 +24,15 @@ b = a+a
 @test isequal(1./[1,2,5], [1.0,0.5,0.2])
 @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
+@test isequal(2.%[1,2,3], [0,0,2])
+@test isequal([1,2,3].%2, [1,0,1])
+@test isequal(2.÷[1,2,3], [2,1,0])
+@test isequal([1,2,3].÷2, [0,1,1])
+@test isequal(-2.%[1,2,3], [0,0,-2])
+@test isequal([-1,-2,-3].%2, [-1,0,-1])
+@test isequal(-2.÷[1,2,3], [-2,-1,0])
+@test isequal([-1,-2,-3].÷2, [0,-1,-1])
+
 @test isequal(1.<<[1,2,5], [2,4,32])
 @test isequal(128.>>[1,2,5], [64,32,4])
 @test isequal(2.>>1, 1)
@@ -306,7 +315,7 @@ for i = 1:3
 end
 @test isequal(a,findn(z))
 
-#argmin argmax
+#findmin findmax indmin indmax
 @test indmax([10,12,9,11]) == 2
 @test indmin([10,12,9,11]) == 3
 @test findmin([NaN,3.2,1.8]) == (1.8,3)
@@ -315,6 +324,16 @@ end
 @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
 @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
 @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+
+# #14085
+@test findmax(4:9) == (9,6)
+@test indmax(4:9) == 6
+@test findmin(4:9) == (4,1)
+@test indmin(4:9) == 1
+@test findmax(5:-2:1) == (5,1)
+@test indmax(5:-2:1) == 1
+@test findmin(5:-2:1) == (1,3)
+@test indmin(5:-2:1) == 3
 
 ## permutedims ##
 
@@ -1423,4 +1442,14 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
               f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
         @test isleaftype(Base.return_types(f, ())[1])
     end
+end
+
+# issue #14482
+@inferred Base.map_to!(Int8, 1, Int8[0], Int[0])
+
+# make sure @inbounds isn't used too much
+type OOB_Functor{T}; a::T; end
+call(f::OOB_Functor, i::Int) = f.a[i]
+let f = OOB_Functor([1,2])
+    @test_throws BoundsError map(f, [1,2,3,4,5])
 end

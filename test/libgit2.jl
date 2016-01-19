@@ -365,7 +365,7 @@ temp_dir() do dir
                 cache_oids = LibGit2.with(LibGit2.GitRevWalker(cache)) do walker
                     LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
                 end
-                @testloop for i in eachindex(oids)
+                @testset for i in eachindex(oids)
                     @test cache_oids[i] == test_oids[i]
                 end
             finally

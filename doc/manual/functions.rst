@@ -476,19 +476,25 @@ Keyword argument default values are evaluated only when necessary
 left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.
 
-Extra keyword arguments can be collected using ``...``, as in varargs
-functions::
+The types of keyword arguments can be made explicit as follows:
 
-    function f(x; y=0, args...)
+    function f(;x::Int64=1)
         ###
     end
 
-Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
+Extra keyword arguments can be collected using ``...``, as in varargs
+functions::
+
+    function f(x; y=0, kwargs...)
+        ###
+    end
+
+Inside ``f``, ``kwargs`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
-arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
+arguments using a semicolon in a call, e.g. ``f(x, z=1; kwargs...)``.
 Dictionaries can also be used for this purpose.
 
-In addition, one can also pass ``(key,value)`` tuples, or any iterable
+One can also pass ``(key,value)`` tuples, or any iterable
 expression (such as a ``=>`` pair) that can be assigned to such a
 tuple, explicitly after a semicolon.  For example, ``plot(x, y;
 (:width,2))`` and ``plot(x, y; :width => 2)`` are equivalent to

@@ -16,8 +16,8 @@ region_t *jl_gc_find_region(void *ptr, int maybe)
 // singleton object), this usually returns the same pointer which points to
 // the next object but it can also return NULL if the pointer is pointing to
 // the end of the page.
-DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
-                                                        size_t *osize_p)
+JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
+                                                           size_t *osize_p)
 {
     region_t *r = find_region(p, 1);
     // Not in the pool
@@ -291,7 +291,7 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
+JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     GC_MARKED_NOESC,
     {0, 0, 0, 0},
     {0, 0, 0, 0},
@@ -347,11 +347,10 @@ void gc_debug_print_status(void)
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
-    jl_printf(JL_STDOUT,
-              "Allocations: %" PRIu64 " "
-              "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-              pool_count + other_count, pool_count, other_count,
-              n_pause);
+    jl_safe_printf("Allocations: %" PRIu64 " "
+                   "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
+                   pool_count + other_count, pool_count, other_count,
+                   n_pause);
 }
 
 static inline void gc_debug_print(void)

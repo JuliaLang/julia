@@ -179,14 +179,18 @@ function chkstride1(A...)
     end
 end
 
-# Check that matrix is square
-function chksquare(A)
+"""
+    LinAlg.checksquare(A)
+
+Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
+"""
+function checksquare(A)
     m,n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square"))
     m
 end
 
-function chksquare(A...)
+function checksquare(A...)
     sizes = Int[]
     for a in A
         size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
@@ -195,16 +199,15 @@ function chksquare(A...)
     return sizes
 end
 
-# Check that upper/lower (for special matrices) is correctly specified
-macro chkuplo()
-   :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-
-Valid choices are 'U' (upper) or 'L' (lower).""")))
+function char_uplo(uplo::Symbol)
+    if uplo == :U
+        'U'
+    elseif uplo == :L
+        'L'
+    else
+        throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+    end
 end
-
-const CHARU = 'U'
-const CHARL = 'L'
-char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
 copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
@@ -213,6 +216,7 @@ include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")
+import .BLAS: gemv! # consider renaming gemv! in matmul
 include("linalg/matmul.jl")
 include("linalg/lapack.jl")
 

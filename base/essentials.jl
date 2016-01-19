@@ -17,6 +17,10 @@ end
 macro _pure_meta()
     Expr(:meta, :pure)
 end
+# another version of inlining that propagates an inbounds context
+macro _propagate_inbounds_meta()
+    Expr(:meta, :inline, :propagate_inbounds)
+end
 
 
 # constructors for Core types in boot.jl
@@ -168,15 +172,17 @@ end
 
 esc(e::ANY) = Expr(:escape, e)
 
-macro boundscheck(yesno,blk)
+macro boundscheck(blk)
     # hack: use this syntax since it avoids introducing line numbers
-    :($(Expr(:boundscheck,yesno));
+    :($(Expr(:boundscheck,true));
       $(esc(blk));
       $(Expr(:boundscheck,:pop)))
 end
 
 macro inbounds(blk)
-    :(@boundscheck false $(esc(blk)))
+    :($(Expr(:inbounds,true));
+      $(esc(blk));
+      $(Expr(:inbounds,:pop)))
 end
 
 macro label(name::Symbol)

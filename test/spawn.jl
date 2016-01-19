@@ -11,6 +11,8 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+@windows_only oldpath = ENV["PATH"]
+@windows_only ENV["PATH"] = joinpath(JULIA_HOME,"..","Git","usr","bin")*";"*oldpath
 
 valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
 
@@ -23,8 +25,8 @@ yes = `perl -le 'while (1) {print STDOUT "y"}'`
 @test length(spawn(pipeline(`echo hello`, `sort`)).processes) == 2
 
 out = readall(`echo hello` & `echo world`)
-@test search(out,"world") != (0,0)
-@test search(out,"hello") != (0,0)
+@test search(out,"world") != 0:-1
+@test search(out,"hello") != 0:-1
 @test readall(pipeline(`echo hello` & `echo world`, `sort`)) == "hello\nworld\n"
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
@@ -340,3 +342,17 @@ end
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
+
+@windows_only ENV["PATH"] = oldpath
+
+# equality tests for Cmd
+
+@test Base.Cmd(``) == Base.Cmd(``)
+@test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
+@test Base.Cmd(`echo test`) == Base.Cmd(`echo test`)
+@test Base.Cmd(``) != Base.Cmd(`echo test`)
+@test Base.Cmd(``, ignorestatus=true) != Base.Cmd(``, ignorestatus=false)
+@test Base.Cmd(``, dir="TESTS") != Base.Cmd(``, dir="TEST")
+@test Base.Set([``, ``]) == Base.Set([``])
+@test Set([``, `echo`]) != Set([``, ``])
+@test Set([`echo`, ``, ``, `echo`]) == Set([`echo`, ``])

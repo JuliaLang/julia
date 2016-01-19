@@ -3317,7 +3317,7 @@ immutable RGB{T<:AbstractFloat} <: Paint{T}
 end
 
 myeltype{T}(::Type{Paint{T}}) = T
-myeltype{P<:Paint}(::Type{P}) = myeltype(super(P))
+myeltype{P<:Paint}(::Type{P}) = myeltype(supertype(P))
 myeltype(::Type{Any}) = Any
 
 end
@@ -3468,8 +3468,7 @@ end
 
 # issue #11327 and #13547
 @test_throws MethodError convert(Type{Int}, Float32)
-# TODO: this should probably be a MethodError in `convert`; not sure what's going on
-@test_throws TypeError Array{Type{Int64}}([Float32])
+@test_throws MethodError Array{Type{Int64}}([Float32])
 abstract A11327
 abstract B11327 <: A11327
 f11327{T}(::Type{T},x::T) = x
@@ -3479,11 +3478,23 @@ let T=TypeVar(:T,true)
 end
 
 # issue 13855
-@eval @noinline function foo13855(x)
-    $(Expr(:localize, :(() -> () -> x)))
+macro m13855()
+    Expr(:localize, :(() -> x))
+end
+@noinline function foo13855(x)
+    @m13855()
 end
 @test foo13855(Base.AddFun())() == Base.AddFun()
 @test foo13855(Base.MulFun())() == Base.MulFun()
+
+# issue #8487
+@test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
+let A = Array(Int, 4,3)
+    for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
+        A[i,j] = 17*i + 51*j
+    end
+    @test A == [17*i + 51*j for i ∈ 1:size(A,1), j ∈ 1:size(A,2)]
+end
 
 # check if finalizers for the old gen can be triggered manually
 # issue #13986
@@ -3503,3 +3514,140 @@ let
     finalize(obj)
     @test finalized == 1
 end
+
+# check if finalizers for the old gen can be triggered manually
+# PR #14181
+let
+    # The following three `gc(false)` clears the `finalizer_list`. It is
+    # not strictly necessary to make the test pass but should make the failure
+    # more repeatable if something breaks.
+    gc(false)
+    # At least: GC_CLEAN; age = 1
+    gc(false)
+    # At least: GC_QUEUED; age = 1
+    gc(false)
+    # all objects in `finalizer_list` are now moved to `finalizer_list_marked`
+
+    obj1 = Ref(1)
+    obj2 = Ref(1)
+    finalized = 0
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj1, (obj) -> (finalized += 1))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalizer(obj2, (obj) -> (finalized += 1; finalize(obj1)))
+    finalize(obj2)
+    @test finalized == 4
+end
+
+# issue #14323
+@test_throws ErrorException eval(Expr(:body, :(1)))
+
+# issue #14339
+f14339{T<:Union{}}(x::T, y::T) = 0
+@test_throws MethodError f14339(1, 2)
+
+# Make sure jlcall objects are rooted
+# PR #14301
+module JLCall14301
+
+# Define f
+f() = 1
+
+let i = Any[[1.23], [2.34]]
+    # f() with capture variables
+    # Intentionally type unstable so that the dynamic dispatch will
+    # read the corrupted tag if the object is incorrectly GC'd.
+    global f() = i[1][1] * i[2][1]
+end
+
+# Another function that use f()
+g() = f() * 100
+# Compile it
+g()
+
+let i = 9.0
+    # Override f()
+    global f() = i + 1
+end
+
+# Make sure the old f() method is GC'd if it was not rooted properly
+gc()
+gc()
+gc()
+
+# Run again.
+g()
+
+end
+
+# make sure codegen doesn't remove argument to `isa`
+@noinline __g_isa_test_1(a) = push!(a,1)
+function __f_isa_arg_1()
+    a = []
+    isa(__g_isa_test_1(a), Any)
+    length(a)
+end
+@test __f_isa_arg_1() == 1
+
+# non-terminating inference, issue #14009
+type A14009{T}; end
+A14009{T}(a::T) = A14009{T}()
+f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
+code_typed(f14009, (Int,))
+
+type B14009{T}; end
+g14009(a) = g14009(B14009{a})
+code_typed(g14009, (Type{Int},))
+
+# issue #14477
+immutable Z14477
+    fld::Z14477
+    Z14477() = new(new())
+end
+let z1 = Z14477()
+    @test isa(z1, Z14477)
+    @test isa(z1.fld, Z14477)
+end
+
+# issue #14482
+let T = TypeVar(:T, true)
+    @test typeintersect(T, Type{Int8}) == Type{Int8}
+    @test typeintersect(Tuple{T}, Tuple{Type{Int8}}) == Tuple{Type{Int8}}
+end
+
+# issue #8846, generic macros
+macro m8846(a, b=0)
+    a, b
+end
+@test @m8846(a) === (:a, 0)
+@test @m8846(a,1) === (:a, 1)
+@test_throws MethodError eval(:(@m8846(a,b,c)))
+
+# a simple case of parametric dispatch with unions
+let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
+    @test foo(1, nothing) === 1
+    @test_throws MethodError foo(nothing, nothing)  # can't determine T
+end
+
+module TestMacroGlobalFunction
+macro makefn(f,g)
+    quote
+        global $(f)
+        function $(f)(x)
+            x+1
+        end
+        global $(g)
+        $(g)(x) = x+2
+    end
+end
+@makefn ff gg
+end
+@test TestMacroGlobalFunction.ff(1) == 2
+@test TestMacroGlobalFunction.gg(1) == 3
+
+# issue #14564
+@test isa(object_id(Tuple.name.cache), Integer)
+
+# issue #14691
+type T14691; a::UInt; end
+@test (T14691(0).a = 0) === 0

@@ -40,6 +40,16 @@ function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
     i == j ? A.dv[i] : (A.isupper && (i == j-1)) || (!A.isupper && (i == j+1)) ? A.ev[min(i,j)] : zero(T)
 end
 
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
+    if A.isupper
+        i==j || i==j-1 ? s : Base.replace_with_centered_mark(s)
+    else
+        i==j || i==j+1 ? s : Base.replace_with_centered_mark(s)
+    end
+end
+
 #Converting from Bidiagonal to dense Matrix
 full{T}(M::Bidiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
@@ -204,8 +214,8 @@ end
 
 #Linear solvers
 A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(transpose(A), b)
-Ac_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(ctranspose(A), b)
+At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
+Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(ctranspose(A), b)
 function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))

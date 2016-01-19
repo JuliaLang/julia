@@ -150,13 +150,16 @@ function invperm(a::AbstractVector)
 end
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
-doc"""
+"""
     nextprod([k_1,k_2,...], n)
 
-Next integer not less than `n` that can be written as $\prod k_i^{p_i}$ for integers $p_1$, $p_2$, etc.
+Next integer not less than `n` that can be written as ``\\prod k_i^{p_i}`` for integers
+``p_1``, ``p_2``, etc.
 
 For a list of integers i1, i2, i3, find the smallest
+
     i1^n1 * i2^n2 * i3^n3 >= x
+
 for integer n1, n2, n3
 """
 function nextprod(a::Vector{Int}, x)
@@ -210,4 +213,3 @@ for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
             "Run Pkg.add(\"Combinatorics\") to install Combinatorics on Julia v0.5-"))
     end
 end
-

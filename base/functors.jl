@@ -67,6 +67,9 @@ call(::LDivFun, x, y) = x \ y
 immutable IDivFun <: Func{2} end
 call(::IDivFun, x, y) = div(x, y)
 
+immutable DotIDivFun <: Func{2} end
+call(::DotIDivFun, x, y) = x .÷ y
+
 immutable ModFun <: Func{2} end
 call(::ModFun, x, y) = mod(x, y)
 
@@ -74,7 +77,7 @@ immutable RemFun <: Func{2} end
 call(::RemFun, x, y) = rem(x, y)
 
 immutable DotRemFun <: Func{2} end
-call(::RemFun, x, y) = x .% y
+call(::DotRemFun, x, y) = x .% y
 
 immutable PowFun <: Func{2} end
 call(::PowFun, x, y) = x ^ y
@@ -190,6 +193,9 @@ function specialized_binary(f::Function)
     is(f, ^) ? PowFun() :
     is(f, &) ? AndFun() :
     is(f, |) ? OrFun()  :
+    is(f, %) ? RemFun() :
+    is(f, rem) ? RemFun() :
+    is(f, ÷) ? IDivFun() :
     is(f, div) ? IDivFun() :
     UnspecializedFun{2}(f)
 end

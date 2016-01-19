@@ -18,11 +18,11 @@ void jl_generate_fptr(jl_function_t *f) {
     f->fptr = li->fptr;
 }
 
-DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
-DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
-DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt) UNAVAILABLE
-DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABLE
-DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
+JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
+JL_DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
+JL_DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
 
 void jl_init_codegen(void) { }
 void jl_compile_linfo(jl_lambda_info_t *li) { }

@@ -14,6 +14,13 @@ function generic_scale!(X::AbstractArray, s::Number)
     X
 end
 
+function generic_scale!(s::Number, X::AbstractArray)
+    @simd for I in eachindex(X)
+        @inbounds X[I] = s*X[I]
+    end
+    X
+end
+
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
@@ -29,10 +36,28 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     end
     C
 end
+
+function generic_scale!(C::AbstractArray, s::Number, X::AbstractArray)
+    if length(C) != length(X)
+        throw(DimensionMismatch("first array has length $(length(C)) which does not
+match the length of the second, $(length(X))."))
+    end
+    if size(C) == size(X)
+        for I in eachindex(C, X)
+            @inbounds C[I] = s*X[I]
+        end
+    else
+        for (IC, IX) in zip(eachindex(C), eachindex(X))
+            @inbounds C[IC] = s*X[IX]
+        end
+    end
+    C
+end
+
 scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
-scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
+scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, s, X)
 scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
-scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
+scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
@@ -309,7 +334,7 @@ end
 rank(x::Number) = x==0 ? 0 : 1
 
 function trace(A::AbstractMatrix)
-    chksquare(A)
+    checksquare(A)
     sum(diag(A))
 end
 trace(x::Number) = x
@@ -322,7 +347,7 @@ trace(x::Number) = x
 inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, checksquare(A)))
 end
 
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)

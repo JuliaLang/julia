@@ -29,7 +29,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	from: @(#)DEFS.h	5.1 (Berkeley) 4/23/90
+ *      from: @(#)DEFS.h        5.1 (Berkeley) 4/23/90
  * $FreeBSD: src/sys/amd64/include/asm.h,v 1.18 2007/08/22 04:26:07 jkoshy Exp $
  */
 
@@ -59,7 +59,8 @@ EXT(CNAME):
 _START_ENTRY
 .globl EXT(CNAME)
 .section .drectve
-.ascii " -export:" XSTR(CNAME)
+.ascii " -export:"
+.ascii XSTR(CNAME)
 .section .text
 .def EXT(CNAME)
 .scl 2

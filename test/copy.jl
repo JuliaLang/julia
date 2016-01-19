@@ -64,3 +64,6 @@ let a = rand(3, 5)
     c = deepcopy(b)
     @test c[1] === c[2]
 end
+
+# issue #14027
+@test isnull(deepcopy(Nullable{Array}()))

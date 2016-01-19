@@ -38,8 +38,8 @@ function add_all_docs_meta(m::Module,meta)
     exports = names(m)
     for (obj, d) in meta
         isexported = sym_exported(obj, m, exports)
-        if isa(d, Base.Docs.FuncDoc) || isa(d, Base.Docs.TypeDoc)
-            add_all_docs(d.meta, (obj, isexported))
+        if isa(d, Base.Docs.MultiDoc)
+            add_all_docs(d.docs, (obj, isexported))
         else
             all_docs[d] = (obj, isexported)
         end
@@ -74,9 +74,15 @@ function find_docs(v)
     docs = []
     for mod in keys(mod_added)
         try
-            meta = Docs.meta(mod)[v]
-            if isa(meta, Base.Docs.FuncDoc) || isa(meta, Base.Docs.TypeDoc)
-                append!(docs, collect(values(meta.meta)))
+            m = Docs.meta(mod)
+            if haskey(m, v)
+                meta = m[v]
+            elseif isa(v, Docs.Binding)
+                obj = getfield(v.mod, v.var)
+                meta = m[obj]
+            end
+            if isa(meta, Base.Docs.MultiDoc)
+                append!(docs, collect(values(meta.docs)))
             else
                 push!(docs, meta)
             end
@@ -247,13 +253,13 @@ function translate(file)
                 for mdoc in getdoc(mod, funcname)
                     mdecl, mbody = split_decl_rst(mdoc)
                     if contains(replace(mdecl, r"[\n ][\n ]+", " "),
-                                replace(".. function:: " * full,
+                                replace(".. function:: " * unescape_string(full),
                                         r"[\n ][\n ]+", " "))
                         if doc != nothing
                             error("duplicate $full $l")
                         end
                         doc = mdoc
-                        decl = mdecl
+                        decl = replace(mdecl, '\\', "\\\\")
                         body = mbody
                     end
                 end
@@ -286,9 +292,11 @@ function translate(file)
 end
 
 for folder in ["stdlib", "manual", "devdocs"]
-    println("\nConverting $folder/\n")
+    println("\nConverting rst files in $folder/\n")
     for file in readdir("$folder")
-        translate("$folder/$file")
+        if endswith(file, ".rst")
+            translate("$folder/$file")
+        end
     end
 end
 

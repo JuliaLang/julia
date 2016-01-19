@@ -82,6 +82,13 @@ SLOT_RULE['s'] = Millisecond
 
 duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
+"""
+    Dates.DateFormat(format::AbstractString) -> DateFormat
+
+Construct a date formatting object that can be passed repeatedly for parsing similarly
+formatted date strings. `format` is a format string in the form described above (e.g.
+`"yyyy-mm-dd"`).
+"""
 function DateFormat(f::AbstractString,locale::AbstractString="english")
     slots = Slot[]
     prefix = ""

@@ -121,6 +121,9 @@ end
 immutable NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
+immutable Type4Union end
+func4union(::Union{Type4Union,Int}) = ()
+@test !isempty(methodswith(Type4Union))
 
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
@@ -181,7 +184,7 @@ x = 1.0
 end
 @test sprint(whos, Main, r"^$") == ""
 let v = sprint(whos, _test_whos_)
-    @test contains(v, "x      8 bytes  Float64 : 1.0")
+    @test contains(v, "x      8 bytes  Float64")
 end
 
 # issue #13021
@@ -198,3 +201,12 @@ end
 @test Base.is_unix(:FreeBSD)
 @test_throws ArgumentError Base.is_unix(:BeOS)
 @unix_only @test Base.windows_version() == (0,0)
+
+# Issue 14173
+module Tmp14173
+    export A
+    A = randn(2000, 2000)
+end
+whos(IOBuffer(), Tmp14173) # warm up
+@test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
+

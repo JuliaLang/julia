@@ -2,7 +2,7 @@
 
 # Method and method-table pretty-printing
 
-function argtype_decl(n, t) # -> (argname, argtype)
+function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -18,12 +18,12 @@ function argtype_decl(n, t) # -> (argname, argtype)
         if t.parameters[1] === Any
             return string(s, "..."), ""
         else
-            return s, string(t.parameters[1], "...")
+            return s, string_with_env(env, t.parameters[1]) * "..."
         end
     elseif t == ByteString
         return s, "ByteString"
     end
-    return s, string(t)
+    return s, string_with_env(env, t)
 end
 
 function arg_decl_parts(m::Method)
@@ -37,7 +37,8 @@ function arg_decl_parts(m::Method)
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
+    decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
+                for i = 1:length(m.sig.parameters)]
     return tv, decls, li.file, li.line
 end
 
@@ -48,8 +49,8 @@ function show(io::IO, m::Method)
         show_delim_array(io, tv, '{', ',', '}', false)
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls],
-                 ", ", ", ")
+    decls = [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls]
+    print_joined(io, decls, ", ", ", ")
     print(io, ")")
     if line > 0
         print(io, " at ", file, ":", line)
@@ -61,7 +62,9 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     n = length(mt)
     if header
         m = n==1 ? "method" : "methods"
-        print(io, "# $n $m for generic function \"$name\":")
+        ns = string(name)
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
     d = mt.defs
     n = rest = 0
@@ -155,7 +158,9 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
-    print(io, "$n $meths for generic function <b>$name</b>:<ul>")
+    ns = string(name)
+    what = startswith(ns, '@') ? "macro" : "generic function"
+    print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
     d = mt.defs
     while d !== nothing
         print(io, "<li> ")
@@ -181,4 +186,4 @@ end
 
 # override usual show method for Vector{Method}: don't abbreviate long lists
 writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
-    showarray(io, mt, limit=false)
+    showarray(IOContext(io, :limit_output => false), mt)

@@ -45,7 +45,7 @@ function rst(io::IO, list::List)
 end
 
 function rst(io::IO, q::BlockQuote)
-    s = sprint(buf -> plain(buf, q.content))
+    s = sprint(buf -> rst(buf, q.content))
     for line in split(rstrip(s), "\n")
         println(io, "    ", line)
     end
@@ -73,7 +73,7 @@ function rstinline(io::IO, md...)
     wasCode = false
     for el in md
         wasCode && isa(el, AbstractString) && !Base.startswith(el, " ") && print(io, "\\ ")
-        wasCode = (isa(el, Code) || isa(el, LaTeX)) && (wasCode = true)
+        wasCode = (isa(el, Code) || isa(el, LaTeX) || isa(el, Link)) && (wasCode = true)
         rstinline(io, el)
     end
 end
@@ -82,7 +82,22 @@ rstinline(io::IO, md::Vector) = !isempty(md) && rstinline(io, md...)
 
 # rstinline(io::IO, md::Image) = rstinline(io, ".. image:: ", md.url)
 
-rstinline(io::IO, md::Link) = rstinline(io, "`", md.text, " <", md.url, ">`_")
+function rstinline(io::IO, md::Link)
+    if ismatch(r":(func|obj|ref|exc|class|const):`\.*", md.url)
+        rstinline(io, md.url)
+    else
+        rstinline(io, "`", md.text, " <", md.url, ">`_")
+    end
+end
+
+function rstinline(io::IO, md::Footnote)
+    if md.text ≡ nothing
+        print(io, "[", md.id, "]_")
+    else
+        print(io, ".. [", md.id, "]")
+        rstinline(io, md.text)
+    end
+end
 
 rstescape(s) = replace(s, "\\", "\\\\")
 

@@ -4,8 +4,6 @@
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 static BOOL (*pSetThreadStackGuarantee)(PULONG);
 
-DLLEXPORT void gdblookup(ptrint_t ip);
-
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
@@ -169,6 +167,13 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
+#ifdef JULIA_ENABLE_THREADING
+                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] ==
+                    (intptr_t)jl_gc_signal_page) {
+                    jl_gc_signal_wait();
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+#endif
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
@@ -220,7 +225,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
         static int recursion = 0;
@@ -260,7 +265,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 }
 #endif
 
-DLLEXPORT void jl_install_sigint_handler(void)
+JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
@@ -310,7 +315,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
@@ -331,7 +336,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
