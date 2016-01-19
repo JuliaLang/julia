@@ -186,17 +186,6 @@ int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
     return 0;
 }
 
-
-void ti_threadgroup_barrier(ti_threadgroup_t *tg, int16_t ext_tid)
-{
-    if (tg->tid_map[ext_tid] == 0  &&  !tg->forked)
-        return;
-
-    ti_threadgroup_join(tg, ext_tid);
-    ti_threadgroup_fork(tg, ext_tid, NULL);
-}
-
-
 int ti_threadgroup_destroy(ti_threadgroup_t *tg)
 {
     int i;
