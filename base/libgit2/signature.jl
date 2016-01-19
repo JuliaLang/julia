@@ -30,7 +30,7 @@ end
 function Base.convert(::Type{GitSignature}, sig::Signature)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_new, :libgit2), Cint,
-                 (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring, Cint, Cint),
+                 (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring, Int64, Cint),
                  sig_ptr_ptr, sig.name, sig.email, sig.time, sig.time_offset)
     return GitSignature(sig_ptr_ptr[])
 end
