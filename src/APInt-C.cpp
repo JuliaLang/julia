@@ -16,7 +16,7 @@ using namespace llvm;
 inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew = 0) {
   return alignTo(Value, Align, Skew);
 }
-+#endif
+#endif
 
 /* create "APInt s" from "integerPart *ps" */
 #define CREATE(s) \
