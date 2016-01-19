@@ -965,7 +965,7 @@
              (body (caddr e)))
          (let ((argl (if (pair? a)
                          (if (eq? (car a) 'tuple)
-                             (cdr a)
+                             (map =-to-kw (cdr a))
                              (if (eq? (car a) 'block)
                                  (cond ((length= a 1) '())
                                        ((length= a 2) (list (cadr a)))
@@ -975,7 +975,7 @@
                                             `((parameters ,(caddr a)) ,(cadr a))))
                                        (else
                                         (error "more than one semicolon in argument list")))
-                                 (list a)))
+                                 (list (=-to-kw a))))
 			 (list a)))
 	       ;; TODO: always use a specific special name like #anon# or _, then ignore
 	       ;; this as a local variable name.
