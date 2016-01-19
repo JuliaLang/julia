@@ -43,25 +43,32 @@ close(s)
 push!(l, ("IOBuffer", io))
 
 
+function run_test_server(srv, text)
+    push!(tasks, @async begin
+        try
+            sock = accept(srv)
+            try
+                write(sock,text)
+            catch e
+                if typeof(e) != Base.UVError
+                    rethrow(e)
+                end
+            finally
+                close(sock)
+            end
+        finally
+            close(srv)
+        end
+    end)
+    yield()
+end
+
+
 # TCPSocket
-
-# PR#14627
-Base.connect!(sock::TCPSocket, addr::Base.InetAddr) = Base.connect!(sock, addr.host, addr.port)
-
-addr = Base.InetAddr(ip"127.0.0.1", 4444)
 io = (text) -> begin
-    c = Condition()
-    tsk = @async begin
-        srv = listen(addr)
-        notify(c)
-        sock = accept(srv)
-        write(sock,text)
-        close(sock)
-        close(srv)
-    end
-    push!(tasks, tsk)
-    wait(c)
-    connect(addr)
+    port, srv = listenany(rand(2000:4000))
+    run_test_server(srv, text)
+    connect(port)
 end
 s = io(text)
 @test isa(s, IO)
@@ -70,22 +77,13 @@ close(s)
 push!(l, ("TCPSocket", io))
 
 
-@windows ? nothing : begin
-
 # PipeEndpoint
-socketname = joinpath(dir, "socket")
-io = (text)-> begin
-    c = Condition()
-    tsk = @async begin
-        con = listen(socketname)
-        notify(c)
-        sock = accept(con)
-        try write(sock,text) end
-        close(sock)
-        close(con)
-    end
-    push!(tasks, tsk)
-    wait(c)
+io = (text) -> begin
+    a = "\\\\.\\pipe\\uv-test-$(randstring(6))"
+    b = joinpath(dir, "socket-$(randstring(6))")
+    socketname = @windows ? a : b
+    srv = listen(socketname)
+    run_test_server(srv, text)
     connect(socketname)
 end
 s = io(text)
@@ -95,8 +93,18 @@ close(s)
 push!(l, ("PipeEndpoint", io))
 
 
+@windows ? nothing : begin
+
+# See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
+#https://ci.appveyor.com/project/StefanKarpinski/julia/build/1.0.12733/job/hpwjs4hmf03vs5ag#L1244
+
 # Pipe
-io = (text) -> open(`echo -n $text`)[1]
+io = (text) -> begin
+    open(io->write(io, text), filename, "w")
+    open(`$(@windows ? "type" : "cat") $filename`)[1]
+#    Was open(`echo -n $text`)[1]
+#    See https://github.com/JuliaLang/julia/issues/14747
+end
 s = io(text)
 @test isa(s, IO)
 @test isa(s, Pipe)
@@ -105,33 +113,33 @@ push!(l, ("Pipe", io))
 
 end
 
+
 open_streams = []
 function cleanup()
     for s in open_streams
         try close(s) end
     end
+    empty!(open_streams)
     for tsk in tasks
         wait(tsk)
     end
+    empty!(tasks)
 end
 
 verbose = false
+
+cleanup()
 
 for (name, f) in l
 
     io = ()->(s=f(text); push!(open_streams, s); s)
 
-    verbose && println("$name readall...")
-    @test readall(io()) == text
-    @test readall(io()) == readall(filename)
-
     verbose && println("$name read...")
-    @test readbytes(io()) == Vector{UInt8}(text)
-    @test readbytes(io()) == open(readbytes,filename)
     @test read(io(), UInt8) == read(IOBuffer(text), UInt8)
     @test read(io(), UInt8) == open(io->read(io, UInt8), filename)
     @test read(io(), Int) == read(IOBuffer(text), Int)
     @test read(io(), Int) == open(io->read(io,Int),filename)
+    cleanup()
     s1 = io()
     s2 = IOBuffer(text)
     @test read(s1, UInt32, 2) == read(s2, UInt32, 2)
@@ -144,11 +152,6 @@ for (name, f) in l
     @test eof(s1)
     close(s1)
     close(s2)
-
-    verbose && println("$name readuntil...")
-    @test readuntil(io(), '\n') == open(io->readuntil(io,'\n'),filename)
-    @test readuntil(io(), "\n") == open(io->readuntil(io,"\n"),filename)
-    @test readuntil(io(), ',') == open(io->readuntil(io,','),filename)
 
     verbose && println("$name eof...")
     n = length(text) - 1
@@ -170,9 +173,16 @@ for (name, f) in l
         UTF8String(['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
         UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
         UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
-        UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)]),
-        UTF8String(['A' + i % 52 for i in 1:(7 + Base.SZ_UNBUFFERED_IO *3)])
+        UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
+
+        verbose && println("$name readall...")
+        @test readall(io()) == text
+        cleanup()
+
+        verbose && println("$name readbytes...")
+        @test readbytes(io()) == Vector{UInt8}(text)
+        cleanup()
 
         verbose && println("$name readbytes!...")
         l = length(text)
@@ -202,18 +212,31 @@ for (name, f) in l
 
         cleanup()
 
+        verbose && println("$name readuntil...")
+        @test readuntil(io(), '\n') == readuntil(IOBuffer(text),'\n')
+        cleanup()
+        @test readuntil(io(), "\n") == readuntil(IOBuffer(text),"\n")
+        cleanup()
+        @test readuntil(io(), ',') == readuntil(IOBuffer(text),',')
+        cleanup()
+
         verbose && println("$name readline...")
         @test readline(io()) == readline(IOBuffer(text))
+        cleanup()
 
         verbose && println("$name readlines...")
         @test readlines(io()) == readlines(IOBuffer(text))
+        cleanup()
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
+        cleanup()
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
+        cleanup()
 
         verbose && println("$name readcsv...")
         @test readcsv(io()) == readcsv(IOBuffer(text))
+        cleanup()
     end
 
     text = old_text
