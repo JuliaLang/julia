@@ -1599,6 +1599,9 @@
                       (else
                        (parse-matrix s first closer #f))))))))))
 
+(define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
+(define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
+
 ;; translate nested (parameters ...) expressions to a statement block if possible
 ;; this allows us to first parse tuples using parse-arglist
 (define (parameters-to-block e)
@@ -1615,9 +1618,7 @@
                           (cons (car snd) rec)))
                    #f)))
             (else #f))
-      (list (if (kwarg? e)
-                (cons '= (cdr e))
-                e))))
+      (list (kw-to-= e))))
 
 ;; convert an arglist to a tuple or block expr
 ;; leading-semi? means we saw (; ...)
@@ -1634,8 +1635,8 @@
           (and (null? first) (null? args) (not comma?)
                `(block))  ;; this case is (;)
           (if (and (pair? args) (pair? (car args)) (eq? (caar args) 'parameters))
-              `(tuple ,(car args) ,@first ,@(cdr args))
-              `(tuple ,@first ,@args)))))
+              `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
+              `(tuple ,@first ,@(map kw-to-= args))))))
 
 (define (not-eof-2 c)
   (if (eof-object? c)

@@ -193,3 +193,8 @@ let f = (x;a=1,b=2)->(x, a, b)
     @test f(0,b=88) === (0, 1, 88)
     @test_throws ErrorException f(0,z=1)
 end
+@test ((a=2)->10a)(3) == 30
+@test ((a=2)->10a)() == 20
+@test ((a=1,b=2)->(a,b))() == (1,2)
+@test ((a=1,b=2)->(a,b))(5) == (5,2)
+@test ((a=1,b=2)->(a,b))(5,6) == (5,6)
