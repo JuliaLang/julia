@@ -52,7 +52,7 @@ typedef struct {
     jl_function_t       *fun;
     jl_svec_t           *args;
     jl_value_t          *ret;
-
+    jl_module_t         *current_module;
 } ti_threadwork_t;
 
 

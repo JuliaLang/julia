@@ -147,6 +147,7 @@ static void ti_initthread(int16_t tid)
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe
+    ptls->current_module = NULL;
 #ifdef JULIA_ENABLE_THREADING
     jl_all_heaps[tid] = jl_mk_thread_heap();
 #else
@@ -270,7 +271,13 @@ void ti_threadfun(void *arg)
                 //       support in the codegen and runtime we don't need to
                 //       enter GC unsafe region when starting the work.
                 int8_t gc_state = jl_gc_unsafe_enter();
+                // This is probably always NULL for now
+                jl_module_t *last_m = jl_current_module;
+                JL_GC_PUSH1(&last_m);
+                jl_current_module = work->current_module;
                 ti_run_fun(work->fun, work->args);
+                jl_current_module = last_m;
+                JL_GC_POP();
                 jl_gc_unsafe_leave(gc_state);
             }
         }
@@ -451,6 +458,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
     threadwork.fun = fun;
     threadwork.args = args;
     threadwork.ret = jl_nothing;
+    threadwork.current_module = jl_current_module;
 
 #if PROFILE_JL_THREADING
     uint64_t tcompile = rdtsc();
@@ -458,7 +466,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_svec_t *args)
 #endif
 
     // fork the world thread group
-    ti_threadwork_t *tw = (ti_threadwork_t *)&threadwork;
+    ti_threadwork_t *tw = &threadwork;
     ti_threadgroup_fork(tgworld, ti_tid, (void **)&tw);
 
 #if PROFILE_JL_THREADING
