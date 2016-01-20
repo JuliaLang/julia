@@ -818,13 +818,13 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             // not needed (e.g. they don't get inlined).
             if (tf && jl_typeis(tf, jl_array_any_type)) {
                 size_t i, l = jl_array_len(tf);
-                for(i=0; i < l; i += 3) {
+                for(i=0; i < l; i += 4) {
                     if (!jl_is_leaf_type(jl_cellref(tf,i))) {
-                        jl_value_t *ret = jl_cellref(tf,i+1);
+                        jl_value_t *ret = jl_cellref(tf, i + 1);
                         if (jl_is_tuple(ret)) {
                             jl_value_t *ast = jl_fieldref(ret, 0);
                             if (jl_is_array(ast) && jl_array_len(ast) > 500)
-                                jl_cellset(tf, i+1, jl_fieldref(ret,1));
+                                jl_cellset(tf, i+1, jl_fieldref(ret, 1));
                         }
                     }
                 }

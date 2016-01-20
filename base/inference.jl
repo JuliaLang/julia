@@ -1450,8 +1450,8 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def, cop, needtree)
-    if linfo.module === Core
+function typeinf(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
+    if linfo.module === Core && isempty(sparams)
         atypes = Tuple
     end
     #dbg =
@@ -1463,12 +1463,12 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
     tf = def.tfunc
     if !is(tf,nothing)
         tfarr = tf::Array{Any,1}
-        for i = 1:3:length(tfarr)
-            if typeseq(tfarr[i],atypes)
-                code = tfarr[i+1]
-                if tfarr[i+2]
+        for i = 1:4:length(tfarr)
+            if tfarr[i + 3] === sparams && typeseq(tfarr[i], atypes)
+                code = tfarr[i + 1]
+                if tfarr[i + 2]
                     redo = true
-                    tfunc_idx = i+1
+                    tfunc_idx = i + 1
                     curtype = code
                     break
                 end
@@ -1501,24 +1501,26 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
         end
         tfarr = def.tfunc::Array{Any,1}
         idx = -1
-        for i = 1:3:length(tfarr)
-            if typeseq(tfarr[i],atypes)
+        for i = 1:4:length(tfarr)
+            if sparams === tfarr[i + 3] && typeseq(tfarr[i], atypes)
                 idx = i; break
             end
         end
         if idx == -1
             l = length(tfarr)
-            idx = l+1
-            resize!(tfarr, l+3)
+            idx = l + 1
+            resize!(tfarr, l + 4)
         end
         tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
         tfarr[idx+1] = rec ? result : (fulltree,result)
         tfarr[idx+2] = rec
+        tfarr[idx+3] = sparams
     else
         def.tfunc[tfunc_idx] = rec ? result : (fulltree,result)
         def.tfunc[tfunc_idx+1] = rec
+        def.tfunc[tfunc_idx+2] = sparams
     end
 
     return (fulltree, result::Type)
