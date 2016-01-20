@@ -981,9 +981,9 @@ export fieldoffsets
 @deprecate isgeneric(f) isa(f,Function)
 
 # need to do this manually since the front end deprecates method defs of `call`
-const call = @eval function(f,args...)
+const call = @eval function(f, args...; kw...)
     $(Expr(:meta, :noinline))
     depwarn("call(f,args...) is deprecated, use f(args...) instead.", :call)
-    f(args...)
+    f(args...; kw...)
 end
 export call
