@@ -2,6 +2,8 @@
 
 using Base.Test
 
+@test Base.idleworker() == 1
+
 inline_flag = Base.JLOptions().can_inline == 1 ? `` : `--inline=no`
 cov_flag = ``
 if Base.JLOptions().code_coverage == 1
@@ -10,6 +12,71 @@ elseif Base.JLOptions().code_coverage == 2
     cov_flag = `--code-coverage=all`
 end
 addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
+
+# Test idleworker()
+let
+
+    @test Base.idleworker() == 2
+
+    r = nothing
+    function remote_sleep(t)
+        @async r = remotecall_fetch(sleep, Base.idleworker(), t)
+        yield()
+    end
+
+    w = workers()
+    @test length(w) == 3
+                                        t1 = now()
+    @test Base.idleworker() == w[1]
+    @test Base.idleworker() == w[1]
+    remote_sleep(10)
+                                        # w1: 10s
+
+    @test Base.idleworker() == w[2]
+    @test Base.idleworker() == w[2]
+    remote_sleep(2)
+                                        # w1: 10, w2: 2s
+
+    @test Base.idleworker() == w[3]
+    @test Base.idleworker() == w[3]
+    remote_sleep(4)
+                                        # w1: 10s, w2: 2s, w3: 4s
+
+                                        t2 = now()
+                                        @test (t2-t1).value < 500
+
+                                        t1 = now()
+                                        # w1: 10s, w2: 2s, w3: 4s ...
+                                        # w1:  9s, w2: 1s, w3: 3s ...
+                                        # w1:  8s, w2: !!, w3: 2s
+    @test Base.idleworker() == w[2]
+                                        t2 = now()
+                                        @test (t2-t1).value > 1000
+    @test Base.idleworker() == w[2]
+    remote_sleep(4)
+                                        t1 = now()
+                                        # w1: 8s, w2: 4s, w3: 2s ...
+                                        # w1: 7s, w2: 3s, w3: 1s ...
+                                        # w1: 6s, w2: 2s, w3: !! ...
+    @test Base.idleworker() == w[3]
+                                        t2 = now()
+                                        @test (t2-t1).value > 1000
+    @test Base.idleworker() == w[3]
+    sleep(3)                            # w1: 6s, w2: 2s ...
+                                        # w1: 5s, w2: 1s ...
+                                        # w1: 4s, w2: !!
+                                        # w1: 3s ...
+    @test Base.idleworker() == w[2]
+    sleep(4)                            # w1: 2s ...
+                                        # w1: 1s ...
+                                        # w1: !!
+                                        # ...
+                                        t1 = now()
+    @test Base.idleworker() == w[1]
+    @test Base.idleworker() == w[1]
+                                        t2 = now()
+                                        @test (t2-t1).value < 500
+end
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]

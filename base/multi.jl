@@ -332,11 +332,14 @@ function workers()
 end
 
 function idleworker()
+    if nprocs() == 1
+        return 1
+    end
     while true
         busy_workers = Int[rv.waitingfor for (id,rv) in PGRP.refs]
         for w in PGRP.workers
             if w.id != 1 && !(w.id in busy_workers)
-                return w
+                return w.id
             end
         end
         wait(PGRP.worker_is_idle)
