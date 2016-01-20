@@ -1175,7 +1175,7 @@ extern JL_DLLEXPORT jl_module_t *jl_internal_main_module;
 extern JL_DLLEXPORT jl_module_t *jl_core_module;
 extern JL_DLLEXPORT jl_module_t *jl_base_module;
 extern JL_DLLEXPORT jl_module_t *jl_top_module;
-extern JL_DLLEXPORT jl_module_t *jl_current_module;
+#define jl_current_module (jl_get_ptls_states()->current_module)
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
@@ -1484,6 +1484,7 @@ typedef struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     struct _jl_thread_heap_t *heap;
+    jl_module_t *current_module;
     jl_task_t *volatile current_task;
     jl_task_t *root_task;
     jl_value_t *volatile task_arg_in_transit;

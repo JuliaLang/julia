@@ -2011,13 +2011,16 @@ static void pre_mark(void)
 {
     // modules
     gc_push_root(jl_main_module, 0);
-    gc_push_root(jl_current_module, 0);
     if (jl_old_base_module) gc_push_root(jl_old_base_module, 0);
     gc_push_root(jl_internal_main_module, 0);
 
     size_t i;
     for(i=0; i < jl_n_threads; i++) {
         jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
+        // current_module might not have a value when the thread is not
+        // running.
+        if (ptls->current_module)
+            gc_push_root(ptls->current_module, 0);
         gc_push_root(ptls->current_task, 0);
         gc_push_root(ptls->root_task, 0);
         gc_push_root(ptls->exception_in_transit, 0);
