@@ -307,7 +307,7 @@ let
         try
             t = connect(addr)
         finally
-           close(srv)
+            close(srv)
         end
 
         test = !is(t,t0)
