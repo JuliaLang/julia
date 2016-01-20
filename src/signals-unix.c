@@ -4,6 +4,9 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 
 #ifdef __APPLE__
 #include <AvailabilityMacros.h>
