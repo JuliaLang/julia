@@ -336,8 +336,8 @@ function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b))
     read_sub(io, b, 1, nr)
     return nr
 end
-readbytes(io::AbstractIOBuffer) = read!(io, Array(UInt8, nb_available(io)))
-readbytes(io::AbstractIOBuffer, nb) = read!(io, Array(UInt8, min(nb, nb_available(io))))
+read(io::AbstractIOBuffer) = read!(io, Array(UInt8, nb_available(io)))
+read(io::AbstractIOBuffer, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 
 function search(buf::IOBuffer, delim::UInt8)
     p = pointer(buf.data, buf.ptr)

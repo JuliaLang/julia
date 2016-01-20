@@ -182,7 +182,7 @@ const warn_doc_between_func = "JULIA_WARN_DOC_BETWEEN_FUNC" in keys(ENV)
 
 function translate(file)
     @assert(isfile(file))
-    ls = split(readall(file), "\n")[1:end-1]
+    ls = split(readstring(file), "\n")[1:end-1]
     doccing = false
     func = nothing
     mod = "Base"

@@ -42,12 +42,12 @@ The ``hello`` is the output of the ``echo`` command, sent to :const:`STDOUT`.
 The run method itself returns ``nothing``, and throws an :exc:`ErrorException`
 if the external command fails to run successfully.
 
-If you want to read the output of the external command, :func:`readall`
+If you want to read the output of the external command, :func:`readstring`
 can be used instead:
 
 .. doctest::
 
-    julia> a=readall(`echo hello`)
+    julia> a=readstring(`echo hello`)
     "hello\n"
 
     julia> (chomp(a)) == "hello"
@@ -314,7 +314,7 @@ When reading and writing to both ends of a pipeline from a single process,
 it is important to avoid forcing the kernel to buffer all of the data.
 
 For example, when reading all of the output from a command,
-call ``readall(out)``, not ``wait(process)``, since the former
+call ``read(out)``, not ``wait(process)``, since the former
 will actively consume all of the data written by the process,
 whereas the latter will attempt to store the data in the kernel's
 buffers while waiting for a reader to be connected.
@@ -323,7 +323,7 @@ Another common solution is to separate the reader and writer
 of the pipeline into separate Tasks::
 
      writer = @async writeall(process, "data")
-     reader = @async do_compute(readall(process))
+     reader = @async do_compute(read(process))
      wait(process)
      fetch(reader)
 

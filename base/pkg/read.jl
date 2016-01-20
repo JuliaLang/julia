@@ -5,7 +5,7 @@ module Read
 import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError
 using ..Types
 
-readstrip(path...) = strip(readall(joinpath(path...)))
+readstrip(path...) = strip(readstring(joinpath(path...)))
 
 url(pkg::AbstractString) = readstrip("METADATA", pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")

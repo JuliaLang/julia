@@ -91,7 +91,7 @@ function _undocumented_rst()
     depdoc = havecount = total = 0
     out = AbstractString["The following exports are not documented:"]
     undoc_exports = Set()
-    exports=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
+    exports=[strip(x) for x in split(replace(readstring("$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
     for line in exports
         if search(line, "deprecated")!=0:-1; continue end
         if haskey(MODULE_DICT, line); havecount+=1; total+=1; continue end
@@ -117,7 +117,7 @@ function _undocumented_rst()
 
     append!(out, AbstractString["", "Documented and deprecated functions/exports (please update docs)", ""])
 
-    deprecated=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/deprecated.jl"),",",""),"\n")]
+    deprecated=[strip(x) for x in split(replace(readstring("$JULIA_HOME/../../base/deprecated.jl"),",",""),"\n")]
     for line in deprecated
         if startswith(line, "@deprecated")
             fn = split(line, r" +")[2]
@@ -141,7 +141,7 @@ function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED
     init_help()
     println(out, ".. currentmodule:: Base")
     println(out)
-    exports=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
+    exports=[strip(x) for x in split(replace(readstring("$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
     for line in exports
         if search(line, "deprecated")!=0:-1; continue end
         if haskey(MODULE_DICT, line); continue end
