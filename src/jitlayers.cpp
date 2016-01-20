@@ -216,7 +216,11 @@ public:
         auto oit = Objects.begin();
         auto lit = LOS.begin();
         while (oit != Objects.end()) {
+#ifdef LLVM39
+            const auto &Object = (*oit)->getBinary();
+#else
             auto &Object = *oit;
+#endif
             auto &LO = *lit;
 
             OwningBinary<ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
