@@ -15,7 +15,6 @@ jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
 jl_module_t *jl_top_module=NULL;
-jl_module_t *jl_current_module=NULL;
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
