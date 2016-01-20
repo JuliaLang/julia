@@ -21,6 +21,14 @@
 
 using namespace llvm;
 
+#ifndef NDEBUG
+static struct {
+    unsigned count;
+    unsigned locals;
+    unsigned temp;
+} jl_gc_frame_stats = {0};
+#endif
+
 class JuliaGCAllocator {
 public:
     JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue) :
@@ -33,8 +41,8 @@ public:
         gcframe(new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0))),
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
-        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
-        jlcall_root_func(M.getFunction("julia.jlcall_root_decl"))
+        gc_store_func(M.getFunction("julia.gc_store")),
+        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl"))
     {
 /* Algorithm sketch:
  *  Compute liveness for each basic block
@@ -46,7 +54,7 @@ public:
         gcframe->setName("gcrootframe");
 #endif
         gcframe->insertAfter(ptlsStates);
-        assert(gcroot_func && gckill_func && jlcall_frame_func && jlcall_root_func);
+        assert(gcroot_func && gckill_func && jlcall_frame_func && gc_store_func);
     }
 
 private:
@@ -59,21 +67,25 @@ CallInst *const ptlsStates;
 AllocaInst *const gcframe;
 Function *const gcroot_func;
 Function *const gckill_func;
+Function *const gc_store_func;
 Function *const jlcall_frame_func;
-Function *const jlcall_root_func;
 
 typedef std::pair<CallInst*, unsigned> frame_register;
 class liveness {
 public:
     typedef unsigned id;
     enum {
-        assign = 1<<0,
-        kill   = 1<<1,
-        live   = 1<<2
+        assign = 1<<0, // an assignment to a gcroot exists in the basic-block (potentially no live-in from the predecessor basic-blocks)
+        kill   = 1<<1, // a use of a gcroot exists in the basic-block (potentially a "kill" and no live-out to the successor basic-blocks)
+        live   = 1<<2  // the gcroot is live over the entire basic-block (the assign/kill are not dominating of entry/exit)
+            // live | kill | assign == a usage and assignment exist, but it is also live on exit, the entry liveness depends on whether a store or use is encountered first
+            // live | kill == a usage exists, but the value must be live for the entire basic-block since it is not the terminal usage in the domination tree
+            // kill | assign == a usage and definition exist in domination order, so the actual lifetime is only a subset of the basic-block
+            // live | assign == impossible (this would be strange)
     };
 };
 
-#ifdef DEBUG // llvm assertions build
+#ifndef NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
 void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
 {
@@ -99,7 +111,27 @@ Instruction *get_pgcstack(Instruction *ptlsStates)
             "jl_pgcstack");
 }
 
-void collapseRedundantFrames(bool deadOnly)
+frame_register get_gcroot(Value *ptr)
+{
+    frame_register frame;
+    frame.first = dyn_cast<CallInst>(ptr);
+    frame.second = 0;
+    if (frame.first == NULL) {
+        // also try to look through GEP for jlcall_frame_func
+        if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(ptr)) {
+            if (gepInst->getNumIndices() == 1) {
+                frame.first = dyn_cast<CallInst>(gepInst->getPointerOperand());
+                if (frame.first && frame.first->getCalledFunction() == jlcall_frame_func)
+                    frame.second = cast<ConstantInt>(gepInst->idx_begin()->get())->getZExtValue();
+                else
+                    frame.first = NULL;
+            }
+        }
+    }
+    return frame;
+}
+
+void collapseRedundantRoots()
 {
     for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
@@ -109,75 +141,107 @@ void collapseRedundantFrames(bool deadOnly)
             // such that the first store can be trivially replaced with just "other" and delete the chain
             // or if is used for store, but the value is never needed
             StoreInst *theStore = NULL;
+            unsigned n_stores = 0;
+            bool variable_slot = true; // whether this gc-root is only used as a variable-slot; e.g. whether theLoad is theValue
             LoadInst *theLoad = NULL;
-            for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
-                // see if the gcroot uses consists of only the load and the store
+            for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ) {
 #ifdef LLVM35
                 User *user = use->getUser();
 #else
                 User *user = use.getUse().getUser();
 #endif
+                ++use;
                 if (StoreInst *storeInst = dyn_cast<StoreInst>(user)) {
-                    if (theStore) {
+                    if (n_stores == 0)
+                        theStore = storeInst;
+                    else
                         theStore = NULL;
-                        break;
+                    Value *theValue = storeInst->getValueOperand();
+                    if (!theValue->hasOneUse()) { // not just the store
+                        variable_slot = false; // this gc-root is used as more than just a variable-slot (aka phi node)
                     }
-                    theStore = storeInst;
+                    n_stores++;
                 }
                 else if (LoadInst *loadInst = dyn_cast<LoadInst>(user)) {
-                    if (theLoad) {
-                        theStore = NULL;
-                        break;
+                    if (loadInst->use_empty()) {
+                        // dead load?
+                        loadInst->eraseFromParent();
                     }
-                    theLoad = loadInst;
+                    else {
+                        if (theLoad) {
+                            // multiple live loads, this is hard to optimize, so skip it
+                            n_stores = 0;
+                            break;
+                        }
+                        theLoad = loadInst;
+                    }
                 }
                 else {
-                    theStore = NULL;
+                    // what is this? oh, well. skip trying to optimize this gc-root
+                    n_stores = 0;
                     break;
                 }
             }
-            if (theStore) {
-                Value *theValue = theLoad ? theLoad : theStore->getValueOperand();
-                if (!theLoad && theValue->hasOneUse()) {
-                    // this gcroot is unused (the only Use of theValue is theStore)
-                    if (&*I == theStore) ++I;
-                    theStore->eraseFromParent();
-                    callInst->eraseFromParent();
+
+            if (n_stores == 0)
+                continue;
+
+            if (theLoad == NULL) {
+                // this gc-root is never loaded from, so we don't need it as a variable location
+                // delete any stores to this gc-root that would be keeping an otherwise-unused value alive
+                for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ) {
+#ifdef LLVM35
+                    User *user = use->getUser();
+#else
+                    User *user = use.getUse().getUser();
+#endif
+                    StoreInst *theStore = cast<StoreInst>(user);
+                    ++use;
+                    Value *theValue = theStore->getValueOperand();
+                    if (theValue->hasOneUse()) { // just the store
+                        if (&*I == theStore) ++I;
+                        theStore->eraseFromParent();
+                    }
                 }
-                else if (!deadOnly && theValue->hasNUses(theLoad ? 1 : 2)) {
-                    StoreInst *theOther = NULL;
-                    bool patternMatchSuccess = false;
+                if (callInst->use_empty()) {
+                    callInst->eraseFromParent();
+                    continue;
+                }
+                else if (callInst->hasOneUse()) {
+                    User::use_iterator use = callInst->use_begin();
+#ifdef LLVM35
+                    theStore = cast<StoreInst>(use->getUser());
+#else
+                    theStore = cast<StoreInst>(use.getUse().getUser());
+#endif
+                }
+            }
+
+            if ((theLoad != NULL && variable_slot) ||
+                (theLoad == NULL && theStore != NULL)) {
+                Value *theValue = theLoad ? theLoad : theStore->getValueOperand();
+                if (theValue->hasNUses(theLoad ? 1 : 2)) { // only uses are theStore and theLoad and theOther
                     // check if this value is only used for a store to another gcroot
                     User::use_iterator value_use = theValue->use_begin();
                     if (theLoad && *value_use == theStore)
                         ++value_use;
 #ifdef LLVM35
-                    theOther = dyn_cast<StoreInst>(value_use->getUser());
+                    StoreInst *theOther = dyn_cast<StoreInst>(value_use->getUser());
                     unsigned OperandNo = value_use->getOperandNo();
 #else
-                    theOther = dyn_cast<StoreInst>(value_use.getUse().getUser());
+                    StoreInst *theOther = dyn_cast<StoreInst>(value_use.getUse().getUser());
                     unsigned OperandNo = value_use.getOperandNo();
 #endif
                     if (theOther && OperandNo != StoreInst::getPointerOperandIndex()) {
                         // test whether this store is valid as a gc-root
-                        CallInst *gcroot_other = dyn_cast<CallInst>(theOther->getPointerOperand());
-                        unsigned arg_offset = 0;
-                        if (!gcroot_other) {
-                            // also try to look through GEP for jlcall_frame_func
-                            if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(theOther->getPointerOperand())) {
-                                if (gepInst->getNumIndices() == 1) {
-                                    gcroot_other = dyn_cast<CallInst>(gepInst->getPointerOperand());
-                                    if (gcroot_other && gcroot_other->getCalledFunction() == jlcall_frame_func)
-                                        arg_offset = cast<ConstantInt>(gepInst->idx_begin()->get())->getZExtValue();
-                                    else
-                                        gcroot_other = NULL;
-                                }
-                            }
-                        }
-                        // it could be a gcroot
-                        if (gcroot_other && gcroot_other->getCalledFunction() == gcroot_func) {
+                        bool patternMatchSuccess = false;
+                        frame_register gcroot_other_gep = get_gcroot(theOther->getPointerOperand());
+                        CallInst *gcroot_other = gcroot_other_gep.first;
+                        // it could be a gcroot...
+                        if (gcroot_other && gcroot_other->getCalledFunction() == gcroot_func && theStore != NULL) {
                             // need to make sure there aren't any other uses of gcroot_other (including gckill)
                             // between the initial store and the replacement store
+                            // TODO: do this better once we have liveness information for locals?
                             BasicBlock *current = theStore->getParent();
                             BasicBlock::iterator bbi = theStore, bbi_end = current->end();
                             patternMatchSuccess = true;
@@ -221,30 +285,47 @@ void collapseRedundantFrames(bool deadOnly)
                                 }
                             }
                         }
-                        // or it could be a jlcall frame
+                        // ...or it could be a jlcall frame
                         else if (gcroot_other && gcroot_other->getCalledFunction() == jlcall_frame_func) {
-                            // only one store to a jlcall_frame_func slot exists now,
-                            // until the allocate space in temp-args for each jlcall frame
+                            // jlcall_frame_func slots are effectively SSA,
+                            // so it's always safe to merge an earlier store into it
                             // but do need to update liveness information for this slot
-                            // TODO: do this better once we have liveness information for locals
-                            if (theOther->getParent() == theStore->getParent()) {
+                            // TODO: do this better once we have liveness information for locals?
+                            if (theStore != NULL && theOther->getParent() == theStore->getParent()) {
+                                //unsigned arg_offset = gcroot_other_gep->second;
                                 //frame_register def(gcroot_other, arg_offset);
                                 //std::map<frame_register, liveness::id> &inuse_list = bb_uses[theOther->getParent()];
                                 //std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
                                 patternMatchSuccess = true;
                             }
                         }
-                    }
-                    if (patternMatchSuccess) {
-                        // do the gcroot merge
-                        theStore->setOperand(StoreInst::getPointerOperandIndex(), theOther->getPointerOperand());
-                        if (&*I == theOther) ++I;
-                        theOther->eraseFromParent();
-                        if (theLoad) {
-                            if (&*I == theLoad) ++I;
-                            theLoad->eraseFromParent();
+                        if (patternMatchSuccess) {
+                            // do the gcroot merge -- replace gcroot with gcroot_other in all the store operations for this gcroot
+                            // so that theOther, theLoad, and this gcroot are no longer needed
+                            Value *gcroot_other = theOther->getPointerOperand();
+                            if (&*I == theOther) ++I;
+                            theOther->eraseFromParent();
+                            if (theLoad) {
+                                if (&*I == theLoad) ++I;
+                                theLoad->eraseFromParent();
+                            }
+                            if (theStore) {
+                                theStore->setOperand(StoreInst::getPointerOperandIndex(), gcroot_other);
+                            }
+                            else {
+                                for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ) {
+#ifdef LLVM35
+                                    User *user = use->getUser();
+#else
+                                    User *user = use.getUse().getUser();
+#endif
+                                    ++use;
+                                    StoreInst *theStore = cast<StoreInst>(user);
+                                    theStore->setOperand(StoreInst::getPointerOperandIndex(), gcroot_other);
+                                }
+                            }
+                            callInst->eraseFromParent();
                         }
-                        callInst->eraseFromParent();
                     }
                 }
             }
@@ -274,21 +355,13 @@ bool record_usage(CallInst *callInst,
  */
     unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
 #if 0 // suboptimal allocator that ignores computed liveness data
-    SmallBitVector &regs = regs_used[&callInst->getParent()->getParent()->getEntryBlock()];
-    if (regs.size() < offset + arg_n)
-        regs.resize(offset + arg_n);
-    for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
-        frame_register def(callInst, arg_offset);
-        unsigned index = offset + arg_offset;
-        bool conflict = regs.test(index);
-        if (commit) {
-            assert(!conflict);
-            regs.set(index);
-        } else if (conflict) {
-            return false;
-        }
-    }
-#else // better allocator that uses per-basicblock liveness
+    {
+        SmallBitVector &regs = regs_used[&callInst->getParent()->getParent()->getEntryBlock()];
+        if (offset + arg_n > regs.size())
+            regs.resize(offset + arg_n);
+        for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
+            frame_register def(callInst, arg_offset);
+#else // }} better allocator that uses per-basicblock liveness
     for (std::map<BasicBlock*, std::map<frame_register, liveness::id> >::iterator
             live_reg = bb_uses.begin(), e = bb_uses.end(); live_reg != e; ++live_reg) {
         BasicBlock *bb = live_reg->first;
@@ -301,6 +374,7 @@ bool record_usage(CallInst *callInst,
             if (inuse_reg == live_reg->second.end())
                 continue;
             // TODO: optimize here better when not live in inuse_reg->second, by ascertaining liveness at the instruction level for this bb
+#endif
             unsigned index = offset + arg_offset;
             bool conflict = regs.test(index);
             if (commit) {
@@ -317,7 +391,6 @@ bool record_usage(CallInst *callInst,
             }
         }
     }
-#endif
     return true;
 }
 
@@ -341,134 +414,97 @@ public:
 void allocate_frame()
 {
     Instruction *last_gcframe_inst = gcframe;
-    collapseRedundantFrames(true);
+    collapseRedundantRoots();
 
-/* bb-queue : queue<BB>
+/* # initialize the kill BasicBlock of all jlcall-frames
  * bb-uses : map<BB, map< pair<inst, arg-offset>, assign|live|kill > >
+ * for inst in gc-frame(f)
+ *     if inst match "a call to make-jlcall-frame"
+ *         kill-use = get-unique-use<isa-CallInst>(inst)
+ *         bb-uses[bb][<def, 1:nargs>] = kill
+ */
+    std::map<BasicBlock*, std::map<frame_register, liveness::id> > bb_uses;
+    std::priority_queue< std::pair<unsigned, CallInst*> > frames;
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
+        CallInst* callInst = dyn_cast<CallInst>(&*I);
+        ++I;
+        if (callInst && callInst->getCalledFunction() == jlcall_frame_func) {
+            BasicBlock *bb = NULL;
+            unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
+            frames.push(std::make_pair(arg_n, callInst));
+            // the jlcall frame should have been passed to exactly one call (the jlcall) -- find its basic-block
+            for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
+#ifdef LLVM35
+                User *user = use->getUser();
+#else
+                User *user = use.getUse().getUser();
+#endif
+                if (CallInst *callInst = dyn_cast<CallInst>(user)) {
+                    assert(bb == NULL);
+                    bb = callInst->getParent();
+#ifdef NDEBUG
+                    break;
+#endif
+                }
+            }
+            assert(bb != NULL);
+            std::map<frame_register, liveness::id> &inuse_list = bb_uses[bb];
+            for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
+                inuse_list[frame_register(callInst, arg_offset)] = liveness::kill;
+            }
+        }
+    }
+
+/* # initialize the dataflow queue for tracking liveness
+ * bb-queue : queue<BB>
  * for bb in iterator(f)
- *     inuse-list ; map< pair<inst, arg-offset>, assign|live|kill >
+ *     inuse-list = &bb-uses[bb]
  *     for inst in reverse-iterator(f)
- *         if inst matches "a call to make-jlcall-frame"
- *            # note that below this logic is rearranged slightly in the implementation so that failure to match an argument IR is "safe"
- *            for (arg-offset, operand) in enumerate(arguments(inst))
- *                if (not hasgcroot(operand)) or (users(GC-Root(operand)) is not only operand and store-instructions)
- *                    inuse-list[<inst, arg-offset>] = (assign|kill)
- *                else # e.g. this is the only use, replace gc-root with direct store to arg-slot
- *                    ReplaceOperand(GC-Root(operand), "a call to jlcall-root", pair<inst, arg-offset>)
- *                    inuse-list[<inst, arg-offset>] = kill
- *         else if inst matches store-inst with op(1) matching "a call to jlcall-root"
- *             def = <inst, arg-offset>
- *             if inuse-list[def] is kill
- *                 inuse-list[def] = assign|kill
- *      bb-uses[bb] = inuse-list
+ *         if inst matches store-inst # todo: or inst matches "gc-store-inst" (for stores to non-stack-slots)
+ *             if inst->operand(0) matches "a call to make-jlcall-frame" (or gep thereof)
+ *                 def = <inst, arg-offset>
+ *                 if inuse-list[def] is kill
+ *                     inuse-list[def] = assign|kill
  *      if not has-live-out(bb)
  *          continue
  *      for pred in predecessors(bb)
  *          if not pred in bb-queue
  *              push-back(bb-queue, pred)
- * GC-Root(load-gcroot-inst) = get-argument(load-gcroot-inst)
- * hasgcroot(inst) = inst matches "CreateLoad(CallInst::Create(gcroot_func))"
  */
-
     std::vector<BasicBlock*> bb_queue;
-    std::map<BasicBlock*, std::map<frame_register, liveness::id> > bb_uses;
-    std::priority_queue< std::pair<unsigned, CallInst*> > frames;
-    for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
-        // TODO: this assumes that the kill bb (aka the jlcall) is the same as the store and the frame allocation (aka jlcall_frame_func)
-        // which is currently a safe assumption due to the specific behavior of `make_jlcall` and `emit_jlcall`, but may not be sufficiently general
-        std::map<frame_register, liveness::id> &inuse_list = bb_uses[bb];
-        unsigned live_out = 0;
+    for (std::map<BasicBlock*, std::map<frame_register, liveness::id> >::iterator
+            live_reg = bb_uses.begin(), e = bb_uses.end(); live_reg != e; ++live_reg) {
+        BasicBlock *bb = live_reg->first;
+        std::map<frame_register, liveness::id> &inuse_list = live_reg->second;
+        unsigned live_out = inuse_list.size();
+
         for (BasicBlock::iterator ri = bb->end(); ri != bb->begin(); ) {
             Instruction *i = &*--ri;
-            if (CallInst* callInst = dyn_cast<CallInst>(i)) {
-                if (callInst->getCalledFunction() == jlcall_frame_func) {
-                    unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
-                    frames.push(std::make_pair(arg_n, callInst));
-                    for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
-                        liveness::id &live = inuse_list[frame_register(callInst, arg_offset)];
-                        if (!live)
-                            live = liveness::kill | liveness::assign;
-                    }
-                }
-                if (callInst->getCalledFunction() == gckill_func) {
-                    // TODO: track variable liveness information starting from gckill, store-to-gcroot, and store-to-jlcall-frame
-                }
-            }
-            else if (StoreInst *storeInst = dyn_cast<StoreInst>(i)) {
-                CallInst *callInst = dyn_cast<CallInst>(storeInst->getPointerOperand());
-                unsigned arg_offset = 0;
-                if (!callInst) {
-                    // also try to look through GEP
-                    if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(storeInst->getPointerOperand())) {
-                        if (gepInst->getNumIndices() == 1) {
-                            callInst = dyn_cast<CallInst>(gepInst->getPointerOperand());
-                            if (callInst && callInst->getCalledFunction() == jlcall_frame_func) {
-                                arg_offset = cast<ConstantInt>(gepInst->idx_begin()->get())->getZExtValue();
-                            }
+            if (StoreInst *storeInst = dyn_cast<StoreInst>(i)) {
+                frame_register def = get_gcroot(storeInst->getPointerOperand());
+                if (CallInst *callInst = def.first) {
+                    if (callInst->getCalledFunction() == jlcall_frame_func) {
+                        std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
+                        if (inuse_reg != inuse_list.end() && inuse_reg->second == liveness::kill) {
+                            inuse_reg->second |= liveness::assign;
+                            --live_out;
                         }
-                    }
-                }
-                if (callInst && callInst->getCalledFunction() == jlcall_frame_func) {
-                    LoadInst *loadInst = dyn_cast<LoadInst>(storeInst->getValueOperand());
-                    CallInst *gcroot = NULL;
-                    if (loadInst && loadInst->hasOneUse()) {
-                        gcroot = dyn_cast<CallInst>(loadInst->getPointerOperand());
-                        if (gcroot && gcroot->getCalledFunction() != gcroot_func)
-                            gcroot = NULL;
-                    }
-                    liveness::id live = liveness::kill;
-                    if (gcroot == NULL) {
-                        live |= liveness::assign;
-                    }
-                    else {
-                        for (User::use_iterator use = gcroot->use_begin(), usee = gcroot->use_end(); use != usee; ++use) {
-#ifdef LLVM35
-                            User *user = use->getUser();
-                            unsigned OperandNo = use->getOperandNo();
-#else
-                            User *user = use.getUse().getUser();
-                            unsigned OperandNo = use.getOperandNo();
-#endif
-                            if (user != loadInst && !(isa<StoreInst>(user) && OperandNo == StoreInst::getPointerOperandIndex())) {
-                                gcroot = NULL;
-                                live |= liveness::assign;
-                                break;
-                            }
-                        }
-                    }
-                    inuse_list[frame_register(callInst, arg_offset)] = live;
-                    if (gcroot) {
-                        Value* args[2] = {callInst, ConstantInt::get(T_int32, arg_offset)};
-                        ReplaceInstWithInst(gcroot, CallInst::Create(jlcall_root_func, makeArrayRef(args)));
-                        ++ri;
-                        storeInst->eraseFromParent();
-                        loadInst->eraseFromParent();
-                        ++live_out;
-                    }
-                }
-                else if (callInst && callInst->getCalledFunction() == jlcall_root_func) {
-                    assert(arg_offset == 0);
-                    frame_register def(
-                            cast<CallInst>(callInst->getArgOperand(0)),
-                            cast<ConstantInt>(callInst->getArgOperand(1))->getZExtValue());
-                    std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
-                    if (inuse_reg != inuse_list.end() && inuse_reg->second == liveness::kill) {
-                        inuse_reg->second |= liveness::assign;
-                        --live_out;
                     }
                 }
             }
         }
-        if (!live_out)
+        if (live_out == 0)
             continue;
-        assert(&*bb != &F.getEntryBlock()); // nothing should live-out from the entry bb
+        assert(&*bb != &F.getEntryBlock()); // only undef variables should live-out from the entry bb
         for (pred_iterator PI = pred_begin(bb), PE = pred_end(bb); PI != PE; ++PI) {
             if (std::find(bb_queue.begin(), bb_queue.end(), *PI) == bb_queue.end())
                 bb_queue.push_back(*PI);
         }
     }
 
-/* while not empty(bb-queue)
+
+/* # follow liveness information flow until termination
+ * while not empty(bb-queue)
  *     bb = pop(bb-queue)
  *     inuse-list = &bb-uses[bb]
  *     changes = 0
@@ -479,16 +515,17 @@ void allocate_frame()
  *                 inuse-list[def] |= live
  *                 changes += 1
  *     for inst in iterator(bb)
- *         if inst matches store-inst with op(1) matching "a call to jlcall-root"
- *             def = <inst, arg-offset>
- *             if live in inuse-list[def]
- *                 inuse-list[def] |= assign
- *                 if not kill in inuse-list[def]
- *                      # found the assignment, def is no longer live
- *                      inuse-list[def] &= ~live
- *                 else
- *                      # not a true kill due to recursion -- the kill happened before this assign in this BB, so it is still live
- *                 changes -= 1
+ *         if inst matches store-inst # todo: or inst matches "gc-store-inst" (for stores to non-stack-slots)
+ *             if inst->operand(0) matches "a call to make-jlcall-frame" (or gep thereof)
+ *                 def = <inst, arg-offset>
+ *                 if live in inuse-list[def]
+ *                     inuse-list[def] |= assign
+ *                     if not kill in inuse-list[def]
+ *                          # found the assignment, def is no longer live
+ *                          inuse-list[def] &= ~live
+ *                     else
+ *                          # not a true kill due to recursion -- the kill happened before this assign in this BB, so it is still live
+ *                     changes -= 1
  *     # if the live list changed, make sure all predecessors are in the queue to be reanalyzed
  *     if changes == 0
  *         continue
@@ -518,11 +555,9 @@ void allocate_frame()
             continue;
         for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ++i) {
             if (StoreInst *storeInst = dyn_cast<StoreInst>(&*i)) {
-                if (CallInst *callInst = dyn_cast<CallInst>(storeInst->getPointerOperand())) {
-                    if (callInst->getCalledFunction() == jlcall_root_func) {
-                        frame_register def(
-                                cast<CallInst>(callInst->getArgOperand(0)),
-                                cast<ConstantInt>(callInst->getArgOperand(1))->getZExtValue());
+                frame_register def = get_gcroot(storeInst->getPointerOperand());
+                if (CallInst *callInst = def.first) {
+                    if (callInst->getCalledFunction() == jlcall_frame_func) {
                         std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
                         if (inuse_reg != inuse_list.end() && (inuse_reg->second & liveness::live)) {
                             inuse_reg->second |= liveness::assign;
@@ -536,7 +571,7 @@ void allocate_frame()
         }
         if (!changes)
             continue;
-        assert(bb != &F.getEntryBlock()); // nothing should live-out from the entry bb
+        assert(bb != &F.getEntryBlock()); // only undef variables should live-out from the entry bb
         for (pred_iterator PI = pred_begin(bb), PE = pred_end(bb); PI != PE; ++PI) {
             if (std::find(bb_queue.begin(), bb_queue.end(), *PI) == bb_queue.end())
                 bb_queue.push_back(*PI);
@@ -546,7 +581,6 @@ void allocate_frame()
 /* # allocate space in locals for the variables
  * TBD
  */
-    collapseRedundantFrames(true);
 
 /* # allocate space in temp-args for each jlcall frame
  * regs-used = zip(get-basic-blocks(), falses)
@@ -564,6 +598,7 @@ void allocate_frame()
     for (; !frames.empty(); frames.pop()) {
         std::pair<unsigned, CallInst*> frame = frames.top();
         unsigned arg_n = frame.first;
+        if (arg_n == 0) continue;
         CallInst *callInst = frame.second;
         unsigned frame_offset = find_space_for(callInst, bb_uses, regs_used);
         record_usage(callInst, bb_uses, regs_used, frame_offset);
@@ -572,14 +607,27 @@ void allocate_frame()
             maxDepth = frame_offset + arg_n;
     }
 
-    // delete the now unused gckill information
+/* # cleanup and finalize the IR */
     for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
         for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ) {
             Instruction *inst = &*i;
             ++i;
+            // delete the now unused gckill information
             if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
                 if (callInst->getCalledFunction() == gckill_func) {
                     callInst->eraseFromParent();
+                }
+            }
+            // delete any StoreInst to a gcframe slot that isn't live
+            if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
+                frame_register def = get_gcroot(storeInst->getPointerOperand());
+                if (CallInst *gcroot = def.first) {
+                    if (gcroot->getCalledFunction() == jlcall_frame_func) {
+                        std::map<frame_register, liveness::id> &inuse_list = bb_uses[storeInst->getParent()];
+                        std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
+                        if (inuse_reg == inuse_list.end())
+                            storeInst->eraseFromParent();
+                    }
                 }
             }
         }
@@ -597,49 +645,32 @@ void allocate_frame()
         tempSlot->insertAfter(gcframe);
         if (last_gcframe_inst == gcframe)
             last_gcframe_inst = tempSlot;
+
+        // finalize all of the jlcall frames by replacing all of the frames with the appropriate gep(tempslot)
+        for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
+            CallInst *gcroot = frame->first;
+            Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
+            GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
+            gep->insertAfter(last_gcframe_inst);
+            gcroot->replaceAllUsesWith(gep);
+            gcroot->eraseFromParent();
+            last_gcframe_inst = gep;
+        }
     }
 
-/* replace all intermediate roots defs with the appropriate gep(gcroot) */
-    /* for inst in entry-basic-block(function)
-     *     if inst matches "jlcall_root_func" or "gc-root"
-     *         slot = get-argument(inst)
-     *         newslot = CreateGEP(gc-frame) -> at InsertPoint(gc-frame)
-     *         Replace(slot, newslot) -> at InsertPoint(gc-frame)
-     *         CreateStore(NULL, newslot) -> at InsertPoint(gc-frame)
-     */
+/* # replace all intermediate roots defs with the appropriate gep(gcroot)
+ * for inst in entry-basic-block(function)
+ *     if inst matches "gc-root"
+ *         slot = get-argument(inst)
+ *         newslot = CreateGEP(gc-frame) -> at InsertPoint(gc-frame)
+ *         Replace(slot, newslot) -> at InsertPoint(gc-frame)
+ *         CreateStore(NULL, newslot) -> at InsertPoint(gc-frame)
+ */
     unsigned argSpaceSize = 0;
     Instruction *argSlot = NULL;
     for(BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
-        if (callInst && callInst->getCalledFunction() == jlcall_root_func) {
-            frame_register def(
-                    cast<CallInst>(callInst->getArgOperand(0)),
-                    cast<ConstantInt>(callInst->getArgOperand(1))->getZExtValue());
-            unsigned frame_offset = frame_offsets.at(def.first);
-            Value* offset[1] = {ConstantInt::get(T_int32, frame_offset + def.second)};
-            GetElementPtrInst *frame = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
-            frame->insertAfter(last_gcframe_inst);
-            callInst->replaceAllUsesWith(frame);
-            callInst->eraseFromParent();
-            last_gcframe_inst = frame;
-
-            // delete any associated StoreInst that aren't live
-            for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ++use) {
-#ifdef LLVM35
-                User *user = use->getUser();
-#else
-                User *user = use.getUse().getUser();
-#endif
-                if (StoreInst *storeInst = dyn_cast<StoreInst>(user)) {
-                    std::map<frame_register, liveness::id> &inuse_list = bb_uses[storeInst->getParent()];
-                    std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
-                    if (inuse_reg == inuse_list.end())
-                        storeInst->eraseFromParent();
-                }
-            }
-        }
-
         if (callInst && callInst->getCalledFunction() == gcroot_func) {
             if (!argSlot) {
                 argSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
@@ -679,13 +710,6 @@ void allocate_frame()
         if (tempSlot)
             tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
 
-        // finalize all of the frames by replacing them with the appropriate gep(tempslot)
-        for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
-            Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
-            GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
-            ReplaceInstWithInst(frame->first, gep);
-        }
-
         IRBuilder<> builder(F.getContext());
         Type *T_ppjlvalue = V_null->getType()->getPointerTo();
 #ifdef _P64
@@ -715,25 +739,18 @@ void allocate_frame()
             }
         }
     }
-}
 
-};
-
-#if 0
-static struct {
-    unsigned count;
-    unsigned locals;
-    unsigned temp;
-} jl_gc_frame_stats = {0};
-#endif
-void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue)
-{
-    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue);
-    allocator.allocate_frame();
-
-#if 0
+#ifndef NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;
     jl_gc_frame_stats.temp += maxDepth;
 #endif
+}
+
+};
+
+void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue)
+{
+    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue);
+    allocator.allocate_frame();
 }
