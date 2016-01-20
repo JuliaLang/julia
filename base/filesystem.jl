@@ -39,7 +39,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
-            write, read, read!, readbytes, isopen, show,
+            write, read, read!, isopen, show,
             check_open, _sizeof_uv_fs, uv_error, UVError
 
 include("path.jl")
@@ -172,14 +172,8 @@ function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     read!(f, b, nr)
     return nr
 end
-readbytes(io::File) = read!(io, Array(UInt8, nb_available(io)))
-readbytes(io::File, nb) = read!(io, Array(UInt8, min(nb, nb_available(io))))
-
-function readbytes(f::File)
-    a = Array(UInt8, nb_available(f))
-    read!(f,a)
-    return a
-end
+read(io::File) = read!(io, Array(UInt8, nb_available(io)))
+read(io::File, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)

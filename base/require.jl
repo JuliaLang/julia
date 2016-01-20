@@ -94,7 +94,7 @@ function include_from_node1(path::AbstractString)
             result = Core.include(path)
             nprocs()>1 && sleep(0.005)
         else
-            result = include_string(remotecall_fetch(readall, 1, path), path)
+            result = include_string(remotecall_fetch(readstring, 1, path), path)
         end
     finally
         if prev == nothing

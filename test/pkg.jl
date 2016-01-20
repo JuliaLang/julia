@@ -30,7 +30,7 @@ temp_pkg_dir() do
     # (done here since it calls Pkg.status which might error or clone metadata)
     buf = PipeBuffer()
     versioninfo(buf, true)
-    ver = readall(buf)
+    ver = readstring(buf)
     @test startswith(ver, "Julia Version $VERSION")
     @test contains(ver, "Environment:")
 

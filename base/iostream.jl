@@ -241,7 +241,7 @@ function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
-function readbytes(s::IOStream)
+function read(s::IOStream)
     sz = 0
     try # filesize is just a hint, so ignore if it fails
         sz = filesize(s)
@@ -255,7 +255,7 @@ function readbytes(s::IOStream)
     resize!(b, nr)
 end
 
-function readbytes(s::IOStream, nb::Integer; all::Bool=true)
+function read(s::IOStream, nb::Integer; all::Bool=true)
     b = Array(UInt8, nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)

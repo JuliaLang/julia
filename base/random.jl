@@ -149,7 +149,7 @@ function make_seed()
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))
         try
-        seed = hash(seed, parse(UInt64, readall(pipeline(`ifconfig`, `sha1sum`))[1:40], 16))
+        seed = hash(seed, parse(UInt64, readstring(pipeline(`ifconfig`, `sha1sum`))[1:40], 16))
         end
         return make_seed(seed)
     end
@@ -168,11 +168,7 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    open(filename) do io
-        a = Array(UInt32, Int(n))
-        read!(io, a)
-        a
-    end
+    read!(filename, Array(UInt32, Int(n)))
 end
 
 ## srand()

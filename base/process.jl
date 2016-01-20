@@ -579,15 +579,15 @@ function readandwrite(cmds::AbstractCmd)
     (out, in, processes)
 end
 
-function readbytes(cmd::AbstractCmd, stdin::Redirectable=DevNull)
+function read(cmd::AbstractCmd, stdin::Redirectable=DevNull)
     out, procs = open(cmd, "r", stdin)
-    bytes = readbytes(out)
+    bytes = read(out)
     !success(procs) && pipeline_error(procs)
     return bytes
 end
 
-function readall(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    return bytestring(readbytes(cmd, stdin))
+function readstring(cmd::AbstractCmd, stdin::Redirectable=DevNull)
+    return bytestring(read(cmd, stdin))
 end
 
 function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=DevNull)

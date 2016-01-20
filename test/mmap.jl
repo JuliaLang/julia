@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 file = tempname()
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 t = "Hello World".data
 @test Mmap.mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
 gc(); gc()
@@ -54,7 +52,7 @@ m = Mmap.mmap(file,Vector{UInt8},12)
 m[:] = "Hello World\n".data
 Mmap.sync!(m)
 finalize(m); m=nothing; gc()
-@test open(readall,file) == "Hello World\n"
+@test open(readstring,file) == "Hello World\n"
 
 s = open(file, "r")
 close(s)
@@ -94,9 +92,7 @@ m = Mmap.mmap(s)
 @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
 finalize(m); m=nothing; gc()
 
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 
 s = open(file, "r")
 m = Mmap.mmap(s)
@@ -114,9 +110,7 @@ close(s)
 finalize(m); finalize(c); finalize(d)
 m=nothing; c=nothing; d=nothing; gc()
 
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 
 s = open(file, "r")
 @test isreadonly(s) == true
