@@ -420,9 +420,9 @@ static Function *diff_gc_total_bytes_func;
 
 // placeholder functions
 static Function *gcroot_func;
+static Function *gcstore_func;
 static Function *gckill_func;
 static Function *jlcall_frame_func;
-static Function *jlcall_root_func;
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
@@ -2021,12 +2021,17 @@ static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 {
     // the temporary variables are after all local variables in the GC frame.
-    CallInst *largs = builder.CreateCall(prepare_call(jlcall_frame_func), ConstantInt::get(T_int32, args.size()));
+    CallInst *largs = CallInst::Create(prepare_call(jlcall_frame_func),
+            ConstantInt::get(T_int32, args.size()),
+            "",
+            /*InsertBefore*/ctx->ptlsStates);
     int slot = 0;
     assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
         Value *arg = boxed(**I, ctx); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
-        Value *newroot = builder.CreateGEP(largs, ConstantInt::get(T_int32, slot));
+        GetElementPtrInst *newroot = GetElementPtrInst::Create(LLVM37_param(NULL) largs,
+                ArrayRef<Value*>(ConstantInt::get(T_int32, slot)));
+        newroot->insertAfter(ctx->ptlsStates);
         builder.CreateStore(arg, newroot);
     }
     return largs;
@@ -3645,8 +3650,8 @@ static void finalize_gc_frame(Function *F)
     Module *M = F->getParent();
     M->getOrInsertFunction(gcroot_func->getName(), gcroot_func->getFunctionType());
     M->getOrInsertFunction(gckill_func->getName(), gckill_func->getFunctionType());
+    M->getOrInsertFunction(gcstore_func->getName(), gcstore_func->getFunctionType());
     M->getOrInsertFunction(jlcall_frame_func->getName(), jlcall_frame_func->getFunctionType());
-    M->getOrInsertFunction(jlcall_root_func->getName(), jlcall_root_func->getFunctionType());
     Function *jl_get_ptls_states = M->getFunction("jl_get_ptls_states");
 
     CallInst *ptlsStates = NULL;
@@ -3701,8 +3706,8 @@ static void finalize_gc_frame(Module *m)
 #endif
     m->getFunction("julia.gc_root_decl")->eraseFromParent();
     m->getFunction("julia.gc_root_kill")->eraseFromParent();
+    m->getFunction("julia.gc_store")->eraseFromParent();
     m->getFunction("julia.jlcall_frame_decl")->eraseFromParent();
-    m->getFunction("julia.jlcall_root_decl")->eraseFromParent();
 #endif
 }
 
@@ -5722,18 +5727,18 @@ static void init_julia_llvm_env(Module *m)
                      "julia.gc_root_kill", m);
     add_named_global(gckill_func, (void*)NULL, /*dllimport*/false);
 
+    Type* gc_store_args[2] = { T_ppjlvalue, T_pjlvalue }; // [1] <= [2]
+    gcstore_func =
+        Function::Create(FunctionType::get(T_void, makeArrayRef(gc_store_args),  false),
+                     Function::ExternalLinkage,
+                     "julia.gc_store", m);
+    add_named_global(gcstore_func, (void*)NULL, /*dllimport*/false);
+
     jlcall_frame_func =
         Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
                      Function::ExternalLinkage,
                      "julia.jlcall_frame_decl", m);
     add_named_global(jlcall_frame_func, (void*)NULL, /*dllimport*/false);
-
-    Type* jlcall_root_args[2] = { T_ppjlvalue, T_int32 };
-    jlcall_root_func =
-        Function::Create(FunctionType::get(T_ppjlvalue, makeArrayRef(jlcall_root_args),  false),
-                     Function::ExternalLinkage,
-                     "julia.jlcall_root_decl", m);
-    add_named_global(jlcall_root_func, (void*)NULL, /*dllimport*/false);
 
     // set up optimization passes
 #ifdef LLVM38
