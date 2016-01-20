@@ -545,7 +545,11 @@ if VERSION < v"0.4.0-dev+2840"
         Base.qr(A, pivot=true, thin=thin)
     qr(A, ::Type{Val{false}}; thin::Bool=true) =
         Base.qr(A, pivot=false, thin=thin)
-    export qr
+    qrfact(A, ::Type{Val{true}}) = Base.qrfact(A, pivot=true)
+    qrfact(A, ::Type{Val{false}}) = Base.qrfact(A, pivot=false)
+    qrfact!(A, ::Type{Val{true}}) = Base.qrfact!(A, pivot=true)
+    qrfact!(A, ::Type{Val{false}}) = Base.qrfact!(A, pivot=false)
+    export qr, qrfact, qrfact!
 end
 
 if VERSION < v"0.4.0-dev+4603"

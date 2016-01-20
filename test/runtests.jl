@@ -346,12 +346,22 @@ begin
     @test firstlast(Val{false}) == "Last"
 end
 
-# qr
+# qr, qrfact, qrfact!
 let A = [1.0 2.0; 3.0 4.0]
     Q, R = qr(A, Val{false})
     @test_approx_eq Q*R A
     Q, R, p = qr(A, Val{true})
     @test_approx_eq Q*R A[:,p]
+    F = qrfact(A, Val{false})
+    @test_approx_eq F[:Q]*F[:R] A
+    F = qrfact(A, Val{true})
+    @test_approx_eq F[:Q]*F[:R] A[:,F[:p]]
+    A_copy = copy(A)
+    F = qrfact!(A_copy, Val{false})
+    @test_approx_eq F[:Q]*F[:R] A
+    A_copy = copy(A)
+    F = qrfact!(A_copy, Val{true})
+    @test_approx_eq F[:Q]*F[:R] A[:,F[:p]]
 end
 
 # Cstring
