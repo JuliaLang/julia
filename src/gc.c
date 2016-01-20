@@ -24,7 +24,7 @@
 #include "threading.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
-#ifdef _OS_DARWIN_
+#if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
