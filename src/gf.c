@@ -2048,9 +2048,9 @@ JL_DLLEXPORT jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *nam
     free(prefixed);
     jl_datatype_t *ftype = jl_new_datatype(tname, st, jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     JL_GC_PUSH1(&ftype);
-    ftype->name->mt->name = name;
-    ftype->name->module = module;
-    ftype->name->mt->module = module;
+    ftype->name->mt->name = name; jl_gc_wb(ftype->name->mt, name);
+    ftype->name->module = module; jl_gc_wb(ftype->name, module);
+    ftype->name->mt->module = module; jl_gc_wb(ftype->name->mt, module);
     jl_set_const(module, tname, (jl_value_t*)ftype);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f; jl_gc_wb(ftype, f);
@@ -2058,10 +2058,11 @@ JL_DLLEXPORT jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *nam
     return (jl_function_t*)f;
 }
 
-JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_methtable_t *mt)
+JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn)
 {
+    jl_methtable_t *mt = tn->mt;
     if (!mt->kwsorter) {
-        mt->kwsorter = jl_new_generic_function_with_supertype(mt->name, mt->module, jl_function_type, 1);
+        mt->kwsorter = jl_new_generic_function_with_supertype(tn->name, mt->module, jl_function_type, 1);
         jl_gc_wb(mt, mt->kwsorter);
     }
     return mt->kwsorter;

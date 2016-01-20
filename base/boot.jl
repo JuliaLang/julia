@@ -268,7 +268,7 @@ eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
 kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
-kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name.mt))
+kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name))
 
 type Box
     contents::Any
