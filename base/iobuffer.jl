@@ -171,7 +171,7 @@ function compact(io::AbstractIOBuffer)
     return io
 end
 
-function ensureroom(io::AbstractIOBuffer, nshort::Int)
+@inline function ensureroom(io::AbstractIOBuffer, nshort::Int)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
         nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
@@ -198,7 +198,7 @@ end
 
 eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
 
-function close{T}(io::AbstractIOBuffer{T})
+@noinline function close{T}(io::AbstractIOBuffer{T})
     io.readable = false
     io.writable = false
     io.seekable = false
@@ -310,12 +310,12 @@ function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
             written += write(to, a[i])
         end
     end
-    written
+    return written
 end
 
 write(to::AbstractIOBuffer, a::Array) = write_sub(to, a, 1, length(a))
 
-function write(to::AbstractIOBuffer, a::UInt8)
+@inline function write(to::AbstractIOBuffer, a::UInt8)
     ensureroom(to, 1)
     ptr = (to.append ? to.size+1 : to.ptr)
     if ptr > to.maxsize
@@ -325,7 +325,7 @@ function write(to::AbstractIOBuffer, a::UInt8)
     end
     to.size = max(to.size, ptr)
     if !to.append to.ptr += 1 end
-    sizeof(UInt8)
+    return sizeof(UInt8)
 end
 
 function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b))
