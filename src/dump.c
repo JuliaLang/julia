@@ -906,6 +906,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
 
 static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t iskw)
 {
+    jl_sym_t *name = mt->name;
     if (iskw) {
         if (!mt->kwsorter)
             return;
@@ -918,7 +919,7 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
     while (ml != (void*)jl_nothing) {
         if (module_in_worklist(ml->func->module)) {
             jl_serialize_value(s, mt->module);
-            jl_serialize_value(s, mt->name);
+            jl_serialize_value(s, name);
             write_int8(s, iskw);
             jl_serialize_value(s, ml->sig);
             jl_serialize_value(s, ml->func);
@@ -1590,7 +1591,7 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
         int8_t iskw = read_int8(s);
         if (iskw)
-            gf = jl_get_kwsorter(jl_gf_mtable(gf));
+            gf = jl_get_kwsorter(((jl_datatype_t*)jl_typeof(gf))->name);
         jl_tupletype_t *types = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_lambda_info_t *meth = (jl_lambda_info_t*)jl_deserialize_value(s, NULL);
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
