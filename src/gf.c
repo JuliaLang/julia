@@ -1229,18 +1229,18 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
         if (((l->tvars==jl_emptysvec) == (tvars==jl_emptysvec)) &&
             sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig, 1)) {
             // method overwritten
-            if (check_amb && l->func->linfo && method->linfo &&
-                (l->func->linfo->module != method->linfo->module)) {
+            if (check_amb && l->func->linfo && method->linfo) {
                 jl_module_t *newmod = method->linfo->module;
+                jl_module_t *oldmod = l->func->linfo->module;
                 JL_STREAM *s = JL_STDERR;
                 jl_printf(s, "WARNING: Method definition %s",
                           jl_symbol_name(method->linfo->name));
                 jl_static_show_func_sig(s, (jl_value_t*)type);
-                jl_printf(s, " in module %s",
-                          jl_symbol_name(l->func->linfo->module->name));
+                jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
                 print_func_loc(s, l->func->linfo);
-                jl_printf(s, " overwritten in module %s",
-                          jl_symbol_name(newmod->name));
+                jl_printf(s, " overwritten");
+                if (oldmod != newmod)
+                    jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
                 print_func_loc(s, method->linfo);
                 jl_printf(s, ".\n");
             }
