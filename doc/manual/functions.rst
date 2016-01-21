@@ -479,7 +479,7 @@ Keyword argument default values are evaluated only when necessary
 left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.
 
-The types of keyword arguments can be made explicit as follows:
+The types of keyword arguments can be made explicit as follows::
 
     function f(;x::Int64=1)
         ###

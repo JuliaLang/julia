@@ -358,7 +358,7 @@ not a standalone interpreter that also generates compiled code.
 
 Other known potential failure scenarios include:
 
-1. Global counters (for example, for attempting to unique identifying objects)
+1. Global counters (for example, for attempting to uniquely identify objects)
    Consider the following code snippet::
 
     type UniquedById
