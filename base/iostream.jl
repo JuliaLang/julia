@@ -158,6 +158,8 @@ end
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
+readavailable(s::IOStream) = read!(s, Vector{UInt8}(nb_available(s)))
+
 function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Cint, (Ptr{Void},), s.ios)
     if b == -1

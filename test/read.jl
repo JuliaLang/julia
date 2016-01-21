@@ -287,6 +287,22 @@ for (name, f) in l
         @test readstring(seekend(io())) == ""
     end
 
+
+    verbose && println("$name write(::IOStream, ...)")
+    to = open("$filename.to", "w")
+    write(to, io())
+    close(to)
+    @test readstring("$filename.to") == text
+                                                                       cleanup()
+    verbose && println("$name write(filename, ...)")
+    write("$filename.to", io())
+    @test readstring("$filename.to") == text
+                                                                       cleanup()
+
+    verbose && println("$name write(::IOBuffer, ...)")
+    to = IOBuffer(Vector{UInt8}(copy(text)), false, true)
+    write(to, io())
+    @test takebuf_string(to) == text
                                                                        cleanup()
 end
 
