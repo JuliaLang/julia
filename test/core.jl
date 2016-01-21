@@ -3651,3 +3651,7 @@ end
 # issue #14691
 type T14691; a::UInt; end
 @test (T14691(0).a = 0) === 0
+
+# issue #14245
+f14245() = (v = []; push!(v, length(v)); v)
+@test f14245()[1] == 0
