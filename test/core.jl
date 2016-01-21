@@ -3666,3 +3666,7 @@ f14245() = (v = []; push!(v, length(v)); v)
 end
 foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
 @test foo9677(1:5) == foo9677(randn(3))
+
+# issue #6846
+f6846() = (please6846; 2)
+@test_throws UndefVarError f6846()

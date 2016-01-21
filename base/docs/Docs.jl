@@ -520,8 +520,8 @@ more than one expression is marked then the same docstring is applied to each ex
 :(Base.@__doc__)
 
 function __doc__!(meta, def::Expr)
-    if isexpr(def, :block, 2) && def.args[1] == symbol("#doc#")
-        # Convert `Expr(:block, :#doc#, ...)` created by `@__doc__` to an `@doc`.
+    if isexpr(def, :block, 2) && isexpr(def.args[1], :meta, 1) && def.args[1].args[1] === :doc
+        # Convert `Expr(:block, Expr(:meta, :doc), ...)` created by `@__doc__` to an `@doc`.
         def.head = :macrocall
         def.args = [symbol("@doc"), meta, def.args[end]]
         true
