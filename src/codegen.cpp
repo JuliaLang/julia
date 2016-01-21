@@ -835,7 +835,7 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         last_time = jl_hrtime();
     nested_compile = true;
     jl_gc_inhibit_finalizers(nested_compile);
-    Function *f = NULL;
+    Function *f = NULL, *specf = NULL;
     JL_TRY {
         jl_llvm_functions_t definitions;
         #if defined(USE_MCJIT) || defined(USE_ORCJIT)
@@ -851,11 +851,11 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         #else
         emit_function(li, &li->functionObjects, &definitions, NULL);
         #endif
-        f = (llvm::Function*)(definitions.specFunctionObject ?
-            definitions.specFunctionObject : definitions.functionObject);
-        li->functionID = jl_assign_functionID((llvm::Function*)definitions.functionObject);
-        if (definitions.specFunctionObject)
-            li->specFunctionID = jl_assign_functionID((llvm::Function*)definitions.specFunctionObject);
+        f = (llvm::Function*)definitions.functionObject;
+        specf = (llvm::Function*)definitions.specFunctionObject;
+        li->functionID = jl_assign_functionID(f);
+        if (specf)
+            li->specFunctionID = jl_assign_functionID(specf);
         //n_emit++;
     }
     JL_CATCH {
@@ -872,10 +872,18 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->name));
     }
     assert(f != NULL);
-#if defined(USE_MCJIT) || defined(ORCJIT)
-    if (imaging_mode)
+#if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
+#ifdef JL_DEBUG_BUILD
+    if (verifyFunction(*f, PrintMessageAction) ||
+        (specf && verifyFunction(*specf, PrintMessageAction))) {
+        f->dump();
+        if (specf) specf->dump();
+        abort();
+    }
 #endif
-        FPM->run(*f);
+    FPM->run(*f);
+    if (specf) FPM->run(*specf);
+#endif
 
     if (old != NULL) {
         builder.SetInsertPoint(old);
@@ -892,7 +900,7 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         jl_printf(dump_compiles_stream, "\"\n");
         last_time = this_time;
     }
-    return f;
+    return specf ? specf : f;
 }
 
 #ifndef LLVM37
@@ -4331,10 +4339,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         builder.CreateRet(r);
     finalize_gc_frame(&ctx);
 
-#if defined(USE_MCJIT) || defined(ORCJIT)
-    if (imaging_mode)
+#if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
+    FPM->run(*cw);
 #endif
-        FPM->run(*cw);
 
     cw->removeFromParent();
     active_module->getFunctionList().push_back(cw);
