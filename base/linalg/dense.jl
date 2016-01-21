@@ -378,7 +378,7 @@ function inv{T}(A::StridedMatrix{T})
     else
         Ai = inv(lufact(AA))
     end
-    return convert(typeof(AA), Ai)
+    return convert(typeof(parent(Ai)), Ai)
 end
 
 function factorize{T}(A::Matrix{T})
