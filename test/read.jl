@@ -12,7 +12,7 @@ l = Vector{Tuple{AbstractString,Function}}()
 
 # File
 io = (text) -> begin
-    open(io-> write(io, text), filename, "w")
+    write(filename, text)
     Base.Filesystem.open(filename, Base.Filesystem.JL_O_RDONLY)
 end
 s = io(text)
@@ -24,7 +24,7 @@ push!(l, ("File", io))
 
 # IOStream
 io = (text) -> begin
-    open(io-> write(io, text), filename, "w")
+    write(filename, text)
     open(filename)
 end
 s = io(text)
@@ -100,7 +100,7 @@ push!(l, ("PipeEndpoint", io))
 
 # Pipe
 io = (text) -> begin
-    open(io->write(io, text), filename, "w")
+    write(filename, text)
     open(`$(@windows ? "type" : "cat") $filename`)[1]
 #    Was open(`echo -n $text`)[1]
 #    See https://github.com/JuliaLang/julia/issues/14747
@@ -128,18 +128,20 @@ end
 
 verbose = false
 
-cleanup()
+                                                                       cleanup()
 
 for (name, f) in l
 
     io = ()->(s=f(text); push!(open_streams, s); s)
 
+    write(filename, text)
+
     verbose && println("$name read...")
     @test read(io(), UInt8) == read(IOBuffer(text), UInt8)
-    @test read(io(), UInt8) == open(io->read(io, UInt8), filename)
+    @test read(io(), UInt8) == read(filename, UInt8)
     @test read(io(), Int) == read(IOBuffer(text), Int)
-    @test read(io(), Int) == open(io->read(io,Int),filename)
-    cleanup()
+    @test read(io(), Int) == read(filename,Int)
+                                                                       cleanup()
     s1 = io()
     s2 = IOBuffer(text)
     @test read(s1, UInt32, 2) == read(s2, UInt32, 2)
@@ -176,13 +178,19 @@ for (name, f) in l
         UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
 
-        verbose && println("$name readall...")
-        @test readall(io()) == text
-        cleanup()
+        write(filename, text)
 
-        verbose && println("$name readbytes...")
-        @test readbytes(io()) == Vector{UInt8}(text)
-        cleanup()
+        verbose && println("$name readstring...")
+        @test readstring(io()) == text
+                                                                       cleanup()
+        @test readstring(io()) == readstring(filename)
+                                                                       cleanup()
+
+        verbose && println("$name read...")
+        @test read(io()) == Vector{UInt8}(text)
+                                                                       cleanup()
+        @test read(io()) == read(filename)
+                                                                       cleanup()
 
         verbose && println("$name readbytes!...")
         l = length(text)
@@ -198,7 +206,7 @@ for (name, f) in l
             @test a1[1:n1] == a2[1:n2]
             @test n <= length(text) || eof(s1)
             @test n <= length(text) || eof(s2)
-            cleanup()
+                                                                       cleanup()
         end
 
         verbose && println("$name read!...")
@@ -206,41 +214,58 @@ for (name, f) in l
         for n = [1, 2, l-2, l-1, l]
             @test read!(io(), Vector{UInt8}(n)) ==
                   read!(IOBuffer(text), Vector{UInt8}(n))
-            cleanup()
+                                                                       cleanup()
+            @test read!(io(), Vector{UInt8}(n)) ==
+                  read!(filename, Vector{UInt8}(n))
+                                                                       cleanup()
         end
         @test_throws EOFError read!(io(), Vector{UInt8}(length(text)+1))
 
-        cleanup()
+                                                                       cleanup()
 
         verbose && println("$name readuntil...")
         @test readuntil(io(), '\n') == readuntil(IOBuffer(text),'\n')
-        cleanup()
+                                                                       cleanup()
+        @test readuntil(io(), '\n') == readuntil(filename,'\n')
+                                                                       cleanup()
         @test readuntil(io(), "\n") == readuntil(IOBuffer(text),"\n")
-        cleanup()
+                                                                       cleanup()
+        @test readuntil(io(), "\n") == readuntil(filename,"\n")
+                                                                       cleanup()
         @test readuntil(io(), ',') == readuntil(IOBuffer(text),',')
-        cleanup()
+                                                                       cleanup()
+        @test readuntil(io(), ',') == readuntil(filename,',')
+                                                                       cleanup()
 
         verbose && println("$name readline...")
         @test readline(io()) == readline(IOBuffer(text))
-        cleanup()
+                                                                       cleanup()
+        @test readline(io()) == readline(filename)
+                                                                       cleanup()
 
         verbose && println("$name readlines...")
         @test readlines(io()) == readlines(IOBuffer(text))
-        cleanup()
+                                                                       cleanup()
+        @test readlines(io()) == readlines(filename)
+                                                                       cleanup()
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
-        cleanup()
+                                                                       cleanup()
+        @test collect(eachline(io())) == collect(eachline(filename))
+                                                                       cleanup()
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
-        cleanup()
+                                                                       cleanup()
 
         verbose && println("$name readcsv...")
         @test readcsv(io()) == readcsv(IOBuffer(text))
-        cleanup()
+                                                                       cleanup()
+        @test readcsv(io()) == readcsv(filename)
+                                                                       cleanup()
     end
 
     text = old_text
-
+    write(filename, text)
 
     if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
 
@@ -250,19 +275,19 @@ for (name, f) in l
         verbose && println("$name seek...")
         for n = 0:length(text)-1
             @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
-            cleanup()
+                                                                       cleanup()
         end
         verbose && println("$name skip...")
         for n = 0:length(text)-1
             @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
             @test readlines(skip(io(), n)) == readlines(skip(IOBuffer(text), n))
-            cleanup()
+                                                                       cleanup()
         end
         verbose && println("$name seekend...")
-        @test readall(seekend(io())) == ""
+        @test readstring(seekend(io())) == ""
     end
 
-    cleanup()
+                                                                       cleanup()
 end
 
 end
