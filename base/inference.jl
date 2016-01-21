@@ -2223,7 +2223,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         if e.head === :call
             if is_known_call_p(e, is_pure_builtin, sv)
                 if !allow_volatile
-                    if is_known_call(e, arrayref, sv)
+                    if is_known_call(e, arrayref, sv) || is_known_call(e, arraylen, sv)
                         return false
                     elseif is_known_call(e, getfield, sv)
                         # arguments must be immutable to ensure e is affect_free
