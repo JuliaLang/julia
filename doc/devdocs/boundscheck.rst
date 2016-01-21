@@ -1,4 +1,4 @@
-.. _devdocs-subarrays:
+.. _devdocs-boundscheck:
 
 .. currentmodule:: Base
 
