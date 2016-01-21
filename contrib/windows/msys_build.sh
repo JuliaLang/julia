@@ -10,6 +10,8 @@
 cd `dirname "$0"`/../..
 # Stop on error
 set -e
+# Make sure stdin exists (not true on appveyor msys2)
+exec < /dev/null
 
 curlflags="curl --retry 10 -k -L -y 5"
 checksum_download() {
@@ -138,7 +140,7 @@ checksum_download \
     "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
+echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config.exe' >> Make.user
 
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
@@ -197,4 +199,5 @@ echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
 make VERBOSE=1
+make build-stats
 #make debug
