@@ -26,10 +26,6 @@ function filemode(te::GitTreeEntry)
     return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
 end
 
-function filemode(te::GitTreeEntry)
-    return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
-end
-
 
 function object(repo::GitRepo, te::GitTreeEntry)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)

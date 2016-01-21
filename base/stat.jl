@@ -120,7 +120,6 @@ for f in Symbol[
     :isdir
     :isblockdev
     :isfile
-    :islink
     :issocket
     :issetuid
     :issetgid
