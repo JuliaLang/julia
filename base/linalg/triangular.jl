@@ -51,6 +51,7 @@ imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
 full(A::AbstractTriangular) = convert(Matrix, A)
+parent(A::AbstractTriangular) = A.data
 
 fill!(A::AbstractTriangular, x) = (fill!(A.data, x); A)
 
