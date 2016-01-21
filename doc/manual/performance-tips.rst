@@ -181,8 +181,9 @@ However, there are a few specific instances where declarations are
 helpful.
 
 .. _man-abstract-fields:
+
 Avoid fields with abstract type
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Types can be declared without specifying the types of their fields:
 
@@ -331,7 +332,7 @@ type at run-time.  This results in shorter and faster code.
 .. _man-abstract-container-type:
 
 Avoid fields with abstract containers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same best practices also work for container types:
 
