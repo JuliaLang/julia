@@ -348,7 +348,10 @@ type EachLine
     EachLine(stream, ondone) = new(stream, ondone)
 end
 eachline(stream::IO) = EachLine(stream)
-eachline(filename::AbstractString) = EachLine(open(filename), close)
+function eachline(filename::AbstractString)
+    s = open(filename)
+    EachLine(s, ()->close(s))
+end
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)
