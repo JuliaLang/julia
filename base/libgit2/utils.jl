@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
