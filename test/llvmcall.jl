@@ -125,7 +125,6 @@ function declared_ceil(x::Float64)
             ret double %2"""),
     Float64, Tuple{Float64}, x)
 end
-
 @test_approx_eq declared_ceil(4.2) 5.0
 
 # Test for multiple lines
@@ -138,5 +137,13 @@ function ceilfloor(x::Float64)
             ret double %3"""),
     Float64, Tuple{Float64}, x)
 end
-
 @test_approx_eq ceilfloor(7.4) 8.0
+
+# Test for proper declaration extraction
+function confuse_declname_parsing()
+    llvmcall(
+        ("""declare i64 addrspace(0)* @foobar()""",
+         """ret void"""),
+    Void, Tuple{})
+end
+confuse_declname_parsing()
