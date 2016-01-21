@@ -2807,7 +2807,7 @@ So far only the second case can actually occur.
     (define (compile e break-labels)
       (if (or (not (pair? e)) (equal? e '(null)))
           ;; atom has no effect, but keep symbols for undefined-var checking
-          #f #;(if (symbol? e) (emit e) #f)
+          (if (symbol? e) (emit e) #f)
           (case (car e)
             ((call)  (emit (goto-form e)))
             ((=)     (let ((vt (vinfo:type
