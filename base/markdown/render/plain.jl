@@ -53,7 +53,10 @@ function plain(io::IO, md::HorizontalRule)
     println(io, "-" ^ 3)
 end
 
-plain(io::IO, md) = writemime(io, "text/plain", md)
+function plain(io::IO, md)
+    writemime(io,  MIME"text/plain"(), md)
+    println(io)
+end
 
 # Inline elements
 

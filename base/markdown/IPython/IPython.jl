@@ -26,7 +26,7 @@ writemime(io::IO, ::MIME"text/plain", tex::LaTeX) =
     print(io, '$', tex.formula, '$')
 
 latex(io::IO, tex::LaTeX) =
-    print(io, "\$\$", tex.formula, "\$\$")
+    println(io, "\$\$", tex.formula, "\$\$")
 
 latexinline(io::IO, tex::LaTeX) =
     print(io, '$', tex.formula, '$')
