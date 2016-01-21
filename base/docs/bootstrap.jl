@@ -4,7 +4,7 @@ macro doc(args...)
     DocBootstrap._expand_(args...)
 end
 
-macro __doc__(ex) esc(Expr(:block, symbol("#doc#"), ex)) end
+macro __doc__(ex) esc(Expr(:block, Expr(:meta, :doc), ex)) end
 
 module DocBootstrap
 
