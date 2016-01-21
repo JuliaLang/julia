@@ -410,7 +410,6 @@ for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
         end
     end
 end
-show_umf_info() = show_umf_info(2.)
 
 function umfpack_report_symbolic(symb::Ptr{Void}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]

@@ -380,6 +380,7 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
                              (:.< , :bitcache_lt , :<   ),
                              (:.!=, :bitcache_neq, :!=  ),
                              (:.<=, :bitcache_le , :<=  ))
+    @eval ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
     for (sigA, sigB, expA, expB, shape) in ((:Any, :AbstractArray,
                                              :A, :(B[ind]),
                                              :(size(B))),
@@ -387,7 +388,6 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
                                              :(A[ind]), :B,
                                              :(size(A))))
         @eval begin
-            ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
             function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
                 left = l - ind + 1
                 @inbounds begin

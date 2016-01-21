@@ -390,7 +390,6 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
 function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union{QRCompactWYQ{TB},QRPackedQ{TB}})
     TAB = promote_type(TA,TB)
     BB = convert(AbstractMatrix{TAB}, B)

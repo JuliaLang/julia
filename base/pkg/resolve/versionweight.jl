@@ -11,7 +11,7 @@ immutable HierarchicalValue{T}
     rest::T
 end
 
-HierarchicalValue{T}(v::Vector{T}, rest::T = zero(T)) = HierarchicalValue{T}(v, rest)
+HierarchicalValue{T}(v::Vector{T}) = HierarchicalValue{T}(v, zero(T))
 HierarchicalValue(T::Type) = HierarchicalValue(T[])
 
 Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)

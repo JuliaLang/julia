@@ -362,7 +362,7 @@ function next(itr::RegexMatchIterator, prev_match)
     (prev_match, nothing)
 end
 
-function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
+function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
     RegexMatchIterator(re,str,ovr)
 end
 
