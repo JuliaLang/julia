@@ -14,21 +14,5 @@ immutable UTF16String <: AbstractString
     end
 end
 
-##\brief      Base UTF32String type, has 32-bit NULL termination word after data, native byte order
-#
-# \throws     UnicodeError
-
-immutable UTF32String <: DirectIndexString
-    data::Vector{UInt32} # includes 32-bit NULL termination after string chars
-
-    function UTF32String(data::Vector{UInt32})
-        if length(data) < 1 || data[end] != 0
-            throw(UnicodeError(UTF_ERR_NULL_32_TERMINATE, 0, 0))
-        end
-        new(data)
-    end
-end
-UTF32String(data::Vector{Char}) = UTF32String(reinterpret(UInt32, data))
-
-isvalid{T<:Union{String,UTF16String,UTF32String}}(str::T) = isvalid(T, str.data)
-isvalid{T<:Union{String,UTF16String,UTF32String}}(::Type{T}, str::T) = isvalid(T, str.data)
+isvalid{T<:Union{String,UTF16String}}(str::T) = isvalid(T, str.data)
+isvalid{T<:Union{String,UTF16String}}(::Type{T}, str::T) = isvalid(T, str.data)

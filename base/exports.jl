@@ -118,14 +118,12 @@ export
     UnitRange,
     UpperTriangular,
     UTF16String,
-    UTF32String,
     Val,
     VecOrMat,
     Vector,
     VersionNumber,
     WeakKeyDict,
     WorkerConfig,
-    WString,
     Zip,
 
 # Ccall types
@@ -897,9 +895,7 @@ export
     uppercase,
     utf8,
     utf16,
-    utf32,
     warn,
-    wstring,
     xdump,
 
 # random numbers
