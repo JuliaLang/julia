@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Quickly copy and set trailing \0
-@inline function fast_utf_copy{S <: Union{UTF16String, UTF32String}, T <: Union{UInt16, UInt32}}(
+@inline function fast_utf_copy{S <: UTF16String, T <: Union{UInt16, UInt32}}(
                               ::Type{S}, ::Type{T}, len, dat, flag::Bool=false)
     S(setindex!(copy!(Vector{T}(len+1), 1, dat, 1, flag ? len : len+1), 0, len+1))
 end
