@@ -299,12 +299,15 @@ t = """a   |   b
 latex_doc = md"""
 We have $x^2 < x$ whenever:
 
-$|x| < 1$"""
+$|x| < 1$
+
+etc."""
 
 @test latex_doc == MD(Any[Paragraph(Any["We have ",
                                         LaTeX("x^2 < x"),
                                         " whenever:"]),
-                          LaTeX("|x| < 1")])
+                          LaTeX("|x| < 1"),
+                          Paragraph(Any["etc."])])
 
-
-@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$"
+@test plain(latex_doc) == "We have \$x^2 < x\$ whenever:\n\n\$|x| < 1\$\n\netc.\n"
+@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$\netc.\n"
