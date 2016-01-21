@@ -119,7 +119,6 @@ call(pred::Predicate, x) = pred.f(x)::Bool
 immutable EqX{T} <: Func{1}
     x::T
 end
-EqX{T}(x::T) = EqX{T}(x)
 
 call(f::EqX, y) = f.x == y
 

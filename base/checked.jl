@@ -81,14 +81,18 @@ end
 function checked_neg{T<:UnsignedInt}(x::T)
     checked_sub(T(0), x)
 end
+if BrokenSignedInt != Union{}
 function checked_neg{T<:BrokenSignedInt}(x::T)
     r = -x
     (x<0) & (r<0) && throw(OverflowError())
     r
 end
+end
+if BrokenUnsignedInt != Union{}
 function checked_neg{T<:BrokenUnsignedInt}(x::T)
     x != 0 && throw(OverflowError())
     T(0)
+end
 end
 
 """
@@ -124,17 +128,21 @@ end
 function checked_add{T<:UnsignedInt}(x::T, y::T)
     box(T, checked_uadd_int(unbox(T,x), unbox(T,y)))
 end
+if BrokenSignedInt != Union{}
 function checked_add{T<:BrokenSignedInt}(x::T, y::T)
     r = x + y
     # x and y have the same sign, and the result has a different sign
     (x<0) == (y<0) != (r<0) && throw(OverflowError())
     r
 end
+end
+if BrokenUnsignedInt != Union{}
 function checked_add{T<:BrokenUnsignedInt}(x::T, y::T)
     # x + y > typemax(T)
     # Note: ~y == -y-1
     x > ~y && throw(OverflowError())
     x + y
+end
 end
 
 # Handle multiple arguments
@@ -167,16 +175,20 @@ end
 function checked_sub{T<:UnsignedInt}(x::T, y::T)
     box(T, checked_usub_int(unbox(T,x), unbox(T,y)))
 end
+if BrokenSignedInt != Union{}
 function checked_sub{T<:BrokenSignedInt}(x::T, y::T)
     r = x - y
     # x and y have different signs, and the result has a different sign than x
     (x<0) != (y<0) == (r<0) && throw(OverflowError())
     r
 end
+end
+if BrokenUnsignedInt != Union{}
 function checked_sub{T<:BrokenUnsignedInt}(x::T, y::T)
     # x - y < 0
     x < y && throw(OverflowError())
     x - y
+end
 end
 
 """
@@ -194,15 +206,19 @@ end
 function checked_mul{T<:UnsignedInt}(x::T, y::T)
     box(T, checked_umul_int(unbox(T,x), unbox(T,y)))
 end
+if BrokenSignedIntMul != Union{} && BrokenSignedIntMul != Int128
 function checked_mul{T<:BrokenSignedIntMul}(x::T, y::T)
     r = widemul(x, y)
     r % T != r && throw(OverflowError())
     r % T
 end
+end
+if BrokenUnsignedIntMul != Union{} && BrokenUnsignedIntMul != UInt128
 function checked_mul{T<:BrokenUnsignedIntMul}(x::T, y::T)
     r = widemul(x, y)
     r % T != r && throw(OverflowError())
     r % T
+end
 end
 if Int128 <: BrokenSignedIntMul
     # Avoid BigInt

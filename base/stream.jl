@@ -255,8 +255,6 @@ function iswritable(io::LibuvStream)
     return ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle) != 0
 end
 
-nb_available(stream::LibuvStream) = nb_available(stream.buffer)
-
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 

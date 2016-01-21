@@ -527,8 +527,6 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
-spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
-    spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
 function eachline(cmd::AbstractCmd, stdin)
     stdout = Pipe()

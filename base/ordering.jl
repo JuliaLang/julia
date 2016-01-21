@@ -41,7 +41,6 @@ immutable Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     order::O
     data::V
 end
-Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
 
 lt(o::ForwardOrdering,       a, b) = isless(a,b)
 lt(o::ReverseOrdering,       a, b) = lt(o.fwd,b,a)
