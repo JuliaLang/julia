@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
+
 // Windows
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling

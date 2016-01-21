@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # An in-place version of circshift. Needs generalization -- currently
 # works only on a 3D hyperplane of a 4D array and supports only unit
 # shifts. Code needs refactoring to reduce duplication.

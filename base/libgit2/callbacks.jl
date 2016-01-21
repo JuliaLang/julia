@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 """Mirror callback function
 
 Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.

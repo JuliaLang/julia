@@ -842,7 +842,6 @@
               <string>rationalize</string>
               <string>read</string>
               <string>read!</string>
-              <string>readstring</string>
               <string>readandwrite</string>
               <string>readavailable</string>
               <string>readbytes!</string>
@@ -853,6 +852,7 @@
               <string>readline</string>
               <string>readlines</string>
               <string>readsfrom</string>
+              <string>readstring</string>
               <string>readuntil</string>
               <string>real</string>
               <string>realmax</string>
