@@ -536,45 +536,51 @@
            (iota (length opt)))
     ,(method-def-expr name sparams overall-argl body isstaged))))
 
+(define (remove-empty-parameters argl)
+  (if (and (has-parameters? argl) (null? (cdar argl)))
+      (cdr argl)
+      argl))
+
 (define (method-def-expr name sparams argl body isstaged)
-  (if (any kwarg? argl)
-      ;; has optional positional args
-      (begin
-        (let check ((l     argl)
-                    (seen? #f))
-          (if (pair? l)
-              (if (kwarg? (car l))
-                  (check (cdr l) #t)
-                  (if (and seen? (not (vararg? (car l))))
-                      (error "optional positional arguments must occur at end")
-                      (check (cdr l) #f)))))
-        (receive
-         (kws argl) (separate kwarg? argl)
-         (let ((opt  (map cadr  kws))
-               (dfl  (map caddr kws)))
-           (if (has-parameters? argl)
-               ;; both!
-               ;; separate into keyword version with all positional args,
-               ;; and a series of optional-positional-defs that delegate keywords
-               (let ((kw   (car argl))
-                     (argl (cdr argl)))
-                 (check-kw-args (cdr kw))
+  (let ((argl (remove-empty-parameters argl)))
+    (if (any kwarg? argl)
+        ;; has optional positional args
+        (begin
+          (let check ((l     argl)
+                      (seen? #f))
+            (if (pair? l)
+                (if (kwarg? (car l))
+                    (check (cdr l) #t)
+                    (if (and seen? (not (vararg? (car l))))
+                        (error "optional positional arguments must occur at end")
+                        (check (cdr l) #f)))))
+          (receive
+           (kws argl) (separate kwarg? argl)
+           (let ((opt  (map cadr  kws))
+                 (dfl  (map caddr kws)))
+             (if (has-parameters? argl)
+                 ;; both!
+                 ;; separate into keyword version with all positional args,
+                 ;; and a series of optional-positional-defs that delegate keywords
+                 (let ((kw   (car argl))
+                       (argl (cdr argl)))
+                   (check-kw-args (cdr kw))
+                   (receive
+                    (vararg req) (separate vararg? argl)
+                    (optional-positional-defs name sparams req opt dfl body isstaged
+                                              (cons kw (append req opt vararg))
+                                              `(parameters (... ,(gensy))))))
+                 ;; optional positional only
                  (receive
                   (vararg req) (separate vararg? argl)
                   (optional-positional-defs name sparams req opt dfl body isstaged
-                                            (cons kw (append req opt vararg))
-                                            `(parameters (... ,(gensy))))))
-               ;; optional positional only
-               (receive
-                (vararg req) (separate vararg? argl)
-                (optional-positional-defs name sparams req opt dfl body isstaged
-                                          (append req opt vararg)))))))
-      (if (has-parameters? argl)
-          ;; keywords only
-          (begin (check-kw-args (cdar argl))
-                 (keywords-method-def-expr name sparams argl body isstaged))
-          ;; neither
-          (method-def-expr- name sparams argl body isstaged))))
+                                            (append req opt vararg)))))))
+        (if (has-parameters? argl)
+            ;; keywords only
+            (begin (check-kw-args (cdar argl))
+                   (keywords-method-def-expr name sparams argl body isstaged))
+            ;; neither
+            (method-def-expr- name sparams argl body isstaged)))))
 
 ;; remove nested blocks
 (define (flatten-blocks e)
