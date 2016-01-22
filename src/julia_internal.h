@@ -647,8 +647,6 @@ JL_DLLEXPORT jl_value_t *jl_fpext(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a);
 
-JL_DLLEXPORT jl_value_t *jl_checked_fptoui(jl_value_t *ty, jl_value_t *a);
-JL_DLLEXPORT jl_value_t *jl_checked_fptosi(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_checked_trunc_sint(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_checked_trunc_uint(jl_value_t *ty, jl_value_t *a);
 

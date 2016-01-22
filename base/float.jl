@@ -602,15 +602,28 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                 $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf)) || throw(InexactError())
                 unsafe_trunc($Ti,x)
             end
-        else
+            @eval function convert(::Type{$Ti}, x::$Tf)
+                if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    return unsafe_trunc($Ti,x)
+                else
+                    throw(InexactError())
+                end
+            end
+        else #
             @eval function trunc(::Type{$Ti},x::$Tf)
                 $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))) || throw(InexactError())
                 unsafe_trunc($Ti,x)
             end
+            @eval function convert(::Type{$Ti}, x::$Tf)
+                if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                    return unsafe_trunc($Ti,x)
+                else
+                    throw(InexactError())
+                end
+            end
         end
     end
 end
-
 
 @eval begin
     issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(UInt32,0x00800000)))) & (x!=0)

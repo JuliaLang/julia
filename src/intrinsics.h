@@ -68,8 +68,6 @@
     ADD_I(fptrunc, 2) \
     ADD_I(fpext, 2) \
     /*  checked conversion */ \
-    ADD_I(checked_fptosi, 2) \
-    ADD_I(checked_fptoui, 2) \
     ADD_I(checked_trunc_sint, 2) \
     ADD_I(checked_trunc_uint, 2) \
     ADD_I(check_top_bit, 1) \
