@@ -319,15 +319,17 @@ function fooo_3()
     y
 end
 @test fooo_3() === 100
-function foo()
-    local x::Int8
-    function bar()
-        x = 100
-    end
+let
+    function foo()
+        local x::Int8
+        function bar()
+            x = 100
+        end
     bar()
-    x
+        x
+    end
+    @test foo() === convert(Int8,100)
 end
-@test foo() === convert(Int8,100)
 
 function bar{T}(x::T)
     local z::Complex{T}
@@ -421,14 +423,14 @@ glotest()
 # issue #7234
 begin
     glob_x2 = 24
-    f7234() = (glob_x2 += 1)
+    f7234_a() = (glob_x2 += 1)
 end
-@test_throws UndefVarError f7234()
+@test_throws UndefVarError f7234_a()
 begin
     global glob_x2 = 24
-    f7234() = (glob_x2 += 1)
+    f7234_b() = (glob_x2 += 1)
 end
-@test_throws UndefVarError f7234()
+@test_throws UndefVarError f7234_b()
 # existing globals can be inherited by non-function blocks
 for i = 1:2
     glob_x2 += 1
@@ -1233,14 +1235,15 @@ end
 @test isa(foo4075(Foo4075(Int64(1),2.0),:y), Float64)
 
 # issue #3167
-function foo(x)
-    ret=Array(typeof(x[1]), length(x))
-    for j = 1:length(x)
-        ret[j] = x[j]
+let
+    function foo(x)
+        ret=Array(typeof(x[1]), length(x))
+        for j = 1:length(x)
+            ret[j] = x[j]
+        end
+        return ret
     end
-    return ret
-end
-let x = Array(Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}, 3)
+    x = Array(Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -3089,10 +3092,12 @@ end
 # issue 11858
 type Foo11858
     x::Float64
+    Foo11858(x::Float64) = new(x)
 end
 
 type Bar11858
     x::Float64
+    Bar11858(x::Float64) = new(x)
 end
 
 g11858(x::Float64) = x
