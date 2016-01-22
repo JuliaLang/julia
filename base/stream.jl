@@ -960,8 +960,8 @@ function readuntil(this::LibuvStream, c::UInt8)
     readuntil(buf, c)
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(length(p)))
-function uv_write(s::LibuvStream, p::Ptr, n::UInt)
+uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     uvw = Libc.malloc(_sizeof_uv_write)
     uv_req_set_data(uvw,C_NULL)
@@ -984,7 +984,7 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
-function buffer_or_write(s::LibuvStream, p::Ptr, n::Integer)
+function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     if isnull(s.sendbuf)
         return uv_write(s, p, UInt(n))
     end
@@ -992,13 +992,13 @@ function buffer_or_write(s::LibuvStream, p::Ptr, n::Integer)
     buf = get(s.sendbuf)
     totb = nb_available(buf) + n
     if totb < buf.maxsize
-        nb = write(buf, p, n)
+        nb = unsafe_write(buf, p, n)
     else
         flush(s)
         if n > buf.maxsize
             nb = uv_write(s, p, n)
         else
-            nb = write(buf, p, n)
+            nb = unsafe_write(buf, p, n)
         end
     end
     return nb
@@ -1013,26 +1013,14 @@ function flush(s::LibuvStream)
         arr = takebuf_array(buf)        # Array of UInt8s
         uv_write(s, arr)
     end
-    s
+    return s
 end
 
 buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 
 ## low-level calls to libuv ##
 
-write(s::LibuvStream, b::UInt8) = write(s, [b])
-write(s::LibuvStream, c::Char) = write(s, string(c))
-function write{T}(s::LibuvStream, a::Array{T})
-    if isbits(T)
-        n = UInt(length(a) * sizeof(T))
-        return buffer_or_write(s, pointer(a), n)
-    else
-        check_open(s)
-        invoke(write, Tuple{IO, typeof(a)}, s, a)
-    end
-end
-
-write(s::LibuvStream, p::Ptr, n::Integer) = buffer_or_write(s, p, n)
+write(s::LibuvStream, b::UInt8) = write(s, Ref{UInt8}(b))
 
 function uv_writecb_task(req::Ptr{Void}, status::Cint)
     d = uv_req_data(req)
@@ -1224,25 +1212,18 @@ function wait_readbyte(s::BufferStream, c::UInt8)
     end
 end
 
-wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
+wait_close(s::BufferStream) = if isopen(s); wait(s.close_c); end
 start_reading(s::BufferStream) = nothing
 
-write(s::BufferStream, b::UInt8) = write(s, [b])
-write(s::BufferStream, c::Char) = write(s, string(c))
-
-function write{T}(s::BufferStream, a::Array{T})
-    rv=write(s.buffer, a)
-    !(s.buffer_writes) && notify(s.r_c; all=true);
-    return rv
-end
-function write(s::BufferStream, p::Ptr, nb::Integer)
-    rv=write(s.buffer, p, nb)
-    !(s.buffer_writes) && notify(s.r_c; all=true);
+write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
+function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
+    rv = unsafe_write(s.buffer, p, nb)
+    !(s.buffer_writes) && notify(s.r_c; all=true)
     return rv
 end
 
 function eof(s::BufferStream)
-    wait_readnb(s,1)
+    wait_readnb(s, 1)
     return !isopen(s) && nb_available(s)<=0
 end
 

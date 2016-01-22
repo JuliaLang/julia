@@ -143,7 +143,7 @@ function serialize(s::SerializationState, x::Symbol)
         writetag(s.io, LONGSYMBOL_TAG)
         write(s.io, Int32(ln))
     end
-    write(s.io, pname, ln)
+    unsafe_write(s.io, pname, ln)
 end
 
 function serialize_array_data(s::IO, a)
