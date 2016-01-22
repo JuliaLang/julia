@@ -2,7 +2,6 @@
 # works only on a 3D hyperplane of a 4D array and supports only unit
 # shifts. Code needs refactoring to reduce duplication.
 
-using Match
 
 # a is the 4D array; index specifies which 3D hyperplane; vec
 # specifies the shifts (only 1 and -1)
@@ -11,26 +10,38 @@ function circshift3d1!(a,index,vec)
     ny = size(a,2)
     nz = size(a,3)
     for i = 1 : length(vec)
-        @match vec[i] begin
-            1  => shift1!(a,nx,ny,nz,index,i)
-           -1  => shiftm1!(a,nx,ny,nz,index,i)
+        vi = vec[i]
+        if vi == 1
+            shift1!(a,nx,ny,nz,index,i)
+        elseif vi == -1
+            shiftm1!(a,nx,ny,nz,index,i)
+        else
+            throw(ArgumentError)
         end
     end
 end
 
 function shift1!(a,nx,ny,nz,index,i)
-    @match i begin
-        1 => shifti!(a,nx,ny,nz,index)
-        2 => shiftj!(a,nx,ny,nz,index)
-        3 => shiftk!(a,nx,ny,nz,index)
+    if i == 1
+        shifti!(a,nx,ny,nz,index)
+    elseif i == 2
+        shiftj!(a,nx,ny,nz,index)
+    elseif i == 3
+        shiftk!(a,nx,ny,nz,index)
+    else
+        throw(ArgumentError)
     end
 end
 
 function shiftm1!(a,nx,ny,nz,index,i)
-    @match i begin
-        1 => shiftmi!(a,nx,ny,nz,index)
-        2 => shiftmj!(a,nx,ny,nz,index)
-        3 => shiftmk!(a,nx,ny,nz,index)
+    if i == 1
+        shiftmi!(a,nx,ny,nz,index)
+    elseif i == 2
+        shiftmj!(a,nx,ny,nz,index)
+    elseif i == 3
+        shiftmk!(a,nx,ny,nz,index)
+    else
+        throw(ArgumentError)
     end
 end
 
