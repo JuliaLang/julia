@@ -191,11 +191,11 @@ function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
             write(out, '0')
             pt += 1
         end
-        write(out, pdigits, ndigits)
+        unsafe_write(out, pdigits, ndigits)
         precision -= ndigits
     elseif ndigits <= pt
         # dddd000.000000
-        write(out, pdigits, ndigits)
+        unsafe_write(out, pdigits, ndigits)
         while ndigits < pt
             write(out, '0')
             ndigits += 1
@@ -206,9 +206,9 @@ function print_fixed(out, precision, pt, ndigits, trailingzeros=true)
     else # 0 < pt < ndigits
         # dd.dd0000
         ndigits -= pt
-        write(out, pdigits, pt)
+        unsafe_write(out, pdigits, pt)
         write(out, '.')
-        write(out, pdigits+pt, ndigits)
+        unsafe_write(out, pdigits+pt, ndigits)
         precision -= ndigits
     end
     if trailingzeros
@@ -314,7 +314,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, zeros, '0'))
     end
     # print integer
-    push!(blk.args, :(write(out, pointer(DIGITS), pt)))
+    push!(blk.args, :(unsafe_write(out, pointer(DIGITS), pt)))
     # print padding
     if padding !== nothing && '-' in flags
         push!(blk.args, pad(width-precision, padding, ' '))
@@ -373,7 +373,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if precision > 0
         push!(blk.args, :(print_fixed(out,$precision,pt,len)))
     else
-        push!(blk.args, :(write(out, pointer(DIGITS), len)))
+        push!(blk.args, :(unsafe_write(out, pointer(DIGITS), len)))
         push!(blk.args, :(while pt >= (len+=1) write(out,'0') end))
         '#' in flags && push!(blk.args, :(write(out, '.')))
     end
@@ -473,12 +473,12 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char, inside_g
                               end;
                               if endidx > 1
                                   write(out, '.')
-                                  write(out, pointer(DIGITS)+1, endidx-1)
+                                  unsafe_write(out, pointer(DIGITS)+1, endidx-1)
                               end
                               ))
         else
             push!(blk.args, :(write(out, '.')))
-            push!(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
+            push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
             if ndigits < precision+1
                 n = precision+1-ndigits
                 push!(blk.args, pad(n, n, '0'))
@@ -577,7 +577,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(write(out, DIGITS[1])))
     if precision > 0
         push!(blk.args, :(write(out, '.')))
-        push!(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
+        push!(blk.args, :(unsafe_write(out, pointer(DIGITS)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
             push!(blk.args, pad(n, n, '0'))
@@ -590,7 +590,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
         else
             push!(vpblk.args, :(write(out, '.')))
         end
-        push!(vpblk.args, :(write(out, pointer(DIGITS)+1, len-1)))
+        push!(vpblk.args, :(unsafe_write(out, pointer(DIGITS)+1, len-1)))
         push!(blk.args, ifvpblk)
     end
     for ch in expmark
@@ -1103,7 +1103,7 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     bufsiz = length(DIGITS) - 1
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    write(out, pointer(DIGITS), min(lng,bufsiz))
+    unsafe_write(out, pointer(DIGITS), min(lng,bufsiz))
     return (false, ())
 end
 

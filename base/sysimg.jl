@@ -86,10 +86,14 @@ include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version
 include("c.jl")
 include("osutils.jl")
 
+# Core I/O
+include("io.jl")
+include("iostream.jl")
+include("iobuffer.jl")
+
 # strings & printing
 include("char.jl")
 include("ascii.jl")
-include("iobuffer.jl")
 include("string.jl")
 include("unicode.jl")
 include("parse.jl")
@@ -97,10 +101,6 @@ include("shell.jl")
 include("regex.jl")
 include("base64.jl")
 importall .Base64
-
-# Core I/O
-include("io.jl")
-include("iostream.jl")
 
 # system & environment
 include("libc.jl")

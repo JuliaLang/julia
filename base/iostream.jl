@@ -121,19 +121,7 @@ end
 
 write(s::IOStream, b::UInt8) = Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
 
-function write{T}(s::IOStream, a::Array{T})
-    if isbits(T)
-        if !iswritable(s)
-            throw(ArgumentError("write failed, IOStream is not writeable"))
-        end
-        Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
-                  s.ios, a, length(a)*sizeof(T)))
-    else
-        invoke(write, Tuple{IO, Array}, s, a)
-    end
-end
-
-function write(s::IOStream, p::Ptr, nb::Integer)
+function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
@@ -146,10 +134,10 @@ function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
-        return write(s, pointer(a, 1), colsz)
+        return unsafe_write(s, pointer(a, 1), colsz)
     else
         for idxs in CartesianRange((1, size(a)[2:end]...))
-            write(s, pointer(a, idxs.I), colsz)
+            unsafe_write(s, pointer(a, idxs.I), colsz)
         end
         return colsz*trailingsize(a,2)
     end

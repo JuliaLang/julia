@@ -171,7 +171,8 @@ function compact(io::AbstractIOBuffer)
     return io
 end
 
-@inline function ensureroom(io::AbstractIOBuffer, nshort::Int)
+@inline ensureroom(io::AbstractIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::AbstractIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
         nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
@@ -236,7 +237,7 @@ function takebuf_array(io::AbstractIOBuffer)
         io.ptr = 1
         io.size = 0
     end
-    data
+    return data
 end
 function takebuf_array(io::IOBuffer)
     ismarked(io) && unmark(io)
@@ -258,7 +259,7 @@ function takebuf_array(io::IOBuffer)
         io.ptr = 1
         io.size = 0
     end
-    data
+    return data
 end
 function takebuf_string(io::AbstractIOBuffer)
     b = takebuf_array(io)
@@ -272,21 +273,21 @@ function write(to::AbstractIOBuffer, from::AbstractIOBuffer)
     end
     written::Int = write_sub(to, from.data, from.ptr, nb_available(from))
     from.ptr += written
-    written
+    return written
 end
 
-write(to::AbstractIOBuffer, p::Ptr, nb::Integer) = write(to, p, Int(nb))
-function write(to::AbstractIOBuffer, p::Ptr, nb::Int)
+function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
     written = min(nb, length(to.data) - ptr + 1)
-    p_u8 = convert(Ptr{UInt8}, p)
     for i = 0:written - 1
-        @inbounds to.data[ptr + i] = unsafe_load(p_u8 + i)
+        @inbounds to.data[ptr + i] = unsafe_load(p + i)
     end
     to.size = max(to.size, ptr - 1 + written)
-    if !to.append to.ptr += written end
-    written
+    if !to.append
+        to.ptr += written
+    end
+    return written
 end
 
 function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
@@ -295,17 +296,11 @@ function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     end
     local written::Int
     if isbits(T) && isa(a,Array)
-        nb = nel * sizeof(T)
-        ensureroom(to, Int(nb))
-        ptr = (to.append ? to.size+1 : to.ptr)
-        written = min(nb, length(to.data) - ptr + 1)
-        unsafe_copy!(pointer(to.data, ptr),
-                     convert(Ptr{UInt8}, pointer(a, offs)), written)
-        to.size = max(to.size, ptr - 1 + written)
-        if !to.append to.ptr += written end
+        nb = UInt(nel * sizeof(T))
+        written = unsafe_write(to, pointer(a, offs), nb)
     else
         written = 0
-        ensureroom(to, sizeof(a))
+        ensureroom(to, UInt(sizeof(a)))
         for i = offs:offs+nel-1
             written += write(to, a[i])
         end
@@ -313,10 +308,8 @@ function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     return written
 end
 
-write(to::AbstractIOBuffer, a::Array) = write_sub(to, a, 1, length(a))
-
 @inline function write(to::AbstractIOBuffer, a::UInt8)
-    ensureroom(to, 1)
+    ensureroom(to, UInt(1))
     ptr = (to.append ? to.size+1 : to.ptr)
     if ptr > to.maxsize
         return 0
@@ -324,7 +317,9 @@ write(to::AbstractIOBuffer, a::Array) = write_sub(to, a, 1, length(a))
         to.data[ptr] = a
     end
     to.size = max(to.size, ptr)
-    if !to.append to.ptr += 1 end
+    if !to.append
+        to.ptr += 1
+    end
     return sizeof(UInt8)
 end
 
@@ -381,30 +376,3 @@ function readuntil(io::AbstractIOBuffer, delim::UInt8)
     end
     A
 end
-
-# IOStream Marking
-# Note that these functions expect that io.mark exists for
-# the concrete IO type.  This may not be true for IO types
-# not in base.
-
-# Note 2: these functions truly belong in io.jl, but serious massive performance issues with type-inference if they aren't available earlier
-
-function mark(io::IO)
-    io.mark = position(io)
-end
-
-function unmark(io::IO)
-    !ismarked(io) && return false
-    io.mark = -1
-    return true
-end
-
-function reset{T<:IO}(io::T)
-    ismarked(io) || throw(ArgumentError("$(T) not marked"))
-    m = io.mark
-    seek(io, m)
-    io.mark = -1 # must be after seek, or seek may fail
-    return m
-end
-
-ismarked(io::IO) = io.mark >= 0

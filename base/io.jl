@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Generic IO stubs
+# Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 lock(::IO) = nothing
 unlock(::IO) = nothing
@@ -23,9 +23,16 @@ function iswritable end
 function copy end
 function eof end
 
-# all subtypes should implement this
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
+
+function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
+    local written::Int = 0
+    for i=1:n
+        written += write(s, unsafe_load(p, i))
+    end
+    return written
+end
 
 # Generic wrappers around other IO objects
 abstract AbstractPipe <: IO
@@ -33,10 +40,7 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
-write(io::AbstractPipe, bytes::Vector{UInt8}) = write(pipe_writer(io), bytes)
-write{T<:AbstractPipe}(io::T, args...) = write(pipe_writer(io), args...)
-write{S<:AbstractPipe}(io::S, a::Array) = write(pipe_writer(io), a)
-buffer_or_write(io::AbstractPipe, p::Ptr, n::Integer) = buffer_or_write(pipe_writer(io), p, n)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io), p, nb)
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io))
 
@@ -100,34 +104,18 @@ function write(io::IO, xs...)
     for x in xs
         written += write(io, x)
     end
-    written
+    return written
 end
 
-if ENDIAN_BOM == 0x01020304
-    function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128})
-        sz = sizeof(x)
-        local written::Int = 0
-        for n = sz:-1:1
-            written += write(s, (x>>>((n-1)<<3))%UInt8)
-        end
-        return written
-    end
-else
-    function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128})
-        sz = sizeof(x)
-        local written::Int = 0
-        for n = 1:sz
-            written += write(s, (x>>>((n-1)<<3))%UInt8)
-        end
-        return written
-    end
+unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n)
+unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+write(s::IO, x::Ref) = unsafe_write(s, x, sizeof(eltype(x)))
+
+function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
+    return write(s, Ref(x))
 end
 
 write(s::IO, x::Bool)    = write(s, UInt8(x))
-write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
-write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
-write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
-
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, a::AbstractArray)
@@ -137,6 +125,19 @@ function write(s::IO, a::AbstractArray)
     end
     return nb
 end
+
+function write{T}(s::IO, a::Array{T})
+    if isbits(T)
+        return unsafe_write(s, pointer(a), sizeof(a))
+    end
+
+    nb = 0
+    for x in a
+        nb += write(s, x)
+    end
+    return nb
+end
+
 
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
@@ -159,17 +160,9 @@ function write(s::IO, ch::Char)
     end
 end
 
-function write(s::IO, p::Ptr, n::Integer)
-    local written::Int = 0
-    for i=1:n
-        written += write(s, unsafe_load(p, i))
-    end
-    return written
-end
-
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    return write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
+    return unsafe_write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
 end
 
 function write(to::IO, from::IO)
@@ -237,7 +230,7 @@ function read(s::IO, ::Type{Char})
     end
     c += ch
     c -= Base.utf8_offset[trailing+1]
-    Char(c)
+    return Char(c)
 end
 
 function readuntil(s::IO, delim::Char)
@@ -254,7 +247,7 @@ function readuntil(s::IO, delim::Char)
             break
         end
     end
-    takebuf_string(out)
+    return takebuf_string(out)
 end
 
 function readuntil{T}(s::IO, delim::T)
@@ -266,7 +259,7 @@ function readuntil{T}(s::IO, delim::T)
             break
         end
     end
-    out
+    return out
 end
 
 # based on code by Glen Hertz
@@ -365,3 +358,28 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 eltype(::Type{EachLine}) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))
+
+# IOStream Marking
+# Note that these functions expect that io.mark exists for
+# the concrete IO type. This may not be true for IO types
+# not in base.
+
+function mark(io::IO)
+    io.mark = position(io)
+end
+
+function unmark(io::IO)
+    !ismarked(io) && return false
+    io.mark = -1
+    return true
+end
+
+function reset{T<:IO}(io::T)
+    ismarked(io) || throw(ArgumentError("$(T) not marked"))
+    m = io.mark
+    seek(io, m)
+    io.mark = -1 # must be after seek, or seek may fail
+    return m
+end
+
+ismarked(io::IO) = io.mark >= 0

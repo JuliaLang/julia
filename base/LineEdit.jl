@@ -1125,7 +1125,7 @@ end
 
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
-    write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
+    unsafe_write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
     write(buf, "': ")
     offset = buf.ptr
     ptr = s.response_buffer.ptr
