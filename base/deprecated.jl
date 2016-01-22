@@ -978,3 +978,6 @@ end
     end
     return offsets
 end
+
+# 14766
+@deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)

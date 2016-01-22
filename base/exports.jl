@@ -1335,7 +1335,9 @@ export
     unsafe_copy!,
     unsafe_load,
     unsafe_pointer_to_objref,
+    #unsafe_read,
     unsafe_store!,
+    unsafe_write,
 
 # nullable types
     isnull,
