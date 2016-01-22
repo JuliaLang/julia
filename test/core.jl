@@ -3655,3 +3655,14 @@ type T14691; a::UInt; end
 # issue #14245
 f14245() = (v = []; push!(v, length(v)); v)
 @test f14245()[1] == 0
+
+# issue #9677
+@generated function foo9677{T,N}(x::AbstractArray{T,N})
+    quote
+        x=$N
+        y=x+1
+        return y
+    end
+end
+foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
+@test foo9677(1:5) == foo9677(randn(3))

@@ -2029,7 +2029,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
             jl_gc_wb(m, m->invokes);
             update_max_args(m->invokes, tt);
             // this private method table has just this one definition
-            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0,(jl_value_t*)m->invokes);
+            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,m->isstaged,(jl_value_t*)m->invokes);
         }
 
         newsig = m->sig;
@@ -2050,7 +2050,11 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tupletype_t *types,
                                                                    jl_svec_len(tpenv)/2);
             }
         }
-        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv, m->isstaged);
+        jl_function_t *func = m->func;
+        if (m->isstaged)
+            func = jl_instantiate_staged(m, tt, tpenv);
+
+        mfunc = cache_method(m->invokes, tt, func, newsig, tpenv, m->isstaged);
         JL_GC_POP();
     }
 
