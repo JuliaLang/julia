@@ -88,26 +88,26 @@ static void jl_unblock_signal(int sig)
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
-    assert(sig == SIGSEGV);
+    assert(sig == SIGSEGV || sig == SIGBUS);
 
 #ifdef JULIA_ENABLE_THREADING
     if (info->si_addr == jl_gc_signal_page) {
-        jl_unblock_signal(SIGSEGV);
+        jl_unblock_signal(sig);
         jl_gc_signal_wait();
         return;
     }
 #endif
     if (jl_in_jl_ || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
-        jl_unblock_signal(SIGSEGV);
+        jl_unblock_signal(sig);
         jl_throw(jl_stackovf_exception);
     }
-    else if (info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
-        jl_unblock_signal(SIGSEGV);
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
+        jl_unblock_signal(sig);
         jl_throw(jl_readonlymemory_exception);
     }
     else {
 #ifdef SEGV_EXCEPTION
-        jl_unblock_signal(SIGSEGV);
+        jl_unblock_signal(sig);
         jl_throw(jl_segv_exception);
 #else
         sigdie_handler(sig, info, context);
@@ -123,6 +123,10 @@ static void allocate_segv_handler(void)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    // On AArch64, stack overflow triggers a SIGBUS
+    if (sigaction(SIGBUS, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 }
@@ -506,9 +510,6 @@ void jl_install_default_signal_handlers(void)
     sigemptyset(&act_die.sa_mask);
     act_die.sa_sigaction = sigdie_handler;
     act_die.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGBUS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
     if (sigaction(SIGILL, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
