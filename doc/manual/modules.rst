@@ -282,6 +282,10 @@ therein.  If you know that it is *not* safe to precompile your module
 throw an error (and thereby prevent the module from being imported by
 any other precompiled module).
 
+``__precompile__()`` should *not* be used in a module unless all of its
+dependencies are also using ``__precompile__()``. Failure to do so can result
+in a runtime error when loading the module.
+
 In order to make your module work with precompilation,
 however, you may need to change your module to explicitly separate any
 initialization steps that must occur at *runtime* from steps that can

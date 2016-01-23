@@ -10607,15 +10607,6 @@ This is only needed if your module depends on a file that is not used via `inclu
 include_dependency
 
 doc"""
-    __precompile__(isprecompilable::Bool=true)
-
-Specify whether the file calling this function is precompilable. If `isprecompilable` is `true`, then `__precompile__` throws an exception when the file is loaded by `using`/`import`/`require` *unless* the file is being precompiled, and in a module file it causes the module to be automatically precompiled when it is imported. Typically, `__precompile__()` should occur before the `module` declaration in the file, or better yet `VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
-
-If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in order to throw an error if Julia attempts to precompile it.
-"""
-__precompile__
-
-doc"""
     randn!([rng], A::Array{Float64,N})
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.

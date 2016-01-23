@@ -155,6 +155,22 @@ precompilableerror(ex, c) = false
 # Call __precompile__ at the top of a file to force it to be precompiled (true), or
 # to be prevent it from being precompiled (false).  __precompile__(true) is
 # ignored except within "require" call.
+"""
+    __precompile__(isprecompilable::Bool=true)
+
+Specify whether the file calling this function is precompilable. If `isprecompilable` is
+`true`, then `__precompile__` throws an exception when the file is loaded by
+`using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
+causes the module to be automatically precompiled when it is imported. Typically,
+`__precompile__()` should occur before the `module` declaration in the file, or better yet
+`VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
+
+If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
+order to throw an error if Julia attempts to precompile it.
+
+`__precompile__()` should *not* be used in a module unless all of its dependencies are also
+using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
+"""
 function __precompile__(isprecompilable::Bool=true)
     if myid() == 1 && isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
         !(isprecompilable && toplevel_load::Bool)

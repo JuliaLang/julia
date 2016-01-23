@@ -153,7 +153,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read binary data from a stream, filling in the argument ``array``\ .
+   Read binary data from a stream or file, filling in the argument ``array``\ .
 
 .. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
 

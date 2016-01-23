@@ -142,6 +142,8 @@ Getting Around
 
    If a module or file is *not* safely precompilable, it should call ``__precompile__(false)`` in order to throw an error if Julia attempts to precompile it.
 
+   ``__precompile__()`` should *not* be used in a module unless all of its dependencies are also using ``__precompile__()``\ . Failure to do so can result in a runtime error when loading the module.
+
 .. function:: include(path::AbstractString)
 
    .. Docstring generated from Julia source

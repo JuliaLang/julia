@@ -1632,7 +1632,11 @@ int jl_deserialize_verify_mod_list(ios_t *s)
             jl_errorf("invalid module path (%s does not name a module)", name);
         }
         if (m->uuid != uuid) {
-            jl_printf(JL_STDERR, "WARNING: Module %s uuid did not match cache file\n", name);
+            jl_printf(JL_STDERR,
+                      "WARNING: Module %s uuid did not match cache file\n"
+                      "  This is likely because module %s does not support"
+                      "  precompilation but is imported by a module that does.\n",
+                      name, name);
             return 0;
         }
     }
