@@ -1194,8 +1194,8 @@ function abstract_eval_constant(x::ANY)
 end
 
 function abstract_eval_global(M::Module, s::Symbol)
-    if isconst(M,s)
-        return abstract_eval_constant(eval(M,s))
+    if isdefined(M,s) && isconst(M,s)
+        return abstract_eval_constant(getfield(M,s))
     end
     return Any
 end
