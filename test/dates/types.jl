@@ -114,12 +114,7 @@ b = Dates.Date(2000)
 @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
 @test string(typemax(Dates.Date)) == "252522163911149-12-31"
 @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
-@test convert(Real,b) == 730120
-@test convert(Float64,b) == 730120.0
-@test convert(Int32,b) == 730120
-@test convert(Real,a) == 63082368000000
-@test convert(Float64,a) == 63082368000000.0
-@test convert(Int64,a) == 63082368000000
+
 # Date-DateTime conversion/promotion
 @test Dates.DateTime(a) == a
 @test Dates.Date(a) == b
@@ -173,4 +168,3 @@ ms = Dates.Millisecond(1)
 @test Dates.Date(d,y) == Dates.Date(1,1,1)
 @test Dates.Date(d,m) == Dates.Date(1,1,1)
 @test Dates.Date(m,y) == Dates.Date(1,1,1)
-
