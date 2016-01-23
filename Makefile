@@ -621,3 +621,17 @@ endif
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe
+
+# various statistics about the build that may interest the user
+ifeq ($(USE_SYSTEM_LLVM), 1)
+LLVM_SIZE := llvm-size$(EXE)
+else
+LLVM_SIZE := $(build_bindir)/llvm-size$(EXE)
+endif
+build-stats:
+	@echo $(JULCOLOR)' ==> ./julia binary sizes'$(ENDCOLOR)
+	$(call spawn,$(LLVM_SIZE) -A $(build_private_libdir)/sys.$(SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_bindir)/julia$(EXE))
+	@echo $(JULCOLOR)' ==> ./julia launch speedtest'$(ENDCOLOR)
+	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
+	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
+	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
