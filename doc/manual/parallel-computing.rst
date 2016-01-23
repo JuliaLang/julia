@@ -29,27 +29,96 @@ operations typically do not look like "message send" and "message
 receive" but rather resemble higher-level operations like calls to user
 functions.
 
-Parallel programming in Julia is built on two primitives: *remote
-references* and *remote calls*. A remote reference is an object that can
-be used from any process to refer to an object stored on a particular
-process. A remote call is a request by one process to call a certain
-function on certain arguments on another (possibly the same) process.
+.. _man-local-processes:
 
-Remote references come in two flavors -``Future`` and ``RemoteChannel``.
+Adding Local Processes
+----------------------
 
-A remote call returns a ``Future`` to its result. Remote calls
-return immediately; the process that made the call proceeds to its
-next operation while the remote call happens somewhere else. You can
-wait for a remote call to finish by calling :func:`wait` on the returned
-`Future`, and you can obtain the full value of the result using
-:func:`fetch`.
-
-On the other hand ``RemoteRefs`` are rewritable. For example, multiple processes
-can co-ordinate their processing by referencing the same remote ``Channel``\ .
-
-Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
+Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
 equal the number of CPU cores on the machine.
+
+::
+
+    $ ./julia -p 2
+
+You can check the number of available processes with :func:`nprocs`.
+
+::
+
+    julia> nprocs()
+    3
+
+The processes used by default for parallel operations are referred to as "workers".
+When there is only one process, process 1 is considered a worker. Otherwise, workers are
+considered to be all processes other than process 1, which is called the "master"
+process. In the above example, there are a total of 3 processes (2 workers, 1 master).
+To check the number of worker processes, you can use :func:`nworkers`.
+
+::
+
+    julia> nworkers()
+    2
+
+Each process has a unique integer id. You can use the :func:`procs` command to
+see them.
+
+::
+
+    julia> procs()
+    3-element Array{Int64,1}:
+     1
+     2
+     3
+
+You can remove processes using :func:`rmprocs`
+
+::
+
+    julia> rmprocs(2) # removes process 2
+    :ok
+
+    julia> procs()
+    2-element Array{Int64,1}:
+     1
+     3
+
+You can add processes using :func:`addprocs` (an alternative to using
+``./julia -p n`` at startup)
+
+::
+
+    julia> addprocs(2) # adds 2 more processes
+
+    julia> procs()
+    4-element Array{Int64,1}:
+     1
+     3
+     4
+     5
+
+This section provided some basic commands to get you aquainted with setting up a
+parallel environment in julia. More advanced tools for launching and managing
+processes are covered in the sections on :ref:`man-clustermanagers` and
+:ref:`man-net-topology`.
+
+.. _man-remote-ref-and-calls:
+
+Remote References and Calls
+---------------------------
+
+Parallel programming in Julia is built on two primitives: *remote
+references* and *remote calls*. A remote reference is used to access
+data stored on a particular process. A remote call is used to call a
+specified function on another (possibly the same) process.
+
+The code below illustrates the basic flavor of this scheme. First,
+julia is launched with 2 worker processes. Then :func:`remotecall`
+is used to construct a 2-by-2 random matrix on process 2. The first
+argument provides the function to be executed, the second argument
+is the process id, and the remaining arguments are passed to the
+executed function. In this case, ``rand(2,2)`` is executed on process
+2.
 
 ::
 
@@ -58,28 +127,51 @@ equal the number of CPU cores on the machine.
     julia> r = remotecall(rand, 2, 2, 2)
     Future(2,1,3,Nullable{Any}())
 
-    julia> s = @spawnat 2 1 .+ fetch(r)
-    Future(2,1,6,Nullable{Any}())
+Notice that :func:`remotecall` returned a ``Future`` object. A ``Future``
+is a type of remote reference (the other type of remote reference is a
+``RemoteChannel``, covered later). The ``Future`` type has the following
+fields.
 
-    julia> fetch(s)
-    2x2 Float64 Array:
-     1.60401  1.50111
-     1.17457  1.15741
+::
 
-The first argument to :func:`remotecall` is the function to call.
-Most parallel programming in Julia does not reference specific processes
-or the number of processes available, but :func:`remotecall` is
-considered a low-level interface providing finer control. The second
-argument to :func:`remotecall` is the index of the process
-that will do the work, and the remaining arguments will be passed
-to the function being called.
+    type Future <: AbstractRemoteRef
+        where::Int       # process id where data exists
+        whence::Int      # process id where this ref was instantiated
+        id::Int          # identifier for this Future
+        v::Nullable{Any} # stores the data after fetch() is called
+    end
 
-As you can see, in the first line we asked process 2 to
-construct a 2-by-2 random matrix, and in the second line we asked it
-to add 1 to it. The result of both calculations is available in the
-two futures, ``r`` and ``s``. The :obj:`@spawnat` macro
-evaluates the expression in the second argument on the process
-specified by the first argument.
+In our example, ``where = 2`` and ``whence = 1`` because we asked
+process 2 to execute the function, and process 1 (by default) issued
+the request. The field ``v`` is a ``Nullable`` type (see
+:ref:`man-nullable-types`), and it remains empty/null until we
+tell process 2 that we want to retrieve the results of the function
+call. We do this by using :func:`fetch`.
+
+::
+
+    julia> isnull(r.v) # no data fetched yet
+    true
+
+    julia> result = fetch(r)
+    2x2 Array{Float64,2}:
+     0.659427  0.995031
+     0.944037  0.311687
+
+    julia> isnull(r.v) # data has been fetched
+    false
+
+You can call :func:`fetch` multiple times to re-access a result;
+it checks and returns the cached value.
+
+In our simple example, the function call executes and finishes nearly
+instantaneously. When more computationally expensive function calls
+are issued to the worker processes, it makes sense to issue remote
+function calls and fetch the result at some later time. If
+:func:`fetch` is called on a ``Future`` before the function is
+finished executing, then the system waits until it finishes and
+then retrieves the result. Also see the related :func:`wait` and
+:func:`isready` functions.
 
 Occasionally you might want a remotely-computed value immediately. This
 typically happens when you read from a remote object to obtain data
@@ -136,17 +228,34 @@ type the following into the Julia prompt::
              return 2*rand(dims...)
            end
 
-    julia> rand2(2,2)
-    2x2 Float64 Array:
-     0.153756  0.368514
-     1.15119   0.918912
+    julia> rand2(2,2) # rand2 is defined on process 1
+    2x2 Array{Float64,2}:
+     0.198569   0.993108
+     0.0346543  0.190869
 
-    julia> fetch(@spawn rand2(2,2))
+    julia> s = @spawn rand2(2,2) # try calling rand2 on process 2
+    Future(2,1,3,Nullable{Any}())
+
+    julia> fetch(s)
     ERROR: On worker 2:
     function rand2 not defined on process 2
 
-
 Process 1 knew about the function ``rand2``, but process 2 did not.
+To fix this, we can use the :obj:`@everywhere` macro, which causes
+every process to execute the specified command.
+
+::
+
+    julia> # defines rand2 on all processes
+           @everywhere function rand2(dims...)
+             return 2*rand(dims...)
+           end
+
+    julia> s = @spawn rand2(2,2)
+    julia> fetch(s)
+    2x2 Array{Float64,2}:
+     1.06361   0.247563
+     0.709421  1.85469
 
 Most commonly you'll be loading code from files or packages, and you
 have a considerable amount of flexibility in controlling which
@@ -178,14 +287,6 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
 
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
 
-You can force a command to run on all processes using the :obj:`@everywhere` macro.
-For example, :obj:`@everywhere` can also be used to directly define a function on all processes::
-
-    julia> @everywhere id = myid()
-
-    julia> remotecall_fetch(()->id, 2)
-    2
-
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
@@ -193,9 +294,6 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an id equal to 1, as would the Julia process running the driver script in the
 example above.
-The processes used by default for parallel operations are referred to as "workers".
-When there is only one process, process 1 is considered a worker. Otherwise, workers are
-considered to be all processes other than process 1.
 
 The base Julia installation has in-built support for two types of clusters:
 
@@ -282,7 +380,7 @@ The function ``count_heads`` simply adds together ``n`` random bits.
 Here is how we can perform some trials on two machines, and add together the
 results::
 
-    require("count_heads")
+    @everywhere include("count_heads.jl")
 
     a = @spawn count_heads(100000000)
     b = @spawn count_heads(100000000)
@@ -332,7 +430,7 @@ For example, the following code will not work as intended::
 
 However, this code will not initialize all of ``a``, since each
 process will have a separate copy of it. Parallel for loops like these
-must be avoided. Fortunately,  `Shared Arrays <#shared-arrays>`_
+must be avoided. Fortunately, :ref:`man-shared-arrays`
 can be used to get around this limitation::
 
     a = SharedArray(Float64,10)
@@ -367,7 +465,8 @@ For example, we could compute the singular values of several large
 random matrices in parallel as follows::
 
     M = Matrix{Float64}[rand(1000,1000) for i=1:10]
-    pmap(svd, M)
+    result = pmap(svd, M)
+    U1,s1,Vt1 = result[1] # access the svd of first matrix
 
 Julia's :func:`pmap` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
@@ -451,36 +550,33 @@ preemptively. This means context switches only occur at well-defined
 points: in this case, when :func:`remotecall_fetch` is called.
 
 
-Channels
---------
-Channels provide for a fast means of inter-task communication. A
-``Channel{T}(n::Int)`` is a shared queue of maximum length ``n``
-holding objects of type ``T``. Multiple readers can read off the channel
+RemoteChannels
+--------------
+A ``RemoteChannel`` is an object that implements flexible inter-task
+communication.
+Multiple readers can read off the channel
 via ``fetch`` and ``take!``. Multiple writers can add to the channel via
 ``put!``. ``isready`` tests for the presence of any object in
 the channel, while ``wait`` waits for an object to become available.
 ``close`` closes a Channel. On a closed channel, ``put!`` will fail,
 while ``take!`` and ``fetch`` successfully return any existing values
 till it is emptied.
+These basic commands are demonstrated below::
 
-A Channel can be used as an iterable object in a ``for`` loop, in which
-case the loop runs as long as the channel has data or is open. The loop
-variable takes on all values added to the channel. An empty, closed channel
-causes the ``for`` loop to terminate.
+    addprocs(3)
+    rr = RemoteChannel(2) # add channel to process 2
 
+    isready(rr) # returns false, channel is empty
 
-Remote references and AbstractChannels
---------------------------------------
+    put!(rr,myid()) # add pid of the process implementing put! command
+    isready(rr) # returns true, now that data has been added
+    fetch(rr) # returns 1, because put! was called from process 1
+    take!(rr) # returns 1, clears data from channel
 
-Remote references always refer to an implementation of an ``AbstractChannel``
+    isready(rr) # returns false, channel is empty again
 
-A concrete implementation of an ``AbstractChannel`` (like ``Channel``), is required
-to implement ``put!``\ , ``take!``\ , ``fetch``\ , ``isready`` and ``wait``\ . The remote object
-referred to by a ``Future`` is stored in a ``Channel{Any}(1)``\ , i.e., a channel of size 1
-capable of holding objects of ``Any`` type.
-
-``RemoteChannel``\ , which is rewritable, can point to any type and size of channels, or any other
-implementation of an ``AbstractChannel``\ .
+    @spawnat 3 put!(rr,myid())
+    take!(rr) # returns 3, because put! was called from process 3
 
 The constructor ``RemoteChannel(f::Function, pid)`` allows us to construct references to channels holding
 more than one value of a specific type. ``f()`` is a function executed on ``pid`` and it must return
@@ -492,7 +588,7 @@ and size 10. The channel exists on worker ``pid``\ .
 Methods ``put!``\ , ``take!``\ , ``fetch``\ , ``isready`` and ``wait`` on a ``RemoteChannel`` are proxied onto
 the backing store on the remote process.
 
-``RemoteChannel`` can thus be used to refer to user implemented ``AbstractChannel`` objects. A simple
+``RemoteChannel`` can be used to refer to user implemented ``AbstractChannel`` objects. A simple
 example of this is provided in ``examples/dictchannel.jl`` which uses a dictionary as its remote store.
 
 
@@ -529,18 +625,24 @@ a good practice to explicitly call ``finalize`` on local instances of a ``Remote
 is not required on fetched ``Future``\ s. Explicitly calling ``finalize`` results in an immediate message sent to
 the remote node to go ahead and remove its reference to the value.
 
+.. _man-shared-arrays:
 
 Shared Arrays
 -------------
 
-Shared Arrays use system shared memory to map the same array across
-many processes.  While there are some similarities to a `DArray`_,
-the behavior of a :class:`SharedArray` is quite different. In a `DArray`_,
-each process has local access to just a chunk of the data, and no two
-processes share the same chunk; in contrast, in a :class:`SharedArray` each
-"participating" process has access to the entire array.  A
-:class:`SharedArray` is a good choice when you want to have a large amount
+A :class:`SharedArray` places a single instance of an array in system shared
+memory so that it can be immediately accessed and altered by many or all
+processes. In contrast, a standard :class:`Array` can only be accessed and
+altered by process that created it. The `DistributedArrays`_ package provides
+a third type of array where each process has local access to just a chunk of
+the data, and no two processes share the same chunk.
+
+A :class:`SharedArray` is a good choice when you want to have a large amount
 of data jointly accessible to two or more processes on the same machine.
+`DistributedArrays`_ are useful when the entire array does not fit into memory
+on a single node on a cluster, or when you want to process data on more cores
+than are available on one node. Communication overhead usually dictates whether
+`DistributedArrays`_ are appropriate for a problem.
 
 :class:`SharedArray` indexing (assignment and accessing values) works just
 as with regular arrays, and is efficient because the underlying memory
@@ -919,6 +1021,8 @@ implementation simply executes an ``exit()`` call on the specified remote worker
 ``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
 
 
+.. _man-net-topology:
+
 Specifying network topology (Experimental)
 -------------------------------------------
 
@@ -940,4 +1044,4 @@ functionality and interface should be considered experimental in nature and may 
 
 .. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.
 
-.. _DArray: https://github.com/JuliaParallel/DistributedArrays.jl
+.. _DistributedArrays: https://github.com/JuliaParallel/DistributedArrays.jl
