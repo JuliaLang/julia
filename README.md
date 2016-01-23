@@ -408,6 +408,7 @@ The following distributions include julia, but the versions may be out of date d
 * Ubuntu
   * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
+* [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 
 <a name="Editor-Terminal-Setup"/>
