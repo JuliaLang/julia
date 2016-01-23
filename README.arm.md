@@ -1,3 +1,8 @@
+# Julia binaries for ARM
+
+[Nightly builds](https://status.julialang.org/download/linux-arm) are
+available for ARM.
+
 # Building Julia on ARM
 
 Julia has been compiled on several ARMv7 / Cortex A15 Samsung
@@ -9,8 +14,9 @@ Julia on ARM can be built by simply typing `make`, which will download all
 the relevant libraries. This is the *recommended* way, and it will take a
 few hours.
 
-If you get SIGILL during sysimg.o creation, it is likely that your cpu does not support VFP.
-File an issue on the Julia issue tracker with the contents of /proc/cpuinfo.
+If you get SIGILL during sysimg.o creation, it is likely that your cpu
+does not support VFP.  File an issue on the Julia issue tracker with
+the contents of /proc/cpuinfo.
 
 This is the list of known issues on ARM:
  [https://github.com/JuliaLang/julia/labels/arm](https://github.com/JuliaLang/julia/labels/arm)
