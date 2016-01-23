@@ -1708,7 +1708,10 @@ $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) xfz $<
-	cd $(dir $<)/libunwind-$(UNWIND_VER) && patch -p1 < $(SRCDIR)/libunwind.patch
+	cd $(dir $<)/libunwind-$(UNWIND_VER) && \
+	patch -p1 < $(SRCDIR)/libunwind.patch && \
+	patch -p1 < $(SRCDIR)/libunwind-001-invalid-dwarf-opcodes-can-cause-references-beyond.patch && \
+	patch -p1 < $(SRCDIR)/libunwind-aarch64.patch
 	touch -c $@
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure
 	mkdir -p $(dir $@)
