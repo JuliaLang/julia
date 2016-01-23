@@ -19,6 +19,9 @@ Language changes
 
   * Relational symbols are now allowed as infix operators ([#8036]).
 
+  * A warning is always given when a method is overwritten (previously, this was done only when the new
+    and old definitions were in separate modules) ([#14759]).
+
 Command-line option changes
 ---------------------------
 
@@ -1764,3 +1767,4 @@ Too numerous to mention.
 [#14243]: https://github.com/JuliaLang/julia/issues/14243
 [#14413]: https://github.com/JuliaLang/julia/issues/14413
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
+[#14759]: https://github.com/JuliaLang/julia/issues/14759
