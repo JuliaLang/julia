@@ -3673,3 +3673,8 @@ f6846() = (please6846; 2)
 
 # issue #14758
 @test isa(eval(:(f14758(; $([]...)) = ())), Function)
+
+# issue #14767
+@inline f14767(x) = x ? A14767 : ()
+const A14767 = f14767(false)
+@test A14767 === ()
