@@ -388,7 +388,7 @@ static Type *staticeval_bitstype(jl_value_t *bt)
 }
 
 // figure out how many bits a bitstype has at compile time
-int get_bitstype_nbits(jl_value_t *bt)
+static int get_bitstype_nbits(jl_value_t *bt)
 {
     assert(jl_is_bitstype(bt));
     if (bt == (jl_value_t*)jl_bool_type)

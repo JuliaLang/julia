@@ -86,8 +86,8 @@ JL_DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t *req, int status)
 {
     /*
      * This happens if the remote machine closes the connecition while we're
-     * in the shutdown request (in that case we call uv_close, thus cancelling this)
-     * request.
+     * in the shutdown request (in that case we call uv_close, thus cancelling
+     * this request).
      */
     if (status != UV__ECANCELED && !uv_is_closing((uv_handle_t*)req->handle)) {
         uv_close((uv_handle_t*)req->handle, &jl_uv_closeHandle);

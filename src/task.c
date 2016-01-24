@@ -174,7 +174,7 @@ static void NOINLINE save_stack(jl_task_t *t)
     jl_gc_wb_back(t);
 }
 
-void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+static void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
     char *_x = (char*)jl_stackbase - t->ssize;
     if (!p) {
@@ -268,8 +268,9 @@ void NOINLINE jl_set_base_ctx(char *__stk)
 #endif
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
-{ // keep this function small, since we want to keep the stack frame
-  // leading up to this also quite small
+{
+    // keep this function small, since we want to keep the stack frame
+    // leading up to this also quite small
     _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;

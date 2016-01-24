@@ -1955,12 +1955,12 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf,
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_methlist_t *m = mt->defs;
     size_t typelen = jl_nparams(types);
-    jl_value_t *env = (jl_value_t*)jl_false;
 
     while (m != (void*)jl_nothing) {
         if (m->tvars!=jl_emptysvec) {
-            env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
-            if (env != (jl_value_t*)jl_false) break;
+            if (jl_type_match((jl_value_t*)types,
+                              (jl_value_t*)m->sig) != (jl_value_t*)jl_false)
+                break;
         }
         else if (jl_tuple_subtype(jl_svec_data(types->parameters), typelen, m->sig, 0)) {
             break;
