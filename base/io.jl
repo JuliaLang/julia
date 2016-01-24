@@ -26,13 +26,39 @@ function eof end
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
+"""
+    unsafe_write(io, ref, nbytes)
+
+Copy nbytes from ref (converted to a pointer) into the IO stream object.
+
+It is recommended that IO subtypes override the exact method signature below
+to provide more efficient implementations:
+`unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)`
+"""
 function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
     local written::Int = 0
-    for i=1:n
+    for i = 1:n
         written += write(s, unsafe_load(p, i))
     end
     return written
 end
+
+"""
+    unsafe_read(io, ref, nbytes)
+
+Copy nbytes from the IO stream object into ref (converted to a pointer).
+
+It is recommended that IO subtypes override the exact method signature below
+to provide more efficient implementations:
+`unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)`
+"""
+function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
+    for i = 1:n
+        unsafe_store!(p, read(s, UInt8)::UInt8, i)
+    end
+    nothing
+end
+
 
 # Generic wrappers around other IO objects
 abstract AbstractPipe <: IO
@@ -45,11 +71,9 @@ buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args..
 flush(io::AbstractPipe) = flush(pipe_writer(io))
 
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
-read!(io::AbstractPipe, bytes::Vector{UInt8}) = read!(pipe_reader(io), bytes)
-read{T<:AbstractPipe}(io::T, args...) = read(pipe_reader(io), args...)
-read!{T<:AbstractPipe}(io::T, args...) = read!(pipe_reader(io), args...)
-readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -107,11 +131,11 @@ function write(io::IO, xs...)
     return written
 end
 
-unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n)
+@noinline unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write(s::IO, x::Ref) = unsafe_write(s, x, sizeof(eltype(x)))
-
-function write(s::IO, x::Union{Int8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
+write{T}(s::IO, x::Ref{T}) = unsafe_write(s, x, Core.sizeof(T))
+write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
+function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
     return write(s, Ref(x))
 end
 
@@ -126,16 +150,20 @@ function write(s::IO, a::AbstractArray)
     return nb
 end
 
-function write{T}(s::IO, a::Array{T})
+@noinline function write(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    return unsafe_write(s, pointer(a), sizeof(a))
+end
+
+@noinline function write{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
         return unsafe_write(s, pointer(a), sizeof(a))
+    else
+        nb = 0
+        for i in eachindex(a)
+            nb += write(s, a[i])
+        end
+        return nb
     end
-
-    nb = 0
-    for x in a
-        nb += write(s, x)
-    end
-    return nb
 end
 
 
@@ -171,23 +199,17 @@ function write(to::IO, from::IO)
     end
 end
 
+@noinline unsafe_read{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+read{T}(s::IO, x::Ref{T}) = (unsafe_read(s, x, Core.sizeof(T)); x)
 
-read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
-
-function read{T <: Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}}(s::IO, ::Type{T})
-    x = zero(T)
-    for n = 1:sizeof(x)
-        x |= (convert(T,read(s,UInt8))<<((n-1)<<3))
-    end
-    return x
+read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
+function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    return read(s, Ref{T}(0))[]::T
 end
 
 read(s::IO, ::Type{Bool})    = (read(s,UInt8)!=0)
-read(s::IO, ::Type{Float16}) = box(Float16,unbox(Int16,read(s,Int16)))
-read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
-read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
-
-read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s,UInt))
+read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s, UInt))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
@@ -195,17 +217,14 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
-function read!(s::IO, a::Vector{UInt8})
-    for i in 1:length(a)
-        a[i] = read(s, UInt8)
-    end
+@noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    unsafe_read(s, pointer(a), sizeof(a))
     return a
 end
 
-function read!{T}(s::IO, a::Array{T})
+@noinline function read!{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
-        nb::Int = length(a) * sizeof(T)
-        read!(s, reinterpret(UInt8, a, (nb,)))
+        unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)
             a[i] = read(s, T)
@@ -324,7 +343,7 @@ function read(s::IO, nb=typemax(Int))
     # instead of taking of risk of over-allocating
     b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
-    resize!(b, nr)
+    return resize!(b, nr)
 end
 
 function readstring(s::IO)

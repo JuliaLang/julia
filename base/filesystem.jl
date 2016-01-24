@@ -144,18 +144,13 @@ function read(f::File, ::Type{UInt8})
     return ret % UInt8
 end
 
-function read!(f::File, a::Vector{UInt8}, nel=length(a))
+function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
-    if nel < 0 || nel > length(a)
-        throw(BoundsError())
-    end
     ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
-                f.handle, a, nel)
-    if ret < nel
-        throw(EOFError())
-    end
+                f.handle, p, nel)
     uv_error("read",ret)
-    return a
+    ret == nel || throw(EOFError())
+    nothing
 end
 
 nb_available(f::File) = filesize(f) - position(f)
