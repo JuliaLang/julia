@@ -513,10 +513,10 @@ JITEventListener* CreateJuliaJITEventListener()
 }
 
 // *name and *filename are either NULL or malloc'd pointers
-void lookup_pointer(DIContext *context, char **name, size_t *line,
-                    char **filename, size_t *inlinedat_line,
-                    char **inlinedat_file, size_t pointer,
-                    int demangle, int *fromC)
+static void lookup_pointer(DIContext *context, char **name, size_t *line,
+                           char **filename, size_t *inlinedat_line,
+                           char **inlinedat_file, size_t pointer,
+                           int demangle, int *fromC)
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -597,7 +597,7 @@ typedef std::map<uint64_t, objfileentry_t> obfiletype;
 static obfiletype objfilemap;
 
 #ifdef _OS_DARWIN_
-bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
+static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 {
 
 # ifdef LLVM37
@@ -637,9 +637,10 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 extern "C" uint64_t jl_sysimage_base;
 
 // *name and *filename should be either NULL or malloc'd pointer
-void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
-                             char** inlinedat_file, size_t *inlinedat_line,
-                             size_t pointer, int *fromC, int skipC, int skipInline)
+static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
+                                    char** inlinedat_file,
+                                    size_t *inlinedat_line, size_t pointer,
+                                    int *fromC, int skipC, int skipInline)
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.

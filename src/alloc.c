@@ -481,7 +481,10 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     return _jl_symbol(str, len);
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void) { return symtab; }
+JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
+{
+    return symtab;
+}
 
 static uint32_t gs_ctr = 0;  // TODO: per-thread
 uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
@@ -806,12 +809,12 @@ UIBOX_FUNC(uint64, uint64_t, 2)
 #endif
 
 static jl_value_t *boxed_int8_cache[256];
-jl_value_t *jl_box_int8(int8_t x)
+JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x)
 {
     return boxed_int8_cache[(uint8_t)x];
 }
 static jl_value_t *boxed_uint8_cache[256];
-jl_value_t *jl_box_uint8(uint8_t x)
+JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 {
     return boxed_uint8_cache[x];
 }
@@ -865,7 +868,7 @@ void jl_mark_box_caches(void)
     }
 }
 
-jl_value_t *jl_box_bool(int8_t x)
+JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 {
     if (x)
         return jl_true;

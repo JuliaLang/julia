@@ -1772,7 +1772,7 @@ void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
-void jl_save_system_image_to_stream(ios_t *f)
+static void jl_save_system_image_to_stream(ios_t *f)
 {
     jl_gc_collect(1); // full
     jl_gc_collect(0); // incremental (sweep finalizers)
@@ -1834,7 +1834,7 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
 
 JL_DLLEXPORT ios_t *jl_create_system_image(void)
 {
-    ios_t *f; f = (ios_t*)malloc(sizeof(ios_t));
+    ios_t *f = (ios_t*)malloc(sizeof(ios_t));
     ios_mem(f, 1000000);
     jl_save_system_image_to_stream(f);
     return f;
@@ -1871,7 +1871,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
         jl_options.cpu_target = (const char *)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
 }
 
-void jl_restore_system_image_from_stream(ios_t *f)
+static void jl_restore_system_image_from_stream(ios_t *f)
 {
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC

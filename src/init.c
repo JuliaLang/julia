@@ -324,7 +324,7 @@ void *jl_winsock_handle;
 
 uv_loop_t *jl_io_loop;
 
-void *init_stdio_handle(uv_file fd,int readable)
+static void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
     uv_handle_type type = uv_guess_handle(fd);

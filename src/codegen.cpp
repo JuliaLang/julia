@@ -1402,26 +1402,6 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
 #endif
 }
 
-Function* CloneFunctionToModule(Function *F, Module *destModule)
-{
-    ValueToValueMapTy VMap;
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(),
-                                      destModule);
-    VMap[F] = NewF;
-
-    Function::arg_iterator DestI = NewF->arg_begin();
-    for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
-        DestI->setName(I->getName());    // Copy the name over...
-        VMap[&*I] = &*DestI++;        // Add mapping to VMap
-    }
-
-    SmallVector<ReturnInst*, 8> Returns;
-    llvm::CloneFunctionInto(NewF, F, VMap, true, Returns, "", NULL, NULL);
-    return NewF;
-}
-
 extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
 {
@@ -1568,7 +1548,7 @@ static void coverageVisitLine(std::string filename, int line)
 
 extern "C" int isabspath(const char *in);
 
-void write_log_data(logdata_t logData, const char *extension)
+static void write_log_data(logdata_t logData, const char *extension)
 {
     std::string base = std::string(jl_options.julia_home);
     base = base + "/../share/julia/base/";
