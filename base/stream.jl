@@ -894,12 +894,13 @@ function stop_reading(stream::LibuvStream)
     end
 end
 
-function readbytes!(s::LibuvStream, b::AbstractArray{UInt8}, nb=length(b))
-    wait_readnb(s, nb)
-    nr = nb_available(s)
-    resize!(b, nr) # shrink to just contain input data if was resized
-    read!(s.buffer, b)
-    return nr
+function read!(s::LibuvStream, b::Vector{UInt8})
+    nb = length(b)
+    r = readbytes!(s, b, nb)
+    if r < nb
+        throw(EOFError())
+    end
+    return b
 end
 
 function read(stream::LibuvStream)
@@ -907,19 +908,18 @@ function read(stream::LibuvStream)
     return takebuf_array(stream.buffer)
 end
 
-function read!(s::LibuvStream, a::Array{UInt8, 1})
-    nb = length(a)
+function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a))
     sbuf = s.buffer
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
 
     if nb_available(sbuf) >= nb
-        return read!(sbuf, a)
+        return readbytes!(sbuf, a, nb)
     end
 
     if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
         wait_readnb(s, nb)
-        read!(sbuf, a)
+        r = readbytes!(sbuf, a, nb)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
@@ -928,6 +928,7 @@ function read!(s::LibuvStream, a::Array{UInt8, 1})
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_readnb(s, nb)
+            r = nb_available(newbuf)
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -935,7 +936,7 @@ function read!(s::LibuvStream, a::Array{UInt8, 1})
             end
         end
     end
-    return a
+    return r
 end
 
 function read(this::LibuvStream, ::Type{UInt8})
