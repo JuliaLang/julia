@@ -203,7 +203,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
 #ifdef JULIA_ENABLE_THREADING
-    eh->gc_state = jl_get_ptls_states()->gc_state;
+    eh->gc_state = jl_gc_state();
     eh->locks_len = jl_current_task->locks.len;
 #endif
     jl_current_task->eh = eh;
