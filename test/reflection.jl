@@ -201,6 +201,21 @@ end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
 
+module TestingExported
+using Base.Test
+import Base.isexported
+global this_is_not_defined
+export this_is_not_defined
+@test_throws ErrorException which(:this_is_not_defined)
+@test_throws ErrorException @which this_is_not_defined
+@test_throws ErrorException which(:this_is_not_exported)
+@test isexported(current_module(), :this_is_not_defined)
+@test !isexported(current_module(), :this_is_not_exported)
+const a_value = 1
+@test which(:a_value) == current_module()
+@test !isexported(current_module(), :a_value)
+end
+
 # issue #13264
 @test isa((@which vcat(1...)), Method)
 
@@ -218,4 +233,32 @@ let ex = :(a + b)
     @test string(ex) == "a + b"
     ex.typ = Integer
     @test string(ex) == "(a + b)::Integer"
+end
+
+type TLayout
+    x::Int8
+    y::Int16
+    z::Int32
+end
+tlayout = TLayout(5,7,11)
+@test fieldnames(tlayout) == fieldnames(TLayout) == [:x, :y, :z]
+@test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:nfields(TLayout)] ==
+    [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test_throws BoundsError fieldtype(TLayout, 0)
+@test_throws BoundsError fieldname(TLayout, 0)
+@test_throws BoundsError fieldoffset(TLayout, 0)
+@test_throws BoundsError fieldtype(TLayout, 4)
+@test_throws BoundsError fieldname(TLayout, 4)
+@test_throws BoundsError fieldoffset(TLayout, 4)
+
+import Base: isstructtype, type_alignment, return_types
+@test !isstructtype(Union{})
+@test !isstructtype(Union{Int,Float64})
+@test !isstructtype(Int)
+@test isstructtype(TLayout)
+@test type_alignment(UInt16) == 2
+@test type_alignment(TLayout) == 4
+let rts = return_types(TLayout)
+    @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
+    @test all(rts .== TLayout)
 end
