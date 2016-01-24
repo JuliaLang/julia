@@ -279,7 +279,8 @@ JL_DLLEXPORT const char* jl_ver_string(void)
 }
 
 // return char* from ByteString field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld) {
+static const char *git_info_string(const char *fld)
+{
     static jl_value_t *GIT_VERSION_INFO = NULL;
     if (!GIT_VERSION_INFO)
         GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));

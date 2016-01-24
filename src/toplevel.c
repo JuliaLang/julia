@@ -71,7 +71,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 }
 
 // load time init procedure: in build mode, only record order
-void jl_module_load_time_initialize(jl_module_t *m)
+static void jl_module_load_time_initialize(jl_module_t *m)
 {
     int build_mode = jl_generating_output();
     if (build_mode) {

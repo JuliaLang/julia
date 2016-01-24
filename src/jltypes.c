@@ -283,7 +283,7 @@ static jl_svec_t *jl_compute_type_union(jl_value_t **types, size_t ntypes)
     return result;
 }
 
-jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
+static jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
 {
     if (n == 0) return (jl_value_t*)jl_bottom_type;
     size_t i;
@@ -1605,8 +1605,6 @@ static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
 {
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
-
-static int type_eqv_(jl_value_t *a, jl_value_t *b);
 
 static int type_eqv__(jl_value_t *a, jl_value_t *b, int distinguish_tctor)
 {
