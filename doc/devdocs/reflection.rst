@@ -74,8 +74,8 @@ The internal representation of a :obj:`DataType` is critically important when in
 C code and several functions are available to inspect these details.
 :func:`isbits(T::DataType) <isbits>` returns true if ``T`` is
 stored with C-compatible alignment.
-:func:`fieldoffsets(T::DataType) <fieldoffsets>` returns the (byte) offset for each
-field relative to the start of the type.
+:func:`fieldoffset(T::DataType, i::Integer) <fieldoffset>` returns the (byte) offset for
+field `i` relative to the start of the type.
 
 .. rubric:: Function methods
 
