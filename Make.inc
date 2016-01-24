@@ -394,8 +394,8 @@ CXX_BASE := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
-CC += -Qunused-arguments -fcolor-diagnostics
-CXX += -Qunused-arguments -fcolor-diagnostics
+CC += -Qunused-arguments
+CXX += -Qunused-arguments
 # http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
