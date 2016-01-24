@@ -655,7 +655,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
                     // Find name of declaration by searching for '@'
                     std::string::size_type atpos = declstr.find('@') + 1;
                     // Find end of declaration by searching for '('
-                    std::string::size_type bracepos = declstr.find('(');
+                    std::string::size_type bracepos = declstr.find('(', atpos);
                     // Declaration name is the string between @ and (
                     std::string declname = declstr.substr(atpos, bracepos - atpos);
 
