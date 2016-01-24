@@ -39,7 +39,7 @@ function copy(b::AbstractIOBuffer)
                     b.readable, b.writable, b.seekable, b.append, b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
-    ret
+    return ret
 end
 
 show(io::IO, b::AbstractIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
@@ -52,8 +52,17 @@ show(io::IO, b::AbstractIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "ptr=",      b.ptr, ", ",
                                       "mark=",     b.mark, ")")
 
-read!(from::AbstractIOBuffer, a::Vector{UInt8}) = read_sub(from, a, 1, length(a))
-read!(from::AbstractIOBuffer, a::Array) = read_sub(from, a, 1, length(a))
+function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    avail = nb_available(from)
+    adv = min(avail, nb)
+    unsafe_copy!(p, pointer(from.data, from.ptr), adv)
+    from.ptr += adv
+    if nb > avail
+        throw(EOFError())
+    end
+    nothing
+end
 
 function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
@@ -61,18 +70,8 @@ function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
         throw(BoundsError())
     end
     if isbits(T) && isa(a,Array)
-        nb = nel * sizeof(T)
-        avail = nb_available(from)
-        adv = min(avail, nb)
-        copy!(pointer_to_array(convert(Ptr{UInt8},pointer(a)), sizeof(a)), # reinterpret(UInt8,a) but without setting the shared data property on a
-              1 + (1 - offs) * sizeof(T),
-              from.data,
-              from.ptr,
-              adv)
-        from.ptr += adv
-        if nb > avail
-            throw(EOFError())
-        end
+        nb = UInt(nel * sizeof(T))
+        unsafe_read(from, pointer(a, offs), nb)
     else
         for i = offs:offs+nel-1
             a[i] = read(to, T)
@@ -82,9 +81,9 @@ function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
 end
 
 @inline function read(from::AbstractIOBuffer, ::Type{UInt8})
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     ptr = from.ptr
     size = from.size
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if ptr > size
         throw(EOFError())
     end
@@ -323,7 +322,8 @@ end
     return sizeof(UInt8)
 end
 
-function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b))
+readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb::Int)
     nr = min(nb, nb_available(io))
     if length(b) < nr
         resize!(b, nr)
