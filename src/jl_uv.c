@@ -340,10 +340,12 @@ JL_DLLEXPORT int jl_fs_read_byte(int handle)
     int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     switch (ret) {
-        case -1: return ret;
-        case  0: jl_eof_error();
-        case  1: return (int)c;
-        default: assert(0);
+    case -1: return ret;
+    case  0: jl_eof_error();
+    case  1: return (int)c;
+    default:
+        assert(0 && "jl_fs_read_byte: Invalid return value from uv_fs_read");
+        return -1;
     }
 }
 
