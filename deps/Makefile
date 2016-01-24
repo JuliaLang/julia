@@ -632,6 +632,9 @@ ifeq ($(ARCH),x86_64)
 endif # x86_64
 endif # WINNT
 
+else ifeq ($(LLVM_VER),3.7.1)
+	(cd llvm-$(LLVM_VER) && patch < ../llvm-3.7.1.patch && patch < ../llvm-3.7.1_2.patch)
+
 endif # LLVM_VER
 	touch -c $@
 # end target llvm-$(LLVM_VER)/configure
