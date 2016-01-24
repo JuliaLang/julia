@@ -1035,11 +1035,9 @@ sparse{Tv}(FC::FactorComponent{Tv,:LD}) = sparse(Sparse(Factor(FC)))
 
 # Calculate the offset into the stype field of the cholmod_sparse_struct and
 # change the value
-let offidx=findfirst(fieldnames(C_Sparse) .== :stype)
-
+let offset = fieldoffset(C_Sparse{Float64}, findfirst(fieldnames(C_Sparse) .== :stype))
     global change_stype!
     function change_stype!(A::Sparse, i::Integer)
-        offset = fieldoffsets(C_Sparse)[offidx]
         unsafe_store!(convert(Ptr{Cint}, A.p), i, div(offset, 4) + 1)
         return A
     end
