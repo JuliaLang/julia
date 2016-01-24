@@ -39,7 +39,8 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
-            write, read, read!, isopen, show,
+            write, read, readavailable, read!, isopen, show,
+            seek, seekend, skip, eof,
             check_open, _sizeof_uv_fs, uv_error, UVError
 
 include("path.jl")
@@ -158,26 +159,52 @@ function read!(f::File, a::Vector{UInt8}, nel=length(a))
     end
     ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
                 f.handle, a, nel)
+    if ret < nel
+        throw(EOFError())
+    end
     uv_error("read",ret)
     return a
 end
 
 nb_available(f::File) = filesize(f) - position(f)
 
+eof(f::File) = nb_available(f) == 0
+
 function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     nr = min(nb, nb_available(f))
     if length(b) < nr
         resize!(b, nr)
     end
-    read!(f, b, nr)
-    return nr
+    ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+                f.handle, b, nr)
+    uv_error("read",ret)
+    return ret
 end
 read(io::File) = read!(io, Array(UInt8, nb_available(io)))
+readavailable(io::File) = read(io)
 read(io::File, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)
 const SEEK_END = Int32(2)
+
+function seek(f::File, n::Integer)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, n, SEEK_SET)
+    systemerror("seek", ret == -1)
+    return f
+end
+
+function seekend(f::File)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, 0, SEEK_END)
+    systemerror("seekend", ret == -1)
+    return f
+end
+
+function skip(f::File, n::Integer)
+    ret = ccall(:jl_lseek, Int64, (Int32, Int64, Int32), f.handle, n, SEEK_CUR)
+    systemerror("skip", ret == -1)
+    return f
+end
 
 function position(f::File)
     check_open(f)
