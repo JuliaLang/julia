@@ -193,3 +193,17 @@ const (:) = Colon()
 # For passing constants through type inference
 immutable Val{T}
 end
+
+immutable Generator{F,I}
+    f::F
+    iter::I
+end
+
+start(g::Generator) = start(g.iter)
+done(g::Generator, s) = done(g.iter, s)
+function next(g::Generator, s)
+    v, s2 = next(g.iter, s)
+    g.f(v), s2
+end
+
+collect(g::Generator) = map(g.f, g.iter)

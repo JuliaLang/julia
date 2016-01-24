@@ -1397,22 +1397,23 @@
 (define (parse-comma-separated-assignments s)
   (parse-comma-separated s parse-eq*))
 
+(define (parse-iteration-spec s)
+  (let ((r (parse-eq* s)))
+    (cond ((and (pair? r) (eq? (car r) '=))  r)
+          ((eq? r ':)  r)
+          ((and (length= r 4) (eq? (car r) 'comparison)
+                (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
+           `(= ,(cadr r) ,(cadddr r)))
+          (else
+           (error "invalid iteration specification")))))
+
 ; as above, but allows both "i=r" and "i in r"
 (define (parse-comma-separated-iters s)
   (let loop ((ranges '()))
-    (let ((r (parse-eq* s)))
-      (let ((r (cond ((and (pair? r) (eq? (car r) '=))
-                      r)
-                     ((eq? r ':)
-                      r)
-                     ((and (length= r 4) (eq? (car r) 'comparison)
-                           (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
-                      `(= ,(cadr r) ,(cadddr r)))
-                     (else
-                      (error "invalid iteration specification")))))
-        (case (peek-token s)
-          ((#\,)  (take-token s) (loop (cons r ranges)))
-          (else   (reverse! (cons r ranges))))))))
+    (let ((r (parse-iteration-spec s)))
+      (case (peek-token s)
+        ((#\,)  (take-token s) (loop (cons r ranges)))
+        (else   (reverse! (cons r ranges)))))))
 
 (define (parse-space-separated-exprs s)
   (with-space-sensitive
@@ -1469,7 +1470,12 @@
                        (begin (take-token s) (loop (cons nxt lst))))
                       ((eqv? c #\;)          (loop (cons nxt lst)))
                       ((equal? c closer)     (loop (cons nxt lst)))
-                      ((eq? c 'for)          (take-token s) (parse-generator s t closer))
+                      ((eq? c 'for)
+                       (take-token s)
+                       (let ((gen (parse-generator s nxt #f)))
+                         (if (eqv? (require-token s) #\,)
+                             (take-token s))
+                         (loop (cons gen lst))))
                       ;; newline character isn't detectable here
                       #;((eqv? c #\newline)
                        (error "unexpected line break in argument list"))
@@ -1514,7 +1520,7 @@
 (define (parse-comprehension s first closer)
   (let ((r (parse-comma-separated-iters s)))
     (if (not (eqv? (require-token s) closer))
-        (error (string "expected " closer))
+        (error (string "expected \"" closer "\""))
         (take-token s))
     `(comprehension ,first ,@r)))
 
@@ -1524,12 +1530,11 @@
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
 
-(define (parse-generator s first closer)
-  (let ((r (parse-comma-separated-iters s)))
-    (if (not (eqv? (require-token s) closer))
-	(error (string "expected " closer))
-        (take-token s))
-    `(macrocall @generator ,first ,@r)))
+(define (parse-generator s first allow-comma)
+  (let ((r (if allow-comma
+               (parse-comma-separated-iters s)
+               (list (parse-iteration-spec s)))))
+    `(generator ,first ,@r)))
 
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
@@ -1959,6 +1964,13 @@
                           `(tuple ,ex)
                           ;; value in parentheses (x)
                           ex))
+                     ((eq? t 'for)
+                      (take-token s)
+                      (let ((gen (parse-generator s ex #t)))
+                        (if (eqv? (require-token s) #\) )
+                            (take-token s)
+                            (error "expected \")\""))
+                        gen))
                      (else
                       ;; tuple (x,) (x,y) (x...) etc.
                       (if (eqv? t #\, )

@@ -219,9 +219,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
     }
-    else if (ex->head == static_typeof_sym) {
-        return (jl_value_t*)jl_any_type;
-    }
     else if (ex->head == method_sym) {
         jl_sym_t *fname = (jl_sym_t*)args[0];
         assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
