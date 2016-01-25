@@ -1948,6 +1948,7 @@ static int push_root(jl_value_t *v, int d, int bits)
     }
     else {
         jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
+        gc_debug_print_status();
         jl_(vt);
         abort();
     }
