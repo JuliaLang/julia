@@ -59,45 +59,41 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
 
 static size_t isLegalHA(jl_datatype_t *dt, Type *&base);
 
-// Check whether a type contained by a candidate homogeneous aggregate is valid
-// fundamental type.
-//
+// Check whether a type contained by a candidate homogeneous aggregate is valid.
 // Returns the corresponding LLVM type.
 static Type *isLegalHAType(jl_datatype_t *dt)
 {
     // single- or double-precision floating-point type
-    if (Type* fp = get_llvm_fptype(dt))
+    Type* fp = get_llvm_fptype(dt);
+    if (fp)
         return fp;
 
     // NOT SUPPORTED: 64- or 128-bit containerized vectors
 
+    // recursive application (composite types can contain other composites)
+    Type *base = NULL;
+    if (isLegalHA(dt, base))
+        return base;
+
     return NULL;
 }
 
-// Check whether a type is a legal homogeneous aggregate.
-// Returns the number of fundamental members.
-//
-// Legality of the HA is determined by a nonzero return value.
-// In case of a non-legal HA, the value of 'base' is undefined.
+// Check whether a type is a legal homogeneous aggregate. Returns the number of
+// members.
 static size_t isLegalHA(jl_datatype_t *dt, Type *&base) {
     // Homogeneous aggregates are only used for VFP registers,
     // so use that definition of legality (section 6.1.2.1)
 
     if (jl_is_structtype(dt)) {
+        // ... with one to four Elements.
+        size_t members = jl_datatype_nfields(dt);
+        if (members < 1 || members > 4)
+            return 0;
+
         base = NULL;
-        size_t total_members = 0;
-
-        size_t parent_members = jl_datatype_nfields(dt);
-        for (size_t i = 0; i < parent_members; ++i) {
-            jl_datatype_t *fdt = (jl_datatype_t*)jl_field_type(dt,i);
-
-            Type *T = isLegalHAType(fdt);
-            if (T)
-                total_members++;
-            else if (size_t field_members = isLegalHA(fdt, T))
-                // recursive application (expanding nested composite types)
-                total_members += field_members;
-            else
+        for (size_t i = 0; i < members; ++i) {
+            Type *T = isLegalHAType((jl_datatype_t*)jl_field_type(dt,i));
+            if (!T)
                 return 0;
 
             if (!base)
@@ -105,12 +101,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base) {
             else if (base != T)
                 return 0;
         }
-
-        // ... with one to four Elements.
-        if (total_members < 1 || total_members > 4)
-            return 0;
-
-        return total_members;
+        return members;
     }
 
     return 0;
