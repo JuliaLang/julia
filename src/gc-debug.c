@@ -264,6 +264,7 @@ static void gc_verify(void)
     }
     restore();
     gc_verify_track();
+    gc_debug_print_status();
     abort();
 }
 
