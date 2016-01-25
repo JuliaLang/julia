@@ -15,19 +15,19 @@ const MAXGAM = 171.624376956302725
 const ASYMP_FACTOR = 1e6
 
 fastabs(x::Real) = abs(x)
-fastabs(x::Complex) = abs(real(x)) + abs(imag(x))
+fastabs(x::Complex) = abs(real(x))
 
 beta(a::Number, b::Number) = beta(promote(float(a), float(b))...)
 
 function beta{T<:Number}(a::T, b::T)
     real(a) <= 0.0 && isinteger(a) && return beta_negint(a, b)
     real(b) <= 0.0 && isinteger(b) && return beta_negint(b, a)
-    #
+
     if fastabs(a) < fastabs(b)
         a, b = b, a
     end
-    #
-    if fastabs(a) > ASYMP_FACTOR * fastabs(b) && a > ASYMP_FACTOR
+
+    if fastabs(a) > ASYMP_FACTOR * fastabs(b) && real(a) > ASYMP_FACTOR
         # Avoid loss of precision in lgamma(a + b) - lgamma(a)
         y, s = lbeta_asymp(a, b)
         return s * exp(y)
@@ -35,10 +35,10 @@ function beta{T<:Number}(a::T, b::T)
 
     y = a + b
     if fastabs(y) > MAXGAM || fastabs(a) > MAXGAM || fastabs(b) > MAXGAM
-    	y, s = lgamma_r(y)
-    	yb, sb = lgamma_r(b)
+    	y, s::T = lgamma_r(y)
+    	yb, sb::T = lgamma_r(b)
         y = yb - y
-    	ya, sa = lgamma_r(a)
+    	ya, sa::T = lgamma_r(a)
         y = ya + y
     	# if (y > MAXLOG) {
     	#     goto overflow;
@@ -65,33 +65,34 @@ end
 lbeta(a::Number, b::Number) = lbeta(promote(float(a), float(b))...)
 
 function lbeta{T<:Number}(a::T, b::T)
-    real(a) <= 0.0 && isinteger(a) && return lbeta_negint(a, b)
-    real(b) <= 0.0 && isinteger(b) && return lbeta_negint(b, a)
+    # real(a) <= 0.0 && isinteger(a) && return lbeta_negint(a, b)
+    # real(b) <= 0.0 && isinteger(b) && return lbeta_negint(b, a)
 
     if fastabs(a) < fastabs(b)
         a, b = b, a
     end
 
-    if fastabs(a) > ASYMP_FACTOR * fastabs(b) && a > ASYMP_FACTOR
+    if fastabs(a) > ASYMP_FACTOR * fastabs(b) && real(a) > ASYMP_FACTOR
         # Avoid loss of precision in lgamma(a + b) - lgamma(a)
-        y, s = lbeta_asymp(a, b)
+        y,  = lbeta_asymp(a, b)
         return y
     end
 
     y = a + b
     if fastabs(y) > MAXGAM || fastabs(a) > MAXGAM || fastabs(b) > MAXGAM
-    	y, s = lgamma_r(y)
-    	yb, sb = lgamma_r(b)
+    	y, = lgamma_r(y)
+    	yb, = lgamma_r(b)
         y = yb - y
-    	ya, sa = lgamma_r(a)
+    	ya, = lgamma_r(a)
         y = ya + y
-    	return y
+    	return y #don't need the s' since the are 1 for complex (add test for this)
+                 #and for real we are computing log|B(a,b)|
     end
 
     y = gamma(y)
     a = gamma(a)
     b = gamma(b)
-    y == 0.0 && return inf(T)
+    y == 0.0 && return convert(T, Inf)
 
     if fastabs(fastabs(a) - fastabs(y)) > fastabs(fastabs(b) - fastabs(y))
         y = b / y
@@ -101,8 +102,11 @@ function lbeta{T<:Number}(a::T, b::T)
         y *= b
     end
 
-    return real(y) < 0 ? log(-y) : log(y)
+    return _log(y)
 end
+
+_log(y::Complex) = log(y)
+_log(y::Real) = log(abs(y))
 
 # assuming isinteger(x) and x < 0.
 function beta_negint{T}(x::T, w::T)
@@ -118,7 +122,6 @@ end
 function lbeta_negint{T}(x::T, w::T)
     if isinteger(w) && 1 - x - w > 0
         s = ifelse(Int(w) % 2 == 0 , T(1), T(-1))
-        return s
         return s * lbeta(1 - x - w, w)
     else
         return convert(T, Inf)
