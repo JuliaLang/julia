@@ -51,7 +51,18 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
+"""
+    fieldname(x::DataType, i)
+
+Get the name of field `i` of a `DataType`.
+"""
+fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+
+"""
+    fieldnames(x::DataType)
+
+Get an array of the fields of a `DataType`.
+"""
 function fieldnames(v)
     t = typeof(v)
     if !isa(t,DataType)
@@ -59,8 +70,7 @@ function fieldnames(v)
     end
     return fieldnames(t)
 end
-
-fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 
 isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
@@ -82,14 +92,41 @@ isleaftype(t::ANY) = (@_pure_meta; ccall(:jl_is_leaf_type, Int32, (Any,), t) != 
 typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
 typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
 
-function fieldoffsets(x::DataType)
-    offsets = Array(Int, nfields(x))
-    ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
-    offsets
-end
+"""
+    fieldoffset(type, i)
 
-type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment,Csize_t,(Any,),x))
-field_offset(x::DataType,idx) = (@_pure_meta; ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx))
+The byte offset of field `i` of a type relative to the data start. For example, we could
+use it in the following manner to summarize information about a struct type:
+
+```jldoctest
+julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
+
+julia> structinfo(StatStruct)
+12-element Array{Tuple{Int64,Symbol,DataType},1}:
+ (0,:device,UInt64)
+ (8,:inode,UInt64)
+ (16,:mode,UInt64)
+ (24,:nlink,Int64)
+ (32,:uid,UInt64)
+ (40,:gid,UInt64)
+ (48,:rdev,UInt64)
+ (56,:size,Int64)
+ (64,:blksize,Int64)
+ (72,:blocks,Int64)
+ (80,:mtime,Float64)
+ (88,:ctime,Float64)
+```
+"""
+fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+
+"""
+    fieldtype(T, name::Symbol | index::Int)
+
+Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
+"""
+fieldtype
+
+type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
 # return all instances, for types that can be enumerated
 function instances end
@@ -266,10 +303,9 @@ function code_typed(f::Function, types::ANY=Tuple; optimize=true)
                                                          optimize=false)
         end
         if !isa(tree, Expr)
-            push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
-        else
-            push!(asts, tree)
+            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)
         end
+        push!(asts, tree)
     end
     asts
 end

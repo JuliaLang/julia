@@ -967,3 +967,14 @@ end
 #https://github.com/JuliaLang/julia/issues/14608
 @deprecate readall readstring
 @deprecate readbytes read
+
+@deprecate field_offset(x::DataType, idx) fieldoffset(x, idx+1)
+@noinline function fieldoffsets(x::DataType)
+    depwarn("fieldoffsets is deprecated. use `map(idx->fieldoffset(x, idx), 1:nfields(x))` instead", :fieldoffsets)
+    nf = nfields(x)
+    offsets = Array(Int, nf)
+    for i = 1:nf
+        offsets[i] = fieldoffset(x, i)
+    end
+    return offsets
+end
