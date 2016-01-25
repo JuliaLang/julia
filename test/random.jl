@@ -315,7 +315,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
-    for T in [Base.BitInteger.types..., Bool, Char, Float16, Float32, Float64]
+    for T in [Base.BitInteger_types..., Bool, Char, Float16, Float32, Float64]
         a0 = rand(rng..., T)       ::T
         a1 = rand(rng..., T, 5)    ::Vector{T}
         a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
