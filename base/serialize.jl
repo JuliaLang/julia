@@ -21,7 +21,7 @@ const TAGS = Any[
     LineNumberNode, SymbolNode, LabelNode, GotoNode,
     QuoteNode, TopNode, TypeVar, Core.Box, LambdaInfo,
     Module, #=UndefRefTag=#Symbol, Task, String,
-    UTF16String, Float16,
+    Float16,
     SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
 
     (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,

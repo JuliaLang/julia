@@ -15,15 +15,11 @@ end
 
 containsnul(s::AbstractString) = '\0' in s
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
-containsnul(s::Union{UTF16String}) = findfirst(s.data, 0) != length(s.data)
 
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
-pointer(x::Union{String,UTF16String}) = pointer(x.data)
+pointer(x::String) = pointer(x.data)
 pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
-pointer(x::Union{UTF16String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 
 # pointer conversions of SubString of ASCII/UTF8/UTF16/UTF32:
 pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
-pointer(x::SubString{UTF16String}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.string.data))
-pointer(x::SubString{UTF16String}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.string.data))

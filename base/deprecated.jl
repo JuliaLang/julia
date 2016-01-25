@@ -490,10 +490,8 @@ export float32_isvalid, float64_isvalid
 # 11241
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
 @deprecate is_valid_utf8(str::String)   isvalid(str)
-@deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
 @deprecate is_valid_utf8(str)  isvalid(String, str)
-@deprecate is_valid_utf16(str) isvalid(UTF16String, str)
 
 # 12087
 @deprecate call(P::Base.DFT.ScaledPlan, A) P * A
