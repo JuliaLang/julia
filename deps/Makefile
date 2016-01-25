@@ -1,5 +1,6 @@
 ## high-level setup ##
 JULIAHOME = $(abspath ..)
+BUILDDIR = $(JULIAHOME)/deps
 include Versions.make
 include $(JULIAHOME)/Make.inc
 
