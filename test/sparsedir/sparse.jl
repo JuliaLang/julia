@@ -1177,6 +1177,11 @@ let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A*A.'
     @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test factorize(triu(A)) == triu(A)
+    @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test factorize(tril(A)) == tril(A)
+    @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+    @test factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
