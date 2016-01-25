@@ -1048,7 +1048,8 @@ export
 
 # types
     convert,
-    fieldoffsets,
+    fieldoffset,
+    fieldname,
     fieldnames,
     isleaftype,
     oftype,

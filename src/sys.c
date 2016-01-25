@@ -567,14 +567,6 @@ JL_DLLEXPORT jl_value_t *jl_is_char_signed(void)
     return ((char)255) < 0 ? jl_true : jl_false;
 }
 
-JL_DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
-{
-    size_t i;
-    for(i=0; i < jl_datatype_nfields(dt); i++) {
-        offsets[i] = jl_field_offset(dt, i);
-    }
-}
-
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
@@ -624,9 +616,9 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    if (field > jl_datatype_nfields(ty))
-        jl_error("This type does not have that many fields");
-    return jl_field_offset(ty, field);
+    if (field > jl_datatype_nfields(ty) || field < 1)
+        jl_bounds_error_int((jl_value_t*)ty, field);
+    return jl_field_offset(ty, field - 1);
 }
 
 JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
