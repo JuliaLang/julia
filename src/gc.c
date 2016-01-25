@@ -358,7 +358,7 @@ static void jl_wait_for_gc(void)
 
 void jl_gc_signal_wait(void)
 {
-    int8_t state = jl_get_ptls_states()->gc_state;
+    int8_t state = jl_gc_state();
     jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
     jl_wait_for_gc();
     jl_get_ptls_states()->gc_state = state;
@@ -2413,7 +2413,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     gc_debug_print();
     JL_SIGATOMIC_BEGIN();
 
-    int8_t old_state = jl_get_ptls_states()->gc_state;
+    int8_t old_state = jl_gc_state();
     jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
     // In case multiple threads enter the GC at the same time, only allow
     // one of them to actually run the collection. We can't just let the
