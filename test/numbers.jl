@@ -1125,7 +1125,7 @@ end
 @test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
-for T in Base.BitSigned.types
+for T in Base.BitSigned_types
     @test abs(typemin(T)) == -typemin(T)
     #for x in (typemin(T),convert(T,-1),zero(T),one(T),typemax(T))
     #    @test signed(unsigned(x)) == x
@@ -1137,8 +1137,8 @@ end
 #    @test unsigned(signed(x)) == x
 #end
 
-for S = Base.BitSigned64.types,
-    U = Base.BitUnsigned64.types
+for S = Base.BitSigned64_types,
+    U = Base.BitUnsigned64_types
     @test !(-one(S) == typemax(U))
     @test -one(S) != typemax(U)
     @test -one(S) < typemax(U)
@@ -1146,7 +1146,7 @@ for S = Base.BitSigned64.types,
 end
 
 # check type of constructed rationals
-int_types = Base.BitInteger64.types
+int_types = Base.BitInteger64_types
 for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
@@ -1156,8 +1156,8 @@ end
 @test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
-real_types = [Base.BitInteger64.types...,
-              [Rational{T} for T in Base.BitInteger64.types]...,
+real_types = [Base.BitInteger64_types...,
+              [Rational{T} for T in Base.BitInteger64_types]...,
               Float32, Float64]
 for A = real_types, B = real_types
     T = promote_type(A,B)

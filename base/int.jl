@@ -7,12 +7,19 @@
 # they are also used elsewhere where Int128/UInt128 support is separated out,
 # such as in hashing2.jl
 
-typealias BitSigned64   Union{Int8,Int16,Int32,Int64}
-typealias BitUnsigned64 Union{UInt8,UInt16,UInt32,UInt64}
-typealias BitInteger64  Union{BitSigned64,BitUnsigned64}
-typealias BitSigned     Union{BitSigned64,Int128}
-typealias BitUnsigned   Union{BitUnsigned64,UInt128}
-typealias BitInteger    Union{BitSigned,BitUnsigned}
+const BitSigned64_types   = (Int8,Int16,Int32,Int64)
+const BitUnsigned64_types = (UInt8,UInt16,UInt32,UInt64)
+const BitInteger64_types  = (BitSigned64_types...,BitUnsigned64_types...)
+const BitSigned_types     = (BitSigned64_types...,Int128)
+const BitUnsigned_types   = (BitUnsigned64_types...,UInt128)
+const BitInteger_types    = (BitSigned_types...,BitUnsigned_types...)
+
+typealias BitSigned64   Union{BitSigned64_types...}
+typealias BitUnsigned64 Union{BitUnsigned64_types...}
+typealias BitInteger64  Union{BitInteger64_types...}
+typealias BitSigned     Union{BitSigned_types...}
+typealias BitUnsigned   Union{BitUnsigned_types...}
+typealias BitInteger    Union{BitInteger_types...}
 
 ## integer comparisons ##
 
@@ -155,7 +162,7 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer conversions ##
 
-for to in tuple(BitInteger.types...), from in tuple(BitInteger.types...,Bool)
+for to in BitInteger_types, from in (BitInteger_types...,Bool)
     if !(to === from)
         if to.size < from.size
             if issubtype(to, Signed)
@@ -263,7 +270,7 @@ promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{Int64}, ::Type{T})     = Int64
 promote_rule{T<:Union{UInt8,UInt16,UInt32}}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:BitSigned64}(::Type{Int128}, ::Type{T})    = Int128
 promote_rule{T<:BitUnsigned64}(::Type{UInt128}, ::Type{T}) = UInt128
-for T in tuple(BitSigned.types...)
+for T in BitSigned_types
     @eval promote_rule{S<:Union{UInt8,UInt16}}(::Type{S}, ::Type{$T}) =
         $(sizeof(T) < sizeof(Int) ? Int : T)
 end

@@ -18,10 +18,10 @@ for y in (4, Float32(4), 4.0, big(4.0))
 end
 
 # Result type must be type of first argument
-for T in (Base.BitInteger.types..., BigInt,
+for T in (Base.BitInteger_types..., BigInt,
           Rational{Int}, Rational{BigInt},
           Float16, Float32, Float64)
-    for U in (Base.BitInteger.types..., BigInt,
+    for U in (Base.BitInteger_types..., BigInt,
               Rational{Int}, Rational{BigInt},
               Float16, Float32, Float64)
         @test typeof(copysign(T(3), U(4))) === T
@@ -89,8 +89,8 @@ end
 bitstype 8 MyBitsType <: Integer
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
 
-UItypes = Base.BitUnsigned.types
-SItypes = Base.BitSigned.types
+UItypes = Base.BitUnsigned_types
+SItypes = Base.BitSigned_types
 
 for T in UItypes, S in UItypes
     @test promote(S(3), T(3)) === (sizeof(T) < sizeof(S) ? (S(3), S(3)) : (T(3), T(3)))
