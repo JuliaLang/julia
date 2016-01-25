@@ -98,7 +98,9 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # eigenvalues/eigenvectors of symmetric tridiagonal
     if elty === Float32 || elty === Float64
-        DT, VT = eig(Ts)
+        DT, VT = @inferred eig(Ts)
+        @inferred eig(Ts, 2:4)
+        @inferred eig(Ts, 1.0, 2.0)
         D, Vecs = eig(Fs)
         @test_approx_eq DT D
         @test_approx_eq abs(VT'Vecs) eye(elty, n)
