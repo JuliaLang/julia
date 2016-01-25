@@ -837,7 +837,7 @@ function factorize(A::SparseMatrixCSC)
     if m == n
         if istril(A)
             if istriu(A)
-                return return Diagonal(A)
+                return Diagonal(A)
             else
                 return LowerTriangular(A)
             end
