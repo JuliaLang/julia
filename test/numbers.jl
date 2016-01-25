@@ -1125,7 +1125,7 @@ end
 @test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
-for T in [Int8, Int16, Int32, Int64, Int128]
+for T in Base.BitSigned.types
     @test abs(typemin(T)) == -typemin(T)
     #for x in (typemin(T),convert(T,-1),zero(T),one(T),typemax(T))
     #    @test signed(unsigned(x)) == x
@@ -1137,8 +1137,8 @@ end
 #    @test unsigned(signed(x)) == x
 #end
 
-for S = [Int8,  Int16,  Int32,  Int64],
-    U = [UInt8, UInt16, UInt32, UInt64]
+for S = Base.BitSigned64.types,
+    U = Base.BitUnsigned64.types
     @test !(-one(S) == typemax(U))
     @test -one(S) != typemax(U)
     @test -one(S) < typemax(U)
@@ -1146,7 +1146,7 @@ for S = [Int8,  Int16,  Int32,  Int64],
 end
 
 # check type of constructed rationals
-int_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64]
+int_types = Base.BitInteger64.types
 for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
@@ -1156,9 +1156,9 @@ end
 @test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
-real_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
-              Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-              Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}]
+real_types = [Base.BitInteger64.types...,
+              [Rational{T} for T in Base.BitInteger64.types]...,
+              Float32, Float64]
 for A = real_types, B = real_types
     T = promote_type(A,B)
     @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}

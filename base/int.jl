@@ -2,29 +2,26 @@
 
 ## integer arithmetic ##
 
-# The tuples and types that do not include 128 bit sizes are necessary to handle certain
-# issues on 32-bit machines, and also to simplify promotion rules, as they are also used
-# elsewhere where Int128/UInt128 support is separated out, such as in hashing2.jl
+# The tuples and types that do not include 128 bit sizes are necessary to handle
+# certain issues on 32-bit machines, and also to simplify promotion rules, as
+# they are also used elsewhere where Int128/UInt128 support is separated out,
+# such as in hashing2.jl
 
-const Signed64Types    = (Int8,Int16,Int32,Int64)
-const Unsigned64Types  = (UInt8,UInt16,UInt32,UInt64)
-const IntTypes         = tuple(Signed64Types..., Int128, Unsigned64Types..., UInt128)
-
-typealias UnionIntTypes    Union{IntTypes...}
-typealias UnionS64Types    Union{Signed64Types...}
-typealias UnionU64Types    Union{Unsigned64Types...}
-typealias Integer64        Union{Signed64Types..., Unsigned64Types...}
-typealias SignedIntTypes   Union{Signed64Types..., Int128}
-typealias UnsignedIntTypes Union{Unsigned64Types..., UInt128}
+typealias BitSigned64   Union{Int8,Int16,Int32,Int64}
+typealias BitUnsigned64 Union{UInt8,UInt16,UInt32,UInt64}
+typealias BitInteger64  Union{BitSigned64,BitUnsigned64}
+typealias BitSigned     Union{BitSigned64,Int128}
+typealias BitUnsigned   Union{BitUnsigned64,UInt128}
+typealias BitInteger    Union{BitSigned,BitUnsigned}
 
 ## integer comparisons ##
 
-<{T<:SignedIntTypes}(x::T, y::T)  = slt_int(unbox(T,x),unbox(T,y))
+<{T<:BitSigned}(x::T, y::T)  = slt_int(unbox(T,x),unbox(T,y))
 
--{T<:UnionIntTypes}(x::T)       = box(T, neg_int(unbox(T,x)))
--{T<:UnionIntTypes}(x::T, y::T) = box(T, sub_int(unbox(T,x),unbox(T,y)))
-+{T<:UnionIntTypes}(x::T, y::T) = box(T, add_int(unbox(T,x),unbox(T,y)))
-*{T<:UnionIntTypes}(x::T, y::T) = box(T, mul_int(unbox(T,x),unbox(T,y)))
+-{T<:BitInteger}(x::T)       = box(T, neg_int(unbox(T,x)))
+-{T<:BitInteger}(x::T, y::T) = box(T, sub_int(unbox(T,x),unbox(T,y)))
++{T<:BitInteger}(x::T, y::T) = box(T, add_int(unbox(T,x),unbox(T,y)))
+*{T<:BitInteger}(x::T, y::T) = box(T, mul_int(unbox(T,x),unbox(T,y)))
 
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
@@ -35,7 +32,7 @@ iseven(n::Integer) = !isodd(n)
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
-flipsign{T<:SignedIntTypes}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
+flipsign{T<:BitSigned}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
 
 flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote(x,y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, reinterpret(Int16,y))
@@ -90,10 +87,10 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-div{T<:UnionS64Types}(x::T, y::T) = box(T,checked_sdiv_int(unbox(T,x),unbox(T,y)))
-rem{T<:UnionS64Types}(x::T, y::T) = box(T,checked_srem_int(unbox(T,x),unbox(T,y)))
-div{T<:UnionU64Types}(x::T, y::T) = box(T,checked_udiv_int(unbox(T,x),unbox(T,y)))
-rem{T<:UnionU64Types}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)))
+div{T<:BitSigned64}(x::T, y::T) = box(T,checked_sdiv_int(unbox(T,x),unbox(T,y)))
+rem{T<:BitSigned64}(x::T, y::T) = box(T,checked_srem_int(unbox(T,x),unbox(T,y)))
+div{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_udiv_int(unbox(T,x),unbox(T,y)))
+rem{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)))
 
 # x == fld(x,y)*y + mod(x,y)
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
@@ -121,23 +118,23 @@ end
 
 ## integer bitwise operations ##
 
-(~){T<:UnionIntTypes}(x::T)       = box(T,not_int(unbox(T,x)))
-(&){T<:UnionIntTypes}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
-(|){T<:UnionIntTypes}(x::T, y::T) = box(T, or_int(unbox(T,x),unbox(T,y)))
-($){T<:UnionIntTypes}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
+(~){T<:BitInteger}(x::T)       = box(T,not_int(unbox(T,x)))
+(&){T<:BitInteger}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
+(|){T<:BitInteger}(x::T, y::T) = box(T, or_int(unbox(T,x),unbox(T,y)))
+($){T<:BitInteger}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
 
->>{T<:SignedIntTypes,S<:Integer64}(x::T, y::S)   = box(T,ashr_int(unbox(T,x),unbox(S,y)))
->>{T<:UnsignedIntTypes,S<:Integer64}(x::T, y::S) = box(T,lshr_int(unbox(T,x),unbox(S,y)))
-<<{T<:UnionIntTypes,S<:Integer64}(x::T,  y::S)   = box(T, shl_int(unbox(T,x),unbox(S,y)))
->>>{T<:UnionIntTypes,S<:Integer64}(x::T, y::S)   = box(T,lshr_int(unbox(T,x),unbox(S,y)))
+>>{T<:BitSigned,S<:BitInteger64}(x::T, y::S)   = box(T,ashr_int(unbox(T,x),unbox(S,y)))
+>>{T<:BitUnsigned,S<:BitInteger64}(x::T, y::S) = box(T,lshr_int(unbox(T,x),unbox(S,y)))
+<<{T<:BitInteger,S<:BitInteger64}(x::T,  y::S) = box(T, shl_int(unbox(T,x),unbox(S,y)))
+>>>{T<:BitInteger,S<:BitInteger64}(x::T, y::S) = box(T,lshr_int(unbox(T,x),unbox(S,y)))
 
 bswap{T<:Union{Int8,UInt8}}(x::T) = x
 bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
     box(T,bswap_int(unbox(T,x)))
 
-count_ones{T<:UnionIntTypes}(x::T) = Int(box(T,ctpop_int(unbox(T,x))))
-leading_zeros{T<:UnionIntTypes}(x::T) = Int(box(T,ctlz_int(unbox(T,x))))
-trailing_zeros{T<:UnionIntTypes}(x::T) = Int(box(T,cttz_int(unbox(T,x))))
+count_ones{T<:BitInteger}(x::T) = Int(box(T,ctpop_int(unbox(T,x))))
+leading_zeros{T<:BitInteger}(x::T) = Int(box(T,ctlz_int(unbox(T,x))))
+trailing_zeros{T<:BitInteger}(x::T) = Int(box(T,cttz_int(unbox(T,x))))
 
 count_zeros(  x::Integer) = count_ones(~x)
 leading_ones( x::Integer) = leading_zeros(~x)
@@ -145,9 +142,9 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-<{T<:UnsignedIntTypes}(x::T, y::T)  = ult_int(unbox(T,x),unbox(T,y))
-<={T<:SignedIntTypes}(x::T, y::T)   = sle_int(unbox(T,x),unbox(T,y))
-<={T<:UnsignedIntTypes}(x::T, y::T) = ule_int(unbox(T,x),unbox(T,y))
+<{T<:BitUnsigned}(x::T, y::T)  = ult_int(unbox(T,x),unbox(T,y))
+<={T<:BitSigned}(x::T, y::T)   = sle_int(unbox(T,x),unbox(T,y))
+<={T<:BitUnsigned}(x::T, y::T) = ule_int(unbox(T,x),unbox(T,y))
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
@@ -158,7 +155,7 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer conversions ##
 
-for to in IntTypes, from in tuple(IntTypes...,Bool)
+for to in tuple(BitInteger.types...), from in tuple(BitInteger.types...,Bool)
     if !(to === from)
         if to.size < from.size
             if issubtype(to, Signed)
@@ -204,9 +201,9 @@ rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
-convert{T<:UnionS64Types,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
+convert{T<:BitSigned64,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
     box(T,checked_fptosi(T,unbox(Tf,x)))
-convert{T<:UnionU64Types,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
+convert{T<:BitUnsigned64,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
     box(T,checked_fptoui(T,unbox(Tf,x)))
 
 convert{T<:Union{Int128,UInt128},Tf<:Union{Float32,Float64}}(::Type{T},x::Tf) =
@@ -264,18 +261,18 @@ promote_rule{T<:Union{Int8,Int16}}(::Type{Int32}, ::Type{T})    = Int32
 promote_rule{T<:Union{UInt8,UInt16}}(::Type{UInt32}, ::Type{T}) = UInt32
 promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{Int64}, ::Type{T})     = Int64
 promote_rule{T<:Union{UInt8,UInt16,UInt32}}(::Type{UInt64}, ::Type{T}) = UInt64
-promote_rule{T<:UnionS64Types}(::Type{Int128}, ::Type{T})    = Int128
-promote_rule{T<:UnionU64Types}(::Type{UInt128}, ::Type{T}) = UInt128
-for T in tuple(Signed64Types...,Int128)
+promote_rule{T<:BitSigned64}(::Type{Int128}, ::Type{T})    = Int128
+promote_rule{T<:BitUnsigned64}(::Type{UInt128}, ::Type{T}) = UInt128
+for T in tuple(BitSigned.types...)
     @eval promote_rule{S<:Union{UInt8,UInt16}}(::Type{S}, ::Type{$T}) =
         $(sizeof(T) < sizeof(Int) ? Int : T)
 end
 @eval promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{UInt32}, ::Type{T}) =
     $(WORD_SIZE == 64 ? Int : UInt)
 promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
-promote_rule{T<:UnionS64Types}(::Type{UInt64}, ::Type{T}) = UInt64
+promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
-promote_rule{T<:SignedIntTypes}(::Type{UInt128}, ::Type{T}) = UInt128
+promote_rule{T<:BitSigned}(::Type{UInt128}, ::Type{T}) = UInt128
 
 promote_op{R<:Integer,S<:Integer}(op, ::Type{R}, ::Type{S}) = typeof(op(one(R), one(S)))
 
