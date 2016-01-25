@@ -1,14 +1,18 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.copy, Base.==
-const verbose = false
+
 const libccalltest = "libccalltest"
+
+const verbose = false
 ccall((:set_verbose, libccalltest), Void, (Int32,), verbose)
+
 
 # Test for proper argument register truncation
 ccall_test_func(x) = ccall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
 @test ccall_test_func(3) == 1
 @test ccall_test_func(259) == 1
+
 
 # Test for proper round-trip of Ref{T} type
 ccall_echo_func{T,U}(x, ::Type{T}, ::Type{U}) = ccall((:test_echo_p, libccalltest), T, (U,), x)
@@ -40,99 +44,372 @@ end
 @test ccall_echo_load(Ref([144,172],2), Ptr{Int}, Ref{Int}) === 172
 # @test ccall_echo_load(Ref([8],1,1), Ptr{Int}, Ref{Int}) === 8
 
-# Tests for passing and returning structs
-ci = 20+51im
-b = ccall((:ctest, libccalltest), Complex{Int}, (Complex{Int},), ci)
-@test b == ci + 1 - 2im
-ci_ary = [ci] # Make sure the array is alive during unsafe_load
-b = unsafe_load(ccall((:cptest, libccalltest), Ptr{Complex{Int}},
-                      (Ptr{Complex{Int}},), ci_ary))
-@test b == ci + 1 - 2im
-@test ci == 20+51im
 
-b = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &ci)
-@test unsafe_load(b) == ci
-Libc.free(convert(Ptr{Void},b))
+## Tests for passing and returning structs
 
-cf64 = 2.84+5.2im
-b = ccall((:cgtest, libccalltest), Complex128, (Complex128,), cf64)
-@test b == cf64 + 1 - 2im
-cf64_ary = [cf64] # Make sure the array is alive during unsafe_load
-b = unsafe_load(ccall((:cgptest, libccalltest), Ptr{Complex128}, (Ptr{Complex128},), cf64_ary))
-@test b == cf64 + 1 - 2im
-@test cf64 == 2.84+5.2im
+let
+    a = 20+51im
 
-cf32 = 3.34f0+53.2f0im
-b = ccall((:cftest, libccalltest), Complex64, (Complex64,), cf32)
-@test b == cf32 + 1 - 2im
-cf32_ary = [cf32] # Make sure the array is alive during unsafe_load
-b = unsafe_load(ccall((:cfptest, libccalltest), Ptr{Complex64}, (Ptr{Complex64},), cf32_ary))
-@test b == cf32 + 1 - 2im
-@test cf32 == 3.34f0+53.2f0im
+    x = ccall((:ctest, libccalltest), Complex{Int}, (Complex{Int},), a)
+
+    @test x == a + 1 - 2im
+
+    ci_ary = [a] # Make sure the array is alive during unsafe_load
+    x = unsafe_load(ccall((:cptest, libccalltest), Ptr{Complex{Int}},
+                          (Ptr{Complex{Int}},), ci_ary))
+
+    @test x == a + 1 - 2im
+    @test a == 20+51im
+
+    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &a)
+    @test unsafe_load(x) == a
+    Libc.free(convert(Ptr{Void},x))
+end
+
+let
+    a = 2.84+5.2im
+
+    x = ccall((:cgtest, libccalltest), Complex128, (Complex128,), a)
+
+    @test x == a + 1 - 2im
+
+    b = [a] # Make sure the array is alive during unsafe_load
+    x = unsafe_load(ccall((:cgptest, libccalltest), Ptr{Complex128}, (Ptr{Complex128},), b))
+
+    @test x == a + 1 - 2im
+    @test a == 2.84+5.2im
+end
+
+let
+    a = 3.34f0+53.2f0im
+
+    x = ccall((:cftest, libccalltest), Complex64, (Complex64,), a)
+
+    @test x == a + 1 - 2im
+
+    b = [a] # Make sure the array is alive during unsafe_load
+    x = unsafe_load(ccall((:cfptest, libccalltest), Ptr{Complex64}, (Ptr{Complex64},), b))
+
+    @test x == a + 1 - 2im
+    @test a == 3.34f0+53.2f0im
+end
 
 
-# Tests for native Julia data types
-@test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), cf32)
-@test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &cf32)
+## Tests for native Julia data types
 
-# Tests for various sized data types (ByVal)
+let
+    a = 2.84+5.2im
+
+    @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), a)
+    @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &a)
+end
+
+
+## Tests for various sized data types (ByVal)
+
 type Struct1
     x::Float32
     y::Float64
 end
-==(a::Struct1,b::Struct1) = a.x == b.x && a.y == b.y
 copy(a::Struct1) = Struct1(a.x, a.y)
-s1 = Struct1(352.39422f23, 19.287577)
-a = copy(s1)
-b = ccall((:test_1, libccalltest), Struct1, (Struct1,), a)
-@test a.x == s1.x && a.y == s1.y
-@test !(a === b)
-@test b.x == s1.x + 1 && b.y == s1.y - 2
 
-function foos1(s::Struct1)
-    @test !(s === a)
-    @test s == a
-    s
+let
+    a = Struct1(352.39422f23, 19.287577)
+    b = Float32(123.456)
+
+    a2 = copy(a)
+    x = ccall((:test_1, libccalltest), Struct1, (Struct1, Float32), a2, b)
+
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+
+    @test_approx_eq x.x a.x + 1*b
+    @test_approx_eq x.y a.y - 2*b
 end
 
-ci32 = Complex{Int32}(Int32(10),Int32(31))
-ba = ccall((:test_2a, libccalltest), Complex{Int32}, (Complex{Int32},), ci32)
-bb = ccall((:test_2b, libccalltest), Complex{Int32}, (Complex{Int32},), ci32)
-@test ba == bb == ci32 + 1 - 2im
-@test ci32 == Complex{Int32}(Int32(10),Int32(31))
+let
+    a = Complex{Int32}(Int32(10),Int32(31))
+    b = Int32(42)
 
-ci64 = Complex{Int64}(Int64(20),Int64(51))
-ba = ccall((:test_3a, libccalltest), Complex{Int64}, (Complex{Int64},), ci64)
-bb = ccall((:test_3b, libccalltest), Complex{Int64}, (Complex{Int64},), ci64)
-bc = ccall((:test_128, libccalltest), Complex{Int64}, (Complex{Int64},), ci64)
-@test ba == bb == ci64 + 1 - 2im
-@test bc == ci64 + 1
-@test ci64 == Complex{Int64}(Int64(20),Int64(51))
+    x = ccall((:test_2a, libccalltest), Complex{Int32}, (Complex{Int32}, Int32), a, b)
+    y = ccall((:test_2b, libccalltest), Complex{Int32}, (Complex{Int32},Int32), a, b)
 
-i128 = Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
-b = ccall((:test_128, libccalltest), Int128, (Int128,), i128)
-@test b == i128 + 1
-@test i128 == Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
+    @test a == Complex{Int32}(Int32(10),Int32(31))
+
+    @test x == y
+    @test x == a + b*1 - b*2im
+end
+
+let
+    a = Complex{Int64}(Int64(20),Int64(51))
+    b = Int64(42)
+
+    x = ccall((:test_3a, libccalltest), Complex{Int64}, (Complex{Int64}, Int64), a, b)
+    y = ccall((:test_3b, libccalltest), Complex{Int64}, (Complex{Int64}, Int64), a, b)
+    z = ccall((:test_128, libccalltest), Complex{Int64}, (Complex{Int64}, Int64), a, b)
+
+    @test a == Complex{Int64}(Int64(20),Int64(51))
+
+    @test x == y
+    @test x == a + b*1 - b*2im
+
+    @test z == a + 1*b
+end
+
+type Struct4
+    x::Int32
+    y::Int32
+    z::Int32
+end
+
+let
+    a = Struct4(-512275808,882558299,-2133022131)
+    b = Int32(42)
+
+    x = ccall((:test_4, libccalltest), Struct4, (Struct4,Int32), a, b)
+
+    @test x.x == a.x+b*1
+    @test x.y == a.y-b*2
+    @test x.z == a.z+b*3
+end
+
+type Struct5
+    x::Int32
+    y::Int32
+    z::Int32
+    a::Int32
+end
+
+let
+    a = Struct5(1771319039, 406394736, -1269509787, -745020976)
+    b = Int32(42)
+
+    x = ccall((:test_5, libccalltest), Struct5, (Struct5,Int32), a, b)
+
+    @test x.x == a.x+b*1
+    @test x.y == a.y-b*2
+    @test x.z == a.z+b*3
+    @test x.a == a.a-b*4
+end
+
+type Struct6
+    x::Int64
+    y::Int64
+    z::Int64
+end
+
+let
+    a = Struct6(-654017936452753226, -5573248801240918230, -983717165097205098)
+    b = Int64(42)
+
+    x = ccall((:test_6, libccalltest), Struct6, (Struct6, Int64), a, b)
+
+    @test x.x == a.x+b*1
+    @test x.y == a.y-b*2
+    @test x.z == a.z+b*3
+end
+
+type Struct7
+    x::Int64
+    y::Cchar
+end
+
+let
+    a = Struct7(-384082741977533896, 'h')
+    b = Int8(42)
+
+    x = ccall((:test_7, libccalltest), Struct7, (Struct7,Int8), a, b)
+
+    @test x.x == a.x+Int(b)*1
+    @test x.y == a.y-Int(b)*2
+end
+
+type Struct8
+    x::Int32
+    y::Cchar
+end
+
+let
+    a = Struct8(-384082896, 'h')
+    b = Int8(42)
+
+    r8 = ccall((:test_8, libccalltest), Struct8, (Struct8,Int8), a, b)
+
+    @test r8.x == a.x+b*1
+    @test r8.y == a.y-b*2
+end
+
+type Struct9
+    x::Int32
+    y::Int16
+end
+
+let
+    a = Struct9(-394092996, -3840)
+    b = Int16(42)
+
+    x = ccall((:test_9, libccalltest), Struct9, (Struct9,Int16), a, b)
+
+    @test x.x == a.x+b*1
+    @test x.y == a.y-b*2
+end
+
+type Struct10
+    x::Cchar
+    y::Cchar
+    z::Cchar
+    a::Cchar
+end
+
+let
+    a = Struct10('0', '1', '2', '3')
+    b = Int8(2)
+
+    x = ccall((:test_10, libccalltest), Struct10, (Struct10,Int8), a, b)
+
+    @test x.x == a.x+b*1
+    @test x.y == a.y-b*2
+    @test x.z == a.z+b*3
+    @test x.a == a.a-b*4
+end
+
+type Struct11
+    x::Complex64
+end
+
+let
+    a = Struct11(0.8877077f0 + 0.4591081f0im)
+    b = Float32(42)
+
+    x = ccall((:test_11, libccalltest), Struct11, (Struct11,Float32), a, b)
+
+    @test_approx_eq x.x a.x + b*1 - b*2im
+end
+
+type Struct12
+    x::Complex64
+    y::Complex64
+end
+
+let
+    a = Struct12(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
+    b = Float32(42)
+
+    x = ccall((:test_12, libccalltest), Struct12, (Struct12,Float32), a, b)
+
+    @test_approx_eq x.x a.x + b*1 - b*2im
+    @test_approx_eq x.y a.y + b*3 - b*4im
+end
+
+type Struct13
+    x::Complex128
+end
+
+let
+    a = Struct13(42968.97560380495 - 803.0576845153616im)
+    b = Float64(42)
+
+    x = ccall((:test_13, libccalltest), Struct13, (Struct13,Float64), a, b)
+
+    @test_approx_eq x.x a.x + b*1 - b*2im
+end
+
+type Struct14
+    x::Float32
+    y::Float32
+end
+
+let
+    a = Struct14(0.024138331f0, 0.89759064f32)
+    b = Float32(42)
+
+    x = ccall((:test_14, libccalltest), Struct14, (Struct14,Float32), a, b)
+
+    @test_approx_eq x.x a.x + b*1
+    @test_approx_eq x.y a.y - b*2
+end
+
+type Struct15
+    x::Float64
+    y::Float64
+end
+
+let
+    a = Struct15(4.180997967273657, -0.404218594294923)
+    b = Float64(42)
+
+    x = ccall((:test_15, libccalltest), Struct15, (Struct15,Float64), a, b)
+
+    @test_approx_eq x.x a.x + b*1
+    @test_approx_eq x.y a.y - b*2
+end
+
+type Struct16
+    x::Float32
+    y::Float32
+    z::Float32
+    a::Float64
+    b::Float64
+    c::Float64
+end
+
+let
+    a = Struct16(0.1604656f0, 0.6297606f0, 0.83588994f0,
+                 0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
+    b = Float32(42)
+
+    x = ccall((:test_16, libccalltest), Struct16, (Struct16,Float32), a, b)
+
+    @test_approx_eq x.x a.x + b*1
+    @test_approx_eq x.y a.y - b*2
+    @test_approx_eq x.z a.z + b*3
+    @test_approx_eq x.a a.a - b*4
+    @test_approx_eq x.b a.b + b*5
+    @test_approx_eq x.c a.c - b*6
+end
+
+let
+    a = Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
+    b = Int64(1)
+
+    x = ccall((:test_128, libccalltest), Int128, (Int128, Int64), a, b)
+
+    @test x == a + b*1
+    @test a == Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
+end
 
 type Struct_Big
     x::Int
     y::Int
     z::Int8
 end
-==(a::Struct_Big,b::Struct_Big) = a.x == b.x && a.y == b.y && a.z == b.z
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
-sbig = Struct_Big(424,-5,Int8('Z'))
 
-a = copy(sbig)
-b = ccall((:test_big, libccalltest), Struct_Big, (Struct_Big,), a)
-@test a.x == sbig.x && a.y == sbig.y && a.z == sbig.z
-@test b.x == sbig.x + 1
-@test b.y == sbig.y - 2
-@test b.z == sbig.z - Int('A')
+let
+    a = Struct_Big(424,-5,Int8('Z'))
+    a2 = copy(a)
+
+    x = ccall((:test_big, libccalltest), Struct_Big, (Struct_Big,), a2)
+
+    @test a2.x == a.x && a2.y == a.y && a2.z == a.z
+    @test x.x == a.x + 1
+    @test x.y == a.y - 2
+    @test x.z == a.z - Int('A')
+end
+
+
+## cfunction roundtrip
 
 verbose && Libc.flush_cstdio()
 verbose && println("Testing cfunction roundtrip: ")
-# cfunction roundtrip
+
+cf64 = 2.84+5.2im
+cf32 = 3.34f0+53.2f0im
+ci32 = Complex{Int32}(Int32(10),Int32(31))
+ci64 = Complex{Int64}(Int64(20),Int64(51))
+s1 = Struct1(352.39422f23, 19.287577)
+==(a::Struct1,b::Struct1) = a.x == b.x && a.y == b.y
+
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
     fname = symbol("foo"*string(v))
