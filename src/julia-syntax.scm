@@ -996,7 +996,7 @@
                     ((and (pair? (cadar binds))
                           (eq? (caadar binds) 'call))
                      ;; f()=c
-                     (let ((asgn (cadr (julia-expand0 (car binds)))))
+                     (let ((asgn (expand-binding-forms (car binds))))
                        (loop (cdr binds)
                              `(scope-block
                                (block
