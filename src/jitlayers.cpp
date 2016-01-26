@@ -170,6 +170,7 @@ using namespace llvm::orc;
 /// Do the registration.
 void NotifyDebugger(jit_code_entry *JITCodeEntry)
 {
+    /* GDB */
     __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
 
     // Insert this entry at the head of the list.
@@ -185,6 +186,33 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 
 // --------------------------------------------------------------------------
+
+    struct unw_table_entry {
+        int32_t ip_off;
+        int32_t fde_off;
+    };
+
+    // https://refspecs.linuxfoundation.org/LSB_3.0.0/LSB-PDA/LSB-PDA/ehframechpt.html
+    char *parse_cie(char* addr, uintptr_t* pc_begin)
+    {
+        int32_t len = *(int32_t*)addr;
+        addr += 4;
+        if (len == 0xffffffff) {
+            abort(); // TODO handle extended length ?
+        } else if (len == 0) {
+            return nullptr;
+        }
+        int32_t id = *(int32_t*)addr;
+        if (id == 0) { // CIE
+            addr += len;
+            *pc_begin = 0;
+            return addr; // TODO align maybe
+        } else { // FDE
+            *pc_begin = *(uintptr_t*)(addr + 4);
+            addr += len;
+            return addr; // TODO ditto
+        }
+    }
 
 class DebugObjectRegistrar {
 private:
@@ -205,6 +233,42 @@ private:
 
           NotifyDebugger(JITCodeEntry);
       }
+      auto dyn = new unw_dyn_info_t;
+      dyn->gp = 0;
+      dyn->format = UNW_INFO_FORMAT_REMOTE_TABLE;
+      dyn->u.ti.name_ptr = (uintptr_t)"HI :)";
+      uintptr_t debug_frame = 0;
+      uintptr_t text_sect = 0;
+      uintptr_t segbase = 0;
+      struct unw_table_entry* entries = NULL;
+      int n_entries = 0;
+      for (auto &section : DebugObj.getBinary()->sections()) {
+          StringRef name;
+          section.getName(name);
+          auto addr = section.getAddress();
+          auto sz = section.getSize();
+          if (name.equals(".eh_frame")) {
+              debug_frame = addr;
+              segbase = addr;
+              uintptr_t pc_begin = 0;
+              while (auto next_frame = parse_cie((char*)debug_frame, &pc_begin)) {
+                  if (pc_begin != 0) {
+                      entries = (unw_table_entry*)realloc(entries, (n_entries+1)*sizeof(unw_table_entry));
+                      entries[n_entries].fde_off = debug_frame - segbase;
+                      entries[n_entries].ip_off = pc_begin - segbase;
+                      n_entries++;
+                  }
+                  debug_frame = (uintptr_t)next_frame;
+              }
+          } else if (name.equals(".text")) {
+              dyn->start_ip = addr;
+              dyn->end_ip = addr + sz;
+          }
+      }
+      dyn->u.ti.table_data = (uintptr_t*)entries;
+      dyn->u.ti.table_len = n_entries;
+      dyn->u.ti.segbase = segbase;
+      _U_dyn_register(dyn);
     }
 
     std::vector<OwningBinary<ObjectFile>> SavedObjects;
