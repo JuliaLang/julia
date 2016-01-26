@@ -160,8 +160,11 @@ end
 @test CartesianTest.f(1,2,3,4) == (1,2,3,4)
 @test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
 
-@test readall(pipeline(`echo hello`, `sort`)) == "hello\n"
-@test success(pipeline(`true`, `true`))
+extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+@compat withenv("PATH" => extrapath * ENV["PATH"]) do
+    @test readall(pipeline(`echo hello`, `sort`)) == "hello\n"
+    @test success(pipeline(`true`, `true`))
+end
 
 let convert_funcs_and_types =
     ((integer, :Integer), (signed, :Signed), (unsigned, :Unsigned),
