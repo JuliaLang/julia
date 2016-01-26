@@ -445,7 +445,7 @@ JL_CALLABLE(jl_f_apply)
         else if (jl_is_tuple(args[i])) {
             n += jl_nfields(args[i]);
         }
-        else if (jl_is_array(args[i]) && ((jl_array_t*)args[i])->ptrarray) {
+        else if (jl_is_array(args[i])) {
             n += jl_array_len(args[i]);
         }
         else {
@@ -481,32 +481,42 @@ JL_CALLABLE(jl_f_apply)
     //          we need to add write barrier for !onstack
     n = 0;
     for(i=1; i < nargs; i++) {
-        if (jl_is_svec(args[i])) {
-            jl_svec_t *t = (jl_svec_t*)args[i];
+        jl_value_t *ai = args[i];
+        if (jl_is_svec(ai)) {
+            jl_svec_t *t = (jl_svec_t*)ai;
             size_t al = jl_svec_len(t);
             for(j=0; j < al; j++)
                 newargs[n++] = jl_svecref(t, j);
         }
-        else if (jl_is_tuple(args[i])) {
-            size_t al = jl_nfields(args[i]);
+        else if (jl_is_tuple(ai)) {
+            size_t al = jl_nfields(ai);
             for(j=0; j < al; j++) {
                 // jl_fieldref may allocate.
-                newargs[n++] = jl_fieldref(args[i], j);
-                if (arg_heap) {
+                newargs[n++] = jl_fieldref(ai, j);
+                if (arg_heap)
                     jl_gc_wb(arg_heap, newargs[n - 1]);
-                }
             }
         }
         else {
-            size_t al = jl_array_len(args[i]);
-            for (j = 0;j < al;j++) {
-                jl_value_t *arg = jl_cellref(args[i], j);
-                // apply with array splatting may have embedded NULL value
-                // #11772
-                if (__unlikely(arg == NULL)) {
-                    jl_throw(jl_undefref_exception);
+            assert(jl_is_array(ai));
+            jl_array_t *aai = (jl_array_t*)ai;
+            size_t al = jl_array_len(aai);
+            if (aai->ptrarray) {
+                for (j = 0; j < al; j++) {
+                    jl_value_t *arg = jl_cellref(aai, j);
+                    // apply with array splatting may have embedded NULL value
+                    // #11772
+                    if (__unlikely(arg == NULL))
+                        jl_throw(jl_undefref_exception);
+                    newargs[n++] = arg;
                 }
-                newargs[n++] = arg;
+            }
+            else {
+                for (j = 0; j < al; j++) {
+                    newargs[n++] = jl_arrayref(aai, j);
+                    if (arg_heap)
+                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                }
             }
         }
     }
