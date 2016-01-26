@@ -91,6 +91,8 @@ Library improvements
     * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
     and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243],[#14424])
 
+    * All `sparse` methods now retain provided numerical zeros as structural nonzeros.
+
   * New `foreach` function for calling a function on every element of a collection when
     the results are not needed.
 
