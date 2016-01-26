@@ -58,6 +58,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Union{args...}` - `Union(args...)` on 0.3. [#11432](https://github.com/JuliaLang/julia/pull/11432)
 
+* `@compat withenv(f, "a" => a, "b" => b...)` on 0.3.
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
@@ -98,6 +100,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   (However, to enable precompiling in 0.4, it is better to explicitly put `VERSION >= v"0.4.0-dev+6521" && __precompile__()` before your `module` statement, so that Julia knows to precompile before anything in your module is evaluated.)
 
 * `isapprox(A, B)` for arrays ([JuliaLang/julia#12472](https://github.com/JuliaLang/julia/pull/12472)), and synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively.
+
+* `withenv` can be used in julia 0.3 (see [the 0.4 docs](http://docs.julialang.org/en/release-0.4/stdlib/base/#Base.withenv)). Note that you must prepend calls to `withenv` with `@compat` if you'd like to use it with the `=>` syntax.
 
 ## Renamed functions
 
