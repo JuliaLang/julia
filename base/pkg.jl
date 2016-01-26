@@ -117,7 +117,7 @@ installed(pkg::AbstractString) = cd(Entry.installed,pkg)
 Prints out a summary of what packages are installed and what version and state they're in.
 """
 status(io::IO=STDOUT) = cd(Entry.status,io)
-status(pkg::AbstractString = "", io::IO=STDOUT) = cd(Entry.status,io,pkg)
+status(pkg::AbstractString, io::IO=STDOUT) = cd(Entry.status,io,pkg)
 
 """
     clone(pkg)

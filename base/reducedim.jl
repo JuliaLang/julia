@@ -222,8 +222,6 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = (_mapreducedim!(f, op, R, A); R)
-
 to_op(op) = op
 function to_op(op::Function)
     is(op, +) ? AddFun() :

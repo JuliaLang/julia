@@ -51,7 +51,7 @@ test_inlined_symbols(test_outer, Tuple{Int64})
 # Make sure that an error is thrown for the undeclared
 # y in the else branch.
 # https://github.com/JuliaLang/julia/issues/12620
-@inline function foo(x)
+@inline function foo_inl(x)
     if x
         y = 2
     else
@@ -60,7 +60,7 @@ test_inlined_symbols(test_outer, Tuple{Int64})
 end
 function bar()
     for i = 1:3
-        foo(i==1)
+        foo_inl(i==1)
     end
 end
 @test_throws UndefVarError bar()

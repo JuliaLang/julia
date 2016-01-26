@@ -4,15 +4,6 @@
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-## generic string uses only endof and next ##
-
-immutable GenericString <: AbstractString
-    string::AbstractString
-end
-
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
-
 # I think these should give error on 4 also, and "" is not treated
 # consistently with SubString("",1,1), nor with Char[]
 for ind in (0, 5)
