@@ -857,6 +857,11 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
+# comprehension in let-bound function
+let x⊙y = sum([x[i]*y[i] for i=1:length(x)])
+    @test [1,2] ⊙ [3,4] == 11
+end
+
 @test_throws DomainError (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1
 
