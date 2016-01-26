@@ -662,7 +662,7 @@ type Timer
         ccall(:uv_timer_start, Cint, (Ptr{Void},Ptr{Void},UInt64,UInt64),
               this.handle, uv_jl_timercb::Ptr{Void},
               UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
-        this
+        return this
     end
 end
 
@@ -676,6 +676,7 @@ function close(t::Timer)
         ccall(:uv_timer_stop, Cint, (Ptr{Void},), t.handle)
         ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
     end
+    nothing
 end
 
 function _uv_hook_close(t::Timer)
@@ -721,7 +722,7 @@ function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     # we re-enter the event loop. this avoids a race condition. see issue #12719
     enq_work(current_task())
     yieldto(waiter)
-    t
+    return t
 end
 
 ## event loop ##
@@ -734,9 +735,9 @@ end
 function process_events(block::Bool)
     loop = eventloop()
     if block
-        ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
+        return ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
     else
-        ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
+        return ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
     end
 end
 
@@ -756,7 +757,7 @@ function init_pipe!(pipe::LibuvPipe;
         (Ptr{Void}, Int32, Int32, Int32),
         pipe.handle, writable, readable, julia_only))
     pipe.status = StatusInit
-    pipe
+    return pipe
 end
 
 function malloc_julia_pipe!(x::LibuvPipe)
@@ -764,11 +765,13 @@ function malloc_julia_pipe!(x::LibuvPipe)
     x.handle = Libc.malloc(_sizeof_uv_named_pipe)
     associate_julia_struct(x.handle, x)
     finalizer(x, uvfinalize)
+    nothing
 end
 
 function _link_pipe(read_end::Ptr{Void}, write_end::Ptr{Void})
     uv_error("pipe_link",
         ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+    nothing
 end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
@@ -781,6 +784,7 @@ function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
     uv_error("init_pipe(write)",
         ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
     _link_pipe(read_end, write_end)
+    nothing
 end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
@@ -790,6 +794,7 @@ function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
     uv_error("init_pipe(write)",
         ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
     _link_pipe(read_end,write_end)
+    nothing
 end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
@@ -803,6 +808,7 @@ function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
         ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), write_end, 1, 0, writable_julia_only))
     _link_pipe(read_end.handle, write_end)
     read_end.status = StatusOpen
+    nothing
 end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
@@ -816,6 +822,7 @@ function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
         readable = false, writable = true, julia_only = writable_julia_only)
     _link_pipe(read_end, write_end.handle)
     write_end.status = StatusOpen
+    nothing
 end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
@@ -843,7 +850,7 @@ function close_pipe_sync(p::PipeEndpoint)
 end
 
 function close_pipe_sync(handle::Ptr{Void})
-    ccall(:uv_pipe_close_sync, Void, (Ptr{Void},), handle)
+    return ccall(:uv_pipe_close_sync, Void, (Ptr{Void},), handle)
 end
 
 ## Functions for any LibuvStream ##
@@ -856,11 +863,11 @@ function start_reading(stream::LibuvStream)
         ret = ccall(:uv_read_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                     stream, uv_jl_alloc_buf::Ptr{Void}, uv_jl_readcb::Ptr{Void})
         stream.status = StatusActive
-        ret
+        return ret
     elseif stream.status == StatusActive
-        Int32(0)
+        return Int32(0)
     else
-        Int32(-1)
+        return Int32(-1)
     end
 end
 
@@ -884,29 +891,16 @@ function stop_reading(stream::LibuvStream)
     if stream.status == StatusActive
         ret = ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
         stream.status = StatusOpen
-        ret
+        return ret
     elseif stream.status == StatusOpen
-        Int32(0)
+        return Int32(0)
     else
-        Int32(-1)
+        return Int32(-1)
     end
 end
 
-function read!(s::LibuvStream, b::Vector{UInt8})
-    nb = length(b)
-    r = readbytes!(s, b, nb)
-    if r < nb
-        throw(EOFError())
-    end
-    return b
-end
-
-function read(stream::LibuvStream)
-    wait_readnb(stream, typemax(Int))
-    return takebuf_array(stream.buffer)
-end
-
-function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a))
+readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, Int(nb))
+function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     sbuf = s.buffer
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
@@ -917,7 +911,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a))
 
     if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
         wait_readnb(s, nb)
-        r = readbytes!(sbuf, a, nb)
+        return readbytes!(sbuf, a, nb)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
@@ -925,8 +919,9 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a))
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
-            wait_readnb(s, nb)
-            r = nb_available(newbuf)
+            wait_readnb(s, Int(nb))
+            compact(newbuf)
+            return nb_available(newbuf)
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
@@ -934,32 +929,68 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a))
             end
         end
     end
-    return r
+    @assert false # unreachable
+end
+
+function read(stream::LibuvStream)
+    wait_readnb(stream, typemax(Int))
+    return takebuf_array(stream.buffer)
+end
+
+function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
+    sbuf = s.buffer
+    @assert sbuf.seekable == false
+    @assert sbuf.maxsize >= nb
+
+    if nb_available(sbuf) >= nb
+        return unsafe_read(sbuf, p, nb)
+    end
+
+    if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
+        wait_readnb(s, Int(nb))
+        unsafe_read(sbuf, p, nb)
+    else
+        try
+            stop_reading(s) # Just playing it safe, since we are going to switch buffers.
+            newbuf = PipeBuffer(pointer_to_array(p, nb), #=maxsize=# Int(nb))
+            newbuf.size = 0 # reset the write pointer to the beginning
+            s.buffer = newbuf
+            write(newbuf, sbuf)
+            wait_readnb(s, Int(nb))
+            nb == nb_available(newbuf) || throw(EOFError())
+        finally
+            s.buffer = sbuf
+            if !isempty(s.readnotify.waitq)
+                start_reading(s) # resume reading iff there are currently other read clients of the stream
+            end
+        end
+    end
+    nothing
 end
 
 function read(this::LibuvStream, ::Type{UInt8})
     wait_readnb(this, 1)
     buf = this.buffer
     @assert buf.seekable == false
-    read(buf, UInt8)
+    return read(buf, UInt8)
 end
 
 function readavailable(this::LibuvStream)
     wait_readnb(this, 1)
     buf = this.buffer
     @assert buf.seekable == false
-    takebuf_array(buf)
+    return takebuf_array(buf)
 end
 
 function readuntil(this::LibuvStream, c::UInt8)
     wait_readbyte(this, c)
     buf = this.buffer
     @assert buf.seekable == false
-    readuntil(buf, c)
+    return readuntil(buf, c)
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(length(p)))
-function uv_write(s::LibuvStream, p::Ptr, n::UInt)
+uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof(p)))
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     uvw = Libc.malloc(_sizeof_uv_write)
     uv_req_set_data(uvw,C_NULL)
@@ -982,7 +1013,7 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
-function buffer_or_write(s::LibuvStream, p::Ptr, n::Integer)
+function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     if isnull(s.sendbuf)
         return uv_write(s, p, UInt(n))
     end
@@ -990,13 +1021,13 @@ function buffer_or_write(s::LibuvStream, p::Ptr, n::Integer)
     buf = get(s.sendbuf)
     totb = nb_available(buf) + n
     if totb < buf.maxsize
-        nb = write(buf, p, n)
+        nb = unsafe_write(buf, p, n)
     else
         flush(s)
         if n > buf.maxsize
             nb = uv_write(s, p, n)
         else
-            nb = write(buf, p, n)
+            nb = unsafe_write(buf, p, n)
         end
     end
     return nb
@@ -1011,26 +1042,14 @@ function flush(s::LibuvStream)
         arr = takebuf_array(buf)        # Array of UInt8s
         uv_write(s, arr)
     end
-    s
+    return s
 end
 
 buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 
 ## low-level calls to libuv ##
 
-write(s::LibuvStream, b::UInt8) = write(s, [b])
-write(s::LibuvStream, c::Char) = write(s, string(c))
-function write{T}(s::LibuvStream, a::Array{T})
-    if isbits(T)
-        n = UInt(length(a) * sizeof(T))
-        return buffer_or_write(s, pointer(a), n)
-    else
-        check_open(s)
-        invoke(write, Tuple{IO, typeof(a)}, s, a)
-    end
-end
-
-write(s::LibuvStream, p::Ptr, n::Integer) = buffer_or_write(s, p, n)
+write(s::LibuvStream, b::UInt8) = write(s, Ref{UInt8}(b))
 
 function uv_writecb_task(req::Ptr{Void}, status::Cint)
     d = uv_req_data(req)
@@ -1202,7 +1221,7 @@ end
 isopen(s::BufferStream) = s.is_open
 close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
-read!(s::BufferStream, a::Vector{UInt8}) = (wait_readnb(s, length(a)); read!(s.buffer, a))
+unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
 nb_available(s::BufferStream) = nb_available(s.buffer)
 
 isreadable(s::BufferStream) = s.buffer.readable
@@ -1222,25 +1241,18 @@ function wait_readbyte(s::BufferStream, c::UInt8)
     end
 end
 
-wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
+wait_close(s::BufferStream) = if isopen(s); wait(s.close_c); end
 start_reading(s::BufferStream) = nothing
 
-write(s::BufferStream, b::UInt8) = write(s, [b])
-write(s::BufferStream, c::Char) = write(s, string(c))
-
-function write{T}(s::BufferStream, a::Array{T})
-    rv=write(s.buffer, a)
-    !(s.buffer_writes) && notify(s.r_c; all=true);
-    return rv
-end
-function write(s::BufferStream, p::Ptr, nb::Integer)
-    rv=write(s.buffer, p, nb)
-    !(s.buffer_writes) && notify(s.r_c; all=true);
+write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
+function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
+    rv = unsafe_write(s.buffer, p, nb)
+    !(s.buffer_writes) && notify(s.r_c; all=true)
     return rv
 end
 
 function eof(s::BufferStream)
-    wait_readnb(s,1)
+    wait_readnb(s, 1)
     return !isopen(s) && nb_available(s)<=0
 end
 

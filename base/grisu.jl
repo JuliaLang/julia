@@ -79,10 +79,10 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
     exp_form = exp_form || (pt >= len && abs(mod(x + 0.05, 10^(pt - len)) - 0.05) > 0.05) # see issue #6608
     if exp_form # .00001 to 100000.
         # => #.#######e###
-        write(io, pdigits, 1)
+        unsafe_write(io, pdigits, 1)
         write(io, '.')
         if len > 1
-            write(io, pdigits+1, len-1)
+            unsafe_write(io, pdigits+1, len-1)
         else
             write(io, '0')
         end
@@ -97,19 +97,19 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
             write(io, '0')
             pt += 1
         end
-        write(io, pdigits, len)
+        unsafe_write(io, pdigits, len)
     elseif pt >= len
         # => ########00.0
-        write(io, pdigits, len)
+        unsafe_write(io, pdigits, len)
         while pt > len
             write(io, '0')
             len += 1
         end
         write(io, ".0")
     else # => ####.####
-        write(io, pdigits, pt)
+        unsafe_write(io, pdigits, pt)
         write(io, '.')
-        write(io, pdigits+pt, len-pt)
+        unsafe_write(io, pdigits+pt, len-pt)
     end
     typed && isa(x,Float32) && write(io, "f0")
     typed && isa(x,Float16) && write(io, ")")
@@ -144,7 +144,7 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
         # => ########e###
-        write(io, pdigits+0, len)
+        unsafe_write(io, pdigits+0, len)
         write(io, 'e')
         write(io, dec(e))
         return
@@ -155,10 +155,10 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
             write(io, '0')
             pt += 1
         end
-        write(io, pdigits+0, len)
+        unsafe_write(io, pdigits+0, len)
     elseif e >= dot
         # => ########000.
-        write(io, pdigits+0, len)
+        unsafe_write(io, pdigits+0, len)
         while e > 0
             write(io, '0')
             e -= 1
@@ -167,9 +167,9 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
             write(io, '.')
         end
     else # => ####.####
-        write(io, pdigits+0, pt)
+        unsafe_write(io, pdigits+0, pt)
         write(io, '.')
-        write(io, pdigits+pt, len-pt)
+        unsafe_write(io, pdigits+pt, len-pt)
     end
     nothing
 end

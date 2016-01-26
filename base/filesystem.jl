@@ -105,7 +105,7 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     nothing
 end
 
-function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
+function unsafe_write(f::File, buf::Ptr{UInt8}, len::UInt, offset::Int64=Int64(-1))
     check_open(f)
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{UInt8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
@@ -113,15 +113,7 @@ function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     return len
 end
 
-write(f::File, c::UInt8) = write(f, UInt8[c])
-
-function write{T}(f::File, a::Array{T})
-    if isbits(T)
-        write(f, pointer(a), sizeof(a))
-    else
-        invoke(write, Tuple{IO, Array}, f, a)
-    end
-end
+write(f::File, c::UInt8) = write(f, Ref{UInt8}(c))
 
 function truncate(f::File, n::Integer)
     check_open(f)
@@ -152,18 +144,13 @@ function read(f::File, ::Type{UInt8})
     return ret % UInt8
 end
 
-function read!(f::File, a::Vector{UInt8}, nel=length(a))
+function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
-    if nel < 0 || nel > length(a)
-        throw(BoundsError())
-    end
     ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
-                f.handle, a, nel)
-    if ret < nel
-        throw(EOFError())
-    end
+                f.handle, p, nel)
     uv_error("read",ret)
-    return a
+    ret == nel || throw(EOFError())
+    nothing
 end
 
 nb_available(f::File) = filesize(f) - position(f)
