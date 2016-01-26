@@ -4,8 +4,6 @@
 
 module Checked
 
-import Base: checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
        checked_div, checked_rem, checked_fld, checked_mod, checked_cld
 
@@ -14,6 +12,29 @@ import Core.Intrinsics: box, unbox,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
+
+# define promotion behavior for checked operations
+checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
+checked_sub(x::Integer, y::Integer) = checked_sub(promote(x,y)...)
+checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
+checked_div(x::Integer, y::Integer) = checked_div(promote(x,y)...)
+checked_rem(x::Integer, y::Integer) = checked_rem(promote(x,y)...)
+checked_fld(x::Integer, y::Integer) = checked_fld(promote(x,y)...)
+checked_mod(x::Integer, y::Integer) = checked_mod(promote(x,y)...)
+checked_cld(x::Integer, y::Integer) = checked_cld(promote(x,y)...)
+
+# fallback catchall rules to prevent infinite recursion if promotion succeeds,
+# but no method exists to handle those types
+checked_neg{T<:Integer}(x::T) = no_op_err("checked_neg", T)
+checked_abs{T<:Integer}(x::T) = no_op_err("checked_abs", T)
+checked_add{T<:Integer}(x::T, y::T) = no_op_err("checked_add", T)
+checked_sub{T<:Integer}(x::T, y::T) = no_op_err("checked_sub", T)
+checked_mul{T<:Integer}(x::T, y::T) = no_op_err("checked_mul", T)
+checked_div{T<:Integer}(x::T, y::T) = no_op_err("checked_div", T)
+checked_rem{T<:Integer}(x::T, y::T) = no_op_err("checked_rem", T)
+checked_fld{T<:Integer}(x::T, y::T) = no_op_err("checked_fld", T)
+checked_mod{T<:Integer}(x::T, y::T) = no_op_err("checked_mod", T)
+checked_cld{T<:Integer}(x::T, y::T) = no_op_err("checked_cld", T)
 
 typealias SignedInt Union{Int8,Int16,Int32,Int64,Int128}
 typealias UnsignedInt Union{UInt8,UInt16,UInt32,UInt64,UInt128}

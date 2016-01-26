@@ -49,12 +49,19 @@ abstract TimeType <: AbstractTime
 # DateTime is a millisecond precision UTInstant interpreted by ISOCalendar
 immutable DateTime <: TimeType
     instant::UTInstant{Millisecond}
+    DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
 
 # DateTime is a day precision UTInstant interpreted by ISOCalendar
 immutable Date <: TimeType
     instant::UTInstant{Day}
+    Date(instant::UTInstant{Day}) = new(instant)
 end
+
+# Fallback constructors
+_c(x) = convert(Int64,x)
+DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),_c(s),_c(ms))
+Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 
 # Convert y,m,d to # of Rata Die days
 # Works by shifting the beginning of the year to March 1,
@@ -153,11 +160,6 @@ function Date(periods::Period...)
     end
     return Date(y,m,d)
 end
-
-# Fallback constructors
-_c(x) = convert(Int64,x)
-DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),_c(s),_c(ms))
-Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 
 # Traits, Equality
 Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
