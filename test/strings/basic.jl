@@ -157,15 +157,6 @@ tstr = tstStringType("12");
 @test_throws ErrorException endof(tstr)
 @test_throws ErrorException next(tstr, Bool(1))
 
-## generic string uses only endof and next ##
-
-immutable GenericString <: AbstractString
-    string::AbstractString
-end
-
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
-
 gstr = GenericString("12");
 @test typeof(string(gstr))==GenericString
 @test bytestring()==""

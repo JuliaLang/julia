@@ -2,7 +2,6 @@
 
 Oid(id::Oid) = id
 Oid(ptr::Ptr{Oid}) = unsafe_load(ptr)::Oid
-Oid(arr::Vector{UInt8}) = Oid(tuple(arr...))
 
 function Oid(ptr::Ptr{UInt8})
     if ptr == C_NULL

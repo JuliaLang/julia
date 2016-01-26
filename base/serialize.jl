@@ -732,8 +732,6 @@ deserialize(s::SerializationState, ::Type{BigFloat}) = parse(BigFloat, deseriali
 
 deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
 
-deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
-
 function deserialize(s::SerializationState, t::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)

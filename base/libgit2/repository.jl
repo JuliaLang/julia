@@ -183,7 +183,7 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
 end
 
 function clone(repo_url::AbstractString, repo_path::AbstractString,
-               clone_opts::CloneOptions = CloneOptions())
+               clone_opts::CloneOptions)
     clone_opts_ref = Ref(clone_opts)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_clone, :libgit2), Cint,

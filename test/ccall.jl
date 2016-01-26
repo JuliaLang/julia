@@ -89,12 +89,6 @@ b = ccall((:test_1, libccalltest), Struct1, (Struct1,), a)
 @test !(a === b)
 @test b.x == s1.x + 1 && b.y == s1.y - 2
 
-function foos1(s::Struct1)
-    @test !(s === a)
-    @test s == a
-    s
-end
-
 ci32 = Complex{Int32}(Int32(10),Int32(31))
 ba = ccall((:test_2a, libccalltest), Complex{Int32}, (Complex{Int32},), ci32)
 bb = ccall((:test_2b, libccalltest), Complex{Int32}, (Complex{Int32},), ci32)
@@ -134,7 +128,7 @@ verbose && Libc.flush_cstdio()
 verbose && println("Testing cfunction roundtrip: ")
 # cfunction roundtrip
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
-            (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
+              (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
     fname = symbol("foo"*string(v))
     fname1 = symbol("foo1"*string(v))
     @eval begin

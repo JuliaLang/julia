@@ -58,7 +58,6 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 
 isempty(lru::LRU) = isempty(lru.q)
 length(lru::LRU) = length(lru.q)
-haskey(lru::LRU, key) = haskey(lru.ht, key)
 
 ## associative ##
 
