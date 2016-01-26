@@ -40,6 +40,7 @@ get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
 end
 
 isnull(x::Nullable) = x.isnull
+exists(x::Nullable) = !x.isnull
 
 function isequal(x::Nullable, y::Nullable)
     if x.isnull && y.isnull
