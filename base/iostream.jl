@@ -121,23 +121,11 @@ end
 
 write(s::IOStream, b::UInt8) = Int(ccall(:ios_putc, Cint, (Cint, Ptr{Void}), b, s.ios))
 
-function write{T}(s::IOStream, a::Array{T})
-    if isbits(T)
-        if !iswritable(s)
-            throw(ArgumentError("write failed, IOStream is not writeable"))
-        end
-        Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
-                  s.ios, a, length(a)*sizeof(T)))
-    else
-        invoke(write, Tuple{IO, Array}, s, a)
-    end
-end
-
-function write(s::IOStream, p::Ptr, nb::Integer)
+function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
+    return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
@@ -146,10 +134,10 @@ function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     end
     colsz = size(a,1)*sizeof(T)
     if N<=1
-        return write(s, pointer(a, 1), colsz)
+        return unsafe_write(s, pointer(a, 1), colsz)
     else
         for idxs in CartesianRange((1, size(a)[2:end]...))
-            write(s, pointer(a, idxs.I), colsz)
+            unsafe_write(s, pointer(a, idxs.I), colsz)
         end
         return colsz*trailingsize(a,2)
     end
@@ -165,19 +153,21 @@ function read(s::IOStream, ::Type{UInt8})
     if b == -1
         throw(EOFError())
     end
-    b % UInt8
+    return b % UInt8
 end
 
-function read{T<:Union{UInt16, Int16, UInt32, Int32, UInt64, Int64}}(s::IOStream, ::Type{T})
-    ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
+if ENDIAN_BOM == 0x04030201
+function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
+    return ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Void}, Csize_t), s.ios, sizeof(T)) % T
+end
 end
 
-function read!(s::IOStream, a::Vector{UInt8})
+function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     if ccall(:ios_readall, Csize_t,
-             (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, a, sizeof(a)) < sizeof(a)
+             (Ptr{Void}, Ptr{Void}, Csize_t), s, p, nb) != nb
         throw(EOFError())
     end
-    a
+    nothing
 end
 
 ## text I/O ##
