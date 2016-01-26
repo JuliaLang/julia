@@ -485,12 +485,24 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
+ifeq ($(LLVM_VER),svn)	# changed since LLVM 3.9
+LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
+LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
+LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
+endif
 endif
 ifeq ($(BUILD_LLDB),1)
 LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
 # block default building of lldb
 LLVM_MFLAGS += OPTIONAL_DIRS=
+ifeq ($(LLVM_VER),svn)	# changed since LLVM 3.9
+LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_EXTERNAL_LLDB_BUILD=OFF
+endif
 endif
 
 LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
