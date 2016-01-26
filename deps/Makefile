@@ -379,8 +379,8 @@ LLVM_CPPFLAGS := $(CPPFLAGS)
 LLVM_LDFLAGS := $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
-LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_BUILDTYPE)" -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
-LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS)
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_BUILDTYPE)"
+LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
@@ -404,12 +404,16 @@ LLVM_FLAGS += --enable-libcpp
 endif # USE_LIBCPP
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
-# turn off shared LLVM on Windows unless explicitly requested
-ifneq ($(USE_LLVM_SHLIB),1)
-LLVM_FLAGS += --disable-shared
-endif
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
+ifeq ($(USE_LLVM_SHLIB),1)
+# NOTE: we could also --disable-static here (on the condition we link tools
+#       against libLLVM) but there doesn't seem to be a CMake counterpart option
+LLVM_FLAGS += --enable-shared
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
+# NOTE: LLVM_DYLIB_EXPORT_ALL has been removed recently,
+#       and LLVM now defaults to exporting all symbols
+endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
 ifeq ($(OS), WINNT)
@@ -441,6 +445,9 @@ endif # ARCH == ppc64
 
 
 ifeq ($(LLVM_SANITIZE),1)
+# NOTE: LLVM_SANITIZE + USE_LLVM_SHLIB only works with LLVM_USE_CMAKE, because
+#       Autotools doesn't provide a sanitation mode (linking libLLVM will fail).
+# NOTE: USE_LLVM_SHLIB + LLVM_USE_CMAKE only works on LLVM > 3.7.x (#24157)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins

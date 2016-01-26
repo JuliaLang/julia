@@ -40,6 +40,7 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
 # Link to the LLVM shared library
+# NOTE: USE_LLVM_SHLIB doesn't work with LLVM_USE_CMAKE on LLVM <=3.7.x (#24157)
 USE_LLVM_SHLIB := 0
 
 ## Settings for various Intel tools
