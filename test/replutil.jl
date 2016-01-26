@@ -122,9 +122,7 @@ end
 abstract T11007
 let
     err_str = @except_str T11007()
-    @test contains(err_str, "convert")
-    @test contains(err_str, "constructor")
-    @test contains(err_str, "T11007(...)")
+    @test contains(err_str, "no method matching T11007()")
 end
 
 # issue 11845
