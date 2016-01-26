@@ -750,7 +750,7 @@ endif
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
+	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
 else
 	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
