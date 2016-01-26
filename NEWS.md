@@ -91,6 +91,9 @@ Library improvements
     * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
     and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243],[#14424])
 
+    * All `sparse` methods now retain provided numerical zeros as structural nonzeros; to
+      drop numerical zeros, use `dropzeros!` ([#14798],[#15242]).
+
   * New `foreach` function for calling a function on every element of a collection when
     the results are not needed.
 
@@ -1779,9 +1782,11 @@ Too numerous to mention.
 [#13780]: https://github.com/JuliaLang/julia/issues/13780
 [#13824]: https://github.com/JuliaLang/julia/issues/13824
 [#13897]: https://github.com/JuliaLang/julia/issues/13897
+[#14114]: https://github.com/JuliaLang/julia/issues/14114
 [#14243]: https://github.com/JuliaLang/julia/issues/14243
 [#14413]: https://github.com/JuliaLang/julia/issues/14413
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
-[#14759]: https://github.com/JuliaLang/julia/issues/14759
-[#14114]: https://github.com/JuliaLang/julia/issues/14114
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
+[#14759]: https://github.com/JuliaLang/julia/issues/14759
+[#14798]: https://github.com/JuliaLang/julia/issues/14798
+[#15242]: https://github.com/JuliaLang/julia/issues/15242
