@@ -705,10 +705,16 @@ $(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
 	touch -c $@
 
+ifeq ($(CMAKE_GENERATOR),Ninja)
+LLVM_BUILD_COMMAND := $(CMAKE) --build .
+else ifeq ($(CMAKE_GENERATOR),make)
+LLVM_BUILD_COMMAND := +$(MAKE)
+endif
+
 $(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(CMAKE) --build .
+		$(LLVM_BUILD_COMMAND)
 	touch -c $@
 
 else
@@ -729,15 +735,16 @@ $(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/config.status | $(llvm_python_work
 endif # LLVM_USE_CMAKE
 
 ifeq ($(LLVM_USE_CMAKE),1)
-CHECK_COMMAND := $(CMAKE) --build . check
+LLVM_CHECK_COMMAND := $(CMAKE) --build . check
 else
-CHECK_COMMAND := $(MAKE) $(LLVM_MFLAGS) check
+LLVM_CHECK_COMMAND := +$(MAKE) $(LLVM_MFLAGS) check
 endif
+
 $(LLVM_BUILDDIR_withtype)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(CHECK_COMMAND)
+		$(LLVM_CHECK_COMMAND)
 endif
 	echo 1 > $@
 
