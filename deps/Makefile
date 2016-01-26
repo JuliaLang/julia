@@ -633,7 +633,7 @@ endif # x86_64
 endif # WINNT
 
 else ifeq ($(LLVM_VER),3.7.1)
-	(cd llvm-$(LLVM_VER) && patch < ../llvm-3.7.1.patch && patch < ../llvm-3.7.1_2.patch)
+	cd llvm-$(LLVM_VER) && patch -p1 < ../llvm-3.7.1.patch && patch -p1 < ../llvm-3.7.1_2.patch
 
 endif # LLVM_VER
 	touch -c $@
