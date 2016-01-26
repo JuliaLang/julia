@@ -155,6 +155,17 @@ let i = 0
     end
 end
 
+# product
+# -------
+
+@test isempty(Base.product(1:2,1:0))
+@test isempty(Base.product(1:2,1:0,1:10))
+@test isempty(Base.product(1:2,1:10,1:0))
+@test isempty(Base.product(1:0,1:2,1:10))
+@test collect(Base.product(1:2,3:4)) == [(1,3),(2,3),(1,4),(2,4)]
+@test isempty(collect(Base.product(1:0,1:2)))
+@test length(Base.product(1:2,1:10,4:6)) == 60
+
 # foreach
 let
     a = []
