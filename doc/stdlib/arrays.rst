@@ -855,11 +855,13 @@ Sparse Vectors and Matrices
 Sparse vectors and matrices largely support the same set of operations as their
 dense counterparts. The following functions are specific to sparse arrays.
 
-.. function:: sparse(I,J,V,[m,n,combine])
+.. function:: sparse(I, J, V,[ m, n, combine])
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ .
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ . Numerical zeros in (``I``\ , ``J``\ , ``V``\ ) are retained as structural nonzeros; to drop numerical zeros, use ``dropzeros!``\ .
+
+   For additional documentation and an expert driver, see ``Base.SparseArrays.sparse!``\ .
 
 .. function:: sparsevec(I, V, [m, combine])
 
