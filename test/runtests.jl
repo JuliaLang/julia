@@ -551,3 +551,9 @@ Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed b
 
 # JuliaLang/julia#14338
 @test supertype(Int) == Signed
+
+# withenv
+@test "1234" == @compat withenv(() -> ENV["_TESTVAR"], "_TESTVAR" => 1234)
+@test "1234" == @compat withenv("_TESTVAR" => 1234) do
+    return ENV["_TESTVAR"]
+end
