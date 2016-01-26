@@ -460,8 +460,11 @@ endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 LDFLAGS += $(SANITIZE_LDFLAGS)
-DEPS_CFLAGS += $(SANITIZE_OPTS)
-DEPS_CXXFLAGS += $(SANITIZE_OPTS)
+# FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
+#        https://github.com/JuliaLang/julia/issues/13858
+#        use LLVM_SANITIZE to sanitize LLVM
+#DEPS_CFLAGS += $(SANITIZE_OPTS)
+#DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
 TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
