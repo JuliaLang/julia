@@ -176,3 +176,12 @@ function findmeta_block(ex::Expr)
     end
     return false, Expr(:block)
 end
+
+remove_linenums!(ex) = ex
+function remove_linenums!(ex::Expr)
+    filter!(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)), ex.args)
+    for subex in ex.args
+        remove_linenums!(subex)
+    end
+    ex
+end
