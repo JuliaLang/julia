@@ -1296,21 +1296,23 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
+function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
-    for i = offs:length(A)
-        @inbounds Ai = A[i]
+    i = offs
+    while !done(A, st)
+        @inbounds Ai, st = next(A, st)
         el = f(Ai)
         S = typeof(el)
         if S === T || S <: T
             @inbounds dest[i] = el::T
+            i += 1
         else
             R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             @inbounds new[i] = el
-            return map_to!(f, i+1, new, A)
+            return map_to!(f, i+1, st, new, A)
         end
     end
     return dest
@@ -1320,10 +1322,12 @@ function map(f, A::AbstractArray)
     if isempty(A)
         return isa(f,Type) ? similar(A,f) : similar(A)
     end
-    first = f(A[1])
+    st = start(A)
+    A1, st = next(A, st)
+    first = f(A1)
     dest = similar(A, typeof(first))
     dest[1] = first
-    return map_to!(f, 2, dest, A)
+    return map_to!(f, 2, st, dest, A)
 end
 
 ## 2 argument
