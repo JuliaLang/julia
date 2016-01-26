@@ -1852,9 +1852,15 @@ static jl_value_t *verify_type(jl_value_t *v)
     assert(jl_typeof(jl_typeof(v)));
     return v;
 }
-
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 {
+    return jl_apply_generic_ex(args, nargs, 1);
+}
+JL_DLLEXPORT jl_value_t *jl_apply_generic_ex(jl_value_t **args, uint32_t nargs, int can_interpret)
+{
+    if (can_interpret && jl_interpreter_enabled) {
+        return jl_apply_interpreted(args, nargs);
+    }
     jl_value_t *F = args[0];
     jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE

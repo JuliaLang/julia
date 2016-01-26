@@ -42,6 +42,14 @@ macro generated(f)
     end
 end
 
+@generated function generic_ccall{R,A}(fptr::Ptr{Void}, ::Type{R}, ::Type{A}, args::SimpleVector)
+    e = Expr(:call, TopNode(:ccall), :fptr, R, A.types)
+    for i in 1:2*length(A.types)
+        push!(e.args, :(args[$i]))
+    end
+    e
+end
+
 
 function tuple_type_head{T<:Tuple}(::Type{T})
     @_pure_meta
