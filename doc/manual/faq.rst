@@ -59,16 +59,30 @@ I passed an argument ``x`` to a function, modified it inside that function, but 
 Suppose you call a function like this::
 
 	julia> x = 10
-	julia> function change_value!(y) # Create a new function
+        10
+
+	julia> function change_value!(y)
 	           y = 17
 	       end
+        change_value! (generic function with 1 method)
+
 	julia> change_value!(x)
+        17
+
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
+In Julia, the binding of a variable ``x`` cannot be changed by passing
+``x`` as an argument to a function. When calling ``change_value!(x)``
+in the above example, ``y`` is a newly created variable, bound
+initially to the value of ``x``, i.e. ``10``; then ``y`` is rebound to
+the constant ``17``, while the variable ``x`` of the outer scope is
+left untouched.
 
-But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
+But here is a thing you should pay attention to: suppose ``x`` is
+bound to an object of type ``Array`` (or any other *mutable* type).
+From within the function, you cannot "unbind" ``x`` from this Array,
+but you can change its content. For example::
 
 	julia> x = [1,2,3]
 	3-element Array{Int64,1}:
@@ -76,17 +90,26 @@ But here is a thing you should pay attention to: suppose ``x`` is bound to an Ar
 	2
 	3
 
-	julia> function change_array!(A) # Create a new function
+	julia> function change_array!(A)
 	           A[1] = 5
 	       end
+        change_array! (generic function with 1 method)
+
 	julia> change_array!(x)
+        5
+
 	julia> x
 	3-element Array{Int64,1}:
 	5
 	2
 	3
 
-Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
+Here we created a function ``change_array!()``, that assigns ``5`` to
+the first element of the passed array (bound to ``x`` at the call
+site, and bound to ``A`` within the function). Notice that, after the
+function call, ``x`` is still bound to the same array, but the content
+of that array changed: the variables ``A`` and ``x`` were distinct
+bindings refering to the same mutable ``Array`` object.
 
 
 Can I use ``using`` or ``import`` inside a function?
