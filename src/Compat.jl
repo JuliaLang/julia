@@ -279,6 +279,17 @@ function rewrite_split(ex, f)
     end
 end
 
+# rewrites all subexpressions of the form `a => b` to `(a, b)`
+function rewrite_pairs_to_tuples!(expr::Expr)
+    if expr.head == :(=>)
+        expr.head = :tuple
+    end
+    for subexpr in expr.args
+        isa(subexpr, Expr) && rewrite_pairs_to_tuples!(subexpr)
+    end
+    return expr
+end
+
 if VERSION < v"0.4.0-dev+707"
     macro inline(ex)
         esc(ex)
@@ -395,6 +406,8 @@ function _compat(ex::Expr)
             else
                 ex = Expr(:call, :Array, f.args[2], ex.args[2:end]...)
             end
+        elseif VERSION < v"0.4.0-dev+4389" && f == :withenv
+            rewrite_pairs_to_tuples!(ex)
         end
     elseif ex.head == :curly
         f = ex.args[1]
@@ -688,6 +701,26 @@ end
 if VERSION < v"0.4.0-dev+3837"
     export OutOfMemoryError
     const OutOfMemoryError = MemoryError
+end
+
+
+if VERSION < v"0.4.0-dev+4389"
+    export withenv
+    # temporarily set and then restore an environment value
+    function withenv(f::Function, keyvals...)
+        old = Dict{typeof(first(first(keyvals))),Any}()
+        for (key,val) in keyvals
+            old[key] = get(ENV, key, nothing)
+            val !== nothing ? (ENV[key]=val) : Base._unsetenv(key)
+        end
+        try f()
+        finally
+            for (key,val) in old
+                val !== nothing ? (ENV[key]=val) : Base._unsetenv(key)
+            end
+        end
+    end
+    withenv(f::Function) = f() # handle empty keyvals case; see #10853
 end
 
 import Base: remotecall, remotecall_fetch, remotecall_wait, remote_do
