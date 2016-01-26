@@ -226,6 +226,7 @@ function serialize(s::SerializationState, r::Regex)
     serialize(s, r.match_options)
 end
 
+#=
 function serialize(s::SerializationState, n::BigInt)
     serialize_type(s, BigInt)
     serialize(s, base(62,n))
@@ -235,6 +236,7 @@ function serialize(s::SerializationState, n::BigFloat)
     serialize_type(s, BigFloat)
     serialize(s, string(n))
 end
+=#
 
 function serialize(s::SerializationState, ex::Expr)
     serialize_cycle(s, ex) && return
@@ -728,11 +730,11 @@ function deserialize{K,V}(s::SerializationState, T::Type{Dict{K,V}})
     return t
 end
 
-deserialize(s::SerializationState, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
+#deserialize(s::SerializationState, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
 
-deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
+#deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
 
-deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
+#deserialize(s::SerializationState, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
 
 function deserialize(s::SerializationState, t::Type{Regex})
     pattern = deserialize(s)

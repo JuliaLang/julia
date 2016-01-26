@@ -13,6 +13,8 @@ function hash_integer(n::Integer, h::UInt)
     return h
 end
 
+#=
+
 function hash_integer(n::BigInt, h::UInt)
     s = n.size
     s == 0 && return hash_integer(0, h)
@@ -24,6 +26,8 @@ function hash_integer(n::BigInt, h::UInt)
     end
     return h
 end
+
+=#
 
 ## generic hashing for rational values ##
 
@@ -129,6 +133,7 @@ function decompose(x::Float64)
     s, Int(e - 1075 + (e == 0)), d
 end
 
+#=
 function decompose(x::BigFloat)
     isnan(x) && return big(0), 0, 0
     isinf(x) && return big(x.sign), 0, 0
@@ -139,6 +144,7 @@ function decompose(x::BigFloat)
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, s.size*sizeof(GMP.Limb))
     s, Int(x.exp - x.prec), Int(x.sign)
 end
+=#
 
 ## streamlined hashing for smallish rational types ##
 

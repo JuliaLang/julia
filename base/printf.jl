@@ -859,6 +859,7 @@ const HEX_symbols = "0123456789ABCDEF".data
 decode_hex(x::Integer) = decode_hex(x,hex_symbols)
 decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
 
+#=
 function decode(b::Int, x::BigInt)
     neg = x.size < 0
     pt = Base.ndigits(x, abs(b))
@@ -889,6 +890,7 @@ function decode_0ct(x::BigInt)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
 end
+=#
 
 ### decoding functions directly used by printf generated code ###
 
@@ -994,6 +996,7 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
     return Int32(len), Int32(pt), neg
 end
 
+#=
 function ini_dec(x::BigInt, n::Int)
     if x.size == 0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
@@ -1009,7 +1012,7 @@ function ini_dec(x::BigInt, n::Int)
     end
     return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
 end
-
+=#
 
 ini_hex(x::Real, n::Int) = ini_hex(x,n,hex_symbols)
 ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
@@ -1066,7 +1069,7 @@ function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     end
 end
 
-
+#=
 #BigFloat
 fix_dec(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_dec(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
@@ -1106,6 +1109,7 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     write(out, pointer(DIGITS), min(lng,bufsiz))
     return (false, ())
 end
+=#
 
 ### external printf interface ###
 
