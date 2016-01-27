@@ -841,16 +841,6 @@ static Value *literal_pointer_val(jl_value_t *p)
         // DataTypes are prefixed with a +
         return julia_gv("+", addr->name->name, addr->name->module, p);
     }
-    /*
-    if (jl_is_func(p)) {
-        jl_lambda_info_t *linfo = ((jl_function_t*)p)->linfo;
-        // Functions are prefixed with a -
-        if (linfo != NULL)
-            return julia_gv("-", linfo->name, linfo->module, p);
-        // Anonymous lambdas are prefixed with jl_method#
-        return julia_gv("jl_method#", p);
-    }
-    */
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
         // Type-inferred functions are prefixed with a -
