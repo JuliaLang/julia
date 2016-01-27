@@ -20,6 +20,8 @@ typealias BitInteger64  Union{BitInteger64_types...}
 typealias BitSigned     Union{BitSigned_types...}
 typealias BitUnsigned   Union{BitUnsigned_types...}
 typealias BitInteger    Union{BitInteger_types...}
+typealias BitSigned64T  Union{Type{Int8},Type{Int16},Type{Int32},Type{Int64}}
+typealias BitUnsigned64T Union{Type{UInt8},Type{UInt16},Type{UInt32},Type{UInt64}}
 
 ## integer comparisons ##
 
@@ -208,12 +210,12 @@ rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
-convert{T<:BitSigned64,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
+convert{Tf<:Union{Float32,Float64}}(T::BitSigned64T, x::Tf) =
     box(T,checked_fptosi(T,unbox(Tf,x)))
-convert{T<:BitUnsigned64,Tf<:Union{Float32,Float64}}(::Type{T}, x::Tf) =
+convert{Tf<:Union{Float32,Float64}}(T::BitUnsigned64T, x::Tf) =
     box(T,checked_fptoui(T,unbox(Tf,x)))
 
-convert{T<:Union{Int128,UInt128},Tf<:Union{Float32,Float64}}(::Type{T},x::Tf) =
+convert{Tf<:Union{Float32,Float64}}(T::Union{Type{Int128},Type{UInt128}},x::Tf) =
     (isinteger(x) || throw(InexactError()) ; trunc(T,x))
 
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
