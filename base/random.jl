@@ -104,7 +104,6 @@ end
 
 @inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
 @inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
-@inline rand_ui52(r::MersenneTwister) = rand_ui52_raw(r) & 0x000fffffffffffff
 @inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
@@ -241,7 +240,8 @@ rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
 
 ## random integers
 
-@inline rand_ui52(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2)) & 0x000fffffffffffff
+@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 # MersenneTwister
 
@@ -1320,14 +1320,28 @@ randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RN
 randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
+"Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
+@inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
+    # this duplicates the functionality of RangeGenerator objects,
+    # to optimize this special case
+    while true
+        x = (rand_ui52_raw(r) % Int) & mask
+        x < n && return x
+    end
+end
 
 function shuffle!(r::AbstractRNG, a::AbstractVector)
-    for i = length(a):-1:2
-        j = rand(r, 1:i)
+    n = length(a)
+    @assert n <= Int64(2)^52
+    mask = nextpow2(n) - 1
+    for i = n:-1:2
+        (mask >> 1) == i && (mask >>= 1)
+        j = 1 + rand_lt(r, i, mask)
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
+
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
@@ -1335,14 +1349,17 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 function randperm(r::AbstractRNG, n::Integer)
     a = Array(typeof(n), n)
+    @assert n <= Int64(2)^52
     if n == 0
        return a
     end
     a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(r, 1:i)
+    mask = 3
+    @inbounds for i = 2:Int(n)
+        j = 1 + rand_lt(r, i, mask)
         a[i] = a[j]
         a[j] = i
+        i == 1+mask && (mask = 2mask + 1)
     end
     return a
 end
@@ -1350,11 +1367,15 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array(typeof(n), n)
+    n == 0 && return a
+    @assert n <= Int64(2)^52
     a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(r, 1:i-1)
+    mask = 3
+    @inbounds for i = 2:Int(n)
+        j = 1 + rand_lt(r, i-1, mask)
         a[i] = a[j]
         a[j] = i
+        i == 1+mask && (mask = 2mask + 1)
     end
     return a
 end
