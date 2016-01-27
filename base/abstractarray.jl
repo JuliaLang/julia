@@ -1320,7 +1320,7 @@ end
 
 function map(f, A::AbstractArray)
     if isempty(A)
-        return isa(f,Type) ? similar(A,f) : similar(A)
+        return isa(f,Type) ? similar(A,f) : similar(A,Union{})
     end
     st = start(A)
     A1, st = next(A, st)
@@ -1358,7 +1358,7 @@ end
 function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
-        return similar(A, promote_type(eltype(A),eltype(B)), shp)
+        return similar(A, Union{}, shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
@@ -1400,7 +1400,7 @@ end
 function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], promote_eltype(As...), shape)
+        return similar(As[1], Union{}, shape)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
