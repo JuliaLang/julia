@@ -897,14 +897,6 @@ references in `r` are replaced with the corresponding matched text.
 replace
 
 """
-    randexp([rng], [dims...])
-
-Generate a random number according to the exponential distribution with scale 1. Optionally
-generate an array of such random numbers.
-"""
-randexp
-
-"""
     chop(string)
 
 Remove the last character from a string.
@@ -1916,14 +1908,6 @@ sort(A,dim,?,?,?,?)
 Kronecker tensor product of two vectors or two matrices.
 """
 kron
-
-"""
-    randn([rng], [dims...])
-
-Generate a normally-distributed random number with mean 0 and standard deviation 1.
-Optionally generate an array of normally-distributed random numbers.
-"""
-randn
 
 """
     process_exited(p::Process)
@@ -6041,13 +6025,6 @@ the topmost backend that does not throw a `MethodError`).
 pushdisplay
 
 """
-    randexp!([rng], A::Array{Float64,N})
-
-Fill the array `A` with random numbers following the exponential distribution (with scale 1).
-"""
-randexp!
-
-"""
     prevind(str, i)
 
 Get the previous valid string index before `i`. Returns a value less than `1` at the
@@ -8963,14 +8940,6 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 include_dependency
-
-"""
-    randn!([rng], A::Array{Float64,N})
-
-Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the rand function.
-"""
-randn!
 
 """
     ldexp(x, n)

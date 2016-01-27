@@ -300,38 +300,47 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister()], [RandomDevice()])
+    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64]
+    ftypes = [Float16, Float32, Float64]
+    b2 = big(2)
+    u3 = UInt(3)
     for f in [rand, randn, randexp]
-        f(rng...)        ::Float64
-        f(rng..., 5)     ::Vector{Float64}
-        f(rng..., 2, 3)  ::Array{Float64, 2}
+        f(rng...)                     ::Float64
+        f(rng..., 5)                  ::Vector{Float64}
+        f(rng..., 2, 3)               ::Array{Float64, 2}
+        f(rng..., b2, u3)             ::Array{Float64, 2}
+        f(rng..., (2, 3))             ::Array{Float64, 2}
+        for T in (f === rand ? types : ftypes)
+            a0 = f(rng..., T)         ::T
+            a1 = f(rng..., T, 5)      ::Vector{T}
+            a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
+            a3 = f(rng..., T, b2, u3) ::Array{T, 2}
+            a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
+            if T <: AbstractFloat && f === rand
+                for a in [a0, a1..., a2..., a3..., a4...]
+                    @test 0.0 <= a < 1.0
+                end
+            end
+        end
     end
-    for f! in [randn!, randexp!]
-        f!(rng..., Array{Float64}(5))    ::Vector{Float64}
-        f!(rng..., Array{Float64}(2, 3)) ::Array{Float64, 2}
+    for f! in [rand!, randn!, randexp!]
+        for T in (f! === rand! ? types : ftypes)
+            X = T == Bool ? T[0,1] : T[0,1,2]
+            for A in (Array{T}(5), Array{T}(2, 3))
+                f!(rng..., A)                ::typeof(A)
+                if f! === rand!
+                    f!(rng..., A, X)         ::typeof(A)
+                    f!(rng..., sparse(A))    ::typeof(sparse(A))
+                    f!(rng..., sparse(A), X) ::typeof(sparse(A))
+                end
+            end
+        end
     end
 
     bitrand(rng..., 5)             ::BitArray{1}
     bitrand(rng..., 2, 3)          ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
-
-    for T in [Base.BitInteger_types..., Bool, Float16, Float32, Float64]
-        a0 = rand(rng..., T)       ::T
-        a1 = rand(rng..., T, 5)    ::Vector{T}
-        a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
-        if T <: AbstractFloat
-            for a in [a0, a1..., a2...]
-                @test 0.0 <= a < 1.0
-            end
-        end
-        for A in (Array{T}(5), Array{T}(2, 3))
-            X = T == Bool ? T[0,1] : T[0,1,2]
-            rand!(rng..., A)            ::typeof(A)
-            rand!(rng..., A, X)  ::typeof(A)
-            rand!(rng..., sparse(A))            ::typeof(sparse(A))
-            rand!(rng..., sparse(A), X)  ::typeof(sparse(A))
-        end
-    end
 end
 
 function hist(X,n)
