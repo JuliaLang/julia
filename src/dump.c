@@ -200,16 +200,16 @@ static void write_float64(ios_t *s, double x)
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc);
-jl_value_t ***sysimg_gvars = NULL;
-void **sysimg_fvars = NULL;
+static jl_value_t ***sysimg_gvars = NULL;
+static void **sysimg_fvars = NULL;
 
 #ifdef HAVE_CPUID
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 #endif
 
 extern int globalUnique;
-void *jl_sysimg_handle = NULL;
-uint64_t jl_sysimage_base = 0;
+static void *jl_sysimg_handle = NULL;
+static uint64_t sysimage_base = 0;
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
 #endif
@@ -263,13 +263,13 @@ static int jl_load_sysimg_so(void)
 #endif
 
 #ifdef _OS_WINDOWS_
-        jl_sysimage_base = (intptr_t)jl_sysimg_handle;
+        sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
         if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
-            jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
+            sysimage_base = (intptr_t)dlinfo.dli_fbase;
         }
         else {
-            jl_sysimage_base = 0;
+            sysimage_base = 0;
         }
 #endif
     }
@@ -384,13 +384,14 @@ static void jl_deserialize_gv_others(ios_t *s)
     }
 }
 
-struct delayed_fptrs_t {
+static struct delayed_fptrs_t {
     jl_lambda_info_t *li;
     int32_t func;
     int32_t cfunc;
 } *delayed_fptrs = NULL;
 static size_t delayed_fptrs_n = 0;
 static size_t delayed_fptrs_max = 0;
+static size_t sysimg_fvars_max = 0;
 
 static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
 {
@@ -399,8 +400,8 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
     if (cfunc || func) {
         if (delayed_fptrs_max < delayed_fptrs_n + 1) {
             if (delayed_fptrs_max == 0)
-                // current measurements put the number of functions at 1130
-                delayed_fptrs_max = 2048;
+                // current measurements put the number of functions at 4508
+                delayed_fptrs_max = 4096;
             else
                 delayed_fptrs_max *= 2;
             delayed_fptrs = (struct delayed_fptrs_t*)realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0])); //assumes sizeof==alignof
@@ -409,8 +410,14 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
         delayed_fptrs[delayed_fptrs_n].func = func;
         delayed_fptrs[delayed_fptrs_n].cfunc = cfunc;
         delayed_fptrs_n++;
+        if (func > sysimg_fvars_max)
+            sysimg_fvars_max = func;
+        if (cfunc > sysimg_fvars_max)
+            sysimg_fvars_max = cfunc;
     }
 }
+
+void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n);
 
 static void jl_update_all_fptrs(void)
 {
@@ -422,19 +429,24 @@ static void jl_update_all_fptrs(void)
     sysimg_gvars = NULL;
     sysimg_fvars = NULL;
     size_t i;
+    jl_lambda_info_t **linfos = (jl_lambda_info_t**)malloc(sizeof(jl_lambda_info_t*) * sysimg_fvars_max);
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_lambda_info_t *li = delayed_fptrs[i].li;
-        int32_t func = delayed_fptrs[i].func-1;
+        int32_t func = delayed_fptrs[i].func - 1;
         if (func >= 0) {
             jl_fptr_to_llvm(fvars[func], li, 0);
+            linfos[func] = li;
         }
-        int32_t cfunc = delayed_fptrs[i].cfunc-1;
+        int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm(fvars[cfunc], li, 1);
+            linfos[cfunc] = li;
         }
     }
+    jl_register_fptrs(sysimage_base, fvars, linfos, delayed_fptrs_n);
     delayed_fptrs_n = 0;
     delayed_fptrs_max = 0;
+    sysimg_fvars_max = 0;
     free(delayed_fptrs);
     delayed_fptrs = NULL;
 }

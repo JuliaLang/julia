@@ -232,8 +232,9 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     size_t line;
     char *inlinedat_file;
     size_t inlinedat_line;
+    jl_lambda_info_t *outer_linfo;
     int fromC;
-    jl_getFunctionInfo(&name, &filename, &line, &inlinedat_file, &inlinedat_line, pointer, &fromC, skipC, 1);
+    jl_getFunctionInfo(&name, &filename, &line, &inlinedat_file, &inlinedat_line, &outer_linfo, pointer, &fromC, skipC, 1);
     free(filename);
     free(inlinedat_file);
     if (!name)

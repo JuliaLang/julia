@@ -120,7 +120,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
-        if length(code) == 7 && !code[6]  # code[6] == fromC
+        if length(code) == 8 && !code[7]  # code[7] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
             elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring #3024
@@ -387,16 +387,30 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
 end
 
-function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n)
+function show_spec_linfo(io::IO, fname::Symbol, linfo::Union{LambdaStaticData, Void})
+    if linfo === nothing
+        print(io, fname)
+    else
+        print(io, linfo.name)
+        Base.show_delim_array(io, linfo.(#=specTypes=#8).parameters, "(", ", ", ")", false)
+    end
+end
+
+const empty_symbol = symbol("")
+show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n) =
+    show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, nothing, n)
+function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, outer_linfo, n)
     print(io, "\n")
     # if we have inlining information, we print the `file`:`line` first,
     # then show the inlining info, because the inlining location
     # corresponds to `fname`.
-    if (inlinedat_file != symbol(""))
+    if inlinedat_file !== empty_symbol
         # align the location text
         print(io, " [inlined code] from ")
     else
-        print(io, " in ", fname, " at ")
+        print(io, " in ")
+        show_spec_linfo(io, fname, outer_linfo)
+        print(io, " at ")
     end
 
     print(io, file)
@@ -413,8 +427,10 @@ function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line,
         print(io, " (repeats ", n, " times)")
     end
 
-    if (inlinedat_file != symbol(""))
-        print(io, "\n in ", fname, " at ")
+    if inlinedat_file !== empty_symbol
+        print(io, "\n in ")
+        show_spec_linfo(io, fname, outer_linfo)
+        print(io, " at ")
         print(io, inlinedat_file, ":", inlinedat_line)
     end
 end
@@ -432,8 +448,8 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
 end
 
 function show_backtrace(io::IO, top_function::Symbol, t, set)
-    process_entry(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n) =
-        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+    process_entry(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, outer_linfo, n) =
+        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, outer_linfo, n)
     process_backtrace(process_entry, top_function, t, set)
 end
 
@@ -447,7 +463,7 @@ end
 function process_backtrace(process_func::Function, top_function::Symbol, t, set; skipC = true)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#");
-    last_inlinedat_file = ""; last_inlinedat_line = -1
+    last_inlinedat_file = ""; last_inlinedat_line = -1; last_outer_linfo = nothing
     local fname, file, line
     count = 0
     for i = 1:length(t)
@@ -455,7 +471,7 @@ function process_backtrace(process_func::Function, top_function::Symbol, t, set;
         if lkup === nothing
             continue
         end
-        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
+        fname, file, line, inlinedat_file, inlinedat_line, outer_linfo, fromC = lkup
 
         if fromC && skipC; continue; end
         if i == 1 && fname == :error; continue; end
@@ -465,16 +481,16 @@ function process_backtrace(process_func::Function, top_function::Symbol, t, set;
 
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
-                process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+                process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, last_outer_linfo, n)
             end
             n = 1
             lastfile = file; lastline = line; lastname = fname;
-            last_inlinedat_file = inlinedat_file; last_inlinedat_line = inlinedat_line;
+            last_inlinedat_file = inlinedat_file; last_inlinedat_line = inlinedat_line; last_outer_linfo = outer_linfo
         else
             n += 1
         end
     end
     if n > 1 || lastline != -11
-        process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+        process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, last_outer_linfo, n)
     end
 end
