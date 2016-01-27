@@ -821,6 +821,8 @@ void jl_dump_compiles(void *s)
 static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declarations,
     jl_llvm_functions_t *definitions, jl_cyclectx_t *cyclectx);
 static void jl_finalize_module(Module *m);
+void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataLayout &DL);
+
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
 {
@@ -874,6 +876,20 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->name));
     }
     assert(f != NULL);
+    const DataLayout &DL =
+#ifdef LLVM35
+        f->getParent()->getDataLayout();
+#else
+        *jl_data_layout;
+#endif
+    // record that this function name came from this linfo,
+    // so we can build a reverse mapping for debug-info.
+    if (li->name != anonymous_sym) {
+        // but don't remember anonymous symbols because
+        // they may not be rooted in the gc for the life of the program,
+        // and the runtime doesn't notify us when the code becomes unreachable :(
+        jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
+    }
 #if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
 #ifdef JL_DEBUG_BUILD
     if (verifyFunction(*f, PrintMessageAction) ||

@@ -28,7 +28,7 @@ void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         lam->fptr = (jl_fptr_t)fptr;
 }
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line,
+                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
                         size_t pointer, int *fromC, int skipC, int skipInline)
 {
     *name = NULL;
@@ -36,6 +36,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     *filename = NULL;
     *inlinedat_file = NULL;
     *inlinedat_line = -1;
+    *outer_linfo = NULL;
     *fromC = 0;
 }
 

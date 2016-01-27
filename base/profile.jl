@@ -2,7 +2,7 @@
 
 module Profile
 
-import Base: hash, ==
+import Base: hash, ==, show_spec_linfo
 
 export @profile
 
@@ -122,7 +122,7 @@ end
 
 # TODO update signature in docstring.
 """
-    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
 
 Given a previous profiling run, determine who called a particular function. Supplying the
 filename (and optionally, range of line numbers over which the function is defined) allows
@@ -171,15 +171,16 @@ clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
 ####
 immutable LineInfo
     func::ByteString
-    file::ByteString
-    line::Int
     inlined_file::ByteString
     inlined_line::Int
+    file::ByteString
+    line::Int
+    outer_linfo::Nullable{LambdaStaticData}
     fromC::Bool
     ip::Int64 # large enough that this struct can be losslessly read on any machine (32 or 64 bit)
 end
 
-const UNKNOWN = LineInfo("?", "?", -1, "?", -1, true, 0)
+const UNKNOWN = LineInfo("?", "?", -1, "?", -1, Nullable{LambdaStaticData}(), true, 0)
 
 #
 # If the LineInfo has function and line information, we consider two of them the same
@@ -208,10 +209,18 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
+const empty_sym = Symbol("")
 function lookup(ip::Ptr{Void})
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
-    if length(info) == 7
-        return LineInfo(string(info[1]), string(info[2]), Int(info[3]), string(info[4]), Int(info[5]), info[6], Int64(info[7]))
+    if length(info) == 8
+        is_inlined = (info[4] !== empty_sym)
+        return LineInfo(string(info[1]),
+            is_inlined ? string(info[2]) : "",
+            is_inlined ? Int(info[3]) : -1,
+            string(is_inlined ? info[4] : info[2]),
+            Int(is_inlined ? info[5] : info[3]),
+            info[6] === nothing ? Nullable{LambdaStaticData}() : Nullable{LambdaStaticData}(info[6]),
+            info[7], Int64(info[8]))
     else
         return UNKNOWN
     end
@@ -326,8 +335,8 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
     end
     wcounts = max(6, ndigits(maximum(n)))
     maxline = 0
-    maxfile = 0
-    maxfunc = 0
+    maxfile = 6
+    maxfunc = 10
     for li in lilist
         maxline = max(maxline, li.line)
         maxfile = max(maxfile, length(li.file))
@@ -335,17 +344,26 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
     end
     wline = max(5, ndigits(maxline))
     ntext = cols - wcounts - wline - 3
-    if maxfile+maxfunc <= ntext
+    maxfunc += 25
+    if maxfile + maxfunc <= ntext
         wfile = maxfile
         wfunc = maxfunc
     else
         wfile = floor(Integer,2*ntext/5)
         wfunc = floor(Integer,3*ntext/5)
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
+    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
         li = lilist[i]
-        println(io, lpad(string(n[i]), wcounts, " "), " ", rpad(truncto(li.file, wfile), wfile, " "), " ", rpad(truncto(li.func, wfunc), wfunc, " "), " ", lpad(string(li.line), wline, " "))
+        Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
+        Base.print(io, rpad(rtruncto(li.file, wfile), wfile, " "), " ")
+        Base.print(io, lpad(string(li.line), wline, " "), " ")
+        fname = li.func
+        if !li.fromC && !isnull(li.outer_linfo)
+            fname = sprint(show_spec_linfo, Symbol(li.func), get(li.outer_linfo))
+        end
+        Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
+        println(io)
     end
 end
 
@@ -400,18 +418,18 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
                           " ","unknown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
                           ")")
             else
-                base = string(base,
+                fname = li.func
+                if !li.fromC && !isnull(li.outer_linfo)
+                    fname = sprint(show_spec_linfo, Symbol(li.func), get(li.outer_linfo))
+                end
+                strs[i] = string(base,
                               rpad(string(counts[i]), ndigcounts, " "),
                               " ",
-                              truncto(string(li.file), widthfile),
+                              rtruncto(li.file, widthfile),
+                              ":",
+                              li.line == -1 ? "?" : string(li.line),
                               "; ",
-                              truncto(string(li.func), widthfunc),
-                              "; ")
-                if li.line == -1
-                    strs[i] = string(base, "(unknown line)")
-                else
-                    strs[i] = string(base, "line: ", li.line)
-                end
+                              ltruncto(fname, widthfunc))
             end
         else
             strs[i] = ""
@@ -540,13 +558,21 @@ function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
 end
 
 # Utilities
-function truncto(str::ByteString, w::Int)
+function rtruncto(str::ByteString, w::Int)
     ret = str;
     if length(str) > w
         ret = string("...", str[end-w+4:end])
     end
     ret
 end
+function ltruncto(str::ByteString, w::Int)
+    ret = str;
+    if length(str) > w
+        ret = string(str[1:w-4], "...")
+    end
+    ret
+end
+
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{LineInfo})
