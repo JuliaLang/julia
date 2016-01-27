@@ -1366,6 +1366,11 @@ for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv
         end
     end
 end
+### Fallbacks brought in from linalg/bidiag.jl while fixing #14506.
+# Eventually the above promotion methods should be generalized as
+# was done for bidiagonal matrices in #14506.
+At_ldiv_B(A::AbstractTriangular, B::AbstractVecOrMat) = At_ldiv_B!(A, copy(B))
+Ac_ldiv_B(A::AbstractTriangular, B::AbstractVecOrMat) = Ac_ldiv_B!(A, copy(B))
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
