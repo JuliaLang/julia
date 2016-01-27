@@ -13,12 +13,15 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/IR/Function.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/StringMap.h>
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
 #else
 #include <llvm/DebugInfo.h>
 #endif
-#ifdef USE_MCJIT
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+#include <llvm/IR/DataLayout.h>
+#include <llvm/IR/Mangler.h>
 #ifndef LLVM36
 #include <llvm/ExecutionEngine/ObjectImage.h>
 #endif
@@ -74,9 +77,8 @@ extern "C" void jl_init_debuginfo()
 struct FuncInfo {
     const Function *func;
     size_t lengthAdr;
-    std::string name;
-    std::string filename;
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
+    jl_lambda_info_t *linfo;
 };
 #else
 struct ObjectInfo {
@@ -90,8 +92,30 @@ struct ObjectInfo {
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
     const char *name;
 #endif
+    jl_lambda_info_t *linfo;
 };
 #endif
+
+// Maintain a mapping of unrealized function names -> linfo objects
+// so that when we see it get emitted, we can add a link back to the linfo
+// that it came from (providing name, type signature, file info, etc.)
+static StringMap<jl_lambda_info_t*> linfo_in_flight;
+static std::string mangle(const std::string &Name, const DataLayout &DL) {
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+    std::string MangledName;
+    {
+        raw_string_ostream MangledNameStream(MangledName);
+        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+    }
+    return MangledName;
+#else
+    return Name;
+#endif
+}
+void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataLayout &DL)
+{
+    linfo_in_flight[mangle(name, DL)] = linfo;
+}
 
 #if defined(_OS_WINDOWS_)
 #if defined(_CPU_X86_64_)
@@ -197,10 +221,16 @@ public:
         int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_wrlock(&threadsafe);
         jl_gc_safe_leave(gc_state);
+        StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(F.getName());
+        jl_lambda_info_t *linfo = NULL;
+        if (linfo_it != linfo_in_flight.end()) {
+            linfo = linfo_it->second;
+            linfo_in_flight.erase(linfo_it);
+        }
 #if defined(_OS_WINDOWS_)
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size, NULL);
 #endif
-        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
+        FuncInfo tmp = {&F, Size, Details.LineStarts, linfo};
         info[(size_t)(Code)] = tmp;
         uv_rwlock_wrunlock(&threadsafe);
     }
@@ -338,12 +368,9 @@ public:
             uint64_t SectionAddr = L.getSectionLoadAddress(secName);
 #endif
             Addr += SectionAddr;
+            StringRef sName = sym_iter.getName().get();
 #if defined(_OS_WINDOWS_)
             uint64_t SectionSize = Section->getSize();
-            StringRef sName = sym_iter.getName().get();
-#   ifdef _CPU_X86_
-            if (sName[0] == '_') sName = sName.substr(1);
-#   endif
             if (SectionAddrCheck)
                 assert(SectionAddrCheck == SectionAddr);
             else
@@ -352,7 +379,13 @@ public:
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
 #endif
-            ObjectInfo tmp = {&debugObj, (size_t)Size, L.clone().release()};
+            StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
+            jl_lambda_info_t *linfo = NULL;
+            if (linfo_it != linfo_in_flight.end()) {
+                linfo = linfo_it->second;
+                linfo_in_flight.erase(linfo_it);
+            }
+            ObjectInfo tmp = {&debugObj, (size_t)Size, L.clone().release(), linfo};
             objectmap[Addr] = tmp;
         }
 
@@ -360,14 +393,11 @@ public:
         uint64_t Addr;
         uint64_t Size;
         object::SymbolRef::Type SymbolType;
+        StringRef sName;
 #ifdef LLVM36
         uint64_t SectionAddr = 0;
-        StringRef sName;
 #else
         bool isText;
-#ifndef _OS_LINUX_
-        StringRef sName;
-#endif
 #ifdef _OS_WINDOWS_
         uint64_t SectionAddr = 0;
 #endif
@@ -389,17 +419,12 @@ public:
 #else
             if (Section->isText(isText) || !isText) continue;
 #endif
-#ifdef _OS_DARWIN_
             sym_iter.getName(sName);
-#   if defined(LLVM36)
-            if (sName[0] == '_') {
-                sName = sName.substr(1);
-            }
-#   else
+#ifdef _OS_DARWIN_
+#   if !defined(LLVM36)
             Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
             if (!Addr && sName[0] == '_') {
-                sName = sName.substr(1);
-                Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
+                Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName.substr(1), true);
             }
             if (!Addr) continue;
 #   endif
@@ -411,10 +436,6 @@ public:
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
 #   endif
-            sym_iter.getName(sName);
-#   ifdef _CPU_X86_
-            if (sName[0] == '_') sName = sName.substr(1);
-#   endif
             if (SectionAddrCheck)
                 assert(SectionAddrCheck == SectionAddr);
             else
@@ -423,21 +444,28 @@ public:
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
 #endif
+            StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
+            jl_lambda_info_t *linfo = NULL;
+            if (linfo_it != linfo_in_flight.end()) {
+                linfo = linfo_it->second;
+                linfo_in_flight.erase(linfo_it);
+            }
             const object::ObjectFile *objfile =
 #ifdef LLVM36
                 &obj;
 #else
                 obj.getObjectFile();
 #endif
-            ObjectInfo tmp = {objfile, (size_t)Size
+            ObjectInfo tmp = {objfile, (size_t)Size,
 #ifdef LLVM37
-                ,L.clone().release()
+                L.clone().release(),
 #elif defined(LLVM36)
-                ,(size_t)SectionAddr
+                (size_t)SectionAddr,
 #endif
 #ifdef _OS_DARWIN_
-                ,strndup(sName.data(), sName.size())
+                strndup(sName.data(), sName.size()),
 #endif
+                linfo
             };
             objectmap[Addr] = tmp;
         }
@@ -577,8 +605,8 @@ static void lookup_pointer(DIContext *context, char **name, size_t *line,
 #endif
 
 done:
-    // If this is a jlcall wrapper, set fromC to match JIT behavior
-    if (*name == NULL || ((strlen(*name) > 7) && (memcmp(*name, "jlcall_",7) == 0))) {
+    // If this is a jlcall or jlcapi wrapper, set fromC to match JIT behavior
+    if (*name == NULL || !strncmp(*name, "jlcall_", 7) || !strncmp(*name, "jlcapi_", 7)) {
         *fromC = true;
     }
 }
@@ -634,13 +662,22 @@ static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 }
 #endif
 
-extern "C" uint64_t jl_sysimage_base;
+static uint64_t jl_sysimage_base;
+static void **sysimg_fvars;
+static jl_lambda_info_t **sysimg_fvars_linfo;
+static size_t sysimg_fvars_n;
+extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n)
+{
+    jl_sysimage_base = sysimage_base;
+    sysimg_fvars = fptrs;
+    sysimg_fvars_linfo = linfos;
+    sysimg_fvars_n = n;
+}
 
 // *name and *filename should be either NULL or malloc'd pointer
 static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
-                                    char **inlinedat_file,
-                                    size_t *inlinedat_line, size_t pointer,
-                                    int *fromC, int skipC, int skipInline)
+                                    char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
+                                    size_t pointer, int *fromC, int skipC, int skipInline)
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -669,6 +706,7 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
         DWORD dwDisplacement = 0;
         DWORD64 dwDisplacement64 = 0;
         DWORD64 dwAddress = pointer;
+        void *saddr = NULL;
         PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
         pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
         pSymbol->MaxNameLen = MAX_SYM_NAME;
@@ -677,6 +715,7 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
                         pSymbol)) {
             // SymFromAddr returned success
             jl_copy_str(name, pSymbol->Name);
+            saddr = (void*)(uintptr_t)pSymbol->Address;
         }
         else {
             // SymFromAddr failed
@@ -701,6 +740,7 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+        void *saddr = dlinfo.dli_saddr;
 #if defined(_OS_DARWIN_)
         size_t msize = (size_t)(((uint64_t)-1)-fbase);
 #endif
@@ -841,6 +881,14 @@ lookup:
 #endif
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide,
                        fbase == jl_sysimage_base, fromC);
+        if (jl_sysimage_base == fbase && sysimg_fvars && saddr) {
+            for (size_t i = 0; i < sysimg_fvars_n; i++) {
+                if (saddr == sysimg_fvars[i]) {
+                    *outer_linfo = sysimg_fvars_linfo[i];
+                    break;
+                }
+            }
+        }
     }
     else {
         *fromC = 1;
@@ -849,7 +897,7 @@ lookup:
 
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line,
+                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
                         size_t pointer, int *fromC, int skipC, int skipInline)
 {
     // This function is not allowed to reference any TLS variables since
@@ -859,6 +907,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     *filename = NULL;
     *inlinedat_file = NULL;
     *inlinedat_line = -1;
+    *outer_linfo = NULL;
     *fromC = 0;
 
 #ifdef USE_MCJIT
@@ -869,6 +918,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 
     if (it != objmap.end() &&
         (intptr_t)(*it).first + (*it).second.size > pointer) {
+        *outer_linfo = (*it).second.linfo;
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
         *name = jl_demangle((*it).second.name);
         DIContext *context = NULL; // versions of MCJIT < 3.7 can't handle MachO relocations
@@ -886,8 +936,6 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 #endif
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer, 1, fromC);
         delete context;
-        uv_rwlock_rdunlock(&threadsafe);
-        return;
     }
 
 #else // !USE_MCJIT
@@ -905,8 +953,8 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
             return;
         }
 
-        jl_copy_str(name, (*it).second.name.c_str());
-        jl_copy_str(filename, (*it).second.filename.c_str());
+        jl_copy_str(name, (*it).second.func->getName().str().c_str());
+        jl_copy_str(filename, "");
 
         if ((*it).second.lines.empty()) {
             *fromC = 1;
@@ -914,6 +962,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
             return;
         }
 
+        *outer_linfo = (*it).second.linfo;
         std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit =
             (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
@@ -959,12 +1008,13 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
             jl_copy_str(inlinedat_file, inlinescope.getFilename().str().c_str());
             *inlinedat_line = inlineloc.getLine();
         }
-
-        uv_rwlock_rdunlock(&threadsafe);
-        return;
     }
 #endif // USE_MCJIT
-    jl_getDylibFunctionInfo(name, filename, line, inlinedat_file, inlinedat_line, pointer, fromC, skipC, skipInline);
+
+    else {
+        jl_getDylibFunctionInfo(name, filename, line, inlinedat_file, inlinedat_line, outer_linfo, pointer, fromC, skipC, skipInline);
+    }
+
     uv_rwlock_rdunlock(&threadsafe);
 }
 
@@ -1104,7 +1154,7 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
         ipstart = (DWORD64)(intptr_t)(*it).first;
     }
     uv_rwlock_rdunlock(&threadsafe);
-    return 0;
+    return ipstart;
 }
 
 #else //ifdef USE_MCJIT

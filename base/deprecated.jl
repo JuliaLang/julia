@@ -81,7 +81,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
         if lkup === ()
             continue
         end
-        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
+        fname, file, line, inlinedat_file, inlinedat_line, linfo, fromC = lkup
         if fname == funcsym
             break
         end
