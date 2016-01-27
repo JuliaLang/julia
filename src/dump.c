@@ -1055,11 +1055,58 @@ static int is_module_replaced(jl_module_t *m)
     return (jl_value_t*)m != jl_get_global(m->parent, m->name);
 }
 
+static int type_has_replaced_module(jl_value_t *t)
+{
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (is_module_replaced(dt->name->module))
+            return 1;
+        int i;
+        for(i=0; i < jl_nparams(dt); i++)
+            if (type_has_replaced_module(jl_tparam(dt,i)))
+                return 1;
+    }
+    // TODO: might eventually need to handle more types here
+    return 0;
+}
+
+static void remove_specializations_from_replaced_modules(jl_methlist_t *l)
+{
+    while (l != (void*)jl_nothing) {
+        jl_array_t *a = l->func->specializations;
+        if (a) {
+            size_t len = jl_array_len(a);
+            size_t i, insrt=0;
+            for(i=0; i < len; i++) {
+                jl_lambda_info_t *li = (jl_lambda_info_t*)jl_cellref(a, i);
+                if (!(li->rettype && type_has_replaced_module(li->rettype)) &&
+                    !(li->specTypes && type_has_replaced_module((jl_value_t*)li->specTypes))) {
+                    jl_cellset(a, insrt, li);
+                    insrt++;
+                }
+            }
+            jl_array_del_end(a, len-insrt);
+        }
+        a = l->func->roots;
+        if (a) {
+            size_t len = jl_array_len(a);
+            size_t i;
+            for(i=0; i < len; i++) {
+                jl_value_t *ai = jl_cellref(a, i);
+                if (jl_is_type(ai) && type_has_replaced_module(ai))
+                    jl_cellset(a, i, jl_nothing);
+            }
+        }
+        l = l->next;
+    }
+}
+
 static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
 {
     jl_methlist_t *l = *pl;
     while (l != (void*)jl_nothing) {
-        if (l->func && is_module_replaced(l->func->module))
+        if ((l->func && is_module_replaced(l->func->module)) ||
+            type_has_replaced_module((jl_value_t*)l->sig))
             *pl = l->next;
         else
             pl = &l->next;
@@ -1085,6 +1132,7 @@ static void remove_methods_from_replaced_modules(jl_methtable_t *mt)
         remove_methods_from_replaced_modules_from_cache(mt->cache_arg1);
     if ((jl_value_t*)mt->cache_targ != jl_nothing)
         remove_methods_from_replaced_modules_from_cache(mt->cache_targ);
+    remove_specializations_from_replaced_modules(mt->defs);
     if (mt->kwsorter)
         remove_methods_from_replaced_modules(jl_gf_mtable(mt->kwsorter));
 }
