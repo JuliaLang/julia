@@ -1614,7 +1614,7 @@ static int type_eqv__(jl_value_t *a, jl_value_t *b, int distinguish_tctor)
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
-            return type_eqv_(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub) &&
+            return !distinguish_tctor && type_eqv_(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub) &&
                 type_eqv_(((jl_tvar_t*)a)->lb, ((jl_tvar_t*)b)->lb);
         }
         else {
@@ -1835,6 +1835,8 @@ static int is_typekey_ordered(jl_value_t **key, size_t n)
     size_t i;
     for(i=0; i < n; i++) {
         jl_value_t *k = key[i];
+        if (jl_is_typevar(k))
+            return 0;
         if (jl_is_type(k) &&
             !(jl_is_datatype(k) && (((jl_datatype_t*)k)->uid ||
                                     k == ((jl_datatype_t*)k)->name->primary ||
@@ -1955,12 +1957,12 @@ static int is_cacheable(jl_datatype_t *type)
             return 0;
     }
     else {
-        if (jl_has_typevars_((jl_value_t*)type,0))
+        if (jl_is_leaf_type((jl_value_t*)type))
+            return 1;
+        if (jl_has_typevars_((jl_value_t*)type,1))
             return 0;
         for(int i=0; i < jl_svec_len(t); i++) {
             jl_value_t *pi = jl_svecref(t,i);
-            if (jl_is_typevar(pi))
-                return 0;
             if (type->name == jl_tuple_typename && !jl_is_leaf_type(pi))
                 return 0;
         }
@@ -3300,7 +3302,7 @@ void jl_init_types(void)
                                            jl_symbol("bound")),
                                    jl_svec(4, jl_sym_type, jl_type_type,
                                            jl_type_type, jl_any_type),
-                                   0, 0, 3);
+                                   0, 1, 3);
 
     jl_svec_t *tv;
     tv = jl_svec1(tvar("T"));
