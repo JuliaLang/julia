@@ -3556,7 +3556,7 @@ f14339{T<:Union{}}(x::T, y::T) = 0
 module JLCall14301
 
 # Define f
-f() = 1
+function f end
 
 let i = Any[[1.23], [2.34]]
     # f() with capture variables
