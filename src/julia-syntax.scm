@@ -1859,7 +1859,9 @@
                                  vars names))))
          (expand-forms
           (expand-binding-forms
-           `(call (top Generator) (-> (tuple ,@names) (block ,@stmts ,expr)) ,@ranges))))))
+           `(call (top ,(if (length> ranges 1) 'GeneratorND 'Generator))
+                  (-> (tuple ,@names) (block ,@stmts ,expr))
+                  ,@ranges))))))
 
    'comprehension
    (lambda (e) (expand-forms

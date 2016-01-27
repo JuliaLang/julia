@@ -1296,7 +1296,7 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A::AbstractArray)
+function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
@@ -1318,9 +1318,12 @@ function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A::AbstractArray)
     return dest
 end
 
+_default_eltype(f::Type) = f
+_default_eltype(f) = Union{}
+
 function map(f, A::AbstractArray)
     if isempty(A)
-        return isa(f,Type) ? similar(A,f) : similar(A,Union{})
+        return similar(A, _default_eltype(f))
     end
     st = start(A)
     A1, st = next(A, st)
@@ -1338,7 +1341,7 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
+function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A, B)
     for i = offs:length(A)
         @inbounds Ai, Bi = A[i], B[i]
         el = f(Ai, Bi)
@@ -1358,12 +1361,12 @@ end
 function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
-        return similar(A, Union{}, shp)
+        return similar(A, _default_eltype(f), shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
     dest[1] = first
-    return map_to!(f, 2, dest, A, B)
+    return map_to!(f, 2, nothing, dest, A, B)
 end
 
 ## N argument
