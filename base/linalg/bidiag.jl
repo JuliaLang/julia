@@ -77,6 +77,13 @@ function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal)
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
 
+# No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
+convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) = A
+# Convert Bidiagonal{Told} to Bidiagonal{Tnew} by constructing a new instance with converted elements
+convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(convert(Vector{Tnew}, A.dv), convert(Vector{Tnew}, A.ev), A.isupper)
+# When asked to convert Bidiagonal{Told} to AbstractMatrix{Tnew}, preserve structure by converting to Bidiagonal{Tnew} <: AbstractMatrix{Tnew}
+convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
+
 big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
 
 ###################
@@ -230,7 +237,6 @@ function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
     end
     B
 end
-
 for func in (:Ac_ldiv_B!, :At_ldiv_B!)
     @eval function ($func)(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
         nA,mA = size(A)
@@ -247,9 +253,6 @@ for func in (:Ac_ldiv_B!, :At_ldiv_B!)
         B
     end
 end
-Ac_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = Ac_ldiv_B!(A,copy(B))
-At_ldiv_B(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix) = At_ldiv_B!(A,copy(B))
-
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
     N = size(A, 2)
@@ -272,9 +275,15 @@ function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b
     x
 end
 
-function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
-    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
+### Generic promotion methods and fallbacks
+for (f,g) in ((:\, :A_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!))
+    @eval begin
+        function ($f){TA<:Number,TB<:Number}(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB})
+            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
+            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+        end
+        ($f)(A::Bidiagonal, B::AbstractVecOrMat) = ($g)(A, copy(B))
+    end
 end
 
 factorize(A::Bidiagonal) = A
