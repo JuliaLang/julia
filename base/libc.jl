@@ -6,6 +6,8 @@ export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, ca
     errno, strerror, flush_cstdio, systemsleep, time
 @windows_only export GetLastError, FormatMessage
 
+import Base: utf16to8
+
 include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
@@ -258,11 +260,10 @@ function FormatMessage end
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[1]
         len == 0 && return utf8("")
-        len = len + 1
         buf = Array(UInt16, len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-        return utf8(UTF16String(buf))
+        return UTF8String(utf16to8(buf))
     end
 end
 

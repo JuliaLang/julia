@@ -26,33 +26,37 @@ end # @unix_only
 
 const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
-_getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
-_hasenv(s::AbstractString) = _getenvlen(s)!=0 || Libc.GetLastError()!=ERROR_ENVVAR_NOT_FOUND
+_getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
+_hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
+_hasenv(s::AbstractString) = _hasenv(cwstring(s))
 
 function access_env(onError::Function, str::AbstractString)
-    var = utf16(str)
+    var = cwstring(str)
     len = _getenvlen(var)
     if len == 0
         return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? utf8("") : onError(str)
     end
     val = zeros(UInt16,len)
-    ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),var,val,len)
+    ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)
     if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
         error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
     end
-    return utf8(UTF16String(val))
+    pop!(val) # NUL
+    return UTF8String(utf16to8(val))
 end
 
-function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
-    var = utf16(var)
+function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
+    var = cwstring(svar)
+    val = cwstring(sval)
     if overwrite || !_hasenv(var)
-        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Cwstring),var,val)
+        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
         systemerror(:setenv, ret == 0)
     end
 end
 
-function _unsetenv(var::AbstractString)
-    ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Ptr{UInt16}),var,C_NULL)
+function _unsetenv(svar::AbstractString)
+    var = cwstring(svar)
+    ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
     systemerror(:setenv, ret == 0)
 end
 
@@ -105,10 +109,10 @@ end
 function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     pos = block[1]
     blk = block[2]
-    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)+1
+    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
     buf = Array(UInt16, len)
     unsafe_copy!(pointer(buf), pos, len)
-    env = utf8(UTF16String(buf))
+    env = UTF8String(utf16to8(buf))
     m = match(r"^(=?[^=]+)=(.*)$"s, env)
     if m === nothing
         error("malformed environment entry: $env")
