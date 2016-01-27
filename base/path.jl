@@ -124,36 +124,31 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 abspath(a::AbstractString) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-@windows_only realpath(path::AbstractString) = realpath(utf16(path))
-@windows_only function realpath(path::UTF16String)
-    p::UInt32 = sizeof(path)>>1
+@windows_only function realpath(path::AbstractString)
+    path = cwstring(path)
+    buf = zeros(UInt16, length(path))
     while true
-        buf = zeros(UInt16, p + 1)
-        p = ccall((:GetFullPathNameW, "kernel32"), stdcall,
-            UInt32, (Cwstring, UInt32, Ptr{UInt16}, Ptr{Void}),
+        n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
             path, length(buf), buf, C_NULL)
-        systemerror(:realpath, p == 0)
-        if (p < length(buf))
-            resize!(buf, p + 1)
-            return utf8(UTF16String(buf))
-        end
+        systemerror(:realpath, n == 0)
+        x = n < length(buf) # is the buffer big enough?
+        resize!(buf, n) # shrink if x, grow if !x
+        x && return UTF8String(utf16to8(buf))
     end
 end
 
-@windows_only longpath(path::AbstractString) = longpath(utf16(path))
-@windows_only function longpath(path::UTF16String)
-    p::UInt32 = sizeof(path)>>1
+@windows_only function longpath(path::AbstractString)
+    path = cwstring(path)
+    buf = zeros(UInt16, length(path))
     while true
-        buf = zeros(UInt16, p + 1)
-        p = ccall((:GetLongPathNameW, "kernel32"), stdcall, UInt32,
-            (Cwstring, Ptr{UInt16}, UInt32),
+        n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
             path, buf, length(buf))
-        systemerror(:longpath, p == 0)
-        # Buffer wasn't big enough, in which case `p` is the necessary buffer size
-        if (p < length(buf))
-            resize!(buf, p + 1)
-            return utf8(UTF16String(buf))
-        end
+        systemerror(:longpath, n == 0)
+        x = n < length(buf) # is the buffer big enough?
+        resize!(buf, n) # shrink if x, grow if !x
+        x && return UTF8String(utf16to8(buf))
     end
 end
 
