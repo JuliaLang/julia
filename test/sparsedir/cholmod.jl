@@ -620,3 +620,7 @@ Fnew = deserialize(b)
 @test_throws ArgumentError diag(Fnew)
 @test_throws ArgumentError logdet(Fnew)
 
+# Issue with promotion during conversion to CHOLMOD.Dense
+@test SparseArrays.CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
+@test SparseArrays.CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
+@test SparseArrays.CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
