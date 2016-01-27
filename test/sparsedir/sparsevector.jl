@@ -724,6 +724,66 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     @test_approx_eq full(y) Af'x2f
 end
 
+# left-division operations involving triangular matrices and sparse vectors (#14005)
+let m = 10
+    sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
+    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
+    sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
+
+    sprmat = sprand(m, m, 0.2)
+    sparsefloatmat = speye(m) + sprmat/(2m)
+    sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex(sprmat.nzval, sprmat.nzval)/(4m))
+    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round(Int, sprmat.nzval*10))
+
+    denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
+    densefloatmat = eye(m) + randn(m, m)/(2m)
+    densecomplexmat = eye(m) + complex(randn(m, m), randn(m, m))/(4m)
+
+    inttypes = (Int32, Int64, BigInt)
+    floattypes = (Float32, Float64, BigFloat)
+    complextypes = (Complex{Float32}, Complex{Float64})
+    eltypes = (inttypes..., floattypes..., complextypes...)
+
+    for eltypemat in eltypes
+        (densemat, sparsemat) = eltypemat in inttypes ? (denseintmat, sparseintmat) :
+                                eltypemat in floattypes ? (densefloatmat, sparsefloatmat) :
+                                eltypemat in complextypes && (densecomplexmat, sparsecomplexmat)
+        densemat = convert(Matrix{eltypemat}, densemat)
+        sparsemat = convert(SparseMatrixCSC{eltypemat}, sparsemat)
+        trimats = (LowerTriangular(densemat), UpperTriangular(densemat),
+                   LowerTriangular(sparsemat), UpperTriangular(sparsemat) )
+        unittrimats = (Base.LinAlg.UnitLowerTriangular(densemat), Base.LinAlg.UnitUpperTriangular(densemat),
+                       Base.LinAlg.UnitLowerTriangular(sparsemat), Base.LinAlg.UnitUpperTriangular(sparsemat) )
+
+        for eltypevec in eltypes
+            spvecs = eltypevec in inttypes ? sparseintvecs :
+                     eltypevec in floattypes ? sparsefloatvecs :
+                     eltypevec in complextypes && sparsecomplexvecs
+            spvecs = SparseVector[SparseVector(m, spvec.nzind, convert(Vector{eltypevec}, spvec.nzval)) for spvec in spvecs]
+
+            for spvec in spvecs
+                fspvec = convert(Array, spvec)
+                # test out-of-place left-division methods
+                for mat in (trimats..., unittrimats...), func in (\, At_ldiv_B, Ac_ldiv_B)
+                    @test isapprox((func)(mat, spvec), (func)(mat, fspvec))
+                end
+                # test in-place left-division methods not involving quotients
+                if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
+                    for mat in unittrimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
+                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                    end
+                end
+                # test in-place left-division methods involving quotients
+                if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
+                    for mat in trimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
+                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                    end
+                end
+            end
+        end
+    end
+end
+
 # It's tempting to share data between a SparseVector and a SparseArrays,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
