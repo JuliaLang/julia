@@ -218,19 +218,21 @@ function tempdir()
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
     end
-    resize!(temppath,lentemppath+1)
-    return utf8(UTF16String(temppath))
+    resize!(temppath,lentemppath)
+    return UTF8String(utf16to8(temppath))
 end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
+const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
+    tempp = cwstring(temppath)
     tname = Array(UInt16,32767)
-    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32,Ptr{UInt16}), temppath,utf16("jul"),uunique,tname)
+    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
-    resize!(tname,lentname+1)
-    return utf8(UTF16String(tname))
+    resize!(tname,lentname)
+    return UTF8String(utf16to8(tname))
 end
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))
@@ -243,7 +245,7 @@ function mktempdir(parent=tempdir())
             seed += 1
         end
         filename = tempname(parent, seed)
-        ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(filename))
+        ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
         if ret == 0
             return filename
         end
