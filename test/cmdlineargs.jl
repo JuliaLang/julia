@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
+let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # --version
     let v = split(readstring(`$exename -v`), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
