@@ -623,7 +623,7 @@ if DoFullTest
     # time can only support a single topology and the current session
     # is already running in parallel under the default topology.
     script = joinpath(dirname(@__FILE__), "topology.jl")
-    cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
+    cmd = `$(Base.julia_cmd()) $script`
 
     (strm, proc) = open(pipeline(cmd, stderr=STDERR))
     wait(proc)
