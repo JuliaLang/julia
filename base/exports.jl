@@ -180,6 +180,7 @@ export
     JULIA_HOME,
     LOAD_PATH,
     OS_NAME,
+    PROGRAM_FILE,
     STDERR,
     STDIN,
     STDOUT,
