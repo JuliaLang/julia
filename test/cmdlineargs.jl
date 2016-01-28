@@ -204,21 +204,46 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --worker takes default / custom as arugment (default/custom arguments tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
+    escape(str) = replace(str, "\\", "\\\\")
+
     # test passing arguments
     let testfile = tempname()
         try
-            # write a julia source file that just prints ARGS to STDOUT and exits
+            # write a julia source file that just prints ARGS to STDOUT
             write(testfile, """
                 println(ARGS)
-                exit(0)
             """)
-            @test readchomp(`$exename $testfile foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename -L $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename $testfile foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') == ["UTF8String[\"$(escape(testfile))\"]", "UTF8String[]"]
             @test !success(`$exename --foo $testfile`)
-            @test !success(`$exename -L $testfile -- foo -bar -- baz`)
+            @test !success(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`)
         finally
             rm(testfile)
+        end
+    end
+
+    # test the script name
+    let a = tempname(), b = tempname()
+        try
+            write(a, """
+                println(@__FILE__)
+                println(PROGRAM_FILE)
+                println(length(ARGS))
+                include(\"$(escape(b))\")
+            """)
+            write(b, """
+                println(@__FILE__)
+                println(PROGRAM_FILE)
+                println(length(ARGS))
+            """)
+            @test split(readchomp(`$exename $a`), '\n') == ["$a", "$a", "0", "$b", "$a", "0"]
+            @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') == ["$(realpath(b))", "", "0"]
+            @test split(readchomp(`$exename -L $b $a`), '\n') == ["$(realpath(b))", "", "1", "$a", "$a", "0", "$b", "$a", "0"]
+        finally
+            rm(a)
+            rm(b)
         end
     end
 
