@@ -52,28 +52,49 @@ let
     @test catch_backtrace() == StackFrame[]
 
     @noinline bad_function() = throw(UndefVarError(:nonexistent))
-    @noinline function try_stacktrace()
-        try
-            bad_function()
-        catch
-            return stacktrace()
-        end
-    end
-    @noinline function try_catch()
+    function try_catch()
         try
             bad_function()
         catch
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
-
-    # Test try...catch with stacktrace
-    @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
+    line_numbers = @__LINE__ - [8, 5]
 
     # Test try...catch with catch_stacktrace
     @test try_catch()[1:2] == [
         StackFrame(:bad_function, @__FILE__, line_numbers[1]),
-        StackFrame(:try_catch, @__FILE__, line_numbers[3])
+        StackFrame(:try_catch, @__FILE__, line_numbers[2])
     ]
+end
+
+let
+    # Test try...catch with stacktrace
+    function try_stacktrace()
+        try
+            error()
+        catch
+            true  # noop corrects stacktrace line numbers
+            return stacktrace()
+        end
+    end
+    line_number = @__LINE__ - 3
+
+    @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_number)
+
+    # TODO: Demonstrates an issue that occurs when stacktraces is called at the beginning
+    # of a catch. Once the issue is corrected, this test case will fail and line_number
+    # should be adjusted to `@__LINE__ - 3` below.
+    function try_stacktrace_bad()
+        try
+            error()
+            true  # Line reported by stacktraces
+            # Ignored
+        catch
+            return stacktrace()  # Line that should be reported
+        end
+    end
+    line_number = @__LINE__ - 6
+
+    @test try_stacktrace_bad()[1] == StackFrame(:try_stacktrace_bad, @__FILE__, line_number)
 end
