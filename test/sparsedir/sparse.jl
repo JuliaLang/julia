@@ -9,6 +9,11 @@ using Base.Test
 # check sparse matrix construction
 @test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 
+# check symmetric full
+a = sparse(complex(ones(5,5),ones(5,5)))
+@test isequal(full(Symmetric(triu(a + a.'))),a + a.')
+@test isequal(full(Symmetric(a + a.')),a + a.')
+
 # check matrix operations
 se33 = speye(3)
 do33 = ones(3)
