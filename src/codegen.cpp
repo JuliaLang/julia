@@ -127,6 +127,10 @@ using namespace llvm::legacy;
 #define AddrSpaceCastInst BitCastInst
 #endif
 
+#if !defined(_COMPILER_MICROSOFT_) && __cplusplus < 201103L
+#  define static_assert(...)
+#endif
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -5347,6 +5351,8 @@ static void init_julia_llvm_env(Module *m)
 #endif
                       , T_int16
     };
+    static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
+                  "Size of jl_array_flags_t is not the same as int16_t");
     Type* jl_array_llvmt =
         StructType::create(jl_LLVMContext,
                            ArrayRef<Type*>(vaelts,sizeof(vaelts)/sizeof(vaelts[0])),

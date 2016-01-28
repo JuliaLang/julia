@@ -1772,11 +1772,17 @@ static Value *emit_arrayflags(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
 {
     assert(tinfo.isboxed);
     Value *t = tinfo.V;
+#ifdef STORE_ARRAY_LEN
+    int arrayflag_field = 2;
+#else
+    int arrayflag_field = 1;
+#endif
     Value *addr = builder.CreateStructGEP(
 #ifdef LLVM37
                             nullptr,
 #endif
-                            builder.CreateBitCast(t, jl_parray_llvmt), 2);
+                            builder.CreateBitCast(t, jl_parray_llvmt),
+                            arrayflag_field);
     return builder.CreateLoad(addr); // TODO: tbaa
 }
 

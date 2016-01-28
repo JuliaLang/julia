@@ -1135,9 +1135,9 @@ static size_t array_nbytes(jl_array_t *a)
 
 static void jl_gc_free_array(jl_array_t *a)
 {
-    if (a->how == 2) {
+    if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
-        if (a->isaligned)
+        if (a->flags.isaligned)
             free_a16(d);
         else
             free(d);
@@ -1161,7 +1161,7 @@ static void sweep_malloced_arrays(void)
             }
             else {
                 *pma = nxt;
-                assert(ma->a->how == 2);
+                assert(ma->a->flags.how == 2);
                 jl_gc_free_array(ma->a);
                 ma->next = mafreelist;
                 mafreelist = ma;
@@ -1836,7 +1836,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_array_t *a = (jl_array_t*)v;
         jl_taggedvalue_t *o = jl_astaggedvalue(v);
         int todo = !(bits & GC_MARKED);
-        if (a->pooled)
+        if (a->flags.pooled)
 #ifdef MEMDEBUG
 #define _gc_setmark_pool gc_setmark_big
 #else
@@ -1844,7 +1844,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 #endif
             MARK(a,
                  bits = _gc_setmark_pool(o, GC_MARKED_NOESC);
-                 if (a->how == 2 && todo) {
+                 if (a->flags.how == 2 && todo) {
                      objprofile_count(MATY, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
@@ -1854,26 +1854,26 @@ static int push_root(jl_value_t *v, int d, int bits)
         else
             MARK(a,
                  bits = gc_setmark_big(o, GC_MARKED_NOESC);
-                 if (a->how == 2 && todo) {
+                 if (a->flags.how == 2 && todo) {
                      objprofile_count(MATY, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
                      else
                          scanned_bytes += array_nbytes(a);
                  });
-        if (a->how == 3) {
+        if (a->flags.how == 3) {
             jl_value_t *owner = jl_array_data_owner(a);
             refyoung |= gc_push_root(owner, d);
             goto ret;
         }
-        else if (a->how == 1) {
+        else if (a->flags.how == 1) {
 #ifdef GC_VERIFY
             void* val_buf = gc_val_buf((char*)a->data - a->offset*a->elsize);
             verify_parent1("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
 #endif
             gc_setmark_buf((char*)a->data - a->offset*a->elsize, gc_bits(o));
         }
-        if (a->ptrarray && a->data!=NULL) {
+        if (a->flags.ptrarray && a->data!=NULL) {
             size_t l = jl_array_len(a);
             if (l > 100000 && d > MAX_MARK_DEPTH-10) {
                 // don't mark long arrays at high depth, to try to avoid
