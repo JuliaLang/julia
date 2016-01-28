@@ -2,8 +2,7 @@
 
 module Profile
 
-import Base: show_spec_linfo
-import Base.StackTraces: lookup, UNKNOWN
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 
 export @profile
 
@@ -308,11 +307,11 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine:
     for i = 1:length(n)
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
-        Base.print(io, rpad(rtruncto(li.file, wfile), wfile, " "), " ")
+        Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
         Base.print(io, lpad(string(li.line), wline, " "), " ")
-        fname = li.func
-        if !li.fromC && !isnull(li.outer_linfo)
-            fname = sprint(show_spec_linfo, Symbol(li.func), get(li.outer_linfo))
+        fname = string(li.func)
+        if !li.from_c && !isnull(li.outer_linfo)
+            fname = sprint(show_spec_linfo, li)
         end
         Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
         println(io)
@@ -373,8 +372,8 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                           ")")
             else
                 fname = string(li.func)
-                if !li.fromC && !isnull(li.outer_linfo)
-                    fname = sprint(show_spec_linfo, Symbol(li.func), get(li.outer_linfo))
+                if !li.from_c && !isnull(li.outer_linfo)
+                    fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
                               rpad(string(counts[i]), ndigcounts, " "),

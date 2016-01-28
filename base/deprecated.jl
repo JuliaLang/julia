@@ -76,13 +76,12 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), bt[i], true)
+        lkup = StackTraces.lookup(bt[i])
         i += 1
-        if lkup === ()
+        if lkup === StackTraces.UNKNOWN
             continue
         end
-        fname, file, line, inlinedat_file, inlinedat_line, linfo, fromC = lkup
-        if fname == funcsym
+        if lkup.func == funcsym
             break
         end
     end
