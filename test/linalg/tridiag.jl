@@ -105,6 +105,10 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @test eigvecs(Ts) == eigvecs(Fs)
         #call to LAPACK.stein here
         Test.test_approx_eq_modphase(eigvecs(Ts,eigvals(Ts)),eigvecs(Fs))
+    elseif elty != Int
+        # check that undef is determined accurately even if type inference
+        # bails out due to the number of try/catch blocks in this code.
+        @test_throws UndefVarError Fs
     end
 
     # Test det(A::Matrix)

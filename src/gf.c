@@ -443,11 +443,13 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tupletype_t *argtypes, jl_lambda_inf
 #endif
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
+        jl_value_t *defast = def->ast;
         li->ast = jl_fieldref(newast, 0);
         jl_gc_wb(li, li->ast);
         li->rettype = jl_fieldref(newast, 1);
         jl_gc_wb(li, li->rettype);
-        li->inferred = 1;
+        // if type inference bails out it returns def->ast
+        li->inferred = li->ast != defast;
 #endif
         li->inInference = 0;
     }
