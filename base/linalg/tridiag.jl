@@ -77,7 +77,7 @@ function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
     elseif absn<size(M,1)
         return zeros(T,size(M,1)-absn)
     else
-        throw(BoundsError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+        throw(ArgumentError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
     end
 end
 
@@ -257,7 +257,7 @@ det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
 function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
-        throw(BoundsError("(i,j) = ($i,$j) not within matrix of size $(size(A))"))
+        throw(BoundsError(A, (i,j)))
     end
     if i == j
         return A.dv[i]
@@ -362,13 +362,13 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     elseif abs(n) < size(M,1)
         return zeros(T,size(M,1)-abs(n))
     else
-        throw(BoundsError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
+        throw(ArgumentError("$n-th diagonal of a $(size(M)) matrix doesn't exist!"))
     end
 end
 
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
-        throw(BoundsError("(i,j) = ($i,$j) not within matrix of size $(size(A))"))
+        throw(BoundsError(A, (i,j)))
     end
     if i == j
         return A.d[i]
