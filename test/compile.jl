@@ -119,7 +119,7 @@ let dir = mktempdir(),
             Base.compilecache(:Time4b3a94a1a081a8cb)
         end)
 
-        exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
+        exename = `$(Base.julia_cmd()) --precompiled=yes`
 
         testcode = """
             insert!(LOAD_PATH, 1, $(repr(dir)))

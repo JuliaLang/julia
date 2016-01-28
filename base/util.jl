@@ -377,7 +377,16 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
     cpu_target = bytestring(opts.cpu_target)
     image_file = bytestring(opts.image_file)
-    `$julia -C$cpu_target -J$image_file`
+    compile = if opts.compile_enabled == 0
+                  "no"
+              elseif opts.compile_enabled == 2
+                  "all"
+              elseif opts.compile_enabled == 3
+                  "min"
+              else
+                  "yes"
+              end
+    `$julia -C$cpu_target -J$image_file --compile=$compile`
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
