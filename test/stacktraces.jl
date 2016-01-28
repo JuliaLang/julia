@@ -2,38 +2,31 @@
 
 # Tests for /base/stacktraces.jl
 
-# Some tests don't currently work for Appveyor 32-bit Windows
-const APPVEYOR_WIN32 = (
-    OS_NAME == :Windows && WORD_SIZE == 32 && get(ENV, "APPVEYOR", "False") == "True"
-)
+let
+    @noinline child() = stacktrace()
+    @noinline parent() = child()
+    @noinline grandparent() = parent()
+    line_numbers = @__LINE__ - [3, 2, 1]
+    stack = grandparent()
 
-if !APPVEYOR_WIN32
-    let
-        @noinline child() = stacktrace()
-        @noinline parent() = child()
-        @noinline grandparent() = parent()
-        line_numbers = @__LINE__ - [3, 2, 1]
-
-        # Basic tests.
-        stack = grandparent()
-        @assert length(stack) >= 3 "Compiler has unexpectedly inlined functions"
-        @test [:child, :parent, :grandparent] == [f.func for f in stack[1:3]]
-        for (line, frame) in zip(line_numbers, stack[1:3])
-            @test [Symbol(@__FILE__), line] in
-                ([frame.file, frame.line], [frame.inlined_file, frame.inlined_line])
-        end
-        @test [false, false, false] == [f.from_c for f in stack[1:3]]
-
-        # Test remove_frames!
-        stack = StackTraces.remove_frames!(grandparent(), :parent)
-        @test stack[1] == StackFrame(:grandparent, @__FILE__, line_numbers[3])
-
-        stack = StackTraces.remove_frames!(grandparent(), [:child, :something_nonexistent])
-        @test stack[1:2] == [
-            StackFrame(:parent, @__FILE__, line_numbers[2]),
-            StackFrame(:grandparent, @__FILE__, line_numbers[3])
-        ]
+    # Basic tests.
+    @assert length(stack) >= 3 "Compiler has unexpectedly inlined functions"
+    @test [:child, :parent, :grandparent] == [f.func for f in stack[1:3]]
+    for (line, frame) in zip(line_numbers, stack[1:3])
+        @test [Symbol(@__FILE__), line] in
+            ([frame.file, frame.line], [frame.inlined_file, frame.inlined_line])
     end
+    @test [false, false, false] == [f.from_c for f in stack[1:3]]
+
+    # Test remove_frames!
+    stack = StackTraces.remove_frames!(grandparent(), :parent)
+    @test stack[1] == StackFrame(:grandparent, @__FILE__, line_numbers[3])
+
+    stack = StackTraces.remove_frames!(grandparent(), [:child, :something_nonexistent])
+    @test stack[1:2] == [
+        StackFrame(:parent, @__FILE__, line_numbers[2]),
+        StackFrame(:grandparent, @__FILE__, line_numbers[3])
+    ]
 end
 
 let
@@ -56,6 +49,7 @@ let
         try
             bad_function()
         catch
+            i_need_a_line_number_julia_bug = true # julia lowering doesn't emit a proper line number for catch
             return stacktrace()
         end
     end
@@ -66,7 +60,7 @@ let
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
+    line_numbers = @__LINE__ .- [16, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
