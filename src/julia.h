@@ -232,29 +232,28 @@ typedef struct {
 } jl_svec_t;
 
 typedef struct {
+    /*
+      how - allocation style
+      0 = data is inlined, or a foreign pointer we don't manage
+      1 = julia-allocated buffer that needs to be marked
+      2 = malloc-allocated pointer this array object manages
+      3 = has a pointer to the Array that owns the data
+    */
+    uint16_t how:2;
+    uint16_t ndims:10;
+    uint16_t pooled:1;
+    uint16_t ptrarray:1;  // representation is pointer array
+    uint16_t isshared:1;  // data is shared by multiple Arrays
+    uint16_t isaligned:1; // data allocated with memalign
+} jl_array_flags_t;
+
+typedef struct {
     JL_DATA_TYPE
     void *data;
 #ifdef STORE_ARRAY_LEN
     size_t length;
 #endif
-    union {
-        struct {
-            /*
-              how - allocation style
-              0 = data is inlined, or a foreign pointer we don't manage
-              1 = julia-allocated buffer that needs to be marked
-              2 = malloc-allocated pointer this array object manages
-              3 = has a pointer to the Array that owns the data
-            */
-            unsigned short how:2;
-            unsigned short ndims:10;
-            unsigned short pooled:1;
-            unsigned short ptrarray:1;  // representation is pointer array
-            unsigned short isshared:1;  // data is shared by multiple Arrays
-            unsigned short isaligned:1; // data allocated with memalign
-        };
-        unsigned short flags;
-    };
+    jl_array_flags_t flags;
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
@@ -735,7 +734,7 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
 #define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
-#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
+#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->flags.ndims))
 #define jl_array_data_owner_offset(ndims) (offsetof(jl_array_t,ncols) + sizeof(size_t)*(1+jl_array_ndimwords(ndims))) // in bytes
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
@@ -749,7 +748,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
     assert(i < jl_array_len(a));
     ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
     if (x) {
-        if (((jl_array_t*)a)->how == 3) {
+        if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
         }
         jl_gc_wb(a, x);
