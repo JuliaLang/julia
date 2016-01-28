@@ -92,7 +92,7 @@ A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = L*LAPACK.ormlq!('L','N',A.factors,A
 A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(full(A)), full(A), full(B))
 function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : copy_oftype(B, TAB))
+    A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
 end
 function *{TA,TB}(A::LQ{TA},B::QR{TB})
     TAB = promote_type(TA, TB)
@@ -108,7 +108,7 @@ end
 A_mul_B!{T<:BlasFloat}(A::LQPackedQ{T}, B::StridedVecOrMat{T})   = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function *{TA,TB}(A::LQPackedQ{TA},B::StridedVecOrMat{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(AbstractMatrix{TAB}, A), TB==TAB ? copy(B) : copy_oftype(B, TAB))
+    A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
@@ -117,11 +117,7 @@ Ac_mul_B!{T<:BlasComplex}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq
 function Ac_mul_B{TA,TB}(A::LQPackedQ{TA}, B::StridedVecOrMat{TB})
     TAB = promote_type(TA,TB)
     if size(B,1) == size(A.factors,2)
-        if TB == TAB
-            Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy(B))
-        else
-            Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
-        end
+        Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
@@ -134,11 +130,7 @@ A_mul_B!{T<:BlasFloat}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R'
 function *{TA,TB}(A::StridedMatrix{TA},B::LQPackedQ{TB})
     TAB = promote_type(TA,TB)
     if size(B.factors,2) == size(A,2)
-        if TA == TAB
-            A_mul_B!(copy(A),convert(AbstractMatrix{TAB},B))
-        else
-            A_mul_B!(convert(AbstractMatrix{TAB}, A),convert(AbstractMatrix{TAB},B))
-        end
+        A_mul_B!(copy_oftype(A, TAB),convert(AbstractMatrix{TAB},B))
     elseif size(B.factors,1) == size(A,2)
         A_mul_B!( [A zeros(TAB, size(A,1), size(B.factors,2)-size(B.factors,1))], convert(AbstractMatrix{TAB},B))
     else
