@@ -141,20 +141,27 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid,
         }
     }
     else {
-        // spin up to threshold cycles (count sheep), then sleep
-        uint64_t spin_cycles, spin_start = rdtsc();
+        // spin up to threshold ns (count sheep), then sleep
+        uint64_t spin_ns;
+        uint64_t spin_start = 0;
         while (tg->group_sense !=
                tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
             if (tg->sleep_threshold) {
-                spin_cycles = rdtsc() - spin_start;
-                if (spin_cycles >= tg->sleep_threshold) {
+                if (!spin_start) {
+                    // Lazily initialize spin_start since uv_hrtime is expensive
+                    spin_start = uv_hrtime();
+                    continue;
+                }
+                spin_ns = uv_hrtime() - spin_start;
+                // In case uv_hrtime is not monotonic, we'll sleep earlier
+                if (spin_ns >= tg->sleep_threshold) {
                     uv_mutex_lock(&tg->alarm_lock);
                     if (tg->group_sense !=
                         tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
                         uv_cond_wait(&tg->alarm, &tg->alarm_lock);
                     }
                     uv_mutex_unlock(&tg->alarm_lock);
-                    spin_start = rdtsc();
+                    spin_start = 0;
                     continue;
                 }
             }
