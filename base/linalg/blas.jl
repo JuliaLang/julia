@@ -314,10 +314,10 @@ function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::
         throw(DimensionMismatch("ranges of differing lengths"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
-        throw(BoundsError("range out of bounds for x, of length $(length(x))"))
+        throw(ArgumentError("range out of bounds for x, of length $(length(x))"))
     end
     if minimum(ry) < 1 || maximum(ry) > length(y)
-        throw(BoundsError("range out of bounds for y, of length $(length(y))"))
+        throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
     axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
     y
@@ -1307,10 +1307,10 @@ end # module
 function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
                                           src::Array{T}, rsrc::Union{UnitRange{Ti},Range{Ti}})
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
-        throw(BoundsError("range out of bounds for dest, of length $(length(dest))"))
+        throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end
     if minimum(rsrc) < 1 || maximum(rsrc) > length(src)
-        throw(BoundsError("range out of bounds for src, of length $(length(src))"))
+        throw(ArgumentError("range out of bounds for src, of length $(length(src))"))
     end
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))

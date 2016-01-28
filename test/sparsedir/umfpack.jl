@@ -62,3 +62,5 @@ x = speye(2) + im * speye(2)
 
 @test det(sparse([1,3,3,1], [1,1,3,3], [1,1,1,1])) == 0
 
+# UMFPACK_ERROR_n_nonpositive
+@test_throws ArgumentError lufact(sparse(Int[], Int[], Float64[], 5, 0))
