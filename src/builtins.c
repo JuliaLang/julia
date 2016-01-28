@@ -494,7 +494,7 @@ JL_CALLABLE(jl_f__apply)
             assert(jl_is_array(ai));
             jl_array_t *aai = (jl_array_t*)ai;
             size_t al = jl_array_len(aai);
-            if (aai->ptrarray) {
+            if (aai->flags.ptrarray) {
                 for (j = 0; j < al; j++) {
                     jl_value_t *arg = jl_cellref(aai, j);
                     // apply with array splatting may have embedded NULL value
@@ -1426,7 +1426,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         jl_array_t *av = (jl_array_t*)v;
         jl_datatype_t *el_type = (jl_datatype_t*)jl_tparam0(vt);
         for (j = 0; j < tlen; j++) {
-            if (av->ptrarray) {
+            if (av->flags.ptrarray) {
                 n += jl_static_show_x(out, jl_cellref(v, j), depth);
             } else {
                 char *ptr = ((char*)av->data) + j * av->elsize;

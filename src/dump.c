@@ -730,19 +730,19 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
-        if (ar->ndims == 1 && ar->elsize < 128) {
+        if (ar->flags.ndims == 1 && ar->elsize < 128) {
             writetag(s, (jl_value_t*)Array1d_tag);
-            write_uint8(s, (ar->ptrarray<<7) | (ar->elsize & 0x7f));
+            write_uint8(s, (ar->flags.ptrarray<<7) | (ar->elsize & 0x7f));
         }
         else {
             writetag(s, (jl_value_t*)jl_array_type);
-            write_uint16(s, ar->ndims);
-            write_uint16(s, (ar->ptrarray<<15) | (ar->elsize & 0x7fff));
+            write_uint16(s, ar->flags.ndims);
+            write_uint16(s, (ar->flags.ptrarray<<15) | (ar->elsize & 0x7fff));
         }
-        for (i=0; i < ar->ndims; i++)
+        for (i=0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         jl_serialize_value(s, jl_typeof(ar));
-        if (!ar->ptrarray) {
+        if (!ar->flags.ptrarray) {
             size_t tot = jl_array_len(ar) * ar->elsize;
             ios_write(s, (char*)jl_array_data(ar), tot);
         }
@@ -1357,7 +1357,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             backref_list.items[pos] = a;
         jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
         jl_set_typeof(a, aty);
-        if (!a->ptrarray) {
+        if (!a->flags.ptrarray) {
             size_t tot = jl_array_len(a) * a->elsize;
             ios_read(s, (char*)jl_array_data(a), tot);
         }
