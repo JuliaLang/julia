@@ -273,6 +273,10 @@ include("libgit2.jl")
 include("pkg.jl")
 const Git = Pkg.Git
 
+# Stack frames and traces
+include("stacktraces.jl")
+importall .StackTraces
+
 # profiler
 include("profile.jl")
 importall .Profile

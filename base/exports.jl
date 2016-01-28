@@ -9,6 +9,7 @@ export
     Pkg,
     Git,
     LibGit2,
+    StackTraces,
     Profile,
     Dates,
     Sys,
@@ -1046,6 +1047,12 @@ export
     error,
     rethrow,
     systemerror,
+
+# stack traces
+    StackTrace,
+    StackFrame,
+    stacktrace,
+    catch_stacktrace,
 
 # types
     convert,
