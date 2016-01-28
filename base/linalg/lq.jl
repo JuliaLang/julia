@@ -8,12 +8,14 @@ immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
     LQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 
-immutable LQPackedQ{T} <: AbstractMatrix{T}
+immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
+    LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 
 LQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQ{T,typeof(factors)}(factors, τ)
+LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
 lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
@@ -55,7 +57,16 @@ convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
-size(A::LQPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, dim) : 1) : throw(BoundsError())
+function size(A::LQPackedQ, dim::Integer)
+    if 0 < dim && dim <= 2
+        return size(A.factors, dim)
+    elseif 0 < dim && dim > 2
+        return 1
+    else
+        throw(BoundsError())
+    end
+end
+
 size(A::LQPackedQ) = size(A.factors)
 
 full(A::LQ) = A[:L]*A[:Q]
@@ -81,15 +92,15 @@ A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = L*LAPACK.ormlq!('L','N',A.factors,A
 A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(full(A)), full(A), full(B))
 function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB}, A), TB==TAB ? copy(B) : copy_oftype(B, TAB))
+    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : copy_oftype(B, TAB))
 end
 function *{TA,TB}(A::LQ{TA},B::QR{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB}, A), TB==TAB ? copy(B) : convert(Factorization{TAB}, B))
+    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : convert(Factorization{TAB},B))
 end
 function *{TA,TB}(A::QR{TA},B::LQ{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB}, A), TB==TAB ? copy(B) : convert(Factorization{TAB}, B))
+    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : convert(Factorization{TAB},B))
 end
 
 ## Multiplication by Q
@@ -140,11 +151,7 @@ A_mul_Bc!{T<:BlasReal}(A::StridedMatrix{T}, B::LQPackedQ{T})    = LAPACK.ormlq!(
 A_mul_Bc!{T<:BlasComplex}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
 function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{TB})
     TAB = promote_type(TA,TB)
-    if TA == TAB
-        A_mul_Bc!(copy(A), convert(AbstractMatrix{TAB},B))
-    else
-        A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
-    end
+    A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
 end
 
 function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
