@@ -84,7 +84,11 @@ extern "C" {
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
+#if !defined(__GNUC__) || __GNUC__ < 6
+    // GCC 6 is not happy about flexible array member in otherwise empty struct.
+    // Only remove the definition on GCC >= 6 to avoid breaking existing setup.
     struct _jl_value_t *fieldptr[];
+#endif
 } jl_value_t;
 
 typedef struct {
@@ -690,16 +694,16 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_tparam1(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 1)
 #define jl_tparam(t,i) jl_svecref(((jl_datatype_t*)(t))->parameters, i)
 
+// get a pointer to the data in a datatype
+#define jl_data_ptr(v)  ((jl_value_t**)v)
+
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
-#define jl_string_len(s)  (jl_array_len(((jl_array_t*)(s)->fieldptr[0])))
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
+#define jl_string_data(s) ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
+#define jl_string_len(s)  (jl_array_len(((jl_array_t*)jl_data_ptr(s)[0])))
+#define jl_iostr_data(s)  ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
-
-// get a pointer to the data in a datatype
-#define jl_data_ptr(v)  (((jl_value_t*)v)->fieldptr)
 
 // struct type info
 #define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))

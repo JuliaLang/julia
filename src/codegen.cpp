@@ -4938,7 +4938,7 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
     jl_value_t *box = (jl_value_t*)jl_gc_alloc_1w();
     jl_set_typeof(box, jl_box_any_type);
     // if (v) jl_gc_wb(box, v); // write block not needed: box was just allocated
-    box->fieldptr[0] = v;
+    jl_data_ptr(box)[0] = v;
     return box;
 }
 
