@@ -797,21 +797,30 @@ if VERSION < v"0.5.0-dev+2228"
     const readstring = readall
     export readstring
 
-    read(s::IO, nb::Integer=typemax(Int)) = readbytes(s, nb)
+    Base.read(s::IO) = readbytes(s)
+    Base.read(s::IO, nb) = readbytes(s, nb)
 
-    write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+    Base.write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
 
-    read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
-    read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
-    readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
-    readline(filename::AbstractString) = open(readline, filename)
-    readlines(filename::AbstractString) = open(readlines, filename)
+    Base.read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+    Base.read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+    Base.readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+    Base.readline(filename::AbstractString) = open(readline, filename)
+    Base.readlines(filename::AbstractString) = open(readlines, filename)
+    Base.readavailable(s::IOStream) = read!(s, Vector{UInt8}(nb_available(s)))
+    Base.readavailable(s::IOBuffer) = read(s)
 
-    function write(to::IO, from::IO)
+    function Base.write(to::IO, from::IO)
         while !eof(from)
             write(to, readavailable(from))
         end
     end
+
+    function Base.eachline(filename::AbstractString)
+        s = open(filename)
+        EachLine(s, ()->close(s))
+    end
+
 end
 
 end # module
