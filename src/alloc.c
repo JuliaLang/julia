@@ -274,8 +274,8 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 }
 
 JL_DLLEXPORT
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
-        jl_svec_t *tvars, jl_svec_t *sparams, jl_module_t *ctx)
+jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_t *sparams,
+                                     jl_module_t *ctx)
 {
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
@@ -294,7 +294,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
         if (jl_is_linenode(body1)) {
             li->file = jl_linenode_file(body1);
             li->line = jl_linenode_line(body1);
-        } else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
+        }
+        else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
             li->file = (jl_sym_t*)jl_exprarg(body1, 1);
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
@@ -583,8 +584,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
     return dt;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
-                                                          int8_t fielddesc_type)
+JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t fielddesc_type)
 {
     // fielddesc_type is specified manually for builtin types
     // and is (will be) calculated automatically for user defined types.
@@ -733,8 +733,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name,
-                                            jl_datatype_t *super,
+JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                             jl_svec_t *parameters, size_t nbits)
 {
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,

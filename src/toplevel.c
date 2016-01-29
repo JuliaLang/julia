@@ -703,7 +703,7 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
-static jl_lambda_info_t* expr_to_lambda(jl_lambda_info_t *f)
+static jl_lambda_info_t *expr_to_lambda(jl_lambda_info_t *f)
 {
     // this occurs when there is a closure being added to an out-of-scope function
     // the user should only do this at the toplevel

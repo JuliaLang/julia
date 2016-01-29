@@ -5,7 +5,7 @@
 // utility procedures used in code generation
 
 template<class T> // for GlobalObject's
-static T* addComdat(T *G)
+static T *addComdat(T *G)
 {
 #if defined(_OS_WINDOWS_)
     if (imaging_mode && !G->isDeclaration()) {
@@ -23,7 +23,7 @@ static T* addComdat(T *G)
     return G;
 }
 
-static Instruction *tbaa_decorate(MDNode* md, Instruction* load_or_store)
+static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 {
     load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
     return load_or_store;
@@ -37,7 +37,7 @@ static GlobalVariable *prepare_global(GlobalVariable *G)
     return G;
 }
 
-static llvm::Value *prepare_call(llvm::Value* Callee)
+static llvm::Value *prepare_call(llvm::Value *Callee)
 {
     llvm::Function *F = dyn_cast<Function>(Callee);
     if (!F)
@@ -79,7 +79,8 @@ static GlobalValue *realize_pending_global(Instruction *User, GlobalValue *G, st
                 }
             }
             FixedGlobals[M] = NewGV;
-        } else {
+        }
+        else {
             Function *F = cast<Function>(G);
             //std::cout << "Realizing " << std::string(F->getName()) << std::endl;
             //if (!F->getParent()) {
@@ -97,7 +98,8 @@ static GlobalValue *realize_pending_global(Instruction *User, GlobalValue *G, st
                     Function::ExternalLinkage,
                     F->getName(),
                     active_module);
-            } else {
+            }
+            else {
                 assert(F);
                 NewF = M->getFunction(F->getName());
                 if (!NewF) {
@@ -119,7 +121,9 @@ struct ExprChain {
     struct ExprChain *Next;
 };
 
-static void handleUse(Use &Use1,llvm::GlobalValue *G,std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals,struct ExprChain *Chain, struct ExprChain *ChainEnd)
+static void handleUse(Use &Use1, llvm::GlobalValue *G,
+                      std::map<llvm::Module*, llvm::GlobalValue*> &FixedGlobals,
+                      struct ExprChain *Chain, struct ExprChain *ChainEnd)
 {
     Instruction *User = dyn_cast<Instruction>(Use1.getUser());
     if (!User) {
@@ -206,7 +210,7 @@ static inline void add_named_global(GlobalValue *gv, void *addr, bool dllimport 
 #endif
 #if defined(_P64) || defined(LLVM35)
         // __imp_ variables are indirection pointers, so use malloc to simulate that
-        void** imp_addr = (void**)malloc(sizeof(void**));
+        void **imp_addr = (void**)malloc(sizeof(void**));
         *imp_addr = addr;
         addr = (void*)imp_addr;
 #endif
@@ -232,14 +236,16 @@ extern "C" {
 }
 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static GlobalVariable *global_proto(GlobalVariable *G) {
+static GlobalVariable *global_proto(GlobalVariable *G)
+{
     GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
             G->isConstant(), GlobalVariable::ExternalLinkage,
             NULL, G->getName(), G->getThreadLocalMode());
     return proto;
 }
 #else
-static GlobalVariable *global_proto(GlobalVariable *G) {
+static GlobalVariable *global_proto(GlobalVariable *G)
+{
     return G;
 }
 #endif
@@ -270,7 +276,8 @@ static GlobalVariable *stringConst(const std::string &txt)
         gv = imaging_mode ? gv : prepare_global(global_proto(gv));
         stringConstants[txt] = gv;
         strno++;
-    } else {
+    }
+    else {
         prepare_global(gv);
     }
     return gv;
@@ -279,7 +286,7 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 // --- Shadow module handling ---
 
-typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
+typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 JL_DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 
@@ -288,10 +295,11 @@ JL_DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
 static std::map<Function *, uint64_t> emitted_function_symtab;
 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static Function *function_proto(Function *F) {
+static Function *function_proto(Function *F)
+{
     Function *NewF = Function::Create(F->getFunctionType(),
-                            Function::ExternalLinkage,
-                            F->getName());
+                                      Function::ExternalLinkage,
+                                      F->getName());
     NewF->setAttributes(AttributeSet());
 
     // FunctionType does not include any attributes. Copy them over manually
@@ -314,7 +322,6 @@ public:
         ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
         LazyFunctions(0)
     {
-
     }
     ValueToValueMapTy VMap;
     llvm::Module *destModule;
@@ -466,7 +473,8 @@ public:
     };
 };
 #else
-static Function *function_proto(Function *F) {
+static Function *function_proto(Function *F)
+{
     return F;
 }
 #endif
@@ -527,7 +535,8 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             Elements.push_back(julia_type_to_di(jl_svecref(jst->types,i),dbuilder,false));
         dbuilder->replaceArrays(ct, dbuilder->getOrCreateArray(ArrayRef<Metadata*>(Elements)));
         return ct;
-    } else {
+    }
+    else {
         jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt, jl_symbol_name(jdt->name->name), NULL, 0, NULL);
         return (llvm::DIType*)jdt->ditype;
     }
@@ -569,7 +578,8 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, const char *sysimg_data, size_t sysimg_len)
+static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
+                                   const char *sysimg_data, size_t sysimg_len)
 {
     ArrayType *gvars_type = ArrayType::get(T_psize, jl_sysimg_gvars.size());
     addComdat(new GlobalVariable(*mod,
@@ -635,7 +645,8 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap, c
     }
 }
 
-static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc)
+static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len,
+                           bool dump_as_bc)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     realize_pending_globals();
@@ -1150,7 +1161,6 @@ static Value *emit_datatype_isbitstype(Value *dt)
     return isbitstype;
 }
 
-
 // --- generating various error checks ---
 
 static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
@@ -1234,12 +1244,12 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
                                        ArrayRef<Value*>(zeros));
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
-                        { fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx)});
+                       { fname_val, msg_val,
+                         literal_pointer_val(type), boxed(x,ctx)});
 #else
     builder.CreateCall4(prepare_call(jltypeerror_func),
-                    fname_val, msg_val,
-                    literal_pointer_val(type), boxed(x,ctx));
+                        fname_val, msg_val,
+                        literal_pointer_val(type), boxed(x,ctx));
 #endif
 }
 
@@ -1352,7 +1362,7 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                         jl_codectx_t *ctx, MDNode* tbaa, size_t alignment = 0)
+                             jl_codectx_t *ctx, MDNode *tbaa, size_t alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1396,8 +1406,8 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 }
 
 static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode* tbaa,
-                        Value* parent,  // for the write barrier, NULL if no barrier needed
+                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode *tbaa,
+                        Value *parent,  // for the write barrier, NULL if no barrier needed
                         size_t alignment = 0)
 {
     Type *elty = julia_type_to_llvm(jltype);
@@ -1740,7 +1750,7 @@ static Value *emit_arraylen(const jl_cgval_t &tinfo, jl_value_t *ex, jl_codectx_
 
 static Value *emit_arrayptr(Value *t)
 {
-    Value* addr = builder.CreateStructGEP(
+    Value *addr = builder.CreateStructGEP(
 #ifdef LLVM37
                                           nullptr,
 #endif
@@ -1867,7 +1877,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 
 // --- boxing ---
 
-static Value* emit_allocobj(size_t static_size);
+static Value *emit_allocobj(size_t static_size);
 static Value *init_bits_value(Value *newv, Value *jt, Value *v)
 {
     builder.CreateStore(jt, emit_typeptr_addr(newv));
@@ -2046,8 +2056,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, jl_value_t *jt)
     return init_bits_value(emit_allocobj(jl_datatype_size(jt)), literal_pointer_val(jt), v);
 }
 
-static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg,
-                               jl_codectx_t *ctx)
+static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_codectx_t *ctx)
 {
     Value *t = emit_typeof(x);
     emit_typecheck(mark_julia_type(t, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg, ctx);
@@ -2068,51 +2077,50 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg,
 }
 
 // allocation for known size object
-static Value* emit_allocobj(size_t static_size)
+static Value *emit_allocobj(size_t static_size)
 {
     if (static_size == sizeof(void*)*1)
-
         return builder.CreateCall(prepare_call(jlalloc1w_func)
 #ifdef LLVM37
-            , {}
+                                  , {}
 #endif
-            );
+                                  );
     else if (static_size == sizeof(void*)*2)
         return builder.CreateCall(prepare_call(jlalloc2w_func)
 #ifdef LLVM37
-            , {}
+                                  , {}
 #endif
-            );
+                                  );
     else if (static_size == sizeof(void*)*3)
         return builder.CreateCall(prepare_call(jlalloc3w_func)
 #ifdef LLVM37
-            , {}
+                                  , {}
 #endif
-            );
+                                  );
     else
         return builder.CreateCall(prepare_call(jlallocobj_func),
                                   ConstantInt::get(T_size, static_size));
 }
 
 // if ptr is NULL this emits a write barrier _back_
-static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
+static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-    Value* parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
-    Value* parent_type = builder.CreateLoad(parenttag);
-    Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
+    Value *parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
+    Value *parent_type = builder.CreateLoad(parenttag);
+    Value *parent_mark_bits = builder.CreateAnd(parent_type, 1);
 
     // the branch hint does not seem to make it to the generated code
     //builder.CreateCall(expect_func, {parent_marked, ConstantInt::get(T_int1, 0)});
-    Value* parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
+    Value *parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
 
-    BasicBlock* cont = BasicBlock::Create(getGlobalContext(), "cont");
-    BasicBlock* barrier_may_trigger = BasicBlock::Create(getGlobalContext(), "wb_may_trigger", ctx->f);
-    BasicBlock* barrier_trigger = BasicBlock::Create(getGlobalContext(), "wb_trigger", ctx->f);
+    BasicBlock *cont = BasicBlock::Create(getGlobalContext(), "cont");
+    BasicBlock *barrier_may_trigger = BasicBlock::Create(getGlobalContext(), "wb_may_trigger", ctx->f);
+    BasicBlock *barrier_trigger = BasicBlock::Create(getGlobalContext(), "wb_trigger", ctx->f);
     builder.CreateCondBr(parent_marked, barrier_may_trigger, cont);
 
     builder.SetInsertPoint(barrier_may_trigger);
-    Value* ptr_mark_bit = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(emit_typeptr_addr(ptr), T_psize)), 1);
-    Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
+    Value *ptr_mark_bit = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(emit_typeptr_addr(ptr), T_psize)), 1);
+    Value *ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
     builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
     builder.SetInsertPoint(barrier_trigger);
     builder.CreateCall(prepare_call(queuerootfun), builder.CreateBitCast(parent, T_pjlvalue));
@@ -2136,7 +2144,7 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
 }
 
 static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t idx0,
-                            const jl_cgval_t &rhs, jl_codectx_t *ctx, bool checked, bool wb)
+                          const jl_cgval_t &rhs, jl_codectx_t *ctx, bool checked, bool wb)
 {
     if (sty->mutabl || !checked) {
         assert(strct.ispointer);
@@ -2287,18 +2295,18 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
 
 static Value *emit_pgcstack(jl_codectx_t *ctx)
 {
-    Value * addr = emit_nthptr_addr(
-        ctx->gc.ptlsStates,
-        (ssize_t)(offsetof(jl_tls_states_t, pgcstack) / sizeof(void*)));
+    Value *addr =
+        emit_nthptr_addr(ctx->gc.ptlsStates,
+                         (ssize_t)(offsetof(jl_tls_states_t, pgcstack) / sizeof(void*)));
     return builder.CreateBitCast(addr, PointerType::get(T_ppjlvalue, 0),
                                  "jl_pgcstack");
 }
 
 static Value *emit_exc_in_transit(jl_codectx_t *ctx)
 {
-    Value * addr = emit_nthptr_addr(
-        ctx->gc.ptlsStates,
-        (ssize_t)(offsetof(jl_tls_states_t,
-                           exception_in_transit) / sizeof(void*)));
+    Value *addr =
+        emit_nthptr_addr(ctx->gc.ptlsStates,
+                         (ssize_t)(offsetof(jl_tls_states_t,
+                                            exception_in_transit) / sizeof(void*)));
     return builder.CreateBitCast(addr, T_ppjlvalue, "jl_exception_in_transit");
 }

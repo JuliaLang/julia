@@ -276,7 +276,7 @@ JL_DLLEXPORT int jl_ver_is_release(void)
     return JULIA_VERSION_IS_RELEASE;
 }
 
-JL_DLLEXPORT const char* jl_ver_string(void)
+JL_DLLEXPORT const char *jl_ver_string(void)
 {
    return JULIA_VERSION_STRING;
 }

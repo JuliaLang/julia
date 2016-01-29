@@ -16,8 +16,7 @@ region_t *jl_gc_find_region(void *ptr, int maybe)
 // singleton object), this usually returns the same pointer which points to
 // the next object but it can also return NULL if the pointer is pointing to
 // the end of the page.
-JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p,
-                                                           size_t *osize_p)
+JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
     region_t *r = find_region(p, 1);
     // Not in the pool
@@ -55,12 +54,12 @@ void jl_(void *jl_value);
 
 // mark verification
 #ifdef GC_VERIFY
-static jl_value_t* lostval = 0;
+static jl_value_t *lostval = 0;
 static arraylist_t lostval_parents;
 static arraylist_t lostval_parents_done;
 static int verifying;
 
-static void add_lostval_parent(jl_value_t* parent)
+static void add_lostval_parent(jl_value_t *parent)
 {
     for(int i = 0; i < lostval_parents_done.len; i++) {
         if ((jl_value_t*)lostval_parents_done.items[i] == parent)
@@ -143,7 +142,7 @@ static void clear_mark(int bits)
     FOR_EACH_HEAP () {
         v = big_objects;
         while (v != NULL) {
-            void* gcv = &v->header;
+            void *gcv = &v->header;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
@@ -152,14 +151,14 @@ static void clear_mark(int bits)
 
     v = big_objects_marked;
     while (v != NULL) {
-        void* gcv = &v->header;
+        void *gcv = &v->header;
         if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
         gc_bits(gcv) = bits;
         v = v->next;
     }
 
     for (int h = 0; h < REGION_COUNT; h++) {
-        region_t* region = regions[h];
+        region_t *region = regions[h];
         if (!region) break;
         for (int pg_i = 0; pg_i < REGION_PG_COUNT/32; pg_i++) {
             uint32_t line = region->freemap[pg_i];
@@ -206,12 +205,12 @@ static void gc_verify_track(void)
             jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
         }
-        jl_value_t* lostval_parent = NULL;
+        jl_value_t *lostval_parent = NULL;
         for(int i = 0; i < lostval_parents.len; i++) {
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
             int clean_len = bits_save[GC_CLEAN].len;
             for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
-                void* p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+                void *p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
                 if (jl_valueof(p) == lostval_parent) {
                     lostval = lostval_parent;
                     lostval_parent = NULL;
@@ -246,7 +245,7 @@ static void gc_verify(void)
     post_mark(&finalizer_list_marked, 1);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
-        gcval_t* v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
+        gcval_t *v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
             jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));

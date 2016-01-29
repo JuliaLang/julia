@@ -98,8 +98,7 @@ int ti_threadgroup_initthread(ti_threadgroup_t *tg, int16_t ext_tid)
 }
 
 
-int ti_threadgroup_member(ti_threadgroup_t *tg, int16_t ext_tid,
-                          int16_t *tgtid)
+int ti_threadgroup_member(ti_threadgroup_t *tg, int16_t ext_tid, int16_t *tgtid)
 {
     if (ext_tid < 0 || ext_tid >= tg->num_threads)
         return -1;
@@ -124,8 +123,7 @@ int ti_threadgroup_size(ti_threadgroup_t *tg, int16_t *tgsize)
 }
 
 
-int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid,
-                        void **bcast_val)
+int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 {
     if (tg->tid_map[ext_tid] == 0) {
         tg->envelope = bcast_val ? *bcast_val : NULL;

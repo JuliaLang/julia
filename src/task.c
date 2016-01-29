@@ -468,7 +468,7 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 #error "COPY_STACKS must be defined on this platform."
 #endif
 }
-static void init_task(jl_task_t *t, char* stack)
+static void init_task(jl_task_t *t, char *stack)
 {
     if (jl_setjmp(t->ctx, 0)) {
         start_task();

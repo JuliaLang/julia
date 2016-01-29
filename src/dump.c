@@ -1362,7 +1362,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             ios_read(s, (char*)jl_array_data(a), tot);
         }
         else {
-            jl_value_t** data = (jl_value_t**)jl_array_data(a);
+            jl_value_t **data = (jl_value_t**)jl_array_data(a);
             for(i=0; i < jl_array_len(a); i++) {
                 data[i] = jl_deserialize_value(s, &data[i]);
                 if (data[i]) jl_gc_wb(a, data[i]);
@@ -1534,7 +1534,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (usetable) {
             jl_value_t *v = jl_new_struct_uninit(jl_globalref_type);
             arraylist_push(&backref_list, v);
-            jl_value_t* *data = jl_data_ptr(v);
+            jl_value_t **data = jl_data_ptr(v);
             data[0] = jl_deserialize_value(s, &data[0]);
             data[1] = jl_deserialize_value(s, &data[1]);
             return v;
@@ -1592,7 +1592,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 if (jl_is_mtable(v))
                     arraylist_push(&methtable_list, v); // will resort this table, later
                 if (dt == jl_typename_type) {
-                    jl_typename_t* tn = (jl_typename_t*)v;
+                    jl_typename_t *tn = (jl_typename_t*)v;
                     tn->uid = jl_assign_type_uid(); // make sure this has a new uid
                     tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
                     tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)

@@ -9,7 +9,6 @@
 // for the barrier
 typedef struct {
     volatile int sense;
-
 } ti_thread_sense_t;
 
 

@@ -7,7 +7,6 @@
 
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
-//
 
 // object layout options ------------------------------------------------------
 
