@@ -1846,6 +1846,23 @@
               (lower-ccall name RT (cdr argtypes) args))))
          e))
 
+   'generator
+   (lambda (e)
+     (let ((expr   (cadr e))
+           (vars   (map cadr  (cddr e)))
+           (ranges (map caddr (cddr e))))
+       (let* ((names (map (lambda (v) (if (symbol? v) v (gensy))) vars))
+              (stmts (apply append
+                            (map (lambda (v arg) (if (symbol? v)
+                                                     '()
+                                                     `((= ,v ,arg))))
+                                 vars names))))
+         (expand-forms
+          (expand-binding-forms
+           `(call (top ,(if (length> ranges 1) 'GeneratorND 'Generator))
+                  (-> (tuple ,@names) (block ,@stmts ,expr))
+                  ,@ranges))))))
+
    'comprehension
    (lambda (e)
      (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))

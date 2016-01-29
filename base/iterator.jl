@@ -292,3 +292,55 @@ eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
     x = prod_next(p, st)
     ((x[1][1],x[1][2]...), x[2])
 end
+
+immutable GeneratorND{F,I<:AbstractProdIterator}
+    f::F
+    iter::I
+
+    (::Type{GeneratorND}){F}(f::F, iters...) = (P = product(iters...); new{F,typeof(P)}(f, P))
+end
+
+start(g::GeneratorND) = start(g.iter)
+done(g::GeneratorND, s) = done(g.iter, s)
+function next(g::GeneratorND, s)
+    v, s2 = next(g.iter, s)
+    g.f(v...), s2
+end
+
+_size(p::Prod2) = (length(p.a), length(p.b))
+_size(p::Prod) = (length(p.a), _size(p.b)...)
+
+size(g::GeneratorND) = _size(g.iter)
+
+function collect(g::GeneratorND)
+    sz = size(g)
+    if prod(sz) == 0
+        return Array(Union{}, sz)
+    end
+    st = start(g.iter)
+    A1, st = next(g.iter, st)
+    first = g.f(A1...)
+    dest = Array(typeof(first), sz)
+    dest[1] = first
+    return map_to!(xs->g.f(xs...), 2, st, dest, g.iter)
+end
+
+# special case for 2d
+function collect{F,P<:Prod2}(g::GeneratorND{F,P})
+    f = g.f
+    a = g.iter.a
+    b = g.iter.b
+    sz = size(g)
+    if prod(sz) == 0
+        return Array(Union{}, sz)
+    end
+    fst = f(first(a), first(b))  # TODO: don't recompute this in the loop
+    dest = Array(typeof(fst), sz)
+    for j in b
+        for i in a
+            val = f(i, j)  # TODO: handle type changes
+            @inbounds dest[i, j] = val
+        end
+    end
+    return dest
+end
