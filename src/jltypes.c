@@ -2372,6 +2372,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
     top.tt = t;
     top.prev = NULL;
     size_t n = jl_svec_len(t->parameters);
+    if (n == 0) return;
+    t->name->cache = jl_emptysvec;
+    t->name->linearcache = jl_emptysvec;
     jl_value_t **env = (jl_value_t**)alloca(n*2*sizeof(void*));
     for(int i=0; i < n; i++) {
         env[i*2] = jl_svecref(t->parameters,i);
