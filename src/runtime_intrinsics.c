@@ -71,8 +71,8 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     return p;
 }
 
-
-static inline unsigned int next_power_of_two(unsigned int val) {
+static inline unsigned int next_power_of_two(unsigned int val)
+{
   /* this function taken from libuv src/unix/core.c */
   val -= 1;
   val |= val >> 1;
@@ -84,12 +84,14 @@ static inline unsigned int next_power_of_two(unsigned int val) {
   return val;
 }
 
-static inline char signbitbyte(void *a, unsigned bytes) {
+static inline char signbitbyte(void *a, unsigned bytes)
+{
     // sign bit of an signed number of n bytes, as a byte
     return (((signed char*)a)[bytes - 1] < 0) ? ~0 : 0;
 }
 
-static inline char usignbitbyte(void *a, unsigned bytes) {
+static inline char usignbitbyte(void *a, unsigned bytes)
+{
     // sign bit of an unsigned number
     return 0;
 }
@@ -270,8 +272,10 @@ static select_intrinsic_u1_t name##_list = { \
 }; \
 uu_iintrinsic(name, u)
 
-static inline jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, char (*getsign)(void*, unsigned),
-        jl_value_t* (*lambda1)(jl_value_t*, void*, unsigned, unsigned, void*), void *list)
+static inline
+jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
+                            char (*getsign)(void*, unsigned),
+                            jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, void*), void *list)
 {
     if (!jl_is_bitstype(jl_typeof(a)))
         jl_errorf("%s: value is not a bitstype", name);
@@ -473,9 +477,11 @@ static select_intrinsic_checked_t name##_list = { \
 }; \
 checked_iintrinsic(name, u)
 
-static inline jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name, char (*getsign)(void*, unsigned),
-        jl_value_t* (*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, void*),
-        void *list, int cvtb)
+static inline
+jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
+                            char (*getsign)(void*, unsigned),
+                            jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, void*),
+                            void *list, int cvtb)
 {
     jl_value_t *ty = jl_typeof(a);
     jl_value_t *tyb = jl_typeof(b);

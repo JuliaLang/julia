@@ -881,9 +881,9 @@ struct math_builder {
 };
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
-                                       jl_codectx_t *ctx, jl_datatype_t* *newtyp);
+                                     jl_codectx_t *ctx, jl_datatype_t **newtyp);
 static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
-                                       jl_codectx_t *ctx)
+                                 jl_codectx_t *ctx)
 {
     assert(f < num_intrinsics);
     if (f == fptoui && nargs == 1)
@@ -1122,7 +1122,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 }
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
-                                       jl_codectx_t *ctx, jl_datatype_t* *newtyp)
+                                       jl_codectx_t *ctx, jl_datatype_t **newtyp)
 {
     Type *t = x->getType();
     Value *fy;

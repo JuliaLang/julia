@@ -66,7 +66,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base);
 static Type *isLegalHAType(jl_datatype_t *dt)
 {
     // single- or double-precision floating-point type
-    if (Type* fp = get_llvm_fptype(dt))
+    if (Type *fp = get_llvm_fptype(dt))
         return fp;
 
     // NOT SUPPORTED: 64- or 128-bit containerized vectors
@@ -79,7 +79,8 @@ static Type *isLegalHAType(jl_datatype_t *dt)
 //
 // Legality of the HA is determined by a nonzero return value.
 // In case of a non-legal HA, the value of 'base' is undefined.
-static size_t isLegalHA(jl_datatype_t *dt, Type *&base) {
+static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
+{
     // Homogeneous aggregates are only used for VFP registers,
     // so use that definition of legality (section 6.1.2.1)
 
@@ -292,7 +293,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     if (align > 8)
         align = 8;
 
-    Type* T = Type::getIntNTy(getGlobalContext(), align*8);
+    Type *T = Type::getIntNTy(getGlobalContext(), align*8);
     return ArrayType::get(T, (dt->size + align - 1) / align);
 }
 

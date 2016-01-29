@@ -367,7 +367,7 @@ jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *typ
 {
     int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
     jl_methlist_t **pml = &mt->cache;
-    jl_value_t* cache_array = NULL;
+    jl_value_t *cache_array = NULL;
     if (jl_datatype_nfields(type) > offs) {
         jl_value_t *t1 = jl_tparam(type, offs);
         uptrint_t uid=0;
@@ -899,7 +899,8 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for an unspecialized method
-static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
+static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_t *meth,
+                                         jl_value_t **args, uint32_t nargs)
 {
     if (__unlikely(meth->fptr == NULL)) {
         jl_compile_linfo(meth, NULL);
@@ -964,7 +965,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
         ex = newast;
     }
     // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
-    jl_lambda_info_t* func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
+    jl_lambda_info_t *func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
     func->name = generator->name;
     JL_GC_POP();
     return func;
@@ -1268,8 +1269,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tupletype_t *type,
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
     if (has_unions(type)) {
-        jl_value_t* item_parent = (jl_value_t*)newrec;
-        jl_value_t* next_parent = 0;
+        jl_value_t *item_parent = (jl_value_t*)newrec;
+        jl_value_t *next_parent = 0;
         jl_methlist_t *item = newrec->next, *next;
         jl_methlist_t **pitem = &newrec->next, **pnext;
         while (item != (void*)jl_nothing) {
@@ -1378,7 +1379,8 @@ void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
     };
     if (jl_base_module) {
         jl_throw(jl_apply_generic(fargs, 3));
-    } else {
+    }
+    else {
         jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base module was defined. Aborting...\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
@@ -1387,8 +1389,7 @@ void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args)
     // not reached
 }
 
-void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args,
-                                    size_t na)
+void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args+1, na-1);
     JL_GC_PUSH1(&argtup);

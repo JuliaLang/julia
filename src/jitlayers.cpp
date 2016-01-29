@@ -158,7 +158,7 @@ extern JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
 #define CUSTOM_MEMORY_MANAGER 1
-extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
+extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
 #endif
 
 namespace {
@@ -168,39 +168,42 @@ using namespace llvm::object;
 using namespace llvm::orc;
 
 /// Do the registration.
-void NotifyDebugger(jit_code_entry* JITCodeEntry) {
-  __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
+void NotifyDebugger(jit_code_entry *JITCodeEntry)
+{
+    __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
 
-  // Insert this entry at the head of the list.
-  JITCodeEntry->prev_entry = nullptr;
-  jit_code_entry* NextEntry = __jit_debug_descriptor.first_entry;
-  JITCodeEntry->next_entry = NextEntry;
-  if (NextEntry) {
-    NextEntry->prev_entry = JITCodeEntry;
-  }
-  __jit_debug_descriptor.first_entry = JITCodeEntry;
-  __jit_debug_descriptor.relevant_entry = JITCodeEntry;
-  __jit_debug_register_code();
+    // Insert this entry at the head of the list.
+    JITCodeEntry->prev_entry = nullptr;
+    jit_code_entry *NextEntry = __jit_debug_descriptor.first_entry;
+    JITCodeEntry->next_entry = NextEntry;
+    if (NextEntry) {
+        NextEntry->prev_entry = JITCodeEntry;
+    }
+    __jit_debug_descriptor.first_entry = JITCodeEntry;
+    __jit_debug_descriptor.relevant_entry = JITCodeEntry;
+    __jit_debug_register_code();
 }
 
 // --------------------------------------------------------------------------
 
 class DebugObjectRegistrar {
 private:
-    void NotifyGDB(OwningBinary<ObjectFile> &DebugObj) {
+    void NotifyGDB(OwningBinary<ObjectFile> &DebugObj)
+    {
       const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
       size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
 
       assert(Buffer && "Attempt to register a null object with a debugger.");
-      jit_code_entry* JITCodeEntry = new jit_code_entry();
+      jit_code_entry *JITCodeEntry = new jit_code_entry();
 
       if (!JITCodeEntry) {
-        jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
-      } else {
-        JITCodeEntry->symfile_addr = Buffer;
-        JITCodeEntry->symfile_size = Size;
+          jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
+      }
+      else {
+          JITCodeEntry->symfile_addr = Buffer;
+          JITCodeEntry->symfile_size = Size;
 
-        NotifyDebugger(JITCodeEntry);
+          NotifyDebugger(JITCodeEntry);
       }
     }
 
@@ -212,7 +215,8 @@ public:
 
     template <typename ObjSetT, typename LoadResult>
     void operator()(ObjectLinkingLayerBase::ObjSetHandleT, const ObjSetT &Objects,
-                  const LoadResult &LOS) {
+                    const LoadResult &LOS)
+    {
         auto oit = Objects.begin();
         auto lit = LOS.begin();
         while (oit != Objects.end()) {
@@ -302,7 +306,8 @@ public:
                 report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
         }
 
-    std::string mangle(const std::string &Name) {
+    std::string mangle(const std::string &Name)
+    {
         std::string MangledName;
         {
             raw_string_ostream MangledNameStream(MangledName);
@@ -311,11 +316,13 @@ public:
         return MangledName;
     }
 
-    void addGlobalMapping(StringRef Name, void *Addr) {
+    void addGlobalMapping(StringRef Name, void *Addr)
+    {
        GlobalSymbolTable[mangle(Name)] = Addr;
     }
 
-    ModuleHandleT addModule(Module *M) {
+    ModuleHandleT addModule(Module *M)
+    {
         // We need a memory manager to allocate memory and resolve symbols for this
         // new module. Create one that resolves symbols by looking back into the
         // JIT.
@@ -342,41 +349,49 @@ public:
         SmallVector<std::unique_ptr<Module>,1> Ms;
         Ms.push_back(std::unique_ptr<Module>{M});
         return CompileLayer->addModuleSet(std::move(Ms),
-                                         MemMgr,
-                                         std::move(Resolver));
+                                          MemMgr,
+                                          std::move(Resolver));
     }
 
     void removeModule(ModuleHandleT H) { CompileLayer->removeModuleSet(H); }
 
-    orc::JITSymbol findSymbol(const std::string &Name) {
+    orc::JITSymbol findSymbol(const std::string &Name)
+    {
         return CompileLayer->findSymbol(Name, true);
     }
 
-    orc::JITSymbol findUnmangledSymbol(const std::string Name) {
+    orc::JITSymbol findUnmangledSymbol(const std::string Name)
+    {
         return findSymbol(mangle(Name));
     }
 
-    uint64_t getGlobalValueAddress(const std::string &Name) {
+    uint64_t getGlobalValueAddress(const std::string &Name)
+    {
         return CompileLayer->findSymbol(mangle(Name), false).getAddress();
     }
 
-    uint64_t getFunctionAddress(const std::string &Name) {
+    uint64_t getFunctionAddress(const std::string &Name)
+    {
         return CompileLayer->findSymbol(mangle(Name), false).getAddress();
     }
 
-    uint64_t FindFunctionNamed(const std::string &Name) {
+    uint64_t FindFunctionNamed(const std::string &Name)
+    {
         return 0; // Functions are not kept around
     }
 
-    void RegisterJITEventListener(JITEventListener *L) {
+    void RegisterJITEventListener(JITEventListener *L)
+    {
         // TODO
     }
 
-    const DataLayout& getDataLayout() const {
+    const DataLayout& getDataLayout() const
+    {
         return DL;
     }
 
-    const Triple& getTargetTriple() const {
+    const Triple& getTargetTriple() const
+    {
         return TM.getTargetTriple();
     }
 

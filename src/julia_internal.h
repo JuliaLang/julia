@@ -115,8 +115,7 @@ uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
 void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
-void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args,
-                                    size_t na);
+void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
@@ -137,9 +136,8 @@ ssize_t jl_max_jlgensym_in(jl_value_t *v);
 extern uv_loop_t *jl_io_loop;
 
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
-                                            jl_value_t *data);
+                                               jl_value_t *data);
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
-
 
 int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta);
 
@@ -269,7 +267,7 @@ uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
-jl_value_t* skip_meta(jl_array_t *body);
+jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
@@ -328,9 +326,8 @@ extern void *jl_winsock_handle;
 
 void *jl_get_library(const char *f_lib);
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
-                                   void **hnd);
+                                      void **hnd);
 const char *jl_dlfind_win32(const char *name);
-
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
@@ -344,7 +341,7 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
 // Runtime intrinsics //
-const char* jl_intrinsic_name(int f);
+const char *jl_intrinsic_name(int f);
 
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i);
@@ -493,7 +490,6 @@ STATIC_INLINE void jl_free_aligned(void *p)
     free(p);
 }
 #endif
-
 
 #ifdef __cplusplus
 }

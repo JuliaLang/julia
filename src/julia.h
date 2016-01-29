@@ -699,7 +699,7 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t* owner);
+                                         int isaligned, jl_value_t *owner);
 
 // object accessors -----------------------------------------------------------
 
@@ -1217,8 +1217,8 @@ JL_DLLEXPORT int jl_cpu_cores(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
-JL_DLLEXPORT jl_sym_t* jl_get_OS_NAME(void);
-JL_DLLEXPORT jl_sym_t* jl_get_ARCH(void);
+JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void);
+JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void);
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1285,10 +1285,9 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
-JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t* worklist);
+JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf,
-                                                         size_t sz);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
 
 // front end interface
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
@@ -1317,10 +1316,8 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
 typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname,
-                                                     unsigned flags);
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname,
-                                                       unsigned flags);
+JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
+JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
 JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags);
 JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle);
 JL_DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
@@ -1769,7 +1766,7 @@ JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);
 JL_DLLEXPORT extern int jl_ver_patch(void);
 JL_DLLEXPORT extern int jl_ver_is_release(void);
-JL_DLLEXPORT extern const char* jl_ver_string(void);
+JL_DLLEXPORT extern const char *jl_ver_string(void);
 JL_DLLEXPORT const char *jl_git_branch(void);
 JL_DLLEXPORT const char *jl_git_commit(void);
 

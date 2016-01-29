@@ -128,8 +128,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v,
-                                                jl_value_t **idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
 {
     jl_value_t *t = NULL;
     // items in idxs are assumed to already be rooted
@@ -138,16 +137,13 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v,
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
-                                                        size_t nv, size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
 {
     // values in v are expected to already be gc-rooted
     jl_bounds_error_int(jl_f_tuple(NULL, v, nv), i);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data,
-                                                          jl_value_t *vt,
-                                                          size_t i)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, size_t i)
 {
     jl_value_t *t = NULL, *v = NULL;
     // data is expected to be gc-safe (either gc-rooted, or alloca)
@@ -166,8 +162,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs,
-                                                   size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs)
 {
     size_t i;
     jl_value_t *t = NULL;
@@ -781,8 +776,7 @@ int str_isspace(char *p)
     return 1;
 }
 
-JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset,
-                                                    size_t len)
+JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, size_t len)
 {
     char *p;
     char *bstr = str+offset;
@@ -834,8 +828,7 @@ JL_DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 #define HUGE_VALF (1e25f * 1e25f)
 #endif
 
-JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset,
-                                                    size_t len)
+JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, size_t len)
 {
     char *p;
     char *bstr = str+offset;
@@ -1428,7 +1421,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         for (j = 0; j < tlen; j++) {
             if (av->flags.ptrarray) {
                 n += jl_static_show_x(out, jl_cellref(v, j), depth);
-            } else {
+            }
+            else {
                 char *ptr = ((char*)av->data) + j * av->elsize;
                 n += jl_static_show_x_(out, (jl_value_t*)ptr, el_type, depth);
             }
@@ -1476,7 +1470,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
                 char *fld_ptr = (char*)v + offs;
                 if (jl_field_isptr(vt, i)) {
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
-                } else {
+                }
+                else {
                     n += jl_static_show_x_(out, (jl_value_t*)fld_ptr,
                                            (jl_datatype_t*)jl_field_type(vt, i),
                                            depth);

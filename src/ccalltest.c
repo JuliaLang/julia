@@ -59,7 +59,7 @@ JL_DLLEXPORT complex double cgtest(complex double a) {
     return a;
 }
 
-JL_DLLEXPORT complex double* cgptest(complex double *a) {
+JL_DLLEXPORT complex double *cgptest(complex double *a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
@@ -73,14 +73,14 @@ JL_DLLEXPORT complex float cftest(complex float a) {
     return a;
 }
 
-JL_DLLEXPORT complex float* cfptest(complex float *a) {
+JL_DLLEXPORT complex float *cfptest(complex float *a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
 }
 
-JL_DLLEXPORT complex_t* cptest(complex_t *a) {
+JL_DLLEXPORT complex_t *cptest(complex_t *a) {
     //Unpack a ComplexPair{Int} struct pointer
     if (verbose) fprintf(stderr,"%lld + %lld i\n", (long long)a->real, (long long)a->imag);
     a->real += 1;
@@ -88,7 +88,7 @@ JL_DLLEXPORT complex_t* cptest(complex_t *a) {
     return a;
 }
 
-JL_DLLEXPORT complex_t* cptest_static(complex_t *a) {
+JL_DLLEXPORT complex_t *cptest_static(complex_t *a) {
     complex_t *b = (complex_t*)malloc(sizeof(complex_t));
     b->real = a->real;
     b->imag = a->imag;
@@ -96,14 +96,14 @@ JL_DLLEXPORT complex_t* cptest_static(complex_t *a) {
 }
 
 // Native-like data types
-JL_DLLEXPORT char* stest(char *x) {
+JL_DLLEXPORT char *stest(char *x) {
     //Print a character Array
     if (verbose) fprintf(stderr,"%s\n", x);
     return x;
 }
 
-struct jl_asciistring_t { struct { void* type; char* data; } *data; };
-char* sptest(struct jl_asciistring_t str) {
+struct jl_asciistring_t { struct { void *type; char *data; } *data; };
+char *sptest(struct jl_asciistring_t str) {
     //Unpack an ASCIIString
     return stest(str.data->data);
 }

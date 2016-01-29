@@ -51,12 +51,14 @@ struct Classification {
     bool isMemory;
     ArgClass classes[2];
 
-    Classification() : isMemory(false) {
+    Classification() : isMemory(false)
+    {
         classes[0] = NoClass;
         classes[1] = NoClass;
     }
 
-    void addField(unsigned offset, ArgClass cl) {
+    void addField(unsigned offset, ArgClass cl)
+    {
         if (isMemory)
             return;
 
@@ -77,7 +79,8 @@ struct Classification {
         }
     }
 
-    static ArgClass merge(ArgClass accum, ArgClass cl) {
+    static ArgClass merge(ArgClass accum, ArgClass cl)
+    {
         if (accum == cl)
             return accum;
         if (accum == NoClass)
@@ -103,7 +106,8 @@ struct Classification {
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
-void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
+void classifyType(Classification& accum, jl_value_t *ty, uint64_t offset)
+{
     // Floating point types
     if (ty == (jl_value_t*)jl_float64_type || ty == (jl_value_t*)jl_float32_type) {
         accum.addField(offset, Sse);
@@ -142,7 +146,8 @@ void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
     }
 }
 
-Classification classify(jl_value_t* ty) {
+Classification classify(jl_value_t *ty)
+{
     Classification cl;
     classifyType(cl, ty, 0);
     return cl;
