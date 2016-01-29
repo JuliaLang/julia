@@ -30,6 +30,7 @@ end
 include("essentials.jl")
 include("docs/bootstrap.jl")
 include("base.jl")
+include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
