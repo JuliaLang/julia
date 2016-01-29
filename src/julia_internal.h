@@ -210,9 +210,6 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
 jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
 int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m);
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
-void jl_add_constructors(jl_datatype_t *t);
-
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
