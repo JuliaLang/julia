@@ -34,18 +34,21 @@ function json()
 end
 
 function curl(url::AbstractString, opts::Cmd=``)
-    success(`curl --version`) || error("using the GitHub API requires having `curl` installed")
-    out, proc = open(`curl -i -s -S $opts $url`,"r")
-    head = readline(out)
-    status = parse(Int,split(head,r"\s+";limit=3)[2])
-    header = Dict{AbstractString,AbstractString}()
-    for line in eachline(out)
-        if !ismatch(r"^\s*$",line)
-            (k,v) = split(line, r":\s*"; limit=2)
-            header[k] = v
-            continue
+    extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+    withenv("PATH" => extrapath * ENV["PATH"]) do
+        success(`curl --version`) || error("using the GitHub API requires having `curl` installed")
+        out, proc = open(`curl -i -s -S $opts $url`,"r")
+        head = readline(out)
+        status = parse(Int,split(head,r"\s+";limit=3)[2])
+        header = Dict{AbstractString,AbstractString}()
+        for line in eachline(out)
+            if !ismatch(r"^\s*$",line)
+                (k,v) = split(line, r":\s*"; limit=2)
+                header[k] = v
+                continue
+            end
+            wait(proc); return status, header, readall(out)
         end
-        wait(proc); return status, header, readall(out)
     end
     error("strangely formatted HTTP response")
 end
