@@ -109,7 +109,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
    | ``yyyymmdd`` | 19960101  | Matches fixed-width year, month, and day                       |
    +--------------+-----------+----------------------------------------------------------------+
 
-   All characters not listed above are treated as delimiters between date and time slots. So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
+   Characters not listed above are normally treated as delimiters between date and time slots. For example a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using backslash. The date "1995y01m" would have the format "y\\ym\\m".
 
 .. _man-date-formatting:
 
@@ -149,7 +149,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    The number of sequential code characters indicate the width of the code. A format of ``yyyy-mm`` specifies that the code ``y`` should have a width of four while ``m`` a width of two. Codes that yield numeric digits have an associated mode: fixed-width or minimum-width. The fixed-width mode left-pads the value with zeros when it is shorter than the specified width and truncates the value when longer. Minimum-width mode works the same as fixed-width except that it does not truncate values longer than the width.
 
-   When creating a ``format`` you can use any non-code characters as a separator. For example to generate the string "1996-01-15T00:00:00" you could use ``format``\ : "yyyy-mm-ddTHH:MM:SS".
+   When creating a ``format`` you can use any non-code characters as a separator. For example to generate the string "1996-01-15T00:00:00" you could use ``format``\ : "yyyy-mm-ddTHH:MM:SS". Note that if you need to use a code character as a literal you can use the escape character backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 
 .. function:: DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
 

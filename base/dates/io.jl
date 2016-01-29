@@ -66,7 +66,7 @@ const SLOT_RULE = SlotRule(Array{Type}(256))
 
 getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
 setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
-keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))
+keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
 
 SLOT_RULE['y'] = Year
 SLOT_RULE['Y'] = Year
@@ -90,12 +90,12 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
     last_offset = 1
 
     letters = join(keys(SLOT_RULE), "")
-    for m in eachmatch(Regex("([\\Q$letters\\E])\\1*"), f)
+    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
         letter = f[m.offset]
         typ = SLOT_RULE[letter]
 
         width = length(m.match)
-        tran = f[last_offset:m.offset-1]
+        tran = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
 
         if isempty(params)
             prefix = tran
@@ -108,7 +108,7 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         last_offset = m.offset + width
     end
 
-    tran = last_offset > endof(f) ? r"(?=\s|$)" : f[last_offset:end]
+    tran = last_offset > endof(f) ? r"(?=\s|$)" : replace(f[last_offset:end], r"\\(.)", s"\1")
     if !isempty(params)
         slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
         push!(slots,slot)
@@ -207,7 +207,7 @@ function format(dt::TimeType,df::DateFormat)
 end
 
 # UI
-const ISODateTimeFormat = DateFormat("yyyy-mm-ddTHH:MM:SS.s")
+const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
 const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
