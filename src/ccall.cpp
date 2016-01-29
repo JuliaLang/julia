@@ -648,7 +648,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
                 auto it = llvmcallDecls.find(declhash);
                 if (it != llvmcallDecls.end()) {
                     prepare_call(it->second);
-                } else {
+                }
+                else {
 #else
                 if (llvmcallDecls.count(declhash) == 0) {
 #endif

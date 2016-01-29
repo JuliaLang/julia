@@ -23,10 +23,8 @@ static const    u_int64_t GIGA = 1000000000ULL;
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 
-
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
-
 
 int exit_on_sigint = 0;
 JL_DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
@@ -62,7 +60,6 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
         jl_gdblookup(bt_data[i]);
     gc_debug_print_status();
 }
-
 
 ///////////////////////
 // Utility functions //

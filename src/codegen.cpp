@@ -181,11 +181,11 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile = false;
 static TargetMachine *jl_TargetMachine;
 
-extern JITEventListener* CreateJuliaJITEventListener();
+extern JITEventListener *CreateJuliaJITEventListener();
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
-    extern bool annotateSimdLoop( BasicBlock* latch );
+    extern bool annotateSimdLoop(BasicBlock *latch);
 }
 
 // for image reloading
@@ -231,7 +231,7 @@ static DataLayout *jl_data_layout;
 static Type *T_jlvalue;
 static Type *T_pjlvalue;
 static Type *T_ppjlvalue;
-static Type* jl_parray_llvmt;
+static Type *jl_parray_llvmt;
 static FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
@@ -269,17 +269,17 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-static MDNode* tbaa_user;           // User data that is mutable
-static MDNode* tbaa_immut;          // User data inside a heap-allocated immutable
-static MDNode* tbaa_value;          // Julia value
-static MDNode* tbaa_array;              // Julia array
-static MDNode* tbaa_arrayptr;               // The pointer inside a jl_array_t
-static MDNode* tbaa_arraysize;              // A size in a jl_array_t
-static MDNode* tbaa_arraylen;               // The len in a jl_array_t
-static MDNode* tbaa_sveclen;           // The len in a jl_svec_t
-static MDNode* tbaa_func;           // A jl_function_t
-static MDNode* tbaa_datatype;       // A jl_datatype_t
-static MDNode* tbaa_const;          // Memory that is immutable by the time LLVM can see it
+static MDNode *tbaa_user;           // User data that is mutable
+static MDNode *tbaa_immut;          // User data inside a heap-allocated immutable
+static MDNode *tbaa_value;          // Julia value
+static MDNode *tbaa_array;              // Julia array
+static MDNode *tbaa_arrayptr;               // The pointer inside a jl_array_t
+static MDNode *tbaa_arraysize;              // A size in a jl_array_t
+static MDNode *tbaa_arraylen;               // The len in a jl_array_t
+static MDNode *tbaa_sveclen;           // The len in a jl_svec_t
+static MDNode *tbaa_func;           // A jl_function_t
+static MDNode *tbaa_datatype;       // A jl_datatype_t
+static MDNode *tbaa_const;          // Memory that is immutable by the time LLVM can see it
 
 // Basic DITypes
 #ifdef LLVM37
@@ -331,12 +331,12 @@ static GlobalVariable *jlRTLD_DEFAULT_var;
 static GlobalVariable *jlexe_var;
 static GlobalVariable *jldll_var;
 #if defined(_CPU_X86_64_) && !defined(USE_MCJIT)
-extern JITMemoryManager* createJITMemoryManagerWin();
+extern JITMemoryManager *createJITMemoryManagerWin();
 #endif
 #endif //_OS_WINDOWS_
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
 #define CUSTOM_MEMORY_MANAGER 1
-extern RTDyldMemoryManager* createRTDyldMemoryManagerOSX();
+extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
 #endif
 
 #ifndef JULIA_ENABLE_THREADING
@@ -1062,7 +1062,8 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
             }
             jl_finalize_module(m);
             li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(((Function*)li->functionObjects.functionObject)->getName());
-        } else {
+        }
+        else {
             li->fptr = (jl_fptr_t)getAddressForOrCompileFunction((Function*)li->functionObjects.functionObject);
         }
         #else
@@ -1243,7 +1244,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 
 
 extern "C" JL_DLLEXPORT
-void *jl_function_ptr_by_llvm_name(char* name) {
+void *jl_function_ptr_by_llvm_name(char *name) {
 #ifdef __has_feature
 #if __has_feature(memory_sanitizer)
     __msan_unpoison_string(name);
@@ -1336,7 +1337,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         if (getwrapper || !declarations.specFunctionObject) {
             llvmf = (llvm::Function*)declarations.functionObject;
             other = (llvm::Function*)declarations.specFunctionObject;
-        } else {
+        }
+        else {
             llvmf = (llvm::Function*)declarations.specFunctionObject;
             other = (llvm::Function*)declarations.functionObject;
         }
@@ -1344,7 +1346,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
             other->eraseFromParent();
         FPM->run(*llvmf);
         llvmf->removeFromParent();
-    } else {
+    }
+    else {
         ValueToValueMapTy VMap;
         llvmf = CloneFunction(llvmf,VMap,false);
         active_module->getFunctionList().push_back(llvmf);
@@ -2618,7 +2621,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     }
                     else {
                         jl_cgval_t v = (ety == (jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx));
-                        PHINode* data_owner = NULL; // owner object against which the write barrier must check
+                        PHINode *data_owner = NULL; // owner object against which the write barrier must check
                         if (isboxed) { // if not boxed we don't need a write barrier
                             assert(ary.isboxed);
                             Value *flags = emit_arrayflags(ary, ctx);
@@ -3866,7 +3869,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
     std::vector<Type*> fargt(0);
     std::vector<bool> fargt_isboxed(0);
     std::vector<Type*> fargt_sig(0);
-    Type* fargt_vasig;
+    Type *fargt_vasig;
     std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
     attr_type attrs;
@@ -4916,7 +4919,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             if (jl_is_linenode(stmt)) {
                 lno = jl_linenode_line(stmt);
                 file = jl_linenode_file(stmt);
-            } else if (jl_is_expr(stmt)) {
+            }
+            else if (jl_is_expr(stmt)) {
                 lno = jl_unbox_long(jl_exprarg(stmt,0));
                 if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
                     jl_value_t *a1 = jl_exprarg(stmt,1);
@@ -4942,7 +4946,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 #               endif
                 if (it != filescopes.end()) {
                     dfil = it->second;
-                } else {
+                }
+                else {
 #                   ifdef LLVM37
                     dfil = (DIFile*)dbuilder.createFile(jl_symbol_name(file),
                                                         ".");
@@ -4962,7 +4967,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                     // set location to line in top file.
                     // TODO: improve handling of nested inlines
                     loc = inlineLoc = DebugLoc::get(lno, 1, SP, NULL);
-                } else {
+                }
+                else {
                     // otherwise, we are compiling inlined code,
                     // so set the DebugLoc "inlinedAt" parameter
                     // to the current line, then use source loc.
@@ -5040,7 +5046,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
         else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx)) {
             // elide bounds check blocks
-        } else {
+        }
+        else {
             emit_expr(stmt, &ctx, false, false);
         }
     }
@@ -5204,7 +5211,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 
 static void init_julia_llvm_env(Module *m)
 {
-    MDNode* tbaa_root = mbuilder->createTBAARoot("jtbaa");
+    MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
     tbaa_user = tbaa_make_child("jtbaa_user",tbaa_root);
     tbaa_value = tbaa_make_child("jtbaa_value",tbaa_root);
     tbaa_immut = tbaa_make_child("jtbaa_immut",tbaa_root);
@@ -5335,7 +5342,7 @@ static void init_julia_llvm_env(Module *m)
     jl_func_sig = FunctionType::get(T_pjlvalue, ftargs, false);
     assert(jl_func_sig != NULL);
 
-    Type* vaelts[] = {T_pint8
+    Type *vaelts[] = {T_pint8
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
@@ -5343,7 +5350,7 @@ static void init_julia_llvm_env(Module *m)
     };
     static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
                   "Size of jl_array_flags_t is not the same as int16_t");
-    Type* jl_array_llvmt =
+    Type *jl_array_llvmt =
         StructType::create(jl_LLVMContext,
                            ArrayRef<Type*>(vaelts,sizeof(vaelts)/sizeof(vaelts[0])),
                            "jl_array_t");

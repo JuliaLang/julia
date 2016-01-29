@@ -125,7 +125,7 @@ enum intrinsic {
 #ifdef __cplusplus
 extern "C"
 #endif
-const char* jl_intrinsic_name(int f)
+const char *jl_intrinsic_name(int f)
 {
     switch ((enum intrinsic)f) {
     default: return "invalid";
@@ -139,7 +139,7 @@ const char* jl_intrinsic_name(int f)
     }
 }
 
-static void* runtime_fp[num_intrinsics];
+static void *runtime_fp[num_intrinsics];
 static unsigned intrinsic_nargs[num_intrinsics];
 
 typedef jl_value_t *(*intrinsic_call_1_arg)(jl_value_t*);

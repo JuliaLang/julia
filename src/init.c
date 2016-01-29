@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 #ifdef _MSC_VER
-JL_DLLEXPORT char * dirname(char *);
+JL_DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
@@ -773,7 +773,7 @@ static void julia_save(void)
 
 jl_function_t *jl_typeinf_func=NULL;
 
-JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t* f)
+JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_function_t*)f;
 }

@@ -35,7 +35,6 @@ typedef struct {
     int16_t volatile    state;
     int16_t             tid;
     ti_threadgroup_t    *tg;
-
 } ti_threadarg_t;
 
 

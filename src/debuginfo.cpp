@@ -72,7 +72,7 @@ extern "C" void jl_init_debuginfo()
 
 #ifndef USE_MCJIT
 struct FuncInfo {
-    const Function* func;
+    const Function *func;
     size_t lengthAdr;
     std::string name;
     std::string filename;
@@ -80,7 +80,7 @@ struct FuncInfo {
 };
 #else
 struct ObjectInfo {
-    const object::ObjectFile* object;
+    const object::ObjectFile *object;
     size_t size;
 #ifdef LLVM37
     const llvm::LoadedObjectInfo *L;
@@ -255,7 +255,8 @@ public:
             uint8_t **pAddr = NULL;
             if (sName.equals("__UnwindData")) {
                 pAddr = &UnwindData;
-            } else if (sName.equals("__catchjmp")) {
+            }
+            else if (sName.equals("__catchjmp")) {
                 pAddr = &catchjmp;
             }
             if (pAddr) {
@@ -474,9 +475,9 @@ public:
 
 #ifdef USE_ORCJIT
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                      const object::ObjectFile &obj,
-                                      const object::ObjectFile &debugObj,
-                                      const RuntimeDyld::LoadedObjectInfo &L)
+                                         const object::ObjectFile &obj,
+                                         const object::ObjectFile &debugObj,
+                                         const RuntimeDyld::LoadedObjectInfo &L)
 {
     ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(obj,debugObj,L);
 }
@@ -506,7 +507,7 @@ char *jl_demangle(const char *name)
 }
 
 static JuliaJITEventListener *jl_jit_events;
-JITEventListener* CreateJuliaJITEventListener()
+JITEventListener *CreateJuliaJITEventListener()
 {
     jl_jit_events = new JuliaJITEventListener();
     return jl_jit_events;
@@ -599,7 +600,6 @@ static obfiletype objfilemap;
 #ifdef _OS_DARWIN_
 static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 {
-
 # ifdef LLVM37
     for (auto Load : obj->load_commands ()) {
 # else
@@ -638,7 +638,7 @@ extern "C" uint64_t jl_sysimage_base;
 
 // *name and *filename should be either NULL or malloc'd pointer
 static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
-                                    char** inlinedat_file,
+                                    char **inlinedat_file,
                                     size_t *inlinedat_line, size_t pointer,
                                     int *fromC, int skipC, int skipInline)
 {
@@ -826,7 +826,6 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
                 }
 #endif
 #endif
-
             }
             objfileentry_t entry = {obj,context,slide};
             objfilemap[fbase] = entry;
@@ -928,7 +927,8 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
             // subprogram.
             if (debugscope.getName().data() != NULL) {
                 jl_copy_str(name, debugscope.getName().str().c_str());
-            } else {
+            }
+            else {
                 char *oldname = *name;
                 *name = jl_demangle(*name);
                 free(oldname);
@@ -970,11 +970,11 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 
 int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #ifdef USE_MCJIT
-    const object::ObjectFile **object
+                      const object::ObjectFile **object
 #else
-    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
+                      std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
 #endif
-    )
+                      )
 {
     int found = 0;
 #ifndef USE_MCJIT
@@ -1006,7 +1006,6 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
     return found;
 }
 
-
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
 
 /*
@@ -1020,8 +1019,8 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 class RTDyldMemoryManagerOSX : public SectionMemoryManager
 {
-  RTDyldMemoryManagerOSX(const RTDyldMemoryManagerOSX&) = delete;
-  void operator=(const RTDyldMemoryManagerOSX&) = delete;
+    RTDyldMemoryManagerOSX(const RTDyldMemoryManagerOSX&) = delete;
+    void operator=(const RTDyldMemoryManagerOSX&) = delete;
 
 public:
     RTDyldMemoryManagerOSX() {};
@@ -1086,7 +1085,7 @@ void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr
     } while(P != End);
 }
 
-RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
+RTDyldMemoryManager *createRTDyldMemoryManagerOSX()
 {
     return new RTDyldMemoryManagerOSX();
 }
@@ -1135,7 +1134,7 @@ public:
         ActualSize -= 48;
         return mem;
     }
-    virtual uint8_t *allocateStub(const GlobalValue* F, unsigned StubSize, unsigned Alignment)
+    virtual uint8_t *allocateStub(const GlobalValue *F, unsigned StubSize, unsigned Alignment)
     {
         return JMM->allocateStub(F,StubSize,Alignment);
     }
@@ -1147,7 +1146,7 @@ public:
     virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) { return JMM->allocateSpace(Size,Alignment); }
     virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) { return JMM->allocateGlobal(Size,Alignment); }
     virtual void deallocateFunctionBody(void *Body) { return JMM->deallocateFunctionBody(Body); }
-    virtual uint8_t *startExceptionTable(const Function* F,
+    virtual uint8_t *startExceptionTable(const Function *F,
                                          uintptr_t &ActualSize) { return JMM->startExceptionTable(F,ActualSize); }
     virtual void endExceptionTable(const Function *F, uint8_t *TableStart,
                                    uint8_t *TableEnd, uint8_t *FrameRegister) { return JMM->endExceptionTable(F,TableStart,TableEnd,FrameRegister); }
@@ -1193,7 +1192,7 @@ public:
     virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
     virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
-JITMemoryManager* createJITMemoryManagerWin()
+JITMemoryManager *createJITMemoryManagerWin()
 {
     return new JITMemoryManagerWin();
 }
