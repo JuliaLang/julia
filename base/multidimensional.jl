@@ -185,37 +185,8 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
     checkbounds(A, I...)
     _unsafe_getindex(l, A, I...)
 end
-@generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
-    N = length(I)
-    quote
-        # This is specifically *not* inlined.
-        @nexprs $N d->(I_d = to_index(I[d]))
-        dest = similar(A, @ncall $N index_shape A I)
-        @ncall $N checksize dest I
-        @ncall $N _unsafe_getindex! dest A I
-    end
-end
 
-# logical indexing optimization - don't use find (within to_index)
-# This is inherently a linear operation in the source, but we could potentially
-# use fast dividing integers to speed it up.
-function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
-    # Both index_shape and checksize compute sum(I); manually hoist it out
-    N = sum(I)
-    dest = similar(src, (N,))
-    size(dest) == (N,) || throw(DimensionMismatch())
-    D = eachindex(dest)
-    Ds = start(D)
-    s = 0
-    for b in eachindex(I)
-        s+=1
-        if unsafe_getindex(I, b)
-            d, Ds = next(D, Ds)
-            unsafe_setindex!(dest, unsafe_getindex(src, s), d)
-        end
-    end
-    dest
-end
+_unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...) = slice(A, I...)
 
 # Indexing with an array of indices is inherently linear in the source, but
 # might be able to be optimized with fast dividing integers

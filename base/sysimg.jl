@@ -316,6 +316,13 @@ end
 include = include_from_node1
 include("precompile.jl")
 
+# Overwrite indexing methods needed for bootstrap:
+getindex(A::Array, I::UnitRange{Int}) = slice(A, I)
+unsafe_getindex(A::Array, I::UnitRange{Int}) = slice_unsafe(A, (I,))
+getindex(A::Array, c::Colon) = slice(A, c)
+unsafe_getindex(A::Array, c::Colon) = slice_unsafe(A, (c,))
+getindex{T<:Real}(A::Array, I::Range{T}) = slice(A, I)
+
 end # baremodule Base
 
 using Base

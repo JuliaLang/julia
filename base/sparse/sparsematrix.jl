@@ -1463,11 +1463,6 @@ function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     ((r1 > r2) || (A.rowval[r1] != i0)) ? zero(T) : A.nzval[r1]
 end
 
-# Colon translation
-getindex(A::SparseMatrixCSC, ::Colon, ::Colon) = copy(A)
-getindex(A::SparseMatrixCSC, i, ::Colon)       = getindex(A, i, 1:size(A, 2))
-getindex(A::SparseMatrixCSC, ::Colon, i)       = getindex(A, 1:size(A, 1), i)
-
 function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     # for indexing whole columns
     (m, n) = size(A)
@@ -1499,53 +1494,6 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
         end
     end
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
-end
-
-function getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector)
-    # Ranges for indexing rows
-    (m, n) = size(A)
-    # whole columns:
-    if I == 1:m
-        return getindex_cols(A, J)
-    end
-
-    nI = length(I)
-    nI == 0 || (minimum(I) >= 1 && maximum(I) <= m) || throw(BoundsError())
-    nJ = length(J)
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-    colptrS = Array(Ti, nJ+1)
-    colptrS[1] = 1
-    nnzS = 0
-
-    # Form the structure of the result and compute space
-    @inbounds for j = 1:nJ
-        col = J[j]
-        1 <= col <= n || throw(BoundsError())
-        @simd for k in colptrA[col]:colptrA[col+1]-1
-            nnzS += rowvalA[k] in I # `in` is fast for ranges
-        end
-        colptrS[j+1] = nnzS+1
-    end
-
-    # Populate the values in the result
-    rowvalS = Array(Ti, nnzS)
-    nzvalS  = Array(Tv, nnzS)
-    ptrS    = 1
-
-    @inbounds for j = 1:nJ
-        col = J[j]
-        for k = colptrA[col]:colptrA[col+1]-1
-            rowA = rowvalA[k]
-            i = rangesearch(I, rowA)
-            if i > 0
-                rowvalS[ptrS] = i
-                nzvalS[ptrS] = nzvalA[k]
-                ptrS += 1
-            end
-        end
-    end
-
-    return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
 function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
@@ -1792,84 +1740,6 @@ function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J
     @inbounds Is = I[pI]
     permute_rows!(getindex_I_sorted(A, Is, J), pI)
 end
-
-# the general case:
-function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
-    (m, n) = size(A)
-
-    if !isempty(J)
-        minj, maxj = extrema(J)
-        ((minj < 1) || (maxj > n)) && throw(BoundsError())
-    end
-
-    if !isempty(I)
-        mini, maxi = extrema(I)
-        ((mini < 1) || (maxi > m)) && throw(BoundsError())
-    end
-
-    if isempty(I) || isempty(J) || (0 == nnz(A))
-        return spzeros(Tv, Ti, length(I), length(J))
-    end
-
-    if issorted(I)
-        return getindex_I_sorted(A, I, J)
-    else
-        return getindex_general(A, I, J)
-    end
-end
-
-function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
-    szA = size(A)
-    nA = szA[1]*szA[2]
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
-
-    n = length(I)
-    outm = size(I,1)
-    outn = size(I,2)
-    szB = (outm, outn)
-    colptrB = zeros(Int, outn+1)
-    rowvalB = Array(Int, n)
-    nzvalB = Array(Tv, n)
-
-    colB = 1
-    rowB = 1
-    colptrB[colB] = 1
-    idxB = 1
-
-    for i in 1:n
-        ((I[i] < 1) | (I[i] > nA)) && throw(BoundsError())
-        row,col = ind2sub(szA, I[i])
-        for r in colptrA[col]:(colptrA[col+1]-1)
-            @inbounds if rowvalA[r] == row
-                rowB,colB = ind2sub(szB, i)
-                colptrB[colB+1] += 1
-                rowvalB[idxB] = rowB
-                nzvalB[idxB] = nzvalA[r]
-                idxB += 1
-                break
-            end
-        end
-    end
-    colptrB = cumsum(colptrB)
-    if n > (idxB-1)
-        deleteat!(nzvalB, idxB:n)
-        deleteat!(rowvalB, idxB:n)
-    end
-    SparseMatrixCSC(outm, outn, colptrB, rowvalB, nzvalB)
-end
-
-# logical getindex
-getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
-getindex{Tv,Ti<:Integer,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{T}) = error("Cannot index with Range{Bool}")
-
-getindex{T<:Integer}(A::SparseMatrixCSC, I::Range{T}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
-getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## setindex!
 function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
