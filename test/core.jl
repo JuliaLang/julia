@@ -3696,3 +3696,18 @@ let
     c=1
     @test b() == 1
 end
+
+# issue #14825
+abstract abstest_14825
+
+type t1_14825{A <: abstest_14825, B}
+  x::A
+  y::B
+end
+
+type t2_14825{C, B} <: abstest_14825
+  x::C
+  y::t1_14825{t2_14825{C, B}, B}
+end
+
+@test t2_14825{Int,Int}.types[2] <: t1_14825
