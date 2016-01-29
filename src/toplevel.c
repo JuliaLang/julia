@@ -625,28 +625,6 @@ DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
     return jl_load(jl_string_data(str), jl_string_len(str));
 }
 
-// type definition ------------------------------------------------------------
-
-void jl_reinstantiate_inner_types(jl_datatype_t *t);
-
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
-{
-    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
-        tt->name == ((jl_datatype_t*)super)->name ||
-        jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
-        jl_is_tuple_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
-        jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
-    }
-    tt->super = (jl_datatype_t*)super;
-    jl_gc_wb(tt, tt->super);
-    if (jl_svec_len(tt->parameters) > 0) {
-        tt->name->cache = jl_emptysvec;
-        tt->name->linearcache = jl_emptysvec;
-        jl_reinstantiate_inner_types(tt);
-    }
-}
-
 // method definition ----------------------------------------------------------
 
 extern int jl_boot_file_loaded;

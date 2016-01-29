@@ -105,6 +105,22 @@ static void check_can_assign_type(jl_binding_t *b)
         jl_errorf("invalid redefinition of constant %s", b->name->name);
 }
 
+void jl_reinstantiate_inner_types(jl_datatype_t *t);
+
+void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+{
+    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
+        tt->name == ((jl_datatype_t*)super)->name ||
+        jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
+        jl_is_tuple_type(super) ||
+        jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
+        jl_errorf("invalid subtyping in definition of %s",
+                  jl_symbol_name(tt->name->name));
+    }
+    tt->super = (jl_datatype_t*)super;
+    jl_gc_wb(tt, tt->super);
+}
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     if (jl_is_symbol(e)) {
@@ -354,6 +370,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_gc_wb_binding(b, dt);
         super = eval(args[2], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
+        jl_reinstantiate_inner_types(dt);
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
@@ -384,6 +401,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_gc_wb_binding(b, dt);
         super = eval(args[3], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
+        jl_reinstantiate_inner_types(dt);
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
@@ -413,6 +431,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_gc_wb_binding(b,dt);
 
         JL_TRY {
+            super = eval(args[3], locals, nl, ngensym);
+            jl_set_datatype_super(dt, super);
             // operations that can fail
             inside_typedef = 1;
             dt->types = (jl_svec_t*)eval(args[4], locals, nl, ngensym);
@@ -423,8 +443,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                 if (!jl_is_type(elt) && !jl_is_typevar(elt))
                     jl_type_error_rt(dt->name->name->name, "type definition", (jl_value_t*)jl_type_type, elt);
             }
-            super = eval(args[3], locals, nl, ngensym);
-            jl_set_datatype_super(dt, super);
+            jl_reinstantiate_inner_types(dt);
         }
         JL_CATCH {
             b->value = temp;
