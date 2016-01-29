@@ -213,6 +213,37 @@ that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
+.. _man-generator-expressions:
+
+Generator Expressions
+---------------------
+
+Comprehensions can also be written without the enclosing square brackets, producing
+an object known as a generator. This object can be iterated to produce values on
+demand, instead of allocating an array and storing them in advance
+(see :ref:`_man-interfaces-iteration`).
+For example, the following expression sums a series without allocating memory::
+
+    julia> sum(1/n^2 for n=1:1000)
+    1.6439345666815615
+
+When writing a generator expression with multiple dimensions, it needs to be
+enclosed in parentheses to avoid ambiguity::
+
+    julia> collect(1/(i+j) for i=1:2, j=1:2)
+    ERROR: function collect does not accept keyword arguments
+
+In this call, the range ``j=1:2`` was interpreted as a second argument to
+``collect``. This is fixed by adding parentheses::
+
+    julia> collect((1/(i+j) for i=1:2, j=1:2))
+    2x2 Array{Float64,2}:
+     0.5       0.333333
+     0.333333  0.25
+
+Note that ``collect`` gathers the values produced by an iterator into an array,
+giving the same effect as an array comprehension.
+
 .. _man-array-indexing:
 
 Indexing
