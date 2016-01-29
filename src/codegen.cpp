@@ -855,6 +855,9 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         li->functionID = jl_assign_functionID(f, 0);
         if (specf)
             li->specFunctionID = jl_assign_functionID(specf, 1);
+        if (f->getFunctionType() != jl_func_sig)
+            // mark the pointer as jl_fptr_sparam_t calling convention
+            li->jlcall_api = 1;
         //n_emit++;
     }
     JL_CATCH {
@@ -1065,10 +1068,6 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
         #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction((Function*)li->functionObjects.functionObject);
         #endif
-        if (((Function*)li->functionObjects.functionObject)->getFunctionType() != jl_func_sig) {
-            // mark the pointer as jl_fptr_sparam_t calling convention
-            li->jlcall_api = 1;
-        }
 
         assert(li->fptr != NULL);
 #ifndef KEEP_BODIES
@@ -1125,7 +1124,7 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx)
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types. If rt is NULL then whatever return type is present is
 // accepted.
-static Function *gen_cfun_wrapper(jl_lambda_info_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref);
+static Function *gen_cfun_wrapper(jl_lambda_info_t *ff, jl_function_t *f, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref);
 static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt)
 {
     if (rt) {
@@ -1204,7 +1203,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tuplet
             }
         }
         JL_GC_POP(); // kill list: sigt
-        return gen_cfun_wrapper(li, astrt, argt, isref);
+        return gen_cfun_wrapper(li, f, astrt, argt, isref);
     }
     jl_error("cfunction: no method exactly matched the required type signature (function not yet c-callable)");
 }
@@ -3839,7 +3838,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 }
 
 // here argt does not include the leading function type argument
-static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref)
+static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref)
 {
     cFunctionList_t *list = (cFunctionList_t*)lam->functionObjects.cFunctionList;
     if (list != NULL) {
@@ -4056,16 +4055,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_value_t *jlrettype, 
     }
     else {
         assert(nargs > 0);
-        // for jlcall, we need to pass the function object even if it is a ghost.
-        // here we reconstruct the function instance from its type (first elt of argt)
-        jl_value_t *ff = jl_tparam0(argt);
-        if (jl_is_type_type(ff)) {
-            ff = jl_tparam0(ff);
-        }
-        else {
-            assert(jl_is_datatype(ff) && jl_is_datatype_singleton((jl_datatype_t*)ff));
-            ff = ((jl_datatype_t*)ff)->instance;
-        }
+        // for jlcall, we need to pass the function object even though it is a ghost
         Value *ret = emit_jlcall(theFptr, literal_pointer_val((jl_value_t*)ff), 0, nargs, &ctx);
         retval = mark_julia_type(ret, true, jlrettype);
     }
@@ -5191,7 +5181,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             add_named_global(f, (void*)fptr);
         }
         else {
-            if (((uintptr_t)fptr) & 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since it would never be used)
+            if (lam->jlcall_api == 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
                 assert(lam->fptr == NULL);
                 lam->fptr = (jl_fptr_t)fptr;
             }
