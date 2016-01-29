@@ -5,7 +5,7 @@ import Core.Intrinsics.ccall
 baremodule Base
 
 using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
+            _apply, typeassert, apply_type, svec
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include
@@ -55,6 +55,29 @@ importall .Checked
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
+
+# Array convenience converting constructors
+(::Type{Array{T}}){T}(m::Integer) = Array{T}(Int(m))
+(::Type{Array{T}}){T}(m::Integer, n::Integer) = Array{T}(Int(m), Int(n))
+(::Type{Array{T}}){T}(m::Integer, n::Integer, o::Integer) = Array{T}(Int(m), Int(n), Int(o))
+(::Type{Array{T}}){T}(d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+
+(::Type{Vector{T}}){T}(m::Integer) = Array{T}(m)
+(::Type{Vector{T}}){T}() = Array{T}(0)
+(::Type{Vector})(m::Integer) = Array{Any}(m)
+(::Type{Vector})() = Array{Any}(0)
+
+(::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Array{T}(m, n)
+(::Type{Matrix{T}}){T}() = Array{T}(0, 0)
+(::Type{Matrix})(m::Integer, n::Integer) = Array{Any}(m, n)
+(::Type{Matrix})() = Array{Any}(0, 0)
+
+# TODO: possibly turn these into deprecations
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
+Array{T}(::Type{T}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
+Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
 
 # numeric operations
 include("hashing.jl")

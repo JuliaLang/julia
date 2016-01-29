@@ -15,6 +15,9 @@
         ((memq (car s1) s2) (diff (cdr s1) s2))
         (else               (cons (car s1) (diff (cdr s1) s2)))))
 
+(define (intersect s1 s2)
+  (filter (lambda (x) (memq x s2)) s1))
+
 (define (has-dups lst)
   (if (null? lst)
       #f
@@ -45,16 +48,18 @@
                 (cdr expr)))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
-(define (expr-find-all p expr key)
-  (let ((found (if (p expr)
-                   (list (key expr))
-                   '())))
-    (if (or (atom? expr) (quoted? expr))
-        found
-        (apply nconc
-               found
-               (map (lambda (x) (expr-find-all p x key))
-                    (cdr expr))))))
+(define (expr-find-all p expr key (filt (lambda (x) #t)))
+  (if (filt expr)
+      (let ((found (if (p expr)
+                       (list (key expr))
+                       '())))
+        (if (or (atom? expr) (quoted? expr))
+            found
+            (apply nconc
+                   found
+                   (map (lambda (x) (expr-find-all p x key filt))
+                        (cdr expr)))))
+      '()))
 
 (define (butlast lst)
   (if (or (null? lst) (null? (cdr lst)))

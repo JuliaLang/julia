@@ -439,8 +439,8 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               jl_svec_data(ctx->sp),
-                                               jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             jl_rethrow_with_add("error interpreting cglobal type");
@@ -504,8 +504,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall argument tuple");
@@ -514,8 +514,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall return type");
@@ -524,8 +524,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                            jl_svec_data(ctx->sp),
-                                            jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting IR argument");
@@ -964,11 +964,12 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                                jl_svec_data(ctx->sp),
-                                                jl_svec_len(ctx->sp)/2);
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             static_rt = false;
+            rt = NULL;
             if (jl_is_type_type(rtt_)) {
                 if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
                     // substitute Ptr{Void} for statically-unknown pointer type
@@ -978,6 +979,24 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     // `Array` used as return type just returns a julia object reference
                     rt = (jl_value_t*)jl_any_type;
                     static_rt = true;
+                }
+            }
+            if (rt == NULL) {
+                if (jl_is_expr(args[2])) {
+                    jl_expr_t *rtexpr = (jl_expr_t*)args[2];
+                    if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 4 &&
+                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_array_type) {
+                        // `Array` used as return type just returns a julia object reference
+                        rt = (jl_value_t*)jl_any_type;
+                        static_rt = true;
+                    }
+                    else if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 3 &&
+                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_pointer_type) {
+                        // substitute Ptr{Void} for statically-unknown pointer type
+                        rt = (jl_value_t*)jl_voidpointer_type;
+                    }
                 }
             }
             if (rt == NULL) {
@@ -1027,9 +1046,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     {
         JL_TRY {
-            at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                                jl_svec_data(ctx->sp),
-                                                jl_svec_len(ctx->sp)/2);
+            at = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->sparam_vals);
         }
         JL_CATCH {
             //jl_rethrow_with_add("error interpreting ccall argument tuple");
@@ -1154,8 +1173,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt == 3);
         jl_value_t *f = static_eval(args[4], ctx, false, false);
         jl_value_t *frt = expr_type(args[6], ctx);
-        if (f && jl_is_function(f) &&
-                (jl_is_type_type((jl_value_t*)frt) && !jl_has_typevars(jl_tparam0(frt)))) {
+        if (f && (jl_is_type_type((jl_value_t*)frt) && !jl_has_typevars(jl_tparam0(frt)))) {
             jl_value_t *fargt = static_eval(args[8], ctx, true, true);
             if (fargt) {
                 if (jl_is_tuple(fargt)) {

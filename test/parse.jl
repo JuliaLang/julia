@@ -99,9 +99,6 @@ macro test999_str(args...); args; end
 # issue #10994
 @test parse("1 + #= \0 =# 2") == :(1 + 2)
 
-# issue #10985
-@test expand(:(f(::Int...) = 1)).head == :method
-
 # issue #10910
 @test parse(":(using A)") == Expr(:quote, Expr(:using, :A))
 @test parse(":(using A.b, B)") == Expr(:quote,
@@ -153,6 +150,26 @@ macro f(args...) end; @f ""
 """) == Expr(:toplevel,
             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
             Expr(:macrocall, symbol("@f"), ""))
+
+# blocks vs. tuples
+@test parse("()") == Expr(:tuple)
+@test parse("(;)") == Expr(:block)
+@test parse("(;;;;)") == Expr(:block)
+@test_throws ParseError parse("(,)")
+@test_throws ParseError parse("(;,)")
+@test_throws ParseError parse("(,;)")
+@test parse("(x;)") == Expr(:block, :x)
+@test parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
+@test parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
+@test parse("(x,)") == Expr(:tuple, :x)
+@test parse("(x,;)") == Expr(:tuple, :x)
+@test parse("(x;y)") == Expr(:block, :x, :y)
+@test parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2))
+@test parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
+@test parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
+@test parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
+@test parse("(x,a;y=1,z=2)") == Expr(:tuple, Expr(:parameters, Expr(:kw,:y,1), Expr(:kw,:z,2)), :x, :a)
+@test parse("(a=1, b=2)") == Expr(:tuple, Expr(:(=), :a, 1), Expr(:(=), :b, 2))
 
 # integer parsing
 @test is(parse(Int32,"0",36),Int32(0))

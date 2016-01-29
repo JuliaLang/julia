@@ -132,7 +132,7 @@ lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 immutable DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
-    function DateFunction(f::Function,negate::Bool,dt::TimeType)
+    function DateFunction(f::ANY,negate::Bool,dt::TimeType)
         try
             f(dt) in (true,false) || throw(ArgumentError("Provided function must take a single TimeType argument and return true or false"))
         catch e
@@ -142,7 +142,7 @@ immutable DateFunction
         return new(@eval x->$n($f(x)))
     end
 end
-Base.show(io::IO,df::DateFunction) = println(io, df.f.code)
+Base.show(io::IO,df::DateFunction) = println(io, df.f)
 
 # Core adjuster
 function adjust(df::DateFunction,start,step,limit)

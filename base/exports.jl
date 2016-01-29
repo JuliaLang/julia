@@ -284,7 +284,6 @@ export
     At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt,
-    call,
 
 # scalar math
     @evalpoly,
@@ -1084,7 +1083,6 @@ export
     fullname,
     functionloc,
     isconst,
-    isgeneric,
     isinteractive,
     less,
     method_exists,

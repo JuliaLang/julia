@@ -15,6 +15,13 @@ New language features
 Language changes
 ----------------
 
+  * Each function and closure now has its own type. The captured variables of a closure
+    are fields of its type. `Function` is now an abstract type, and is the default supertype
+    of functions and closures. All functions, including anonymous functions,
+    are generic and support all features (e.g. keyword arguments).
+    Instead of adding methods to `call`, methods are added by type using the syntax
+    `(::ftype)(...) = ...`. `call` is deprecated ([#13412]).
+
   * `using` and `import` are now case-sensitive even on case-insensitive filesystems (common on Mac and Windows) ([#13542]).
 
   * Relational symbols are now allowed as infix operators ([#8036]).
@@ -1756,6 +1763,7 @@ Too numerous to mention.
 [#13232]: https://github.com/JuliaLang/julia/issues/13232
 [#13338]: https://github.com/JuliaLang/julia/issues/13338
 [#13387]: https://github.com/JuliaLang/julia/issues/13387
+[#13412]: https://github.com/JuliaLang/julia/issues/13412
 [#13440]: https://github.com/JuliaLang/julia/issues/13440
 [#13465]: https://github.com/JuliaLang/julia/issues/13465
 [#13480]: https://github.com/JuliaLang/julia/issues/13480

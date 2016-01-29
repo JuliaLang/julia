@@ -14,16 +14,6 @@ deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
 deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
 
-function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
-    if isa(x.env, Union{MethodTable, Symbol}) || x.env === ()
-        return x
-    end
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
-    _deepcopy_t(x, typeof(x), stackdict)
-end
-
 function deepcopy_internal(x, stackdict::ObjectIdDict)
     if haskey(stackdict, x)
         return stackdict[x]

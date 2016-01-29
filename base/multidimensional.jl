@@ -20,13 +20,13 @@ immutable CartesianIndex{N}
 end
 
 CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
-@generated function Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
+@generated function (::Type{CartesianIndex{N}}){N}(index::Integer...)
     length(index) == N && return :(CartesianIndex(index))
     length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
     args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
     :(CartesianIndex(tuple($(args...))))
 end
-Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
+(::Type{CartesianIndex{N}}){M,N}(index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
 
 # length
 length{N}(::CartesianIndex{N})=N
