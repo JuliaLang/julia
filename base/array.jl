@@ -387,7 +387,9 @@ end
 
 function push!{T}(a::Array{T,1}, item)
     # convert first so we don't grow the array if the assignment won't work
-    itemT = convert(T, item)
+    if T !== Union{}
+        itemT = convert(T, item)
+    end
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
     a[end] = itemT
     return a
