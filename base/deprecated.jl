@@ -507,10 +507,12 @@ export float32_isvalid, float64_isvalid
 
 # 12087
 @deprecate call(P::Base.DFT.ScaledPlan, A) P * A
-@deprecate call(P::Base.FFTW.DCTPlan, A) P * A
-@deprecate call(P::Base.FFTW.cFFTWPlan, A) P * A
-@deprecate call(P::Base.FFTW.rFFTWPlan, A) P * A
-@deprecate call(P::Base.FFTW.r2rFFTWPlan, A) P * A
+if Base.USE_GPL_LIBS
+    @deprecate call(P::Base.FFTW.DCTPlan, A) P * A
+    @deprecate call(P::Base.FFTW.cFFTWPlan, A) P * A
+    @deprecate call(P::Base.FFTW.rFFTWPlan, A) P * A
+    @deprecate call(P::Base.FFTW.r2rFFTWPlan, A) P * A
+end
 for f in (:plan_fft, :plan_ifft, :plan_bfft, :plan_fft!, :plan_ifft!, :plan_bfft!, :plan_rfft)
     @eval @deprecate $f(A, dims, flags) $f(A, dims; flags=flags)
     @eval @deprecate $f(A, dims, flags, tlim) $f(A, dims; flags=flags, timelimit=tlim)
