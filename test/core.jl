@@ -691,7 +691,7 @@ let A = [1]
 end
 
 # Module() constructor
-@test names(Module(:anonymous), true, true) != [:anonymous]
+@test names(Module(:anonymous), true, true) == [:anonymous]
 @test names(Module(:anonymous, false), true, true) == [:anonymous]
 
 # exception from __init__()
@@ -812,8 +812,7 @@ let
     local my_func, a, c
     my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
     my_func{T}(x::T, P::Vector{T}) = 1
-    # todo: this gives an ambiguity warning
-    #my_func{T}(P::Vector{T}, x::T) = 2
+    my_func{T}(P::Vector{T}, x::T) = 2
     a = Int[3]
     c = Vector[a]
 
@@ -2084,7 +2083,7 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-Base.call(x::Int, y::Int) = x + 3y
+(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
 let x = 10
     @test x(3) == 19
@@ -2094,7 +2093,7 @@ end
 type Issue2403
     x
 end
-Base.call(i::Issue2403, y) = i.x + 2y
+(i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
     @test issue2403func(x) == 34
@@ -2187,10 +2186,10 @@ call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
 call_lambda3() = ((x)->x)(1,2)
 call_lambda4() = ((x,y...)->x)()
-@test (try call_lambda1(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
-@test (try call_lambda2(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
-@test (try call_lambda3(); false; catch e; (e::ErrorException).msg; end) == "wrong number of arguments"
-@test (try call_lambda4(); false; catch e; (e::ErrorException).msg; end) == "too few arguments"
+@test_throws MethodError call_lambda1()
+@test_throws MethodError call_lambda2()
+@test_throws MethodError call_lambda3()
+@test_throws MethodError call_lambda4()
 call_lambda5() = ((x...)->x)()
 call_lambda6() = ((x...)->x)(1)
 call_lambda7() = ((x...)->x)(1,2)
@@ -2208,7 +2207,7 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
-if Base.is_unix(OS_NAME)
+@unix_only begin
     ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
     @test_throws InterruptException begin
         #ccall(:raise, Void, (Cint,), 2) # llvm installs a custom version on Darwin that resolves to pthread_kill(pthread_self(), sig), which isn't what we want
@@ -2381,13 +2380,13 @@ type newtype10373
 end
 let f
     for f in (f10373,g10373)
-        f(x::newtype10373) = println("$f")
+        (::typeof(f))(x::newtype10373) = println("$f")
     end
 end
-@test f10373.env.defs.func.code.name == :f10373
-@test f10373.env.defs.next.func.code.name == :f10373
-@test g10373.env.defs.func.code.name == :g10373
-@test g10373.env.defs.next.func.code.name == :g10373
+@test methods(f10373).defs.func.name == :f10373
+@test methods(f10373).defs.next.func.name == :f10373
+@test methods(g10373).defs.func.name == :g10373
+@test methods(g10373).defs.next.func.name == :g10373
 
 # issue #7221
 f7221{T<:Number}(::T) = 1
@@ -2997,7 +2996,7 @@ end
 
 # issue #8283
 function func8283 end
-@test isa(func8283,Function) && isgeneric(func8283)
+@test isa(func8283,Function)
 @test_throws MethodError func8283()
 
 # issue #11243
@@ -3103,9 +3102,9 @@ end
 
 g11858(x::Float64) = x
 f11858(a) = for Baz in a
-    Baz(x) = Baz(float(x))
+    (f::Baz)(x) = f(float(x))
 end
-f11858(Any[Foo11858, Bar11858, g11858])
+f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 
 @test g11858(1) == 1.0
 @test Foo11858(1).x == 1.0
@@ -3182,9 +3181,9 @@ failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
 
 # issue #12023 Test error checking in bitstype
-@test_throws ErrorException bitstype 0 SPJa12023
-@test_throws ErrorException bitstype 4294967312 SPJb12023
-@test_throws ErrorException bitstype -4294967280 SPJc12023
+@test_throws ErrorException (@eval bitstype 0 SPJa12023)
+@test_throws ErrorException (@eval bitstype 4294967312 SPJb12023)
+@test_throws ErrorException (@eval bitstype -4294967280 SPJc12023)
 
 # issue #12089
 type A12089{K, N}
@@ -3331,21 +3330,6 @@ end
 @test @inferred(MyColors.myeltype(MyColors.RGB{Float32})) == Float32
 @test @inferred(MyColors.myeltype(MyColors.RGB)) == Any
 
-# issue #12612 (handle the case when `call` is not defined)
-Main.eval(:(type Foo12612 end))
-
-baremodule A12612
-import Main: Foo12612
-f1() = Foo12612()
-f2() = Main.Foo12612()
-end
-
-## Don't panic in type inference if call is not defined
-code_typed(A12612.f1, Tuple{})
-code_typed(A12612.f2, Tuple{})
-@test_throws ErrorException A12612.f1()
-@test_throws ErrorException A12612.f2()
-
 # issue #12569
 @test_throws ArgumentError symbol("x"^10_000_000)
 @test_throws ArgumentError gensym("x"^10_000_000)
@@ -3353,7 +3337,7 @@ code_typed(A12612.f2, Tuple{})
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # meta nodes for optional positional arguments
-@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[1].args[3]).args[3].args[1].args[1] === :inline
+@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[3].args[3]).args[3].args[1].args[1] === :inline
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
@@ -3684,3 +3668,31 @@ f6846() = (please6846; 2)
 @inline f14767(x) = x ? A14767 : ()
 const A14767 = f14767(false)
 @test A14767 === ()
+
+# issue #10985
+f10985(::Any...) = 1
+@test f10985(1, 2, 3) == 1
+
+# a tricky case for closure conversion
+type _CaptureInCtor
+    yy
+    function _CaptureInCtor(list_file::AbstractString="")
+        y = 0
+        f = x->add_node(y)
+        new(f(2))
+    end
+    add_node(y) = y+1
+end
+@test _CaptureInCtor().yy == 1
+
+# issue #14610
+let sometypes = (Int,Int8)
+    f(::Union{ntuple(i->Type{sometypes[i]}, length(sometypes))...}) = 1
+    @test method_exists(f, (Union{Type{Int},Type{Int8}},))
+end
+
+let
+    b=()->c
+    c=1
+    @test b() == 1
+end

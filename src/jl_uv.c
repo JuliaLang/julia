@@ -50,7 +50,7 @@ extern "C" {
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
 
-static void jl_uv_call_close_callback(void *val)
+static void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t *cb;
     if (!jl_old_base_module) {
@@ -61,8 +61,9 @@ static void jl_uv_call_close_callback(void *val)
     else {
         cb = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module), jl_symbol("_uv_hook_close"));
     }
-    assert(cb && jl_is_function(cb));
-    jl_apply((jl_function_t*)cb, (jl_value_t**)&val, 1);
+    assert(cb);
+    jl_value_t *args[2] = {cb,val};
+    jl_apply(args, 2);
 }
 
 JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
@@ -78,7 +79,7 @@ JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data)
-        jl_uv_call_close_callback(handle->data);
+        jl_uv_call_close_callback((jl_value_t*)handle->data);
     free(handle);
 }
 

@@ -751,7 +751,7 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
     delete clone;
 }
 
-static int32_t jl_assign_functionID(Function *functionObject)
+static int32_t jl_assign_functionID(Function *functionObject, int specsig)
 {
     // give the function an index in the constant lookup table
     if (!imaging_mode)
@@ -840,14 +840,6 @@ static Value *literal_pointer_val(jl_value_t *p)
         jl_datatype_t *addr = (jl_datatype_t*)p;
         // DataTypes are prefixed with a +
         return julia_gv("+", addr->name->name, addr->name->module, p);
-    }
-    if (jl_is_func(p)) {
-        jl_lambda_info_t *linfo = ((jl_function_t*)p)->linfo;
-        // Functions are prefixed with a -
-        if (linfo != NULL)
-            return julia_gv("-", linfo->name, linfo->module, p);
-        // Anonymous lambdas are prefixed with jl_method#
-        return julia_gv("jl_method#", p);
     }
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
@@ -1056,13 +1048,6 @@ static Value *emit_nthptr(Value *v, ssize_t n, MDNode *tbaa)
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, n);
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
-}
-
-static Value *emit_nthptr_recast(Value *v, ssize_t n, MDNode *tbaa, Type* ptype)
-{
-    // p = (jl_value_t**)v; *(ptype)&p[n]
-    Value *vptr = emit_nthptr_addr(v, n);
-    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
 
 static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype)
@@ -1484,8 +1469,6 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = jl_fieldref(e,0);
         goto type_of_constant;
     }
-    if (jl_is_lambda_info(e))
-        return (jl_value_t*)jl_function_type;
     if (jl_is_globalref(e)) {
         jl_value_t *v = static_eval(e, ctx);
         if (v == NULL)
@@ -1510,10 +1493,13 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
-                for(size_t i=0; i < jl_svec_len(ctx->sp); i+=2) {
-                    assert(jl_is_symbol(jl_svecref(ctx->sp, i)));
-                    if (e == jl_svecref(ctx->sp, i)) {
-                        e = jl_svecref(ctx->sp, i+1);
+                jl_svec_t *sp = ctx->linfo->sparam_syms;
+                for (size_t i=0; i < jl_svec_len(sp); i++) {
+                    assert(jl_is_symbol(jl_svecref(sp, i)));
+                    if (e == jl_svecref(sp, i)) {
+                        if (jl_svec_len(ctx->linfo->sparam_vals) == 0)
+                            return (jl_value_t*)jl_any_type;
+                        e = jl_svecref(ctx->linfo->sparam_vals, i);
                         goto type_of_constant;
                     }
                 }

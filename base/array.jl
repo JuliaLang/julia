@@ -10,40 +10,7 @@ typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
 typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 
-call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
-call{T}(::Type{Vector{T}}) = Array{T}(0)
-call(::Type{Vector}, m::Integer) = Array{Any}(m)
-call(::Type{Vector}) = Array{Any}(0)
-
-call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
-call{T}(::Type{Matrix{T}}) = Array{T}(0, 0)
-call(::Type{Matrix}, m::Integer, n::Integer) = Array{Any}(m, n)
-call(::Type{Matrix}) = Array{Any}(0, 0)
-
 ## Basic functions ##
-
-# convert Arrays to pointer arrays for ccall
-function call{P<:Ptr,T<:Ptr}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
-    return RefArray(a) # effectively a no-op
-end
-function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
-    if (!isbits(T) && T <: eltype(P))
-        # this Array already has the right memory layout for the requested Ref
-        return RefArray(a,1,false) # root something, so that this function is type-stable
-    else
-        ptrs = Array(P, length(a)+1)
-        roots = Array(Any, length(a))
-        for i = 1:length(a)
-            root = cconvert(P, a[i])
-            ptrs[i] = unsafe_convert(P, root)::P
-            roots[i] = root
-        end
-        ptrs[length(a)+1] = C_NULL
-        return RefArray(ptrs,1,roots)
-    end
-end
-cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
-cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
 
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
@@ -296,8 +263,8 @@ function unsafe_getindex(A::Array, ::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{T<:Real}(A::Array, I::Range{T})
-    return [ A[to_index(i)] for i in I ]
+function getindex{S,T<:Real}(A::Array{S}, I::Range{T})
+    return S[ A[to_index(i)] for i in I ]
 end
 
 ## Indexing: setindex! ##

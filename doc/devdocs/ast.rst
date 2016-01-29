@@ -31,7 +31,7 @@ The following data types exist in lowered ASTs:
     used to name local variables and static parameters within a function.
 
 ``LambdaStaticData``
-    wraps the AST of each function, including inner functions.
+    wraps the AST of each method.
 
 ``LineNumberNode``
     line number metadata
@@ -62,7 +62,8 @@ The following data types exist in lowered ASTs:
     (SSA) variable inserted by the compiler.
 
 ``NewvarNode``
-    marks a point where a closed variable needs to have a new box allocated.
+    Marks a point where a variable is created. This has the effect of resetting a
+    variable to undefined.
 
 
 Expr types
@@ -87,20 +88,34 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``method``
     adds a method to a generic function and assigns the result if necessary.
 
-    ``args[1]`` - function name (symbol), or a ``GlobalRef``, or an ``Expr``
-    with head ``kw``.  In the ``(kw f)`` case, the method is actually a keyword
-    argument sorting function for ``f``. It will be stored instead in
-    ``generic_function->env->kwsorter``.
+    Has a 1-argument form and a 4-argument form. The 1-argument form arises
+    from the syntax ``function foo end``. In the 1-argument form, the
+    argument is a symbol. If this symbol already names a function in the
+    current scope, nothing happens. If the symbol is undefined, a new function
+    is created and assigned to the identifier specified by the symbol.
+    If the symbol is defined but names a non-function, an error is raised.
+    The definition of "names a function" is that the binding is constant, and
+    refers to an object of singleton type. The rationale for this is that an
+    instance of a singleton type uniquely identifies the type to add the method
+    to. When the type has fields, it wouldn't be clear whether the method was
+    being added to the instance or its type.
 
-    If ``method`` has only one argument, it corresponds to the form ``function
-    foo end`` and only creates a function without adding any methods.
+    The 4-argument form has the following arguments:
+    ``args[1]`` - A function name, or ``false`` if unknown. If a symbol,
+    then the expression first behaves like the 1-argument form above.
+    This argument is ignored from then on.
+    When this is ``false``, it means a method is being added strictly by type,
+    ``(::T)(x) = x``.
 
     ``args[2]`` - a ``SimpleVector`` of argument type data. ``args[2][1]`` is
-    a ``Tuple type`` of the argument types, and ``args[2][2]`` is a
+    a ``Tuple`` type of the argument types, and ``args[2][2]`` is a
     ``SimpleVector`` of type variables corresponding to the method's static
     parameters.
 
-    ``args[3]`` - a ``LambdaStaticData`` of the method itself.
+    ``args[3]`` - a ``LambdaStaticData`` of the method itself. For "out of scope"
+    method definitions (adding a method to a function that also has methods defined
+    in different scopes) this is an expression that evaluates to a ``:lambda``
+    expression.
 
     ``args[4]`` - ``true`` or ``false``, identifying whether the method is
     staged (``@generated function``)
@@ -162,6 +177,10 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 LambdaStaticData
 ~~~~~~~~~~~~~~~~
 
+``sparam_syms`` - The names (symbols) of static parameters.
+
+``sparam_vals`` - The values of the static parameters (once known), indexed by ``sparam_syms``.
+
 Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
 ``Expr`` has the following layout:
 
@@ -190,8 +209,6 @@ Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
 
     ``args[2][3]`` - The types of variables represented by ``GenSym`` objects.
     Given ``GenSym`` ``g``, its type will be at ``args[2][3][g.id+1]``.
-
-    ``args[2][4]`` - The names (symbols) of static parameters.
 
 ``args[3]``
     an ``Expr`` with head ``body`` whose arguments are the statements

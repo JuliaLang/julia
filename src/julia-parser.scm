@@ -509,20 +509,20 @@
 
 (define (syntax-deprecation s what instead)
   (if (or *depwarn* *deperror*)
-    (let ((msg (string
-		 #\newline
-		 (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
-	      (if (eq? current-filename 'none)
-		  ""
-		  (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
-	      "."
-	      (if (equal? instead "")
-		  ""
-		  (string #\newline "Use \"" instead "\" instead."))
-	      #\newline)))
-	  (if *deperror*
-	    (error msg)
-	    (io.write *stderr* msg)))))
+      (let ((msg (string
+                  #\newline
+                  (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
+                  (if (or (not s) (eq? current-filename 'none))
+                      ""
+                      (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
+                  "."
+                  (if (equal? instead "")
+                      ""
+                      (string #\newline "Use \"" instead "\" instead."))
+                  #\newline)))
+        (if *deperror*
+            (error msg)
+            (io.write *stderr* msg)))))
 
 ;; --- parser ---
 
@@ -1599,32 +1599,44 @@
                       (else
                        (parse-matrix s first closer #f))))))))))
 
-; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
-(define (parse-stmts-within-expr s)
-  (parse-Nary s parse-eq* '(#\;) 'block '(#\, #\) ) #t))
+(define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
+(define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
 
-(define (parse-tuple s first)
-  (let loop ((lst '())
-             (nxt first))
-    (case (require-token s)
-      ((#\))
-       (take-token s)
-       (cons 'tuple (reverse (cons nxt lst))))
-      ((#\,)
-       (take-token s)
-       (if (eqv? (require-token s) #\))
-           ;; allow ending with ,
-           (begin (take-token s)
-                  (cons 'tuple (reverse (cons nxt lst))))
-           (loop (cons nxt lst) (parse-eq* s))))
-      ((#\;)
-       (error "unexpected semicolon in tuple"))
-      #;((#\newline)
-      (error "unexpected line break in tuple"))
-      ((#\] #\})
-       (error (string "unexpected \"" (peek-token s) "\" in tuple")))
-      (else
-       (error "missing separator in tuple")))))
+;; translate nested (parameters ...) expressions to a statement block if possible
+;; this allows us to first parse tuples using parse-arglist
+(define (parameters-to-block e)
+  (if (and (pair? e) (eq? (car e) 'parameters))
+      (cond ((length= e 1) '())
+            ((length= e 2) (parameters-to-block (cadr e)))
+            ((length= e 3)
+             (let ((fst (cadr e))
+                   (snd (caddr e)))
+               (if (and (pair? fst) (eq? (car fst) 'parameters))
+                   (let ((rec (parameters-to-block fst))
+                         (snd (parameters-to-block snd)))
+                     (and rec snd
+                          (cons (car snd) rec)))
+                   #f)))
+            (else #f))
+      (list (kw-to-= e))))
+
+;; convert an arglist to a tuple or block expr
+;; leading-semi? means we saw (; ...)
+;; comma? means there was a comma after the first expression
+(define (arglist-to-tuple leading-semi? comma? args . first)
+  (if (and (pair? first) (null? args) (not leading-semi?) (not comma?))
+      `(block ,@first)  ;; this case is (x;)
+      (or (and (not comma?) (length= args 1) (pair? (car args)) (eq? (caar args) 'parameters)
+               (let ((blk (parameters-to-block (car args))))
+                 (and blk (or (and (not leading-semi?)
+                                   `(block ,@first ,@blk))
+                              (and (null? first) (null? blk)
+                                   `(block))))))  ;; all semicolons inside ()
+          (and (null? first) (null? args) (not comma?)
+               `(block))  ;; this case is (;)
+          (if (and (pair? args) (pair? (car args)) (eq? (caar args) 'parameters))
+              `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
+              `(tuple ,@first ,@(map kw-to-= args))))))
 
 (define (not-eof-2 c)
   (if (eof-object? c)
@@ -1924,6 +1936,8 @@
                    (error (string "invalid identifier name \"" tok "\""))
                    (take-token s))
                tok))
+            ((eqv? (peek-token s) #\;)
+             (arglist-to-tuple #t #f (parse-arglist s #\) )))
             (else
              ;; here we parse the first subexpression separately, so
              ;; we can look for a comma to see if it's a tuple.
@@ -1937,29 +1951,11 @@
                           `(tuple ,ex)
                           ;; value in parentheses (x)
                           ex))
-                     ((eqv? t #\, )
-                      ;; tuple (x,) (x,y) (x...) etc.
-                      (parse-tuple s ex))
-                     ((eqv? t #\;)
-                      ;; parenthesized block (a;b;c)
-                      (take-token s)
-                      (if (eqv? (require-token s) #\))
-                          ;; (ex;)
-                          (begin (take-token s) `(block ,ex))
-                          (let* ((blk (parse-stmts-within-expr s))
-                                 (tok (require-token s)))
-                            (if (eqv? tok #\,)
-                                (error "unexpected comma in statement block"))
-                            (if (not (eqv? tok #\)))
-                                (error "missing separator in statement block"))
-                            (take-token s)
-                            `(block ,ex ,blk))))
-                     #;((eqv? t #\newline)
-                        (error "unexpected line break in tuple"))
-                     ((memv t '(#\] #\}))
-                      (error (string "unexpected \"" t "\" in tuple")))
                      (else
-                      (error "missing separator in tuple")))))))))
+                      ;; tuple (x,) (x,y) (x...) etc.
+                      (if (eqv? t #\, )
+                          (take-token s))
+                      (arglist-to-tuple #f (eqv? t #\,) (parse-arglist s #\) ) ex)))))))))
 
           ;; cell expression
           ((eqv? t #\{ )

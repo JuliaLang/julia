@@ -38,7 +38,7 @@
                                       (put! tab n #t)
                                       tab)))
                 ((lambda)       tab)
-                ((local local!) tab)
+                ((local)        tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
 		((module)       '())
                 (else
@@ -67,9 +67,7 @@
      (find-decls 'global e)
      ;; vars assigned anywhere, if they have been defined as global
      (filter defined-julia-global (find-possible-globals e))))
-   (append
-    (find-decls 'local e)
-    (find-decls 'local! e))))
+   (find-decls 'local e)))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
@@ -94,7 +92,8 @@
                               (scope-block
                                (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                       ,ex))))))
-                 (if (null? (car (caddr th)))
+                 (if (and (null? (car (caddr th)))
+			  (= 0 (caddr (caddr th))))
                      ;; if no locals, return just body of function
                      (cadddr th)
                      `(thunk ,th))))))))

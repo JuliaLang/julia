@@ -268,8 +268,8 @@ create_serialization_stream() do s # Base generic function
     seek(s, 0)
     @test deserialize(s) === sin
     @test deserialize(s) === typeof
-    @test deserialize(s) == serialize_test_function
-    @test deserialize(s).code.ast == Base.uncompressed_ast(serialize_test_function2.code)
+    @test deserialize(s)() === 1
+    @test deserialize(s)() === 1
 end
 
 # Task
@@ -280,7 +280,6 @@ create_serialization_stream() do s # user-defined type array
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.code.code.ast == Base.uncompressed_ast(f.code)
     @test r.storage[:v] == 2
     @test r.state == :done
     @test r.exception == nothing

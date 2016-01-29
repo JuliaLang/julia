@@ -219,7 +219,7 @@ end
 # any and all with functors
 
 immutable SomeFunctor end
-Base.call(::SomeFunctor, x) = true
+(::SomeFunctor)(x) = true
 
 @test any(SomeFunctor(), 1:10)
 @test all(SomeFunctor(), 1:10)

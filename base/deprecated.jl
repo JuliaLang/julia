@@ -506,7 +506,11 @@ export float32_isvalid, float64_isvalid
 @deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
 
 # 12087
-@deprecate call(P::Base.DFT.Plan, A) P * A
+@deprecate call(P::Base.DFT.ScaledPlan, A) P * A
+@deprecate call(P::Base.FFTW.DCTPlan, A) P * A
+@deprecate call(P::Base.FFTW.cFFTWPlan, A) P * A
+@deprecate call(P::Base.FFTW.rFFTWPlan, A) P * A
+@deprecate call(P::Base.FFTW.r2rFFTWPlan, A) P * A
 for f in (:plan_fft, :plan_ifft, :plan_bfft, :plan_fft!, :plan_ifft!, :plan_bfft!, :plan_rfft)
     @eval @deprecate $f(A, dims, flags) $f(A, dims; flags=flags)
     @eval @deprecate $f(A, dims, flags, tlim) $f(A, dims; flags=flags, timelimit=tlim)
@@ -973,3 +977,13 @@ export fieldoffsets
 
 # 14766
 @deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
+
+@deprecate isgeneric(f) isa(f,Function)
+
+# need to do this manually since the front end deprecates method defs of `call`
+const call = @eval function(f, args...; kw...)
+    $(Expr(:meta, :noinline))
+    depwarn("call(f,args...) is deprecated, use f(args...) instead.", :call)
+    f(args...; kw...)
+end
+export call

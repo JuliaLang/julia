@@ -495,7 +495,9 @@ static NOINLINE int true_main(int argc, char *argv[])
         jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
         if (args == NULL) {
             args = jl_alloc_cell_1d(0);
+            JL_GC_PUSH1(&args);
             jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            JL_GC_POP();
         }
         assert(jl_array_len(args) == 0);
         jl_array_grow_end(args, argc);
@@ -511,7 +513,7 @@ static NOINLINE int true_main(int argc, char *argv[])
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
-        jl_apply(start_client, NULL, 0);
+        jl_apply(&start_client, 1);
         return 0;
     }
 

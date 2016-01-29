@@ -108,7 +108,12 @@ function write_lambda_signature(io::IO, lam::LambdaStaticData)
     write(io, '(')
     nargs = length(ex.args[1])
     for (i,arg) in enumerate(ex.args[1])
-        argname, argtype = arg.args
+        i==1 && continue
+        if isa(arg,Expr)
+            argname, argtype = arg.args
+        else
+            argname, argtype = arg, :Any
+        end
         if argtype === :Any || argtype === :ANY
             write(io, argname)
         elseif isa(argtype,Expr) && argtype.head === :... &&
@@ -126,14 +131,8 @@ end
 function functionsummary(func::Function)
     io  = IOBuffer()
     write(io, "```julia\n")
-    if isgeneric(func)
-        print(io, methods(func))
-    else
-        if isdefined(func,:code) && func.code !== nothing
-            write_lambda_signature(io, func.code)
-            write(io, " -> ...")
-        end
-    end
+    print(io, methods(func))
+    # TODO jb/functions better summary for closures?
     write(io, "\n```")
     return Markdown.parse(takebuf_string(io))
 end
@@ -177,7 +176,7 @@ function doc(b::Binding)
 
         No documentation found.
 
-        `$(qualified_name(b))` is $(isgeneric(v) ? "a generic" : "an anonymous") `Function`.
+        `$(qualified_name(b))` is a `Function`.
         """), functionsummary(v))
     elseif isa(v,DataType)
         d = catdoc(Markdown.parse("""
@@ -312,7 +311,7 @@ function field_meta(def)
 end
 
 function doc(obj::Base.Callable, sig::Type = Union)
-    isgeneric(obj) && sig !== Union && isempty(methods(obj, sig)) && return nothing
+    sig !== Union && isempty(methods(obj, sig)) && return nothing
     results, groups = [], []
     for m in modules
         if haskey(meta(m), obj)

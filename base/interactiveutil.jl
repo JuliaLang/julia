@@ -257,9 +257,9 @@ function gen_call_with_extracted_types(fcn, ex0)
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
             isa(ex.args[1], TopNode) && ex.args[1].name == :_apply
             # check for splatting
-            exret = Expr(:call, ex.args[1], ex.args[2], fcn,
-                        Expr(:tuple, esc(ex.args[3]),
-                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
+            exret = Expr(:call, ex.args[1], fcn,
+                        Expr(:tuple, esc(ex.args[2]),
+                            Expr(:call, typesof, map(esc, ex.args[3:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...))
@@ -301,10 +301,8 @@ function type_close_enough(x::ANY, t::ANY)
 end
 
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
-    if !isa(f.env, MethodTable)
-        return meths
-    end
-    d = f.env.defs
+    mt = typeof(f).name.mt
+    d = mt.defs
     while d !== nothing
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
@@ -495,7 +493,11 @@ function summarysize(obj::DataType, seen, excl)
     return size
 end
 
-summarysize(obj::TypeName, seen, excl) = Core.sizeof(obj)
+function summarysize(obj::TypeName, seen, excl)
+    key = pointer_from_objref(obj)
+    haskey(seen, key) ? (return 0) : (seen[key] = true)
+    return Core.sizeof(obj) + (isdefined(obj,:mt) ? summarysize(obj.mt, seen, excl) : 0)
+end
 
 summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
 # define the general case separately to make sure it is not specialized for every type
@@ -555,6 +557,14 @@ function summarysize(obj::Module, seen, excl)
             value = getfield(obj, binding)
             if !isa(value, Module) || module_parent(value) === obj
                 size += summarysize(value, seen, excl)::Int
+                vt = isa(value,DataType) ? value : typeof(value)
+                if vt.name.module === obj
+                    if vt !== value
+                        size += summarysize(vt, seen, excl)::Int
+                    end
+                    # charge a TypeName to its module
+                    size += summarysize(vt.name, seen, excl)::Int
+                end
             end
         end
     end
@@ -594,7 +604,9 @@ function summarysize(m::Method, seen, excl)
     while true
         haskey(seen, m) ? (return size) : (seen[m] = true)
         size += Core.sizeof(m)
-        size += summarysize(m.func, seen, excl)::Int
+        if isdefined(m, :func)
+            size += summarysize(m.func, seen, excl)::Int
+        end
         size += summarysize(m.sig, seen, excl)::Int
         size += summarysize(m.tvars, seen, excl)::Int
         size += summarysize(m.invokes, seen, excl)::Int
