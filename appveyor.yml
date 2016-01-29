@@ -1,5 +1,6 @@
 environment:
 #  USEMSVC: "1"
+  JULIA_TEST_MAXRSS_MB: 600
   matrix:
   - ARCH: "i686"
   - ARCH: "x86_64"
