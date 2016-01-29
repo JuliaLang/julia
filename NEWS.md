@@ -4,6 +4,9 @@ Julia v0.5.0 Release Notes
 New language features
 ---------------------
 
+  * Generator expressions, e.g. `f(i) for i in 1:n` (#4470). This returns an iterator
+    that computes the specified values on demand.
+
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
     However note that the argument types refer to the syntax tree representation, and not
