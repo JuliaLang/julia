@@ -120,7 +120,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r03.7z
+  f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r04.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -140,7 +140,8 @@ checksum_download \
     "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config.exe' >> Make.user
+echo 'override LLVM_CONFIG := $(JULIAHOME)/usr/tools/llvm-config.exe' >> Make.user
+echo 'override LLVM_SIZE := $(JULIAHOME)/usr/tools/llvm-size.exe' >> Make.user
 
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
