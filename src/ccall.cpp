@@ -5,9 +5,9 @@
 
 // keep track of llvmcall declarations
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static std::map<u_int64_t,llvm::GlobalValue*> llvmcallDecls;
+static std::map<uint64_t,llvm::GlobalValue*> llvmcallDecls;
 #else
-static std::set<u_int64_t> llvmcallDecls;
+static std::set<uint64_t> llvmcallDecls;
 #endif
 
 static std::map<std::string, GlobalVariable*> libMapGV;
@@ -634,7 +634,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         llvm::raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-        std::map<u_int64_t,std::string> localDecls;
+        std::map<uint64_t,std::string> localDecls;
 #endif
 
         if (decl != NULL) {
@@ -643,7 +643,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             // parse string line by line
             std::string declstr;
             while (std::getline(declarations, declstr, '\n')) {
-                u_int64_t declhash = memhash(declstr.c_str(), declstr.length());
+                uint64_t declhash = memhash(declstr.c_str(), declstr.length());
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
                 auto it = llvmcallDecls.find(declhash);
                 if (it != llvmcallDecls.end()) {

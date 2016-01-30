@@ -109,7 +109,7 @@ typedef struct _buff_t {
     union {
         uintptr_t header;
         struct _buff_t *next;
-        uptrint_t flags;
+        uintptr_t flags;
         jl_value_t *type; // 16-bytes aligned
         struct {
             uintptr_t gc_bits:2;
@@ -133,13 +133,13 @@ typedef struct _bigval_t {
     struct _bigval_t **prev; // pointer to the next field of the prev entry
     union {
         size_t sz;
-        uptrint_t age : 2;
+        uintptr_t age : 2;
     };
     //struct buff_t <>;
     union {
-        uptrint_t header;
-        uptrint_t flags;
-        uptrint_t gc_bits:2;
+        uintptr_t header;
+        uintptr_t flags;
+        uintptr_t gc_bits:2;
     };
     // Work around a bug affecting gcc up to (at least) version 4.4.7
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
@@ -721,12 +721,12 @@ static inline void objprofile_count(void *ty, int old, int sz)
     if (*bp == HT_NOTFOUND)
         *bp = (void*)2;
     else
-        (*((ptrint_t*)bp))++;
+        (*((intptr_t*)bp))++;
     bp = ptrhash_bp(&obj_sizes[old], ty);
     if (*bp == HT_NOTFOUND)
         *bp = (void*)(1 + sz);
     else
-        *((ptrint_t*)bp) += sz;
+        *((intptr_t*)bp) += sz;
 #endif
 }
 
@@ -1718,7 +1718,7 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     return refyoung;
 }
 
-static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, ptrint_t offset, int d)
+static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d)
 {
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
@@ -1758,7 +1758,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
         gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d);
     }
     else if (stkbuf) {
-        ptrint_t offset;
+        intptr_t offset;
 #ifdef COPY_STACKS
         offset = (char *)ta->stkbuf - ((char *)ptls->stackbase - ta->ssize);
 #else

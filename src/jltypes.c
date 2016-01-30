@@ -1864,8 +1864,8 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
             int dtk = jl_is_datatype(kj);
             if (!dtt && !dtk && jl_egal(tj, kj))
                 continue;
-            uptrint_t tid = (dtt && ((jl_datatype_t*)tj)->uid ? ((jl_datatype_t*)tj)->uid : jl_object_id(tj));
-            uptrint_t kid = (dtk && ((jl_datatype_t*)kj)->uid ? ((jl_datatype_t*)kj)->uid : jl_object_id(kj));
+            uintptr_t tid = (dtt && ((jl_datatype_t*)tj)->uid ? ((jl_datatype_t*)tj)->uid : jl_object_id(tj));
+            uintptr_t kid = (dtk && ((jl_datatype_t*)kj)->uid ? ((jl_datatype_t*)kj)->uid : jl_object_id(kj));
             if (kid != tid)
                 return kid < tid ? -1 : 1;
         }

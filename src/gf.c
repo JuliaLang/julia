@@ -115,7 +115,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_value_t **sig,
 static inline
 jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tparam, int8_t offs)
 {
-    uptrint_t uid = ((jl_datatype_t*)ty)->uid;
+    uintptr_t uid = ((jl_datatype_t*)ty)->uid;
     jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->nrows-1));
     if (ml && ml!=(void*)jl_nothing) {
         jl_value_t *t = jl_field_type(ml->sig, offs);
@@ -139,7 +139,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t offs)
             jl_value_t *t = jl_field_type(ml->sig, offs);
             if (jl_is_type_type(t))
                 t = jl_tparam0(t);
-            uptrint_t uid = ((jl_datatype_t*)t)->uid;
+            uintptr_t uid = ((jl_datatype_t*)t)->uid;
             nd[uid & (len*2-1)] = (jl_value_t*)ml;
         }
     }
@@ -150,7 +150,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t offs)
 static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
                                        int8_t tparam, int8_t offs, jl_value_t *parent)
 {
-    uptrint_t uid;
+    uintptr_t uid;
     if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         while (1) {
             jl_methlist_t **pml = &((jl_methlist_t**)jl_array_data(*pa))[uid & ((*pa)->nrows-1)];
@@ -370,7 +370,7 @@ jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *typ
     jl_value_t *cache_array = NULL;
     if (jl_datatype_nfields(type) > offs) {
         jl_value_t *t1 = jl_tparam(type, offs);
-        uptrint_t uid=0;
+        uintptr_t uid=0;
         // if t1 != jl_typetype_type and the argument is Type{...}, this
         // method has specializations for singleton kinds and we use
         // the table indexed for that purpose.

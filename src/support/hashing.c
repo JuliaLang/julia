@@ -27,7 +27,7 @@ uint_t nextipow2(uint_t i)
     return i<<1;
 }
 
-u_int32_t int32hash(u_int32_t a)
+uint32_t int32hash(uint32_t a)
 {
     a = (a+0x7ed55d16) + (a<<12);
     a = (a^0xc761c23c) ^ (a>>19);
@@ -38,7 +38,7 @@ u_int32_t int32hash(u_int32_t a)
     return a;
 }
 
-u_int64_t int64hash(u_int64_t key)
+uint64_t int64hash(uint64_t key)
 {
     key = (~key) + (key << 21);            // key = (key << 21) - key - 1;
     key =   key  ^ (key >> 24);
@@ -50,7 +50,7 @@ u_int64_t int64hash(u_int64_t key)
     return key;
 }
 
-u_int32_t int64to32hash(u_int64_t key)
+uint32_t int64to32hash(uint64_t key)
 {
     key = (~key) + (key << 18); // key = (key << 18) - key - 1;
     key =   key  ^ (key >> 31);
@@ -58,7 +58,7 @@ u_int32_t int64to32hash(u_int64_t key)
     key = key ^ (key >> 11);
     key = key + (key << 6);
     key = key ^ (key >> 22);
-    return (u_int32_t)key;
+    return (uint32_t)key;
 }
 
 #include "MurmurHash3.c"

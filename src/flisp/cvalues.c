@@ -18,9 +18,9 @@ static const int ALIGNPTR = sizeof(struct prim_ptr) - sizeof(void*);
 static void cvalue_init(fl_context_t *fl_ctx, fltype_t *type, value_t v, void *dest);
 
 // cvalues-specific builtins
-value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
+value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
 // trigger unconditional GC after this many bytes are allocated
 #define ALLOC_LIMIT_TRIGGER 67108864
@@ -92,7 +92,7 @@ static size_t cv_nwords(fl_context_t *fl_ctx, cvalue_t *cv)
 
 static void autorelease(fl_context_t *fl_ctx, cvalue_t *cv)
 {
-    cv->type = (fltype_t*)(((uptrint_t)cv->type) | CV_OWNED_BIT);
+    cv->type = (fltype_t*)(((uintptr_t)cv->type) | CV_OWNED_BIT);
     add_finalizer(fl_ctx, cv);
 }
 
@@ -173,7 +173,7 @@ value_t cvalue_from_ref(fl_context_t *fl_ctx, fltype_t *type, void *ptr, size_t 
     pcv->len = sz;
     pcv->type = type;
     if (parent != fl_ctx->NIL) {
-        pcv->type = (fltype_t*)(((uptrint_t)pcv->type) | CV_PARENT_BIT);
+        pcv->type = (fltype_t*)(((uintptr_t)pcv->type) | CV_PARENT_BIT);
         pcv->parent = parent;
     }
     cv = tagptr(pcv, TAG_CVALUE);
@@ -257,7 +257,7 @@ num_init(float, double, T_FLOAT)
 num_init(double, double, T_DOUBLE)
 
 #define num_ctor_init(typenam, ctype, tag)                              \
-value_t cvalue_##typenam(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs) \
+value_t cvalue_##typenam(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) \
 {                                                                       \
     if (nargs==0) { PUSH(fl_ctx, fixnum(0)); args = &fl_ctx->Stack[fl_ctx->SP-1]; } \
     value_t cp = cprim(fl_ctx, fl_ctx->typenam##type, sizeof(fl_##ctype##_t)); \
@@ -398,7 +398,7 @@ static int cvalue_array_init(fl_context_t *fl_ctx, fltype_t *ft, value_t arg, vo
     return 0;
 }
 
-value_t cvalue_array(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t cvalue_array(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     size_t elsize, cnt, sz, i;
     value_t arg;
@@ -501,7 +501,7 @@ void to_sized_ptr(fl_context_t *fl_ctx, value_t v, char *fname, char **pdata, si
     type_error(fl_ctx, fname, "plain-old-data", v);
 }
 
-value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "sizeof", nargs, 1);
     if (issymbol(args[0]) || iscons(args[0])) {
@@ -513,7 +513,7 @@ value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return size_wrap(fl_ctx, n);
 }
 
-value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "typeof", nargs, 1);
     switch(tag(args[0])) {
@@ -572,7 +572,7 @@ value_t cvalue_copy(fl_context_t *fl_ctx, value_t v)
         memcpy(ncv->data, cv_data(cv), len);
         autorelease(fl_ctx, ncv);
         if (hasparent(cv)) {
-            ncv->type = (fltype_t*)(((uptrint_t)ncv->type) & ~CV_PARENT_BIT);
+            ncv->type = (fltype_t*)(((uintptr_t)ncv->type) & ~CV_PARENT_BIT);
             ncv->parent = fl_ctx->NIL;
         }
     }
@@ -583,7 +583,7 @@ value_t cvalue_copy(fl_context_t *fl_ctx, value_t v)
     return tagptr(ncv, TAG_CVALUE);
 }
 
-value_t fl_copy(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_copy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "copy", nargs, 1);
     if (iscons(args[0]) || isvector(args[0]))
@@ -595,7 +595,7 @@ value_t fl_copy(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return cvalue_copy(fl_ctx, args[0]);
 }
 
-value_t fl_podp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_podp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "plain-old-data?", nargs, 1);
     return (iscprim(args[0]) ||
@@ -658,7 +658,7 @@ static numerictype_t sym_to_numtype(fl_context_t *fl_ctx, value_t type)
 // this provides (1) a way to allocate values with a shared type for
 // efficiency, (2) a uniform interface for allocating cvalues of any
 // type, including user-defined.
-value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 1 || nargs > 2)
         argcount(fl_ctx, "c-value", nargs, 2);
@@ -763,7 +763,7 @@ static value_t cvalue_array_aset(fl_context_t *fl_ctx, value_t *args)
     return args[2];
 }
 
-value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "builtin", nargs, 1);
     symbol_t *name = tosymbol(fl_ctx, args[0], "builtin");
@@ -789,11 +789,11 @@ value_t cbuiltin(fl_context_t *fl_ctx, char *name, builtin_t f)
     return tagptr(cv, TAG_CVALUE);
 }
 
-static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
-static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
+static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
 static const builtinspec_t cvalues_builtin_info[] = {
     { "c-value", cvalue_new },
@@ -919,7 +919,7 @@ value_t return_from_int64(fl_context_t *fl_ctx, int64_t Saccum)
     RETURN_NUM_AS(fl_ctx, Saccum, int32);
 }
 
-static value_t fl_add_any(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs, fixnum_t carryIn)
+static value_t fl_add_any(fl_context_t *fl_ctx, value_t *args, uint32_t nargs, fixnum_t carryIn)
 {
     uint64_t Uaccum=0;
     int64_t Saccum = carryIn;
@@ -1027,7 +1027,7 @@ static value_t fl_neg(fl_context_t *fl_ctx, value_t n)
     type_error(fl_ctx, "-", "number", n);
 }
 
-static value_t fl_mul_any(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs, int64_t Saccum)
+static value_t fl_mul_any(fl_context_t *fl_ctx, value_t *args, uint32_t nargs, int64_t Saccum)
 {
     uint64_t Uaccum=1;
     double Faccum=1;
@@ -1288,7 +1288,7 @@ static value_t fl_bitwise_op(fl_context_t *fl_ctx, value_t a, value_t b, int opc
     return fl_ctx->NIL;
 }
 
-static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1304,7 +1304,7 @@ static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return v;
 }
 
-static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1320,7 +1320,7 @@ static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return v;
 }
 
-static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1336,7 +1336,7 @@ static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return v;
 }
 
-static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "lognot", nargs, 1);
     value_t a = args[0];
@@ -1364,7 +1364,7 @@ static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     type_error(fl_ctx, "lognot", "integer", a);
 }
 
-static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     fixnum_t n;
     int64_t accum;

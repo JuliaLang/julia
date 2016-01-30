@@ -369,9 +369,9 @@ JL_DEFINE_MUTEX(symbol_table)
 
 static jl_sym_t *volatile symtab = NULL;
 
-static uptrint_t hash_symbol(const char *str, size_t len)
+static uintptr_t hash_symbol(const char *str, size_t len)
 {
-    return memhash(str, len) ^ ~(uptrint_t)0/3*2;
+    return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
 
 #define SYM_POOL_SIZE 524288
@@ -416,7 +416,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
                                size_t len, jl_sym_t *volatile **slot)
 {
     jl_sym_t *node = *ptree;
-    uptrint_t h = hash_symbol(str, len);
+    uintptr_t h = hash_symbol(str, len);
 
     // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
     while (node != NULL) {
