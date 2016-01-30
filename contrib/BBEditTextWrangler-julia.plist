@@ -426,7 +426,6 @@
               <string>fft</string>
               <string>fft!</string>
               <string>fftshift</string>
-              <string>fieldoffsets</string>
               <string>filemode</string>
               <string>filesize</string>
               <string>fill</string>
