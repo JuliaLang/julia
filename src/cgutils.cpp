@@ -460,7 +460,7 @@ public:
             std::map<Value*, void *>::iterator it;
             it = jl_llvm_to_jl_value.find(GV);
             if (it != jl_llvm_to_jl_value.end()) {
-                newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
+                newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(intptr_t)it->second)));
                 newGV->setConstant(true);
             }
             else if (GV->hasInitializer()) {
@@ -1082,7 +1082,7 @@ static Value *emit_typeof(Value *tt)
     tt = builder.CreateLoad(emit_typeptr_addr(tt), false);
     tt = builder.CreateIntToPtr(builder.CreateAnd(
                 builder.CreatePtrToInt(tt, T_size),
-                ConstantInt::get(T_size,~(uptrint_t)15)),
+                ConstantInt::get(T_size,~(uintptr_t)15)),
             T_pjlvalue);
     return tt;
 }

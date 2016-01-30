@@ -26,13 +26,13 @@
 extern "C" {
 #endif
 
-value_t fl_stringp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_stringp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "string?", nargs, 1);
     return fl_isstring(fl_ctx, args[0]) ? fl_ctx->T : fl_ctx->F;
 }
 
-value_t fl_string_count(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_count(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     size_t start = 0;
     if (nargs < 1 || nargs > 3)
@@ -57,10 +57,10 @@ value_t fl_string_count(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return size_wrap(fl_ctx, u8_charnum(str+start, stop-start));
 }
 
-extern value_t fl_buffer(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
+extern value_t fl_buffer(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 extern value_t stream_to_string(fl_context_t *fl_ctx, value_t *ps);
 
-value_t fl_string(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs == 1 && fl_isstring(fl_ctx, args[0]))
         return args[0];
@@ -82,7 +82,7 @@ value_t fl_string(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return outp;
 }
 
-value_t fl_string_sub(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_sub(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs != 2)
         argcount(fl_ctx, "string.sub", nargs, 3);
@@ -108,7 +108,7 @@ value_t fl_string_sub(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return ns;
 }
 
-value_t fl_string_char(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "string.char", nargs, 2);
     char *s = tostring(fl_ctx, args[0], "string.char");
@@ -130,7 +130,7 @@ static value_t mem_find_byte(fl_context_t *fl_ctx, char *s, char c, size_t start
     return size_wrap(fl_ctx, (size_t)(p - s));
 }
 
-value_t fl_string_find(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_find(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     char cbuf[8];
     size_t start = 0;
@@ -180,7 +180,7 @@ value_t fl_string_find(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return fl_ctx->F;
 }
 
-value_t fl_string_inc(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_inc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 2 || nargs > 3)
         argcount(fl_ctx, "string.inc", nargs, 2);
@@ -198,7 +198,7 @@ value_t fl_string_inc(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return size_wrap(fl_ctx, i);
 }
 
-value_t fl_string_dec(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_dec(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 2 || nargs > 3)
         argcount(fl_ctx, "string.dec", nargs, 2);
@@ -227,7 +227,7 @@ static unsigned long get_radix_arg(fl_context_t *fl_ctx, value_t arg, char *fnam
     return radix;
 }
 
-value_t fl_numbertostring(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_numbertostring(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 1 || nargs > 2)
         argcount(fl_ctx, "number->string", nargs, 2);
@@ -266,7 +266,7 @@ value_t fl_stringtonumber(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return n;
 }
 
-value_t fl_string_isutf8(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_string_isutf8(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "string.isutf8", nargs, 1);
     char *s = tostring(fl_ctx, args[0], "string.isutf8");
