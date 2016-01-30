@@ -11,7 +11,7 @@
 //#define MEMDEBUG
 //#define MEMDEBUG2
 
-typedef uptrint_t value_t;
+typedef uintptr_t value_t;
 typedef int_t fixnum_t;
 #if NBITS==64
 #define T_FIXNUM T_INT64
@@ -30,7 +30,7 @@ typedef struct {
 } cons_t;
 
 typedef struct _symbol_t {
-    uptrint_t flags;
+    uintptr_t flags;
     value_t binding;   // global value binding
     struct _fltype_t *type;
     uint32_t hash;
@@ -61,7 +61,7 @@ typedef struct {
 #define tag(x) ((x)&0x7)
 #define ptr(x) ((void*)((x)&(~(value_t)0x7)))
 #define tagptr(p,t) (((value_t)(p)) | (t))
-#define fixnum(x) ((value_t)(((uptrint_t)(x))<<2))
+#define fixnum(x) ((value_t)(((uintptr_t)(x))<<2))
 #define numval(x)  (((fixnum_t)(x))>>2)
 #if NBITS==64
 #define fits_fixnum(x) (((x)>>61) == 0 || (~((x)>>61)) == 0)
@@ -157,7 +157,7 @@ size_t llength(value_t v);
 value_t fl_compare(fl_context_t *fl_ctx, value_t a, value_t b);  // -1, 0, or 1
 value_t fl_equal(fl_context_t *fl_ctx, value_t a, value_t b);    // T or nil
 int equal_lispvalue(fl_context_t *fl_ctx, value_t a, value_t b);
-uptrint_t hash_lispvalue(fl_context_t *fl_ctx, value_t a);
+uintptr_t hash_lispvalue(fl_context_t *fl_ctx, value_t a);
 int isnumtok_base(fl_context_t *fl_ctx, char *tok, value_t *pval, int base);
 
 /* safe casts */
@@ -260,10 +260,10 @@ typedef struct {
 
 #define CV_OWNED_BIT  0x1
 #define CV_PARENT_BIT 0x2
-#define owned(cv)      ((uptrint_t)(cv)->type & CV_OWNED_BIT)
-#define hasparent(cv)  ((uptrint_t)(cv)->type & CV_PARENT_BIT)
+#define owned(cv)      ((uintptr_t)(cv)->type & CV_OWNED_BIT)
+#define hasparent(cv)  ((uintptr_t)(cv)->type & CV_PARENT_BIT)
 #define isinlined(cv)  ((cv)->data == &(cv)->_space[0])
-#define cv_class(cv)   ((fltype_t*)(((uptrint_t)(cv)->type)&~3))
+#define cv_class(cv)   ((fltype_t*)(((uintptr_t)(cv)->type)&~3))
 #define cv_len(cv)     ((cv)->len)
 #define cv_type(cv)    (cv_class(cv)->type)
 #define cv_data(cv)    ((cv)->data)
@@ -350,7 +350,7 @@ typedef struct {
 void assign_global_builtins(fl_context_t *fl_ctx, const builtinspec_t *b);
 
 /* builtins */
-value_t fl_hash(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs);
+value_t fl_hash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 value_t cvalue_byte(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 value_t cvalue_wchar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
@@ -394,12 +394,12 @@ struct _fl_context_t {
     fltype_t *tabletype;
     cvtable_t table_vtable;
 
-    u_int32_t readtoktype;
+    uint32_t readtoktype;
     value_t readtokval;
     char readbuf[256];
 
     htable_t printconses;
-    u_int32_t printlabel;
+    uint32_t printlabel;
     int print_pretty;
     int print_princ;
     fixnum_t print_length;

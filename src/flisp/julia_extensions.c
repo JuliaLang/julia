@@ -26,7 +26,7 @@ static int is_bom(uint32_t wc)
     return wc == 0xFEFF;
 }
 
-value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "skip-ws", nargs, 2);
     ios_t *s = fl_toiostream(fl_ctx, args[0], "skip-ws");
@@ -136,7 +136,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     return 0;
 }
 
-value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "identifier-char?", nargs, 1);
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
@@ -145,7 +145,7 @@ value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, u_int32_t 
     return jl_id_char(wc) ? fl_ctx->T : fl_ctx->F;
 }
 
-value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "identifier-start-char?", nargs, 1);
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
@@ -179,7 +179,7 @@ error:
             utf8proc_errmsg(result));
 }
 
-value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "accum-julia-symbol", nargs, 2);
     ios_t *s = fl_toiostream(fl_ctx, args[1], "accum-julia-symbol");

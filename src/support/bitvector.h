@@ -7,20 +7,20 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT u_int32_t *bitvector_new(u_int64_t n, int initzero);
+JL_DLLEXPORT uint32_t *bitvector_new(uint64_t n, int initzero);
 JL_DLLEXPORT
-u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
-                            int initzero);
-size_t bitvector_nwords(u_int64_t nbits);
-JL_DLLEXPORT void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c);
-JL_DLLEXPORT u_int32_t bitvector_get(u_int32_t *b, u_int64_t n);
+uint32_t *bitvector_resize(uint32_t *b, uint64_t oldsz, uint64_t newsz,
+                           int initzero);
+size_t bitvector_nwords(uint64_t nbits);
+JL_DLLEXPORT void bitvector_set(uint32_t *b, uint64_t n, uint32_t c);
+JL_DLLEXPORT uint32_t bitvector_get(uint32_t *b, uint64_t n);
 
 JL_DLLEXPORT uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
 
 JL_DLLEXPORT
-u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
+uint64_t bitvector_count(uint32_t *b, uint64_t offs, uint64_t nbits);
 JL_DLLEXPORT
-u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
+uint32_t bitvector_any1(uint32_t *b, uint64_t offs, uint64_t nbits);
 
 #ifdef __cplusplus
 }

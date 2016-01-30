@@ -991,7 +991,7 @@ JL_CALLABLE(jl_f_invoke)
 #define hash64(a)   int64to32hash(a)
 #endif
 
-static uptrint_t bits_hash(void *b, size_t sz)
+static uintptr_t bits_hash(void *b, size_t sz)
 {
     switch (sz) {
     case 1:  return int32hash(*(int8_t*)b);
@@ -1007,19 +1007,19 @@ static uptrint_t bits_hash(void *b, size_t sz)
     }
 }
 
-static uptrint_t NOINLINE hash_svec(jl_svec_t *v)
+static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
 {
-    uptrint_t h = 0;
+    uintptr_t h = 0;
     size_t l = jl_svec_len(v);
     for(size_t i = 0; i < l; i++) {
         jl_value_t *x = jl_svecref(v,i);
-        uptrint_t u = x==NULL ? 0 : jl_object_id(x);
+        uintptr_t u = x==NULL ? 0 : jl_object_id(x);
         h = bitmix(h, u);
     }
     return h;
 }
 
-static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
+static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
 {
     if (tv == (jl_value_t*)jl_sym_type)
         return ((jl_sym_t*)v)->hash;
@@ -1028,7 +1028,7 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        uptrint_t h = 0xda1ada1a;
+        uintptr_t h = 0xda1ada1a;
         // has_typevars always returns 0 on name->primary, so that type
         // can exist in the cache. however, interpreter.c mutates its
         // typevars' `bound` fields to 0, corrupting the cache. this is
@@ -1039,9 +1039,9 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     }
     if (dt == jl_typename_type)
         return bitmix(((jl_typename_t*)v)->uid, 0xa1ada1ad);
-    if (dt->mutabl) return inthash((uptrint_t)v);
+    if (dt->mutabl) return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
-    uptrint_t h = jl_object_id(tv);
+    uintptr_t h = jl_object_id(tv);
     if (sz == 0) return ~h;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0) {
@@ -1050,7 +1050,7 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     for (size_t f=0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)jl_data_ptr(v) + offs;
-        uptrint_t u;
+        uintptr_t u;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *f = *(jl_value_t**)vo;
             u = f==NULL ? 0 : jl_object_id(f);
@@ -1068,7 +1068,7 @@ static uptrint_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     return h;
 }
 
-JL_DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
+JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v)
 {
     return jl_object_id_(jl_typeof(v), v);
 }
