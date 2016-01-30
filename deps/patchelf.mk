@@ -1,7 +1,7 @@
 ## patchelf ##
 
 PATCHELF_SOURCE := $(BUILDDIR)/patchelf-$(PATCHELF_VER)/src/patchelf
-PATCHELF_TARGET := $(build_bindir)/patchelf
+PATCHELF_TARGET := $(build_depsbindir)/patchelf
 
 $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz

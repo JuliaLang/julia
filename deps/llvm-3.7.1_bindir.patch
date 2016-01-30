@@ -1,0 +1,49 @@
+diff --git a/cmake/modules/AddLLVM.cmake b/cmake/modules/AddLLVM.cmake
+index 45f6746..277be1a 100644
+--- a/cmake/modules/AddLLVM.cmake
++++ b/cmake/modules/AddLLVM.cmake
+@@ -619,7 +619,7 @@ macro(add_llvm_tool name)
+     if( LLVM_BUILD_TOOLS )
+       install(TARGETS ${name}
+               EXPORT LLVMExports
+-              RUNTIME DESTINATION bin
++              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+               COMPONENT ${name})
+ 
+       if (NOT CMAKE_CONFIGURATION_TYPES)
+diff --git a/cmake/modules/TableGen.cmake b/cmake/modules/TableGen.cmake
+index 85d720e..ffe429f 100644
+--- a/cmake/modules/TableGen.cmake
++++ b/cmake/modules/TableGen.cmake
+@@ -119,7 +119,7 @@ macro(add_tablegen target project)
+   if (${project} STREQUAL LLVM AND NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
+     install(TARGETS ${target}
+             EXPORT LLVMExports
+-            RUNTIME DESTINATION bin)
++            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+   endif()
+   set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${target})
+ endmacro()
+diff --git a/tools/llvm-ar/CMakeLists.txt b/tools/llvm-ar/CMakeLists.txt
+index 05ffe36..dd8f216 100644
+--- a/tools/llvm-ar/CMakeLists.txt
++++ b/tools/llvm-ar/CMakeLists.txt
+@@ -36,4 +36,4 @@ add_custom_command(OUTPUT ${llvm_lib}
+ add_custom_target(llvm-lib ALL DEPENDS ${llvm_lib})
+ set_target_properties(llvm-lib PROPERTIES FOLDER Tools)
+ 
+-install(SCRIPT install_symlink.cmake -DCMAKE_INSTALL_PREFIX=\"${CMAKE_INSTALL_PREFIX}\")
++install(SCRIPT install_symlink.cmake -DCMAKE_INSTALL_PREFIX=\"${CMAKE_INSTALL_PREFIX}\" -DCMAKE_INSTALL_BINDIR=\"${CMAKE_INSTALL_BINDIR}\")
+diff --git a/tools/llvm-ar/install_symlink.cmake b/tools/llvm-ar/install_symlink.cmake
+index d48431b..0154639 100644
+--- a/tools/llvm-ar/install_symlink.cmake
++++ b/tools/llvm-ar/install_symlink.cmake
+@@ -16,7 +16,7 @@ else()
+   set(EXECUTABLE_SUFFIX "")
+ endif()
+ 
+-set(bindir "${DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/")
++set(bindir "${DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/")
+ 
+ message("Creating llvm-ranlib")
+ 

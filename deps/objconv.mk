@@ -1,7 +1,7 @@
 ## objconv ##
 
 OBJCONV_SOURCE := $(BUILDDIR)/objconv/objconv
-OBJCONV_TARGET := $(build_bindir)/objconv
+OBJCONV_TARGET := $(build_depsbindir)/objconv
 
 $(SRCDIR)/srccache/objconv.zip: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
@@ -12,7 +12,7 @@ $(BUILDDIR)/objconv/config.status: $(SRCDIR)/srccache/objconv.zip
 	echo 1 > $@
 $(OBJCONV_SOURCE): $(BUILDDIR)/objconv/config.status
 	cd $(dir $<) && $(CXX) -o objconv -O2 *.cpp
-$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
+$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_depsbindir)
 	cp -f $< $@
 
 clean-objconv:
