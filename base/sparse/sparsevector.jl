@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: Func, AddFun, MulFun, MaxFun, MinFun, SubFun
+import Base: Func, AddFun, MulFun, MaxFun, MinFun, SubFun, sort
 
 immutable ComplexFun <: Func{2} end
 call(::ComplexFun, x::Real, y::Real) = complex(x, y)
@@ -1493,6 +1493,7 @@ function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::BinaryOp, A::SparseMatrixCSC{TvA
     SparseVector(n, ynzind, ynzval)
 end
 
+
 # define matrix division operations involving triangular matrices and sparse vectors
 # the valid left-division operations are A[t|c]_ldiv_B[!] and \
 # the valid right-division operations are A(t|c)_rdiv_B[t|c][!]
@@ -1615,4 +1616,16 @@ function _densifystarttolastnz!(x::SparseVector)
     # finally update lengthened nzinds
     x.nzind[1:newnnz] = 1:newnnz
     x
+end
+
+#sorting
+function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
+    allvals = push!(copy(nonzeros(x)),zero(Tv))
+    sinds = sortperm(allvals;kws...)
+    n,k = length(x),length(allvals)
+    z = findfirst(sinds,k)
+    newnzind = collect(Ti,1:k-1)
+    newnzind[z:end]+= n-k+1
+    newnzvals = allvals[deleteat!(sinds[1:k],z)]
+    SparseVector(n,newnzind,newnzvals)
 end
