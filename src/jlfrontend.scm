@@ -40,7 +40,7 @@
                 ((lambda)       tab)
                 ((local)        tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
-		((module)       '())
+                ((module)       '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
@@ -93,7 +93,7 @@
                                (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                       ,ex))))))
                  (if (and (null? (car (caddr th)))
-			  (= 0 (caddr (caddr th))))
+                          (= 0 (caddr (caddr th))))
                      ;; if no locals, return just body of function
                      (cadddr th)
                      `(thunk ,th))))))))
