@@ -810,6 +810,7 @@ let S = SparseMatrixCSC(10,1,[1,6],[1,3,5,6,7],[0,1,2,0,3]), x = SparseVector(10
     @test nnz(S[[1 3 5; 2 4 6]]) == nnz(x[[1 3 5; 2 4 6]])
 end
 
+
 # Issue 14013
 s14013 = sparse([10.0 0.0 30.0; 0.0 1.0 0.0])
 a14013 = [10.0 0.0 30.0; 0.0 1.0 0.0]
@@ -822,3 +823,18 @@ a14013 = [10.0 0.0 30.0; 0.0 1.0 0.0]
 s14046 = sprand(5, 1.0)
 @test spzeros(5) + s14046 == s14046
 @test 2*s14046 == s14046 + s14046
+
+# Issue 14589
+#test vectors with no zero elements
+x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+@test collect(sort(x)) == sort(collect(x))
+#test vectors with all zero elements
+x = sparsevec(Int64[], Float64[], 7)
+@test collect(sort(x)) == sort(collect(x))
+#test vector with sparsity approx 1/2
+x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
+@test collect(sort(x)) == sort(collect(x))
+# apply three distinct tranformations where zeros sort into start/middle/end
+@test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
+@test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
+@test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
