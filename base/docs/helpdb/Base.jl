@@ -2066,11 +2066,31 @@ Kronecker tensor product of two vectors or two matrices.
 kron
 
 """
-    >>(x, n)
+    fieldoffsets(type)
 
-Right bit shift operator, preserving the sign of `x`.
+The byte offset of each field of a type relative to the data start. For example, we could
+use it in the following manner to summarize information about a struct type:
+
+```jldoctest
+julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
+
+julia> structinfo(StatStruct)
+12-element Array{Tuple{Int64,Symbol,DataType},1}:
+ (0,:device,UInt64)
+ (8,:inode,UInt64)
+ (16,:mode,UInt64)
+ (24,:nlink,Int64)
+ (32,:uid,UInt64)
+ (40,:gid,UInt64)
+ (48,:rdev,UInt64)
+ (56,:size,Int64)
+ (64,:blksize,Int64)
+ (72,:blocks,Int64)
+ (80,:mtime,Float64)
+ (88,:ctime,Float64)
+```
 """
-Base.(:(>>))
+fieldoffsets
 
 """
     randn([rng], [dims...])
@@ -6182,13 +6202,6 @@ after the end of the string.
 nextind
 
 """
-    >>>(x, n)
-
-Unsigned right bit shift operator.
-"""
-Base.(:(>>>))
-
-"""
     @timed
 
 A macro to execute an expression, and return the value of the expression, elapsed time,
@@ -7678,13 +7691,6 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 `x`. The behavior of this function is unpredictable if `x` is of a bits type.
 """
 finalizer
-
-"""
-    <<(x, n)
-
-Left bit shift operator.
-"""
-Base.(:(<<))
 
 """
     csch(x)
