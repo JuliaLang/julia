@@ -10,41 +10,41 @@
 
 (define (wrap-with-splice x)
   `(call (top _expr) (inert $)
-	 (call (top _expr) (inert tuple)
-	       (call (top _expr) (inert |...|) ,x))))
+         (call (top _expr) (inert tuple)
+               (call (top _expr) (inert |...|) ,x))))
 
 (define (julia-bq-bracket x d)
   (if (splice-expr? x)
       (if (= d 0)
-	  (cadr (cadr (cadr x)))
-	  (list 'cell1d
-		(wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
+          (cadr (cadr (cadr x)))
+          (list 'cell1d
+                (wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
       (list 'cell1d (julia-bq-expand x d))))
 
 (define (julia-bq-expand x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
-	((or (symbol? x) (jlgensym? x))     (list 'inert x))
+        ((or (symbol? x) (jlgensym? x))     (list 'inert x))
         ((atom? x)  x)
         ((eq? (car x) 'quote)
-	 `(call (top _expr) (inert quote) ,(julia-bq-expand (cadr x) (+ d 1))))
+         `(call (top _expr) (inert quote) ,(julia-bq-expand (cadr x) (+ d 1))))
         ((eq? (car x) '$)
-	 (if (and (= d 0) (length= x 2))
-	     (cadr x)
-	     (if (splice-expr? (cadr x))
-		 `(call (top splicedexpr) (inert $)
-			(call (top append_any) ,(julia-bq-bracket (cadr x) (- d 1))))
-		 `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
+         (if (and (= d 0) (length= x 2))
+             (cadr x)
+             (if (splice-expr? (cadr x))
+                 `(call (top splicedexpr) (inert $)
+                        (call (top append_any) ,(julia-bq-bracket (cadr x) (- d 1))))
+                 `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
          `(copyast (inert ,x)))
-	((not (any splice-expr? x))
-	 `(call (top _expr) ,.(map (lambda (ex) (julia-bq-expand ex d)) x)))
-	(else
-	 (let loop ((p (cdr x)) (q '()))
-	   (if (null? p)
-	       (let ((forms (reverse q)))
-		 `(call (top splicedexpr) ,(julia-bq-expand (car x) d)
-			(call (top append_any) ,@forms)))
-	       (loop (cdr p) (cons (julia-bq-bracket (car p) d) q)))))))
+        ((not (any splice-expr? x))
+         `(call (top _expr) ,.(map (lambda (ex) (julia-bq-expand ex d)) x)))
+        (else
+         (let loop ((p (cdr x)) (q '()))
+           (if (null? p)
+               (let ((forms (reverse q)))
+                 `(call (top splicedexpr) ,(julia-bq-expand (car x) d)
+                        (call (top append_any) ,@forms)))
+               (loop (cdr p) (cons (julia-bq-bracket (car p) d) q)))))))
 
 ;; hygiene
 
@@ -273,12 +273,12 @@
             (let ((expr (cadr e))
                   (lvars (map unescape (cddr e))))
               (let ((vs (delete-duplicates
-			 (expr-find-all (lambda (v)
-					  (and (symbol? v) (or (memq v lvars)
-							       (assq v env))))
-					expr identity)))
+                         (expr-find-all (lambda (v)
+                                          (and (symbol? v) (or (memq v lvars)
+                                                               (assq v env))))
+                                        expr identity)))
                     (e2 (resolve-expansion-vars-with-new-env expr env m inarg)))
-		`(call (-> (tuple ,@vs) ,e2) ,@vs))))
+                `(call (-> (tuple ,@vs) ,e2) ,@vs))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
@@ -314,46 +314,46 @@
 
 (define (function-def? e)
   (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
-		     (and (eq? (car e) '=) (length= e 3)
-			  (pair? (cadr e)) (eq? (caadr e) 'call)))))
+                     (and (eq? (car e) '=) (length= e 3)
+                          (pair? (cadr e)) (eq? (caadr e) 'call)))))
 
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
-	((eq? (car e) 'escape)  '())
-	((eq? (car e) 'localize) '())
-	((eq? (car e) decl)     (map decl-var* (cdr e)))
-	((and (not outer) (function-def? e)) '())
-	(else
-	 (apply append! (map (lambda (x)
-			       (find-declared-vars-in-expansion x decl #f))
-			     e)))))
+        ((eq? (car e) 'escape)  '())
+        ((eq? (car e) 'localize) '())
+        ((eq? (car e) decl)     (map decl-var* (cdr e)))
+        ((and (not outer) (function-def? e)) '())
+        (else
+         (apply append! (map (lambda (x)
+                               (find-declared-vars-in-expansion x decl #f))
+                             e)))))
 
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
-	((eq? (car e) 'escape)  '())
-	((eq? (car e) 'localize) '())
-	((and (not outer) (function-def? e))
-	 ;; pick up only function name
-	 (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
-			    ((eq? (car e) 'function)
-			     (if (eq? (car (cadr e)) 'tuple)
-				 #f
-				 (cadr (cadr e))))
-			    (else #f))))
-	   (if (symbol? fname)
+        ((eq? (car e) 'escape)  '())
+        ((eq? (car e) 'localize) '())
+        ((and (not outer) (function-def? e))
+         ;; pick up only function name
+         (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
+                            ((eq? (car e) 'function)
+                             (if (eq? (car (cadr e)) 'tuple)
+                                 #f
+                                 (cadr (cadr e))))
+                            (else #f))))
+           (if (symbol? fname)
                (list fname)
                '())))
         ((and (eq? (car e) '=) (not (function-def? e)))
-	 (append! (filter
-		   symbol?
-		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
-		       (map decl-var* (cdr (cadr e)))
-		       (list (decl-var* (cadr e)))))
-		  (find-assigned-vars-in-expansion (caddr e) #f)))
-	(else
-	 (apply append! (map (lambda (x)
-			       (find-assigned-vars-in-expansion x #f))
-			     e)))))
+         (append! (filter
+                   symbol?
+                   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
+                       (map decl-var* (cdr (cadr e)))
+                       (list (decl-var* (cadr e)))))
+                  (find-assigned-vars-in-expansion (caddr e) #f)))
+        (else
+         (apply append! (map (lambda (x)
+                               (find-assigned-vars-in-expansion x #f))
+                             e)))))
 
 (define (vars-introduced-by e)
   (let ((v (pattern-expand1 vars-introduced-by-patterns e)))
@@ -422,6 +422,6 @@
              (rename-symbolic-labels
               (julia-expand-macros
                (resolve-expansion-vars form m))))))
-	((eq? (car e) 'module) e)
+        ((eq? (car e) 'module) e)
         (else
          (map julia-expand-macros e))))
