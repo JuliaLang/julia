@@ -230,21 +230,73 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Left bit shift operator.
+   Left bit shift operator, ``x << n``\ . The result is ``x`` shifted left by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s. This is equivalent to ``x * 2^n``\ .
+
+   .. doctest::
+
+       julia> Int8(3) << 2
+       12
+
+       julia> bits(Int8(3))
+       "00000011"
+
+       julia> bits(Int8(12))
+       "00001100"
+
+   See also :func:`>>`\ , :func:`>>>`\ .
 
 .. _>>:
 .. function:: >>(x, n)
 
    .. Docstring generated from Julia source
 
-   Right bit shift operator, preserving the sign of ``x``\ .
+   Right bit shift operator, ``x >> n``\ . The result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s if ``x >= 0``\ , ``1``\ s if ``x < 0``\ , preserving the sign of ``x``\ . This is equivalent to ``fld(x, 2^n)``\ .
+
+   .. doctest::
+
+       julia> Int8(13) >> 2
+       3
+
+       julia> bits(Int8(13))
+       "00001101"
+
+       julia> bits(Int8(3))
+       "00000011"
+
+       julia> Int8(-14) >> 2
+       -4
+
+       julia> bits(Int8(-14))
+       "11110010"
+
+       julia> bits(Int8(-4))
+       "11111100"
+
+   See also :func:`>>>`\ , :func:`<<`\ .
 
 .. _>>>:
 .. function:: >>>(x, n)
 
    .. Docstring generated from Julia source
 
-   Unsigned right bit shift operator.
+   Unsigned right bit shift operator, ``x >>> n``\ . The result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s.
+
+   For ``Unsigned`` integer types, this is eqivalent to :func:`>>`\ . For ``Signed`` integer types, this is equivalent to ``(unsigned(x) >> n) % typeof(x)``\ .
+
+   .. doctest::
+
+       julia> Int8(-14) >>> 2
+       60
+
+       julia> bits(Int8(-14))
+       "11110010"
+
+       julia> bits(Int8(60))
+       "00111100"
+
+   ``BigInt``\ s are treated as if having infinite size, so no filling is required and this is equivalent to :func:`>>`\ .
+
+   See also :func:`>>`\ , :func:`<<`\ .
 
 .. _\::
 .. function:: :(start, [step], stop)
