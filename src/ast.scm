@@ -41,9 +41,9 @@
                 ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
                 ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
                 ((quote inert)
-		 (if (symbol? (cadr e))
-		     (string ":" (deparse (cadr e)))
-		     (string ":(" (deparse (cadr e)) ")")))
+                 (if (symbol? (cadr e))
+                     (string ":" (deparse (cadr e)))
+                     (string ":(" (deparse (cadr e)) ")")))
                 ((vcat)   (string #\[ (deparse-arglist (cdr e)) #\]))
                 ((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
                 ((global local const)
@@ -56,15 +56,15 @@
                 ((comparison) (apply string (map deparse (cdr e))))
                 ((in) (string (deparse (cadr e)) " in " (deparse (caddr e))))
                 ((jlgensym) (string "GenSym(" (cdr e) ")"))
-		((line) (if (length= e 2)
-			    (string "# line " (cadr e))
-			    (string "# " (caddr e) ", line " (cadr e))))
-		((block)
-		 (string "begin\n"
-			 (string.join (map (lambda (ex) (string "    " (deparse ex)))
-					   (cdr e))
-				      "\n")
-			 "\nend"))
+                ((line) (if (length= e 2)
+                            (string "# line " (cadr e))
+                            (string "# " (caddr e) ", line " (cadr e))))
+                ((block)
+                 (string "begin\n"
+                         (string.join (map (lambda (ex) (string "    " (deparse ex)))
+                                           (cdr e))
+                                      "\n")
+                         "\nend"))
                 (else
                  (string e))))))
 
@@ -139,14 +139,14 @@
 ;; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
   (map arg-name (filter (lambda (a) (not (and (pair? a)
-					      (eq? (car a) 'parameters))))
+                                              (eq? (car a) 'parameters))))
                         lst)))
 
 (define (llist-keywords lst)
   (apply append
          (map (lambda (a) (if (and (pair? a) (eq? (car a) 'parameters))
-			      (map arg-name (cdr a))
-			      '()))
+                              (map arg-name (cdr a))
+                              '()))
               lst)))
 
 ;; get just argument types
@@ -163,7 +163,7 @@
 (define (symbol-like? e)
   (or (symbol? e) (jlgensym? e)))
 
-; get the variable name part of a declaration, x::int => x
+;; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
   (if (decl? v) (cadr v) v))
 
