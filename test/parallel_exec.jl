@@ -373,6 +373,16 @@ map!(x->1, d)
 @test 2.0 == remotecall_fetch(D->D[2], id_other, Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(D->D[1], id_other, Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
+# Issue #14664
+d = SharedArray(Int,10)
+@sync @parallel for i=1:10
+    d[i] = i
+end
+
+for (x,i) in enumerate(d)
+    @test x == i
+end
+
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
 workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
