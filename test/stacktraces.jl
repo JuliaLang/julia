@@ -40,8 +40,9 @@ end
 
 @test StackTraces.lookup(C_NULL) == StackTraces.UNKNOWN
 
-let
-    # No errors should mean nothing in catch_backtrace
+let ct = current_task()
+    # After a task switch, there should be nothing in catch_backtrace
+    yieldto(@task yieldto(ct))
     @test catch_backtrace() == StackFrame[]
 
     @noinline bad_function() = throw(UndefVarError(:nonexistent))
