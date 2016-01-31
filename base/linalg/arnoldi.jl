@@ -31,8 +31,7 @@ The following keyword arguments are supported:
 * `tol`: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).
      A Ritz value ``θ`` is considered converged when its associated residual
      is less than or equal to the product of `tol` and ``max(ɛ^{2/3}, |θ|)``,
-     where ``ɛ`` is machine epsilon as determined by the LAPACK routine
-     `_LAMCH('EPS')`.
+     where `ɛ = eps(real(eltype(A)))/2` is LAPACK's machine epsilon.
      The residual associated with ``θ`` and its corresponding Ritz vector ``v``
      is defined as the norm ``||Av - vθ||``.
      The specified value of `tol` should be positive; otherwise, it is ignored
