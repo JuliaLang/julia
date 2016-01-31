@@ -13,7 +13,6 @@
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
 #else
-#include <sys/sysctl.h>
 #include <sys/wait.h>
 #include <sys/ptrace.h>
 #include <unistd.h>
