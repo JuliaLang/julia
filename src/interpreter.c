@@ -122,7 +122,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     if (jl_is_symbol(e)) {
-        jl_value_t *v;
+        jl_value_t *v = NULL;
         size_t i;
         for(i=0; i < nl; i++) {
             if (locals[i*2] == e) {
