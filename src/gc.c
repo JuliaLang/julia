@@ -1351,7 +1351,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
                     gcpage_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
-                    pool_t *p;
+                    pool_t *p = NULL;
                     FOR_HEAP (t_n)
                         p = &pools[p_n];
                     int osize = pg->osize;
@@ -2457,7 +2457,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
 void *allocb(size_t sz)
 {
-    buff_t *b;
+    buff_t *b = NULL;
     size_t allocsz = sz + sizeof(buff_t);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
