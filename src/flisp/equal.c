@@ -286,7 +286,7 @@ value_t fl_equal(fl_context_t *fl_ctx, value_t a, value_t b)
 #endif
 
 // *oob: output argument, means we hit the limit specified by 'bound'
-static uptrint_t bounded_hash(fl_context_t *fl_ctx, value_t a, int bound, int *oob)
+static uintptr_t bounded_hash(fl_context_t *fl_ctx, value_t a, int bound, int *oob)
 {
     *oob = 0;
     union {
@@ -298,7 +298,7 @@ static uptrint_t bounded_hash(fl_context_t *fl_ctx, value_t a, int bound, int *o
     cvalue_t *cv;
     cprim_t *cp;
     void *data;
-    uptrint_t h = 0;
+    uintptr_t h = 0;
     int oob2, tg = tag(a);
     switch(tg) {
     case TAG_NUM :
@@ -370,14 +370,14 @@ int equal_lispvalue(fl_context_t *fl_ctx, value_t a, value_t b)
     return (numval(compare_(fl_ctx, a, b, 1))==0);
 }
 
-uptrint_t hash_lispvalue(fl_context_t *fl_ctx, value_t a)
+uintptr_t hash_lispvalue(fl_context_t *fl_ctx, value_t a)
 {
     int oob = 0;
-    uptrint_t n = bounded_hash(fl_ctx, a, BOUNDED_HASH_BOUND, &oob);
+    uintptr_t n = bounded_hash(fl_ctx, a, BOUNDED_HASH_BOUND, &oob);
     return n;
 }
 
-value_t fl_hash(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_hash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "hash", nargs, 1);
     return fixnum(hash_lispvalue(fl_ctx, args[0]));

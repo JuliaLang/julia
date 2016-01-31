@@ -19,10 +19,10 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
     void **tab = h->table;                                              \
     void **ol;                                                          \
                                                                         \
-    hv = HFUNC((uptrint_t)key, ctx);                                    \
+    hv = HFUNC((uintptr_t)key, ctx);                                    \
  retry_bp:                                                              \
     iter = 0;                                                           \
-    index = (index_t)(hv & (sz-1)) * 2;                                 \
+    index = (size_t)(hv & (sz-1)) * 2;                                  \
     sz *= 2;                                                            \
     orig = index;                                                       \
                                                                         \
@@ -97,7 +97,7 @@ static void **HTNAME##_peek_bp_r(htable_t *h, void *key, void *ctx)     \
     size_t sz = hash_size(h);                                           \
     size_t maxprobe = max_probe(sz);                                    \
     void **tab = h->table;                                              \
-    size_t index = (index_t)(HFUNC((uptrint_t)key, ctx) & (sz-1)) * 2;  \
+    size_t index = (size_t)(HFUNC((uintptr_t)key, ctx) & (sz-1)) * 2;   \
     sz *= 2;                                                            \
     size_t orig = index;                                                \
     size_t iter = 0;                                                    \
@@ -148,7 +148,7 @@ _STATIC void HTNAME##_adjoin_r(htable_t *h, void *key, void *val, void *ctx) \
 }
 
 #define HTIMPL(HTNAME, HFUNC, EQFUNC)                                   \
-static uint_t HTNAME##_hfunc_wrapper(uptrint_t key, void *ctx)          \
+static uint_t HTNAME##_hfunc_wrapper(uintptr_t key, void *ctx)          \
 {                                                                       \
     (void)ctx;                                                          \
     return HFUNC(key);                                                  \

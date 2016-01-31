@@ -6,7 +6,7 @@
 #define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
 
 #define keyhash(k)     jl_object_id(k)
-#define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
+#define h2index(hv,sz) (size_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 

@@ -219,7 +219,7 @@ int fl_is_keyword_name(const char *str, size_t len)
     return len>1 && ((str[0] == ':' || str[len-1] == ':') && str[1] != '\0');
 }
 
-#define CHECK_ALIGN8(p) assert((((uptrint_t)(p))&0x7)==0 && "flisp requires malloc to return 8-aligned pointers")
+#define CHECK_ALIGN8(p) assert((((uintptr_t)(p))&0x7)==0 && "flisp requires malloc to return 8-aligned pointers")
 
 static symbol_t *mk_symbol(const char *str)
 {
@@ -293,7 +293,7 @@ int fl_isgensym(fl_context_t *fl_ctx, value_t v)
     return isgensym(fl_ctx, v);
 }
 
-static value_t fl_gensymp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_gensymp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "gensym?", nargs, 1);
     return isgensym(fl_ctx, args[0]) ? fl_ctx->T : fl_ctx->F;
@@ -449,7 +449,7 @@ static void trace_globals(fl_context_t *fl_ctx, symbol_t *root)
 static value_t relocate(fl_context_t *fl_ctx, value_t v)
 {
     value_t a, d, nc, first, *pcdr;
-    uptrint_t t = tag(v);
+    uintptr_t t = tag(v);
 
     if (t == TAG_CONS) {
         // iterative implementation allows arbitrarily long cons chains
@@ -916,7 +916,7 @@ static uint32_t process_keys(fl_context_t *fl_ctx, value_t kwtable,
                              uint32_t nreq, uint32_t nkw, uint32_t nopt,
                              uint32_t bp, uint32_t nargs, int va)
 {
-    uptrint_t n;
+    uintptr_t n;
     uint32_t extr = nopt+nkw;
     uint32_t ntot = nreq+extr;
     value_t *args = (value_t*)alloca(extr*sizeof(value_t));
@@ -945,9 +945,9 @@ static uint32_t process_keys(fl_context_t *fl_ctx, value_t kwtable,
             lerrorf(fl_ctx, fl_ctx->ArgError, "keyword %s requires an argument",
                     symbol_name(fl_ctx, v));
         value_t hv = fixnum(((symbol_t*)ptr(v))->hash);
-        uptrint_t x = 2*(labs(numval(hv)) % n);
+        uintptr_t x = 2*(labs(numval(hv)) % n);
         if (vector_elt(kwtable, x) == v) {
-            uptrint_t idx = numval(vector_elt(kwtable, x+1));
+            uintptr_t idx = numval(vector_elt(kwtable, x+1));
             assert(idx < nkw);
             idx += nopt;
             if (args[idx] == UNBOUND) {
@@ -1049,7 +1049,7 @@ static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
     fl_apply_func = fl_ctx->Stack[fl_ctx->SP-nargs-1];
     ip = (uint8_t*)cv_data((cvalue_t*)ptr(fn_bcode(fl_apply_func)));
 #ifndef MEMDEBUG2
-    assert(!ismanaged(fl_ctx, (uptrint_t)ip));
+    assert(!ismanaged(fl_ctx, (uintptr_t)ip));
 #endif
     while (fl_ctx->SP+GET_INT32(ip) > fl_ctx->N_STACK) {
         grow_stack(fl_ctx);
@@ -1187,7 +1187,7 @@ static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
             fl_apply_func = fl_ctx->Stack[fl_ctx->SP-n-1];
             if (tag(fl_apply_func) == TAG_FUNCTION) {
                 if (fl_apply_func > (N_BUILTINS<<3)) {
-                    fl_ctx->Stack[fl_ctx->curr_frame-1] = (uptrint_t)ip;
+                    fl_ctx->Stack[fl_ctx->curr_frame-1] = (uintptr_t)ip;
                     nargs = n;
                     goto apply_cl_top;
                 }
@@ -1232,56 +1232,56 @@ static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
             type_error(fl_ctx, "apply", "function", fl_apply_func);
         OP(OP_TCALLL) n = GET_INT32(ip); ip+=4; goto do_tcall;
         OP(OP_CALLL)  n = GET_INT32(ip); ip+=4; goto do_call;
-        OP(OP_JMP) ip += (ptrint_t)GET_INT16(ip); NEXT_OP;
+        OP(OP_JMP) ip += (intptr_t)GET_INT16(ip); NEXT_OP;
         OP(OP_BRF)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v == fl_ctx->F) ip += (ptrint_t)GET_INT16(ip);
+            if (fl_apply_v == fl_ctx->F) ip += (intptr_t)GET_INT16(ip);
             else ip += 2;
             NEXT_OP;
         OP(OP_BRT)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v != fl_ctx->F) ip += (ptrint_t)GET_INT16(ip);
+            if (fl_apply_v != fl_ctx->F) ip += (intptr_t)GET_INT16(ip);
             else ip += 2;
             NEXT_OP;
-        OP(OP_JMPL) ip += (ptrint_t)GET_INT32(ip); NEXT_OP;
+        OP(OP_JMPL) ip += (intptr_t)GET_INT32(ip); NEXT_OP;
         OP(OP_BRFL)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v == fl_ctx->F) ip += (ptrint_t)GET_INT32(ip);
+            if (fl_apply_v == fl_ctx->F) ip += (intptr_t)GET_INT32(ip);
             else ip += 4;
             NEXT_OP;
         OP(OP_BRTL)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v != fl_ctx->F) ip += (ptrint_t)GET_INT32(ip);
+            if (fl_apply_v != fl_ctx->F) ip += (intptr_t)GET_INT32(ip);
             else ip += 4;
             NEXT_OP;
         OP(OP_BRNE)
-            if (fl_ctx->Stack[fl_ctx->SP-2] != fl_ctx->Stack[fl_ctx->SP-1]) ip += (ptrint_t)GET_INT16(ip);
+            if (fl_ctx->Stack[fl_ctx->SP-2] != fl_ctx->Stack[fl_ctx->SP-1]) ip += (intptr_t)GET_INT16(ip);
             else ip += 2;
             POPN(fl_ctx, 2);
             NEXT_OP;
         OP(OP_BRNEL)
-            if (fl_ctx->Stack[fl_ctx->SP-2] != fl_ctx->Stack[fl_ctx->SP-1]) ip += (ptrint_t)GET_INT32(ip);
+            if (fl_ctx->Stack[fl_ctx->SP-2] != fl_ctx->Stack[fl_ctx->SP-1]) ip += (intptr_t)GET_INT32(ip);
             else ip += 4;
             POPN(fl_ctx, 2);
             NEXT_OP;
         OP(OP_BRNN)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v != fl_ctx->NIL) ip += (ptrint_t)GET_INT16(ip);
+            if (fl_apply_v != fl_ctx->NIL) ip += (intptr_t)GET_INT16(ip);
             else ip += 2;
             NEXT_OP;
         OP(OP_BRNNL)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v != fl_ctx->NIL) ip += (ptrint_t)GET_INT32(ip);
+            if (fl_apply_v != fl_ctx->NIL) ip += (intptr_t)GET_INT32(ip);
             else ip += 4;
             NEXT_OP;
         OP(OP_BRN)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v == fl_ctx->NIL) ip += (ptrint_t)GET_INT16(ip);
+            if (fl_apply_v == fl_ctx->NIL) ip += (intptr_t)GET_INT16(ip);
             else ip += 2;
             NEXT_OP;
         OP(OP_BRNL)
             fl_apply_v = POP(fl_ctx);
-            if (fl_apply_v == fl_ctx->NIL) ip += (ptrint_t)GET_INT32(ip);
+            if (fl_apply_v == fl_ctx->NIL) ip += (intptr_t)GET_INT32(ip);
             else ip += 4;
             NEXT_OP;
         OP(OP_RET)
@@ -2135,13 +2135,13 @@ static value_t fl_function_name(fl_context_t *fl_ctx, value_t *args, uint32_t na
     return fn_name(v);
 }
 
-value_t fl_copylist(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_copylist(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "copy-list", nargs, 1);
     return copy_list(fl_ctx, args[0]);
 }
 
-value_t fl_append(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_append(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs == 0)
         return fl_ctx->NIL;
@@ -2178,21 +2178,21 @@ value_t fl_append(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return first;
 }
 
-value_t fl_liststar(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_liststar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs == 1) return args[0];
     else if (nargs == 0) argcount(fl_ctx, "list*", nargs, 1);
     return _list(fl_ctx, args, nargs, 1);
 }
 
-value_t fl_stacktrace(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_stacktrace(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     (void)args;
     argcount(fl_ctx, "stacktrace", nargs, 0);
     return _stacktrace(fl_ctx, fl_ctx->throwing_frame ? fl_ctx->throwing_frame : fl_ctx->curr_frame);
 }
 
-value_t fl_map1(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_map1(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 2)
         lerror(fl_ctx, fl_ctx->ArgError, "map: too few arguments");

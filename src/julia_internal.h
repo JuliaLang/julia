@@ -280,17 +280,17 @@ typedef unw_context_t *bt_context_t;
 #endif
 #define jl_bt_data (jl_get_ptls_states()->bt_data)
 #define jl_bt_size (jl_get_ptls_states()->bt_size)
-JL_DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
-JL_DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
+JL_DLLEXPORT size_t rec_backtrace(intptr_t *data, size_t maxsize);
+JL_DLLEXPORT size_t rec_backtrace_ctx(intptr_t *data, size_t maxsize, bt_context_t ctx);
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
+size_t rec_backtrace_ctx_dwarf(intptr_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 JL_DLLEXPORT void jl_raise_debugger(void);
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
-JL_DLLEXPORT void jl_gdblookup(ptrint_t ip);
+JL_DLLEXPORT void jl_gdblookup(intptr_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)

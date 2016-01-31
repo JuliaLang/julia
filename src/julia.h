@@ -215,7 +215,7 @@ typedef struct _jl_sym_t {
     JL_DATA_TYPE
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
-    uptrint_t hash;    // precomputed hash value
+    uintptr_t hash;    // precomputed hash value
     // JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
 
@@ -351,7 +351,7 @@ typedef struct {
     jl_value_t *primary;
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
-    ptrint_t uid;
+    intptr_t uid;
     struct _jl_methtable_t *mt;
 } jl_typename_t;
 
@@ -466,7 +466,7 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *cache;
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
-    ptrint_t max_args;  // max # of non-vararg arguments in a signature
+    intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
 #ifdef JL_GF_PROFILE
@@ -767,9 +767,9 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_symbolnode_sym(s) (*(jl_sym_t**)s)
 #define jl_symbolnode_type(s) (((jl_value_t**)s)[1])
 #define jl_linenode_file(x) (*(jl_sym_t**)x)
-#define jl_linenode_line(x) (((ptrint_t*)x)[1])
-#define jl_labelnode_label(x) (((ptrint_t*)x)[0])
-#define jl_gotonode_label(x) (((ptrint_t*)x)[0])
+#define jl_linenode_line(x) (((intptr_t*)x)[1])
+#define jl_labelnode_label(x) (((intptr_t*)x)[0])
+#define jl_gotonode_label(x) (((intptr_t*)x)[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)s)
 #define jl_globalref_name(s) (((jl_sym_t**)s)[1])
 
@@ -1002,7 +1002,7 @@ STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 
 // object identity
 JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
+JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v);
 
 // type predicates and basic operations
 JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
@@ -1481,7 +1481,7 @@ typedef struct _jl_tls_states_t {
     int8_t in_jl_;
     int16_t tid;
     size_t bt_size;
-    ptrint_t bt_data[JL_MAX_BT_SIZE + 1];
+    intptr_t bt_data[JL_MAX_BT_SIZE + 1];
 } jl_tls_states_t;
 
 typedef struct {

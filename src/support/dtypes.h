@@ -146,16 +146,6 @@ typedef int64_t int_t;
 typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
-typedef ptrdiff_t ptrint_t; // pointer-size int
-typedef size_t uptrint_t;
-typedef ptrdiff_t offset_t;
-typedef size_t index_t;
-
-typedef uint8_t  u_int8_t;
-typedef uint16_t u_int16_t;
-typedef uint32_t u_int32_t;
-typedef uint64_t u_int64_t;
-typedef uptrint_t u_ptrint_t;
 
 #define LLT_ALIGN(x, sz) (((x) + (sz-1)) & (-sz))
 
