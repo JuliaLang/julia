@@ -3479,7 +3479,7 @@ void jl_init_types(void)
     jl_svecset(jl_methtable_type->types, 7, jl_module_type);
 
     jl_lambda_info_type =
-        jl_new_datatype(jl_symbol("LambdaStaticData"),
+        jl_new_datatype(jl_symbol("LambdaInfo"),
                         jl_any_type, jl_emptysvec,
                         jl_svec(16, jl_symbol("ast"), jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"), jl_symbol("sparam_vals"),

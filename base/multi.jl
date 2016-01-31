@@ -755,7 +755,7 @@ function local_remotecall_thunk(f, args)
     # TODO: this seems to be capable of causing deadlocks by waiting on
     # Refs buried inside the closure that we don't want to wait on yet.
     # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    # if isa(linfo,LambdaStaticData)
+    # if isa(linfo,LambdaInfo)
     #     env = ccall(:jl_closure_env, Any, (Any,), f)
     #     buf = memio()
     #     serialize(buf, env)

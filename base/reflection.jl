@@ -244,7 +244,7 @@ next(mt::MethodTable, m::Method) = (m,m.next)
 done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
-uncompressed_ast(l::LambdaStaticData) =
+uncompressed_ast(l::LambdaInfo) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
@@ -282,7 +282,7 @@ function func_for_method_checked(m, types)
         error("cannot call @generated function `", m[3], "` ",
               "with abstract argument types: ", types)
     end
-    linfo::LambdaStaticData
+    linfo::LambdaInfo
 end
 
 function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
@@ -346,7 +346,7 @@ function which_module(m::Module, s::Symbol)
 end
 
 function functionloc(m::Method)
-    lsd = m.func::LambdaStaticData
+    lsd = m.func::LambdaInfo
     ln = lsd.line
     if ln <= 0
         error("could not determine location of method definition")

@@ -30,7 +30,7 @@ The following data types exist in lowered ASTs:
 ``Symbol``
     used to name local variables and static parameters within a function.
 
-``LambdaStaticData``
+``LambdaInfo``
     wraps the AST of each method.
 
 ``LineNumberNode``
@@ -112,7 +112,7 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     ``SimpleVector`` of type variables corresponding to the method's static
     parameters.
 
-    ``args[3]`` - a ``LambdaStaticData`` of the method itself. For "out of scope"
+    ``args[3]`` - a ``LambdaInfo`` of the method itself. For "out of scope"
     method definitions (adding a method to a function that also has methods defined
     in different scopes) this is an expression that evaluates to a ``:lambda``
     expression.
@@ -174,8 +174,8 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     ``:inline`` and ``:noinline``.
 
 
-LambdaStaticData
-~~~~~~~~~~~~~~~~
+LambdaInfo
+~~~~~~~~~~
 
 ``sparam_syms`` - The names (symbols) of static parameters.
 

@@ -15,8 +15,8 @@
     ``func::Symbol``
         the name of the function containing the execution context
 
-    ``outer_linfo::Nullable{LambdaStaticData}``
-        the LambdaStaticData containing the execution context (if it could be found)
+    ``outer_linfo::Nullable{LambdaInfo}``
+        the LambdaInfo containing the execution context (if it could be found)
 
     ``file::Symbol``
         the path to the file containing the execution context

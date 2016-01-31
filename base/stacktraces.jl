@@ -15,8 +15,8 @@ Stack information representing execution context.
 immutable StackFrame
     "the name of the function containing the execution context"
     func::Symbol
-    "the LambdaStaticData containing the execution context (if it could be found)"
-    outer_linfo::Nullable{LambdaStaticData}
+    "the LambdaInfo containing the execution context (if it could be found)"
+    outer_linfo::Nullable{LambdaInfo}
     "the path to the file containing the execution context"
     file::Symbol
     "the line number in the file containing the execution context"
@@ -31,7 +31,7 @@ immutable StackFrame
     pointer::Int64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
-StackFrame(func, file, line) = StackFrame(func, Nullable{LambdaStaticData}(), file, line, empty_sym, -1, false, 0)
+StackFrame(func, file, line) = StackFrame(func, Nullable{LambdaInfo}(), file, line, empty_sym, -1, false, 0)
 
 """
     StackTrace
@@ -43,7 +43,7 @@ typealias StackTrace Vector{StackFrame}
 
 const empty_sym = symbol("")
 const unk_sym = symbol("???")
-const UNKNOWN = StackFrame(unk_sym, Nullable{LambdaStaticData}(), unk_sym, -1, empty_sym, -1, true, 0) # === lookup(C_NULL)
+const UNKNOWN = StackFrame(unk_sym, Nullable{LambdaInfo}(), unk_sym, -1, empty_sym, -1, true, 0) # === lookup(C_NULL)
 
 
 #=
@@ -74,7 +74,7 @@ function lookup(pointer::Ptr{Void})
     if length(info) == 8
         is_inlined = (info[4] !== empty_sym)
         return StackFrame(string(info[1]),
-            info[6] === nothing ? Nullable{LambdaStaticData}() : Nullable{LambdaStaticData}(info[6]),
+            info[6] === nothing ? Nullable{LambdaInfo}() : Nullable{LambdaInfo}(info[6]),
             is_inlined ? info[4] : info[2],
             Int(is_inlined ? info[5] : info[3]),
             is_inlined ? info[2] : "",

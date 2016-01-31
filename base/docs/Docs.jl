@@ -103,7 +103,7 @@ function doc(obj)
     get_obj_meta(obj)
 end
 
-function write_lambda_signature(io::IO, lam::LambdaStaticData)
+function write_lambda_signature(io::IO, lam::LambdaInfo)
     ex = Base.uncompressed_ast(lam)
     write(io, '(')
     nargs = length(ex.args[1])

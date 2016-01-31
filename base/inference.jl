@@ -29,7 +29,7 @@ type VarInfo
     mod::Module
 end
 
-function VarInfo(linfo::LambdaStaticData, ast=linfo.ast)
+function VarInfo(linfo::LambdaInfo, ast=linfo.ast)
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
     end
@@ -735,7 +735,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
             rettype = Any
             break
         end
-        linfo = linfo::LambdaStaticData
+        linfo = linfo::LambdaInfo
         lsig = length(m[3].sig.parameters)
         # limit argument type tuple based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
@@ -802,7 +802,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY)
     if linfo === NF
         return Any
     end
-    return typeinf(linfo::LambdaStaticData, ti, env, linfo)[2]
+    return typeinf(linfo::LambdaInfo, ti, env, linfo)[2]
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -1406,7 +1406,7 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
+function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
     if linfo.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
@@ -1487,7 +1487,7 @@ typeinf_uncached(linfo, atypes::ANY, sparams::ANY; optimize=true) =
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 # compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
-function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleVector, def, curtype, cop, optimize)
+function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, curtype, cop, optimize)
     ast0 = def.ast
     #if dbg
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
@@ -2316,7 +2316,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
             return NF
         end
     end
-    linfo = linfo::LambdaStaticData
+    linfo = linfo::LambdaInfo
 
     spnames = Any[s for s in linfo.sparam_syms]
     if length(linfo.sparam_vals) > 0
