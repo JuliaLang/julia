@@ -6,7 +6,7 @@ using .ARPACK
 """
     eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-Computes eigenvalues `d` of `A` using Lanczos or Arnoldi iterations for real symmetric or
+Computes eigenvalues `d` of `A` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or
 general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
@@ -28,7 +28,17 @@ The following keyword arguments are supported:
 | `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
 | `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `tol`: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).
+     A Ritz value ``θ`` is considered converged when its associated residual
+     is less than or equal to the product of `tol` and ``max(ɛ^{2/3}, |θ|)``,
+     where ``ɛ`` is machine epsilon as determined by the LAPACK routine
+     `_LAMCH('EPS')`.
+     The residual associated with ``θ`` and its corresponding Ritz vector ``v``
+     is defined as the norm ``||Av - vθ||``.
+     The specified value of `tol` should be positive; otherwise, it is ignored
+     and ``ɛ`` is used instead.
+     Default: ``ɛ``.
+
 * `maxiter`: Maximum number of iterations (default = 300)
 * `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
@@ -51,6 +61,20 @@ constructed by the specification of the iteration mode implied by `sigma`.
 |:----------------|:---------------------------------|:---------------------------------|
 | `nothing`       | ordinary (forward)               | ``A``                            |
 | real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
+
+**note**
+
+Although `tol` has a default value, the best choice depends strongly on the
+matrix `A`. We recommend that users _always_ specify a value for `tol` which
+suits their specific needs.
+
+For details of how the errors in the computed eigenvalues are estimated, see:
+
+* B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e
+  (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
+* R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly
+  Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and
+  Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
@@ -70,7 +94,7 @@ end
 """
     eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-Computes generalized eigenvalues `d` of `A` and `B` using Lanczos or Arnoldi iterations for
+Computes generalized eigenvalues `d` of `A` and `B` using implicitly restarted Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively.
 
 The following keyword arguments are supported:
@@ -92,7 +116,11 @@ The following keyword arguments are supported:
 | `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
 | `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `tol`: relative tolerance used in the convergence criterion for eigenvalues, similar to
+     `tol` in the [`eigs(A)`](:func:`eigs`) method for the ordinary eigenvalue
+     problem, but effectively for the eigenvalues of ``B^{-1} A`` instead of ``A``.
+     See the documentation for the ordinary eigenvalue problem in
+     [`eigs(A)`](:func:`eigs`) and the accompanying note about `tol`.
 * `maxiter`: Maximum number of iterations (default = 300)
 * `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
