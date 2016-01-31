@@ -443,7 +443,7 @@ static void jl_update_all_fptrs(void)
             linfos[cfunc] = li;
         }
     }
-    jl_register_fptrs(sysimage_base, fvars, linfos, delayed_fptrs_n);
+    jl_register_fptrs(sysimage_base, fvars, linfos, sysimg_fvars_max);
     delayed_fptrs_n = 0;
     delayed_fptrs_max = 0;
     sysimg_fvars_max = 0;
