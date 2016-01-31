@@ -33,7 +33,7 @@ size_t llength(value_t v)
     return n;
 }
 
-static value_t fl_nconc(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_nconc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs == 0)
         return fl_ctx->NIL;
@@ -59,7 +59,7 @@ static value_t fl_nconc(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return first;
 }
 
-static value_t fl_assq(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_assq(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "assq", nargs, 2);
     value_t item = args[0];
@@ -75,7 +75,7 @@ static value_t fl_assq(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return fl_ctx->F;
 }
 
-static value_t fl_memq(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_memq(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "memq", nargs, 2);
     while (iscons(args[1])) {
@@ -87,7 +87,7 @@ static value_t fl_memq(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return fl_ctx->F;
 }
 
-static value_t fl_length(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_length(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "length", nargs, 1);
     value_t a = args[0];
@@ -116,13 +116,13 @@ static value_t fl_length(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     type_error(fl_ctx, "length", "sequence", a);
 }
 
-static value_t fl_f_raise(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_f_raise(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "raise", nargs, 1);
     fl_raise(fl_ctx, args[0]);
 }
 
-static value_t fl_exit(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_exit(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs > 0)
         exit(tofixnum(fl_ctx, args[0], "exit"));
@@ -130,7 +130,7 @@ static value_t fl_exit(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return fl_ctx->NIL;
 }
 
-static value_t fl_symbol(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "symbol", nargs, 1);
     if (!fl_isstring(fl_ctx, args[0]))
@@ -138,14 +138,14 @@ static value_t fl_symbol(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return symbol(fl_ctx, (char*)cvalue_data(args[0]));
 }
 
-static value_t fl_keywordp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_keywordp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "keyword?", nargs, 1);
     return (issymbol(args[0]) &&
             iskeyword((symbol_t*)ptr(args[0]))) ? fl_ctx->T : fl_ctx->F;
 }
 
-static value_t fl_top_level_value(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_top_level_value(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "top-level-value", nargs, 1);
     symbol_t *sym = tosymbol(fl_ctx, args[0], "top-level-value");
@@ -154,7 +154,7 @@ static value_t fl_top_level_value(fl_context_t *fl_ctx, value_t *args, u_int32_t
     return sym->binding;
 }
 
-static value_t fl_set_top_level_value(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_set_top_level_value(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "set-top-level-value!", nargs, 2);
     symbol_t *sym = tosymbol(fl_ctx, args[0], "set-top-level-value!");
@@ -174,7 +174,7 @@ static void global_env_list(fl_context_t *fl_ctx, symbol_t *root, value_t *pv)
     }
 }
 
-value_t fl_global_env(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+value_t fl_global_env(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     (void)args;
     argcount(fl_ctx, "environment", nargs, 0);
@@ -185,7 +185,7 @@ value_t fl_global_env(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     return lst;
 }
 
-static value_t fl_constantp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_constantp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "constant?", nargs, 1);
     if (issymbol(args[0]))
@@ -198,7 +198,7 @@ static value_t fl_constantp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs
     return fl_ctx->T;
 }
 
-static value_t fl_integer_valuedp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_integer_valuedp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "integer-valued?", nargs, 1);
     value_t v = args[0];
@@ -227,7 +227,7 @@ static value_t fl_integer_valuedp(fl_context_t *fl_ctx, value_t *args, u_int32_t
     return fl_ctx->F;
 }
 
-static value_t fl_integerp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_integerp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "integer?", nargs, 1);
     value_t v = args[0];
@@ -236,7 +236,7 @@ static value_t fl_integerp(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
         fl_ctx->T : fl_ctx->F;
 }
 
-static value_t fl_fixnum(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_fixnum(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "fixnum", nargs, 1);
     if (isfixnum(args[0])) {
@@ -249,7 +249,7 @@ static value_t fl_fixnum(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     type_error(fl_ctx, "fixnum", "number", args[0]);
 }
 
-static value_t fl_truncate(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_truncate(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "truncate", nargs, 1);
     if (isfixnum(args[0]))
@@ -277,7 +277,7 @@ static value_t fl_truncate(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
     type_error(fl_ctx, "truncate", "number", args[0]);
 }
 
-static value_t fl_vector_alloc(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_vector_alloc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     fixnum_t i;
     value_t f, v;
@@ -299,7 +299,7 @@ static value_t fl_vector_alloc(fl_context_t *fl_ctx, value_t *args, u_int32_t na
     return v;
 }
 
-static value_t fl_time_now(fl_context_t *fl_ctx, value_t *args, u_int32_t nargs)
+static value_t fl_time_now(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "time.now", nargs, 0);
     (void)args;

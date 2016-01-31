@@ -432,7 +432,7 @@ static void *signal_listener(void *arg)
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
                     // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof + bt_size_cur,
+                    bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, signal_context);
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;

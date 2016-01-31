@@ -13,12 +13,12 @@ extern "C" {
 #include <threading.h>
 
 // Profiler control variables //
-static volatile ptrint_t *bt_data_prof = NULL;
+static volatile intptr_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
-static volatile u_int64_t nsecprof = 0;
+static volatile uint64_t nsecprof = 0;
 static volatile int running = 0;
-static const    u_int64_t GIGA = 1000000000ULL;
+static const    uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
@@ -36,7 +36,7 @@ JL_DLLEXPORT void jl_sigint_action(void)
     jl_throw(jl_interrupt_exception);
 }
 
-static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size);
+static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size);
 
 #if defined(_WIN32)
 #include "signals-win.c"
@@ -45,7 +45,7 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
 #endif
 
 // what to do on a critical error
-static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, size_t *bt_size)
+static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size)
 {
     // This function is not allowed to reference any TLS variables.
     // We need to explicitly pass in the TLS buffer pointer when
@@ -64,22 +64,22 @@ static void jl_critical_error(int sig, bt_context_t context, ptrint_t *bt_data, 
 ///////////////////////
 // Utility functions //
 ///////////////////////
-JL_DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
+JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (ptrint_t*) calloc(maxsize, sizeof(ptrint_t));
+    bt_data_prof = (intptr_t*) calloc(maxsize, sizeof(intptr_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;
     return 0;
 }
 
-JL_DLLEXPORT u_int8_t *jl_profile_get_data(void)
+JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
 {
-    return (u_int8_t*) bt_data_prof;
+    return (uint8_t*) bt_data_prof;
 }
 
 JL_DLLEXPORT size_t jl_profile_len_data(void)
@@ -92,7 +92,7 @@ JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
     return bt_size_max;
 }
 
-JL_DLLEXPORT u_int64_t jl_profile_delay_nsec(void)
+JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
 {
     return nsecprof;
 }
