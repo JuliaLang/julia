@@ -726,7 +726,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
       ========= ======================================================================================================================
 
-    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+    * ``tol``: tolerance (:math:`tol \ge 0.0` defaults to ``DLAMCH('EPS')``)
     * ``maxiter``: Maximum number of iterations (default = 300)
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
