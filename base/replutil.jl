@@ -119,13 +119,13 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
-        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b-1, true)
-        if length(code) == 7 && !code[6]  # code[6] == fromC
-            if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code[1]) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
-            elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring #3024
+        code = StackTraces.lookup(b)
+        if code !== lookup && code.from_c
+            if code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+                print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
+            elseif (code.func == :^ && code.file == symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
-            elseif code[1] == :^ && (code[2] == symbol("promotion.jl") || code[2] == symbol("math.jl"))
+            elseif code.func == :^ && (code.file == symbol("promotion.jl") || code.file == symbol("math.jl"))
                 print(io, "\nExponentiation yielding a complex result requires a complex argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
             break
@@ -387,36 +387,10 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
 end
 
-function show_trace_entry(io, fname, file, line, inlinedat_file, inlinedat_line, n)
+function show_trace_entry(io, frame, n)
     print(io, "\n")
-    # if we have inlining information, we print the `file`:`line` first,
-    # then show the inlining info, because the inlining location
-    # corresponds to `fname`.
-    if (inlinedat_file != symbol(""))
-        # align the location text
-        print(io, " [inlined code] from ")
-    else
-        print(io, " in ", fname, " at ")
-    end
-
-    print(io, file)
-
-    if line >= 1
-        try
-            print(io, ":", line)
-        catch
-            print(io, '?') #for when dec is not yet defined
-        end
-    end
-
-    if n > 1
-        print(io, " (repeats ", n, " times)")
-    end
-
-    if (inlinedat_file != symbol(""))
-        print(io, "\n in ", fname, " at ")
-        print(io, inlinedat_file, ":", inlinedat_line)
-    end
+    show(io, frame, full_path=true)
+    n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 function show_backtrace(io::IO, t, set=1:typemax(Int))
@@ -432,8 +406,8 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
 end
 
 function show_backtrace(io::IO, top_function::Symbol, t, set)
-    process_entry(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n) =
-        show_trace_entry(io, lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+    process_entry(last_frame, n) =
+        show_trace_entry(io, last_frame, n)
     process_backtrace(process_entry, top_function, t, set)
 end
 
@@ -445,36 +419,32 @@ end
 
 # process the backtrace, up to (but not including) top_function
 function process_backtrace(process_func::Function, top_function::Symbol, t, set; skipC = true)
-    n = 1
-    lastfile = ""; lastline = -11; lastname = symbol("#");
-    last_inlinedat_file = ""; last_inlinedat_line = -1
-    local fname, file, line
+    n = 0
+    last_frame = StackTraces.UNKNOWN
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i]-1, skipC)
-        if lkup === nothing
+        lkup = StackTraces.lookup(t[i])
+        if lkup === StackTraces.UNKNOWN
             continue
         end
-        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
 
-        if fromC && skipC; continue; end
-        if i == 1 && fname == :error; continue; end
-        if fname == top_function; break; end
+        if lkup.from_c && skipC; continue; end
+        if i == 1 && lkup.func == :error; continue; end
+        if lkup.func == top_function; break; end
         count += 1
         if !in(count, set); continue; end
 
-        if file != lastfile || line != lastline || fname != lastname
-            if lastline != -11
-                process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+        if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+            if n > 0
+                process_func(last_frame, n)
             end
             n = 1
-            lastfile = file; lastline = line; lastname = fname;
-            last_inlinedat_file = inlinedat_file; last_inlinedat_line = inlinedat_line;
+            last_frame = lkup
         else
             n += 1
         end
     end
-    if n > 1 || lastline != -11
-        process_func(lastname, lastfile, lastline, last_inlinedat_file, last_inlinedat_line, n)
+    if n > 0
+        process_func(last_frame, n)
     end
 end

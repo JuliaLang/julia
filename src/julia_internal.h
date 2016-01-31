@@ -288,7 +288,7 @@ size_t rec_backtrace_ctx_dwarf(intptr_t *data, size_t maxsize, bt_context_t ctx)
 JL_DLLEXPORT void jl_raise_debugger(void);
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line,
+                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
 JL_DLLEXPORT void jl_gdblookup(intptr_t ip);
 
