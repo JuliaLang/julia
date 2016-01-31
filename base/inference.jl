@@ -19,7 +19,7 @@ end
 
 const NF = NotFound()
 
-type StaticVarInfo
+type VarInfo
     sp::SimpleVector     # static parameters
     vars::Array{Any,1}   # names of args and locals
     gensym_types::Array{Any,1} # types of the GenSym's in this function
@@ -29,7 +29,7 @@ type StaticVarInfo
     mod::Module
 end
 
-function StaticVarInfo(linfo::LambdaStaticData, ast=linfo.ast)
+function VarInfo(linfo::LambdaStaticData, ast=linfo.ast)
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
     end
@@ -53,7 +53,7 @@ function StaticVarInfo(linfo::LambdaStaticData, ast=linfo.ast)
     else
         sp = svec()
     end
-    StaticVarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
+    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
 end
 
 type VarState
@@ -71,14 +71,14 @@ type CallStack
     cycleid::Int
     result
     prev::Union{EmptyCallStack,CallStack}
-    sv::StaticVarInfo
+    sv::VarInfo
 
     CallStack(ast, types::ANY, prev) = new(ast, types, false, 0, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
 
-function is_static_parameter(sv::StaticVarInfo, s::Symbol)
+function is_static_parameter(sv::VarInfo, s::Symbol)
     sp = sv.sp
     for i=1:2:length(sp)
         if is(sp[i],s)
@@ -97,9 +97,9 @@ function contains_is(itr, x::ANY)
     return false
 end
 
-is_local(sv::StaticVarInfo, s::GenSym) = true
-is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
-is_global(sv::StaticVarInfo, s::Symbol) = !is_local(sv,s) && !is_static_parameter(sv,s)
+is_local(sv::VarInfo, s::GenSym) = true
+is_local(sv::VarInfo, s::Symbol) = contains_is(sv.vars, s)
+is_global(sv::VarInfo, s::Symbol) = !is_local(sv,s) && !is_static_parameter(sv,s)
 
 function _iisconst(s::Symbol, sv)
     m = sv.mod
@@ -116,7 +116,7 @@ _ieval(x::ANY, sv) =
           sv.mod, x, svec(), svec())
 _iisdefined(x::ANY, sv) = isdefined(sv.mod, x)
 
-_topmod(sv::StaticVarInfo) = _topmod(sv.mod)
+_topmod(sv::VarInfo) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
 function istopfunction(topmod, f::ANY, sym)
@@ -568,7 +568,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
     return tf[3](argtypes...)
 end
 
-function isconstantref(f::ANY, sv::StaticVarInfo)
+function isconstantref(f::ANY, sv::VarInfo)
     if isa(f,TopNode)
         m = _topmod(sv)
         return isconst(m, f.name) && isdefined(m, f.name) && f
@@ -862,7 +862,7 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
     return abstract_call(af, (), Any[type_typeof(af), Vararg{Any}], vtypes, sv, ())
 end
 
-function isconstantargs(args, argtypes::Vector{Any}, sv::StaticVarInfo)
+function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
     if isempty(argtypes)
         return true
     end
@@ -881,7 +881,7 @@ function isconstantargs(args, argtypes::Vector{Any}, sv::StaticVarInfo)
     return true
 end
 
-function _ieval_args(args, argtypes::Vector{Any}, sv::StaticVarInfo)
+function _ieval_args(args, argtypes::Vector{Any}, sv::VarInfo)
     c = cell(length(args)-1)
     for i = 2:length(argtypes)
         t = argtypes[i]
@@ -955,7 +955,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
 end
 
 
-function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes, sv::StaticVarInfo, e)
+function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes, sv::VarInfo, e)
     t = pure_eval_call(f, fargs, argtypes, sv, e)
     t !== false && return t
     if is(f,_apply) && length(fargs)>1
@@ -1013,7 +1013,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes, sv::StaticV
     return abstract_call_gf(f, fargs, Tuple{argtypes...}, e)
 end
 
-function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
+function abstract_eval_call(e, vtypes, sv::VarInfo)
     argtypes = Any[abstract_eval(a, vtypes, sv) for a in e.args]
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
@@ -1050,7 +1050,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     return abstract_call(f, e.args, argtypes, vtypes, sv, e)
 end
 
-function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
+function abstract_eval(e::ANY, vtypes, sv::VarInfo)
     if isa(e,QuoteNode)
         v = (e::QuoteNode).value
         return type_typeof(v)
@@ -1160,7 +1160,7 @@ function abstract_eval_global(M::Module, s::Symbol)
     return Any
 end
 
-function abstract_eval_gensym(s::GenSym, sv::StaticVarInfo)
+function abstract_eval_gensym(s::GenSym, sv::VarInfo)
     typ = sv.gensym_types[s.id+1]
     if typ === NF
         return Bottom
@@ -1168,7 +1168,7 @@ function abstract_eval_gensym(s::GenSym, sv::StaticVarInfo)
     return typ
 end
 
-function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo)
+function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::VarInfo)
     t = get(vtypes,s,NF)
     if is(t,NF)
         sp = sv.sp
@@ -1214,7 +1214,7 @@ function getindex(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
+function abstract_interpret(e::ANY, vtypes, sv::VarInfo)
     !isa(e,Expr) && return vtypes
     # handle assignment
     if is(e.head,:(=))
@@ -1376,7 +1376,7 @@ function find_gensym_uses(e::ANY, uses, line)
     end
 end
 
-function newvar!(sv::StaticVarInfo, typ)
+function newvar!(sv::VarInfo, typ)
     id = length(sv.gensym_types)
     push!(sv.gensym_types, typ)
     return GenSym(id)
@@ -1573,10 +1573,10 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
         ast = linfo.ast
     end
 
-    sv = StaticVarInfo(linfo, ast)
+    sv = VarInfo(linfo, ast)
 
     if length(linfo.sparam_vals) > 0
-        # handled by StaticVarInfo constructor
+        # handled by VarInfo constructor
     else
         sp = Any[]
         for i = 1:2:length(sparams)
@@ -1893,7 +1893,7 @@ function record_var_type(e::Symbol, t::ANY, decls)
     end
 end
 
-function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, undefs)
+function eval_annotate(e::ANY, vtypes::ANY, sv::VarInfo, decls, undefs)
     if isa(e, Symbol)
         e = e::Symbol
 
@@ -2087,7 +2087,7 @@ end
 
 const emptydict = ObjectIdDict()
 
-function exprtype(x::ANY, sv::StaticVarInfo)
+function exprtype(x::ANY, sv::VarInfo)
     if isa(x,Expr)
         return (x::Expr).typ
     elseif isa(x,SymbolNode)
@@ -2254,7 +2254,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 # `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
-function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::StaticVarInfo, enclosing_ast::Expr)
+function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing_ast::Expr)
     local linfo,
         metharg::Type,
         atypes = atype.parameters,
@@ -2802,7 +2802,7 @@ function mk_getfield(texpr, i, T)
     e
 end
 
-function mk_tuplecall(args, sv::StaticVarInfo)
+function mk_tuplecall(args, sv::VarInfo)
     e = Expr(:call, top_tuple, args...)
     e.typ = tuple_tfunc(Tuple{Any[exprtype(x,sv) for x in args]...})
     e
@@ -3200,7 +3200,7 @@ symequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 symequal(x::GenSym    , y::GenSym)     = is(x.id,y.id)
 symequal(x::ANY       , y::ANY)        = is(x,y)
 
-function occurs_outside_getfield(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::Int)
+function occurs_outside_getfield(e::ANY, sym::ANY, sv::VarInfo, tuplen::Int)
     if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
         return true
     end
@@ -3279,7 +3279,7 @@ function getfield_elim_pass(e::Expr, sv)
 end
 
 # eliminate allocation of unnecessary tuples
-function tuple_elim_pass(ast::Expr, sv::StaticVarInfo)
+function tuple_elim_pass(ast::Expr, sv::VarInfo)
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
