@@ -164,3 +164,15 @@ end
 A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
+
+### Generic promotion methods and fallbacks
+for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal)
+    for (f,g) in ((:expm, :expm!), (:logm, :logm), (:sqrtm, :sqrtm))
+        @eval begin
+            function ($f)(A::($matrixtype))
+                ($g)(full(A))
+            end
+        end
+    end
+end
+
