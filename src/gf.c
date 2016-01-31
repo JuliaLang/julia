@@ -1812,7 +1812,7 @@ static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
 void jl_compile_all(void)
 {
     // this "found" array will contain
-    // LambdaStaticDatas that need to be compiled
+    // LambdaInfos that need to be compiled
     // and (generic-function, method) pairs that may be optimized (and need to be compiled)
     jl_array_t *m = jl_alloc_cell_1d(0);
     JL_GC_PUSH1(&m);
@@ -2239,7 +2239,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 // return a cell array of svecs, each describing a method match:
 // {svec(t, spvals, li, cenv), ...}
 // t is the intersection of the type argument and the method signature,
-// spvals is any matched static parameter values, li is the LambdaStaticData,
+// spvals is any matched static parameter values, li is the LambdaInfo,
 // and cenv is the closure environment or ().
 //
 // lim is the max # of methods to return. if there are more return jl_false.

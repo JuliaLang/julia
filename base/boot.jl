@@ -59,7 +59,7 @@
 #    name::Symbol
 #end
 
-#type LambdaStaticData
+#type LambdaInfo
 #    ast::Expr
 #    sparams::Tuple
 #    tfunc
@@ -125,7 +125,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, Builtin, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
+    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,

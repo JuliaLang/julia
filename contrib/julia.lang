@@ -288,7 +288,7 @@
       <keyword>InetAddr</keyword>
       <keyword>IpAddr|IPv[46]</keyword>
       <keyword>(Key|Value)Iterator</keyword>
-      <keyword>LambdaStaticData</keyword>
+      <keyword>LambdaInfo</keyword>
       <keyword>LocalProcess</keyword>
       <keyword>Long(Expr|Symbol|Tuple)</keyword>
       <keyword>MersenneTwister</keyword>

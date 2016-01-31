@@ -107,7 +107,7 @@ typedef enum _DUMP_MODES {
     MODE_INVALID = 0,
 
     // jl_uncompress_ast
-    // compressing / decompressing an AST Expr in a LambdaStaticData
+    // compressing / decompressing an AST Expr in a LambdaInfo
     MODE_AST,
 
     // jl_restore_system_image
