@@ -157,11 +157,11 @@ static jl_value_t *ti_run_fun(jl_svec_t *args)
 }
 
 
-#ifdef JULIA_ENABLE_THREADING
-
 // lock for code generation
-JL_DEFINE_MUTEX(codegen);
-JL_DEFINE_MUTEX(typecache);
+JL_DEFINE_MUTEX(codegen)
+JL_DEFINE_MUTEX(typecache)
+
+#ifdef JULIA_ENABLE_THREADING
 
 // thread heap
 struct _jl_thread_heap_t **jl_all_heaps;
