@@ -34,15 +34,15 @@ h_noinlined() = g_noinlined()
 
 function foundfunc(bt, funcname)
     for b in bt
-        lkup = Profile.lookup(b)
+        lkup = StackTraces.lookup(b)
         if lkup.func == funcname
             return true
         end
     end
     false
 end
-@test !foundfunc(h_inlined(), "g_inlined")
-@test foundfunc(h_noinlined(), "g_noinlined")
+@test !foundfunc(h_inlined(), :g_inlined)
+@test foundfunc(h_noinlined(), :g_noinlined)
 
 using Base.pushmeta!, Base.popmeta!
 
