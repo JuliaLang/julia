@@ -933,6 +933,9 @@ end
 @test 2.0^63 != UInt64(2)^63+1
 
 @test typemax(UInt64) != 2.0^64
+# issue #9085
+f9085() = typemax(UInt64) != 2.0^64
+@test f9085()
 
 @test typemax(UInt64) < Float64(typemax(UInt64))
 @test typemax(Int64) < Float64(typemax(Int64))
