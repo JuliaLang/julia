@@ -208,7 +208,7 @@ function show(io::IO, m::Module)
     end
 end
 
-function show(io::IO, l::LambdaStaticData)
+function show(io::IO, l::LambdaInfo)
     print(io, "AST(")
     show(io, uncompressed_ast(l))
     print(io, ")")

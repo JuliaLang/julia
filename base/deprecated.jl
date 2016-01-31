@@ -988,3 +988,5 @@ const call = @eval function(f, args...; kw...)
     f(args...; kw...)
 end
 export call
+
+@deprecate_binding LambdaStaticData LambdaInfo
