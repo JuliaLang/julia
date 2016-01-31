@@ -28,7 +28,7 @@ The following keyword arguments are supported:
 | `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
 | `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `tol`: tolerance (``tol \\ge 0.0`` defaults to `DLAMCH('EPS')`)
 * `maxiter`: Maximum number of iterations (default = 300)
 * `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
@@ -92,7 +92,7 @@ The following keyword arguments are supported:
 | `:SI`   | eigenvalues of smallest imaginary part (nonsymmetric or complex `A` only)                                                 |
 | `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
-* `tol`: tolerance (``tol \\le 0.0`` defaults to `DLAMCH('EPS')`)
+* `tol`: tolerance (``tol \\ge 0.0`` defaults to `DLAMCH('EPS')`)
 * `maxiter`: Maximum number of iterations (default = 300)
 * `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
