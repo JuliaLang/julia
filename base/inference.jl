@@ -666,6 +666,11 @@ let stagedcache=Dict{Any,Any}()
     end
 end
 
+function pessimistic_nomatch()
+    opt = JLOptions()
+    opt.outputbc != C_NULL || opt.outputo != C_NULL || opt.outputji != C_NULL
+end
+
 function abstract_call_gf(f::ANY, fargs, argtype::ANY, e)
     argtypes = argtype.parameters
     tm = _topmod((inference_stack::CallStack).sv)  # TODO pass in sv instead
@@ -715,7 +720,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
         # TODO: it would be nice to return Bottom here, but during bootstrap we
         # often compile code that calls methods not defined yet, so it is much
         # safer just to fall back on dynamic dispatch.
-        return Any
+        return pessimistic_nomatch() ? Any : Bottom
     end
     for (m::SimpleVector) in x
         sig = m[1]
@@ -948,7 +953,6 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
     return type_typeof(v)
 end
 
-
 function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes, sv::VarInfo, e)
     t = pure_eval_call(f, fargs, argtypes, sv, e)
     t !== false && return t
@@ -995,6 +999,8 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes, sv::VarInfo
         if isa(ft,DataType) && !ft.abstract
             if isdefined(ft.name.mt, :kwsorter)
                 return typeof(ft.name.mt.kwsorter)
+            elseif !pessimistic_nomatch()
+                return Bottom
             end
         end
         return Any
