@@ -40,7 +40,6 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
 # Link to the LLVM shared library
-# NOTE: USE_LLVM_SHLIB doesn't work with LLVM_USE_CMAKE on LLVM <=3.7.x (#24157)
 USE_LLVM_SHLIB := 0
 
 ## Settings for various Intel tools
@@ -188,6 +187,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
+LLVM_USE_CMAKE := 0
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
@@ -200,6 +200,7 @@ BUILD_LLDB := 0
 
 # Path to cmake (override in Make.user if needed)
 CMAKE ?= cmake
+CMAKE_GENERATOR ?= make
 
 # Point pkg-config to only look at our libraries
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
