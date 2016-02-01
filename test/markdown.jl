@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, Table, Code, LaTeX, Footnote
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: writemime
 
 # Basics
@@ -235,6 +235,34 @@ let out =
     * list2
     """
     @test sprint(io -> writemime(io, "text/rst", book)) == out
+end
+
+# rst rendering
+
+for (input, output) in (
+        md"foo *bar* baz"     => "foo *bar* baz\n",
+        md"something ***"     => "something ***\n",
+        md"# h1## "           => "h1##\n****\n\n",
+        md"## h2 ### "        => "h2\n==\n\n",
+        md"###### h6"         => "h6\n..\n\n",
+        md"####### h7"        => "####### h7\n",
+        md"   >"              => "    \n\n",
+        md"1. Hello"          => "1. Hello\n",
+        md"* World"           => "* World\n",
+        md"``x + y``"         => ":math:`x + y`\n",
+        md"# title *blah*"    => "title *blah*\n************\n\n",
+        md"## title *blah*"   => "title *blah*\n============\n\n",
+        md"[`x`](:func:`x`)"  => ":func:`x`\n",
+        md"[`x`](:obj:`x`)"   => ":obj:`x`\n",
+        md"[`x`](:ref:`x`)"   => ":ref:`x`\n",
+        md"[`x`](:exc:`x`)"   => ":exc:`x`\n",
+        md"[`x`](:class:`x`)" => ":class:`x`\n",
+        md"[`x`](:const:`x`)" => ":const:`x`\n",
+        md"[`x`](:data:`x`)"  => ":data:`x`\n",
+        md"[`x`](:???:`x`)"   => "```x`` <:???:`x`>`_\n",
+        md"[x](y)"            => "`x <y>`_\n",
+    )
+    @test rst(input) == output
 end
 
 # Interpolation / Custom types
