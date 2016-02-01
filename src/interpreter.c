@@ -55,14 +55,30 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
 }
 
 static jl_value_t *do_call(jl_value_t **args, size_t nargs,
-                           jl_value_t **locals, size_t nl, size_t ngensym)
+                           jl_value_t **locals, size_t nl, size_t ngensym,
+                           int interpreted)
 {
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs);
     size_t i;
     for(i=0; i < nargs; i++)
         argv[i] = eval(args[i], locals, nl, ngensym);
-    jl_value_t *result = jl_apply_generic(argv, nargs);
+    jl_value_t *result;
+    if (!interpreted) {
+        result = jl_apply_generic(argv, nargs);
+    } else {
+        jl_methtable_t *mt = jl_gf_mtable(argv[0]);
+        jl_lambda_info_t *mfunc = jl_method_table_assoc_exact(mt, argv, nargs);
+        if (!mfunc) {
+            jl_tupletype_t *tt = arg_type_tuple(args, nargs);
+            mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
+        }
+        if (!mfunc) {
+            jl_no_method_error((jl_function_t*)argv[0], args, nargs);
+            __builtin_unreachable();
+        }
+        result = jl_interpret_toplevel_thunk_with(mfunc, args, nargs);
+    }
     JL_GC_POP();
     return result;
 }
@@ -118,7 +134,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }
-
+int jl_interpret_calls = 0;
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     if (jl_is_symbol(e)) {
@@ -182,7 +198,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym) {
-        return do_call(args, nargs, locals, nl, ngensym);
+        return do_call(args, nargs, locals, nl, ngensym, jl_interpret_calls);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];

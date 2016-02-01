@@ -178,7 +178,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
   there tends to be lots of variation there. The type of the 0th argument
   (the function) is always the same for most functions.
 */
-static jl_lambda_info_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt, jl_tupletype_t *types)
+jl_lambda_info_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt, jl_tupletype_t *types)
 {
     // called object is the primary key for constructors, otherwise first argument
     int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
@@ -214,7 +214,7 @@ static jl_lambda_info_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     return NULL;
 }
 
-static jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t **args, size_t n)
+jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t **args, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
     int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
@@ -971,7 +971,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     return func;
 }
 
-static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact)
+jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = jl_nparams(tt);
