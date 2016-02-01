@@ -2595,13 +2595,13 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chkside(side)
             chkstride1(A, C)
             m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
-            nA  = size(A, 2)
+            mA, nA  = size(A)
             k   = length(tau)
             if side == 'L' && m != nA
                 throw(DimensionMismatch("For a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
             end
-            if side == 'R' && n != nA
-                throw(DimensionMismatch("For a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $nA"))
+            if side == 'R' && n != mA
+                throw(DimensionMismatch("For a right-sided multiplication, the second dimension of C, $n, must equal the first dimension of A, $mA"))
             end
             if side == 'L' && k > m
                 throw(DimensionMismatch("Invalid number of reflectors: k = $k should be <= m = $m"))
