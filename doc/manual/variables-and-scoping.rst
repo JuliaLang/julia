@@ -94,7 +94,7 @@ changed within their global scope and not from an outside module. ::
             # through a qualified access
     import A # makes module A available
     d = A.a
-    # A.a = 2 # would error with: "ERROR: type Module has no field a"
+    # A.a = 2 # would error with: "ERROR: cannot assign variables in other modules"
     end
 
 Note that the interactive prompt (aka REPL) is in the global scope of
@@ -485,7 +485,7 @@ iteration variables::
 
     x = 0
     [ x for x=1:3 ]
-    X  # here still equal to 0
+    x  # here still equal to 0
 
 Constants
 ---------
