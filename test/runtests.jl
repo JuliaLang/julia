@@ -162,7 +162,7 @@ end
 
 extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 @compat withenv("PATH" => extrapath * ENV["PATH"]) do
-    @test readall(pipeline(`echo hello`, `sort`)) == "hello\n"
+    @test readstring(pipeline(`echo hello`, `sort`)) == "hello\n"
     @test success(pipeline(`true`, `true`))
 end
 
@@ -666,10 +666,10 @@ mktempdir() do dir
 
         for text in [
             old_text,
-            UTF8String(['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
-            UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
-            UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
-            UTF8String(['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
+            UTF8String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
+            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
+            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
+            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
         ]
 
             write(filename, text)
