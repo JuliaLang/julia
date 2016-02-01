@@ -10,10 +10,10 @@ static void addOptimizationPasses(T *PM)
     // LLVM 3.7 BUG: ASAN pass doesn't properly initialize its dependencies
     initializeTargetLibraryInfoWrapperPassPass(*PassRegistry::getPassRegistry());
 #   endif
-    FPM->add(createAddressSanitizerFunctionPass());
+    PM->add(createAddressSanitizerFunctionPass());
 #   endif
 #   if __has_feature(memory_sanitizer)
-    FPM->add(llvm::createMemorySanitizerPass(true));
+    PM->add(llvm::createMemorySanitizerPass(true));
 #   endif
 #endif
 #ifdef LLVM37
@@ -47,16 +47,16 @@ static void addOptimizationPasses(T *PM)
     PM->add(createJumpThreadingPass());        // Thread jumps.
     // NOTE: CFG simp passes after this point seem to hurt native codegen.
     // See issue #6112. Should be re-evaluated when we switch to MCJIT.
-    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Combine silly seq's
 #endif
 
-    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
     PM->add(createReassociatePass());          // Reassociate expressions
 
     // this has the potential to make some things a bit slower
-    //FPM->add(createBBVectorizePass());
+    //PM->add(createBBVectorizePass());
 
     PM->add(createEarlyCSEPass()); //// ****
 
@@ -80,13 +80,13 @@ static void addOptimizationPasses(T *PM)
 #if !defined(LLVM35) && !defined(INSTCOMBINE_BUG)
     PM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
-    //FPM->add(createLoopStrengthReducePass());   // (jwb added)
+    //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Clean up after the unroller
 #endif
     PM->add(createGVNPass());                  // Remove redundancies
-    //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset
+    //PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
     PM->add(createSCCPPass());                 // Constant prop with SCCP
 
     // Run instcombine after redundancy elimination to exploit opportunities
@@ -112,7 +112,7 @@ static void addOptimizationPasses(T *PM)
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
-    //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
 #ifdef USE_ORCJIT
