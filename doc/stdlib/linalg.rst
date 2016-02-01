@@ -1125,19 +1125,29 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma B )^{-1}B = v\nu` |
    +-----------------+------------------------------------+--------------------------------------+
 
-.. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
+.. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> ([left_sv,] s, [right_sv,] nconv, niter, nmult, resid)
 
    .. Docstring generated from Julia source
 
-   ``svds`` computes largest singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations. Uses :func:`eigs` underneath.
+   Computes the largest singular values ``s`` of ``A`` using implicitly restarted Lanczos iterations derived from :func:`eigs`\ .
 
-   Inputs are:
+   **Inputs**
 
-   * ``A``\ : Linear operator. It can either subtype of ``AbstractArray`` (e.g., sparse matrix) or   duck typed. For duck typing ``A`` has to support ``size(A)``\ , ``eltype(A)``\ , ``A * vector`` and   ``A' * vector``\ .
+   * ``A``\ : Linear operator whose singular values are desired. ``A`` may be represented   as a subtype of ``AbstractArray``\ , e.g., a sparse matrix, or any other type   supporting the four methods ``size(A)``\ , ``eltype(A)``\ , ``A * vector``\ , and   ``A' * vector``\ .
    * ``nsv``\ : Number of singular values.
-   * ``ritzvec``\ : Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``\ ,   default is ``true``\ . If ``false`` the singular vectors are omitted from the output.
+   * ``ritzvec``\ : If ``true``\ , return the left and right singular vectors ``left_sv`` and ``right_sv``\ .    If ``false``\ , omit the singular vectors. Default: ``true``\ .
    * ``tol``\ : tolerance, see :func:`eigs`\ .
    * ``maxiter``\ : Maximum number of iterations, see :func:`eigs`\ .
+
+   **Outputs**
+
+   * ``left_sv``\ : Left singular vectors (only if ``ritzvec = true``\ ).
+   * ``s``\ : A vector of length ``nsv`` containing the requested singular values.
+   * ``right_sv``\ : Right singular vectors (only if ``ritzvec = true``\ ).
+   * ``nconv``\ : Number of converged singular values.
+   * ``niter``\ : Number of iterations.
+   * ``nmult``\ : Number of matrix–vector products used.
+   * ``resid``\ : Final residual vector.
 
    **Example**
 
@@ -1145,6 +1155,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        X = sprand(10, 5, 0.2)
        svds(X, nsv = 2)
+
+   **Implementation note**
+
+   ``svds(A)`` is formally equivalent to calling ``eigs`` to perform implicitly restarted Lanczos tridiagonalization on the Hermitian matrix :math:`\begin{pmatrix} 0 & A^\prime \\ A & 0 \end{pmatrix}`\ , whose eigenvalues are plus and minus the singular values of :math:`A`\ .
 
 .. function:: peakflops(n; parallel=false)
 
