@@ -360,7 +360,7 @@ function warn(io::IO, msg...;
         show_backtrace(io, bt)
     end
     if filename !== nothing
-        print(io, "\nwhile loading $filename, in expression starting on line $lineno")
+        print(io, "\nin expression starting at $filename:$lineno")
     end
     println(io)
     return
