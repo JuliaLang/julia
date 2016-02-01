@@ -1285,7 +1285,7 @@ for (mmname, smname, elty) in
             m, n = size(B)
             k = checksquare(A)
             if k != (side == 'L' ? m : n)
-                throw(DimensionMismatch("size of A is $n, size(B)=($m,$n) and transa='$transa'"))
+                throw(DimensionMismatch("size of A is ($k,$k), size of B is ($m,$n), side is $side, and transa='$transa'"))
             end
             ccall((@blasfunc($smname), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8},
