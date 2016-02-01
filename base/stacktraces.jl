@@ -142,9 +142,13 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if isdefined(linfo, 8)
             params = linfo.(#=specTypes=#8).parameters
             ft = params[1]
-            if ft <: Function && isdefined(ft.name.module, ft.name.name) &&
-                    ft == getfield(ft.name.module, ft.name.name)
+            if ft <: Function && isempty(ft.parameters) &&
+                    isdefined(ft.name.module, ft.name.mt.name) &&
+                    ft == typeof(getfield(ft.name.module, ft.name.mt.name))
                 print(io, ft.name.mt.name)
+            elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+                f = ft.parameters[1]
+                print(io, f)
             else
                 print(io, "(::", ft, ")")
             end
