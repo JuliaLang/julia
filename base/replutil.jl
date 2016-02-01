@@ -160,27 +160,28 @@ function showerror(io::IO, ex::MethodError)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
-    if isa(ex.f, Tuple)
-        f = ex.f[1]
-        print(io, "<inline> ")
-    else
-        f = ex.f
-    end
-    name = typeof(f).name.mt.name
+    f = ex.f
+    ft = typeof(f)
+    name = ft.name.mt.name
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
         # See #13033
         T = striptype(ex.args[1])
         if T == nothing
-            print(io, "First argument to `convert` must be a Type, got $(ex.args[1])")
+            print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
         else
-            print(io, "Cannot `convert` an object of type $(arg_types_param[2]) to an object of type $T")
+            print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
         end
     else
-        if isa(f, DataType)
-            print(io, "`$(f)` has no method matching $(f)(")
+        if ft <: Function && isempty(ft.parameters) &&
+                isdefined(ft.name.module, ft.name.name) &&
+                ft == getfield(ft.name.module, ft.name.name)
+            print(io, "`", name, "` has no method matching ", name)
+        elseif isa(f, Type)
+            print(io, "`", f, "` has no method matching ", f)
         else
-            print(io, "`$(name)` has no method matching $(name)(")
+            print(io, "`(::", ft, ")` has no method matching (::", ft, ")")
         end
+        print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
             print(io, "::$typ")
             i == length(arg_types_param) || print(io, ", ")
@@ -192,7 +193,7 @@ function showerror(io::IO, ex::MethodError)
         basef = eval(Base, name)
         if basef !== ex.f && method_exists(basef, arg_types)
             println(io)
-            print(io, "you may have intended to import Base.$(name)")
+            print(io, "you may have intended to import Base.", name)
         end
     end
     if !is_arg_types
@@ -212,7 +213,7 @@ function showerror(io::IO, ex::MethodError)
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if (f == Base.convert && !isempty(arg_types_param) && !is_arg_types &&
+    if (f === Base.convert && !isempty(arg_types_param) && !is_arg_types &&
         isa(arg_types_param[1], DataType) &&
         arg_types_param[1].name === Type.name)
         construct_type = arg_types_param[1].parameters[1]

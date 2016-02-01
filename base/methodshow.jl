@@ -46,9 +46,9 @@ function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
-    if isa(ft,DataType) && (isempty(ft.parameters) && nfields(ft)==0 &&
-                            isdefined(ft.name.module,ft.name.name) &&
-                            ft == getfield(ft.name.module,ft.name.name))
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.name) &&
+            ft == getfield(ft.name.module, ft.name.name)
         print(io, ft.name.mt.name)
     else
         print(io, "(", d1[1], "::", d1[2], ")")
@@ -143,9 +143,9 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
-    if isa(ft,DataType) && (isempty(ft.parameters) && nfields(ft)==0 &&
-                            isdefined(ft.name.module,ft.name.name) &&
-                            ft == getfield(ft.name.module,ft.name.name))
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.name) &&
+            ft == getfield(ft.name.module, ft.name.name)
         print(io, ft.name.mt.name)
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
