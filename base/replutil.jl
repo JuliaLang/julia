@@ -5,10 +5,14 @@ writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
 writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
-    mt = typeof(f).name.mt
+    ft = typeof(f)
+    mt = ft.name.mt
+    name = mt.name
+    isself = isdefined(ft.name.module, name) &&
+             ft == typeof(getfield(ft.name.module, name))
     n = length(mt)
     m = n==1 ? "method" : "methods"
-    ns = string(mt.name)
+    ns = isself ? string(name) : string("(::", name, ")")
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, ns, " (", what, " with $n $m)")
 end
@@ -173,13 +177,13 @@ function showerror(io::IO, ex::MethodError)
         end
     else
         if ft <: Function && isempty(ft.parameters) &&
-                isdefined(ft.name.module, ft.name.name) &&
-                ft == getfield(ft.name.module, ft.name.name)
-            print(io, "`", name, "` has no method matching ", name)
+                isdefined(ft.name.module, name) &&
+                ft == typeof(getfield(ft.name.module, name))
+            print(io, "no method matching ", name)
         elseif isa(f, Type)
-            print(io, "`", f, "` has no method matching ", f)
+            print(io, "no method matching ", f)
         else
-            print(io, "`(::", ft, ")` has no method matching (::", ft, ")")
+            print(io, "no method matching (::", ft, ")")
         end
         print(io, "(")
         for (i, typ) in enumerate(arg_types_param)
