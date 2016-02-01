@@ -6,9 +6,6 @@
 
 module ReflectionTest
 using Base.Test
-# use versions of these functions that doesn't have static-parameters
-# so that code_llvm can handle them
-plus(a, b) = +(a, b)
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -29,13 +26,11 @@ end
 function test_code_reflections(tester, freflect)
     test_code_reflection(freflect, ismatch,
                          Tuple{Regex, AbstractString}, tester) # abstract type
-    test_code_reflection(freflect, plus, Tuple{Int, Int}, tester) # leaftype signature
-    test_code_reflection(freflect, plus,
+    test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
+    test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
     test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
-    if tester == test_ast_reflection
-        test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
-    end
+    test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
 end
 
 println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
@@ -43,12 +38,6 @@ test_code_reflections(test_ast_reflection, code_lowered)
 test_code_reflections(test_ast_reflection, code_typed)
 test_code_reflections(test_bin_reflection, code_llvm)
 test_code_reflections(test_bin_reflection, code_native)
-
-@test_throws Exception code_native(+, Int, Int)
-@test_throws Exception code_native(+, Array{Float32}, Array{Float32})
-
-@test_throws Exception code_llvm(+, Int, Int)
-@test_throws Exception code_llvm(+, Array{Float32}, Array{Float32})
 end
 
 # code_warntype
