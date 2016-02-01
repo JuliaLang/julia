@@ -92,15 +92,11 @@ big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
 
 #Singular values
 svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
-function svd{T<:BlasReal}(M::Bidiagonal{T})
-    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', copy(M.dv), copy(M.ev))
-    return U, d, Vt'
-end
-function svdfact!(M::Bidiagonal, thin::Bool=true)
+function svdfact!{T<:BlasReal}(M::Bidiagonal{T}; thin::Bool=true)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-svdfact(M::Bidiagonal, thin::Bool=true) = svdfact!(copy(M),thin)
+svdfact(M::Bidiagonal; thin::Bool=true) = svdfact!(copy(M),thin=thin)
 
 ####################
 # Generic routines #
