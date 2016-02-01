@@ -105,16 +105,10 @@ function _iisconst(s::Symbol, sv)
     m = sv.mod
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
-_iisconst(s::SymbolNode, sv) = _iisconst(s.name, sv)
-_iisconst(s::TopNode, sv) = isconst(_topmod(sv.mod), s.name)
-_iisconst(s::GlobalRef, sv) = isconst(s.mod, s.name)
-_iisconst(x::Expr, sv) = false
-_iisconst(x::ANY, sv) = true
 
 _ieval(x::ANY, sv) =
     ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Any, Any),
           sv.mod, x, svec(), svec())
-_iisdefined(x::ANY, sv) = isdefined(sv.mod, x)
 
 _topmod(sv::VarInfo) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
@@ -1986,17 +1980,13 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY, a
 
     # add declarations for variables that are always the same type
     for vi in ast.args[2][1]::Array{Any,1}
-        if (vi[3]&4)==0
-            vi[2] = get(decls, vi[1], vi[2])
-        end
+        vi[2] = get(decls, vi[1], vi[2])
         if haskey(undefs, vi[1])
             vi[3] |= 32
         end
     end
     for vi in ast.args[2][2]::Array{Any,1}
-        if (vi[3]&4)==0
-            vi[2] = get(decls, vi[1], vi[2])
-        end
+        vi[2] = get(decls, vi[1], vi[2])
         if haskey(undefs, vi[1])
             vi[3] |= 32
         end
