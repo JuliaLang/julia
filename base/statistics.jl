@@ -98,7 +98,7 @@ varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
 end
-call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+(f::CentralizedAbs2Fun)(x) = abs2(x - f.m)
 centralize_sumabs2(A::AbstractArray, m::Number) =
     mapreduce(CentralizedAbs2Fun(m), AddFun(), A)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =

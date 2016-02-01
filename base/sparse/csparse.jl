@@ -333,13 +333,13 @@ end
 
 
 immutable DropTolFun <: Func{4} end
-call(::DropTolFun, i,j,x,other) = abs(x)>other
+(::DropTolFun)(i,j,x,other) = abs(x)>other
 immutable DropZerosFun <: Func{4} end
-call(::DropZerosFun, i,j,x,other) = x!=0
+(::DropZerosFun)(i,j,x,other) = x!=0
 immutable TriuFun <: Func{4} end
-call(::TriuFun, i,j,x,other) = j>=i + other
+(::TriuFun)(i,j,x,other) = j>=i + other
 immutable TrilFun <: Func{4} end
-call(::TrilFun, i,j,x,other) = i>=j - other
+(::TrilFun)(i,j,x,other) = i>=j - other
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, DropTolFun(), tol)
 dropzeros!(A::SparseMatrixCSC) = fkeep!(A, DropZerosFun(), nothing)

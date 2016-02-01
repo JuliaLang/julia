@@ -454,10 +454,9 @@ end
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
 
-    @eval function call{K,inplace,N}(::Type{cFFTWPlan{$Tc,K,inplace,N}},
-                                     X::StridedArray{$Tc,N},
-                                     Y::StridedArray{$Tc,N},
-                                     region, flags::Integer, timelimit::Real)
+    @eval function (::Type{cFFTWPlan{$Tc,K,inplace,N}}){K,inplace,N}(X::StridedArray{$Tc,N},
+                                                                     Y::StridedArray{$Tc,N},
+                                                                     region, flags::Integer, timelimit::Real)
         direction = K
         set_timelimit($Tr, timelimit)
         R = copy(region)
@@ -475,10 +474,9 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return cFFTWPlan{$Tc,K,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{rFFTWPlan{$Tr,$FORWARD,inplace,N}},
-                                   X::StridedArray{$Tr,N},
-                                   Y::StridedArray{$Tc,N},
-                                   region, flags::Integer, timelimit::Real)
+    @eval function (::Type{rFFTWPlan{$Tr,$FORWARD,inplace,N}}){inplace,N}(X::StridedArray{$Tr,N},
+                                                                          Y::StridedArray{$Tc,N},
+                                                                          region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -496,10 +494,9 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan{$Tr,$FORWARD,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{rFFTWPlan{$Tc,$BACKWARD,inplace,N}},
-                                   X::StridedArray{$Tc,N},
-                                   Y::StridedArray{$Tr,N},
-                                   region, flags::Integer, timelimit::Real)
+    @eval function (::Type{rFFTWPlan{$Tc,$BACKWARD,inplace,N}}){inplace,N}(X::StridedArray{$Tc,N},
+                                                                           Y::StridedArray{$Tr,N},
+                                                                           region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -517,11 +514,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan{$Tc,$BACKWARD,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{r2rFFTWPlan{$Tr,ANY,inplace,N}},
-                                   X::StridedArray{$Tr,N},
-                                   Y::StridedArray{$Tr,N},
-                                   region, kinds, flags::Integer,
-                                   timelimit::Real)
+    @eval function (::Type{r2rFFTWPlan{$Tr,ANY,inplace,N}}){inplace,N}(X::StridedArray{$Tr,N},
+                                                                       Y::StridedArray{$Tr,N},
+                                                                       region, kinds, flags::Integer,
+                                                                       timelimit::Real)
         R = copy(region)
         knd = fix_kinds(region, kinds)
         set_timelimit($Tr, timelimit)
@@ -540,11 +536,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
     end
 
     # support r2r transforms of complex = transforms of real & imag parts
-    @eval function call{inplace,N}(::Type{r2rFFTWPlan{$Tc,ANY,inplace,N}},
-                                   X::StridedArray{$Tc,N},
-                                   Y::StridedArray{$Tc,N},
-                                   region, kinds, flags::Integer,
-                                   timelimit::Real)
+    @eval function (::Type{r2rFFTWPlan{$Tc,ANY,inplace,N}}){inplace,N}(X::StridedArray{$Tc,N},
+                                                                       Y::StridedArray{$Tc,N},
+                                                                       region, kinds, flags::Integer,
+                                                                       timelimit::Real)
         R = copy(region)
         knd = fix_kinds(region, kinds)
         set_timelimit($Tr, timelimit)
