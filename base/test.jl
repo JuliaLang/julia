@@ -240,7 +240,7 @@ end
 function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check the right type of exception was thrown
-        if isa(result.exception, extype)
+        if is(typeof(result.exception), extype)
             testres = Pass(:test_throws, orig_expr, extype, result.exception)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, result.exception)
