@@ -21,8 +21,8 @@ Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
 Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
-call{T}(::Type{Ref{T}}) = RefValue{T}() # Ref{T}()
-call{T}(::Type{Ref{T}}, x) = RefValue{T}(x) # Ref{T}(x)
+(::Type{Ref{T}}){T}() = RefValue{T}() # Ref{T}()
+(::Type{Ref{T}}){T}(x) = RefValue{T}(x) # Ref{T}(x)
 convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
 
 function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
@@ -62,10 +62,10 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 # convert Arrays to pointer arrays for ccall
-function call{P<:Ptr,T<:Ptr}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
+function (::Type{Ref{P}}){P<:Ptr,T<:Ptr}(a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
     return RefArray(a) # effectively a no-op
 end
-function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+function (::Type{Ref{P}}){P<:Ptr,T}(a::Array{T}) # Ref{P<:Ptr}(a::Array)
     if (!isbits(T) && T <: eltype(P))
         # this Array already has the right memory layout for the requested Ref
         return RefArray(a,1,false) # root something, so that this function is type-stable

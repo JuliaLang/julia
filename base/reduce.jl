@@ -400,7 +400,7 @@ function count(pred, itr)
 end
 
 immutable NotEqZero <: Func{1} end
-call(::NotEqZero, x) = x != 0
+(::NotEqZero)(x) = x != 0
 
 """
     countnz(A)

@@ -5,10 +5,10 @@
 import Base: Func, AddFun, MulFun, MaxFun, MinFun, SubFun, sort
 
 immutable ComplexFun <: Func{2} end
-call(::ComplexFun, x::Real, y::Real) = complex(x, y)
+(::ComplexFun)(x::Real, y::Real) = complex(x, y)
 
 immutable DotFun <: Func{2} end
-call(::DotFun, x::Number, y::Number) = conj(x) * y
+(::DotFun)(x::Number, y::Number) = conj(x) * y
 
 typealias UnaryOp Union{Function, Func{1}}
 typealias BinaryOp Union{Function, Func{2}}

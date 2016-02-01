@@ -28,9 +28,9 @@ find_in_node1_path(name) = myid()==1 ?
     find_in_path(name) : remotecall_fetch(find_in_path, 1, name)
 
 # Store list of files and their load time
-package_list = (ByteString=>Float64)[]
+package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
-package_locks = (ByteString=>Any)[]
+package_locks = Dict{ByteString,Any}()
 
 # only broadcast top-level (not nested) requires and reloads
 toplevel_load = true
@@ -43,7 +43,7 @@ function require(name::ByteString)
     path == nothing && error("$name not found")
 
     if myid() == 1 && toplevel_load
-        refs = { @spawnat p _require(path) for p in filter(x->x!=1, procs()) }
+        refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
         _require(path)
         for r in refs; wait(r); end
     else

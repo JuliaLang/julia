@@ -373,7 +373,7 @@ following example::
     2
 
 See also the closures in the examples in the next two sections.
-    
+
 .. _man-let-blocks:
 
 Let Blocks

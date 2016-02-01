@@ -32,7 +32,7 @@ BitArray(dims::Int...) = BitArray(dims)
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}
 
-call(::Type{BitVector}) = BitArray{1}(0)
+(::Type{BitVector})() = BitArray{1}(0)
 
 ## utility functions ##
 
