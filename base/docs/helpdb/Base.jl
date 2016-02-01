@@ -2066,33 +2066,6 @@ Kronecker tensor product of two vectors or two matrices.
 kron
 
 """
-    fieldoffsets(type)
-
-The byte offset of each field of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct type:
-
-```jldoctest
-julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
-
-julia> structinfo(StatStruct)
-12-element Array{Tuple{Int64,Symbol,DataType},1}:
- (0,:device,UInt64)
- (8,:inode,UInt64)
- (16,:mode,UInt64)
- (24,:nlink,Int64)
- (32,:uid,UInt64)
- (40,:gid,UInt64)
- (48,:rdev,UInt64)
- (56,:size,Int64)
- (64,:blksize,Int64)
- (72,:blocks,Int64)
- (80,:mtime,Float64)
- (88,:ctime,Float64)
-```
-"""
-fieldoffsets
-
-"""
     randn([rng], [dims...])
 
 Generate a normally-distributed random number with mean 0 and standard deviation 1.
