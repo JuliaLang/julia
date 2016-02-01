@@ -278,6 +278,49 @@ function svds{T}(A::AbstractMatrix{T}; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
     svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
 end
+
+"""
+    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> ([left_sv,] s, [right_sv,] nconv, niter, nmult, resid)
+
+Computes the largest singular values `s` of `A` using implicitly restarted Lanczos
+iterations derived from [`eigs`](:func:`eigs`).
+
+**Inputs**
+
+* `A`: Linear operator whose singular values are desired. `A` may be represented
+  as a subtype of `AbstractArray`, e.g., a sparse matrix, or any other type
+  supporting the four methods `size(A)`, `eltype(A)`, `A * vector`, and
+  `A' * vector`.
+* `nsv`: Number of singular values.
+* `ritzvec`: If `true`, return the left and right singular vectors `left_sv` and `right_sv`.
+   If `false`, omit the singular vectors. Default: `true`.
+* `tol`: tolerance, see [`eigs`](:func:`eigs`).
+* `maxiter`: Maximum number of iterations, see [`eigs`](:func:`eigs`).
+
+**Outputs**
+
+* `left_sv`: Left singular vectors (only if `ritzvec = true`).
+* `s`: A vector of length `nsv` containing the requested singular values.
+* `right_sv`: Right singular vectors (only if `ritzvec = true`).
+* `nconv`: Number of converged singular values.
+* `niter`: Number of iterations.
+* `nmult`: Number of matrix--vector products used.
+* `resid`: Final residual vector.
+
+**Example**
+
+```julia
+X = sprand(10, 5, 0.2)
+svds(X, nsv = 2)
+```
+
+**Implementation note**
+
+`svds(A)` is formally equivalent to calling `eigs` to perform implicitly restarted
+Lanczos tridiagonalization on the Hermitian matrix
+``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
+plus and minus the singular values of ``A``.
+"""
 svds(A; kwargs...) = _svds(A; kwargs...)
 function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
     if nsv < 1
