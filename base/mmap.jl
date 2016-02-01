@@ -203,9 +203,11 @@ const MS_INVALIDATE = 2
 const MS_SYNC = 4
 
 function sync!{T}(m::Array{T}, flags::Integer=MS_SYNC)
-    @unix_only systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), pointer(m), length(m)*sizeof(T), flags) != 0)
+    offset = rem(UInt(pointer(m)), PAGESIZE)
+    ptr = pointer(m) - offset
+    @unix_only systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m)*sizeof(T), flags) != 0)
     @windows_only systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
-                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), pointer(m), length(m)) == 0)
+                    ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), ptr, length(m)) == 0)
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
 
