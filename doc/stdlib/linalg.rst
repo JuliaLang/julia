@@ -1029,7 +1029,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.
+   Computes eigenvalues ``d`` of ``A`` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.
 
    The following keyword arguments are supported:
 
@@ -1055,7 +1055,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | ``:BE``   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only) |
    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
-   * ``tol``\ : tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``\ )
+   * ``tol``\ : parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).      A Ritz value :math:`θ` is considered converged when its associated residual      is less than or equal to the product of ``tol`` and :math:`max(ɛ^{2/3}, |θ|)`\ ,      where ``ɛ = eps(real(eltype(A)))/2`` is LAPACK's machine epsilon.      The residual associated with :math:`θ` and its corresponding Ritz vector :math:`v`      is defined as the norm :math:`||Av - vθ||`\ .      The specified value of ``tol`` should be positive; otherwise, it is ignored      and :math:`ɛ` is used instead.      Default: :math:`ɛ`\ .
+
    * ``maxiter``\ : Maximum number of iterations (default = 300)
    * ``sigma``\ : Specifies the level shift used in inverse iteration. If ``nothing`` (default),   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma``   using shift and invert iterations.
    * ``ritzvec``\ : Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
@@ -1075,11 +1076,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma I )^{-1}`       |
    +-----------------+------------------------------------+------------------------------------+
 
+   **note**
+
+   Although ``tol`` has a default value, the best choice depends strongly on the matrix ``A``\ . We recommend that users _always_ specify a value for ``tol`` which suits their specific needs.
+
+   For details of how the errors in the computed eigenvalues are estimated, see:
+
+   * B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e   (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
+   * R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly   Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and   Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
+
 .. function:: eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    .. Docstring generated from Julia source
 
-   Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.
+   Computes generalized eigenvalues ``d`` of ``A`` and ``B`` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.
 
    The following keyword arguments are supported:
 
@@ -1105,7 +1115,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | ``:BE``   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only) |
    +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
-   * ``tol``\ : tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``\ )
+   * ``tol``\ : relative tolerance used in the convergence criterion for eigenvalues, similar to      ``tol`` in the :func:`eigs` method for the ordinary eigenvalue      problem, but effectively for the eigenvalues of :math:`B^{-1} A` instead of :math:`A`\ .      See the documentation for the ordinary eigenvalue problem in      :func:`eigs` and the accompanying note about ``tol``\ .
    * ``maxiter``\ : Maximum number of iterations (default = 300)
    * ``sigma``\ : Specifies the level shift used in inverse iteration. If ``nothing`` (default),   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma``   using shift and invert iterations.
    * ``ritzvec``\ : Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
