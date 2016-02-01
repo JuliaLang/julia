@@ -59,7 +59,7 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
-ifneq ($(LLVM_USE_CMAKE),)
+ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
@@ -338,6 +338,12 @@ LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
 endif
 endif
 
+LLVM_VER_MAJ:=$(word 1, $(subst ., ,$(LLVM_VER)))
+LLVM_VER_MIN:=$(word 2, $(subst ., ,$(LLVM_VER)))
+LLVM_VER_PATCH:=$(word 3, $(subst ., ,$(LLVM_VER)))
+ifeq ($(LLVM_VER_PATCH),)
+LLVM_VER_PATCH := 0
+endif
 LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
 LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
 LLVM_LIB_FILE := libLLVMCodeGen.a
@@ -444,11 +450,22 @@ ifeq ($(ARCH), ppc64)
 LLVM_CXXFLAGS += -mminimal-toc
 endif # ARCH == ppc64
 
+# LLVM bug #24157
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),1)
+ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),$(filter $(LLVM_VER_MAJ).$(LLVM_VER_MIN),3.3 3.4 3.5 3.6 3.7))
+$(error USE_LLVM_SHLIB=1 with LLVM_USE_CMAKE=1 requires LLVM > 3.7.x)
+endif
+endif
+endif
 
 ifeq ($(LLVM_SANITIZE),1)
-# NOTE: LLVM_SANITIZE + USE_LLVM_SHLIB only works with LLVM_USE_CMAKE, because
-#       Autotools doesn't provide a sanitation mode (linking libLLVM will fail).
-# NOTE: USE_LLVM_SHLIB + LLVM_USE_CMAKE only works on LLVM > 3.7.x (#24157)
+# autotools doesn't provide a sanitation build mode (linking libLLVM will fail)
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),0)
+$(error LLVM_SANITIZE=1 with USE_LLVM_SHLIB=1 requires LLVM_USE_CMAKE=1)
+endif
+endif
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
@@ -493,12 +510,12 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
-ifeq ($(LLVM_VER),svn)	# changed since LLVM 3.9
-LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
-LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
-else
+ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),$(filter $(LLVM_VER_MAJ).$(LLVM_VER_MIN),3.3 3.4 3.5 3.6 3.7 3.8))
 LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
 LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
+LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
 endif
 endif
 ifeq ($(BUILD_LLDB),1)
@@ -704,7 +721,7 @@ endif
 endif
 
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
-ifneq ($(LLVM_USE_CMAKE),)
+ifeq ($(LLVM_USE_CMAKE),1)
 
 $(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
@@ -713,10 +730,10 @@ $(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
 	touch -c $@
 
-ifeq ($(CMAKE_GENERATOR),Ninja)
-LLVM_BUILD_COMMAND := $(CMAKE) --build .
-else ifeq ($(CMAKE_GENERATOR),make)
+ifeq ($(CMAKE_GENERATOR),make)
 LLVM_BUILD_COMMAND := +$(MAKE)
+else
+LLVM_BUILD_COMMAND := $(CMAKE) --build .
 endif
 
 $(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt | $(llvm_python_workaround)
