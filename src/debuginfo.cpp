@@ -45,6 +45,10 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#ifdef _OS_LINUX_
+#  define UNW_LOCAL_ONLY
+#  include <libunwind.h>
+#endif
 
 #include <string>
 #include <sstream>
@@ -881,11 +885,19 @@ lookup:
 #endif
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide,
                        fbase == jl_sysimage_base, fromC);
-        if (jl_sysimage_base == fbase && sysimg_fvars && saddr) {
-            for (size_t i = 0; i < sysimg_fvars_n; i++) {
-                if (saddr == sysimg_fvars[i]) {
-                    *outer_linfo = sysimg_fvars_linfo[i];
-                    break;
+        if (jl_sysimage_base == fbase && sysimg_fvars) {
+#ifdef _OS_LINUX_
+            unw_proc_info_t pip;
+            if (!saddr && unw_get_proc_info_by_ip(unw_local_addr_space,
+                                                  pointer, &pip, NULL) == 0)
+                saddr = (void*)pip.start_ip;
+#endif
+            if (saddr) {
+                for (size_t i = 0; i < sysimg_fvars_n; i++) {
+                    if (saddr == sysimg_fvars[i]) {
+                        *outer_linfo = sysimg_fvars_linfo[i];
+                        break;
+                    }
                 }
             }
         }
