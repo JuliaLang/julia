@@ -155,7 +155,7 @@ function ismatch(r::Regex, s::SubString, offset::Integer=0)
                      r.match_data)
 end
 
-call(r::Regex, s) = ismatch(r, s)
+(r::Regex)(s) = ismatch(r, s)
 
 function match(re::Regex, str::Union{SubString{UTF8String}, UTF8String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)

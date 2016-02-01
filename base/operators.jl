@@ -89,10 +89,10 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
 end
 
 immutable ElementwiseMaxFun end
-call(::ElementwiseMaxFun, x, y) = max(x,y)
+(::ElementwiseMaxFun)(x, y) = max(x,y)
 
 immutable ElementwiseMinFun end
-call(::ElementwiseMinFun, x, y) = min(x, y)
+(::ElementwiseMinFun)(x, y) = min(x, y)
 
 for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
                (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))

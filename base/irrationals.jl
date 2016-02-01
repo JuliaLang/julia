@@ -15,7 +15,7 @@ convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, convert(T,x))
 convert{T<:Integer}(::Type{Rational{T}}, x::Irrational) = convert(Rational{T}, Float64(x))
 
-@generated function call{T<:Union{Float32,Float64},s}(t::Type{T},c::Irrational{s},r::RoundingMode)
+@generated function (t::Type{T}){T<:Union{Float32,Float64},s}(c::Irrational{s},r::RoundingMode)
     f = T(big(c()),r())
     :($f)
 end

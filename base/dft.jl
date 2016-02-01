@@ -222,7 +222,7 @@ type ScaledPlan{T,P,N} <: Plan{T}
     pinv::Plan
     ScaledPlan(p, scale) = new(p, scale)
 end
-call{T,P,N}(::Type{ScaledPlan{T}}, p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
+(::Type{ScaledPlan{T}}){T,P,N}(p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
 ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
