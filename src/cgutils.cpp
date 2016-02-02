@@ -850,7 +850,7 @@ static Value *literal_pointer_val(jl_value_t *p)
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
         // Type-inferred functions are prefixed with a -
-        return julia_gv("-", linfo->name, linfo->module, p);
+        return julia_gv("-", linfo->def->name, linfo->def->module, p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t *addr = (jl_sym_t*)p;
@@ -1498,7 +1498,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
-                jl_svec_t *sp = ctx->linfo->sparam_syms;
+                jl_svec_t *sp = ctx->linfo->def->sparam_syms;
                 for (size_t i=0; i < jl_svec_len(sp); i++) {
                     assert(jl_is_symbol(jl_svecref(sp, i)));
                     if (e == jl_svecref(sp, i)) {

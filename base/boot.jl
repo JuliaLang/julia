@@ -60,15 +60,28 @@
 #end
 
 #type LambdaInfo
+#    inferred_ast::Expr
+#    rettype::Any
+#    sparam_vals::SimpleVector
+#    specTypes::Any
+#    unspecialized::LambdaInfo
+#    def::MethodInfo
+#    pure::Bool
+#end
+
+#type MethodInfo
 #    ast::Expr
-#    sparams::Tuple
+#    sparam_syms::SimpleVector
 #    tfunc
 #    name::Symbol
+#    roots::Vector{Any}
+#    unspecialized::LambdaInfo
 #    specializations
-#    inferred
-#    file::Symbol
-#    line::Int
 #    module::Module
+#    file::Symbol
+#    line::Int32
+#    called::Int32
+#    pure::Bool
 #end
 
 #abstract Ref{T}
@@ -125,7 +138,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, Method, MethodTable,
+    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, MethodInfo, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -298,6 +311,7 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
+LambdaInfo(ast::MethodInfo, sparam_vals::SimpleVector, specTypes::DataType) = ccall(:jl_new_lambda_info, Any, (Any, Any, Any), ast, sparam_vals, specTypes)
 
 Void() = nothing
 

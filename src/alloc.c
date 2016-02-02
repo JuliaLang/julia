@@ -45,6 +45,7 @@ jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;
 jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_lambda_info_type;
+jl_datatype_t *jl_method_info_type;
 jl_datatype_t *jl_module_type;
 jl_datatype_t *jl_errorexception_type=NULL;
 jl_datatype_t *jl_argumenterror_type;
@@ -273,15 +274,13 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-JL_DLLEXPORT
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_t *sparams,
-                                     jl_module_t *ctx)
+JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tvars,
+                               jl_module_t *ctx)
 {
-    jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
-                                  NWORDS(sizeof(jl_lambda_info_t)));
+    jl_method_info_t *li =
+        (jl_method_info_t*)newobj((jl_value_t*)jl_method_info_type,
+                                  NWORDS(sizeof(jl_method_info_t)));
     li->ast = ast;
-    li->rettype = (jl_value_t*)jl_any_type;
     li->file = null_sym;
     li->line = 0;
     li->pure = 0;
@@ -319,47 +318,52 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     }
     li->module = ctx;
     li->sparam_syms = tvars;
-    li->sparam_vals = sparams;
     li->tfunc = jl_nothing;
+    li->roots = NULL;
+    li->unspecialized = NULL;
+    li->specializations = NULL;
+    li->name = anonymous_sym;
+    return li;
+}
+
+
+JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_method_info_t *ast, jl_svec_t *sparam_vals, jl_datatype_t *specTypes)
+{
+    jl_lambda_info_t *li =
+        (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
+                                  NWORDS(sizeof(jl_lambda_info_t)));
+    li->inferred_ast = ast->ast;
+    li->rettype = (jl_value_t*)jl_any_type;
+    li->pure = ast->pure;
+    li->called = ast->called;
+    li->sparam_vals = sparam_vals;
     li->fptr = NULL;
     li->jlcall_api = 0;
-    li->roots = NULL;
     li->functionObjects.functionObject = NULL;
     li->functionObjects.specFunctionObject = NULL;
     li->functionObjects.cFunctionList = NULL;
     li->functionID = 0;
     li->specFunctionID = 0;
-    li->specTypes = NULL;
+    li->specTypes = specTypes;
     li->inferred = 0;
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
-    li->specializations = NULL;
-    li->name = anonymous_sym;
-    li->def = li;
+    li->def = ast;
     return li;
 }
 
-jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+jl_method_info_t *jl_copy_method_info(jl_method_info_t *linfo)
 {
-    jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
-    new_linfo->rettype = linfo->rettype;
+    jl_method_info_t *new_linfo =
+        jl_new_method_info(linfo->ast, linfo->sparam_syms, linfo->module);
     new_linfo->tfunc = linfo->tfunc;
     new_linfo->name = linfo->name;
     new_linfo->roots = linfo->roots;
-    new_linfo->specTypes = linfo->specTypes;
     new_linfo->unspecialized = linfo->unspecialized;
     new_linfo->specializations = linfo->specializations;
-    new_linfo->def = linfo->def;
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;
-    new_linfo->fptr = linfo->fptr;
-    new_linfo->jlcall_api = linfo->jlcall_api;
-    new_linfo->functionObjects.functionObject = linfo->functionObjects.functionObject;
-    new_linfo->functionObjects.specFunctionObject = linfo->functionObjects.specFunctionObject;
-    new_linfo->functionID = linfo->functionID;
-    new_linfo->specFunctionID = linfo->specFunctionID;
     return new_linfo;
 }
 

@@ -29,9 +29,9 @@ type VarInfo
     mod::Module
 end
 
-function VarInfo(linfo::LambdaInfo, ast=linfo.ast)
+function VarInfo(linfo::LambdaInfo, ast=linfo.inferred_ast)
     if !isa(ast,Expr)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, ast)
     end
     vinflist = ast.args[2][1]::Array{Any,1}
     vars = map(vi->vi[1], vinflist)
@@ -43,17 +43,17 @@ function VarInfo(linfo::LambdaInfo, ast=linfo.ast)
     gensym_types = Any[ NF for i = 1:(ngs::Int) ]
     nl = label_counter(body)+1
     if length(linfo.sparam_vals) > 0
-        n = length(linfo.sparam_syms)
+        n = length(linfo.def.sparam_syms)
         sp = Array(Any, n*2)
         for i = 1:n
-            sp[i*2-1] = linfo.sparam_syms[i]
+            sp[i*2-1] = linfo.def.sparam_syms[i]
             sp[i*2  ] = linfo.sparam_vals[i]
         end
         sp = svec(sp...)
     else
         sp = svec()
     end
-    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
+    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.def.module)
 end
 
 type VarState
@@ -648,8 +648,10 @@ end
 let stagedcache=Dict{Any,Any}()
     global func_for_method
     function func_for_method(m::Method, tt, env)
+        spvals = Any[env[i] for i = 2:2:length(env)]
+        _any(sp -> isa(sp, TypeVar), spvals) && empty!(spvals)
         if !m.isstaged
-            return m.func
+            return LambdaInfo(m.func, svec(spvals...), tt)
         elseif haskey(stagedcache, (m, tt))
             return stagedcache[(m, tt)]
         else
@@ -660,6 +662,7 @@ let stagedcache=Dict{Any,Any}()
                 return NF
             end
             f = ccall(:jl_instantiate_staged, Any, (Any, Any, Any), m.func, tt, env)
+            f = LambdaInfo(f, svec(spvals...), tt)
             stagedcache[(m, tt)] = f
             return f
         end
@@ -738,7 +741,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
         limit = false
         # look at the stack to detect recursive calls with growing argument lists
         while sp !== EmptyCallStack()
-            if linfo.ast === sp.ast && length(argtypes) > length(sp.types.parameters)
+            if linfo.def.ast === sp.ast && length(argtypes) > length(sp.types.parameters)
                 limit = true; break
             end
             sp = sp.prev
@@ -763,7 +766,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
             end
         end
         #print(m,"\n")
-        (_tree,rt) = typeinf(linfo, sig, m[2], linfo)
+        (_tree,rt) = typeinf(linfo, sig, m[2], linfo.def)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
@@ -796,7 +799,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY)
     if linfo === NF
         return Any
     end
-    return typeinf(linfo::LambdaInfo, ti, env, linfo)[2]
+    return typeinf(linfo::LambdaInfo, ti, env, linfo.def)[2]
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -917,7 +920,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
         return false
     end
     if !linfo.pure
-        typeinf(linfo, meth[1], meth[2], linfo)
+        typeinf(linfo, meth[1], meth[2], linfo.def)
         if !linfo.pure
             return false
         end
@@ -1381,7 +1384,7 @@ f_argnames(ast) =
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-function typeinf_ext(linfo, atypes::ANY, def)
+function typeinf_ext(linfo::LambdaInfo, atypes::ANY, def::MethodInfo)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
@@ -1390,8 +1393,8 @@ function typeinf_ext(linfo, atypes::ANY, def)
     return result
 end
 
-typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true,false)
-typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true,false)
+typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo.def,true,false)
+typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY,def::MethodInfo) = typeinf(linfo,atypes,sparams,def,true,false)
 
 CYCLE_ID = 1
 
@@ -1400,8 +1403,8 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
-    if linfo.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
+function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::MethodInfo, cop, needtree)
+    if def.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
     #dbg =
@@ -1436,8 +1439,8 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop
         end
     end
     # TODO: typeinf currently gets stuck without this
-    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
-        return (linfo.ast, Any)
+    if def.name === :abstract_interpret || def.name === :tuple_elim_pass || def.name === :abstract_call_gf
+        return (def.ast, Any)
     end
 
     (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
@@ -1474,21 +1477,21 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop
     return (fulltree, result::Type)
 end
 
-typeinf_uncached(linfo, atypes::ANY, sparams::ANY; optimize=true) =
-    typeinf_uncached(linfo, atypes, sparams, linfo, Bottom, true, optimize)
+typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::ANY; optimize=true) =
+    typeinf_uncached(linfo::LambdaInfo, atypes, sparams, linfo.def, Bottom, true, optimize)
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 # compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
-function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, curtype, cop, optimize)
+function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::MethodInfo, curtype, cop, optimize)
     ast0 = def.ast
     #if dbg
-    #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
+    #    print("typeinf ", def.name, " ", object_id(ast0), "\n")
     #end
     # if isdefined(:STDOUT)
     #     write(STDOUT, "typeinf ")
-    #     write(STDOUT, string(linfo.name))
+    #     write(STDOUT, string(def.name))
     #     write(STDOUT, string(atypes))
     #     write(STDOUT, '\n')
     # end
@@ -1556,15 +1559,15 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     end
 
     #if trace_inf
-    #    print("typeinf ", linfo.name, " ", atypes, " ", linfo.file,":",linfo.line,"\n")
+    #    print("typeinf ", def.name, " ", atypes, " ", def.file,":",def.line,"\n")
     #end
 
-    #if dbg print("typeinf ", linfo.name, " ", atypes, "\n") end
+    #if dbg print("typeinf ", def.name, " ", atypes, "\n") end
 
     if cop
-        ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
+        ast = ccall(:jl_prepare_ast, Any, (Any,), def)::Expr
     else
-        ast = linfo.ast
+        ast = linfo.inferred_ast
     end
 
     sv = VarInfo(linfo, ast)
@@ -1577,8 +1580,8 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             push!(sp, sparams[i].name)
             push!(sp, sparams[i+1])
         end
-        for i = 1:length(linfo.sparam_syms)
-            sym = linfo.sparam_syms[i]
+        for i = 1:length(def.sparam_syms)
+            sym = linfo.def.sparam_syms[i]
             push!(sp, sym)
             push!(sp, TypeVar(sym, Any, true))
         end
@@ -1864,7 +1867,6 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             tuple_elim_pass(fulltree, sv)
             getfield_elim_pass(fulltree.args[3], sv)
         end
-        linfo.inferred = true
         body = Expr(:block)
         body.args = fulltree.args[3].args::Array{Any,1}
         linfo.pure = popmeta!(body, :pure)[1]
@@ -2308,7 +2310,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     end
     linfo = linfo::LambdaInfo
 
-    spnames = Any[s for s in linfo.sparam_syms]
+    spnames = Any[s for s in linfo.def.sparam_syms]
     if length(linfo.sparam_vals) > 0
         spvals = Any[x for x in linfo.sparam_vals]
     else
@@ -2358,13 +2360,13 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     methargs = metharg.parameters
     nm = length(methargs)
 
-    (ast, ty) = typeinf(linfo, metharg, methsp, linfo, true, true)
+    (ast, ty) = typeinf(linfo, metharg, methsp, linfo.def, true, true)
     if is(ast,())
         return NF
     end
     needcopy = true
     if !isa(ast,Expr)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, ast)
         needcopy = false
     end
     ast = ast::Expr

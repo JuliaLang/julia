@@ -267,7 +267,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], locals, nl, ngensym);
         meth = eval(args[2], locals, nl, ngensym);
-        jl_method_def((jl_svec_t*)atypes, (jl_lambda_info_t*)meth, args[3]);
+        jl_method_def((jl_svec_t*)atypes, (jl_method_info_t*)meth, args[3]);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -555,7 +555,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
     return NULL;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
+jl_value_t *jl_interpret_toplevel_thunk_with(jl_method_info_t *lam,
                                              jl_value_t **loc, size_t nl)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -583,7 +583,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
     return r;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+jl_value_t *jl_interpret_toplevel_thunk(jl_method_info_t *lam)
 {
     return jl_interpret_toplevel_thunk_with(lam, NULL, 0);
 }

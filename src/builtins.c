@@ -1084,19 +1084,21 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-    jl_lambda_info_t *li = jl_new_lambda_info(jl_nothing, jl_emptysvec, jl_emptysvec, jl_core_module);
-    li->fptr = fptr;
+    jl_method_info_t *li = jl_new_method_info(jl_nothing, jl_emptysvec, jl_core_module);
     li->name = sname;
     // TODO jb/functions: what should li->ast be?
     li->ast = (jl_value_t*)jl_exprn(lambda_sym,0); jl_gc_wb(li, li->ast);
-    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li);
+    jl_lambda_info_t *unspec = jl_new_lambda_info(li, jl_emptysvec, jl_anytuple_type);
+    li->unspecialized = unspec;
+    unspec->fptr = fptr;
+    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, unspec);
     return f;
 }
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache->func->fptr;
+    return ((jl_method_info_t*)jl_gf_mtable(b)->cache->func)->unspecialized->fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)
@@ -1161,6 +1163,7 @@ void jl_init_primitives(void)
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("LambdaInfo", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("MethodInfo", (jl_value_t*)jl_method_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
@@ -1231,15 +1234,19 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     }
     else if (vt == jl_lambda_info_type) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
+        n += jl_printf(out, ".");
+        n += jl_show_svec(out, li->specTypes->parameters,
+                          jl_symbol_name(li->def->name), "(", ")");
+        // The following is nice for debugging, but allocates memory and generates a lot of output
+        // so it may not be a good idea to to have it active
+        //jl_printf(out, " -> ");
+        //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
+    }
+    else if (vt == jl_method_info_type) {
+        jl_method_info_t *li = (jl_method_info_t*)v;
         n += jl_static_show_x(out, (jl_value_t*)li->module, depth);
-        if (li->specTypes) {
-            n += jl_printf(out, ".");
-            n += jl_show_svec(out, li->specTypes->parameters,
-                              jl_symbol_name(li->name), "(", ")");
-        }
-        else {
-            n += jl_printf(out, ".%s(?)", jl_symbol_name(li->name));
-        }
+        n += jl_printf(out, ".%s(?)", jl_symbol_name(li->name));
         // The following is nice for debugging, but allocates memory and generates a lot of output
         // so it may not be a good idea to to have it active
         //jl_printf(out, " -> ");

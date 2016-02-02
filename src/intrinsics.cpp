@@ -360,7 +360,7 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
     else {
         JL_TRY { // TODO: change this to an actual call to staticeval rather than actually executing code
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
         }
         JL_CATCH {

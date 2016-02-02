@@ -19,7 +19,7 @@ const TAGS = Any[
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, SymbolNode, LabelNode, GotoNode,
-    QuoteNode, TopNode, TypeVar, Box, LambdaInfo,
+    QuoteNode, TopNode, TypeVar, Box, MethodInfo,
     Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
@@ -72,7 +72,7 @@ const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
 const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
-const LAMBDASTATICDATA_TAG = sertag(LambdaInfo)
+const METHODDATA_TAG = sertag(MethodInfo)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
@@ -307,19 +307,17 @@ function object_number(l::ANY)
     return ln
 end
 
-function serialize(s::SerializationState, linfo::LambdaInfo)
+function serialize(s::SerializationState, linfo::MethodInfo)
     serialize_cycle(s, linfo) && return
-    writetag(s.io, LAMBDASTATICDATA_TAG)
+    writetag(s.io, METHODDATA_TAG)
     serialize(s, object_number(linfo))
-    serialize(s, uncompressed_ast(linfo))
-    if isdefined(linfo.def, :roots)
-        serialize(s, linfo.def.roots::Vector{Any})
+    serialize(s, linfo.ast)
+    if isdefined(linfo, :roots)
+        serialize(s, linfo.roots::Vector{Any})
     else
         serialize(s, Any[])
     end
     serialize(s, linfo.sparam_syms)
-    serialize(s, linfo.sparam_vals)
-    serialize(s, linfo.inferred)
     serialize(s, linfo.module)
     serialize(s, linfo.name)
     serialize(s, linfo.file)
@@ -543,21 +541,19 @@ end
 
 const known_object_data = Dict()
 
-function deserialize(s::SerializationState, ::Type{LambdaInfo})
+function deserialize(s::SerializationState, ::Type{MethodInfo})
     lnumber = deserialize(s)
     if haskey(known_object_data, lnumber)
-        linfo = known_object_data[lnumber]::LambdaInfo
+        linfo = known_object_data[lnumber]::MethodInfo
         makenew = false
     else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)::LambdaInfo
+        linfo = ccall(:jl_new_method_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL)::MethodInfo
         makenew = true
     end
     deserialize_cycle(s, linfo)
-    ast = deserialize(s)::Expr
+    ast = deserialize(s)
     roots = deserialize(s)::Vector{Any}
     sparam_syms = deserialize(s)::SimpleVector
-    sparam_vals = deserialize(s)::SimpleVector
-    infr = deserialize(s)::Bool
     mod = deserialize(s)::Module
     name = deserialize(s)
     file = deserialize(s)
@@ -566,8 +562,6 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
     if makenew
         linfo.ast = ast
         linfo.sparam_syms = sparam_syms
-        linfo.sparam_vals = sparam_vals
-        linfo.inferred = infr
         linfo.module = mod
         linfo.roots = roots
         linfo.name = name

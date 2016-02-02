@@ -245,6 +245,8 @@ done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
 uncompressed_ast(l::LambdaInfo) =
+    isa(l.inferred_ast,Expr) ? l.inferred_ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l.def, l.inferred_ast)
+uncompressed_ast(l::MethodInfo) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
@@ -291,14 +293,14 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x, types)
         if optimize
-            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo,
+            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo.def,
                                                 true, true)
         else
             (tree, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2],
                                                          optimize=false)
         end
         if !isa(tree, Expr)
-            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)
+            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, tree)
         end
         push!(asts, tree)
     end
@@ -346,7 +348,7 @@ function which_module(m::Module, s::Symbol)
 end
 
 function functionloc(m::Method)
-    lsd = m.func::LambdaInfo
+    lsd = m.func::MethodInfo
     ln = lsd.line
     if ln <= 0
         error("could not determine location of method definition")

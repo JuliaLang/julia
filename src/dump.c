@@ -613,6 +613,14 @@ static int is_ast_node(jl_value_t *v)
 {
     if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        if (jl_is_expr(li->inferred_ast)) {
+            li->inferred_ast = jl_compress_ast(li->def, li->inferred_ast);
+            jl_gc_wb(li, li->inferred_ast);
+        }
+        return 0;
+    }
+    if (jl_is_method_info(v)) {
+        jl_method_info_t *li = (jl_method_info_t*)v;
         if (jl_is_expr(li->ast)) {
             li->ast = jl_compress_ast(li, li->ast);
             jl_gc_wb(li, li->ast);
@@ -791,13 +799,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_tvar_t*)v)->ub);
         write_int8(s, ((jl_tvar_t*)v)->bound);
     }
-    else if (jl_is_lambda_info(v)) {
-        writetag(s, jl_lambda_info_type);
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+    else if (jl_is_method_info(v)) {
+        writetag(s, jl_method_info_type);
+        jl_method_info_t *li = (jl_method_info_t*)v;
         jl_serialize_value(s, li->ast);
-        jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
-        jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
         if (li->module == jl_core_module) {
@@ -824,19 +830,29 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             jl_serialize_value(s, (jl_value_t*)li->tfunc);
         }
         jl_serialize_value(s, (jl_value_t*)li->name);
-        jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
+        jl_serialize_value(s, (jl_value_t*)li->file);
+        jl_serialize_value(s, (jl_value_t*)li->module);
+        jl_serialize_value(s, (jl_value_t*)li->roots);
+        write_int32(s, li->line);
+        write_int8(s, li->pure);
+        write_int8(s, li->called);
+    }
+    else if (jl_is_lambda_info(v)) {
+        writetag(s, jl_lambda_info_type);
+        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        jl_serialize_value(s, li->inferred_ast);
+        jl_serialize_value(s, li->rettype);
+        jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
+        jl_serialize_value(s, (jl_value_t*)li->specTypes);
+        jl_serialize_value(s, (jl_value_t*)li->def);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
         write_int8(s, li->called);
-        jl_serialize_value(s, (jl_value_t*)li->file);
-        write_int32(s, li->line);
-        jl_serialize_value(s, (jl_value_t*)li->module);
-        jl_serialize_value(s, (jl_value_t*)li->roots);
-        jl_serialize_value(s, (jl_value_t*)li->def);
-        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
-        jl_serialize_fptr(s, li->fptr);
         // save functionObject pointers
+        jl_serialize_fptr(s, li->fptr);
         write_int32(s, li->functionID);
         write_int32(s, li->specFunctionID);
         if (li->functionID)
@@ -929,7 +945,7 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
     assert(mt->module);
     jl_methlist_t *ml = mt->defs;
     while (ml != (void*)jl_nothing) {
-        if (module_in_worklist(ml->func->module)) {
+        if (module_in_worklist(((jl_method_info_t*)ml->func)->module)) {
             jl_serialize_value(s, mt->module);
             jl_serialize_value(s, name);
             write_int8(s, iskw);
@@ -1085,21 +1101,23 @@ static int type_has_replaced_module(jl_value_t *t)
 static void remove_specializations_from_replaced_modules(jl_methlist_t *l)
 {
     while (l != (void*)jl_nothing) {
-        jl_array_t *a = l->func->specializations;
+        assert(jl_is_method_info(l->func));
+        jl_array_t *a = ((jl_method_info_t*)l->func)->specializations;
         if (a) {
             size_t len = jl_array_len(a);
             size_t i, insrt=0;
             for(i=0; i < len; i++) {
                 jl_lambda_info_t *li = (jl_lambda_info_t*)jl_cellref(a, i);
-                if (!(li->rettype && type_has_replaced_module(li->rettype)) &&
-                    !(li->specTypes && type_has_replaced_module((jl_value_t*)li->specTypes))) {
+                assert(li->specTypes && li->rettype);
+                if (!type_has_replaced_module(li->rettype) &&
+                    !type_has_replaced_module((jl_value_t*)li->specTypes)) {
                     jl_cellset(a, insrt, li);
                     insrt++;
                 }
             }
             jl_array_del_end(a, len-insrt);
         }
-        a = l->func->roots;
+        a = ((jl_method_info_t*)l->func)->roots;
         if (a) {
             size_t len = jl_array_len(a);
             size_t i;
@@ -1117,8 +1135,11 @@ static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
 {
     jl_methlist_t *l = *pl;
     while (l != (void*)jl_nothing) {
-        if ((l->func && is_module_replaced(l->func->module)) ||
-            type_has_replaced_module((jl_value_t*)l->sig))
+        if (type_has_replaced_module((jl_value_t*)l->sig))
+            *pl = l->next;
+        else if (l->func == NULL)
+            pl = &l->next;
+        else if (is_module_replaced((jl_is_method_info(l->func) ? (jl_method_info_t*)l->func : ((jl_lambda_info_t*)l->func)->def)->module))
             *pl = l->next;
         else
             pl = &l->next;
@@ -1416,52 +1437,65 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         tv->bound = read_int8(s);
         return (jl_value_t*)tv;
     }
+    else if (vtag == (jl_value_t*)jl_method_info_type) {
+        jl_method_info_t *li =
+            (jl_method_info_t*)newobj((jl_value_t*)jl_method_info_type,
+                                   NWORDS(sizeof(jl_method_info_t)));
+        if (usetable)
+            arraylist_push(&backref_list, li);
+        li->ast = jl_deserialize_value(s, &li->ast);
+        jl_gc_wb(li, li->ast);
+        li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
+        jl_gc_wb(li, li->sparam_syms);
+        li->tfunc = jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
+        jl_gc_wb(li, li->tfunc);
+        li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        jl_gc_wb(li, li->name);
+        li->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->specializations);
+        if (li->specializations) jl_gc_wb(li, li->specializations);
+        li->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
+        if (li->unspecialized) jl_gc_wb(li, li->unspecialized);
+        li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        jl_gc_wb(li, li->file);
+        li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
+        jl_gc_wb(li, li->module);
+        li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
+        if (li->roots) jl_gc_wb(li, li->roots);
+        li->line = read_int32(s);
+        li->pure = read_int8(s);
+        li->called = read_int8(s);
+        return (jl_value_t*)li;
+    }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
             (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
                                       NWORDS(sizeof(jl_lambda_info_t)));
         if (usetable)
             arraylist_push(&backref_list, li);
-        li->ast = jl_deserialize_value(s, &li->ast);
-        jl_gc_wb(li, li->ast);
+        li->inferred_ast = jl_deserialize_value(s, &li->inferred_ast);
+        jl_gc_wb(li, li->inferred_ast);
         li->rettype = jl_deserialize_value(s, &li->rettype);
         jl_gc_wb(li, li->rettype);
-        li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
-        jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
         jl_gc_wb(li, li->sparam_vals);
-        li->tfunc = jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
-        jl_gc_wb(li, li->tfunc);
-        li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        jl_gc_wb(li, li->name);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
         if (li->specTypes) jl_gc_wb(li, li->specTypes);
-        li->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->specializations);
-        if (li->specializations) jl_gc_wb(li, li->specializations);
+        li->def = (jl_method_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
+        jl_gc_wb(li, li->def);
+        li->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
+        if (li->unspecialized) jl_gc_wb(li, li->unspecialized);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
         li->called = read_int8(s);
-        li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        jl_gc_wb(li, li->file);
-        li->line = read_int32(s);
-        li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
-        jl_gc_wb(li, li->module);
-        li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
-        if (li->roots) jl_gc_wb(li, li->roots);
-        li->def = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
-        jl_gc_wb(li, li->def);
-        li->fptr = NULL;
         li->functionObjects.functionObject = NULL;
         li->functionObjects.cFunctionList = NULL;
         li->functionObjects.specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
-        if (li->unspecialized) jl_gc_wb(li, li->unspecialized);
-        li->fptr = jl_deserialize_fptr(s);
         li->functionID = 0;
         li->specFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
+        li->fptr = jl_deserialize_fptr(s);
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
@@ -1653,7 +1687,7 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         if (iskw)
             gf = jl_get_kwsorter(((jl_datatype_t*)jl_typeof(gf))->name);
         jl_tupletype_t *types = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
-        jl_lambda_info_t *meth = (jl_lambda_info_t*)jl_deserialize_value(s, NULL);
+        jl_method_info_t *meth = (jl_method_info_t*)jl_deserialize_value(s, NULL);
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
         int8_t isstaged = read_int8(s);
         jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
@@ -2028,7 +2062,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
+JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_method_info_t *li, jl_value_t *ast)
 {
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
@@ -2039,12 +2073,13 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_array_t *last_tlv = tree_literal_values;
     jl_module_t *last_tem = tree_enclosing_module;
     int en = jl_gc_enable(0); // Might GC
+    assert(jl_is_method_info(li));
 
-    if (li->def->roots == NULL) {
-        li->def->roots = jl_alloc_cell_1d(0);
-        jl_gc_wb(li->def, li->def->roots);
+    if (li->roots == NULL) {
+        li->roots = jl_alloc_cell_1d(0);
+        jl_gc_wb(li, li->roots);
     }
-    tree_literal_values = li->def->roots;
+    tree_literal_values = li->roots;
     tree_enclosing_module = li->module;
     jl_serialize_value(&dest, ast);
 
@@ -2052,7 +2087,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0 && last_tlv == NULL) {
-        li->def->roots = NULL;
+        li->roots = NULL;
     }
     tree_literal_values = last_tlv;
     tree_enclosing_module = last_tem;
@@ -2063,15 +2098,16 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     return v;
 }
 
-JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
+JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_method_info_t *li, jl_value_t *data)
 {
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
+    assert(jl_is_method_info(li));
     assert(jl_is_array(data));
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     jl_array_t *bytes = (jl_array_t*)data;
-    tree_literal_values = li->def->roots;
+    tree_literal_values = li->roots;
     tree_enclosing_module = li->module;
     ios_t src;
     ios_mem(&src, 0);
@@ -2368,7 +2404,7 @@ void jl_init_serializer(void)
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag,
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
-                     jl_module_type, jl_tvar_type, jl_lambda_info_type,
+                     jl_module_type, jl_tvar_type, jl_lambda_info_type, jl_method_info_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
                      // everything above here represents a class of object rather only than a literal
 
@@ -2435,7 +2471,7 @@ void jl_init_serializer(void)
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
-                     jl_module_type->name, jl_function_type->name,
+                     jl_method_info_type->name, jl_module_type->name, jl_function_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,

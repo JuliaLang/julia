@@ -440,7 +440,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
         }
         JL_CATCH {
@@ -505,7 +505,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
     }
     JL_CATCH {
@@ -515,7 +515,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
     }
     JL_CATCH {
@@ -525,7 +525,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
     }
     JL_CATCH {
@@ -966,7 +966,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
         }
         JL_CATCH {
@@ -1049,7 +1049,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
         JL_TRY {
             at = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
+                                               ctx->linfo->def->sparam_syms,
                                                ctx->linfo->sparam_vals);
         }
         JL_CATCH {
