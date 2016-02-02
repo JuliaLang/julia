@@ -249,9 +249,11 @@ end
 @test sinc(1) == 0
 @test sinc(complex(1,0)) == 0
 @test sinc(0) == 1
+@test sinc(Inf) == 0
 @test cosc(1) == -1
 @test cosc(0) == 0
 @test cosc(complex(1,0)) == -1
+@test cosc(Inf) == 0
 
 # check type stability
 for T = (Float32,Float64,BigFloat)
