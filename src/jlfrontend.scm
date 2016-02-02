@@ -88,7 +88,7 @@
                (let* ((ex (julia-expand01 ex0))
                       (gv (toplevel-expr-globals ex))
                       (th (julia-expand1
-                           `(lambda ()
+                           `(lambda () ()
                               (scope-block
                                (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                       ,ex))))))
