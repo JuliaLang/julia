@@ -456,7 +456,7 @@ r = linspace(1/3,5/7,6)
 @test abs(r[end] - 5/7) <= eps(5/7)
 r = linspace(0.25,0.25,1)
 @test length(r) == 1
-@test_throws Exception linspace(0.25,0.5,1)
+@test_throws ErrorException linspace(0.25,0.5,1)
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
