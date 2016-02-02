@@ -455,10 +455,10 @@ function _generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractV
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA, $nB), matrix B has dimensions ($mB, $nB)"))
+        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA, $nB)"))
+        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
 
     tile_size = 0
