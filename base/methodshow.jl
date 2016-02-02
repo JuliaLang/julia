@@ -46,10 +46,17 @@ function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
-    if isa(ft,DataType) && (isempty(ft.parameters) && nfields(ft)==0 &&
-                            isdefined(ft.name.module,ft.name.name) &&
-                            ft == getfield(ft.name.module,ft.name.name))
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
+    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            print(io, f)
+        else
+            print(io, "(", d1[1], "::", d1[2], ")")
+        end
     else
         print(io, "(", d1[1], "::", d1[2], ")")
     end
@@ -67,10 +74,12 @@ end
 
 function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
     name = mt.name
+    isself = isdefined(mt.module, name) &&
+             typeof(getfield(mt.module, name)) <: Function
     n = length(mt)
     if header
         m = n==1 ? "method" : "methods"
-        ns = string(name)
+        ns = isself ? string(name) : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
@@ -143,10 +152,17 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
-    if isa(ft,DataType) && (isempty(ft.parameters) && nfields(ft)==0 &&
-                            isdefined(ft.name.module,ft.name.name) &&
-                            ft == getfield(ft.name.module,ft.name.name))
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
+    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            print(io, f)
+        else
+            print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+        end
     else
         print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
     end
