@@ -203,7 +203,6 @@ ExecutionEngine *jl_ExecutionEngine;
 static Module *shadow_module;
 static Module *builtins_module;
 static Module *active_module;
-static RTDyldMemoryManager *jl_mcjmm;
 #define jl_Module (builder.GetInsertBlock()->getParent()->getParent())
 #else
 static Module *jl_Module;
@@ -1002,9 +1001,6 @@ static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
     #ifdef JL_DEBUG_BUILD
     llvm::raw_fd_ostream out(1,false);
     #endif
-    uint64_t addr = jl_mcjmm->getSymbolAddress(llvmf->getName());
-    if (addr)
-        return addr;
     Function *ActiveF = active_module->getFunction(llvmf->getName());
     // Must have been in a prior module. Safe to ask the execution engine
     // to emit it.
@@ -1043,7 +1039,7 @@ static uint64_t getAddressForOrCompileFunction(llvm::Function *llvmf)
         #endif
         jl_finalize_module(active_module);
     }
-    addr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    uint64_t addr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
     assert(addr != 0);
     if (!imaging_mode) {
         active_module = new Module("julia", jl_LLVMContext);
@@ -1298,6 +1294,8 @@ extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #endif
     );
 
+extern "C"
+uint64_t jl_getUnwindInfo(uint64_t dwAddr);
 
 // Get pointer to llvm::Function instance, compiling if necessary
 extern "C" JL_DLLEXPORT
@@ -1324,88 +1322,78 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         linfo = jl_get_unspecialized(linfo);
     }
 
-#if defined(USE_ORCJIT) || defined(USE_MCJIT)
-    if (linfo->functionObjects.functionObject == NULL && linfo->functionObjects.specFunctionObject == NULL) {
-        jl_compile_linfo(linfo, NULL);
-    }
-    if (getdeclarations) {
-        JL_GC_POP();
-        if (getwrapper || linfo->functionObjects.specFunctionObject == NULL)
-            return linfo->functionObjects.functionObject;
+    if (!getdeclarations) {
+        Function *llvmDecl = nullptr;
+        if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL)
+            llvmDecl = (Function*)linfo->functionObjects.specFunctionObject;
         else
-            return linfo->functionObjects.specFunctionObject;
-    }
-
-    Function *llvmDecl = nullptr;
-    if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL)
-        llvmDecl = (Function*)linfo->functionObjects.specFunctionObject;
-    else
-        llvmDecl = (Function*)linfo->functionObjects.functionObject;
-
-    Function *llvmf = active_module->getFunction(llvmDecl->getName());
-    // Not in active module anymore, recompile
-    // Now that in either case, we need to run the FPM manually,
-    // since this is now usually done as part of object emission
-    if (!llvmf) {
-        Function *other;
-        jl_llvm_functions_t declarations;
-        emit_function(linfo, nullptr, &declarations, nullptr);
-        if (getwrapper || !declarations.specFunctionObject) {
-            llvmf = (llvm::Function*)declarations.functionObject;
-            other = (llvm::Function*)declarations.specFunctionObject;
+            llvmDecl = (Function*)linfo->functionObjects.functionObject;
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+        Function *llvmf = llvmDecl ? active_module->getFunction(llvmDecl->getName()) : NULL;
+        // Note that in either case, we need to run the FPM manually,
+        // since this is now usually done as part of object emission
+#else
+        Function *llvmf = llvmDecl && !llvmDecl->isDeclaration() ? llvmDecl : NULL;
+#endif
+        if (!llvmf) {
+            Function *other;
+            jl_llvm_functions_t declarations;
+            emit_function(linfo, nullptr, &declarations, nullptr);
+            if (getwrapper || !declarations.specFunctionObject) {
+                llvmf = (llvm::Function*)declarations.functionObject;
+                other = (llvm::Function*)declarations.specFunctionObject;
+            }
+            else {
+                llvmf = (llvm::Function*)declarations.specFunctionObject;
+                other = (llvm::Function*)declarations.functionObject;
+            }
+            if (other)
+                other->eraseFromParent();
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+            FPM->run(*llvmf);
+#endif
+            llvmf->removeFromParent();
+            if (llvmDecl)
+                llvmf->setName(llvmDecl->getName());
         }
         else {
-            llvmf = (llvm::Function*)declarations.specFunctionObject;
-            other = (llvm::Function*)declarations.functionObject;
+            ValueToValueMapTy VMap;
+            llvmf = CloneFunction(llvmf, VMap, false);
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+            active_module->getFunctionList().push_back(llvmf);
+            FPM->run(*llvmf);
+            llvmf->removeFromParent();
+#endif
         }
-        if (other)
-            other->eraseFromParent();
-        FPM->run(*llvmf);
-        llvmf->removeFromParent();
+        JL_GC_POP();
+        return llvmf;
     }
-    else {
-        ValueToValueMapTy VMap;
-        llvmf = CloneFunction(llvmf,VMap,false);
-        active_module->getFunctionList().push_back(llvmf);
-        FPM->run(*llvmf);
-        llvmf->removeFromParent();
-    }
-    JL_GC_POP();
-    return llvmf;
-#else
-    if (linfo->functionObjects.specFunctionObject != NULL) {
+
+    if (linfo->fptr && !jl_getUnwindInfo((uintptr_t)linfo->fptr)) {
+        // Not in in the current ExecutionEngine
         // found in the system image: force a recompile
-        Function *llvmf = (Function*)linfo->functionObjects.specFunctionObject;
-        if (llvmf->isDeclaration()) {
-            linfo->functionObjects.specFunctionObject = NULL;
-            linfo->functionObjects.functionObject = NULL;
-        }
+        linfo->functionObjects.specFunctionObject = NULL;
+        linfo->functionObjects.functionObject = NULL;
+        linfo->fptr = NULL;
     }
-    if (linfo->functionObjects.functionObject != NULL) {
-        // found in the system image: force a recompile
-        Function *llvmf = (Function*)linfo->functionObjects.functionObject;
-        if (llvmf->isDeclaration()) {
-            linfo->functionObjects.specFunctionObject = NULL;
-            linfo->functionObjects.functionObject = NULL;
-        }
-    }
-    if (linfo->functionObjects.functionObject == NULL &&
-        linfo->functionObjects.specFunctionObject == NULL) {
+    if (linfo->functionObjects.functionObject == NULL) {
         jl_compile_linfo(linfo, NULL);
     }
-    JL_GC_POP();
     Function *llvmf;
-    if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL)
+    if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL) {
         llvmf = (Function*)linfo->functionObjects.specFunctionObject;
-    else
-        llvmf = (Function*)linfo->functionObjects.functionObject;
-    if (getdeclarations)
-      return llvmf;
+    }
     else {
-      ValueToValueMapTy VMap;
-      return CloneFunction(llvmf,VMap,false);
+        llvmf = (Function*)linfo->functionObjects.functionObject;
+    }
+#if !defined(USE_ORCJIT) && !defined(USE_MCJIT)
+    if (!getdeclarations) {
+        ValueToValueMapTy VMap;
+        llvmf = CloneFunction(llvmf, VMap, false);
     }
 #endif
+    JL_GC_POP();
+    return llvmf;
 }
 
 extern "C" JL_DLLEXPORT
@@ -5989,9 +5977,6 @@ extern "C" void jl_init_codegen(void)
 #if defined(__APPLE__) && !defined(LLVM34)
     // turn on JIT support for libunwind to walk the stack
     options.JITExceptionHandling = 1;
-#endif
-#ifdef USE_MCJIT
-    jl_mcjmm = new SectionMemoryManager();
 #endif
 
 #ifdef LLVM36

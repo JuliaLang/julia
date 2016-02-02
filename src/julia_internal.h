@@ -268,10 +268,10 @@ jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
+uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 extern HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
-DWORD64 jl_getUnwindInfo(ULONG64 dwBase);
 extern volatile int jl_in_stackwalk;
 #else
 #define UNW_LOCAL_ONLY

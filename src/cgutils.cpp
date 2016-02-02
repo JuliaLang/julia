@@ -407,11 +407,6 @@ public:
                     // Check whether we already emitted it once
                     if (emitted_function_symtab.find(shadow) != emitted_function_symtab.end())
                         return InjectFunctionProto(F);
-                    uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
-                    if (addr) {
-                        emitted_function_symtab[shadow] = addr;
-                        return InjectFunctionProto(F);
-                    }
 
                     Function *oldF = destModule->getFunction(F->getName());
                     if (oldF)

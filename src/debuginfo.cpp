@@ -1154,23 +1154,36 @@ RTDyldMemoryManager *createRTDyldMemoryManagerOSX()
 
 #endif
 
-#if defined(_OS_WINDOWS_)
 #ifdef USE_MCJIT
 extern "C"
-DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
+uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
-    DWORD64 ipstart = 0; // ip of the first instruction in the function (if found)
+    uint64_t ipstart = 0; // ip of the first instruction in the function (if found)
     if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.size > dwAddr) {
-        ipstart = (DWORD64)(intptr_t)(*it).first;
+        ipstart = (uint64_t)(intptr_t)(*it).first;
     }
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
 }
+#else
+extern "C"
+uint64_t jl_getUnwindInfo(uint64_t dwAddr)
+{
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
+    uint64_t ipstart = 0; // ip of the first instruction in the function (if found)
+    if (it != info.end() && (intptr_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
+        ipstart = (uint64_t)(intptr_t)(*it).first;
+    }
+    uv_rwlock_rdunlock(&threadsafe);
+    return ipstart;
+}
+#endif
 
-#else //ifdef USE_MCJIT
-#if defined(_CPU_X86_64_)
+
+#if defined(_OS_WINDOWS_) && !defined(USE_MCJIT) && defined(_CPU_X86_64_)
 // Custom memory manager for exception handling on Windows
 // we overallocate 48 bytes at the end of each function
 // for unwind information (see NotifyFunctionEmitted)
@@ -1258,19 +1271,4 @@ JITMemoryManager *createJITMemoryManagerWin()
 {
     return new JITMemoryManagerWin();
 }
-#else
-extern "C"
-DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
-{
-    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
-    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
-    DWORD64 ipstart = 0; // ip of the first instruction in the function (if found)
-    if (it != info.end() && (intptr_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
-        ipstart = (DWORD64)(intptr_t)(*it).first;
-    }
-    uv_rwlock_rdunlock(&threadsafe);
-    return ipstart;
-}
-#endif
-#endif
 #endif
