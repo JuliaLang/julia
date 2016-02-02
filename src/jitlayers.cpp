@@ -330,12 +330,8 @@ public:
                           [&](const std::string &Name) {
                             // TODO: consider moving the FunctionMover resolver here
                             // Step 0: ObjectLinkingLayer has checked whether it is in the current module
-                            // Step 1: Check against list of known external globals
-                            GlobalSymbolTableT::const_iterator pos = GlobalSymbolTable.find(Name);
-                            if (pos != GlobalSymbolTable.end())
-                                return RuntimeDyld::SymbolInfo((intptr_t)pos->second, JITSymbolFlags::Exported);
-                            // Step 2: Search all previously emitted symbols
-                            if (auto Sym = findSymbol(Name))
+                            // Step 1: See if it's something known to the ExecutionEngine
+                            if (auto Sym = findSymbol(Name, true))
                               return RuntimeDyld::SymbolInfo(Sym.getAddress(),
                                                              Sym.getFlags());
                             // Step 2: Search the program symbols
@@ -355,27 +351,34 @@ public:
 
     void removeModule(ModuleHandleT H) { CompileLayer->removeModuleSet(H); }
 
-    orc::JITSymbol findSymbol(const std::string &Name)
+    orc::JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
     {
-        return CompileLayer->findSymbol(Name, true);
+        if (ExportedSymbolsOnly) {
+            // Step 1: Check against list of known external globals
+            GlobalSymbolTableT::const_iterator pos = GlobalSymbolTable.find(Name);
+            if (pos != GlobalSymbolTable.end())
+                return orc::JITSymbol((uintptr_t)pos->second, JITSymbolFlags::Exported);
+        }
+        // Step 2: Search all previously emitted symbols
+        return CompileLayer->findSymbol(Name, ExportedSymbolsOnly);
     }
 
     orc::JITSymbol findUnmangledSymbol(const std::string Name)
     {
-        return findSymbol(mangle(Name));
+        return findSymbol(mangle(Name), true);
     }
 
     uint64_t getGlobalValueAddress(const std::string &Name)
     {
-        return CompileLayer->findSymbol(mangle(Name), false).getAddress();
+        return findSymbol(mangle(Name), false).getAddress();
     }
 
     uint64_t getFunctionAddress(const std::string &Name)
     {
-        return CompileLayer->findSymbol(mangle(Name), false).getAddress();
+        return findSymbol(mangle(Name), false).getAddress();
     }
 
-    uint64_t FindFunctionNamed(const std::string &Name)
+    Function *FindFunctionNamed(const std::string &Name)
     {
         return 0; // Functions are not kept around
     }
