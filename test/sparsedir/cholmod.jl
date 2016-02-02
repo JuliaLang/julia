@@ -624,3 +624,11 @@ Fnew = deserialize(b)
 @test SparseArrays.CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
 @test SparseArrays.CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
 @test SparseArrays.CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
+
+# Further issue with promotion #14894
+@test cholfact(speye(Float16, 5))\ones(5) == ones(5)
+@test cholfact(Symmetric(speye(Float16, 5)))\ones(5) == ones(5)
+@test cholfact(Hermitian(speye(Complex{Float16}, 5)))\ones(5) == ones(Complex{Float64}, 5)
+@test_throws MethodError cholfact(speye(BigFloat, 5))
+@test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
+@test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
