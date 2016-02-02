@@ -42,34 +42,34 @@ AbiState default_abi_state = 0;
 
 bool use_sret(AbiState *state, jl_value_t *ty)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return false;
-    size_t size = jl_datatype_size(ty);
-    if (size <= 8)
+    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
+    // This covers the special case of Complex64
+    size_t size = dt->size;
+    if (size == 1 || size == 2 || size == 4 || size == 8)
         return false;
     return true;
 }
 
 void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return;
-    size_t size = jl_datatype_size(ty);
-    if (size <= 8)
-        return;
-    *byRef = true;
+    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    // Use pass by reference for all structs
+    *byRef = dt->nfields > 0;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 {
-    if (!isret)
+    // Arguments are either scalar or passed by value
+    if (!isret || !jl_is_datatype(ty) || jl_is_abstracttype(ty))
         return NULL;
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    // rewrite integer sized (non-sret) struct to the corresponding integer
+    if (!dt->nfields || use_sret(NULL, ty))
         return NULL;
-    size_t size = jl_datatype_size(ty);
-    if (size > 0 && size <= 8 && !jl_is_bitstype(ty))
-        return Type::getIntNTy(getGlobalContext(), size*8);
-    return NULL;
+    return Type::getIntNTy(getGlobalContext(), dt->size * 8);
 }
 
 bool need_private_copy(jl_value_t *ty, bool byRef)
