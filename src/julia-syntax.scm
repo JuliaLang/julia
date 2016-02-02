@@ -3099,7 +3099,7 @@ So far only the second case can actually occur.
                                             alldefs))))
                         (sps   (delete-duplicates  ;; static params from all definitions
                                 (apply append
-                                       (lam:sp lam2)
+                                       (if lam2 (lam:sp lam2) '())
                                        (map (lambda (methdef) (lam:sp (cadddr methdef)))
                                             alldefs))))
                         (capt-sp (intersect cvs sps))

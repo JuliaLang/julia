@@ -3711,3 +3711,9 @@ type t2_14825{C, B} <: abstest_14825
 end
 
 @test t2_14825{Int,Int}.types[2] <: t1_14825
+
+# issue #14917
+@test isa(let generic
+          function generic end
+          end,
+          Function)
