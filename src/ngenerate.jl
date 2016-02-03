@@ -116,29 +116,4 @@ function sreplace!(ex::Expr, sym, val)
 end
 sreplace!(s::Symbol, sym, val) = s == sym ? val : s
 
-# If using the syntax that will need "desplatting",
-#     myfunction(A::AbstractArray, I::NTuple{N, Int}...)
-# return the variable name (as a string) and type
-function get_splatinfo(ex::Expr, itersym::Symbol)
-    if ex.head == :call
-        a = ex.args[end]
-        if  isa(a, Expr) && a.head == :... && length(a.args) == 1
-            b = a.args[1]
-            if isa(b, Expr) && b.head == :(::)
-                varname = string(b.args[1])
-                c = b.args[2]
-                if isa(c, Expr) && c.head == :curly && c.args[1] == :NTuple && c.args[2] == itersym
-                    T = c.args[3]
-                    return varname, T
-                end
-            end
-        end
-    end
-    "", Void
-end
-
-isfuncexpr(ex::Expr) =
-    ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
-isfuncexpr(arg) = false
-
 end
