@@ -30,7 +30,6 @@
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Support/MachO.h>
 #include <llvm/Support/COFF.h>
-#include <llvm/MC/MCDisassembler.h>
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -46,11 +45,18 @@
 #include <llvm/MC/MCInstrAnalysis.h>
 #include <llvm/MC/MCSymbol.h>
 #ifdef LLVM35
-#include <llvm/AsmParser/Parser.h>
-#include <llvm/MC/MCExternalSymbolizer.h>
+#  include <llvm/AsmParser/Parser.h>
+#  ifdef LLVM39
+#    include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#    include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
+#  else
+#    include <llvm/MC/MCExternalSymbolizer.h>
+#    include <llvm/MC/MCDisassembler.h>
+#  endif
 #else
-#include <llvm/Assembly/Parser.h>
-#include <llvm/ADT/OwningPtr.h>
+#  include <llvm/Assembly/Parser.h>
+#  include <llvm/ADT/OwningPtr.h>
+#  include <llvm/MC/MCDisassembler.h>
 #endif
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
