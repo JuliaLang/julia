@@ -18,12 +18,6 @@ TODO:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _MSC_VER
-#include <unistd.h>
-#include <sched.h>
-#else
-#define sleep(x) Sleep(1000*x)
-#endif
 
 #include "julia.h"
 #include "julia_internal.h"

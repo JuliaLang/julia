@@ -59,6 +59,7 @@ static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, 
     for(size_t i=0; i < n; i++)
         jl_gdblookup(bt_data[i]);
     gc_debug_print_status();
+    gc_debug_critical_error();
 }
 
 ///////////////////////
