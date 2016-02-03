@@ -144,6 +144,7 @@ JL_DLLEXPORT void __stack_chk_fail()
 {
     /* put your panic function or similar in here */
     fprintf(stderr, "fatal error: stack corruption detected\n");
+    gc_debug_critical_error();
     abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
 }
 #endif
@@ -895,6 +896,7 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         (specf && verifyFunction(*specf, PrintMessageAction))) {
         f->dump();
         if (specf) specf->dump();
+        gc_debug_critical_error();
         abort();
     }
 #endif
@@ -992,6 +994,7 @@ static void writeRecoveryFile(llvm::Module *mod)
     raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
     WriteBitcodeToFile(mod,OS);
     OS.flush();
+    gc_debug_critical_error();
     abort();
 }
 #endif

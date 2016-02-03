@@ -264,6 +264,7 @@ static void gc_verify(void)
     restore();
     gc_verify_track();
     gc_debug_print_status();
+    gc_debug_critical_error();
     abort();
 }
 
@@ -286,6 +287,7 @@ typedef struct {
 
 typedef struct {
     int sweep_mask;
+    int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
     jl_alloc_num_t print;
@@ -293,6 +295,7 @@ typedef struct {
 
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     GC_MARKED_NOESC,
+    0,
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0}
@@ -302,7 +305,7 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
 {
     // Not very generic and robust but good enough for a debug option
     char buff[128];
-    sprintf(buff, "JL_GC_ALLOC_%s", name);
+    sprintf(buff, "JULIA_GC_ALLOC_%s", name);
     char *env = getenv(buff);
     if (!env)
         return;
@@ -324,10 +327,11 @@ static char *gc_stack_lo;
 static void gc_debug_init(void)
 {
     gc_stack_lo = (char*)gc_get_stack_ptr();
-    char *env = getenv("JL_GC_NO_GENERATIONAL");
-    if (env && strcmp(env, "0") != 0) {
+    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
+    if (env && strcmp(env, "0") != 0)
         jl_gc_debug_env.sweep_mask = GC_MARKED;
-    }
+    env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
+    jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
     gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
     gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
     gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
@@ -349,8 +353,18 @@ void gc_debug_print_status(void)
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count,
-                   n_pause);
+                   pool_count + other_count, pool_count, other_count, n_pause);
+}
+
+void gc_debug_critical_error(void)
+{
+    gc_debug_print_status();
+    if (!jl_gc_debug_env.wait_for_debugger)
+        return;
+    jl_safe_printf("Waiting for debugger to attach\n");
+    while (1) {
+        sleep(1000);
+    }
 }
 
 static inline void gc_debug_print(void)
@@ -401,6 +415,20 @@ static inline int gc_debug_check_other(void)
 static inline int gc_debug_check_pool(void)
 {
     return 0;
+}
+
+void gc_debug_print_status(void)
+{
+    // May not be accurate but should be helpful enough
+    uint64_t pool_count = gc_num.poolalloc;
+    uint64_t big_count = gc_num.bigalloc;
+    jl_safe_printf("Allocations: %" PRIu64 " "
+                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                   pool_count + big_count, pool_count, big_count, n_pause);
+}
+
+void gc_debug_critical_error(void)
+{
 }
 
 static inline void gc_debug_print(void)
