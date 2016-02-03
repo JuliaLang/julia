@@ -32,8 +32,8 @@ cache:
 # Cache any downloads from sourceforge because it's really unreliable
   - i686-4.9.2-release-win32-sjlj-rt_v4-rev3.7z
   - x86_64-4.9.2-release-win32-seh-rt_v4-rev3.7z
-  - llvm-3.7.1-i686-w64-mingw32-juliadeps-r03.7z
-  - llvm-3.7.1-x86_64-w64-mingw32-juliadeps-r03.7z
+  - llvm-3.7.1-i686-w64-mingw32-juliadeps-r04.7z
+  - llvm-3.7.1-x86_64-w64-mingw32-juliadeps-r04.7z
 
 build_script:
 # If there's a newer build queued for the same PR, cancel this one
