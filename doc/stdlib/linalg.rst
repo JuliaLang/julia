@@ -149,8 +149,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` factorization. The ``uplo`` argument may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``PivotedCholesky`` objects: ``size``\ , ``, ``inv``\ , ``det``\ , and ``rank``\ . The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
-.. function:: cholfact(::Union{SparseMatrixCSC,Symmetric{Float64,SparseMatrixCSC{Flaot64,
-                  SuiteSparse_long}},Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},
+.. function:: cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
+                  Symmetric{<:Real,SparseMatrixCSC{<:Real,
+                  SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},
                   SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
@@ -161,10 +162,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
-.. function:: cholfact!(F::Factor, A::Union{SparseMatrixCSC,
-              Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-              Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
-              shift = 0.0) -> CHOLMOD.Factor
+.. function:: cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
+                  SparseMatrixCSC{Complex{<:Real}},
+                  Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
+                  Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
+                  shift = 0.0) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
 
@@ -216,9 +218,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute an ``LDLt`` factorization of a real symmetric tridiagonal matrix such that ``A = L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector. The main use of an ``LDLt`` factorization ``F = ldltfact(A)`` is to solve the linear system of equations ``Ax = b`` with ``F\b``\ .
 
-.. function:: ldltfact(::Union{SparseMatrixCSC,
-                  Symmetric{Float64,SparseMatrixCSC{Flaot64,SuiteSparse_long}},
-                  Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+.. function:: ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
+                  Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
+                  Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
                   shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
@@ -229,9 +231,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
-.. function:: ldltfact!(F::Factor, A::Union{SparseMatrixCSC,
-                  Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
-                  Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}};
+.. function:: ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
+                  SparseMatrixCSC{Complex{<:Real}},
+                  Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
+                  Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
                   shift = 0.0) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
