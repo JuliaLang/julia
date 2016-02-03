@@ -543,7 +543,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (ewc) {
         if (thk->unspecialized == NULL) {
-            thk->unspecialized = jl_new_lambda_info(thk, jl_emptysvec, jl_typeof(jl_emptytuple));
+            thk->unspecialized = jl_new_lambda_info(thk, jl_emptysvec, (jl_tupletype_t*)jl_typeof(jl_emptytuple));
             jl_gc_wb(thk, thk->unspecialized);
         }
         if (!jl_in_inference) {
@@ -613,7 +613,7 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
     return 0;
 }
 
-void print_func_loc(JL_STREAM *s, jl_value_t *li);
+void print_func_loc(JL_STREAM *s, jl_method_info_t *li);
 
 void jl_check_static_parameter_conflicts(jl_method_info_t *li, jl_svec_t *t, jl_sym_t *fname)
 {
@@ -792,7 +792,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_info_t *f, jl_valu
         }
     }
 
-    jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
+    f = jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
     if (jl_boot_file_loaded && f->ast && jl_is_expr(f->ast)) {
         f->ast = jl_compress_ast(f, f->ast);
         jl_gc_wb(f, f->ast);

@@ -1320,10 +1320,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         JL_GC_POP();
         return NULL;
     }
-    if (!linfo->specTypes) {
-        jl_printf(JL_STDERR, "WARNING: Returned code may not match what actually runs.\n");
-        linfo = jl_get_unspecialized(linfo);
-    }
+    assert(linfo->specTypes);
 
     if (!getdeclarations) {
         Function *llvmDecl = nullptr;

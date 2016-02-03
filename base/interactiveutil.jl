@@ -65,8 +65,7 @@ function edit(path::AbstractString, line::Integer=0)
 end
 
 function edit(m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    edit(string(file), line)
+    edit(string(m.file), m.line)
 end
 
 edit(f)          = edit(functionloc(f)...)
@@ -599,7 +598,7 @@ function summarysize(obj::MethodTable, seen, excl)
     return size
 end
 
-function summarysize(m::Method, seen, excl)
+function summarysize(m::MethodList, seen, excl)
     size::Int = 0
     while true
         haskey(seen, m) ? (return size) : (seen[m] = true)
@@ -608,10 +607,8 @@ function summarysize(m::Method, seen, excl)
             size += summarysize(m.func, seen, excl)::Int
         end
         size += summarysize(m.sig, seen, excl)::Int
-        size += summarysize(m.tvars, seen, excl)::Int
-        size += summarysize(m.invokes, seen, excl)::Int
         m.next === nothing && break
-        m = m.next::Method
+        m = m.next::MethodList
     end
     return size
 end

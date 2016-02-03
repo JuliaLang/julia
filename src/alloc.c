@@ -43,7 +43,7 @@ jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;
-jl_datatype_t *jl_method_type;
+jl_datatype_t *jl_methodlist_type;
 jl_datatype_t *jl_lambda_info_type;
 jl_datatype_t *jl_method_info_type;
 jl_datatype_t *jl_module_type;
@@ -281,10 +281,24 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
         (jl_method_info_t*)newobj((jl_value_t*)jl_method_info_type,
                                   NWORDS(sizeof(jl_method_info_t)));
     li->ast = ast;
+    li->sig = NULL;
+    li->tvars = NULL;
+    li->next = NULL;
     li->file = null_sym;
     li->line = 0;
     li->pure = 0;
+    li->isstaged = 0;
+    li->va = 0;
     li->called = 0xff;
+    li->module = ctx;
+    li->sparam_syms = tvars;
+    li->tfunc = jl_nothing;
+    li->roots = NULL;
+    li->specializations = NULL;
+    li->name = anonymous_sym;
+    li->invokes = (jl_methtable_t*)jl_nothing;
+    li->next = (jl_method_info_t*)jl_nothing;
+    li->unspecialized = NULL;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
         if (has_meta(body, pure_sym))
@@ -316,13 +330,6 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
         }
         li->called = called;
     }
-    li->module = ctx;
-    li->sparam_syms = tvars;
-    li->tfunc = jl_nothing;
-    li->roots = NULL;
-    li->unspecialized = NULL;
-    li->specializations = NULL;
-    li->name = anonymous_sym;
     return li;
 }
 
@@ -351,20 +358,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_method_info_t *ast, jl_svec
     li->unspecialized = NULL;
     li->def = ast;
     return li;
-}
-
-jl_method_info_t *jl_copy_method_info(jl_method_info_t *linfo)
-{
-    jl_method_info_t *new_linfo =
-        jl_new_method_info(linfo->ast, linfo->sparam_syms, linfo->module);
-    new_linfo->tfunc = linfo->tfunc;
-    new_linfo->name = linfo->name;
-    new_linfo->roots = linfo->roots;
-    new_linfo->unspecialized = linfo->unspecialized;
-    new_linfo->specializations = linfo->specializations;
-    new_linfo->file = linfo->file;
-    new_linfo->line = linfo->line;
-    return new_linfo;
 }
 
 // symbols --------------------------------------------------------------------
@@ -546,7 +539,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs = (jl_methlist_t*)jl_nothing;
+    mt->defs = (jl_method_info_t*)jl_nothing;
     mt->cache = (jl_methlist_t*)jl_nothing;
     mt->cache_arg1 = (jl_array_t*)jl_nothing;
     mt->cache_targ = (jl_array_t*)jl_nothing;

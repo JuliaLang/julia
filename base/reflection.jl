@@ -170,8 +170,8 @@ end
 
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
-code_lowered(f, t::ANY=Tuple) = map(m->uncompressed_ast(m.func), methods(f, t))
-function methods(f::ANY,t::ANY)
+code_lowered(f, t::ANY=Tuple) = map(m->uncompressed_ast(m), methods(f, t))
+function methods(f::ANY, t::ANY)
     if isa(f,Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -240,13 +240,13 @@ function length(mt::MethodTable)
 end
 
 start(mt::MethodTable) = mt.defs
-next(mt::MethodTable, m::Method) = (m,m.next)
+next(mt::MethodTable, m::Method) = (m, m.next)
 done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
 uncompressed_ast(l::LambdaInfo) =
     isa(l.inferred_ast,Expr) ? l.inferred_ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l.def, l.inferred_ast)
-uncompressed_ast(l::MethodInfo) =
+uncompressed_ast(l::Method) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
@@ -279,7 +279,7 @@ code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m, types)
-    linfo = Core.Inference.func_for_method(m[3],m[1],m[2])
+    linfo = Core.Inference.func_for_method(m[3], m[1], m[2])
     if linfo === Core.Inference.NF
         error("cannot call @generated function `", m[3], "` ",
               "with abstract argument types: ", types)
@@ -348,12 +348,11 @@ function which_module(m::Module, s::Symbol)
 end
 
 function functionloc(m::Method)
-    lsd = m.func::MethodInfo
-    ln = lsd.line
+    ln = m.line
     if ln <= 0
         error("could not determine location of method definition")
     end
-    (find_source_file(string(lsd.file)), ln)
+    (find_source_file(string(m.file)), ln)
 end
 
 functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
@@ -377,7 +376,7 @@ function function_module(f, types::ANY)
     if isempty(m)
         error("no matching methods")
     end
-    m[1].func.module
+    m[1].module
 end
 
 function method_exists(f::ANY, t::ANY)

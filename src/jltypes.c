@@ -3381,15 +3381,13 @@ void jl_init_types(void)
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
-    jl_method_type =
-        jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_emptysvec,
-                        jl_svec(7, jl_symbol("sig"), jl_symbol("va"), jl_symbol("isstaged"),
-                                jl_symbol("tvars"), jl_symbol("func"),
-                                jl_symbol("invokes"), jl_symbol("next")),
-                        jl_svec(7, jl_type_type, jl_bool_type, jl_bool_type,
-                                jl_any_type, jl_any_type,
+    jl_methodlist_type =
+        jl_new_datatype(jl_symbol("MethodList"), jl_any_type, jl_emptysvec,
+                        jl_svec(4, jl_symbol("sig"), jl_symbol("va"),
+                                jl_symbol("func"), jl_symbol("next")),
+                        jl_svec(4, jl_type_type, jl_bool_type,
                                 jl_any_type, jl_any_type),
-                        0, 1, 4);
+                        0, 1, 2);
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);
@@ -3498,9 +3496,11 @@ void jl_init_types(void)
                         0, 1, 4);
 
     jl_method_info_type =
-        jl_new_datatype(jl_symbol("MethodInfo"),
+        jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(12, jl_symbol("ast"),
+                        jl_svec(18, jl_symbol("ast"),
+                                jl_symbol("sig"),
+                                jl_symbol("tvars"),
                                 jl_symbol("sparam_syms"),
                                 jl_symbol("tfunc"),
                                 jl_symbol("name"),
@@ -3511,8 +3511,14 @@ void jl_init_types(void)
                                 jl_symbol("file"),
                                 jl_symbol("line"),
                                 jl_symbol("called"),
-                                jl_symbol("pure")),
-                        jl_svec(12, jl_any_type,
+                                jl_symbol("pure"),
+                                jl_symbol("isstaged"),
+                                jl_symbol("va"),
+                                jl_symbol("invokes"),
+                                jl_symbol("next")),
+                        jl_svec(18, jl_any_type,
+                                jl_type_type,
+                                jl_any_type,
                                 jl_simplevector_type,
                                 jl_any_type,
                                 jl_sym_type,
@@ -3523,8 +3529,12 @@ void jl_init_types(void)
                                 jl_sym_type,
                                 jl_int32_type,
                                 jl_int32_type,
-                                jl_bool_type),
-                        0, 1, 4);
+                                jl_bool_type,
+                                jl_bool_type,
+                                jl_bool_type,
+                                jl_any_type,
+                                jl_any_type),
+                        0, 1, 1);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
@@ -3578,7 +3588,7 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
-    jl_compute_field_offsets(jl_method_type);
+    jl_compute_field_offsets(jl_methodlist_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_expr_type);
     jl_compute_field_offsets(jl_linenumbernode_type);

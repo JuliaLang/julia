@@ -651,7 +651,7 @@ let stagedcache=Dict{Any,Any}()
         spvals = Any[env[i] for i = 2:2:length(env)]
         _any(sp -> isa(sp, TypeVar), spvals) && empty!(spvals)
         if !m.isstaged
-            return LambdaInfo(m.func, svec(spvals...), tt)
+            return LambdaInfo(m, svec(spvals...), tt)
         elseif haskey(stagedcache, (m, tt))
             return stagedcache[(m, tt)]
         else
@@ -661,7 +661,7 @@ let stagedcache=Dict{Any,Any}()
                 # we can't guarantee that their type behavior is monotonic.
                 return NF
             end
-            f = ccall(:jl_instantiate_staged, Any, (Any, Any, Any), m.func, tt, env)
+            f = ccall(:jl_instantiate_staged, Any, (Any, Any, Any), m, tt, env)
             f = LambdaInfo(f, svec(spvals...), tt)
             stagedcache[(m, tt)] = f
             return f
@@ -1384,7 +1384,7 @@ f_argnames(ast) =
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-function typeinf_ext(linfo::LambdaInfo, atypes::ANY, def::MethodInfo)
+function typeinf_ext(linfo::LambdaInfo, atypes::ANY, def::Method)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
@@ -1394,7 +1394,7 @@ function typeinf_ext(linfo::LambdaInfo, atypes::ANY, def::MethodInfo)
 end
 
 typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo.def,true,false)
-typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY,def::MethodInfo) = typeinf(linfo,atypes,sparams,def,true,false)
+typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY,def::Method) = typeinf(linfo,atypes,sparams,def,true,false)
 
 CYCLE_ID = 1
 
@@ -1403,7 +1403,7 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::MethodInfo, cop, needtree)
+function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Method, cop, needtree)
     if def.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
@@ -1484,7 +1484,7 @@ typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::ANY; optimize=true) =
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 # compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
-function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::MethodInfo, curtype, cop, optimize)
+function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Method, curtype, cop, optimize)
     ast0 = def.ast
     #if dbg
     #    print("typeinf ", def.name, " ", object_id(ast0), "\n")
@@ -2298,7 +2298,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     if linfo === NF
         return NF
     end
-    methfunc = meth[3].func
+    methfunc = meth[3]
     methsig = meth[3].sig
     if !(atype <: metharg)
         incompletematch = true
@@ -2346,7 +2346,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     #                 return NF
     #             end
     #             meth = meth[1]::Tuple
-    #             linfo2 = meth[3].func.code
+    #             linfo2 = meth[3].code
     #             if linfo2 !== linfo
     #                 return NF
     #             end
@@ -3354,6 +3354,6 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-#tfunc(f,t) = methods(f,t)[1].func.code.tfunc
+#tfunc(f,t) = methods(f,t)[1].code.tfunc
 
 ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)

@@ -286,14 +286,16 @@ typedef struct _jl_llvm_functions_t {
     void *specFunctionObject;
 } jl_llvm_functions_t;
 
-typedef struct {
+typedef struct _jl_method_info_t {
     JL_DATA_TYPE
     // this holds the static data for an AST
     // a syntax tree, static parameter names
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
     jl_value_t *ast;
-    // sparams is a vector of values indexed by symbols
+    jl_tupletype_t *sig;
+    // sparam_syms is a svec of the names of the tvars
+    jl_svec_t *tvars;
     jl_svec_t *sparam_syms;
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
@@ -307,6 +309,14 @@ typedef struct {
     int32_t line;
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t pure;
+    uint8_t isstaged;
+    uint8_t va;
+
+    // cache of specializations of this method for invoke(), i.e.
+    // cases where this method was called even though it was not necessarily
+    // the most specific for the argument types.
+    struct _jl_methtable_t *invokes;
+    struct _jl_method_info_t *next;
 } jl_method_info_t;
 
 typedef struct _jl_lambda_info_t {
@@ -458,23 +468,15 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     JL_DATA_TYPE
     jl_tupletype_t *sig;
-    int8_t va;
-    int8_t isstaged;
-    jl_svec_t *tvars;
-    jl_value_t *func; // TODO: jl_method_info_t, but currently this is used for cachelist which has jl_lambda_info_t
-    // cache of specializations of this method for invoke(), i.e.
-    // cases where this method was called even though it was not necessarily
-    // the most specific for the argument types.
-    struct _jl_methtable_t *invokes;
-    // TODO: pointer from specialized to original method
-    //jl_function_t *orig_method;
+    int8_t va; // sig has Vararg
+    jl_lambda_info_t *func;
     struct _jl_methlist_t *next;
 } jl_methlist_t;
 
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
-    jl_methlist_t *defs;
+    jl_method_info_t *defs;
     jl_methlist_t *cache;
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
@@ -586,7 +588,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_methodlist_type;
 
 extern JL_DLLEXPORT jl_svec_t *jl_emptysvec;
 extern JL_DLLEXPORT jl_value_t *jl_emptytuple;
