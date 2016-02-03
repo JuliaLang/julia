@@ -171,6 +171,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
+    gc_debug_critical_error();
     abort();
 }
 

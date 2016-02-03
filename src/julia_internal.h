@@ -5,6 +5,12 @@
 
 #include <options.h>
 #include <uv.h>
+#ifndef _MSC_VER
+#include <unistd.h>
+#include <sched.h>
+#else
+#define sleep(x) Sleep(1000*x)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,11 +103,8 @@ static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_val
         gc_setmark_buf(bufptr, jl_astaggedvalue(parent)->gc_bits);
 }
 
-#ifdef GC_DEBUG_ENV
 void gc_debug_print_status(void);
-#else
-#define gc_debug_print_status()
-#endif
+void gc_debug_critical_error(void);
 #if defined(GC_FINAL_STATS)
 void jl_print_gc_stats(JL_STREAM *s);
 #else
