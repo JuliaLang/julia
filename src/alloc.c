@@ -280,16 +280,14 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
     jl_method_info_t *li =
         (jl_method_info_t*)newobj((jl_value_t*)jl_method_info_type,
                                   NWORDS(sizeof(jl_method_info_t)));
-    li->ast = ast;
+    JL_GC_PUSH1(&li);
     li->sig = NULL;
     li->tvars = NULL;
     li->next = NULL;
     li->file = null_sym;
     li->line = 0;
-    li->pure = 0;
     li->isstaged = 0;
     li->va = 0;
-    li->called = 0xff;
     li->module = ctx;
     li->sparam_syms = tvars;
     li->tfunc = jl_nothing;
@@ -299,10 +297,11 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
     li->invokes = (jl_methtable_t*)jl_nothing;
     li->next = (jl_method_info_t*)jl_nothing;
     li->unspecialized = NULL;
+    uint8_t pure = 0, called = 0xff;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
         if (has_meta(body, pure_sym))
-            li->pure = 1;
+            pure = 1;
         jl_value_t *body1 = skip_meta(body);
         if (jl_is_linenode(body1)) {
             li->file = jl_linenode_file(body1);
@@ -312,10 +311,10 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
             li->file = (jl_sym_t*)jl_exprarg(body1, 1);
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
-        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
-        jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
+        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
+        jl_array_t *args = jl_lam_args((jl_expr_t*)ast);
         size_t narg = jl_array_len(args);
-        uint8_t called=0;
+        called=0;
         int i, j=0;
         for(i=1; i < narg && i <= 8; i++) {
             jl_value_t *ai = jl_cellref(args,i);
@@ -328,37 +327,67 @@ JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast, jl_svec_t *tv
             if (jl_unbox_long(jl_cellref(vj,2))&64)
                 called |= (1<<(i-1));
         }
-        li->called = called;
     }
+
+    jl_lambda_info_t *unspec = jl_spec_lambda_info(NULL, jl_emptysvec, (jl_tupletype_t*)jl_anytuple_type);
+    unspec->ast = ast;
+    unspec->pure = pure;
+    unspec->called = called;
+    unspec->def = li;
+    li->unspecialized = unspec;
+    jl_gc_wb(li, unspec);
+    JL_GC_POP();
     return li;
 }
 
-
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_method_info_t *ast, jl_svec_t *sparam_vals, jl_datatype_t *specTypes)
+// return a new lambda-info that has some extra static parameters merged in.
+JL_DLLEXPORT jl_lambda_info_t *jl_spec_lambda_info(jl_lambda_info_t *li, jl_svec_t *sp, jl_tupletype_t *types)
 {
-    jl_lambda_info_t *li =
+    assert((li && jl_svec_len(li->def->sparam_syms) == jl_svec_len(sp)) || sp == jl_emptysvec);
+    jl_lambda_info_t *nli =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
                                   NWORDS(sizeof(jl_lambda_info_t)));
-    li->inferred_ast = ast->ast;
-    li->rettype = (jl_value_t*)jl_any_type;
-    li->pure = ast->pure;
-    li->called = ast->called;
-    li->sparam_vals = sparam_vals;
-    li->fptr = NULL;
-    li->jlcall_api = 0;
-    li->functionObjects.functionObject = NULL;
-    li->functionObjects.specFunctionObject = NULL;
-    li->functionObjects.cFunctionList = NULL;
-    li->functionID = 0;
-    li->specFunctionID = 0;
-    li->specTypes = specTypes;
-    li->inferred = 0;
-    li->inInference = 0;
-    li->inCompile = 0;
-    li->unspecialized = NULL;
-    li->def = ast;
-    return li;
+    nli->sparam_vals = sp;
+    nli->specTypes = types;
+
+    // clone the basic metadata
+    nli->ast = li ? li->ast : NULL;
+    nli->def = li ? li->def : NULL;
+    nli->rettype = li ? li->rettype : (jl_value_t*)jl_any_type;
+    nli->pure = li ? li->pure : 0;
+    nli->called = li ? li->called : 0xff;
+
+    // some values never get cloned
+    nli->inInference = 0;
+    nli->inCompile = 0;
+    nli->unspecialized_ducttape = NULL;
+    nli->inferred = 0;
+    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF && li != NULL) {
+        // copy fptr from the unspecialized method definition
+        nli->fptr = li->fptr;
+        nli->jlcall_api = li->jlcall_api;
+        nli->functionObjects.functionObject = li->functionObjects.functionObject;
+        nli->functionObjects.specFunctionObject = li->functionObjects.specFunctionObject;
+        nli->functionID = li->functionID;
+        nli->specFunctionID = li->functionID;
+        if (nli->fptr == NULL) {
+            jl_printf(JL_STDERR,"code missing for ");
+            jl_static_show(JL_STDERR, (jl_value_t*)nli);
+            jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
+        }
+    }
+    else {
+        nli->fptr = NULL;
+        nli->jlcall_api = 0;
+        nli->functionObjects.functionObject = NULL;
+        nli->functionObjects.specFunctionObject = NULL;
+        nli->functionObjects.cFunctionList = NULL;
+        nli->functionID = 0;
+        nli->specFunctionID = 0;
+    }
+    return nli;
 }
+
 
 // symbols --------------------------------------------------------------------
 

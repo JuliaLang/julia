@@ -29,7 +29,7 @@ type VarInfo
     mod::Module
 end
 
-function VarInfo(linfo::LambdaInfo, ast=linfo.inferred_ast)
+function VarInfo(linfo::LambdaInfo, ast=linfo.def.unspecialized.ast)
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, ast)
     end
@@ -65,7 +65,7 @@ type EmptyCallStack
 end
 
 type CallStack
-    ast
+    meth::Method
     types::Type
     recurred::Bool
     cycleid::Int
@@ -73,7 +73,7 @@ type CallStack
     prev::Union{EmptyCallStack,CallStack}
     sv::VarInfo
 
-    CallStack(ast, types::ANY, prev) = new(ast, types, false, 0, Bottom, prev)
+    CallStack(meth, types::ANY, prev) = new(meth, types, false, 0, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -741,7 +741,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
         limit = false
         # look at the stack to detect recursive calls with growing argument lists
         while sp !== EmptyCallStack()
-            if linfo.def.ast === sp.ast && length(argtypes) > length(sp.types.parameters)
+            if linfo.def === sp.meth && length(argtypes) > length(sp.types.parameters)
                 limit = true; break
             end
             sp = sp.prev
@@ -1440,7 +1440,7 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Met
     end
     # TODO: typeinf currently gets stuck without this
     if def.name === :abstract_interpret || def.name === :tuple_elim_pass || def.name === :abstract_call_gf
-        return (def.ast, Any)
+        return (def.unspecialized.ast, Any)
     end
 
     (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
@@ -1485,7 +1485,6 @@ tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 # compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
 function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Method, curtype, cop, optimize)
-    ast0 = def.ast
     #if dbg
     #    print("typeinf ", def.name, " ", object_id(ast0), "\n")
     #end
@@ -1501,7 +1500,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
 
     f = inference_stack
     while !isa(f,EmptyCallStack)
-        if is(f.ast,ast0)
+        if is(f.meth, def)
             # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
             td = type_depth(atypes)
             if td > type_depth(f.types)
@@ -1540,7 +1539,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
-        if (is(f.ast,ast0) || f.ast==ast0) && typeseq(f.types, atypes)
+        if (is(f.meth, def) || f.meth.unspecialized.ast == def.unspecialized.ast) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
             (f::CallStack).cycleid = CYCLE_ID
@@ -1567,7 +1566,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     if cop
         ast = ccall(:jl_prepare_ast, Any, (Any,), def)::Expr
     else
-        ast = linfo.inferred_ast
+        ast = linfo.ast
     end
 
     sv = VarInfo(linfo, ast)
@@ -1605,7 +1604,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     end
 
     # our stack frame
-    frame = CallStack(ast0, atypes, inference_stack)
+    frame = CallStack(def, atypes, inference_stack)
     frame.sv = sv
     inference_stack = frame
     frame.result = curtype
@@ -1810,7 +1809,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                             # for an example see test/libgit2.jl on 0.5-pre master
                             # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
                             inference_stack = (inference_stack::CallStack).prev
-                            return (ast0, Any, false)
+                            return (def.unspecialized.ast, Any, false)
                         end
                     end
                     handler_at[l] = cur_hand
@@ -2339,7 +2338,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     #     # check call stack to see if this argument list is growing
     #     st = inference_stack
     #     while !isa(st, EmptyCallStack)
-    #         if st.ast === linfo.def.ast && length(atypes) > length(st.types)
+    #         if st.meth === linfo.def && length(atypes) > length(st.types)
     #             atypes = limit_tuple_type(atypes)
     #             meth = _methods(f, atypes, 1)
     #             if meth === false || length(meth) != 1

@@ -292,7 +292,6 @@ typedef struct _jl_method_info_t {
     // a syntax tree, static parameter names
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
-    jl_value_t *ast;
     jl_tupletype_t *sig;
     // sparam_syms is a svec of the names of the tvars
     jl_svec_t *tvars;
@@ -307,8 +306,6 @@ typedef struct _jl_method_info_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    int32_t called;  // bit flags: whether each of the first 8 arguments is called
-    uint8_t pure;
     uint8_t isstaged;
     uint8_t va;
 
@@ -324,18 +321,19 @@ typedef struct _jl_lambda_info_t {
     // this holds the static data for an inferred function:
     // a syntax tree, static parameters, and (if it has been compiled)
     // a function pointer.
-    jl_value_t *inferred_ast;
+    jl_value_t *ast;
     jl_value_t *rettype;
     // sparam_vals is a vector of values indexed by def->sparam_syms
     jl_svec_t *sparam_vals;
     jl_tupletype_t *specTypes;  // argument types this will be compiled for
     // a slower-but-works version of this function as a fallback
-    struct _jl_lambda_info_t *unspecialized;
+    // this keeps codegen happy if the method contains intrinsics that depend on an sparam
+    struct _jl_lambda_info_t *unspecialized_ducttape;
     jl_method_info_t *def;  // original this is specialized from
     uint8_t pure;
+    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
 
     // hidden fields:
-    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t inferred : 1;
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
     uint8_t inInference : 1;    // flags to tell if inference is running on this function
@@ -1055,9 +1053,9 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_method_info_t *ast,
-                                                  jl_svec_t *sparam_vals,
-                                                  jl_datatype_t *specTypes);
+JL_DLLEXPORT jl_lambda_info_t *jl_spec_lambda_info(jl_lambda_info_t *li,
+                                                   jl_svec_t *sp,
+                                                   jl_tupletype_t *types);
 JL_DLLEXPORT jl_method_info_t *jl_new_method_info(jl_value_t *ast,
                                                   jl_svec_t *tvars,
                                                   jl_module_t *ctx);

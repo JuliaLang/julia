@@ -558,7 +558,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_method_info_t *lam,
                                              jl_value_t **loc, size_t nl)
 {
-    jl_expr_t *ast = (jl_expr_t*)lam->ast;
+    jl_expr_t *ast = (jl_expr_t*)lam->unspecialized->ast;
     jl_array_t *stmts = jl_lam_body(ast)->args;
     size_t nargs = jl_array_len(jl_lam_args(ast));
     jl_array_t *l = jl_lam_vinfo(ast);

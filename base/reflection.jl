@@ -245,9 +245,8 @@ done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
 uncompressed_ast(l::LambdaInfo) =
-    isa(l.inferred_ast,Expr) ? l.inferred_ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l.def, l.inferred_ast)
-uncompressed_ast(l::Method) =
-    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+    isa(l.ast, Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l.def, l.ast)
+uncompressed_ast(l::Method) = uncompressed_ast(l.unspecialized)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)

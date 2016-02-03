@@ -484,7 +484,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 e = cdr_(e);
             }
             nli = jl_new_method_info((jl_value_t*)ex, tvars, jl_current_module);
-            jl_preresolve_globals(nli->ast, nli);
+            jl_preresolve_globals(nli->unspecialized->ast, nli);
             JL_GC_POP();
             return (jl_value_t*)nli;
         }
@@ -914,11 +914,9 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
 
 jl_sym_t *jl_lam_argname(jl_method_info_t *li, int i)
 {
-    jl_expr_t *ast;
-    if (jl_is_expr(li->ast))
-        ast = (jl_expr_t*)li->ast;
-    else
-        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
+    jl_expr_t *ast = (jl_expr_t*)li->unspecialized->ast;
+    if (!jl_is_expr(ast))
+        ast = (jl_expr_t*)jl_uncompress_ast(li, (jl_value_t*)ast);
     // NOTE (gc root): `ast` is not rooted here, but jl_lam_args and jl_cellref
     // do not allocate.
     return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
@@ -1091,8 +1089,7 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr)
 // this tree can then be further mutated by optimization passes.
 JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_method_info_t *li)
 {
-    jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;
+    jl_value_t *ast = li->unspecialized->ast;
     JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
         ast = jl_uncompress_ast(li, ast);
@@ -1169,7 +1166,7 @@ static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
 
 int jl_local_in_linfo(jl_method_info_t *linfo, jl_sym_t *sym)
 {
-    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast), sym) ||
+    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->unspecialized->ast), sym) ||
         jl_in_sym_svec(linfo->sparam_syms, sym);
 }
 
@@ -1185,7 +1182,7 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_method_info_t *lam)
     }
     else if (jl_is_method_info(expr)) {
         jl_method_info_t *l = (jl_method_info_t*)expr;
-        (void)jl_preresolve_globals(l->ast, l);
+        (void)jl_preresolve_globals(l->unspecialized->ast, l);
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;

@@ -60,17 +60,16 @@
 #end
 
 #type LambdaInfo
-#    inferred_ast::Expr
+#    ast::Union{Expr, Vector{UInt8}}
 #    rettype::Any
 #    sparam_vals::SimpleVector
 #    specTypes::Any
-#    unspecialized::LambdaInfo
+#    unspecialized_ducttape::LambdaInfo
 #    def::Method
 #    pure::Bool
 #end
 
 #type Method
-#    ast::Expr
 #    sig::Type
 #    tvars::Expr
 #    sparam_syms::SimpleVector
@@ -317,7 +316,7 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
-LambdaInfo(ast::Method, sparam_vals::SimpleVector, specTypes::DataType) = ccall(:jl_new_lambda_info, Any, (Any, Any, Any), ast, sparam_vals, specTypes)
+LambdaInfo(ast::Method, sparam_vals::SimpleVector, specTypes::DataType) = ccall(:jl_spec_lambda_info, Any, (Any, Any, Any), ast.unspecialized, sparam_vals, specTypes)
 
 Void() = nothing
 

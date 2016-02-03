@@ -514,12 +514,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (head == thunk_sym) {
         thk = (jl_method_info_t*)jl_exprarg(ex,0);
         assert(jl_is_method_info(thk));
-        if (!jl_is_expr(thk->ast)) {
-            thk->ast = jl_uncompress_ast(thk, thk->ast);
-            jl_gc_wb(thk, thk->ast);
+        if (!jl_is_expr(thk->unspecialized->ast)) {
+            thk->unspecialized->ast = jl_uncompress_ast(thk, thk->unspecialized->ast);
+            jl_gc_wb(thk->unspecialized, thk->unspecialized->ast);
         }
         assert(jl_svec_len(thk->sparam_syms) == 0);
-        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->unspecialized->ast), fast, jl_current_module);
     }
     else {
         if (head && jl_eval_with_compiler_p((jl_expr_t*)ex, fast, jl_current_module)) {
@@ -542,10 +542,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (ewc) {
-        if (thk->unspecialized == NULL) {
-            thk->unspecialized = jl_new_lambda_info(thk, jl_emptysvec, (jl_tupletype_t*)jl_typeof(jl_emptytuple));
-            jl_gc_wb(thk, thk->unspecialized);
-        }
+        thk->unspecialized->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
         if (!jl_in_inference) {
             jl_type_infer(thk->unspecialized);
         }
@@ -620,8 +617,8 @@ void jl_check_static_parameter_conflicts(jl_method_info_t *li, jl_svec_t *t, jl_
     jl_array_t *vinfo;
     size_t nvars;
 
-    if (li->ast && jl_is_expr(li->ast)) {
-        vinfo = jl_lam_vinfo((jl_expr_t*)li->ast);
+    if (li->unspecialized->ast && jl_is_expr(li->unspecialized->ast)) {
+        vinfo = jl_lam_vinfo((jl_expr_t*)li->unspecialized->ast);
         nvars = jl_array_len(vinfo);
         for(size_t i=0; i < jl_svec_len(t); i++) {
             for(size_t j=0; j < nvars; j++) {
@@ -727,7 +724,7 @@ static jl_method_info_t *expr_to_lambda_ast(jl_method_info_t *f)
     }
     // wrap in a MethodInfo
     f = jl_new_method_info((jl_value_t*)f, tvar_syms, jl_current_module);
-    jl_preresolve_globals(f->ast, f);
+    jl_preresolve_globals(f->unspecialized->ast, f);
     JL_GC_POP();
     return f;
 }
@@ -793,9 +790,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_info_t *f, jl_valu
     }
 
     f = jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
-    if (jl_boot_file_loaded && f->ast && jl_is_expr(f->ast)) {
-        f->ast = jl_compress_ast(f, f->ast);
-        jl_gc_wb(f, f->ast);
+    if (jl_boot_file_loaded && f->unspecialized->ast && jl_is_expr(f->unspecialized->ast)) {
+        f->unspecialized->ast = jl_compress_ast(f, f->unspecialized->ast);
+        jl_gc_wb(f->unspecialized, f->unspecialized->ast);
     }
     JL_GC_POP();
 }

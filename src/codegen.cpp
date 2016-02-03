@@ -4205,7 +4205,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     assert(definitions && "Capturing definitions is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
-    jl_expr_t *ast = (jl_expr_t*)lam->inferred_ast;
+    jl_expr_t *ast = (jl_expr_t*)lam->ast;
     JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
         ast = (jl_expr_t*)jl_uncompress_ast(lam->def, (jl_value_t*)ast);

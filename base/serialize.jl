@@ -19,7 +19,7 @@ const TAGS = Any[
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, SymbolNode, LabelNode, GotoNode,
-    QuoteNode, TopNode, TypeVar, Box, Method,
+    QuoteNode, TopNode, TypeVar, Box, :reserved00,
     Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
@@ -72,7 +72,6 @@ const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
 const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
-const METHODDATA_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
