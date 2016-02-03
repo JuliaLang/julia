@@ -503,9 +503,23 @@ threadcall_test_func(x) =
 @test threadcall_test_func(3) == 1
 @test threadcall_test_func(259) == 1
 
-@test 1.9 > @elapsed @sync for i = 1:2
-    @unix_only @async @threadcall(:sleep, Cuint, (Cuint,), 1)
-    @windows_only @async @threadcall(:Sleep, Void, (UInt32,), 1000)
+let n=3
+    tids=[]
+    @sync for i in 1:10^n
+        @unix_only @async push!(tids, @threadcall(:pthread_self, Cuint, ()))
+        @windows_only @async push!(tids, @threadcall(:GetCurrentThreadId, Cuint, ()))
+    end
+
+    d=Dict()
+    for t in tids
+        d[t] = get(d, t, 0) + 1
+    end
+
+    @test sum(values(d)) == 10^n
+
+    for v in values(d)
+        @test v < 10^n
+    end
 end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
