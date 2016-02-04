@@ -528,6 +528,7 @@ getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
 reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
+length(p::Pair) = 2
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛

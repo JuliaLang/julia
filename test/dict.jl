@@ -10,6 +10,7 @@ p = Pair(1,2)
 @test !done(p,2)
 @test done(p,3)
 @test !done(p,0)
+@test endof(p) == length(p) == 2
 @test Base.indexed_next(p, 1, (1,2)) == (1,2)
 @test Base.indexed_next(p, 2, (1,2)) == (2,3)
 @test (1=>2) < (2=>3)
