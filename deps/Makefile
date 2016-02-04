@@ -340,6 +340,12 @@ endif
 
 LLVM_VER_MAJ:=$(word 1, $(subst ., ,$(LLVM_VER)))
 LLVM_VER_MIN:=$(word 2, $(subst ., ,$(LLVM_VER)))
+# define a "short" LLVM version for easy comparisons
+ifeq ($(LLVM_VER),svn)
+LLVM_VER_SHORT:=svn
+else
+LLVM_VER_SHORT:=$(LLVM_VER_MAJ).$(LLVM_VER_MIN)
+endif
 LLVM_VER_PATCH:=$(word 3, $(subst ., ,$(LLVM_VER)))
 ifeq ($(LLVM_VER_PATCH),)
 LLVM_VER_PATCH := 0
@@ -453,7 +459,7 @@ endif # ARCH == ppc64
 # LLVM bug #24157
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
-ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),$(filter $(LLVM_VER_MAJ).$(LLVM_VER_MIN),3.3 3.4 3.5 3.6 3.7))
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 $(error USE_LLVM_SHLIB=1 with LLVM_USE_CMAKE=1 requires LLVM > 3.7.x)
 endif
 endif
@@ -510,7 +516,7 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
-ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),$(filter $(LLVM_VER_MAJ).$(LLVM_VER_MIN),3.3 3.4 3.5 3.6 3.7 3.8))
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
 LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
 LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
 else
@@ -523,10 +529,10 @@ LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
 # block default building of lldb
 LLVM_MFLAGS += OPTIONAL_DIRS=
-ifeq ($(LLVM_VER),svn)	# changed since LLVM 3.9
-LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
-else
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
 LLVM_CMAKE += -DLLVM_EXTERNAL_LLDB_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 endif
 
