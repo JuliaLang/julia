@@ -937,286 +937,270 @@
                  (break ,bb)))
         (else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
-(define (expand-binding-forms e)
-  (cond
-   ((atom? e) e)
-   ((quoted? e) e)
-   (else
-    (case (car e)
-      ((function stagedfunction)
-       (let ((name (cadr e)))
-         (cond ((and (length= e 2) (symbol? name))  `(method ,name))
-               ((not (pair? name))                  e)
-               ((eq? (car name) 'tuple)
-                (expand-binding-forms `(-> ,name ,(caddr e))))
-               ((eq? (car name) 'call)
-                (let* ((head    (cadr name))
-                       (argl    (cddr name))
-                       (has-sp  (and (pair? head) (eq? (car head) 'curly)))
-                       (name    (if has-sp (cadr head) head))
-                       (sparams (if has-sp (cddr head) '()))
-                       (isstaged (eq? (car e) 'stagedfunction))
-                       (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
-                                                 `(|::| |#self#| ,(cadr n))
-                                                 n)))
-                       ;; fill in first (closure) argument
-                       (farg    (if (decl? name)
-                                    (adj-decl name)
-                                    `(|::| |#self#| (call (|.| Core 'Typeof) ,name))))
-                       (argl    (fix-arglist
-                                 (if (and (not (decl? name)) (eq? (undot-name name) 'call))
-                                     (cons (adj-decl (car argl)) (cdr argl))
-                                     (arglist-unshift argl farg))
-                                 (and (not (any kwarg? argl)) (not (and (pair? argl)
-                                                                        (pair? (car argl))
-                                                                        (eq? (caar argl) 'parameters))))))
-                       (name    (if (decl? name) #f name)))
-                  (expand-binding-forms
-                   (method-def-expr name sparams argl (caddr e) isstaged))))
-               (else e))))
+(define (expand-function-def e)   ;; handle function or stagedfunction
+  (let ((name (cadr e)))
+    (cond ((and (length= e 2) (symbol? name))  `(method ,name))
+          ((not (pair? name))                  e)
+          ((eq? (car name) 'tuple)
+           (expand-forms `(-> ,name ,(caddr e))))
+          ((eq? (car name) 'call)
+           (let* ((head    (cadr name))
+                  (argl    (cddr name))
+                  (has-sp  (and (pair? head) (eq? (car head) 'curly)))
+                  (name    (if has-sp (cadr head) head))
+                  (sparams (if has-sp (cddr head) '()))
+                  (isstaged (eq? (car e) 'stagedfunction))
+                  (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
+                                            `(|::| |#self#| ,(cadr n))
+                                            n)))
+                  ;; fill in first (closure) argument
+                  (farg    (if (decl? name)
+                               (adj-decl name)
+                               `(|::| |#self#| (call (|.| Core 'Typeof) ,name))))
+                  (argl    (fix-arglist
+                            (if (and (not (decl? name)) (eq? (undot-name name) 'call))
+                                (cons (adj-decl (car argl)) (cdr argl))
+                                (arglist-unshift argl farg))
+                            (and (not (any kwarg? argl)) (not (and (pair? argl)
+                                                                   (pair? (car argl))
+                                                                   (eq? (caar argl) 'parameters))))))
+                  (name    (if (decl? name) #f name)))
+             (expand-forms
+              (method-def-expr name sparams argl (caddr e) isstaged))))
+          (else e))))
 
-      ((->)
-       (let ((a    (cadr e))
-             (body (caddr e)))
-         (let ((argl (if (pair? a)
-                         (if (eq? (car a) 'tuple)
-                             (map =-to-kw (cdr a))
-                             (if (eq? (car a) 'block)
-                                 (cond ((length= a 1) '())
-                                       ((length= a 2) (list (cadr a)))
-                                       ((length= a 3)
-                                        (if (assignment? (caddr a))
-                                            `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
-                                            `((parameters ,(caddr a)) ,(cadr a))))
-                                       (else
-                                        (error "more than one semicolon in argument list")))
-                                 (list (=-to-kw a))))
-                         (list a)))
-               ;; TODO: always use a specific special name like #anon# or _, then ignore
-               ;; this as a local variable name.
-               (name (symbol (string "#" (current-julia-module-counter)))))
-           (expand-binding-forms
-            `(block (local ,name)
-                    (function (call ,name ,@argl) ,body))))))
+(define (expand-arrow e)
+  (let ((a    (cadr e))
+        (body (caddr e)))
+    (let ((argl (if (pair? a)
+                    (if (eq? (car a) 'tuple)
+                        (map =-to-kw (cdr a))
+                        (if (eq? (car a) 'block)
+                            (cond ((length= a 1) '())
+                                  ((length= a 2) (list (cadr a)))
+                                  ((length= a 3)
+                                   (if (assignment? (caddr a))
+                                       `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
+                                       `((parameters ,(caddr a)) ,(cadr a))))
+                                  (else
+                                   (error "more than one semicolon in argument list")))
+                            (list (=-to-kw a))))
+                    (list a)))
+          ;; TODO: always use a specific special name like #anon# or _, then ignore
+          ;; this as a local variable name.
+          (name (symbol (string "#" (current-julia-module-counter)))))
+      (expand-forms
+       `(block (local ,name)
+               (function (call ,name ,@argl) ,body))))))
 
-      ((let)
-       (let ((ex (cadr e))
-             (binds (cddr e)))
-         (expand-binding-forms
-          (if
-           (null? binds)
-           `(scope-block (block ,ex))
-           (let loop ((binds (reverse binds))
-                      (blk   ex))
-             (if (null? binds)
-                 blk
-                 (cond
-                  ((or (symbol? (car binds)) (decl? (car binds)))
-                   ;; just symbol -> add local
-                   (loop (cdr binds)
-                         `(scope-block
-                           (block
-                            (local ,(car binds))
-                            (newvar ,(decl-var (car binds)))
-                            ,blk))))
-                  ((and (length= (car binds) 3)
-                        (eq? (caar binds) '=))
-                   ;; some kind of assignment
-                   (cond
-                    ((or (symbol? (cadar binds))
-                         (decl?   (cadar binds)))
-                     (let ((vname (decl-var (cadar binds))))
-                       (loop (cdr binds)
-                             (if (contains (lambda (x) (eq? x vname))
-                                           (caddar binds))
-                                 (let ((tmp (make-jlgensym)))
-                                   `(scope-block
-                                     (block (= ,tmp ,(caddar binds))
-                                            (scope-block
-                                             (block
-                                              (local ,(cadar binds))
-                                              (newvar ,vname)
-                                              (= ,vname ,tmp)
-                                              ,blk)))))
-                                 `(scope-block
-                                   (block
-                                    (local ,(cadar binds))
-                                    (newvar ,vname)
-                                    (= ,vname ,(caddar binds))
-                                    ,blk))))))
-                    ((and (pair? (cadar binds))
-                          (eq? (caadar binds) 'call))
-                     ;; f()=c
-                     (let* ((asgn (butlast (expand-binding-forms (car binds))))
-                            (name (cadr (cadar binds)))
-                            (name (cond ((symbol? name) name)
-                                        ((and (pair? name) (eq? (car name) 'curly))
-                                         (cadr name))
-                                        (else (error "invalid let syntax")))))
-                       (loop (cdr binds)
-                             `(scope-block
-                               (block
-                                (local ,name)
-                                (newvar ,name)
-                                ,asgn
-                                ,blk)))))
-                    (else (error "invalid let syntax"))))
-                  (else (error "invalid let syntax")))))))))
-
-      ((macro)
-       (cond ((and (pair? (cadr e))
-                   (eq? (car (cadr e)) 'call)
-                   (symbol? (cadr (cadr e))))
-              (let ((anames (cddr (cadr e))))
-                (expand-binding-forms
-                 `(function (call ,(symbol (string #\@ (cadr (cadr e))))
-                                  ,@(map (lambda (v)
-                                           (if (symbol? v)
-                                               `(|::| ,v (top ANY))
-                                               v))
-                                         anames))
-                            ,@(cddr e)))))
-             (else
-              (error "invalid macro definition"))))
-
-      ((type)
-       (let ((mut (cadr e))
-             (sig (caddr e))
-             (fields (cdr (cadddr e))))
-         (let loop ((f fields))
-           (if (null? f)
-               '()
-               (let ((x (car f)))
-                 (cond ((or (symbol? x) (decl? x) (and (pair? x) (eq? (car x) 'line)))
-                        (loop (cdr f)))
-                       ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
-                        (error (string "\"" (deparse x) "\" inside type definition is reserved")))
-                       (else '())))))
-         (expand-binding-forms
-          (receive (name params super) (analyze-type-sig sig)
-                   (struct-def-expr name params super fields mut)))))
-
-      ((try)
-       (if (length= e 5)
-           (let (;; expand inner try blocks first, so their return statements
-                 ;; will have been moved for `finally`, causing correct
-                 ;; chaining behavior when the current (outer) try block is
-                 ;; expanded.
-                 (tryb (expand-binding-forms (cadr e)))
-                 (var  (caddr e))
-                 (catchb (cadddr e))
-                 (finalb (cadddr (cdr e))))
-             (if (has-unmatched-symbolic-goto? tryb)
-                 (error "goto from a try/finally block is not permitted"))
-             (let ((hasret (or (contains return? tryb)
-                               (contains return? catchb))))
-               (let ((err (gensy))
-                     (ret (and hasret
-                               (or (not (block-returns? tryb))
-                                   (and catchb
-                                        (not (block-returns? catchb))))
-                               (gensy)))
-                     (retval (if hasret (gensy) #f))
-                     (bb  (gensy))
-                     (finally-exception (gensy))
-                     (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
-                 (let ((tryb   (replace-return tryb bb ret retval))
-                       (catchb (replace-return catchb bb ret retval)))
-                   (expand-binding-forms
+(define (expand-let e)
+  (let ((ex (cadr e))
+        (binds (cddr e)))
+    (expand-forms
+     (if
+      (null? binds)
+      `(scope-block (block ,ex))
+      (let loop ((binds (reverse binds))
+                 (blk   ex))
+        (if (null? binds)
+            blk
+            (cond
+             ((or (symbol? (car binds)) (decl? (car binds)))
+              ;; just symbol -> add local
+              (loop (cdr binds)
                     `(scope-block
                       (block
-                       ,@(if hasret `((local ,retval)) '())
-                       (local ,val)
-                       (local ,finally-exception)
-                       (= ,err false)
-                       ,@(if ret `((= ,ret false)) '())
-                       (break-block
-                        ,bb
-                        (try (= ,val
-                                ,(if catchb
-                                     `(try ,tryb ,var ,catchb)
-                                     tryb))
-                             #f
-                             (= ,err true)))
-                       (= ,finally-exception (the_exception))
-                       ,finalb
-                       (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
-                       ,(if hasret
-                            (if ret
-                                `(if ,ret (return ,retval) ,val)
-                                `(return ,retval))
-                            val))))))))
-           (if (length= e 4)
-               (let ((tryb (cadr e))
-                     (var  (caddr e))
-                     (catchb (cadddr e)))
-                 (expand-binding-forms
-                  (if (symbol-like? var)
-                      `(trycatch (scope-block ,tryb)
-                                 (scope-block
-                                  (block (= ,var (the_exception))
-                                         ,catchb)))
-                      `(trycatch (scope-block ,tryb)
-                                 (scope-block ,catchb)))))
-               (map expand-binding-forms e))))
+                       (local ,(car binds))
+                       (newvar ,(decl-var (car binds)))
+                       ,blk))))
+             ((and (length= (car binds) 3)
+                   (eq? (caar binds) '=))
+              ;; some kind of assignment
+              (cond
+               ((or (symbol? (cadar binds))
+                    (decl?   (cadar binds)))
+                (let ((vname (decl-var (cadar binds))))
+                  (loop (cdr binds)
+                        (if (contains (lambda (x) (eq? x vname))
+                                      (caddar binds))
+                            (let ((tmp (make-jlgensym)))
+                              `(scope-block
+                                (block (= ,tmp ,(caddar binds))
+                                       (scope-block
+                                        (block
+                                         (local ,(cadar binds))
+                                         (newvar ,vname)
+                                         (= ,vname ,tmp)
+                                         ,blk)))))
+                            `(scope-block
+                              (block
+                               (local ,(cadar binds))
+                               (newvar ,vname)
+                               (= ,vname ,(caddar binds))
+                               ,blk))))))
+               ((and (pair? (cadar binds))
+                     (eq? (caadar binds) 'call))
+                ;; f()=c
+                (let* ((asgn (butlast (expand-forms (car binds))))
+                       (name (cadr (cadar binds)))
+                       (name (cond ((symbol? name) name)
+                                   ((and (pair? name) (eq? (car name) 'curly))
+                                    (cadr name))
+                                   (else (error "invalid let syntax")))))
+                  (loop (cdr binds)
+                        `(scope-block
+                          (block
+                           (local ,name)
+                           (newvar ,name)
+                           ,asgn
+                           ,blk)))))
+               (else (error "invalid let syntax"))))
+             (else (error "invalid let syntax")))))))))
 
-      ((=)
-       (if (and (pair? (cadr e))
-                (eq? (car (cadr e)) 'call))
-           (expand-binding-forms (cons 'function (cdr e)))
-           (map expand-binding-forms e)))
+(define (expand-macro-def e)
+  (cond ((and (pair? (cadr e))
+              (eq? (car (cadr e)) 'call)
+              (symbol? (cadr (cadr e))))
+         (let ((anames (cddr (cadr e))))
+           (expand-forms
+            `(function (call ,(symbol (string #\@ (cadr (cadr e))))
+                             ,@(map (lambda (v)
+                                      (if (symbol? v)
+                                          `(|::| ,v (top ANY))
+                                          v))
+                                    anames))
+                       ,@(cddr e)))))
+        (else
+         (error "invalid macro definition"))))
 
-      ((const)
-       (if (atom? (cadr e))
-           e
-           (case (car (cadr e))
-             ((global local)
-              (expand-binding-forms
-               (qualified-const-expr (cdr (cadr e)) e)))
-             ((=)
-              (let ((lhs (cadr (cadr e)))
-                    (rhs (caddr (cadr e))))
-                (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-                                (cdr lhs)
-                                (list lhs))))
-                  `(block
-                    ,.(map (lambda (v)
-                             `(const ,(const-check-symbol (decl-var v))))
-                           vars)
-                    ,(expand-binding-forms `(= ,lhs ,rhs))))))
-             (else
-              e))))
+(define (expand-type-def e)
+  (let ((mut (cadr e))
+        (sig (caddr e))
+        (fields (cdr (cadddr e))))
+    (let loop ((f fields))
+      (if (null? f)
+          '()
+          (let ((x (car f)))
+            (cond ((or (symbol? x) (decl? x) (and (pair? x) (eq? (car x) 'line)))
+                   (loop (cdr f)))
+                  ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
+                   (error (string "\"" (deparse x) "\" inside type definition is reserved")))
+                  (else '())))))
+    (expand-forms
+     (receive (name params super) (analyze-type-sig sig)
+              (struct-def-expr name params super fields mut)))))
 
-      ((local global)
-       (if (and (symbol? (cadr e)) (length= e 2))
-           e
-           (expand-binding-forms (expand-decls (car e) (cdr e)))))
+(define (expand-try e)
+  (if (length= e 5)
+      (let (;; expand inner try blocks first, so their return statements
+            ;; will have been moved for `finally`, causing correct
+            ;; chaining behavior when the current (outer) try block is
+            ;; expanded.
+            (tryb (expand-forms (cadr e)))
+            (var  (caddr e))
+            (catchb (cadddr e))
+            (finalb (cadddr (cdr e))))
+        (if (has-unmatched-symbolic-goto? tryb)
+            (error "goto from a try/finally block is not permitted"))
+        (let ((hasret (or (contains return? tryb)
+                          (contains return? catchb))))
+          (let ((err (gensy))
+                (ret (and hasret
+                          (or (not (block-returns? tryb))
+                              (and catchb
+                                   (not (block-returns? catchb))))
+                          (gensy)))
+                (retval (if hasret (gensy) #f))
+                (bb  (gensy))
+                (finally-exception (gensy))
+                (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
+            (let ((tryb   (replace-return tryb bb ret retval))
+                  (catchb (replace-return catchb bb ret retval)))
+              (expand-forms
+               `(scope-block
+                 (block
+                  ,@(if hasret `((local ,retval)) '())
+                  (local ,val)
+                  (local ,finally-exception)
+                  (= ,err false)
+                  ,@(if ret `((= ,ret false)) '())
+                  (break-block
+                   ,bb
+                   (try (= ,val
+                           ,(if catchb
+                                `(try ,tryb ,var ,catchb)
+                                tryb))
+                        #f
+                        (= ,err true)))
+                  (= ,finally-exception (the_exception))
+                  ,finalb
+                  (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
+                  ,(if hasret
+                       (if ret
+                           `(if ,ret (return ,retval) ,val)
+                           `(return ,retval))
+                       val))))))))
+      (if (length= e 4)
+          (let ((tryb (cadr e))
+                (var  (caddr e))
+                (catchb (cadddr e)))
+            (expand-forms
+             (if (symbol-like? var)
+                 `(trycatch (scope-block ,tryb)
+                            (scope-block
+                             (block (= ,var (the_exception))
+                                    ,catchb)))
+                 `(trycatch (scope-block ,tryb)
+                            (scope-block ,catchb)))))
+          (map expand-forms e))))
 
-      ((typealias)
-       (if (and (pair? (cadr e))
-                (eq? (car (cadr e)) 'curly))
-           (let ((name (cadr (cadr e)))
-                 (params (cddr (cadr e)))
-                 (type-ex (caddr e)))
-             (receive
-              (params bounds) (sparam-name-bounds params '() '())
-              `(block
-                (const ,name)
-                (= ,name
-                   (scope-block
-                    (block
-                     ,@(map (lambda (v) `(local ,v)) params)
-                     ,@(map make-assignment params (symbols->typevars params bounds #t))
-                     (call (top TypeConstructor)
-                           (call (top svec) ,@params)
-                           ,(expand-binding-forms type-ex))))))))
-           (expand-binding-forms
-            `(const (= ,(cadr e) ,(caddr e))))))
+(define (expand-const-decl e)
+  (if (atom? (cadr e))
+      e
+      (case (car (cadr e))
+        ((global local)
+         (expand-forms
+          (qualified-const-expr (cdr (cadr e)) e)))
+        ((=)
+         (let ((lhs (cadr (cadr e)))
+               (rhs (caddr (cadr e))))
+           (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+                           (cdr lhs)
+                           (list lhs))))
+             `(block
+               ,.(map (lambda (v)
+                        `(const ,(const-check-symbol (decl-var v))))
+                      vars)
+               ,(expand-forms `(= ,lhs ,rhs))))))
+        (else e))))
 
-      ((module) e)
+(define (expand-typealias e)
+  (if (and (pair? (cadr e))
+           (eq? (car (cadr e)) 'curly))
+      (let ((name (cadr (cadr e)))
+            (params (cddr (cadr e)))
+            (type-ex (caddr e)))
+        (receive
+         (params bounds) (sparam-name-bounds params '() '())
+         `(block
+           (const ,name)
+           (= ,name
+              (scope-block
+               (block
+                ,@(map (lambda (v) `(local ,v)) params)
+                ,@(map (lambda (l r) (make-assignment l (expand-forms r)))
+                       params
+                       (symbols->typevars params bounds #t))
+                (call (top TypeConstructor)
+                      (call (top svec) ,@params)
+                      ,(expand-forms type-ex))))))))
+      (expand-forms
+       `(const (= ,(cadr e) ,(caddr e))))))
 
-      (else
-       (map expand-binding-forms e))))))
+(define (expand-local-or-global-decl e)
+  (if (and (symbol? (cadr e)) (length= e 2))
+      e
+      (expand-forms (expand-decls (car e) (cdr e)))))
 
 (define (assigned-name e)
   (if (and (pair? e) (memq (car e) '(call curly)))
@@ -1427,20 +1411,25 @@
                                             `(call (top next) ,coll ,state))
                    ,body))))))))
 
-(define (map-expand-forms e) (map expand-forms e))
-
 (define (expand-forms e)
-  (if (atom? e)
+  (if (or (atom? e) (memq (car e) '(quote inert top line module)))
       e
-      ((get expand-table (car e) map-expand-forms) e)))
+      (let ((ex (get expand-table (car e) #f)))
+        (if ex
+            (ex e)
+            (cons (car e)
+                  (map expand-forms (cdr e)))))))
 
 (define expand-table
   (table
-   'quote identity
-   'inert identity
-   'top   identity
-   'line  identity
-   'module identity
+   'function       expand-function-def
+   'stagedfunction expand-function-def
+   '->             expand-arrow
+   'let            expand-let
+   'macro          expand-macro-def
+   'type           expand-type-def
+   'try            expand-try
+   'typealias      expand-typealias
 
    'lambda
    (lambda (e) (list* 'lambda (map expand-forms (cadr e)) (map expand-forms (cddr e))))
@@ -1459,104 +1448,107 @@
    (lambda (e)
      `(call in ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
+   'const  expand-const-decl
+   'local  expand-local-or-global-decl
+   'global expand-local-or-global-decl
+
    '=
    (lambda (e)
-     (if (or (atom? (cadr e)) (jlgensym? (cadr e)))
-         `(= ,(cadr e) ,(expand-forms (caddr e)))
-         (case (car (cadr e))
-           ((|.|)
-            ;; a.b =
-            (let ((a (cadr (cadr e)))
-                  (b (caddr (cadr e)))
-                  (rhs (expand-forms (caddr e))))
-              (let ((aa (if (atom? a) a (make-jlgensym)))
-                    (bb (if (or (atom? b) (quoted? b)) b (make-jlgensym)))
-                    (rr (if (atom? rhs) rhs (make-jlgensym))))
-                `(block
-                  ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                  ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
-                  ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
-                  (call (top setfield!) ,aa ,bb
-                        (call (top convert)
-                              (call (top fieldtype) (call (top typeof) ,aa) ,bb)
-                              ,rr))
-                  ,rr))))
-
-           ((tuple)
-            ;; multiple assignment
-            (let ((lhss (cdr (cadr e)))
-                  (x    (caddr e)))
-              (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-                       (length= lhss (length (cdr x))))
-                  ;; (a, b, ...) = (x, y, ...)
-                  (expand-forms
-                   (tuple-to-assignments lhss x))
-                  ;; (a, b, ...) = other
-                  (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
-                                  x (make-jlgensym)))
-                         (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
-                         (st  (gensy)))
-                    `(block
-                      ,@ini
-                      (= ,st (call (top start) ,xx))
-                      ,.(map (lambda (i lhs)
-                               (expand-forms
-                                (lower-tuple-assignment
-                                 (list lhs st)
-                                 `(call (top indexed_next)
-                                        ,xx ,(+ i 1) ,st))))
-                             (iota (length lhss))
-                             lhss)
-                      ,xx)))))
-
-           ((typed_hcat)
-            (error "invalid spacing in left side of indexed assignment"))
-           ((typed_vcat)
-            (error "unexpected \";\" in left side of indexed assignment"))
-
-           ((ref)
-            ;; (= (ref a . idxs) rhs)
-            (let ((a    (cadr (cadr e)))
-                  (idxs (cddr (cadr e)))
-                  (rhs  (caddr e)))
-              (let* ((reuse (and (pair? a)
-                                 (contains (lambda (x)
-                                             (or (eq? x 'end)
-                                                 (and (pair? x)
-                                                      (eq? (car x) ':))))
-                                           idxs)))
-                     (arr   (if reuse (make-jlgensym) a))
-                     (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
-                (let* ((rrhs (and (pair? rhs) (not (jlgensym? rhs)) (not (quoted? rhs))))
-                       (r    (if rrhs (make-jlgensym) rhs))
-                       (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
-                  (receive
-                   (new-idxs stuff) (process-indexes arr idxs)
-                   `(block
-                     ,@stmts
-                     ,.(map expand-forms stuff)
-                     ,@rini
-                     ,(expand-forms
-                       `(call setindex! ,arr ,r ,@new-idxs))
-                     ,r))))))
-
-           ((|::|)
-            ;; (= (|::| x T) rhs)
-            (let ((x (cadr (cadr e)))
-                  (T (caddr (cadr e)))
-                  (rhs (caddr e)))
-              (let ((e (remove-argument-side-effects x)))
+     (cond
+      ((and (pair? (cadr e))
+            (eq? (car (cadr e)) 'call))
+       (expand-forms (cons 'function (cdr e))))
+      ((or (atom? (cadr e)) (jlgensym? (cadr e)))
+       `(= ,(cadr e) ,(expand-forms (caddr e))))
+      (else
+       (case (car (cadr e))
+         ((|.|)
+          ;; a.b =
+          (let ((a (cadr (cadr e)))
+                (b (caddr (cadr e)))
+                (rhs (expand-forms (caddr e))))
+            (let ((aa (if (atom? a) a (make-jlgensym)))
+                  (bb (if (or (atom? b) (quoted? b)) b (make-jlgensym)))
+                  (rr (if (atom? rhs) rhs (make-jlgensym))))
+              `(block
+                ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
+                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
+                ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
+                (call (top setfield!) ,aa ,bb
+                      (call (top convert)
+                            (call (top fieldtype) (call (top typeof) ,aa) ,bb)
+                            ,rr))
+                ,rr))))
+         ((tuple)
+          ;; multiple assignment
+          (let ((lhss (cdr (cadr e)))
+                (x    (caddr e)))
+            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+                     (length= lhss (length (cdr x))))
+                ;; (a, b, ...) = (x, y, ...)
                 (expand-forms
-                 `(block ,@(cdr e)
-                         (|::| ,(car e) ,T)
-                         (= ,(car e) ,rhs))))))
-
-           ((vcat)
-            ;; (= (vcat . args) rhs)
-            (error "use \"(a, b) = ...\" to assign multiple values"))
-
-           (else
-            (error "invalid assignment location")))))
+                 (tuple-to-assignments lhss x))
+                ;; (a, b, ...) = other
+                (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
+                                x (make-jlgensym)))
+                       (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+                       (st  (gensy)))
+                  `(block
+                    ,@ini
+                    (= ,st (call (top start) ,xx))
+                    ,.(map (lambda (i lhs)
+                             (expand-forms
+                              (lower-tuple-assignment
+                               (list lhs st)
+                               `(call (top indexed_next)
+                                      ,xx ,(+ i 1) ,st))))
+                           (iota (length lhss))
+                           lhss)
+                    ,xx)))))
+         ((typed_hcat)
+          (error "invalid spacing in left side of indexed assignment"))
+         ((typed_vcat)
+          (error "unexpected \";\" in left side of indexed assignment"))
+         ((ref)
+          ;; (= (ref a . idxs) rhs)
+          (let ((a    (cadr (cadr e)))
+                (idxs (cddr (cadr e)))
+                (rhs  (caddr e)))
+            (let* ((reuse (and (pair? a)
+                               (contains (lambda (x)
+                                           (or (eq? x 'end)
+                                               (and (pair? x)
+                                                    (eq? (car x) ':))))
+                                         idxs)))
+                   (arr   (if reuse (make-jlgensym) a))
+                   (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
+              (let* ((rrhs (and (pair? rhs) (not (jlgensym? rhs)) (not (quoted? rhs))))
+                     (r    (if rrhs (make-jlgensym) rhs))
+                     (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+                (receive
+                 (new-idxs stuff) (process-indexes arr idxs)
+                 `(block
+                   ,@stmts
+                   ,.(map expand-forms stuff)
+                   ,@rini
+                   ,(expand-forms
+                     `(call setindex! ,arr ,r ,@new-idxs))
+                   ,r))))))
+         ((|::|)
+          ;; (= (|::| x T) rhs)
+          (let ((x (cadr (cadr e)))
+                (T (caddr (cadr e)))
+                (rhs (caddr e)))
+            (let ((e (remove-argument-side-effects x)))
+              (expand-forms
+               `(block ,@(cdr e)
+                       (|::| ,(car e) ,T)
+                       (= ,(car e) ,rhs))))))
+         ((vcat)
+          ;; (= (vcat . args) rhs)
+          (error "use \"(a, b) = ...\" to assign multiple values"))
+         (else
+          (error "invalid assignment location"))))))
 
    'abstract
    (lambda (e)
@@ -1756,6 +1748,9 @@
                    (if (null? (cdr ranges))
                        (caddr e)  ;; body
                        (nest (cdr ranges) #f)))))
+
+   '&&     (lambda (e) (expand-forms (expand-and e)))
+   '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
 
    '+=     lower-update-op
    '-=     lower-update-op
@@ -2273,11 +2268,6 @@
                                                     ,(to-blk (to-lff (caddr e) g tail)))
                                          ())))
                        (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
-
-        ((&&)
-         (to-lff (expand-and e) dest tail))
-        ((|\|\||)
-         (to-lff (expand-or e) dest tail))
 
         ((block)
          (if (length= e 2)
@@ -3355,8 +3345,7 @@ So far only the second case can actually occur.
 
 (define (julia-expand01 ex)
   (to-LFF
-   (expand-forms
-    (expand-binding-forms ex))))
+   (expand-forms ex)))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))
