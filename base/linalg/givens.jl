@@ -13,7 +13,17 @@ function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
+"""
+    LinAlg.Givens(i1,i2,c,s) -> G
 
+A Givens rotation linear operator. The fields `c` and `s` represent the cosine and sine of
+the rotation angle, respectively. The `Givens` type supports left multiplication `G*A` and
+conjugated transpose right multiplication `A*G'`. The type doesn't have a `size` and can
+therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
+`G*A` or `i2<=size(A,1)` for `A*G'`.
+
+See also: [`givens`](:func:`givens`)
+"""
 immutable Givens{T} <: AbstractRotation{T}
     i1::Int
     i2::Int
@@ -222,69 +232,114 @@ end
 
 """
 
-    givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
+    givens{T}(f::T, g::T, i1::Integer, i2::Integer) -> (G::Givens, r::T)
 
-Computes the tuple `(G, r) = givens(f, g, i1, i2)` where `G` is a Givens rotation and `r`
-is a scalar such that `G*x=y` with `x[i1]=f`, `x[i2]=g`, `y[i1]=r`, and `y[i2]=0`. The
-cosine and sine of the rotation angle can be extracted from the `Givens` type with `G.c`
-and `G.s` respectively. The arguments `f` and `g` can be either `Float32`, `Float64`,
-`Complex{Float32}`, or `Complex{Float64}`. The `Givens` type supports left multiplication
-`G*A` and conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
-and can therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)`
-for `G*A` or `i2<=size(A,1)` for `A*G'`.
+Computes the Givens rotation `G` and scalar `r` such that for any vector `x` where
+```
+x[i1] = f
+x[i2] = g
+```
+the result of the multiplication
+```
+y = G*x
+```
+has the property that
+```
+y[i1] = r
+y[i2] = 0
+```
+
+See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
 """
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    if i1 >= i2
-        throw(ArgumentError("second index must be larger than the first"))
+    if i1 == i2
+        throw(ArgumentError("Indices must be distinct."))
     end
     c, s, r = givensAlgorithm(f, g)
-    Givens(i1, i2, convert(T, c), convert(T, s)), r
-end
-"""
-
-    givens{T}(::AbstractArray{T}, ::Integer, ::Integer, ::Integer) -> {Givens, T}
-
-Computes the tuple `(G, r) = givens(A, i1, i2, col)` where `G` is Givens rotation and `r`
-is a scalar such that `G*A[:,col]=y` with `y[i1]=r`, and `y[i2]=0`. The cosine and sine of
-the rotation angle can be extracted from the `Givens` type with `G.c` and `G.s`
-respectively. The element type of `A` can be either `Float32`, `Float64`,
-`Complex{Float32}`, or `Complex{Float64}`. The `Givens` type supports left multiplication
-`G*A` and conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
-and can therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)`
-for `G*A` or `i2<=size(A,1)` for `A*G'`.
-"""
-function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    if i1 >= i2
-        throw(ArgumentError("second index must be larger than the first"))
+    if i1 > i2
+        s = -conj(s)
+        i1,i2 = i2,i1
     end
-    c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
+"""
+    givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
 
-getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
+Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
+```
+B = G*A
+```
+has the property that
+```
+B[i1,j] = r
+B[i2,j] = 0
+```
+
+See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
+"""
+givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
+    givens(A[i1,j], A[i2,j],i1,i2)
+
+
+"""
+    givens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)
+
+Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
+```
+B = G*x
+```
+has the property that
+```
+B[i1] = r
+B[i2] = 0
+```
+
+See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
+"""
+givens(x::AbstractVector, i1::Integer, i2::Integer) =
+    givens(x[i1], x[i2], i1, i2)
+
+
+function getindex(G::Givens, i::Integer, j::Integer)
+    if i == j
+        if i == G.i1 || i == G.i2
+            G.c
+        else
+            one(G.c)
+        end
+    elseif i == G.i1 && j == G.i2
+        G.s
+    elseif i == G.i2 && j == G.i1
+        -conj(G.s)
+    else
+        zero(G.s)
+    end
+end
+
 
 A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
+
 function A_mul_B!(G::Givens, A::AbstractVecOrMat)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
     @inbounds @simd for i = 1:n
-        tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
-        A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
-        A[G.i1,i] = tmp
+        a1, a2 = A[G.i1,i], A[G.i2,i]
+        A[G.i1,i] =       G.c *a1 + G.s*a2
+        A[G.i2,i] = -conj(G.s)*a1 + G.c*a2
     end
     return A
 end
-function A_mul_Bc!(A::AbstractVecOrMat, G::Givens)
+function A_mul_Bc!(A::AbstractMatrix, G::Givens)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
     @inbounds @simd for i = 1:m
-        tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
-        A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
-        A[i,G.i1] = tmp
+        a1, a2 = A[i,G.i1], A[i,G.i2]
+        A[i,G.i1] =  a1*G.c + a2*conj(G.s)
+        A[i,G.i2] = -a1*G.s + a2*G.c
     end
     return A
 end
