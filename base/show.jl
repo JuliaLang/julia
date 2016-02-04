@@ -898,7 +898,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 print(io, a)
             end
         end
-
+    elseif is(head, :meta) && length(args) >= 2 && args[1] === :push_loc
+        print(io, "# meta: location ", join(args[2:end], " "))
+        show_type = false
+    elseif is(head, :meta) && length(args) == 1 && args[1] === :pop_loc
+        print(io, "# meta: pop location")
+        show_type = false
     # print anything else as "Expr(head, args...)"
     else
         show_type = false

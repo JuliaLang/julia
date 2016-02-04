@@ -348,6 +348,15 @@ jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
+typedef struct {
+    char *func_name;
+    char *file_name;
+    int line;
+    jl_lambda_info_t *linfo;
+    int fromC;
+    int inlined;
+} jl_frame_t;
+
 // Might be called from unmanaged thread
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
@@ -385,12 +394,14 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ct
 #endif
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
-// Set *name and *filename to either NULL or malloc'd string
-void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
-                        uintptr_t pointer, int *fromC, int skipC, int skipInline);
+int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
 JL_DLLEXPORT void jl_gdblookup(uintptr_t ip);
-
+jl_value_t *jl_uncompress_ast_(jl_lambda_info_t*, jl_value_t*, int);
+#ifdef COPY_STACKS
+// the base of the stack we will copy this task's stack to
+// when switchting to it
+JL_DLLEXPORT char *jl_task_stackbase(jl_task_t *task);
+#endif
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 {
