@@ -309,21 +309,6 @@
   (or (eq? name 'call) (and (pair? name) (sym-ref? name)
                             (equal? (caddr name) '(inert call)))))
 
-;; renames - assoc list of (oldname . newname)
-(define (rename-vars e renames)
-  (cond ((null? renames)  e)
-        ((symbol? e)      (lookup e renames e))
-        ((not (pair? e))  e)
-        ((quoted? e)      e)
-        (else
-         (let ((new-renames (if (eq? (car e) 'lambda)
-                                (without renames (lam:vars e))
-                                renames)))
-           (cons (car e)
-                 (map (lambda (x)
-                        (rename-vars x new-renames))
-                      (cdr e)))))))
-
 (define (method-def-expr- name sparams argl body isstaged)
   (receive
    (names bounds) (sparam-name-bounds sparams '() '())
@@ -345,16 +330,14 @@
              (if (null? sparams)
                  `(method ,name (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec)))
                           ,body ,isstaged)
-                 (let* ((gss (map (lambda (x) (make-jlgensym)) names))
-                        (renames (map cons names gss)))
-                   `(method ,name
-                            (block
-                             ,@(map make-assignment gss (symbols->typevars names bounds #t))
-                             (call (top svec) (curly Tuple ,@(dots->vararg
-                                                              (map (lambda (x) (rename-vars x renames))
-                                                                   types)))
-                                   (call (top svec) ,@gss)))
-                            ,body ,isstaged)))))
+                 `(method ,name
+                          (scope-block
+                           (block
+                            ,@(map (lambda (n) `(local ,n)) names)
+                            ,@(map make-assignment names (symbols->typevars names bounds #t))
+                            (call (top svec) (curly Tuple ,@(dots->vararg types))
+                                  (call (top svec) ,@names))))
+                          ,body ,isstaged))))
        (if (and iscall (not (null? argl)))
            (let* ((n (arg-name (car argl)))
                   (n (if (hidden-name? n) "" n))
@@ -859,8 +842,7 @@
 
 (define (abstract-type-def-expr name params super)
   (receive
-   (params bounds)
-   (sparam-name-bounds params '() '())
+   (params bounds) (sparam-name-bounds params '() '())
    `(block
      (const ,name)
      (scope-block
@@ -871,8 +853,7 @@
 
 (define (bits-def-expr n name params super)
   (receive
-   (params bounds)
-   (sparam-name-bounds params '() '())
+   (params bounds) (sparam-name-bounds params '() '())
    `(block
      (const ,name)
      (scope-block
