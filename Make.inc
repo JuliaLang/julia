@@ -187,7 +187,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
-LLVM_USE_CMAKE := 0
+#LLVM_USE_CMAKE: defined in deps/Makefile as it depends on LLVM_VER_SHORT
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
