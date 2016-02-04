@@ -61,14 +61,14 @@ void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx);
 // invoke (compiling if necessary) the jlcall function pointer for a method
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
-    if (__unlikely(meth->fptr == NULL)) {
+    if (__unlikely(meth->functionObjects.fptr == NULL)) {
         jl_compile_linfo(meth, NULL);
         jl_generate_fptr(meth);
     }
-    if (meth->jlcall_api == 0)
-        return meth->fptr(args[0], &args[1], nargs-1);
+    if (meth->functionObjects.jlcall_api == 0)
+        return meth->functionObjects.fptr(args[0], &args[1], nargs-1);
     else
-        return ((jl_fptr_sparam_t)meth->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
+        return ((jl_fptr_sparam_t)meth->functionObjects.fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
 }
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);

@@ -854,12 +854,12 @@ static Function *to_function(jl_lambda_info_t *li, jl_cyclectx_t *cyclectx)
         #endif
         f = (llvm::Function*)definitions.functionObject;
         specf = (llvm::Function*)definitions.specFunctionObject;
-        li->functionID = jl_assign_functionID(f, 0);
+        li->functionObjects.functionID = jl_assign_functionID(f, 0);
         if (specf)
-            li->specFunctionID = jl_assign_functionID(specf, 1);
+            li->functionObjects.specFunctionID = jl_assign_functionID(specf, 1);
         if (f->getFunctionType() != jl_func_sig)
             // mark the pointer as jl_fptr_sparam_t calling convention
-            li->jlcall_api = 1;
+            li->functionObjects.jlcall_api = 1;
         //n_emit++;
     }
     JL_CATCH {
@@ -1057,7 +1057,7 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
     JL_LOCK(codegen);
     // objective: assign li->fptr
     assert(li->functionObjects.functionObject);
-    if (li->fptr == NULL) {
+    if (li->functionObjects.fptr == NULL) {
         JL_SIGATOMIC_BEGIN();
         #ifdef USE_MCJIT
         if (imaging_mode) {
@@ -1076,16 +1076,16 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
                 }
             }
             jl_finalize_module(m);
-            li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(((Function*)li->functionObjects.functionObject)->getName());
+            li->functionObjects.fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(((Function*)li->functionObjects.functionObject)->getName());
         }
         else {
-            li->fptr = (jl_fptr_t)getAddressForOrCompileFunction((Function*)li->functionObjects.functionObject);
+            li->functionObjects.fptr = (jl_fptr_t)getAddressForOrCompileFunction((Function*)li->functionObjects.functionObject);
         }
         #else
-        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction((Function*)li->functionObjects.functionObject);
+        li->functionObjects.fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction((Function*)li->functionObjects.functionObject);
         #endif
 
-        assert(li->fptr != NULL);
+        assert(li->functionObjects.fptr != NULL);
 #ifndef KEEP_BODIES
         if (!imaging_mode)
             ((Function*)li->functionObjects.functionObject)->deleteBody();
@@ -1369,12 +1369,12 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         return llvmf;
     }
 
-    if (linfo->fptr && !jl_getUnwindInfo((uintptr_t)linfo->fptr)) {
+    if (linfo->functionObjects.fptr && !jl_getUnwindInfo((uintptr_t)linfo->functionObjects.fptr)) {
         // Not in in the current ExecutionEngine
         // found in the system image: force a recompile
         linfo->functionObjects.specFunctionObject = NULL;
         linfo->functionObjects.functionObject = NULL;
-        linfo->fptr = NULL;
+        linfo->functionObjects.fptr = NULL;
     }
     if (linfo->functionObjects.functionObject == NULL) {
         jl_compile_linfo(linfo, NULL);
@@ -5148,7 +5148,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 {
     if (imaging_mode) {
         if (!specsig) {
-            lam->fptr = (jl_fptr_t)fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
+            lam->functionObjects.fptr = (jl_fptr_t)fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
         }
     }
     else {
@@ -5192,16 +5192,16 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             add_named_global(f, (void*)fptr);
         }
         else {
-            if (lam->jlcall_api == 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
-                assert(lam->fptr == NULL);
-                lam->fptr = (jl_fptr_t)fptr;
+            if (lam->functionObjects.jlcall_api == 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
+                assert(lam->functionObjects.fptr == NULL);
+                lam->functionObjects.fptr = (jl_fptr_t)fptr;
             }
             else {
                 Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
                 if (lam->functionObjects.functionObject == NULL) {
                     lam->functionObjects.functionObject = (void*)f;
-                    assert(lam->fptr == NULL);
-                    lam->fptr = (jl_fptr_t)fptr;
+                    assert(lam->functionObjects.fptr == NULL);
+                    lam->functionObjects.fptr = (jl_fptr_t)fptr;
                 }
             }
         }

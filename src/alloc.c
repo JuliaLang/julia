@@ -364,26 +364,21 @@ JL_DLLEXPORT jl_lambda_info_t *jl_spec_lambda_info(jl_lambda_info_t *li, jl_svec
     nli->inferred = 0;
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF && li != NULL) {
         // copy fptr from the unspecialized method definition
-        nli->fptr = li->fptr;
-        nli->jlcall_api = li->jlcall_api;
-        nli->functionObjects.functionObject = li->functionObjects.functionObject;
-        nli->functionObjects.specFunctionObject = li->functionObjects.specFunctionObject;
-        nli->functionID = li->functionID;
-        nli->specFunctionID = li->functionID;
-        if (nli->fptr == NULL) {
+        nli->functionObjects = li->functionObjects;
+        if (nli->functionObjects.fptr == NULL) {
             jl_printf(JL_STDERR,"code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)nli);
             jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
         }
     }
     else {
-        nli->fptr = NULL;
-        nli->jlcall_api = 0;
+        nli->functionObjects.fptr = NULL;
+        nli->functionObjects.jlcall_api = 0;
         nli->functionObjects.functionObject = NULL;
         nli->functionObjects.specFunctionObject = NULL;
         nli->functionObjects.cFunctionList = NULL;
-        nli->functionID = 0;
-        nli->specFunctionID = 0;
+        nli->functionObjects.functionID = 0;
+        nli->functionObjects.specFunctionID = 0;
     }
     return nli;
 }

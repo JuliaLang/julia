@@ -1086,7 +1086,7 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
     jl_method_info_t *li = jl_new_method_info(jl_nothing, jl_emptysvec, jl_core_module);
     li->name = sname;
-    li->unspecialized->fptr = fptr;
+    li->unspecialized->functionObjects.fptr = fptr;
     // TODO jb/functions: what should li->ast be?
     li->unspecialized->ast = (jl_value_t*)jl_exprn(lambda_sym,0);
     jl_gc_wb(li->unspecialized, li->unspecialized->ast);
@@ -1097,7 +1097,7 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache->func->fptr;
+    return jl_gf_mtable(b)->cache->func->functionObjects.fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)

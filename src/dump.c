@@ -847,11 +847,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, li->pure);
         write_int8(s, li->called);
         // save functionObject pointers
-        jl_serialize_fptr(s, li->fptr);
-        write_int32(s, li->functionID);
-        write_int32(s, li->specFunctionID);
-        if (li->functionID)
-            write_int8(s, li->jlcall_api);
+        jl_serialize_fptr(s, li->functionObjects.fptr);
+        write_int32(s, li->functionObjects.functionID);
+        write_int32(s, li->functionObjects.specFunctionID);
+        if (li->functionObjects.functionID)
+            write_int8(s, li->functionObjects.jlcall_api);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1504,19 +1504,19 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
         li->called = read_int8(s);
+        li->inInference = 0;
+        li->inCompile = 0;
         li->functionObjects.functionObject = NULL;
         li->functionObjects.cFunctionList = NULL;
         li->functionObjects.specFunctionObject = NULL;
-        li->inInference = 0;
-        li->inCompile = 0;
-        li->functionID = 0;
-        li->specFunctionID = 0;
+        li->functionObjects.functionID = 0;
+        li->functionObjects.specFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
-        li->fptr = jl_deserialize_fptr(s);
+        li->functionObjects.fptr = jl_deserialize_fptr(s);
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
-        li->jlcall_api = func_llvm ? read_int8(s) : 0;
+        li->functionObjects.jlcall_api = func_llvm ? read_int8(s) : 0;
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {

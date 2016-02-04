@@ -279,11 +279,13 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, u
 typedef struct _jl_datatype_t jl_tupletype_t;
 
 typedef struct _jl_llvm_functions_t {
-    void *functionObject;       // jlcall llvm Function
-    void *cFunctionList;        // c callable llvm Functions
-
-    // specialized llvm Function (common core for the other two)
-    void *specFunctionObject;
+    void *functionObject;     // jlcall llvm Function
+    void *cFunctionList;      // c callable llvm Functions
+    void *specFunctionObject; // specialized llvm Function (common core for the other two)
+    int32_t functionID;       // index that this function will have in the codegen table
+    int32_t specFunctionID;   // index that this specFunction will have in the codegen table
+    jl_fptr_t fptr;           // jlcall entry point
+    uint8_t jlcall_api;       // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
 } jl_llvm_functions_t;
 
 typedef struct _jl_method_info_t {
@@ -330,25 +332,18 @@ typedef struct _jl_lambda_info_t {
     // this keeps codegen happy if the method contains intrinsics that depend on an sparam
     struct _jl_lambda_info_t *unspecialized_ducttape;
     jl_method_info_t *def;  // original this is specialized from
+    uint32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t pure;
-    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
-
-    // hidden fields:
-    uint8_t inferred : 1;
-    uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
-    uint8_t inInference : 1;    // flags to tell if inference is running on this function
-                                // used to avoid infinite recursion
-    uint8_t inCompile : 1;
-    jl_fptr_t fptr;             // jlcall entry point
+    uint8_t inferred;
+    uint8_t inInference; // flags to tell if inference is running on this function
+                         // used to avoid infinite recursion
+    uint8_t inCompile;
 
     // On the old JIT, handles to all Functions generated for this linfo
     // For the new JITs, handles to declarations in the shadow module
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
     jl_llvm_functions_t functionObjects;
-
-    int32_t functionID; // index that this function will have in the codegen table
-    int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;
 
 typedef jl_value_t jl_function_t;

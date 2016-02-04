@@ -845,15 +845,15 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
 static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_t *meth,
                                          jl_value_t **args, uint32_t nargs)
 {
-    if (__unlikely(meth->fptr == NULL)) {
+    if (__unlikely(meth->functionObjects.fptr == NULL)) {
         jl_compile_linfo(meth, NULL);
         jl_generate_fptr(meth);
     }
     assert(jl_svec_len(meth->def->sparam_syms) == jl_svec_len(sparam_vals));
-    if (__likely(meth->jlcall_api == 0))
-        return meth->fptr(args[0], &args[1], nargs-1);
+    if (__likely(meth->functionObjects.jlcall_api == 0))
+        return meth->functionObjects.fptr(args[0], &args[1], nargs-1);
     else
-        return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
+        return ((jl_fptr_sparam_t)meth->functionObjects.fptr)(sparam_vals, args[0], &args[1], nargs-1);
 }
 
 JL_DLLEXPORT jl_method_info_t *jl_instantiate_staged(jl_method_info_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
@@ -1494,7 +1494,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
     if (sf == NULL || sf->inInference)
         goto not_found;
     if (sf->functionObjects.functionObject == NULL) {
-        if (sf->fptr != NULL)
+        if (sf->functionObjects.fptr != NULL)
             goto not_found;
         jl_compile_linfo(sf, cyclectx);
     }
@@ -1704,9 +1704,9 @@ static void _compile_all_deq(jl_array_t *found)
             if (complete) {
                 // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the unspecialized function)
                 // this is necessary because many intrinsics try to call static_eval and thus are not compilable unspecialized
-                if (!linfo->functionID)
+                if (!linfo->functionObjects.functionID)
                     // indicate that this method doesn't need a functionID because it was fully covered above
-                    linfo->functionID = -1;
+                    linfo->functionObjects.functionID = -1;
                 continue;
             }
         }
@@ -1720,11 +1720,11 @@ static void _compile_all_deq(jl_array_t *found)
             linfo->functionObjects.functionObject = NULL;
             linfo->functionObjects.specFunctionObject = NULL;
             linfo->functionObjects.cFunctionList = NULL;
-            linfo->functionID = 0;
-            linfo->specFunctionID = 0;
+            linfo->functionObjects.functionID = 0;
+            linfo->functionObjects.specFunctionID = 0;
         }
         jl_compile_linfo(linfo, NULL);
-        assert(linfo->functionID > 0);
+        assert(linfo->functionObjects.functionID > 0);
     }
     jl_printf(JL_STDERR, "\n");
 }
@@ -1735,7 +1735,7 @@ static void _compile_all_enq_ml(jl_methlist_t *ml, jl_array_t *found)
         if (ml->func != NULL) {
             // found a lambda specialization (not a placeholder guard)
             jl_lambda_info_t *linfo = (jl_lambda_info_t*)ml->func;
-            if (!linfo->functionID || !linfo->inferred)
+            if (!linfo->functionObjects.functionID || !linfo->inferred)
                 // and it still needs to be compiled
                 jl_cell_1d_push(found, (jl_value_t*)linfo);
         }
@@ -1750,7 +1750,7 @@ static void _compile_all_enq_methods(jl_method_info_t *ml, jl_array_t *found)
         if (!ml->isstaged) {
             // method definitions -- compile unspecialized field
             jl_lambda_info_t *linfo = ml->unspecialized;
-            if (!linfo->functionID || !linfo->inferred) {
+            if (!linfo->functionObjects.functionID || !linfo->inferred) {
                 // and it still needs to be compiled
                 jl_cell_1d_push(found, (jl_value_t*)ml);
             }
