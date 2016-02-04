@@ -209,6 +209,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
         // For now, only thread 0 runs the task scheduler.
         // The others return to the thread loop
         jl_switchto(jl_root_task, jl_nothing);
+        gc_debug_critical_error();
         abort();
     }
     if (task_done_hook_func == NULL) {
@@ -219,6 +220,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
         jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
         jl_apply(args, 2);
     }
+    gc_debug_critical_error();
     abort();
 }
 
@@ -253,6 +255,7 @@ static void NOINLINE JL_NORETURN start_task(void)
         }
     }
     finish_task(t, res);
+    gc_debug_critical_error();
     abort();
 }
 

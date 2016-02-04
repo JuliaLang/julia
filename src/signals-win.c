@@ -306,6 +306,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             bt_size_cur++;
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
                 fputs("failed to resume main thread! aborting.",stderr);
+                gc_debug_critical_error();
                 abort();
             }
         }

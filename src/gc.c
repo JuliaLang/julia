@@ -389,6 +389,7 @@ void jl_gc_signal_init(void)
 #endif
     if (jl_gc_signal_page == NULL) {
         jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
+        gc_debug_critical_error();
         abort();
     }
 }
@@ -856,6 +857,7 @@ static NOINLINE void *malloc_page(void)
 #endif
             if (mem == NULL) {
                 jl_printf(JL_STDERR, "could not allocate pools\n");
+                gc_debug_critical_error();
                 abort();
             }
             if (GC_PAGE_SZ > jl_page_size) {
@@ -886,6 +888,7 @@ static NOINLINE void *malloc_page(void)
     }
     if (region_i >= REGION_COUNT) {
         jl_printf(JL_STDERR, "increase REGION_COUNT or allocate less memory\n");
+        gc_debug_critical_error();
         abort();
     }
     if (regions_lb[region_i] < i)
@@ -1951,6 +1954,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
         gc_debug_print_status();
         jl_(vt);
+        gc_debug_critical_error();
         abort();
     }
 
