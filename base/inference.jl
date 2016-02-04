@@ -637,18 +637,21 @@ end
 
 function isconstantref(f::ANY, sv::InferenceState)
     if isa(f,TopNode)
+        f = f::TopNode
         m = _topmod(sv)
         return isconst(m, f.name) && isdefined(m, f.name) && f
     end
     if isa(f,GlobalRef)
+        f = f::GlobalRef
         M = f.mod; s = f.name
         return isdefined(M,s) && isconst(M,s) && f
     end
     if isa(f,Expr)
+        f = f::Expr
         if is(f.head,:call)
             if length(f.args) == 3 && isa(f.args[1], TopNode) &&
                 is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
-                s = f.args[3].value
+                s = (f.args[3]::QuoteNode).value
                 if isa(f.args[2],Module)
                     M = f.args[2]
                 else
@@ -661,6 +664,7 @@ function isconstantref(f::ANY, sv::InferenceState)
                         return false
                     end
                 end
+                M = M::Module
                 return isdefined(M,s) && isconst(M,s) && f
             end
         elseif is(f.head,:inert)
@@ -674,6 +678,7 @@ function isconstantref(f::ANY, sv::InferenceState)
         return false
     end
     if isa(f,Symbol)
+        f = f::Symbol
         return _iisconst(f, sv) && f
     elseif !isa(f,Expr)
         return f
@@ -1490,10 +1495,13 @@ function newvar!(sv::InferenceState, typ)
 end
 
 # copy a LambdaInfo just enough to make it not share data with li.def
-function unshare_linfo(li::LambdaInfo)
+function unshare_linfo(li::LambdaInfo, sparams::SimpleVector, atypes::DataType)
     if li.nargs > 0
         if li === li.def
             li = ccall(:jl_copy_lambda_info, Any, (Any,), li)::LambdaInfo
+            li.sparam_vals = sparams
+            li.tfunc = nothing
+            li.specTypes = atypes
         end
         if !isa(li.code, Array{Any,1})
             li.code = ccall(:jl_uncompress_ast, Any, (Any,Any), li, li.code)
@@ -1591,7 +1599,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
             end
         end
         # add lam to be inferred and record the edge
-        linfo = unshare_linfo(linfo)
+        linfo = unshare_linfo(linfo, sparams, atypes)
         # our stack frame inference context
         frame = InferenceState(linfo, atypes, sparams, optimize)
 
@@ -2295,6 +2303,23 @@ end
 
 #### post-inference optimizations ####
 
+function add_inlined_loc!(enclosing::LambdaInfo, data::LambdaInfo)
+    if !isdefined(enclosing.def, :roots)
+        enclosing.def.roots = Any[data]
+        1
+    else
+        il = enclosing.def.roots::Vector{Any}
+        # TODO if the quadratic lookup ends up being too expensive we could build a lookup hash before starting the inlining
+        for i=1:length(il)
+            if il[i] === data
+                return i
+            end
+        end
+        push!(il, data)
+        length(il)
+    end
+end
+
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
 # static parameters are ok if all the static parameter values are leaf types,
@@ -2349,7 +2374,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
     meth = meth[1]::SimpleVector
     metharg = meth[1]
-    methsp = meth[2]
+    methsp = meth[2]::SimpleVector
     linfo = try
         func_for_method(meth[3],metharg,methsp)
     catch
@@ -2551,6 +2576,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     # see if each argument occurs only once in the body expression
     stmts = Any[]
+    prelude_stmts = Any[]
     stmts_free = true # true = all entries of stmts are effect_free
 
     # when 1 method matches the inferred types, there is still a chance
@@ -2668,10 +2694,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                     vnew = add_slot!(enclosing, aeitype, #=SSA=#false)
                     argexprs[i] = vnew
                 end
-                unshift!(stmts, Expr(:(=), vnew, aei))
+                unshift!(prelude_stmts, Expr(:(=), vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
-                unshift!(stmts, aei)
+                unshift!(prelude_stmts, aei)
                 stmts_free = false
             end
         end
@@ -2703,6 +2729,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     append!(enclosing.slotflags, linfo.slotflags[na+1:end])
 
     # make labels / goto statements unique
+    # relocate inlining information
     newlabels = zeros(Int,label_counter(body.args)+1)
     for i = 1:length(body.args)
         a = body.args[i]
@@ -2711,6 +2738,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             newlabel = genlabel(sv)
             newlabels[a.label+1] = newlabel.label
             body.args[i] = newlabel
+        elseif isa(a,Expr) && a.head === :meta && a.args[1] === :push_lambda
+            inlined_idx = a.args[2]::Int
+            a.args[2] = add_inlined_loc!(enclosing, linfo.def.roots[inlined_idx])
         end
     end
     for i = 1:length(body.args)
@@ -2771,14 +2801,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         expr = lastexpr.args[1]
     end
 
-    if length(stmts) == 1
-        # remove line number when inlining a single expression. see issue #13725
-        s = stmts[1]
-        if isa(s,Expr)&&is(s.head,:line) || isa(s,LineNumberNode)
-            pop!(stmts)
-        end
+   if !isempty(stmts)
+       if all(stmt -> isa(stmt,Expr) && stmt.head === :line || isa(stmt, LineNumberNode), stmts)
+           empty!(stmts)
+       else
+           loc = add_inlined_loc!(enclosing, linfo)
+           unshift!(stmts,Expr(:meta, :push_lambda, loc))
+           push!(stmts, Expr(:meta, :pop_lambda))
+       end
     end
-
     if !isempty(stmts) && !propagate_inbounds
         # inlined statements are out-of-bounds by default
         unshift!(stmts, Expr(:inbounds, false))
@@ -2791,12 +2822,21 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             expr.typ = old_t
         end
     end
+    if !isempty(prelude_stmts)
+        stmts = append!(prelude_stmts, stmts)
+    end
     return (expr, stmts)
 end
 # The inlining incomplete matches optimization currently
 # doesn't work on Tuples of TypeVars
 const inline_incompletematch_allowed = false
 
+# should the expression be part of the inline cost model
+function inline_ignore(ex)
+    isa(ex, LineNumberNode) ||
+    isa(ex, Expr) && ((ex::Expr).head === :line ||
+                      (ex::Expr).head === :meta)
+end
 inline_worthy(body, cost::Integer) = true
 function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
     if popmeta!(body, :inline)[1]
@@ -2806,17 +2846,16 @@ function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost;
         return false
     end
     symlim = 1000 + 5_000_000 ÷ cost
-    nargs = 0
-    for arg in body.args
-        if (!isa(arg, LineNumberNode) &&
-            !(isa(arg, Expr) && (arg::Expr).head === :line))
-            nargs += 1
+    nstmt = 0
+    for stmt in body.args
+        if !inline_ignore(stmt)
+            nstmt += 1
         end
     end
-    if nargs < (symlim + 500) ÷ 1000
+    if nstmt < (symlim + 500) ÷ 1000
         symlim *= 16
         symlim ÷= 1000
-        if occurs_more(body, e->(!isa(e, LineNumberNode)), symlim) < symlim
+        if occurs_more(body, e->!inline_ignore(e), symlim) < symlim
             return true
         end
     end

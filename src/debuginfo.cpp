@@ -597,74 +597,87 @@ JITEventListener *CreateJuliaJITEventListener()
     return jl_jit_events;
 }
 
-// *name and *filename are either NULL or malloc'd pointers
-static void lookup_pointer(DIContext *context, char **name, size_t *line,
-                           char **filename, size_t *inlinedat_line,
-                           char **inlinedat_file, size_t pointer,
-                           int demangle, int *fromC)
+// *frames is a one element array containing whatever we could come up
+// with for the current frame. here we'll try to expand it using debug info
+// func_name and file_name are either NULL or malloc'd pointers
+static int lookup_pointer(DIContext *context, jl_frame_t **frames,
+                          size_t pointer, int demangle, int noInline)
 {
-    // This function is not allowed to reference any TLS variables since
-    // it can be called from an unmanaged thread on OSX.
-    DILineInfo info, topinfo;
-    DIInliningInfo inlineinfo;
-    if (demangle && *name != NULL) {
-        char *oldname = *name;
-        *name = jl_demangle(*name);
-        free(oldname);
+    // This function is not allowed to reference any TLS variables if noInline
+    // since it can be called from an unmanaged thread on OSX.
+    if (!context) {
+        if (demangle && (*frames)[0].func_name != NULL) {
+            char *oldname = (*frames)[0].func_name;
+            (*frames)[0].func_name = jl_demangle(oldname);
+            free(oldname);
+        }
+        return 1;
     }
 #ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
-                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
-    DILineInfoSpecifier inlineSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
 #else
     int infoSpec = DILineInfoSpecifier::FileLineInfo |
                    DILineInfoSpecifier::AbsoluteFilePath |
                    DILineInfoSpecifier::FunctionName;
-    int inlineSpec = DILineInfoSpecifier::FileLineInfo |
-                   DILineInfoSpecifier::AbsoluteFilePath |
-                   DILineInfoSpecifier::FunctionName;
 #endif
 
-    if (context == NULL) goto done;
-    info = context->getLineInfoForAddress(pointer, infoSpec);
-    inlineinfo = context->getInliningInfoForAddress(pointer, inlineSpec);
+    auto inlineInfo = context->getInliningInfoForAddress(pointer, infoSpec);
 
-#ifndef LLVM35 // LLVM <= 3.4
-    if (strcmp(info.getFunctionName(), "<invalid>") == 0) goto done;
-    if (demangle) {
-        free(*name);
-        *name = jl_demangle(info.getFunctionName());
+    int fromC = (*frames)[0].fromC;
+    int n_frames = inlineInfo.getNumberOfFrames();
+    if (noInline)
+        n_frames = 1;
+    if (n_frames > 1) {
+        jl_frame_t *new_frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
+        memcpy(&new_frames[n_frames-1], *frames, sizeof(jl_frame_t));
+        free(*frames);
+        *frames = new_frames;
     }
-    else {
-        jl_copy_str(name, info.getFunctionName());
-    }
-    *line = info.getLine();
-    jl_copy_str(filename, info.getFileName());
+    jl_lambda_info_t *outer_linfo = (*frames)[n_frames-1].linfo;
+    for (size_t i = 0; i < n_frames; i++) {
+        bool inlined_frame = i != n_frames - 1;
+        DILineInfo info;
+        if (!noInline) {
+            info = inlineInfo.getFrame(i);
+        }
+        else {
+            info = context->getLineInfoForAddress(pointer, infoSpec);
+        }
 
-    if (inlineinfo.getNumberOfFrames() > 1) {
-        topinfo = inlineinfo.getFrame(inlineinfo.getNumberOfFrames() - 1);
-        jl_copy_str(inlinedat_file, topinfo.getFileName());
-        *inlinedat_line = topinfo.getLine();
-    }
-#else
-    if (strcmp(info.FunctionName.c_str(), "<invalid>") == 0) goto done;
-    jl_copy_str(name, info.FunctionName.c_str());
-    *line = info.Line;
-    jl_copy_str(filename, info.FileName.c_str());
+        jl_frame_t *frame = &(*frames)[i];
+        std::string func_name(info.FunctionName);
 
-    if (inlineinfo.getNumberOfFrames() > 1) {
-        topinfo = inlineinfo.getFrame(inlineinfo.getNumberOfFrames() - 1);
-        jl_copy_str(inlinedat_file, topinfo.FileName.c_str());
-        *inlinedat_line = topinfo.Line;
-    }
-#endif
+        if (inlined_frame) {
+            frame->inlined = 1;
+            frame->fromC = fromC;
+            if (outer_linfo) {
+                std::size_t semi_pos = func_name.find(';');
+                if (semi_pos != std::string::npos) {
+                    // we got an index in the inlined lambda array
+                    int inl_idx = std::stoi(func_name.substr(semi_pos+1, std::string::npos));
+                    func_name = func_name.substr(0, semi_pos);
+                    assert(1 <= inl_idx && inl_idx <= jl_array_len(outer_linfo->def->roots));
+                    frame->linfo = (jl_lambda_info_t*)jl_cellref(outer_linfo->def->roots, inl_idx-1);
+                }
+            }
+        }
 
-done:
-    // If this is a jlcall or jlcapi wrapper, set fromC to match JIT behavior
-    if (*name == NULL || !strncmp(*name, "jlcall_", 7) || !strncmp(*name, "jlcapi_", 7)) {
-        *fromC = true;
+        if (func_name == "<invalid>")
+            frame->func_name = NULL;
+        else
+            jl_copy_str(&frame->func_name, func_name.c_str());
+        frame->line = info.Line;
+        if (info.FileName == "<invalid>")
+            frame->file_name = NULL;
+        else
+            jl_copy_str(&frame->file_name, info.FileName.c_str());
+
+        if (!frame->func_name || !func_name.compare(0, 7, "jlcall_") || !func_name.compare(0, 7, "jlcapi_")) {
+            frame->fromC = 1;
+        }
     }
+    return n_frames;
 }
 
 #ifdef _OS_DARWIN_
@@ -731,6 +744,10 @@ extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambd
     sysimg_fvars_n = n;
 }
 
+#ifdef _OS_LINUX_
+#include <link.h>
+#endif
+
 bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
 {
@@ -786,9 +803,23 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
-    if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
+    int dladdr_success;
+    uint64_t fbase;
+#ifdef _OS_LINUX_
+    // dlinfo.dli_fbase is not the right value for the main executable on linux
+    struct link_map *extra_info;
+    dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
+#else
+    dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
+#endif
+
+    if (dladdr_success && dlinfo.dli_fname) {
+#ifdef _OS_LINUX_
+        fbase = (uintptr_t)extra_info->l_addr;
+#else
+        fbase = (uintptr_t)dlinfo.dli_fbase;
+#endif
         const char *fname;
-        uint64_t fbase = (uintptr_t)dlinfo.dli_fbase;
         if (saddr)
             *saddr = dlinfo.dli_saddr;
 #if defined(_OS_DARWIN_)
@@ -968,18 +999,17 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 }
 
 // *name and *filename should be either NULL or malloc'd pointer
-static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
-                                    char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
-                                    size_t pointer, int *fromC, int skipC, int skipInline)
+static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skipC, int noInline)
 {
-    // This function is not allowed to reference any TLS variables since
-    // it can be called from an unmanaged thread on OSX.
+    // This function is not allowed to reference any TLS variables if noInline
+    // since it can be called from an unmanaged thread on OSX.
+    jl_frame_t *frame0 = *frames;
 #ifdef _OS_WINDOWS_
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     if (jl_in_stackwalk) {
-        *fromC = 1;
-        return;
+        frame0->fromC = 1;
+        return 1;
     }
     jl_in_stackwalk = 1;
     DWORD64 dwAddress = pointer;
@@ -987,9 +1017,9 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
         // SymGetLineFromAddr64 returned success
         // record source file name and line number
-        if (frame_info_line.FileName && filename)
-            jl_copy_str(filename, frame_info_line.FileName);
-        *line = frame_info_line.LineNumber;
+        if (frame_info_line.FileName)
+            jl_copy_str(&frame0->file_name, frame_info_line.FileName);
+        frame0->line = frame_info_line.LineNumber;
     }
     jl_in_stackwalk = 0;
 #endif
@@ -998,13 +1028,11 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
     bool isSysImg;
     void *saddr;
     int64_t slide, section_slide;
-    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, &section_slide, skipC, &isSysImg, &saddr, name, filename)) {
-        *fromC = 1;
-        return;
+    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, &section_slide, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
+        frame0->fromC = 1;
+        return 1;
     }
-    *fromC = !isSysImg;
-    lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide,
-                   isSysImg, fromC);
+    frame0->fromC = !isSysImg;
     if (isSysImg && sysimg_fvars) {
 #ifdef _OS_LINUX_
         unw_proc_info_t pip;
@@ -1015,12 +1043,14 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
         if (saddr) {
             for (size_t i = 0; i < sysimg_fvars_n; i++) {
                 if (saddr == sysimg_fvars[i]) {
-                    *outer_linfo = sysimg_fvars_linfo[i];
+                    frame0->linfo = sysimg_fvars_linfo[i];
                     break;
                 }
             }
         }
+        return lookup_pointer(context, frames, pointer+slide, isSysImg, noInline);
     }
+    return lookup_pointer(context, frames, pointer+slide, isSysImg, noInline);
 }
 
 int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
@@ -1109,19 +1139,16 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 #endif
 
 // Set *name and *filename to either NULL or malloc'd string
-void jl_getFunctionInfo(char **name, char **filename, size_t *line,
-                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
-                        size_t pointer, int *fromC, int skipC, int skipInline)
+int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline)
 {
-    // This function is not allowed to reference any TLS variables since
-    // it can be called from an unmanaged thread on OSX.
-    *name = NULL;
-    *line = -1;
-    *filename = NULL;
-    *inlinedat_file = NULL;
-    *inlinedat_line = -1;
-    *outer_linfo = NULL;
-    *fromC = 0;
+    // This function is not allowed to reference any TLS variables if noInline
+    // since it can be called from an unmanaged thread on OSX.
+
+    // initial guess
+    int n_frames = 1;
+    jl_frame_t *frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), 1);
+    frames[0].line = -1;
+    *frames_out = frames;
 
 #ifdef USE_MCJIT
     llvm::DIContext *context;
@@ -1129,9 +1156,9 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     uint64_t symsize;
     int64_t slide = 0;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, NULL, &object, &context)) {
-        *outer_linfo = jl_jit_events->lookupLinfo(pointer);
-        lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide, 1, fromC);
-        return;
+        frames[0].linfo = jl_jit_events->lookupLinfo(pointer);
+        int nf = lookup_pointer(context, frames_out, pointer+slide, 1, noInline);
+        return nf;
     }
 #else // !USE_MCJIT
 // Without MCJIT we use the FuncInfo structure containing address maps
@@ -1143,21 +1170,21 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
         if (skipC && (*it).second.lines.empty()) {
             // Technically not true, but we don't want them
             // in julia backtraces, so close enough
-            *fromC = 1;
+            frames[0].fromC = 1;
             uv_rwlock_rdunlock(&threadsafe);
-            return;
+            return 1;
         }
 
-        jl_copy_str(name, (*it).second.func->getName().str().c_str());
-        jl_copy_str(filename, "");
+        jl_copy_str(&frames[0].func_name, (*it).second.func->getName().str().c_str());
+        jl_copy_str(&frames[0].file_name, "");
 
         if ((*it).second.lines.empty()) {
-            *fromC = 1;
+            frames[0].fromC = 1;
             uv_rwlock_rdunlock(&threadsafe);
-            return;
+            return 1;
         }
 
-        *outer_linfo = (*it).second.linfo;
+        frames[0].linfo = (*it).second.linfo;
         std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit =
             (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
@@ -1165,16 +1192,16 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
         if ((*it).second.func) {
             DISubprogram debugscope =
                 DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
-            jl_copy_str(filename, debugscope.getFilename().str().c_str());
+            jl_copy_str(&frames[0].file_name, debugscope.getFilename().str().c_str());
             // the DISubprogram has the un-mangled name, so use that if
             // available. However, if the scope need not be the current
             // subprogram.
             if (debugscope.getName().data() != NULL) {
-                jl_copy_str(name, debugscope.getName().str().c_str());
+                jl_copy_str(&frames[0].func_name, debugscope.getName().str().c_str());
             }
             else {
-                char *oldname = *name;
-                *name = jl_demangle(*name);
+                char *oldname = frames[0].func_name;
+                frames[0].func_name = jl_demangle(frames[0].func_name);
                 free(oldname);
             }
         }
@@ -1183,34 +1210,83 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 
         while (vit != (*it).second.lines.end()) {
             if (pointer <= (*vit).Address) {
-                *line = prev.Loc.getLine();
+                frames[0].line = prev.Loc.getLine();
                 break;
             }
             prev = *vit;
             vit++;
         }
-        if (*line == (size_t) -1) {
-            *line = prev.Loc.getLine();
+        if (frames[0].line == (size_t) -1) {
+            frames[0].line = prev.Loc.getLine();
         }
 
         DILexicalBlockFile locscope = DILexicalBlockFile(prev.Loc.getScope((*it).second.func->getContext()));
-        jl_copy_str(filename, locscope.getFilename().str().c_str());
+        jl_copy_str(&frames[0].file_name, locscope.getFilename().str().c_str());
 
-        MDNode *inlinedAt = skipInline ? NULL : prev.Loc.getInlinedAt((*it).second.func->getContext());
+        /*MDNode *inlinedAt = skipInline ? NULL : prev.Loc.getInlinedAt((*it).second.func->getContext());
         if ((!skipInline) && (inlinedAt != NULL)) {
             DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
             DILexicalBlockFile inlinescope = DILexicalBlockFile(inlineloc.getScope((*it).second.func->getContext()));
-            jl_copy_str(inlinedat_file, inlinescope.getFilename().str().c_str());
+            jl_copy_str(&frames, inlinescope.getFilename().str().c_str());
             *inlinedat_line = inlineloc.getLine();
-        }
+            }*/
         uv_rwlock_rdunlock(&threadsafe);
-        return;
+        return 1;
     }
     uv_rwlock_rdunlock(&threadsafe);
 #endif // USE_MCJIT
-
-    jl_getDylibFunctionInfo(name, filename, line, inlinedat_file, inlinedat_line, outer_linfo, pointer, fromC, skipC, skipInline);
+    return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
+
+#if defined(LLVM37) && (defined(_OS_LINUX_) || defined(_OS_DARWIN_))
+const int SECTION_MEMORY_SIZE = 2*1024*1024; // 2MB
+struct section_memory {
+    uint8_t *current;
+    uint8_t *end;
+};
+enum section_type {
+    Sect_Code, Sect_Data, Sect_RoData
+};
+static section_memory *section_mem[3];
+#include <sys/mman.h>
+#ifdef _OS_DARWIN_
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+uint8_t *juliaAllocateSection(uintptr_t size, unsigned align, section_type typ)
+{
+    section_memory **pmem = &section_mem[(int)typ];
+    if (*pmem) {
+        section_memory *mem = *pmem;
+        uint8_t *current = mem->current;
+        int offset = align - (uintptr_t)current % align;
+        uint8_t *addr = current + offset;
+        uint8_t *end = addr + size;
+        if (end >= mem->end)
+            goto allocate_new_block;
+        mem->current = end;
+        return addr;
+    }
+ allocate_new_block:
+    if (size > SECTION_MEMORY_SIZE - sizeof(section_memory) - align)
+        abort(); // TODO make a mapping just for this one section
+    int prot = 0;
+    switch(typ) {
+    case Sect_Code:
+        prot = PROT_WRITE | PROT_EXEC | PROT_READ;
+        break;
+    case Sect_Data:
+    case Sect_RoData:
+        prot = PROT_WRITE | PROT_READ;
+        break;
+    }
+    uint8_t *block = (uint8_t*)mmap(0, SECTION_MEMORY_SIZE, prot, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    // shamelessly leak the current block, we're not freeing generated code anyway
+    *pmem = (section_memory*)block;
+    (*pmem)->end = block + SECTION_MEMORY_SIZE;
+    (*pmem)->current = block + sizeof(section_memory);
+    return juliaAllocateSection(size, align, typ);
+}
+#endif
 
 #if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
 extern "C" void __register_frame(void*);
@@ -1261,6 +1337,9 @@ public:
     ~RTDyldMemoryManagerOSX() override {};
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    uint8_t *allocateCodeSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName) override;
+    uint8_t *allocateDataSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly) override;
+
 };
 
 static void (*libc_register_frame)(void*)   = NULL;
@@ -1299,6 +1378,16 @@ void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
     });
 }
 
+uint8_t *RTDyldMemoryManagerOSX::allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+}
+
+uint8_t *RTDyldMemoryManagerOSX::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Data);
+}
+
 RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
 {
     return new RTDyldMemoryManagerOSX();
@@ -1315,10 +1404,13 @@ class RTDyldMemoryManagerUnix : public SectionMemoryManager
     void operator=(const RTDyldMemoryManagerUnix&) = delete;
 
 public:
-    RTDyldMemoryManagerUnix() {};
+    RTDyldMemoryManagerUnix() {
+    };
     ~RTDyldMemoryManagerUnix() override {};
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    uint8_t *allocateCodeSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName) override;
+    uint8_t *allocateDataSection (uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly) override;
 };
 
 struct unw_table_entry
@@ -1645,6 +1737,17 @@ void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
     // the allocated entry above (or we could look in libunwind's internal
     // data structures).
 }
+
+uint8_t *RTDyldMemoryManagerUnix::allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Code);
+}
+
+uint8_t *RTDyldMemoryManagerUnix::allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID, StringRef SectionName, bool isReadOnly)
+{
+    return juliaAllocateSection(Size, Alignment >= 16 ? Alignment : 16, Sect_Data);
+}
+
 
 RTDyldMemoryManager* createRTDyldMemoryManagerUnix()
 {

@@ -124,7 +124,7 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
-        code = StackTraces.lookup(b)
+        code = StackTraces.lookup(b)[1]
         if !code.from_c
             if code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
@@ -438,25 +438,27 @@ function process_backtrace(process_func::Function, top_function::Symbol, t::Vect
     last_frame = StackTraces.UNKNOWN
     count = 0
     for i = eachindex(t)
-        lkup = StackTraces.lookup(t[i])
-        if lkup === StackTraces.UNKNOWN
-            continue
-        end
-
-        if lkup.from_c && skipC; continue; end
-        if i == 1 && lkup.func == :error; continue; end
-        if lkup.func == top_function; break; end
-        count += 1
-        if !in(count, set); continue; end
-
-        if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
-            if n > 0
-                process_func(last_frame, n)
+        lkups = StackTraces.lookup(t[i])
+        for lkup in lkups
+            if lkup === StackTraces.UNKNOWN
+                continue
             end
-            n = 1
-            last_frame = lkup
-        else
-            n += 1
+
+            if lkup.from_c && skipC; continue; end
+            if i == 1 && lkup.func == :error; continue; end
+            if lkup.func == top_function; break; end
+            count += 1
+            if !in(count, set); continue; end
+
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+                if n > 0
+                    process_func(last_frame, n)
+                end
+                n = 1
+                last_frame = lkup
+            else
+                n += 1
+            end
         end
     end
     if n > 0

@@ -233,16 +233,11 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     default: return 0;          // Cannot handle input address size
     }
     int skipC = 0;
-    char *name;
-    char *filename;
-    size_t line;
-    char *inlinedat_file;
-    size_t inlinedat_line;
-    jl_lambda_info_t *outer_linfo;
-    int fromC;
-    jl_getFunctionInfo(&name, &filename, &line, &inlinedat_file, &inlinedat_line, &outer_linfo, pointer, &fromC, skipC, 1);
-    free(filename);
-    free(inlinedat_file);
+    jl_frame_t *frame;
+    jl_getFunctionInfo(&frame, pointer, skipC, 1);
+    char *name = frame->func_name;
+    free(frame->file_name);
+    free(frame);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
