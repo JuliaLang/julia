@@ -170,6 +170,11 @@ static void NOINLINE save_stack(jl_task_t *t)
     jl_gc_wb_back(t);
 }
 
+char *jl_task_stackbase(jl_task_t *task)
+{
+    return (char*)jl_all_task_states[task->tid].ptls->stackbase;
+}
+
 static void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
     char *_x = (char*)jl_stackbase - t->ssize;
@@ -487,7 +492,6 @@ static void init_task(jl_task_t *t, char *stack)
 
 #endif /* !COPY_STACKS */
 
-
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
@@ -608,22 +612,28 @@ void jl_init_tasks(void)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_emptysvec,
-                                   jl_svec(9,
-                                            jl_symbol("parent"),
-                                            jl_symbol("storage"),
-                                            jl_symbol("state"),
-                                            jl_symbol("consumers"),
-                                            jl_symbol("donenotify"),
-                                            jl_symbol("result"),
-                                            jl_symbol("exception"),
-                                            jl_symbol("backtrace"),
-                                            jl_symbol("code")),
-                                   jl_svec(9,
-                                            jl_any_type,
-                                            jl_any_type, jl_sym_type,
-                                            jl_any_type, jl_any_type,
-                                            jl_any_type, jl_any_type,
-                                            jl_any_type, jl_any_type),
+                                   jl_svec(13,
+                                           jl_symbol("parent"),
+                                           jl_symbol("storage"),
+                                           jl_symbol("state"),
+                                           jl_symbol("consumers"),
+                                           jl_symbol("donenotify"),
+                                           jl_symbol("result"),
+                                           jl_symbol("exception"),
+                                           jl_symbol("backtrace"),
+                                           jl_symbol("code"),
+                                           jl_symbol("ctx"),
+                                           jl_symbol("bufsz"),
+                                           jl_symbol("stkbuf"),
+                                           jl_symbol("ssize")),
+                                   jl_svec(13,
+                                           jl_any_type,
+                                           jl_any_type, jl_sym_type,
+                                           jl_any_type, jl_any_type,
+                                           jl_any_type, jl_any_type,
+                                           jl_any_type, jl_any_type,
+                                           jl_tupletype_fill(sizeof(jl_jmp_buf), (jl_value_t*)jl_uint8_type),
+                                           jl_long_type, jl_voidpointer_type, jl_long_type),
                                    0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
