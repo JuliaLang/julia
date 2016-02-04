@@ -439,3 +439,10 @@ let d = ImmutableDict{UTF8String, UTF8String}(),
     @test_throws KeyError d[k1]
     @test_throws KeyError d1["key2"]
 end
+
+# filtering
+let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
+    @test filter(f, d) == filter!(f, copy(d)) ==
+          invoke(filter!, (Function, Associative), f, copy(d)) ==
+          Dict(zip(2:2:1000, 2:2:1000))
+end
