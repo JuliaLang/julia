@@ -572,7 +572,7 @@ data should be declared to be of type ``T`` inside the :func:`ccall`, as they
 are passed by value.  For C code accepting pointers, ``Ref{T}`` should
 generally be used for the types of input arguments, allowing the use of
 pointers to memory managed by either Julia or C through the implicit call to
-:func:``cconvert``.  In contrast, pointers returned by the C function called
+:func:`cconvert`.  In contrast, pointers returned by the C function called
 should be declared to be of output type ``Ptr{T}``, reflecting that the memory
 pointed to is managed by C only. Pointers contained in C structs should be
 represented as fields of type ``Ptr{T}`` within the corresponding Julia
