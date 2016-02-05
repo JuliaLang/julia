@@ -4711,7 +4711,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 vi.hasGCRoot = false;
                 continue;
             }
-            if (vi.isSA && !vi.isVolatile && !vi.usedUndef) {
+            if (jl_options.opt_level > 0 && vi.isSA && !vi.isVolatile && !vi.usedUndef) {
                 vi.hasGCRoot = false; // so far...
             }
             else {

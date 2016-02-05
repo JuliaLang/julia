@@ -95,8 +95,8 @@ script:
         /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
+        /tmp/julia/bin/julia -O0 --check-bounds=yes runtests.jl $TESTSTORUN &&
+        /tmp/julia/bin/julia -O0 --check-bounds=yes runtests.jl libgit2-online pkg
     - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/build/julia-env
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
