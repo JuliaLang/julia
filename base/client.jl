@@ -281,7 +281,7 @@ const repl_hooks = []
 
 atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
 
-function _atreplinit(repl)
+function _run_repl_hooks(repl)
     for f in repl_hooks
         try
             f(repl)
@@ -299,14 +299,9 @@ function _start()
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
 
-        local term
         global active_repl
-        global active_repl_backend
         if repl
-            if !isa(STDIN,TTY)
-                global is_interactive |= !isa(STDIN,Union{File,IOStream})
-                color_set || (global have_color = false)
-            else
+            if isa(STDIN,TTY)
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
@@ -322,11 +317,11 @@ function _start()
                 # Make sure any displays pushed in .juliarc.jl ends up above the
                 # REPLDisplay
                 pushdisplay(REPL.REPLDisplay(active_repl))
-            end
-        end
-
-        if repl
-            if !isa(STDIN,TTY)
+                _run_repl_hooks(active_repl)
+                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            else
+                global is_interactive |= !isa(STDIN,Union{File,IOStream})
+                color_set || (global have_color = false)
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
@@ -337,9 +332,6 @@ function _start()
                         eval_user_input(parse_input_line(STDIN), true)
                     end
                 end
-            else
-                _atreplinit(active_repl)
-                REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
             end
         end
     catch err
