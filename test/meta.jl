@@ -100,6 +100,23 @@ for m in [:foo1, :foo2, :foo3, :foo4, :foo5]
 end
 @test Base.findmeta(multi_meta.args)[1] == 0
 
+# Test that pushmeta! can push across other macros,
+# in the case multiple pushmeta!-based macros are combined
+
+@attach 40 @attach 41 @attach 42 dummy_multi() = return nothing
+
+asts = code_lowered(dummy_multi, Tuple{})
+@test length(asts) == 1
+ast = asts[1]
+
+body = Expr(:block)
+body.args = Base.uncompressed_ast(ast)
+
+@test popmeta!(body, :test) == (true, [40])
+@test popmeta!(body, :test) == (true, [41])
+@test popmeta!(body, :test) == (true, [42])
+@test popmeta!(body, :nonexistent) == (false, [])
+
 end
 
 
