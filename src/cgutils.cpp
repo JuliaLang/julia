@@ -849,8 +849,9 @@ static Value *literal_pointer_val(jl_value_t *p)
     }
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
+        jl_datatype_t *ftype = (jl_datatype_t*)jl_first_argument_datatype((jl_value_t*)linfo->sig);
         // Type-inferred functions are prefixed with a -
-        return julia_gv("-", linfo->def->name, linfo->def->module, p);
+        return ftype ? julia_gv("-", ftype->name->mt->name, ftype->name->mt->module, p) : julia_gv("jl_lambda#", p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t *addr = (jl_sym_t*)p;
@@ -1498,7 +1499,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {
                 // look for static parameter
-                jl_svec_t *sp = ctx->linfo->def->sparam_syms;
+                jl_svec_t *sp = ctx->astinfo->def->sparam_syms;
                 for (size_t i=0; i < jl_svec_len(sp); i++) {
                     assert(jl_is_symbol(jl_svecref(sp, i)));
                     if (e == jl_svecref(sp, i)) {
@@ -1531,8 +1532,6 @@ type_of_constant:
 }
 
 // --- accessing the representations of built-in data types ---
-
-static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val);
 
 static Value *data_pointer(Value *x)
 {
@@ -1586,7 +1585,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
         jl_value_t *jt = jl_field_type(stt,0);
         if (!stt->uid) {
             // add root for types not cached
-            jl_add_linfo_root(ctx->linfo, (jl_value_t*)stt);
+            jl_add_linfo_root(ctx, (jl_value_t*)stt);
         }
         Value *idx0 = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
         if (strct.isghost) {
@@ -2010,7 +2009,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, jl_value_t *jt)
     if ((c = dyn_cast<Constant>(v)) != NULL) {
         jl_value_t *s = static_constant_instance(c, jt);
         if (s) {
-            jl_add_linfo_root(ctx->linfo, s);
+            jl_add_linfo_root(ctx, s);
             return literal_pointer_val(s);
         }
     }

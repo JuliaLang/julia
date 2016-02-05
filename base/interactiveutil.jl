@@ -598,7 +598,7 @@ function summarysize(obj::MethodTable, seen, excl)
     return size
 end
 
-function summarysize(m::MethodList, seen, excl)
+function summarysize(m::LambdaInfo, seen, excl)
     size::Int = 0
     while true
         haskey(seen, m) ? (return size) : (seen[m] = true)
@@ -606,9 +606,12 @@ function summarysize(m::MethodList, seen, excl)
         if isdefined(m, :func)
             size += summarysize(m.func, seen, excl)::Int
         end
+        if isdefined(m, :sparam_vals)
+            size += summarysize(m.sparam_vals, seen, excl)::Int
+        end
         size += summarysize(m.sig, seen, excl)::Int
         m.next === nothing && break
-        m = m.next::MethodList
+        m = m.next::LambdaInfo
     end
     return size
 end

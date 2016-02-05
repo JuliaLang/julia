@@ -139,7 +139,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         print(io, frame.func !== empty_sym ? frame.func : "?")
     else
         linfo = get(frame.outer_linfo)
-        params = linfo.specTypes.parameters
+        params = linfo.sig.parameters
         ft = params[1]
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, ft.name.mt.name) &&

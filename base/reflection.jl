@@ -244,9 +244,9 @@ next(mt::MethodTable, m::Method) = (m, m.next)
 done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
-uncompressed_ast(l::LambdaInfo) =
+uncompressed_ast(l::AstInfo) =
     isa(l.ast, Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l.def, l.ast)
-uncompressed_ast(l::Method) = uncompressed_ast(l.unspecialized)
+uncompressed_ast(l::Method) = uncompressed_ast(l.ast)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
@@ -292,14 +292,15 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x, types)
         if optimize
-            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo.def,
+            (astinfo, ty) = Core.Inference.typeinf(linfo, x[1], x[2], (linfo.func::AstInfo).def,
                                                 true, true)
         else
-            (tree, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2],
+            (astinfo, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2],
                                                          optimize=false)
         end
+        tree = astinfo.ast
         if !isa(tree, Expr)
-            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, tree)
+            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), astinfo.def, tree)
         end
         push!(asts, tree)
     end
@@ -311,7 +312,7 @@ function return_types(f::ANY, types::ANY=Tuple)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x,types)
-        (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
+        (astinfo, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
     rt

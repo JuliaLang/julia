@@ -1084,20 +1084,16 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-    jl_method_info_t *li = jl_new_method_info(jl_nothing, jl_emptysvec, jl_core_module);
-    li->name = sname;
-    li->unspecialized->functionObjects.fptr = fptr;
-    // TODO jb/functions: what should li->ast be?
-    li->unspecialized->ast = (jl_value_t*)jl_exprn(lambda_sym,0);
-    jl_gc_wb(li->unspecialized, li->unspecialized->ast);
-    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li->unspecialized);
+    jl_lambda_info_t *li = jl_new_lambda_info(NULL, jl_emptysvec, jl_anytuple_type);
+    li->functionObjects.fptr = fptr;
+    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li);
     return f;
 }
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache->func->functionObjects.fptr;
+    return jl_gf_mtable(b)->cache->functionObjects.fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)
@@ -1154,7 +1150,6 @@ void jl_init_primitives(void)
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
-    add_builtin("MethodList", (jl_value_t*)jl_methodlist_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
@@ -1162,7 +1157,8 @@ void jl_init_primitives(void)
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("LambdaInfo", (jl_value_t*)jl_lambda_info_type);
-    add_builtin("Method", (jl_value_t*)jl_method_info_type);
+    add_builtin("AstInfo", (jl_value_t*)jl_ast_info_type);
+    add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
@@ -1266,19 +1262,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
-    else if (vt == jl_lambda_info_type) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+    else if (vt == jl_ast_info_type) {
+        jl_ast_info_t *li = (jl_ast_info_t*)v;
         n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
-        n += jl_printf(out, ".");
-        n += jl_show_svec(out, li->specTypes->parameters,
-                          jl_symbol_name(li->def->name), "(", ")");
+        n += jl_printf(out, ".%s(...)", jl_symbol_name(li->def->name));
         // The following is nice for debugging, but allocates memory and generates a lot of output
         // so it may not be a good idea to to have it active
-        //jl_printf(out, " -> ");
-        //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
+        //n += jl_printf(out, " -> ");
+        //n += jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li->def, li->ast) : li->ast);
     }
-    else if (vt == jl_method_info_type) {
-        jl_method_info_t *li = (jl_method_info_t*)v;
+    else if (vt == jl_lambda_info_type) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        n += jl_static_show_func_sig(out, (jl_value_t*)li->sig);
+        n += jl_printf(out, " <");
+        n += jl_static_show_x(out, (jl_value_t*)li->sparam_vals, depth);
+        n += jl_printf(out, ">");
+    }
+    else if (vt == jl_method_type) {
+        jl_method_t *li = (jl_method_t*)v;
         if (li->sig) {
             n += jl_static_show_func_sig(out, (jl_value_t*)li->sig);
         }
@@ -1286,10 +1287,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
             n += jl_static_show_x(out, (jl_value_t*)li->module, depth);
             n += jl_printf(out, ".%s(?)", jl_symbol_name(li->name));
         }
-        // The following is nice for debugging, but allocates memory and generates a lot of output
-        // so it may not be a good idea to to have it active
-        //jl_printf(out, " -> ");
-        //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");

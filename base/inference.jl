@@ -29,9 +29,10 @@ type VarInfo
     mod::Module
 end
 
-function VarInfo(linfo::LambdaInfo, ast=linfo.def.unspecialized.ast)
+function VarInfo(linfo::LambdaInfo, astinfo::AstInfo=linfo.func)
+    ast = astinfo.ast
     if !isa(ast,Expr)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, ast)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), astinfo.def, ast)
     end
     vinflist = ast.args[2][1]::Array{Any,1}
     vars = map(vi->vi[1], vinflist)
@@ -43,17 +44,17 @@ function VarInfo(linfo::LambdaInfo, ast=linfo.def.unspecialized.ast)
     gensym_types = Any[ NF for i = 1:(ngs::Int) ]
     nl = label_counter(body)+1
     if length(linfo.sparam_vals) > 0
-        n = length(linfo.def.sparam_syms)
+        n = length(astinfo.def.sparam_syms)
         sp = Array(Any, n*2)
         for i = 1:n
-            sp[i*2-1] = linfo.def.sparam_syms[i]
+            sp[i*2-1] = astinfo.def.sparam_syms[i]
             sp[i*2  ] = linfo.sparam_vals[i]
         end
         sp = svec(sp...)
     else
         sp = svec()
     end
-    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.def.module)
+    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), astinfo.def.module)
 end
 
 type VarState
@@ -733,6 +734,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
             break
         end
         linfo = linfo::LambdaInfo
+        astinfo = linfo.func::AstInfo
         lsig = length(m[3].sig.parameters)
         # limit argument type tuple based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
@@ -741,7 +743,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
         limit = false
         # look at the stack to detect recursive calls with growing argument lists
         while sp !== EmptyCallStack()
-            if linfo.def === sp.meth && length(argtypes) > length(sp.types.parameters)
+            if astinfo.def === sp.meth && length(argtypes) > length(sp.types.parameters)
                 limit = true; break
             end
             sp = sp.prev
@@ -766,7 +768,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
             end
         end
         #print(m,"\n")
-        (_tree,rt) = typeinf(linfo, sig, m[2], linfo.def)
+        (_tree,rt) = typeinf(linfo, sig, m[2], astinfo.def)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
@@ -799,7 +801,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY)
     if linfo === NF
         return Any
     end
-    return typeinf(linfo::LambdaInfo, ti, env, linfo.def)[2]
+    return typeinf(linfo::LambdaInfo, ti, env, (linfo.func::AstInfo).def)[2]
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -919,9 +921,10 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
     if linfo === NF
         return false
     end
-    if !linfo.pure
-        typeinf(linfo, meth[1], meth[2], linfo.def)
-        if !linfo.pure
+    astinfo = linfo.func::AstInfo
+    if !astinfo.pure
+        typeinf(linfo, meth[1], meth[2], astinfo.def)
+        if !astinfo.pure
             return false
         end
     end
@@ -1393,7 +1396,7 @@ function typeinf_ext(linfo::LambdaInfo, atypes::ANY, def::Method)
     return result
 end
 
-typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo.def,true,false)
+typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,(linfo.func::AstInfo).def,true,false)
 typeinf(linfo::LambdaInfo,atypes::ANY,sparams::ANY,def::Method) = typeinf(linfo,atypes,sparams,def,true,false)
 
 CYCLE_ID = 1
@@ -1433,19 +1436,19 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Met
                         return (nothing, code)
                     end
                 else
-                    return code  # else code is a tuple (ast, type)
+                    return code  # else code is a tuple (astinfo, type)
                 end
             end
         end
     end
     # TODO: typeinf currently gets stuck without this
     if def.name === :abstract_interpret || def.name === :tuple_elim_pass || def.name === :abstract_call_gf
-        return (def.unspecialized.ast, Any)
+        return (def.ast, Any)
     end
 
-    (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
-    if fulltree === ()
-        return (fulltree, result::Type)
+    (astinfo, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
+    if astinfo === ()
+        return (def.ast, result::Type)
     end
 
     if !redo
@@ -1467,18 +1470,18 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def::Met
         tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        tfarr[idx+1] = rec ? result : (fulltree,result)
+        tfarr[idx+1] = rec ? result : (astinfo,result)
         tfarr[idx+2] = rec
     else
-        def.tfunc[tfunc_idx] = rec ? result : (fulltree,result)
+        def.tfunc[tfunc_idx] = rec ? result : (astinfo,result)
         def.tfunc[tfunc_idx+1] = rec
     end
 
-    return (fulltree, result::Type)
+    return (astinfo, result::Type)
 end
 
 typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::ANY; optimize=true) =
-    typeinf_uncached(linfo::LambdaInfo, atypes, sparams, linfo.def, Bottom, true, optimize)
+    typeinf_uncached(linfo::LambdaInfo, atypes, sparams, (linfo.func::AstInfo).def, Bottom, true, optimize)
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
@@ -1539,7 +1542,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
-        if (is(f.meth, def) || f.meth.unspecialized.ast == def.unspecialized.ast) && typeseq(f.types, atypes)
+        if (is(f.meth, def) || f.meth.ast.ast == def.ast.ast) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
             (f::CallStack).cycleid = CYCLE_ID
@@ -1563,13 +1566,12 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
 
     #if dbg print("typeinf ", def.name, " ", atypes, "\n") end
 
+    astinfo = linfo.func::AstInfo
     if cop
-        ast = ccall(:jl_prepare_ast, Any, (Any,), def)::Expr
-    else
-        ast = linfo.ast
+        astinfo = ccall(:jl_copy_ast_info, Any, (Any,), astinfo)::AstInfo
     end
-
-    sv = VarInfo(linfo, ast)
+    ast = astinfo.ast::Expr
+    sv = VarInfo(linfo, astinfo)
 
     if length(linfo.sparam_vals) > 0
         # handled by VarInfo constructor
@@ -1580,7 +1582,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             push!(sp, sparams[i+1])
         end
         for i = 1:length(def.sparam_syms)
-            sym = linfo.def.sparam_syms[i]
+            sym = def.sparam_syms[i]
             push!(sp, sym)
             push!(sp, TypeVar(sym, Any, true))
         end
@@ -1809,7 +1811,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                             # for an example see test/libgit2.jl on 0.5-pre master
                             # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
                             inference_stack = (inference_stack::CallStack).prev
-                            return (def.unspecialized.ast, Any, false)
+                            return (def.ast, Any, false)
                         end
                     end
                     handler_at[l] = cur_hand
@@ -1853,6 +1855,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
         rec = false
     end
     fulltree = type_annotate(ast, s, sv, frame.result, args)
+    astinfo.inferred = true
 
     if !rec
         @assert fulltree.args[3].head === :body
@@ -1868,12 +1871,13 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
         end
         body = Expr(:block)
         body.args = fulltree.args[3].args::Array{Any,1}
-        linfo.pure = popmeta!(body, :pure)[1]
+        astinfo.pure = popmeta!(body, :pure)[1]
         fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
+    astinfo.ast = fulltree
 
     inference_stack = (inference_stack::CallStack).prev
-    return (fulltree, frame.result, rec)
+    return (astinfo, frame.result, rec)
 end
 
 function record_var_type(e::Symbol, t::ANY, decls)
@@ -2308,8 +2312,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
         end
     end
     linfo = linfo::LambdaInfo
+    astinfo = linfo.func::AstInfo
 
-    spnames = Any[s for s in linfo.def.sparam_syms]
+    spnames = Any[s for s in astinfo.def.sparam_syms]
     if length(linfo.sparam_vals) > 0
         spvals = Any[x for x in linfo.sparam_vals]
     else
@@ -2338,7 +2343,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     #     # check call stack to see if this argument list is growing
     #     st = inference_stack
     #     while !isa(st, EmptyCallStack)
-    #         if st.meth === linfo.def && length(atypes) > length(st.types)
+    #         if st.meth === astinfo.def && length(atypes) > length(st.types)
     #             atypes = limit_tuple_type(atypes)
     #             meth = _methods(f, atypes, 1)
     #             if meth === false || length(meth) != 1
@@ -2359,13 +2364,14 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     methargs = metharg.parameters
     nm = length(methargs)
 
-    (ast, ty) = typeinf(linfo, metharg, methsp, linfo.def, true, true)
-    if is(ast,())
+    (astinfo, ty) = typeinf(linfo, metharg, methsp, astinfo.def, true, true)
+    if is(astinfo,())
         return NF
     end
     needcopy = true
+    ast = astinfo.ast
     if !isa(ast,Expr)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo.def, ast)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), astinfo.def, ast)
         needcopy = false
     end
     ast = ast::Expr

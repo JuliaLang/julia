@@ -3381,14 +3381,6 @@ void jl_init_types(void)
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
-    jl_methodlist_type =
-        jl_new_datatype(jl_symbol("MethodList"), jl_any_type, jl_emptysvec,
-                        jl_svec(4, jl_symbol("sig"), jl_symbol("va"),
-                                jl_symbol("func"), jl_symbol("next")),
-                        jl_svec(4, jl_type_type, jl_bool_type,
-                                jl_any_type, jl_any_type),
-                        0, 1, 2);
-
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);
 
@@ -3477,37 +3469,51 @@ void jl_init_types(void)
     jl_svecset(jl_methtable_type->types, 7, jl_module_type);
 
     jl_lambda_info_type =
-        jl_new_datatype(jl_symbol("LambdaInfo"),
-                        jl_any_type, jl_emptysvec,
-                        jl_svec(18, jl_symbol("ast"),
+        jl_new_datatype(jl_symbol("LambdaInfo"), jl_any_type, jl_emptysvec,
+                        jl_svec(14, jl_symbol("next"),
+                                jl_symbol("sig"),
                                 jl_symbol("rettype"),
+                                jl_symbol("va"),
                                 jl_symbol("sparam_vals"),
-                                jl_symbol("specTypes"),
-                                jl_symbol("unspecialized_ducttape"),
+                                jl_symbol("func"),
+                                jl_symbol(""), jl_symbol(""), jl_symbol(""),
+                                jl_symbol(""), jl_symbol(""), jl_symbol("fptr"),
+                                jl_symbol("jlcall_api"), jl_symbol("inCompile")),
+                        jl_svec(14, jl_any_type,
+                                jl_type_type,
+                                jl_type_type,
+                                jl_bool_type,
+                                jl_simplevector_type,
+                                jl_any_type,
+                                jl_any_type, jl_any_type, jl_any_type,
+                                jl_int32_type, jl_int32_type, jl_any_type,
+                                jl_bool_type, jl_bool_type),
+                        0, 1, 4);
+
+    jl_ast_info_type =
+        jl_new_datatype(jl_symbol("AstInfo"),
+                        jl_any_type, jl_emptysvec,
+                        jl_svec(7, jl_symbol("ast"),
                                 jl_symbol("def"),
+                                jl_symbol("unspecialized_ducttape"),
                                 jl_symbol("called"),
                                 jl_symbol("pure"),
                                 jl_symbol("inferred"),
-                                jl_symbol("inInference"),
-                                jl_symbol("inCompile"),
-                                jl_symbol(""), jl_symbol(""), jl_symbol(""),
-                                jl_symbol(""), jl_symbol(""), jl_symbol("fptr"), jl_symbol("")),
-                        jl_svec(18, jl_any_type,
+                                jl_symbol("need_ducttape")),
+                        jl_svec(7, jl_any_type,
                                 jl_any_type,
-                                jl_simplevector_type,
-                                jl_any_type,
-                                jl_any_type,
-                                jl_any_type,
+                                jl_lambda_info_type,
                                 jl_int32_type,
-                                jl_bool_type, jl_bool_type, jl_bool_type, jl_bool_type,
-                                jl_any_type, jl_any_type, jl_any_type,
-                                jl_int32_type, jl_int32_type, jl_any_type, jl_bool_type),
-                        0, 1, 4);
+                                jl_bool_type,
+                                jl_bool_type,
+                                jl_bool_type),
+                        0, 1, 2);
 
-    jl_method_info_type =
+    jl_method_type =
         jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(15, jl_symbol("sig"),
+                        jl_svec(16, jl_symbol("ast"),
+                                jl_symbol("sig"),
                                 jl_symbol("tvars"),
                                 jl_symbol("sparam_syms"),
                                 jl_symbol("tfunc"),
@@ -3522,7 +3528,8 @@ void jl_init_types(void)
                                 jl_symbol("va"),
                                 jl_symbol("invokes"),
                                 jl_symbol("next")),
-                        jl_svec(15, jl_type_type,
+                        jl_svec(16, jl_ast_info_type,
+                                jl_type_type,
                                 jl_any_type,
                                 jl_simplevector_type,
                                 jl_any_type,
@@ -3537,7 +3544,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_any_type,
                                 jl_any_type),
-                        0, 1, 0);
+                        0, 1, 1);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
@@ -3585,17 +3592,15 @@ void jl_init_types(void)
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_methtable_type->types, 5, jl_long_type);
-    jl_svecset(jl_lambda_info_type->types, 5, jl_method_info_type);
+    jl_svecset(jl_lambda_info_type->types, 6, jl_voidpointer_type);
+    jl_svecset(jl_lambda_info_type->types, 7, jl_voidpointer_type);
+    jl_svecset(jl_lambda_info_type->types, 8, jl_voidpointer_type);
     jl_svecset(jl_lambda_info_type->types, 11, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 12, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 13, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 16, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
-    jl_compute_field_offsets(jl_methodlist_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_expr_type);
     jl_compute_field_offsets(jl_linenumbernode_type);
@@ -3605,7 +3610,8 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_topnode_type);
     jl_compute_field_offsets(jl_module_type);
     jl_compute_field_offsets(jl_lambda_info_type);
-    jl_compute_field_offsets(jl_method_info_type);
+    jl_compute_field_offsets(jl_ast_info_type);
+    jl_compute_field_offsets(jl_method_type);
     jl_compute_field_offsets(jl_typector_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_simplevector_type->pointerfree = 0;

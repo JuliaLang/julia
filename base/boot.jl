@@ -59,17 +59,26 @@
 #    name::Symbol
 #end
 
-#type LambdaInfo
+#type AstInfo
 #    ast::Union{Expr, Vector{UInt8}}
-#    rettype::Any
-#    sparam_vals::SimpleVector
-#    specTypes::Any
 #    unspecialized_ducttape::LambdaInfo
 #    def::Method
 #    pure::Bool
+#    called::Int32
+#end
+
+#type LambdaInfo
+#    next::Union{LambdaInfo,Void}
+#    sig::Any
+#    rettype::Any
+#    va::Bool
+#    sparam_vals::SimpleVector
+#    func
+#    ...
 #end
 
 #type Method
+#    ast::AstInfo
 #    sig::Type
 #    tvars::Expr
 #    sparam_syms::SimpleVector
@@ -81,10 +90,7 @@
 #    module::Module
 #    file::Symbol
 #    line::Int32
-#    called::Int32
-#    pure::Bool
 #    isstaged::Bool
-#    va::Bool
 #    invokes::Union{MethodTable,Void}
 #    next::Union{Method,Void}
 #end
@@ -143,7 +149,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, MethodList, Method, MethodTable,
+    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, AstInfo, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -316,7 +322,7 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
-LambdaInfo(ast::Method, sparam_vals::SimpleVector, specTypes::DataType) = ccall(:jl_spec_lambda_info, Any, (Any, Any, Any), ast.unspecialized, sparam_vals, specTypes)
+LambdaInfo(m::Method, sparam_vals::SimpleVector, specTypes::DataType) = ccall(:jl_new_lambda_info, Any, (Any, Any, Any), m.ast, sparam_vals, specTypes)
 
 Void() = nothing
 
@@ -364,5 +370,6 @@ Array{T}(::Type{T}, d::Int...) = Array{T}(d)
 Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
+Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
 
 ccall(:jl_set_istopmod, Void, (Bool,), true)

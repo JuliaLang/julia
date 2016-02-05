@@ -43,7 +43,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 }
 
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_lambda_info_t *li, int sparams, int allow_alloc)
+                           jl_ast_info_t *ast, jl_lambda_info_t *linfo, int allow_alloc);
 {
     return NULL;
 }

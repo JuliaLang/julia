@@ -240,21 +240,21 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
+int jl_has_intrinsics(jl_ast_info_t *ast, jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym) {
-        jl_value_t *sv = jl_static_eval(e0, NULL, m, li, 0, 0);
+        jl_value_t *sv = jl_static_eval(e0, NULL, m, ast, NULL, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
     int i;
     for(i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics(li, (jl_expr_t*)a, m))
+        if (jl_is_expr(a) && jl_has_intrinsics(ast, (jl_expr_t*)a, m))
             return 1;
     }
     return 0;
@@ -491,7 +491,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     jl_value_t *thunk=NULL;
     jl_value_t *result;
-    jl_method_info_t *thk=NULL;
+    jl_method_t *thk=NULL;
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
@@ -512,14 +512,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (head == thunk_sym) {
-        thk = (jl_method_info_t*)jl_exprarg(ex,0);
-        assert(jl_is_method_info(thk));
-        if (!jl_is_expr(thk->unspecialized->ast)) {
-            thk->unspecialized->ast = jl_uncompress_ast(thk, thk->unspecialized->ast);
-            jl_gc_wb(thk->unspecialized, thk->unspecialized->ast);
+        thk = (jl_method_t*)jl_exprarg(ex,0);
+        assert(jl_is_method(thk));
+        if (!jl_is_expr(thk->ast->ast)) {
+            thk->ast->ast = jl_uncompress_ast(thk, thk->ast->ast);
+            jl_gc_wb(thk->ast, thk->ast->ast);
         }
         assert(jl_svec_len(thk->sparam_syms) == 0);
-        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->unspecialized->ast), fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast->ast), fast, jl_current_module);
     }
     else {
         if (head && jl_eval_with_compiler_p((jl_expr_t*)ex, fast, jl_current_module)) {
@@ -542,11 +542,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (ewc) {
-        thk->unspecialized->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
-        if (!jl_in_inference) {
-            jl_type_infer(thk->unspecialized);
+        thk->sig = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
+        if (!thk->unspecialized) {
+            thk->unspecialized = jl_new_lambda_info((jl_value_t*)thk->ast, jl_emptysvec, thk->sig);
+            jl_gc_wb(thk, thk->unspecialized);
+            if (!jl_in_inference)
+                jl_type_infer(thk->unspecialized);
         }
-        jl_value_t *dummy_f_arg=NULL;
+        jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(thk->unspecialized, &dummy_f_arg, 1);
     }
     else {
@@ -610,15 +613,15 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
     return 0;
 }
 
-void print_func_loc(JL_STREAM *s, jl_method_info_t *li);
+void print_func_loc(JL_STREAM *s, jl_method_t *li);
 
-void jl_check_static_parameter_conflicts(jl_method_info_t *li, jl_svec_t *t, jl_sym_t *fname)
+void jl_check_static_parameter_conflicts(jl_method_t *li, jl_svec_t *t, jl_sym_t *fname)
 {
     jl_array_t *vinfo;
     size_t nvars;
 
-    if (li->unspecialized->ast && jl_is_expr(li->unspecialized->ast)) {
-        vinfo = jl_lam_vinfo((jl_expr_t*)li->unspecialized->ast);
+    if (li->ast->ast && jl_is_expr(li->ast->ast)) {
+        vinfo = jl_lam_vinfo((jl_expr_t*)li->ast->ast);
         nvars = jl_array_len(vinfo);
         for(size_t i=0; i < jl_svec_len(t); i++) {
             for(size_t j=0; j < nvars; j++) {
@@ -704,7 +707,7 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
-static jl_method_info_t *expr_to_lambda_ast(jl_method_info_t *f)
+static jl_method_t *expr_to_lambda_ast(jl_method_t *f)
 {
     // this occurs when there is a closure being added to an out-of-scope function
     // the user should only do this at the toplevel
@@ -722,14 +725,14 @@ static jl_method_info_t *expr_to_lambda_ast(jl_method_info_t *f)
     for (i = 0; i < l; i++) {
         jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
     }
-    // wrap in a MethodInfo
-    f = jl_new_method_info((jl_value_t*)f, tvar_syms, jl_current_module);
-    jl_preresolve_globals(f->unspecialized->ast, f);
+    // wrap in a Method
+    f = jl_new_method((jl_value_t*)f, tvar_syms, jl_current_module);
+    jl_preresolve_globals(f->ast->ast, f);
     JL_GC_POP();
     return f;
 }
 
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_info_t *f, jl_value_t *isstaged)
+JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_t *f, jl_value_t *isstaged)
 {
     // argdata is svec({types...}, svec(typevars...))
     jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
@@ -738,10 +741,10 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_info_t *f, jl_valu
     jl_sym_t *name;
     JL_GC_PUSH1(&f);
 
-    if (!jl_is_method_info(f))
+    if (!jl_is_method(f))
         f = expr_to_lambda_ast(f);
 
-    assert(jl_is_method_info(f));
+    assert(jl_is_method(f));
     assert(jl_is_tuple_type(argtypes));
     assert(jl_is_svec(tvars));
     assert(jl_nparams(argtypes)>0);
@@ -790,9 +793,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_info_t *f, jl_valu
     }
 
     f = jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
-    if (jl_boot_file_loaded && f->unspecialized->ast && jl_is_expr(f->unspecialized->ast)) {
-        f->unspecialized->ast = jl_compress_ast(f, f->unspecialized->ast);
-        jl_gc_wb(f->unspecialized, f->unspecialized->ast);
+    if (jl_boot_file_loaded && f->ast->ast && jl_is_expr(f->ast->ast)) {
+        f->ast->ast = jl_compress_ast(f, f->ast->ast);
+        jl_gc_wb(f->ast, f->ast->ast);
     }
     JL_GC_POP();
 }
