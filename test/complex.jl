@@ -135,6 +135,17 @@ end
 @test isinf(complex(0,-Inf))
 @test !isinf(complex(0,0))
 
+# flipsign:
+@test isequal(complex( 0.0, 0.0 ), flipsign(complex( 0.0, 0.0 ), 1))
+@test isequal(complex( -0.0, -0.0 ), flipsign(complex( 0.0, 0.0 ), -1))
+@test isequal(complex( Inf, 0.0 ), flipsign(complex( Inf, 0.0 ), 1))
+@test isequal(complex( -Inf, -0.0 ), flipsign(complex( Inf, 0.0 ), -1))
+@test isequal(complex( 0.0, NaN ), flipsign(complex( 0.0, NaN ), 1.0))
+@test isequal(complex( -0.0, NaN ), flipsign(complex( 0.0, NaN ), -1.0))
+
+@test isequal(complex( 5.0, 4.0 ), flipsign(complex(-5.0, -4.0), -1))
+@test isequal(complex( 0.5, -0.5 ), flipsign(complex(-0.5, 0.5), -2))
+
 # sqrt:
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))
