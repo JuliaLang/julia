@@ -155,17 +155,17 @@ let err_str,
     err_str = @except_str Symbol() MethodError
     @test contains(err_str, "no method matching Symbol()")
     err_str = @except_str :a() MethodError
-    @test contains(err_str, "no method matching (::Symbol)()")
+    @test contains(err_str, "::Symbol is not callable")
     err_str = @except_str EightBitType() MethodError
     @test contains(err_str, "no method matching EightBitType()")
     err_str = @except_str i() MethodError
-    @test contains(err_str, "no method matching (::EightBitType)()")
+    @test contains(err_str, "::EightBitType is not callable")
     err_str = @except_str EightBitTypeT() MethodError
     @test contains(err_str, "no method matching EightBitTypeT{T}()")
     err_str = @except_str EightBitTypeT{Int32}() MethodError
     @test contains(err_str, "no method matching EightBitTypeT{Int32}()")
     err_str = @except_str j() MethodError
-    @test contains(err_str, "no method matching (::EightBitTypeT{Int32})()")
+    @test contains(err_str, "::EightBitTypeT{Int32} is not callable")
     err_str = @except_str FunctionLike()() MethodError
     @test contains(err_str, "no method matching (::FunctionLike)()")
 end
@@ -257,4 +257,11 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+end
+
+
+# Issue 14940
+let
+    err_str = @except_str randn(1)() MethodError
+    @test contains(err_str, "::Array{Float64,1} is not callable")
 end
