@@ -1450,8 +1450,10 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
                 }
             }
         }
-        if (dump_module)
+        if (dump_module) {
+            realize_pending_globals();
             m->print(stream, NULL);
+        }
         else
             f2->print(stream);
         f2->eraseFromParent();
