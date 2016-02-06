@@ -65,7 +65,7 @@ function primesmask(lo::Int, hi::Int)
     lsi = lo - 1
     lwi = wheel_index(lsi)
     @inbounds for i in eachindex(wheel_sieve)
-        Base.unsafe_setindex!(sieve, wheel_sieve[i], wheel_prime(i + lwi) - lsi)
+        sieve[wheel_prime(i + lwi) - lsi] = wheel_sieve[i]
     end
     return sieve
 end
