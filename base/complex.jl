@@ -59,6 +59,8 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
+flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
+
 function show(io::IO, z::Complex)
     r, i = reim(z)
     compact = limit_output(io)
