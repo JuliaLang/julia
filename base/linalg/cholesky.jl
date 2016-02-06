@@ -228,7 +228,7 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
 end
 
 show{T,S<:AbstractMatrix}(io::IO, C::Cholesky{T,S}) =
-    (println("$(typeof(C)) with factor:");show(io,C[:UL]))
+    (println(io, "$(typeof(C)) with factor:");show(io,C[:UL]))
 
 A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix}(C::Cholesky{T,S}, B::StridedVecOrMat{T}) =
     LAPACK.potrs!(C.uplo, C.factors, B)
