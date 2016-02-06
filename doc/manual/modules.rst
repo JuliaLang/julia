@@ -251,6 +251,19 @@ A variable can be "reserved" for the current module without assigning to
 it by declaring it as ``global x`` at the top level. This can be used to
 prevent name conflicts for globals initialized after load time.
 
+The ``using`` and ``import`` statements always bring their target modules
+into the ``Main`` namespace, in addition to their current context. For
+example, given the module definition ::
+
+    module A
+
+    import Lib
+    ...
+
+    end
+
+the statement ``using A`` brings ``Lib`` into the ``Main`` namespace.
+
 .. _man-modules-initialization-precompilation:
 
 Module initialization and precompilation
