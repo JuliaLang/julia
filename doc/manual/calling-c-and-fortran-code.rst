@@ -582,7 +582,7 @@ structs.
 In Julia code wrapping calls to external Fortran routines, all input arguments
 should be declared as of type ``Ref{T}``, as Fortran passes all variables by
 reference. The return type should either be ``Void`` for Fortran subroutines,
-or a ``Ptr{T}`` for Fortran functions returning the type ``T``.
+or a ``T`` for Fortran functions returning the type ``T``.
 
 
 Mapping C Functions to Julia
