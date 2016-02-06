@@ -1704,15 +1704,15 @@ LIBUNWIND_TARGET_SOURCE := $(BUILDDIR)/libunwind-$(UNWIND_VER)/src/.libs/libunwi
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$(notdir $@)
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.bz2: | $(SRCDIR)/srccache
+	$(JLDOWNLOAD) $@ https://github.com/yuyichao/libunwind/releases/download/libunwind-$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.bz2
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xfz $<
-	cd $(dir $<)/libunwind-$(UNWIND_VER) && \
-	patch -p1 < $(SRCDIR)/libunwind.patch && \
-	patch -p1 < $(SRCDIR)/libunwind-001-invalid-dwarf-opcodes-can-cause-references-beyond.patch && \
-	patch -p1 < $(SRCDIR)/libunwind-aarch64.patch
+	cd $(dir $<) && $(TAR) xfj $<
+	# cd $(dir $<)/libunwind-$(UNWIND_VER) && \
+	# patch -p1 < $(SRCDIR)/libunwind.patch && \
+	# patch -p1 < $(SRCDIR)/libunwind-001-invalid-dwarf-opcodes-can-cause-references-beyond.patch && \
+	# patch -p1 < $(SRCDIR)/libunwind-aarch64.patch
 	touch -c $@
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure
 	mkdir -p $(dir $@)
