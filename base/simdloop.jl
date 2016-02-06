@@ -47,7 +47,7 @@ simd_outer_range(r) = 0:0
 simd_inner_length(r,j::Int) = length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r,j::Int,i) = Base.unsafe_getindex(r,i+1)
+@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+1]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x)
