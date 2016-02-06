@@ -175,6 +175,8 @@ function showerror(io::IO, ex::MethodError)
         else
             print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
         end
+    elseif isempty(methods(f)) && !isa(f, Function)
+        print(io, "::$ft is not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
