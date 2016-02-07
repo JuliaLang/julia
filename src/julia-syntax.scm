@@ -1930,7 +1930,7 @@
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
-                  (inbounds false)
+                  (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
                   (= ,ri (call (top +) ,ri 1)))
