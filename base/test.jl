@@ -273,6 +273,8 @@ if an exception is thrown inside the test block but outside of a `@test` context
 """
 function record end
 
+import Base.start
+
 """
     start(ts::AbstractTestSet, nruns::Int)
 
@@ -282,7 +284,6 @@ counts the number of times the test block has been executed. One common use for 
 function is to record the starting time for timing of testing. Its return value
 indicates if the test block should be run or not.
 """
-import Base.start
 function start(ts::AbstractTestSet, nruns::Int)
     nruns < 1 # Default is to only run tests once
 end
