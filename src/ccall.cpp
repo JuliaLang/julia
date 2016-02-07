@@ -346,6 +346,52 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     return slot;
 }
 
+
+void jl_find_native_sym(jl_value_t *ptr, const char** f_name, const char** f_lib, void **fptr, const char *fname)
+{
+    jl_value_t *t0 = NULL, *t1 = NULL;
+    JL_GC_PUSH2(&t0, &t1);
+    if (ptr != NULL) {
+        if (jl_is_tuple(ptr) && jl_nfields(ptr)==1) {
+            ptr = jl_fieldref(ptr,0);
+        }
+        if (jl_is_symbol(ptr))
+            *f_name = jl_symbol_name((jl_sym_t*)ptr);
+        else if (jl_is_byte_string(ptr))
+            *f_name = jl_string_data(ptr);
+        if (*f_name != NULL) {
+            // just symbol, default to JuliaDLHandle
+            // will look in process symbol table
+#ifdef _OS_WINDOWS_
+            *f_lib = jl_dlfind_win32(f_name);
+#endif
+        }
+        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
+            *fptr = *(void**)jl_data_ptr(ptr);
+        }
+        else if (jl_is_tuple(ptr) && jl_nfields(ptr)>1) {
+            jl_value_t *t0 = jl_fieldref(ptr,0);
+            jl_value_t *t1 = jl_fieldref(ptr,1);
+            if (jl_is_symbol(t0))
+                *f_name = jl_symbol_name((jl_sym_t*)t0);
+            else if (jl_is_byte_string(t0))
+                *f_name = jl_string_data(t0);
+            else
+                JL_TYPECHKS(fname, symbol, t0);
+            if (jl_is_symbol(t1))
+                *f_lib = jl_symbol_name((jl_sym_t*)t1);
+            else if (jl_is_byte_string(t1))
+                *f_lib = jl_string_data(t1);
+            else
+                JL_TYPECHKS(fname, symbol, t1);
+        }
+        else {
+            JL_TYPECHKS(fname, pointer, ptr);
+        }
+    }
+    JL_GC_POP();
+}
+
 typedef struct {
     Value *jl_ptr;  // if the argument is a run-time computed pointer
     void *fptr;     // if the argument is a constant pointer
@@ -354,13 +400,13 @@ typedef struct {
 } native_sym_arg_t;
 
 // --- parse :sym or (:sym, :lib) argument into address info ---
-static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx, const char *fname)
+native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx, const char *fname)
 {
-    jl_value_t *ptr = NULL;
-    Value *jl_ptr=NULL;
-
-    ptr = static_eval(arg, ctx, true);
+    native_sym_arg_t r;
+    r.jl_ptr = NULL; r.fptr = NULL; r.f_name = NULL; r.f_lib = NULL;
+    jl_value_t *ptr = static_eval(arg, ctx, true);
     if (ptr == NULL) {
+        // runtime Ptr{T}
         jl_value_t *ptr_ty = expr_type(arg, ctx);
         jl_cgval_t arg1 = emit_unboxed(arg, ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
@@ -371,60 +417,30 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                ctx);
         }
         arg1 = remark_julia_type(arg1, (jl_value_t*)jl_voidpointer_type);
-        jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
+        r.jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
+    } else {
+        // compile time Ptr{T}, :sym or (sym, lib)
+        JL_GC_PUSH1(&ptr);
+        jl_find_native_sym(ptr, &r.f_name, &r.f_lib, &r.fptr, fname);
+        JL_GC_POP();
     }
-
-    void *fptr=NULL;
-    const char *f_name=NULL, *f_lib=NULL;
-    jl_value_t *t0 = NULL, *t1 = NULL;
-    JL_GC_PUSH3(&ptr, &t0, &t1);
-    if (ptr != NULL) {
-        if (jl_is_tuple(ptr) && jl_nfields(ptr)==1) {
-            ptr = jl_fieldref(ptr,0);
-        }
-        if (jl_is_symbol(ptr))
-            f_name = jl_symbol_name((jl_sym_t*)ptr);
-        else if (jl_is_byte_string(ptr))
-            f_name = jl_string_data(ptr);
-        if (f_name != NULL) {
-            // just symbol, default to JuliaDLHandle
-            // will look in process symbol table
-#ifdef _OS_WINDOWS_
-            f_lib = jl_dlfind_win32(f_name);
-#endif
-        }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            fptr = *(void**)jl_data_ptr(ptr);
-        }
-        else if (jl_is_tuple(ptr) && jl_nfields(ptr)>1) {
-            jl_value_t *t0 = jl_fieldref(ptr,0);
-            jl_value_t *t1 = jl_fieldref(ptr,1);
-            if (jl_is_symbol(t0))
-                f_name = jl_symbol_name((jl_sym_t*)t0);
-            else if (jl_is_byte_string(t0))
-                f_name = jl_string_data(t0);
-            else
-                JL_TYPECHKS(fname, symbol, t0);
-            if (jl_is_symbol(t1))
-                f_lib = jl_symbol_name((jl_sym_t*)t1);
-            else if (jl_is_byte_string(t1))
-                f_lib = jl_string_data(t1);
-            else
-                JL_TYPECHKS(fname, symbol, t1);
-        }
-        else {
-            JL_TYPECHKS(fname, pointer, ptr);
-        }
-    }
-    JL_GC_POP();
-    native_sym_arg_t r;
-    r.jl_ptr = jl_ptr;
-    r.fptr = fptr;
-    r.f_name = f_name;
-    r.f_lib = f_lib;
     return r;
 }
 
+jl_value_t *jl_native_sym(jl_value_t *desc, jl_value_t *ty)
+{
+    void *hnd = NULL;
+    void *fptr = NULL;
+    const char *f_name = NULL;
+    const char *f_lib = NULL;
+    jl_find_native_sym(desc, &f_name, &f_lib, &fptr, "ccall");
+    if (!fptr) {
+        fptr = jl_load_and_lookup(f_lib, f_name, &hnd);
+    }
+    jl_value_t *jlptr = jl_new_struct_uninit((jl_datatype_t*)ty);
+    *(void**)jl_data_ptr(jlptr) = fptr;
+    return jlptr;
+}
 
 typedef AttributeSet attr_type;
 

@@ -648,6 +648,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 
     if (jl_options.image_file) {
+        jl_restore_intrinsic_tables();
         JL_TRY {
             jl_restore_system_image(jl_options.image_file);
         }

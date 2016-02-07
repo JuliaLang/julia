@@ -581,6 +581,8 @@ extern JL_DLLEXPORT jl_value_t *jl_true;
 extern JL_DLLEXPORT jl_value_t *jl_false;
 extern JL_DLLEXPORT jl_value_t *jl_nothing;
 
+extern JL_DLLEXPORT jl_value_t *jl_generic_ccall;
+
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
@@ -1369,7 +1371,9 @@ STATIC_INLINE int jl_vinfo_usedundef(jl_array_t *vi)
 // calling into julia ---------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
-
+JL_DLLEXPORT jl_value_t *jl_apply_interpreted(jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_apply_generic_ex(jl_value_t **args, uint32_t nargs, int can_interpret);
+JL_DLLEXPORT extern int jl_interpreter_enabled;
 STATIC_INLINE
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 {

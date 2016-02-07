@@ -197,7 +197,7 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
 #ifdef __cplusplus
 extern "C"
 #endif
-void jl_init_intrinsic_functions()
+void jl_init_intrinsic_functions(void)
 {
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
     inm->parent = jl_core_module;
@@ -214,4 +214,20 @@ void jl_init_intrinsic_functions()
 
     jl_set_const(inm, jl_symbol("intrinsic_call"),
                  jl_mk_builtin_func("intrinsic_call", jl_f_intrinsic_call));
+}
+
+#ifdef __cplusplus
+extern "C"
+#endif
+void jl_restore_intrinsic_tables(void)
+{
+#define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void*)&jl_##name);
+#define ADD_HIDDEN(name, nargs) add_intrinsic_properties(name, nargs, (void*)&jl_##name);
+#define ALIAS(alias, base) add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
+    ADD_HIDDEN(reinterpret, 2);
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
+
 }

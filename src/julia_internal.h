@@ -156,6 +156,8 @@ jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *typ
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_lambda_info_t *method, jl_svec_t *tvars,
                                       int8_t isstaged);
+jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact);
+jl_lambda_info_t *jl_method_table_assoc_exact(jl_methtable_t *mt, jl_value_t **args, size_t n);
 int jl_is_type(jl_value_t *v);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_svec_t **penv, jl_svec_t *tvars);
@@ -183,8 +185,10 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                               const char *content, size_t contentlen);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
-jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
-                                             jl_value_t **loc, size_t nl);
+jl_value_t *jl_interpret_call(jl_lambda_info_t *lam,
+                              jl_value_t **args, size_t nargs,
+                              jl_value_t **sparam_vals,
+                              int toplevel);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
@@ -232,6 +236,7 @@ void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
+void jl_restore_intrinsic_tables(void);
 void jl_init_tasks(void);
 void jl_init_stack_limits(int ismaster);
 void jl_init_root_task(void *stack, size_t ssize);
@@ -328,6 +333,8 @@ void *jl_get_library(const char *f_lib);
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
 const char *jl_dlfind_win32(const char *name);
+
+JL_DLLEXPORT jl_value_t *jl_native_sym(jl_value_t *ptr, jl_value_t *ty);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
