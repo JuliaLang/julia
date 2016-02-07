@@ -277,9 +277,16 @@ extern HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
 extern volatile int jl_in_stackwalk;
 #else
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
+// This gives unwind only local unwinding options ==> faster code
+#  define UNW_LOCAL_ONLY
+#  include <libunwind.h>
 typedef unw_context_t *bt_context_t;
+#  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
+       (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR > 1))
+// Enable our memory manager only for libunwind with our patch or
+// on a newer release
+#    define JL_UNW_HAS_FORMAT_IP 1
+#  endif
 #endif
 #define jl_bt_data (jl_get_ptls_states()->bt_data)
 #define jl_bt_size (jl_get_ptls_states()->bt_size)
