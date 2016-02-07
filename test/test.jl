@@ -266,3 +266,55 @@ for i in 1:6
     @test typeof(tss[i].results[4]) == CustomTestSet
     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
+
+
+# import also the start method we can use to control repeated testset execution
+import Base.Test: start
+# A custom test set that repeats execution of tests a fixed number of times
+immutable RepeatingTestSet <: Base.Test.AbstractTestSet
+    description::AbstractString
+    reps::Int
+    results::Vector
+    # constructor takes a description string and options keyword arguments
+    RepeatingTestSet(desc; reps=10) = new(desc, reps, [])
+end
+record(ts::RepeatingTestSet, child::AbstractTestSet) = push!(ts.results, child)
+record(ts::RepeatingTestSet, res::Result) = push!(ts.results, res)
+function finish(ts::RepeatingTestSet)
+    # just record if we're not the top-level parent
+    if get_testset_depth() > 0
+        record(get_testset(), ts)
+    end
+    ts
+end
+# Repeatedly run tests `reps` times
+start(ts::RepeatingTestSet, nruns::Int) = (nruns < ts.reps)
+
+counter_inner = counter_outer = 0
+ts = @testset RepeatingTestSet "Testing custom, repeating testsets" begin
+    counter_outer += 1
+    @test true
+    @test false
+    @test error("this error will be reported as an error")
+    @test_throws ErrorException nothing
+    @test_throws ErrorException error("this error is a success")
+    # this testset should inherit the parent testset type but only repeat twice
+    @testset reps=2 "custom, repeating testset inner 1" begin
+        counter_inner += 1
+        @test true
+    end
+end
+
+@test typeof(ts) == RepeatingTestSet
+@test ts.reps == 10
+@test ts.description == "Testing custom, repeating testsets"
+@test counter_outer == 10
+@test typeof(ts.results[1]) == Pass
+@test typeof(ts.results[2]) == Fail
+@test typeof(ts.results[3]) == Error
+@test typeof(ts.results[4]) == Fail
+@test typeof(ts.results[5]) == Pass
+@test typeof(ts.results[6]) == RepeatingTestSet
+@test ts.results[6].description == "custom, repeating testset inner 1"
+@test ts.results[6].reps == 2
+@test counter_inner == 20 # It runs 10*2 times, since outer repeats 10 and inner 2 times
