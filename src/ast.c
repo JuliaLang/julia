@@ -456,7 +456,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             jl_expr_t *ex = jl_exprn(lambda_sym, n);
             jl_svec_t *tvars = NULL;
             jl_array_t *vinf = NULL;
-            jl_lambda_info_t *nli = NULL;
+            jl_method_t *nli = NULL;
             JL_GC_PUSH4(&ex, &tvars, &vinf, &nli);
             e = cdr_(e);
             value_t largs = car_(e);
@@ -483,8 +483,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 jl_cellset(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
                 e = cdr_(e);
             }
-            nli = jl_new_lambda_info((jl_value_t*)ex, tvars, jl_emptysvec, jl_current_module);
-            jl_preresolve_globals(nli->ast, nli);
+            nli = jl_new_method((jl_value_t*)ex, tvars, jl_current_module);
+            jl_preresolve_globals(nli->ast->ast, nli);
             JL_GC_POP();
             return (jl_value_t*)nli;
         }
@@ -875,7 +875,7 @@ ssize_t jl_max_jlgensym_in(jl_value_t *v)
 }
 
 // wrap expr in a thunk AST
-jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
+jl_method_t *jl_wrap_expr(jl_value_t *expr)
 {
     // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
@@ -895,7 +895,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
-    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_emptysvec, jl_emptysvec, jl_current_module);
+    jl_method_t *li = jl_new_method((jl_value_t*)le, jl_emptysvec, jl_current_module);
     JL_GC_POP();
     return li;
 }
@@ -912,13 +912,11 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
     return (jl_array_t*)ae;
 }
 
-jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
+jl_sym_t *jl_lam_argname(jl_method_t *li, int i)
 {
-    jl_expr_t *ast;
-    if (jl_is_expr(li->ast))
-        ast = (jl_expr_t*)li->ast;
-    else
-        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
+    jl_expr_t *ast = (jl_expr_t*)li->ast->ast;
+    if (!jl_is_expr(ast))
+        ast = (jl_expr_t*)jl_uncompress_ast(li, (jl_value_t*)ast);
     // NOTE (gc root): `ast` is not rooted here, but jl_lam_args and jl_cellref
     // do not allocate.
     return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
@@ -1061,7 +1059,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 
 static jl_value_t *dont_copy_ast(jl_value_t *expr)
 {
-    if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {
+    if (jl_is_symbol(expr) || jl_is_method(expr)) {
         return copy_ast(expr);
     }
     else if (jl_is_expr(expr)) {
@@ -1085,24 +1083,25 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-// given a new lambda_info with static parameter values, make a copy
-// of the tree with declared types evaluated and static parameters passed
-// on to all enclosed functions.
-// this tree can then be further mutated by optimization passes.
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
+// copy an astinfo tree so it can then be further mutated by optimization passes
+JL_DLLEXPORT jl_ast_info_t *jl_copy_ast_info(jl_ast_info_t *astinfo)
 {
-    jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;
+    jl_value_t *ast = astinfo->ast;
     JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
-        ast = jl_uncompress_ast(li, ast);
+        ast = jl_uncompress_ast(astinfo->def, ast);
         ast = dont_copy_ast(ast);
     }
     else {
         ast = copy_ast(ast);
     }
+    jl_ast_info_t *newastinfo =
+        (jl_ast_info_t*)newobj((jl_value_t*)jl_ast_info_type,
+                               NWORDS(sizeof(jl_ast_info_t)));
+    *newastinfo = *astinfo;
+    newastinfo->ast = ast;
     JL_GC_POP();
-    return ast;
+    return newastinfo;
 }
 
 JL_DLLEXPORT int jl_is_operator(char *sym)
@@ -1167,15 +1166,15 @@ static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
     return 0;
 }
 
-int jl_local_in_linfo(jl_lambda_info_t *linfo, jl_sym_t *sym)
+int jl_local_in_linfo(jl_method_t *linfo, jl_sym_t *sym)
 {
-    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast), sym) ||
+    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast->ast), sym) ||
         jl_in_sym_svec(linfo->sparam_syms, sym);
 }
 
 extern jl_value_t *jl_builtin_getfield;
 
-jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
+jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_method_t *lam)
 {
     if (jl_is_symbol(expr)) {
         if (lam->module == NULL)
@@ -1183,9 +1182,9 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
         if (!jl_local_in_linfo(lam, (jl_sym_t*)expr))
             return jl_module_globalref(lam->module, (jl_sym_t*)expr);
     }
-    else if (jl_is_lambda_info(expr)) {
-        jl_lambda_info_t *l = (jl_lambda_info_t*)expr;
-        (void)jl_preresolve_globals(l->ast, l);
+    else if (jl_is_method(expr)) {
+        jl_method_t *l = (jl_method_t*)expr;
+        (void)jl_preresolve_globals(l->ast->ast, l);
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
@@ -1203,13 +1202,13 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
                 jl_value_t *fe = jl_exprarg(e,0);
                 if (jl_is_symbol(s) && jl_is_topnode(fe)) {
-                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module, lam, 0, 0);
+                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module, NULL, 0, 0);
                     if (f == jl_builtin_getfield) {
                         jl_value_t *me = jl_exprarg(e,1);
                         if (jl_is_topnode(me) ||
                             (jl_is_symbol(me) && jl_binding_resolved_p(lam->module,(jl_sym_t*)me))) {
                             jl_value_t *m = jl_static_eval(me, NULL, lam->module,
-                                                           lam, 0, 0);
+                                                           NULL, 0, 0);
                             if (m && jl_is_module(m))
                                 return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
                         }

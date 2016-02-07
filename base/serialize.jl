@@ -19,7 +19,7 @@ const TAGS = Any[
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, SymbolNode, LabelNode, GotoNode,
-    QuoteNode, TopNode, TypeVar, Box, LambdaInfo,
+    QuoteNode, TopNode, TypeVar, Box, :reserved00,
     Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
@@ -72,7 +72,6 @@ const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
 const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
-const LAMBDASTATICDATA_TAG = sertag(LambdaInfo)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
@@ -292,39 +291,19 @@ function serialize(s::SerializationState, m::Module)
 end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
-const object_numbers = WeakKeyDict()
-obj_number_salt = 0
-function object_number(l::ANY)
-    global obj_number_salt, object_numbers
-    if haskey(object_numbers, l)
-        return object_numbers[l]
+const type_uid_numbers = WeakKeyDict()
+type_uid_salt = 0
+function type_uid(l::ANY)
+    global type_uid_salt, type_uid_numbers
+    if haskey(type_uid_numbers, l)
+        return type_uid_numbers[l]
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = obj_number_salt+(UInt64(myid())<<44)
-    obj_number_salt += 1
-    object_numbers[l] = ln
+    ln = type_uid_salt+(UInt64(myid())<<44)
+    type_uid_salt += 1
+    type_uid_numbers[l] = ln
     return ln
-end
-
-function serialize(s::SerializationState, linfo::LambdaInfo)
-    serialize_cycle(s, linfo) && return
-    writetag(s.io, LAMBDASTATICDATA_TAG)
-    serialize(s, object_number(linfo))
-    serialize(s, uncompressed_ast(linfo))
-    if isdefined(linfo.def, :roots)
-        serialize(s, linfo.def.roots::Vector{Any})
-    else
-        serialize(s, Any[])
-    end
-    serialize(s, linfo.sparam_syms)
-    serialize(s, linfo.sparam_vals)
-    serialize(s, linfo.inferred)
-    serialize(s, linfo.module)
-    serialize(s, linfo.name)
-    serialize(s, linfo.file)
-    serialize(s, linfo.line)
-    serialize(s, linfo.pure)
 end
 
 function serialize(s::SerializationState, t::Task)
@@ -346,7 +325,7 @@ end
 function serialize(s::SerializationState, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
-    serialize(s, object_number(t))
+    serialize(s, type_uid(t))
     serialize(s, t.name)
     serialize(s, t.module)
     serialize(s, t.names)
@@ -541,44 +520,6 @@ function deserialize(s::SerializationState, ::Type{Module})
     m
 end
 
-const known_object_data = Dict()
-
-function deserialize(s::SerializationState, ::Type{LambdaInfo})
-    lnumber = deserialize(s)
-    if haskey(known_object_data, lnumber)
-        linfo = known_object_data[lnumber]::LambdaInfo
-        makenew = false
-    else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)::LambdaInfo
-        makenew = true
-    end
-    deserialize_cycle(s, linfo)
-    ast = deserialize(s)::Expr
-    roots = deserialize(s)::Vector{Any}
-    sparam_syms = deserialize(s)::SimpleVector
-    sparam_vals = deserialize(s)::SimpleVector
-    infr = deserialize(s)::Bool
-    mod = deserialize(s)::Module
-    name = deserialize(s)
-    file = deserialize(s)
-    line = deserialize(s)
-    pure = deserialize(s)
-    if makenew
-        linfo.ast = ast
-        linfo.sparam_syms = sparam_syms
-        linfo.sparam_vals = sparam_vals
-        linfo.inferred = infr
-        linfo.module = mod
-        linfo.roots = roots
-        linfo.name = name
-        linfo.file = file
-        linfo.line = line
-        linfo.pure = pure
-        known_object_data[lnumber] = linfo
-    end
-    return linfo
-end
-
 function deserialize_array(s::SerializationState)
     d1 = deserialize(s)
     if isa(d1,Type)
@@ -643,12 +584,14 @@ end
 module __deserialized_types__
 end
 
+const known_types = Dict()
+
 function deserialize(s::SerializationState, ::Type{TypeName})
     number = deserialize(s)
     name = deserialize(s)
     mod = deserialize(s)
-    if haskey(known_object_data, number)
-        tn = known_object_data[number]::TypeName
+    if haskey(known_types, number)
+        tn = known_types[number]::TypeName
         name = tn.name
         mod = tn.module
         makenew = false
@@ -680,7 +623,7 @@ function deserialize(s::SerializationState, ::Type{TypeName})
         tn.primary = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                            tn, super, parameters, names, types,
                            abstr, mutable, ninitialized)
-        known_object_data[number] = tn
+        known_types[number] = tn
         ty = tn.primary
         ccall(:jl_set_const, Void, (Any, Any, Any), mod, name, ty)
         if !isdefined(ty,:instance)

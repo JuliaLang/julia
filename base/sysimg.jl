@@ -73,7 +73,6 @@ include("array.jl")
 (::Type{Matrix})() = Array{Any}(0, 0)
 
 # TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
 Array{T}(::Type{T}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
 Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)

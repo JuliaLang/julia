@@ -820,7 +820,7 @@ JL_DLLEXPORT void jlbacktrace(void)
 {
     size_t n = jl_bt_size; // jl_bt_size > 40 ? 40 : jl_bt_size;
     for (size_t i=0; i < n; i++)
-        jl_gdblookup(jl_bt_data[i]);
+        jl_gdblookup(jl_bt_data[i] - 1);
 }
 
 JL_DLLEXPORT void jl_gdbbacktrace(void)

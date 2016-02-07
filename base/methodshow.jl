@@ -28,47 +28,50 @@ end
 
 function arg_decl_parts(m::Method)
     tv = m.tvars
-    if !isa(tv,SimpleVector)
+    if !isa(tv, SimpleVector)
         tv = Any[tv]
     else
         tv = Any[tv...]
     end
-    li = m.func
-    e = uncompressed_ast(li)
+    e = uncompressed_ast(m)
     argnames = e.args[1]
     s = symbol("?")
     decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
                 for i = 1:length(m.sig.parameters)]
-    return tv, decls, li.file, li.line
+    return tv, decls
 end
 
 function show(io::IO, m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
-    d1 = decls[1]
-    if ft <: Function &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
+    if isdefined(m, :sig)
+        tv, decls = arg_decl_parts(m)
+        ft = m.sig.parameters[1]
+        d1 = decls[1]
+        if ft <: Function &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+            f = ft.parameters[1]
+            if isa(f, DataType) && isempty(f.parameters)
+                print(io, f)
+            else
+                print(io, "(", d1[1], "::", d1[2], ")")
+            end
         else
             print(io, "(", d1[1], "::", d1[2], ")")
         end
+        if !isempty(tv)
+            show_delim_array(io, tv, '{', ',', '}', false)
+        end
+        print(io, "(")
+        print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+                     ", ", ", ")
+        print(io, ")")
     else
-        print(io, "(", d1[1], "::", d1[2], ")")
+        print(io, m.name, "(?)")
     end
-    if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
-    end
-    print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
-                 ", ", ", ")
-    print(io, ")")
-    if line > 0
-        print(io, " at ", file, ":", line)
+    if m.line > 0
+        print(io, " at ", m.file, ":", m.line)
     end
 end
 
@@ -114,10 +117,10 @@ end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
-    M = m.func.module
-    (m.func.file == :null || m.func.file == :string) && return ""
-    file = string(m.func.file)
-    line = m.func.line
+    M = m.module
+    (m.file == :null || m.file == :string) && return ""
+    file = string(m.file)
+    line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -149,39 +152,43 @@ function url(m::Method)
 end
 
 function writemime(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
-    d1 = decls[1]
-    if ft <: Function &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
+    if isdefined(m, :sig)
+        tv, decls = arg_decl_parts(m)
+        ft = m.sig.parameters[1]
+        d1 = decls[1]
+        if ft <: Function &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+            f = ft.parameters[1]
+            if isa(f, DataType) && isempty(f.parameters)
+                print(io, f)
+            else
+                print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+            end
         else
             print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
         end
+        if !isempty(tv)
+            print(io,"<i>")
+            show_delim_array(io, tv, '{', ',', '}', false)
+            print(io,"</i>")
+        end
+        print(io, "(")
+        print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+                          for d in decls[2:end]], ", ", ", ")
+        print(io, ")")
     else
-        print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+        print(io, m.name, "(?)")
     end
-    if !isempty(tv)
-        print(io,"<i>")
-        show_delim_array(io, tv, '{', ',', '}', false)
-        print(io,"</i>")
-    end
-    print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
-                      for d in decls[2:end]], ", ", ", ")
-    print(io, ")")
-    if line > 0
+    if m.line > 0
         u = url(m)
         if isempty(u)
-            print(io, " at ", file, ":", line)
+            print(io, " at ", m.file, ":", m.line)
         else
             print(io, """ at <a href="$u" target="_blank">""",
-                  file, ":", line, "</a>")
+                  m.file, ":", m.line, "</a>")
         end
     end
 end

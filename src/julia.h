@@ -310,57 +310,80 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, u
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 
-typedef struct _jl_llvm_functions_t {
-    void *functionObject;       // jlcall llvm Function
-    void *cFunctionList;        // c callable llvm Functions
-
-    // specialized llvm Function (common core for the other two)
-    void *specFunctionObject;
-} jl_llvm_functions_t;
-
-typedef struct _jl_lambda_info_t {
+typedef struct _jl_method_t {
     JL_DATA_TYPE
-    // this holds the static data for a function:
-    // a syntax tree, static parameters, and (if it has been compiled)
-    // a function pointer.
+    // this holds the static data for a method definition
+    // a syntax tree, static parameter names
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
-    jl_value_t *ast;
-    jl_value_t *rettype;
-    // sparams is a vector of values indexed by symbols
+    struct _jl_ast_info_t *ast;
+    jl_tupletype_t *sig;
+    // sparam_syms is a svec of the names of the tvars
+    jl_svec_t *tvars;
     jl_svec_t *sparam_syms;
-    jl_svec_t *sparam_vals;
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
-    jl_tupletype_t *specTypes;  // argument types this will be compiled for
     // a slower-but-works version of this function as a fallback
     struct _jl_lambda_info_t *unspecialized;
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     struct _jl_module_t *module;
-    struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_sym_t *file;
     int32_t line;
-    int8_t inferred;
-    int8_t pure;
-    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
+    uint8_t isstaged;
+    uint8_t va;
 
-    // hidden fields:
-    uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
-    uint8_t inInference : 1;    // flags to tell if inference is running on this function
-                                // used to avoid infinite recursion
-    uint8_t inCompile : 1;
-    jl_fptr_t fptr;             // jlcall entry point
+    // cache of specializations of this method for invoke(), i.e.
+    // cases where this method was called even though it was not necessarily
+    // the most specific for the argument types.
+    struct _jl_methtable_t *invokes;
+    struct _jl_method_t *next;
+} jl_method_t;
 
+typedef struct _jl_ast_info_t {
+    JL_DATA_TYPE
+    // this holds the static data for a (possibly inferred) syntax tree
+    jl_value_t *ast;
+    jl_method_t *def;  // method this is specialized from
+    // a slower-but-works version of this function as a fallback
+    // this keeps codegen happy if the method contains intrinsics that depend on an sparam
+    struct _jl_lambda_info_t *unspecialized_ducttape;
+    uint32_t called;  // bit flags: whether each of the first 8 arguments is called
+    uint8_t pure;
+    uint8_t inferred;
+    uint8_t need_ducttape; // whether this function has sparams and intrinsics,
+        // signaling that it probably can't be compiled via unspecialized
+        // (until the interpreter / runtime-intrinsics are fully functional)
+} jl_ast_info_t;
+
+typedef struct _jl_llvm_functions_t {
     // On the old JIT, handles to all Functions generated for this linfo
     // For the new JITs, handles to declarations in the shadow module
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
-    jl_llvm_functions_t functionObjects;
+    void *functionObject;     // jlcall llvm Function
+    void *cFunctionList;      // c callable llvm Functions
+    void *specFunctionObject; // specialized llvm Function (common core for the other two)
+    int32_t functionID;       // index that this function will have in the codegen table
+    int32_t specFunctionID;   // index that this specFunction will have in the codegen table
+    jl_fptr_t fptr;           // jlcall entry point
+    uint8_t jlcall_api;       // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
+} jl_llvm_functions_t;
 
-    int32_t functionID; // index that this function will have in the codegen table
-    int32_t specFunctionID; // index that this specFunction will have in the codegen table
+typedef struct _jl_lambda_info_t {
+    JL_DATA_TYPE
+    // this holds the data for a executable thunk that maps sig -> rettype
+    struct _jl_lambda_info_t *next;
+    jl_tupletype_t *sig; // aka specTypes
+    jl_value_t *rettype;
+    uint8_t va; // sig has Vararg
+    uint8_t inCompile; // flags to tell if inference is running on this function
+                       // used to avoid infinite recursion
+    // sparam_vals is the closure data (a vector of values indexed by func->def->sparam_syms)
+    jl_svec_t *sparam_vals; // NULL if this is a guard entry
+    jl_value_t *func; // where this function came from, NULL if there isn't an associated definition
+    jl_llvm_functions_t functionObjects;
 } jl_lambda_info_t;
 
 typedef jl_value_t jl_function_t;
@@ -475,27 +498,11 @@ typedef struct _jl_module_t {
     uint32_t counter;
 } jl_module_t;
 
-typedef struct _jl_methlist_t {
-    JL_DATA_TYPE
-    jl_tupletype_t *sig;
-    int8_t va;
-    int8_t isstaged;
-    jl_svec_t *tvars;
-    jl_lambda_info_t *func;
-    // cache of specializations of this method for invoke(), i.e.
-    // cases where this method was called even though it was not necessarily
-    // the most specific for the argument types.
-    struct _jl_methtable_t *invokes;
-    // TODO: pointer from specialized to original method
-    //jl_function_t *orig_method;
-    struct _jl_methlist_t *next;
-} jl_methlist_t;
-
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
-    jl_methlist_t *defs;
-    jl_methlist_t *cache;
+    jl_method_t *defs;
+    jl_lambda_info_t *cache;
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
@@ -542,6 +549,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 
 extern JL_DLLEXPORT jl_value_t *jl_bottom_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_lambda_info_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_ast_info_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_module_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_abstractarray_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_densearray_type;
@@ -605,7 +614,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
 
 extern JL_DLLEXPORT jl_svec_t *jl_emptysvec;
 extern JL_DLLEXPORT jl_value_t *jl_emptytuple;
@@ -923,6 +931,8 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_topnode(v)     jl_typeis(v,jl_topnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
+#define jl_is_ast_info(v)    jl_typeis(v,jl_ast_info_type)
+#define jl_is_method(v)      jl_typeis(v,jl_method_type)
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
@@ -1071,12 +1081,12 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-JL_DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
-                                           jl_lambda_info_t *li);
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
-                                                  jl_svec_t *tvars,
-                                                  jl_svec_t *sparams,
-                                                  jl_module_t *ctx);
+JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *func,
+                                                  jl_svec_t *sp,
+                                                  jl_tupletype_t *sig);
+JL_DLLEXPORT jl_method_t *jl_new_method(jl_value_t *ast,
+                                        jl_svec_t *tvars,
+                                        jl_module_t *ctx);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...);
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);
@@ -1096,7 +1106,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 JL_DLLEXPORT jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged);
+JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_method_t *f, jl_value_t *isstaged);
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
@@ -1374,11 +1384,11 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li);
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
+JL_DLLEXPORT jl_ast_info_t *jl_copy_ast_info(jl_ast_info_t *astinfo);
 
-JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
-JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
+JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_method_t *li, jl_value_t *ast);
+JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_method_t *li, jl_value_t *data);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);

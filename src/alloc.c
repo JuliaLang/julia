@@ -43,8 +43,9 @@ jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;
-jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_lambda_info_type;
+jl_datatype_t *jl_ast_info_type;
+jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_module_type;
 jl_datatype_t *jl_errorexception_type=NULL;
 jl_datatype_t *jl_argumenterror_type;
@@ -273,36 +274,61 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-JL_DLLEXPORT
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_t *sparams,
-                                     jl_module_t *ctx)
+// create a new Method from an expression tree
+JL_DLLEXPORT jl_method_t *jl_new_method(jl_value_t *ast, jl_svec_t *tvars,
+                                        jl_module_t *ctx)
 {
-    jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
-                                  NWORDS(sizeof(jl_lambda_info_t)));
-    li->ast = ast;
-    li->rettype = (jl_value_t*)jl_any_type;
-    li->file = null_sym;
-    li->line = 0;
-    li->pure = 0;
-    li->called = 0xff;
+    jl_method_t *def =
+        (jl_method_t*)newobj((jl_value_t*)jl_method_type,
+                             NWORDS(sizeof(jl_method_t)));
+    def->sig = NULL;
+    def->tvars = NULL;
+    def->next = NULL;
+    def->file = null_sym;
+    def->line = 0;
+    def->isstaged = 0;
+    def->va = 0;
+    def->module = ctx;
+    def->sparam_syms = tvars;
+    def->tfunc = jl_nothing;
+    def->roots = NULL;
+    def->specializations = NULL;
+    def->name = anonymous_sym;
+    def->invokes = (jl_methtable_t*)jl_nothing;
+    def->next = (jl_method_t*)jl_nothing;
+    def->unspecialized = NULL;
+    def->ast = NULL;
+
+    JL_GC_PUSH1(&def);
+    jl_ast_info_t *astinfo =
+        (jl_ast_info_t*)newobj((jl_value_t*)jl_ast_info_type,
+                               NWORDS(sizeof(jl_ast_info_t)));
+    astinfo->ast = ast;
+    astinfo->def = def;
+    astinfo->unspecialized_ducttape = NULL;
+    astinfo->called = 0xff;
+    astinfo->pure = 0;
+    astinfo->inferred = 0;
+    astinfo->need_ducttape = (def->sparam_syms != jl_emptysvec);
+    def->ast = astinfo;
+    jl_gc_wb(def, astinfo);
     if (ast != NULL && jl_is_expr(ast)) {
-        jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
-        if (has_meta(body, pure_sym))
-            li->pure = 1;
-        jl_value_t *body1 = skip_meta(body);
+        jl_expr_t *body = jl_lam_body((jl_expr_t*)ast);
+        if (has_meta(body->args, pure_sym))
+            astinfo->pure = 1;
+        jl_value_t *body1 = skip_meta(body->args);
         if (jl_is_linenode(body1)) {
-            li->file = jl_linenode_file(body1);
-            li->line = jl_linenode_line(body1);
+            def->file = jl_linenode_file(body1);
+            def->line = jl_linenode_line(body1);
         }
         else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
-            li->file = (jl_sym_t*)jl_exprarg(body1, 1);
-            li->line = jl_unbox_long(jl_exprarg(body1, 0));
+            def->file = (jl_sym_t*)jl_exprarg(body1, 1);
+            def->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
-        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
-        jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
+        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
+        jl_array_t *args = jl_lam_args((jl_expr_t*)ast);
         size_t narg = jl_array_len(args);
-        uint8_t called=0;
+        astinfo->called=0;
         int i, j=0;
         for(i=1; i < narg && i <= 8; i++) {
             jl_value_t *ai = jl_cellref(args,i);
@@ -313,55 +339,69 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
             } while (jl_cellref(vj,0) != ai);
 
             if (jl_unbox_long(jl_cellref(vj,2))&64)
-                called |= (1<<(i-1));
+                astinfo->called |= (1<<(i-1));
         }
-        li->called = called;
+        if (astinfo->need_ducttape && !jl_has_intrinsics(astinfo, body, def->module))
+            astinfo->need_ducttape = 0;
     }
-    li->module = ctx;
-    li->sparam_syms = tvars;
-    li->sparam_vals = sparams;
-    li->tfunc = jl_nothing;
-    li->fptr = NULL;
-    li->jlcall_api = 0;
-    li->roots = NULL;
-    li->functionObjects.functionObject = NULL;
-    li->functionObjects.specFunctionObject = NULL;
-    li->functionObjects.cFunctionList = NULL;
-    li->functionID = 0;
-    li->specFunctionID = 0;
-    li->specTypes = NULL;
-    li->inferred = 0;
-    li->inInference = 0;
-    li->inCompile = 0;
-    li->unspecialized = NULL;
-    li->specializations = NULL;
-    li->name = anonymous_sym;
-    li->def = li;
-    return li;
+    JL_GC_POP();
+    return def;
 }
 
-jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+// return a new lambda-info that has some extra static parameters merged in
+JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *func, jl_svec_t *sp, jl_tupletype_t *types)
 {
-    jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
-    new_linfo->rettype = linfo->rettype;
-    new_linfo->tfunc = linfo->tfunc;
-    new_linfo->name = linfo->name;
-    new_linfo->roots = linfo->roots;
-    new_linfo->specTypes = linfo->specTypes;
-    new_linfo->unspecialized = linfo->unspecialized;
-    new_linfo->specializations = linfo->specializations;
-    new_linfo->def = linfo->def;
-    new_linfo->file = linfo->file;
-    new_linfo->line = linfo->line;
-    new_linfo->fptr = linfo->fptr;
-    new_linfo->jlcall_api = linfo->jlcall_api;
-    new_linfo->functionObjects.functionObject = linfo->functionObjects.functionObject;
-    new_linfo->functionObjects.specFunctionObject = linfo->functionObjects.specFunctionObject;
-    new_linfo->functionID = linfo->functionID;
-    new_linfo->specFunctionID = linfo->specFunctionID;
-    return new_linfo;
+    jl_lambda_info_t *nli =
+        (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
+                                  NWORDS(sizeof(jl_lambda_info_t)));
+    nli->next = (jl_lambda_info_t*)jl_nothing;
+    nli->sparam_vals = sp;
+    nli->sig = types;
+    nli->rettype = (jl_value_t*)jl_any_type;
+    nli->va = jl_is_va_tuple(types);
+    nli->func = func;
+    nli->inCompile = 0;
+    jl_llvm_functions_t functionObjects = {0};
+    nli->functionObjects = functionObjects;
+    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF && func != NULL) {
+        // copy fptr from func
+        while (func) {
+            if (jl_is_ast_info(func)) {
+                jl_ast_info_t *astinfo = (jl_ast_info_t*)func;
+                if (astinfo->unspecialized_ducttape && astinfo->unspecialized_ducttape->functionObjects.fptr)
+                    func = (jl_value_t*)astinfo->unspecialized_ducttape;
+                else if (astinfo->def->unspecialized && astinfo->def->unspecialized->functionObjects.fptr)
+                    func = (jl_value_t*)astinfo->def->unspecialized;
+                else
+                    break;
+                nli->functionObjects = ((jl_lambda_info_t*)func)->functionObjects;
+                nli->rettype = ((jl_lambda_info_t*)func)->rettype;
+                break;
+            }
+            else if (jl_is_lambda_info(func)) {
+                jl_lambda_info_t *linfo = (jl_lambda_info_t*)func;
+                if (linfo->functionObjects.fptr) {
+                    nli->functionObjects = linfo->functionObjects;
+                    nli->rettype = linfo->rettype;
+                    break;
+                }
+                func = linfo->func;
+            }
+            else {
+                assert(0 && "don't know how to codegen this type of object");
+            }
+        }
+        if (nli->functionObjects.fptr == NULL) {
+            JL_GC_PUSH1(&nli);
+            jl_printf(JL_STDERR,"code missing for ");
+            jl_static_show(JL_STDERR, (jl_value_t*)nli);
+            jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
+            JL_GC_POP();
+        }
+    }
+    return nli;
 }
+
 
 // symbols --------------------------------------------------------------------
 
@@ -542,8 +582,8 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs = (jl_methlist_t*)jl_nothing;
-    mt->cache = (jl_methlist_t*)jl_nothing;
+    mt->defs = (jl_method_t*)jl_nothing;
+    mt->cache = (jl_lambda_info_t*)jl_nothing;
     mt->cache_arg1 = (jl_array_t*)jl_nothing;
     mt->cache_targ = (jl_array_t*)jl_nothing;
     mt->max_args = 0;
