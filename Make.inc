@@ -650,6 +650,9 @@ else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
 LIBUNWIND:=-lunwind-generic -lunwind
+# Only for linux since we want to use not yet released libunwind features
+JCFLAGS+=-DSYSTEM_LIBUNWIND
+JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
 ifeq ($(OS),Darwin)
