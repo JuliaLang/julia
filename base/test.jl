@@ -376,7 +376,7 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 # so that it can later calculate the elapsed time.
 function start(ts::DefaultTestSet, nruns::Int)
     if nruns < 1
-        ts.startime = time()
+        ts.starttime = time()
         return true
     end
     return false # We only run tests once
