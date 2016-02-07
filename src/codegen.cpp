@@ -5145,18 +5145,18 @@ static GlobalVariable *global_to_llvm(const std::string &cname, void *addr, Modu
     return gv;
 }
 
-static Function *jlcall_func_to_llvm(const std::string &cname, void *addr, Module *m)
+static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
     add_named_global(f, addr);
     return f;
 }
 
-extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
+extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig)
 {
     if (imaging_mode) {
         if (!specsig) {
-            lam->fptr = (jl_fptr_t)fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
+            lam->fptr = fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
         }
     }
     else {
@@ -5197,19 +5197,19 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             if (lam->functionObjects.specFunctionObject == NULL) {
                 lam->functionObjects.specFunctionObject = (void*)f;
             }
-            add_named_global(f, (void*)fptr);
+            add_named_global(f, fptr);
         }
         else {
             if (lam->jlcall_api == 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
                 assert(lam->fptr == NULL);
-                lam->fptr = (jl_fptr_t)fptr;
+                lam->fptr = fptr;
             }
             else {
                 Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
                 if (lam->functionObjects.functionObject == NULL) {
                     lam->functionObjects.functionObject = (void*)f;
                     assert(lam->fptr == NULL);
-                    lam->fptr = (jl_fptr_t)fptr;
+                    lam->fptr = fptr;
                 }
             }
         }
@@ -5374,7 +5374,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "__stack_chk_fail", m);
     jl__stack_chk_fail->setDoesNotReturn();
-    add_named_global(jl__stack_chk_fail, (void*)&__stack_chk_fail);
+    add_named_global(jl__stack_chk_fail, &__stack_chk_fail);
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true, m);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
@@ -5395,18 +5395,18 @@ static void init_julia_llvm_env(Module *m)
         new GlobalVariable(*m, T_pint8,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_RTLD_DEFAULT_handle");
-    add_named_global(jlRTLD_DEFAULT_var, (void*)&jl_RTLD_DEFAULT_handle);
+    add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
 #ifdef _OS_WINDOWS_
     jlexe_var =
         new GlobalVariable(*m, T_pint8,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_exe_handle");
-    add_named_global(jlexe_var, (void*)&jl_exe_handle);
+    add_named_global(jlexe_var, &jl_exe_handle);
     jldll_var =
         new GlobalVariable(*m, T_pint8,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_dl_handle");
-    add_named_global(jldll_var, (void*)&jl_dl_handle);
+    add_named_global(jldll_var, &jl_dl_handle);
 #endif
 #ifdef JL_NEED_FLOATTEMP_VAR
     // Has to be big enough for the biggest LLVM-supported float type
@@ -5425,7 +5425,7 @@ static void init_julia_llvm_env(Module *m)
         new GlobalVariable(*m, ArrayType::get(T_pint8, tls_states_size),
                            false, GlobalVariable::ExternalLinkage,
                            NULL, "jl_tls_states");
-    add_named_global(jltls_states_var, (void*)&jl_tls_states);
+    add_named_global(jltls_states_var, &jl_tls_states);
 #else
     // For threading, we emit a call to the getter function.
     // In non-imaging mode, (i.e. the code will not be saved to disk), we
@@ -5444,7 +5444,7 @@ static void init_julia_llvm_env(Module *m)
                       AttributeSet::FunctionIndex, Attribute::ReadNone)
         .addAttribute(jltls_states_func->getContext(),
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
-    add_named_global(jltls_states_func, (void*)jl_get_ptls_states_getter());
+    add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
         jltls_states_func_ptr =
             new GlobalVariable(*m, T_ppint8,
@@ -5473,7 +5473,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_error", m);
     jlerror_func->setDoesNotReturn();
-    add_named_global(jlerror_func, (void*)&jl_error);
+    add_named_global(jlerror_func, &jl_error);
 
     std::vector<Type*> args1_(0);
     args1_.push_back(T_pjlvalue);
@@ -5482,14 +5482,14 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_throw", m);
     jlthrow_func->setDoesNotReturn();
-    add_named_global(jlthrow_func, (void*)&jl_throw);
+    add_named_global(jlthrow_func, &jl_throw);
 
     jlundefvarerror_func =
         Function::Create(FunctionType::get(T_void, args1_, false),
                          Function::ExternalLinkage,
                          "jl_undefined_var_error", m);
     jlundefvarerror_func->setDoesNotReturn();
-    add_named_global(jlundefvarerror_func, (void*)&jl_undefined_var_error);
+    add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
 
     std::vector<Type*> args2_boundserrorv(0);
     args2_boundserrorv.push_back(T_pjlvalue);
@@ -5500,7 +5500,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_bounds_error_ints", m);
     jlboundserrorv_func->setDoesNotReturn();
-    add_named_global(jlboundserrorv_func, (void*)&jl_bounds_error_ints);
+    add_named_global(jlboundserrorv_func, &jl_bounds_error_ints);
 
     std::vector<Type*> args2_boundserror(0);
     args2_boundserror.push_back(T_pjlvalue);
@@ -5510,7 +5510,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_bounds_error_int", m);
     jlboundserror_func->setDoesNotReturn();
-    add_named_global(jlboundserror_func, (void*)&jl_bounds_error_int);
+    add_named_global(jlboundserror_func, &jl_bounds_error_int);
 
     std::vector<Type*> args3_vboundserror(0);
     args3_vboundserror.push_back(T_ppjlvalue);
@@ -5521,7 +5521,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_bounds_error_tuple_int", m);
     jlvboundserror_func->setDoesNotReturn();
-    add_named_global(jlvboundserror_func, (void*)&jl_bounds_error_tuple_int);
+    add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
 
     std::vector<Type*> args3_uboundserror(0);
     args3_uboundserror.push_back(T_pint8);
@@ -5532,12 +5532,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_bounds_error_unboxed_int", m);
     jluboundserror_func->setDoesNotReturn();
-    add_named_global(jluboundserror_func, (void*)&jl_bounds_error_unboxed_int);
+    add_named_global(jluboundserror_func, &jl_bounds_error_unboxed_int);
 
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,
                          "jl_new_structv", m);
-    add_named_global(jlnew_func, (void*)&jl_new_structv);
+    add_named_global(jlnew_func, &jl_new_structv);
 
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);
@@ -5548,7 +5548,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, jl_setjmp_name, m);
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
-    add_named_global(setjmp_func, (void*)&jl_setjmp_f);
+    add_named_global(setjmp_func, &jl_setjmp_f);
 
     std::vector<Type*> args_memcmp(0);
     args_memcmp.push_back(T_pint8);
@@ -5557,7 +5557,7 @@ static void init_julia_llvm_env(Module *m)
     memcmp_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
-    add_named_global(memcmp_func, (void*)&memcmp);
+    add_named_global(memcmp_func, &memcmp);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
@@ -5569,7 +5569,7 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_type_error_rt", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func, (void*)&jl_type_error_rt);
+    add_named_global(jltypeerror_func, &jl_type_error_rt);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(T_pjlvalue);
@@ -5578,7 +5578,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, args_2ptrs, false),
                          Function::ExternalLinkage,
                          "jl_checked_assignment", m);
-    add_named_global(jlcheckassign_func, (void*)&jl_checked_assignment);
+    add_named_global(jlcheckassign_func, &jl_checked_assignment);
 
     std::vector<Type *> args_1ptr(0);
     args_1ptr.push_back(T_pjlvalue);
@@ -5586,13 +5586,13 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, args_1ptr, false),
                          Function::ExternalLinkage,
                          "jl_declare_constant", m);
-    add_named_global(jldeclareconst_func, (void*)&jl_declare_constant);
+    add_named_global(jldeclareconst_func, &jl_declare_constant);
 
     jlgetbindingorerror_func =
         Function::Create(FunctionType::get(T_pjlvalue, args_2ptrs, false),
                          Function::ExternalLinkage,
                          "jl_get_binding_or_error", m);
-    add_named_global(jlgetbindingorerror_func, (void*)&jl_get_binding_or_error);
+    add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
 
     jlpref_func = Function::Create(FunctionType::get(T_pjlvalue, two_pvalue_llvmt, false),
                             Function::ExternalLinkage,
@@ -5603,40 +5603,40 @@ static void init_julia_llvm_env(Module *m)
                             "jl_pointerset", m);
 
 
-    builtin_func_map[jl_f_is] = jlcall_func_to_llvm("jl_f_is", (void*)&jl_f_is, m);
-    builtin_func_map[jl_f_typeof] = jlcall_func_to_llvm("jl_f_typeof", (void*)&jl_f_typeof, m);
-    builtin_func_map[jl_f_sizeof] = jlcall_func_to_llvm("jl_f_sizeof", (void*)&jl_f_sizeof, m);
-    builtin_func_map[jl_f_issubtype] = jlcall_func_to_llvm("jl_f_issubtype", (void*)&jl_f_issubtype, m);
-    builtin_func_map[jl_f_isa] = jlcall_func_to_llvm("jl_f_isa", (void*)&jl_f_isa, m);
-    builtin_func_map[jl_f_typeassert] = jlcall_func_to_llvm("jl_f_typeassert", (void*)&jl_f_typeassert, m);
-    builtin_func_map[jl_f__apply] = jlcall_func_to_llvm("jl_f__apply", (void*)&jl_f__apply, m);
-    builtin_func_map[jl_f_throw] = jlcall_func_to_llvm("jl_f_throw", (void*)&jl_f_throw, m);
-    builtin_func_map[jl_f_tuple] = jlcall_func_to_llvm("jl_f_tuple", (void*)&jl_f_tuple, m);
-    builtin_func_map[jl_f_svec] = jlcall_func_to_llvm("jl_f_svec", (void*)&jl_f_svec, m);
-    builtin_func_map[jl_f_applicable] = jlcall_func_to_llvm("jl_f_applicable", (void*)&jl_f_applicable, m);
-    builtin_func_map[jl_f_invoke] = jlcall_func_to_llvm("jl_f_invoke", (void*)&jl_f_invoke, m);
-    builtin_func_map[jl_f_isdefined] = jlcall_func_to_llvm("jl_f_isdefined", (void*)&jl_f_isdefined, m);
-    builtin_func_map[jl_f_getfield] = jlcall_func_to_llvm("jl_f_getfield", (void*)&jl_f_getfield, m);
-    builtin_func_map[jl_f_setfield] = jlcall_func_to_llvm("jl_f_setfield", (void*)&jl_f_setfield, m);
-    builtin_func_map[jl_f_fieldtype] = jlcall_func_to_llvm("jl_f_fieldtype", (void*)&jl_f_fieldtype, m);
-    builtin_func_map[jl_f_nfields] = jlcall_func_to_llvm("jl_f_nfields", (void*)&jl_f_nfields, m);
-    builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", (void*)&jl_f__expr, m);
-    builtin_func_map[jl_f_arrayref] = jlcall_func_to_llvm("jl_f_arrayref", (void*)&jl_f_arrayref, m);
-    builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", (void*)&jl_f_arrayset, m);
-    builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", (void*)&jl_f_arraysize, m);
-    builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", (void*)&jl_f_apply_type, m);
+    builtin_func_map[jl_f_is] = jlcall_func_to_llvm("jl_f_is", &jl_f_is, m);
+    builtin_func_map[jl_f_typeof] = jlcall_func_to_llvm("jl_f_typeof", &jl_f_typeof, m);
+    builtin_func_map[jl_f_sizeof] = jlcall_func_to_llvm("jl_f_sizeof", &jl_f_sizeof, m);
+    builtin_func_map[jl_f_issubtype] = jlcall_func_to_llvm("jl_f_issubtype", &jl_f_issubtype, m);
+    builtin_func_map[jl_f_isa] = jlcall_func_to_llvm("jl_f_isa", &jl_f_isa, m);
+    builtin_func_map[jl_f_typeassert] = jlcall_func_to_llvm("jl_f_typeassert", &jl_f_typeassert, m);
+    builtin_func_map[jl_f__apply] = jlcall_func_to_llvm("jl_f__apply", &jl_f__apply, m);
+    builtin_func_map[jl_f_throw] = jlcall_func_to_llvm("jl_f_throw", &jl_f_throw, m);
+    builtin_func_map[jl_f_tuple] = jlcall_func_to_llvm("jl_f_tuple", &jl_f_tuple, m);
+    builtin_func_map[jl_f_svec] = jlcall_func_to_llvm("jl_f_svec", &jl_f_svec, m);
+    builtin_func_map[jl_f_applicable] = jlcall_func_to_llvm("jl_f_applicable", &jl_f_applicable, m);
+    builtin_func_map[jl_f_invoke] = jlcall_func_to_llvm("jl_f_invoke", &jl_f_invoke, m);
+    builtin_func_map[jl_f_isdefined] = jlcall_func_to_llvm("jl_f_isdefined", &jl_f_isdefined, m);
+    builtin_func_map[jl_f_getfield] = jlcall_func_to_llvm("jl_f_getfield", &jl_f_getfield, m);
+    builtin_func_map[jl_f_setfield] = jlcall_func_to_llvm("jl_f_setfield", &jl_f_setfield, m);
+    builtin_func_map[jl_f_fieldtype] = jlcall_func_to_llvm("jl_f_fieldtype", &jl_f_fieldtype, m);
+    builtin_func_map[jl_f_nfields] = jlcall_func_to_llvm("jl_f_nfields", &jl_f_nfields, m);
+    builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", &jl_f__expr, m);
+    builtin_func_map[jl_f_arrayref] = jlcall_func_to_llvm("jl_f_arrayref", &jl_f_arrayref, m);
+    builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
+    builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
+    builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_getfield];
 
     jltypeassert_func = Function::Create(FunctionType::get(T_void, two_pvalue_llvmt, false),
                                         Function::ExternalLinkage,
                                         "jl_typeassert", m);
-    add_named_global(jltypeassert_func, (void*)&jl_typeassert);
+    add_named_global(jltypeassert_func, &jl_typeassert);
 
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
                                     Function::ExternalLinkage,
                                     "jl_gc_queue_root", m);
-    add_named_global(queuerootfun, (void*)&jl_gc_queue_root);
+    add_named_global(queuerootfun, &jl_gc_queue_root);
 
     std::vector<Type *> agargs(0);
     agargs.push_back(T_ppjlvalue);
@@ -5644,7 +5644,7 @@ static void init_julia_llvm_env(Module *m)
     jlapplygeneric_func = Function::Create(FunctionType::get(T_pjlvalue, agargs, false),
                                            Function::ExternalLinkage,
                                            "jl_apply_generic", m);
-    add_named_global(jlapplygeneric_func, (void*)&jl_apply_generic);
+    add_named_global(jlapplygeneric_func, &jl_apply_generic);
 
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);
@@ -5656,13 +5656,13 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, args3, false),
                          Function::ExternalLinkage,
                          "jl_toplevel_eval", m);
-    add_named_global(jltopeval_func, (void*)&jl_toplevel_eval);
+    add_named_global(jltopeval_func, &jl_toplevel_eval);
 
     jlcopyast_func =
         Function::Create(FunctionType::get(T_pjlvalue, args3, false),
                          Function::ExternalLinkage,
                          "jl_copy_ast", m);
-    add_named_global(jlcopyast_func, (void*)&jl_copy_ast);
+    add_named_global(jlcopyast_func, &jl_copy_ast);
 
     std::vector<Type*> args5(0);
     args5.push_back(T_size);
@@ -5670,7 +5670,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, args5, true),
                          Function::ExternalLinkage,
                          "jl_svec", m);
-    add_named_global(jlnsvec_func, (void*)&jl_svec);
+    add_named_global(jlnsvec_func, &jl_svec);
 
     std::vector<Type*> mdargs(0);
     mdargs.push_back(T_pjlvalue);
@@ -5680,7 +5680,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, mdargs, false),
                          Function::ExternalLinkage,
                          "jl_method_def", m);
-    add_named_global(jlmethod_func, (void*)&jl_method_def);
+    add_named_global(jlmethod_func, &jl_method_def);
 
     std::vector<Type*> funcdefargs(0);
     funcdefargs.push_back(T_pjlvalue);
@@ -5691,7 +5691,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, funcdefargs, false),
                          Function::ExternalLinkage,
                          "jl_generic_function_def", m);
-    add_named_global(jlgenericfunction_func, (void*)&jl_generic_function_def);
+    add_named_global(jlgenericfunction_func, &jl_generic_function_def);
 
     std::vector<Type*> ehargs(0);
     ehargs.push_back(T_pint8);
@@ -5699,32 +5699,32 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, ehargs, false),
                          Function::ExternalLinkage,
                          "jl_enter_handler", m);
-    add_named_global(jlenter_func, (void*)&jl_enter_handler);
+    add_named_global(jlenter_func, &jl_enter_handler);
 
 #ifdef _OS_WINDOWS_
     resetstkoflw_func = Function::Create(FunctionType::get(T_int32, false),
             Function::ExternalLinkage, "_resetstkoflw", m);
-    add_named_global(resetstkoflw_func, (void*)&_resetstkoflw);
+    add_named_global(resetstkoflw_func, &_resetstkoflw);
 #ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
 #if defined(_COMPILER_MINGW_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "___chkstk_ms", m);
-    add_named_global(chkstk_func, (void*)&___chkstk_ms, /*dllimport*/false);
+    add_named_global(chkstk_func, &___chkstk_ms, /*dllimport*/false);
 #else
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "__chkstk", m);
-    add_named_global(chkstk_func, (void*)&__chkstk, /*dllimport*/false);
+    add_named_global(chkstk_func, &__chkstk, /*dllimport*/false);
 #endif
 #else
 #if defined(_COMPILER_MINGW_)
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_alloca", m);
-    add_named_global(chkstk_func, (void*)&_alloca, /*dllimport*/false);
+    add_named_global(chkstk_func, &_alloca, /*dllimport*/false);
 #else
     Function *chkstk_func = Function::Create(FunctionType::get(T_void, false),
             Function::ExternalLinkage, "_chkstk", m);
-    add_named_global(chkstk_func, (void*)&_chkstk, /*dllimport*/false);
+    add_named_global(chkstk_func, &_chkstk, /*dllimport*/false);
 #endif
 #endif
 #endif
@@ -5736,7 +5736,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, lhargs, false),
                          Function::ExternalLinkage,
                          "jl_pop_handler", m);
-    add_named_global(jlleave_func, (void*)&jl_pop_handler);
+    add_named_global(jlleave_func, &jl_pop_handler);
 
     std::vector<Type *> args_2vals(0);
     args_2vals.push_back(T_pjlvalue);
@@ -5745,7 +5745,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, args_2vals, false),
                          Function::ExternalLinkage,
                          "jl_egal", m);
-    add_named_global(jlegal_func, (void*)&jl_egal);
+    add_named_global(jlegal_func, &jl_egal);
 
     std::vector<Type *> subt_args(0);
     subt_args.push_back(T_pjlvalue);
@@ -5755,7 +5755,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, subt_args, false),
                          Function::ExternalLinkage,
                          "jl_subtype", m);
-    add_named_global(jlsubtype_func, (void*)&jl_subtype);
+    add_named_global(jlsubtype_func, &jl_subtype);
 
     std::vector<Type*> aoargs(0);
     aoargs.push_back(T_size);
@@ -5763,26 +5763,26 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, aoargs, false),
                          Function::ExternalLinkage,
                          "jl_gc_allocobj", m);
-    add_named_global(jlallocobj_func, (void*)&jl_gc_allocobj);
+    add_named_global(jlallocobj_func, &jl_gc_allocobj);
 
     std::vector<Type*> empty_args(0);
     jlalloc1w_func =
         Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
                          Function::ExternalLinkage,
                          "jl_gc_alloc_1w", m);
-    add_named_global(jlalloc1w_func, (void*)&jl_gc_alloc_1w);
+    add_named_global(jlalloc1w_func, &jl_gc_alloc_1w);
 
     jlalloc2w_func =
         Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
                          Function::ExternalLinkage,
                          "jl_gc_alloc_2w", m);
-    add_named_global(jlalloc2w_func, (void*)&jl_gc_alloc_2w);
+    add_named_global(jlalloc2w_func, &jl_gc_alloc_2w);
 
     jlalloc3w_func =
         Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
                          Function::ExternalLinkage,
                          "jl_gc_alloc_3w", m);
-    add_named_global(jlalloc3w_func, (void*)&jl_gc_alloc_3w);
+    add_named_global(jlalloc3w_func, &jl_gc_alloc_3w);
 
     std::vector<Type*> atargs(0);
     atargs.push_back(T_size);
@@ -5790,7 +5790,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, atargs, false),
                          Function::ExternalLinkage,
                          "jl_alloc_svec", m);
-    add_named_global(jl_alloc_svec_func, (void*)&jl_alloc_svec);
+    add_named_global(jl_alloc_svec_func, &jl_alloc_svec);
 
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);
@@ -5800,7 +5800,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pvoidfunc, dlsym_args, false),
                          Function::ExternalLinkage,
                          "jl_load_and_lookup", m);
-    add_named_global(jldlsym_func, (void*)&jl_load_and_lookup);
+    add_named_global(jldlsym_func, &jl_load_and_lookup);
 
     std::vector<Type *> newbits_args(0);
     newbits_args.push_back(T_pjlvalue);
@@ -5809,7 +5809,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, newbits_args, false),
                          Function::ExternalLinkage,
                          "jl_new_bits", m);
-    add_named_global(jlnewbits_func, (void*)&jl_new_bits);
+    add_named_global(jlnewbits_func, &jl_new_bits);
 
     std::vector<Type *> getnthfld_args(0);
     getnthfld_args.push_back(T_pjlvalue);
@@ -5818,20 +5818,20 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_pjlvalue, getnthfld_args, false),
                          Function::ExternalLinkage,
                          "jl_get_nth_field_checked", m);
-    add_named_global(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
+    add_named_global(jlgetnthfieldchecked_func, *jl_get_nth_field_checked);
 
     diff_gc_total_bytes_func =
         Function::Create(FunctionType::get(T_int64, false),
                          Function::ExternalLinkage,
                          "jl_gc_diff_total_bytes", m);
-    add_named_global(diff_gc_total_bytes_func, (void*)*jl_gc_diff_total_bytes);
+    add_named_global(diff_gc_total_bytes_func, *jl_gc_diff_total_bytes);
 
 #ifndef LLVM36
     Type *powf_type[2] = { T_float32, T_float32 };
     jlpowf_func = Function::Create(FunctionType::get(T_float32, powf_type, false),
                                    Function::ExternalLinkage,
                                    "powf", m);
-    add_named_global(jlpowf_func, (void*)&powf, false);
+    add_named_global(jlpowf_func, &powf, false);
 
     Type *pow_type[2] = { T_float64, T_float64 };
     jlpow_func = Function::Create(FunctionType::get(T_float64, pow_type, false),
@@ -5841,7 +5841,7 @@ static void init_julia_llvm_env(Module *m)
 #ifdef _COMPILER_MICROSOFT_
         static_cast<double (*)(double, double)>(&pow),
 #else
-        (void*)&pow,
+        &pow,
 #endif
         false);
 #endif
@@ -6103,13 +6103,13 @@ extern "C" void jl_init_codegen(void)
     UBOX_F(gensym,size);
 
     box8_func  = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int8),
-                              "jl_box8", (void*)&jl_box8, m);
+                              "jl_box8", &jl_box8, m);
     box16_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int16),
-                              "jl_box16", (void*)&jl_box16, m);
+                              "jl_box16", &jl_box16, m);
     box32_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int32),
-                              "jl_box32", (void*)&jl_box32, m);
+                              "jl_box32", &jl_box32, m);
     box64_func = boxfunc_llvm(ft2arg(T_pjlvalue, T_pjlvalue, T_int64),
-                              "jl_box64", (void*)&jl_box64, m);
+                              "jl_box64", &jl_box64, m);
     jl_init_intrinsic_functions_codegen(m);
 }
 

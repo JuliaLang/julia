@@ -348,7 +348,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
 
 typedef struct {
     Value *jl_ptr;  // if the argument is a run-time computed pointer
-    void *fptr;     // if the argument is a constant pointer
+    void (*fptr)(void);     // if the argument is a constant pointer
     const char *f_name;   // if the symbol name is known
     const char *f_lib;    // if a library name is specified
 } native_sym_arg_t;
@@ -374,7 +374,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
     }
 
-    void *fptr=NULL;
+    void (*fptr)(void) = NULL;
     const char *f_name=NULL, *f_lib=NULL;
     jl_value_t *t0 = NULL, *t1 = NULL;
     JL_GC_PUSH3(&ptr, &t0, &t1);
@@ -394,7 +394,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 #endif
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            fptr = *(void**)jl_data_ptr(ptr);
+            fptr = *(void(**)(void))jl_data_ptr(ptr);
         }
         else if (jl_is_tuple(ptr) && jl_nfields(ptr)>1) {
             jl_value_t *t0 = jl_fieldref(ptr,0);
@@ -462,7 +462,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
         res = builder.CreateIntToPtr(sym.jl_ptr, lrt);
     }
     else if (sym.fptr != NULL) {
-        res = literal_static_pointer_val(sym.fptr, lrt);
+        res = literal_static_pointer_val((void*)(uintptr_t)sym.fptr, lrt);
         if (imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
@@ -944,7 +944,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
     Value *jl_ptr=NULL;
-    void *fptr = NULL;
+    void (*fptr)(void) = NULL;
     const char *f_name = NULL, *f_lib = NULL;
     jl_ptr = symarg.jl_ptr;
     fptr = symarg.fptr;
@@ -1106,7 +1106,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
-    if (fptr == (void *) &jl_array_ptr ||
+    if (fptr == (void(*)(void))&jl_array_ptr ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
@@ -1119,7 +1119,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(boxed(ary, ctx)), lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
-    if (fptr == (void *) &jl_value_ptr ||
+    if (fptr == (void(*)(void))&jl_value_ptr ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name,"jl_value_ptr"))) {
         assert(lrt->isPointerTy());
@@ -1156,7 +1156,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
-    if (fptr == (void *) &jl_is_leaf_type ||
+    if (fptr == (void(*)(void))&jl_is_leaf_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
         assert(nargt == 1);
@@ -1169,7 +1169,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     false, args[2], rt, static_rt, ctx);
         }
     }
-    if (fptr == (void*)&jl_function_ptr ||
+    if (fptr == (void(*)(void))&jl_function_ptr ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_function_ptr"))) {
         assert(nargt == 3);
@@ -1351,7 +1351,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
-        llvmf = literal_static_pointer_val(fptr, funcptype);
+        llvmf = literal_static_pointer_val((void*)(uintptr_t)fptr, funcptype);
         if (imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
     }
