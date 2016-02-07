@@ -193,6 +193,21 @@ function _test_mixed(A, B)
     nothing
 end
 
+function test_bounds(A)
+    @test_throws BoundsError A[0]
+    @test_throws BoundsError A[end+1]
+    @test_throws BoundsError A[1, 0]
+    @test_throws BoundsError A[1, end+1]
+    @test_throws BoundsError A[1, 1, 0]
+    @test_throws BoundsError A[1, 1, end+1]
+    @test_throws BoundsError A[0, 1]
+    @test_throws BoundsError A[end+1, 1]
+    @test_throws BoundsError A[0, 1, 1]
+    @test_throws BoundsError A[end+1, 1, 1]
+    @test_throws BoundsError A[1, 0, 1]
+    @test_throws BoundsError A[1, end+1, 1]
+end
+
 function err_li(I::Tuple, ld::Int, ldc::Int)
     @show I
     @show ld, ldc
@@ -222,12 +237,14 @@ function runtests(A::Array, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
     # slice
     S = slice(A, I...)
     getLD(S) == ldc || err_li(S, ldc)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
 end
 
 function runtests(A::SubArray, I...)
@@ -270,6 +287,7 @@ function runtests(A::SubArray, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
     # slice
     try
         S = slice(A, I...)
@@ -284,6 +302,7 @@ function runtests(A::SubArray, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
 end
 
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
