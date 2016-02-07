@@ -72,12 +72,12 @@ end
 macro except_str(expr, err_type)
     return quote
         let
-            local err::$(esc(err_type))
+            local err
             try
                 $(esc(expr))
             catch err
             end
-            @test typeof(err) === $err_type
+            @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err)
             takebuf_string(buff)
@@ -114,12 +114,21 @@ let
 end
 
 module __tmp_replutil
+
 using Base.Test
 import Main.@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
-@test contains(err_str, "Base.+")
+@test contains(err_str, "import Base.+")
+
+err_str = @except_str Float64[](1) MethodError
+@test !contains(err_str, "import Base.Array")
+
+Array() = 1
+err_str = @except_str Array(1) MethodError
+@test contains(err_str, "import Base.Array")
+
 end
 
 let

@@ -167,7 +167,9 @@ function showerror(io::IO, ex::MethodError)
     f = ex.f
     ft = typeof(f)
     name = ft.name.mt.name
+    f_is_function = false
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+        f_is_function = true
         # See #13033
         T = striptype(ex.args[1])
         if T == nothing
@@ -181,6 +183,7 @@ function showerror(io::IO, ex::MethodError)
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
                 ft == typeof(getfield(ft.name.module, name))
+            f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
             print(io, "no method matching ", f)
@@ -195,8 +198,8 @@ function showerror(io::IO, ex::MethodError)
         print(io, ")")
     end
     # Check for local functions that shadow methods in Base
-    if isdefined(Base, name)
-        basef = eval(Base, name)
+    if f_is_function && isdefined(Base, name)
+        basef = getfield(Base, name)
         if basef !== ex.f && method_exists(basef, arg_types)
             println(io)
             print(io, "you may have intended to import Base.", name)
