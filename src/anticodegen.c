@@ -24,10 +24,10 @@ JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAIL
 JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
+void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig)
 {
     if (!specsig)
-        lam->fptr = (jl_fptr_t)fptr;
+        lam->fptr = fptr;
 }
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
