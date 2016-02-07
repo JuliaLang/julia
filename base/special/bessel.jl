@@ -88,7 +88,6 @@ airybiprime(z) = airy(3,z)
 airy(k::Number, x::AbstractFloat) = oftype(x, real(airy(k, complex(x))))
 airy(k::Number, x::Real) = airy(k, float(x))
 airy(k::Number, z::Complex64) = Complex64(airy(k, Complex128(z)))
-airy(k::Number, z::Complex) = airy(convert(Int,k), Complex128(z))
 @vectorize_2arg Number airy
 
 function airyx(k::Int, z::Complex128)
@@ -370,7 +369,6 @@ for f in ("i", "ix", "j", "jx", "k", "kx", "y", "yx")
     bfn = symbol("bessel", f)
     @eval begin
         $bfn(nu::Real, z::Complex64) = Complex64($bfn(Float64(nu), Complex128(z)))
-        $bfn(nu::Real, z::Complex) = $bfn(Float64(nu), Complex128(z))
         $bfn(nu::Real, x::Integer) = $bfn(nu, Float64(x))
         @vectorize_2arg Number $bfn
     end
