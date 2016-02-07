@@ -270,7 +270,10 @@ end
 
 # import also the start method we can use to control repeated testset execution
 import Base.Test: start
-# A custom test set that repeats execution of tests a fixed number of times
+# A custom test set that repeats execution of tests a fixed number of times. This specific
+# case can be done with a @testset for loop but is used here for illustration purposes.
+# The start(::AbstractTestSet) method is needed for more refined, advanced use cases
+# such as adaptive number of repetitions, sequential testing etc.
 immutable RepeatingTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     reps::Int
@@ -309,6 +312,7 @@ end
 @test ts.reps == 10
 @test ts.description == "Testing custom, repeating testsets"
 @test counter_outer == 10
+@test length(ts.results) == (10*6)
 @test typeof(ts.results[1]) == Pass
 @test typeof(ts.results[2]) == Fail
 @test typeof(ts.results[3]) == Error
@@ -318,3 +322,25 @@ end
 @test ts.results[6].description == "custom, repeating testset inner 1"
 @test ts.results[6].reps == 2
 @test counter_inner == 20 # It runs 10*2 times, since outer repeats 10 and inner 2 times
+
+# A more useful test case for repeatable testset is for finding rare bugs
+# with random test data generation, aka property-based testing:
+my_buggy_reverse(v) = (length(v) == 4) ? Int64[1] : reverse(v) # Obvious, seeded, unrealistic bug here
+hit_one_of_length_4 = false
+ts = @testset RepeatingTestSet reps=500 begin
+    # Generate a random array of random length between 0-4.
+    a = Int64[rand(1:10000) for i in 1:rand(0:4)]
+    # A fundamental property of reverse is that if done twice we get orig ary
+    @test my_buggy_reverse(my_buggy_reverse(a)) == a
+
+    # Below code is only to handle the very unlikely case that our random testing
+    # did not "hit" an array of length 4.
+    # But we don't want to flag a failure below even if unlikely
+    hit_one_of_length_4 = hit_one_of_length_4 || (length(a) == 4)
+end
+
+@test length(ts.results) == 500
+if hit_one_of_length_4 # Chance that we didn't is extremely small, 0.8^500
+    numfails = find((r)->isa(r, Fail), ts.results)
+    @test length(numfails) > 0
+end
