@@ -166,7 +166,7 @@ end
                     N += 1
                     push!(sizeexprs, dimsizeexpr(j, Jindex, length(Jp), :V, :J))
                 end
-                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(indexexprs, :(unsafe_getindex(V.indexes[$IVindex], J[$Jindex])))
                 push!(Itypes, rangetype(iv, j))
             else
                 # We have a linear index that spans more than one
@@ -251,13 +251,13 @@ end
             if Jindex < N && j <: Real
                 # convert scalar to a range
                 sym = gensym()
-                push!(preexprs, :($sym = reindex(V.indexes[$IVindex], Int(J[$Jindex]))))
+                push!(preexprs, :($sym = unsafe_getindex(V.indexes[$IVindex], Int(J[$Jindex]))))
                 push!(indexexprs, :($sym:$sym))
                 push!(Itypes, UnitRange{Int})
                 push!(ItypesLD, j)
             elseif Jindex < length(Jp) || Jindex == NV || IVindex == length(IVp)
                 # simple indexing
-                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(indexexprs, :(unsafe_getindex(V.indexes[$IVindex], J[$Jindex])))
                 push!(Itypes, rangetype(iv, j))
                 push!(ItypesLD, Itypes[end])
             else
@@ -311,12 +311,6 @@ function rangetype(T1, T2)
     length(rt) == 1 || error("Can't infer return type")
     rt[1]
 end
-
-reindex(a, b) = a[b]
-reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
-reindex(a::UnitRange, b::StepRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), step(b), length(b))
-reindex(a::StepRange, b::Range{Int}) = range(oftype(first(a), first(a)+(first(b)-1)*step(a)), step(a)*step(b), length(b))
-reindex(a, b::Int) = (@inbounds r = a[b]; r)
 
 dimsizeexpr(Itype, d::Int, len::Int, Asym::Symbol, Isym::Symbol) = :(length($Isym[$d]))
 function dimsizeexpr(Itype::Type{Colon}, d::Int, len::Int, Asym::Symbol, Isym::Symbol)
