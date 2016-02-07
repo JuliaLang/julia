@@ -1329,7 +1329,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
     }
 
     if (!getdeclarations) {
-        Function *llvmDecl = nullptr;
+        Function *llvmDecl = NULL;
         if (!getwrapper && linfo->functionObjects.specFunctionObject != NULL)
             llvmDecl = (Function*)linfo->functionObjects.specFunctionObject;
         else
@@ -1344,7 +1344,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         if (!llvmf) {
             Function *other;
             jl_llvm_functions_t declarations;
-            emit_function(linfo, nullptr, &declarations, nullptr);
+            emit_function(linfo, NULL, &declarations, NULL);
             if (getwrapper || !declarations.specFunctionObject) {
                 llvmf = (llvm::Function*)declarations.functionObject;
                 other = (llvm::Function*)declarations.specFunctionObject;
@@ -1451,7 +1451,9 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
             }
         }
         if (dump_module) {
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
             realize_pending_globals();
+#endif
             m->print(stream, NULL);
         }
         else
