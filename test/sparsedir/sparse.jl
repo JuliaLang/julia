@@ -1200,3 +1200,15 @@ let
     @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end
+
+# Inf/NaN corner cases in sparse .* scalar, scalar .* sparse,
+# sparse ./ scalar, scalar .\ sparse
+for A in (4*speye(5,3), 3*sparse(ones(Int, 4,6)),
+          SparseMatrixCSC(4, 3, [1,3,5,8], [1,2,2,3,2,3,4],
+          [0.0, -0.0, -Inf, Inf, NaN, -NaN, 2.0])),
+    B in (0.0, -0.0, -Inf, Inf, NaN, -NaN, 2.0)
+    @test_approx_eq_eps full(A .* B) full(A) .* B 0
+    @test_approx_eq_eps full(B .* A) B .* full(A) 0
+    @test_approx_eq_eps full(A ./ B) full(A) ./ B 0
+    @test_approx_eq_eps full(B .\ A) B .\ full(A) 0
+end

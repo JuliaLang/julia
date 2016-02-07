@@ -1084,18 +1084,67 @@ end # macro
 (.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
 ( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
 
-(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(MulFun(), A, B)
-(.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
-(.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
+# multiplication and division by scalars need to be careful about 0, Inf, NaN
+# corner cases where we might need to return dense data (as a SparseMatrixCSC
+# for type stability)
+function densify_with_default(A::SparseMatrixCSC, spvals, defaultvalue)
+    # return a SparseMatrixCSC C with the same dimensions as A, structural
+    # nonzero values spvals in the same locations that A has structural
+    # nonzeros, and nonzero value defaultvalue everywhere else
+    m, n = size(A)
+    Arowval = A.rowval
+    Acolptr = A.colptr
+    Cnnz = m * n
+    Cnzval = fill(defaultvalue, Cnnz)
+    Crowval = similar(Arowval, Cnnz)
+    Ccolptr = similar(Acolptr)
+    Ccolptr[1] = 1
+    for col = 1:n
+        Ccolptr[col+1] = 1 + col * m
+        Crowval[Ccolptr[col] : Ccolptr[col+1]-1] = 1:m
+        for k in nzrange(A, col)
+            Cnzval[sub2ind((m, n), Arowval[k], col)] = spvals[k]
+        end
+    end
+    return SparseMatrixCSC(m, n, Ccolptr, Crowval, Cnzval)
+end
 
-(./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
+(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(MulFun(), A, B)
+function (.*)(A::SparseMatrixCSC, B::Number)
+    if isfinite(B)
+        SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
+    else
+        densify_with_default(A, A.nzval .* B, zero(eltype(A)) .* B)
+    end
+end
+function (.*)(A::Number, B::SparseMatrixCSC)
+    if isfinite(A)
+        SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
+    else
+        densify_with_default(B, A .* B.nzval, A .* zero(eltype(B)))
+    end
+end
+
+function (./)(A::SparseMatrixCSC, B::Number)
+    if B == 0 || isnan(B)
+        densify_with_default(A, A.nzval ./ B, zero(eltype(A)) ./ B)
+    else
+        SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
+    end
+end
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
 (./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
 
 (.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
-(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval )
+function (.\)(A::Number, B::SparseMatrixCSC)
+    if A == 0 || isnan(A)
+        densify_with_default(B, A .\ B.nzval, A .\ zero(eltype(B)))
+    else
+        SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval)
+    end
+end
 (.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
 (.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
 (.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
