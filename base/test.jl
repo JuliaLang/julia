@@ -17,7 +17,7 @@ export @test, @test_throws
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq, @test_approx_eq_eps, @inferred
-
+export @except_str
 #-----------------------------------------------------------------------
 
 """
@@ -818,6 +818,22 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
     for i=1:n
         v1, v2 = a[:, i], b[:, i]
         @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
+    end
+end
+
+macro except_str(expr, err_type)
+    return quote
+        let
+            local err
+            try
+                $(esc(expr))
+            catch err
+            end
+            @test typeof(err) === $(esc(err_type))
+            buff = IOBuffer()
+            showerror(buff, err)
+            takebuf_string(buff)
+        end
     end
 end
 

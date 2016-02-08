@@ -69,22 +69,6 @@ for f in [getindex, setindex!]
     test_have_color(buf, "", "")
 end
 
-macro except_str(expr, err_type)
-    return quote
-        let
-            local err
-            try
-                $(esc(expr))
-            catch err
-            end
-            @test typeof(err) === $(esc(err_type))
-            buff = IOBuffer()
-            showerror(buff, err)
-            takebuf_string(buff)
-        end
-    end
-end
-
 macro except_strbt(expr, err_type)
     return quote
         let
@@ -116,6 +100,7 @@ macro except_stackframe(expr, err_type)
     end
 end
 
+using Base.Test
 # Pull Request 11007
 abstract InvokeType11007
 abstract MethodType11007 <: InvokeType11007
@@ -132,7 +117,6 @@ end
 module __tmp_replutil
 
 using Base.Test
-import Main.@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
@@ -337,5 +321,3 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
-
-

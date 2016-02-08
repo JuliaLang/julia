@@ -213,3 +213,10 @@ a = [RootInt(2),RootInt(10)]
 @test a*a' == [4 20; 20 100]
 A = [RootInt(3) RootInt(5)]
 @test A*a == [56]
+
+# 14679
+a = rand(4)
+b = rand(4,4)
+@test_throws DimensionMismatch (*)(a, b)
+err_str = @except_str (*)(a, b) DimensionMismatch
+@test contains(err_str, "A has dimensions (4,) but B has dimensions (4,4)")
