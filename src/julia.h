@@ -1329,7 +1329,7 @@ JL_DLLEXPORT int jl_parse_depwarn(int warn);
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, size_t namelen);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
-JL_DLLEXPORT void *jl_eval_string(const char *str);
+JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str);
 
 // external libraries
 enum JL_RTLD_CONSTANT {
