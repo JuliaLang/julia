@@ -424,7 +424,7 @@ int64_t ios_seek(ios_t *s, int64_t pos)
 {
     s->_eof = 0;
     if (s->bm == bm_mem) {
-        if (pos > s->size)
+        if (pos < 0 || pos > s->size)
             return -2;
         s->bpos = pos;
     }
