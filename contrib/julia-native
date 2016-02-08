@@ -1,0 +1,44 @@
+#! /bin/bash
+
+# See 'julia-native-setup' for instructions.
+
+# Get the name of the directory in which this script lives
+# See <http://stackoverflow.com/questions/59895>
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Get the current host's CPU type for LLVM
+CPU=$("$DIR/julia" -e 'println(Sys.cpu_name)')
+if [[ -z $CPU ]]; then
+    echo "Could not determine CPU type; aborting"
+    exit 1
+fi
+
+# Determine the system image name for this host
+ORIGIMG="$DIR/../lib/julia/sys"
+SYSIMG="$ORIGIMG-$CPU"
+SUFFIX=
+for suf in so dylib; do
+    if [[ -e $ORIGIMG.$suf ]]; then
+        SUFFIX=$suf
+        break
+    fi
+done
+if [[ -z $SUFFIX ]]; then
+    echo "Could not determine shared library suffix; aborting"
+    exit 1
+fi
+if [[ ! -e $ORIGIMG.$SUFFIX ]]; then
+    echo "Could not find original Julia system image; aborting"
+    exit 1
+fi
+
+# Check whether the specialized system image is there
+if [[ $SYSIMG.$SUFFIX -ot $ORIGIMG.$SUFFIX ]]; then
+    echo "Julia's system image for $CPU CPUs is outdated or does not exist."
+    echo "Run 'julia-native-setup' to create it,"
+    echo "or ask your system administrator to do so."
+    exit 1
+fi
+
+echo "Running Julia optimized for $CPU CPUs..."
+exec "$DIR/julia" -C "$CPU" -J "$SYSIMG.$SUFFIX" "$@"
