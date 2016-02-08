@@ -764,12 +764,12 @@ end
 if VERSION < v"0.4.0-dev+1653"
     function rm_recursive(path)
         if islink(path) || !isdir(path)
-            Filesystem.rm(path)
+            rm(path)
         else
             for p in readdir(path)
                 rm_recursive(joinpath(path, p))
             end
-            rmdir(path)
+            rm(path)
         end
     end
 
@@ -791,6 +791,36 @@ if VERSION < v"0.4.0-dev+1653"
             rm_recursive(tmpdir)
         end
     end
+end
+
+if VERSION < v"0.5.0-dev+2228"
+    const readstring = readall
+    export readstring
+
+    Base.read(s::IO) = readbytes(s)
+    Base.read(s::IO, nb) = readbytes(s, nb)
+
+    Base.write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+
+    Base.read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+    Base.read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+    Base.readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+    Base.readline(filename::AbstractString) = open(readline, filename)
+    Base.readlines(filename::AbstractString) = open(readlines, filename)
+    Base.readavailable(s::IOStream) = read!(s, @compat Vector{UInt8}(nb_available(s)))
+    Base.readavailable(s::IOBuffer) = read(s)
+
+    function Base.write(to::IO, from::IO)
+        while !eof(from)
+            write(to, readavailable(from))
+        end
+    end
+
+    function Base.eachline(filename::AbstractString)
+        s = open(filename)
+        EachLine(s, ()->close(s))
+    end
+
 end
 
 end # module

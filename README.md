@@ -133,7 +133,12 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
 
+
 * `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
+
+
+* `readall` and `readbytes` are now `readstring` and `read` [#14660](https://github.com/JuliaLang/julia/pull/14660)
+
 
 ## New macros
 
