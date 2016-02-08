@@ -753,7 +753,7 @@ end
 if VERSION < v"0.4.0-dev+1653"
     function rm_recursive(path)
         if islink(path) || !isdir(path)
-            Filesystem.unlink(path)
+            Filesystem.rm(path)
         else
             for p in readdir(path)
                 rm_recursive(joinpath(path, p))
