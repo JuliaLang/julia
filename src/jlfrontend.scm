@@ -40,7 +40,7 @@
                 ((lambda)       tab)
                 ((local)        tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
-                ((module)       '())
+                ((module toplevel) '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
@@ -76,7 +76,7 @@
   (let ((ex0 (julia-expand-macros e)))
     (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
         `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
-        (let* ((ex (julia-expand01 ex0))
+        (let* ((ex (julia-expand0 ex0))
                (gv (toplevel-expr-globals ex))
                (th (julia-expand1
                     `(lambda () ()
