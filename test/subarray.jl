@@ -222,10 +222,18 @@ function err_li(S::SubArray, ld::Int, szC)
     error("Linear indexing inference mismatch")
 end
 
+function dim_break_linindex(I)
+    i = 1
+    while i <= length(I) && !isa(I[i], Vector{Int})
+        i += 1
+    end
+    i - 1
+end
+
 function runtests(A::Array, I...)
     # Direct test of linear indexing inference
     C = Agen_nodrop(A, I...)
-    ld = single_stride_dim(C)
+    ld = min(single_stride_dim(C), dim_break_linindex(I))
     ldc = Base.subarray_linearindexing_dim(typeof(A), typeof(I))
     ld == ldc || err_li(I, ld, ldc)
     # sub
@@ -262,7 +270,7 @@ function runtests(A::SubArray, I...)
     AA = copy_to_array(A)
     # Direct test of linear indexing inference
     C = Agen_nodrop(AA, I...)
-    Cld = ld = single_stride_dim(C)
+    Cld = ld = min(single_stride_dim(C), dim_break_linindex(I))
     Cdim = AIindex = 0
     while Cdim <= Cld && AIindex < length(A.indexes)
         AIindex += 1
