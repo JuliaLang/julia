@@ -3337,7 +3337,7 @@ end
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # meta nodes for optional positional arguments
-@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[3].args[3]).args[3].args[1].args[1] === :inline
+@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[2].args[3]).args[3].args[1].args[1] === :inline
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
