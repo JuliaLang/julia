@@ -578,3 +578,23 @@ Base.remote_do(() -> true, 1) # Doesn't return anything so cannot be `@test`ed b
 @test "1234" == @compat withenv("_TESTVAR" => 1234) do
     return ENV["_TESTVAR"]
 end
+
+# Test functional form of mktemp and mktempdir
+let
+    tmp_path = mktemp() do p, io
+        @test isfile(p)
+        print(io, "鴨かも？")
+        p
+    end
+    @test tmp_path != ""
+    @test !isfile(tmp_path)
+end
+
+let
+    tmpdir = mktempdir() do d
+        @test isdir(d)
+        d
+    end
+    @test tmpdir != ""
+    @test !isdir(tmpdir)
+end

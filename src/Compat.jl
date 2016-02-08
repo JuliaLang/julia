@@ -761,4 +761,36 @@ if VERSION < v"0.5.0-dev+1946"
     export supertype
 end
 
+if VERSION < v"0.4.0-dev+1653"
+    function rm_recursive(path)
+        if islink(path) || !isdir(path)
+            Filesystem.rm(path)
+        else
+            for p in readdir(path)
+                rm_recursive(joinpath(path, p))
+            end
+            rmdir(path)
+        end
+    end
+
+    function Base.mktemp(fn::Function)
+        (tmp_path, tmp_io) = mktemp()
+        try
+            fn(tmp_path, tmp_io)
+        finally
+            close(tmp_io)
+            rm(tmp_path)
+        end
+    end
+
+    function Base.mktempdir(fn::Function)
+        tmpdir = mktempdir()
+        try
+            fn(tmpdir)
+        finally
+            rm_recursive(tmpdir)
+        end
+    end
+end
+
 end # module
