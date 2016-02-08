@@ -108,7 +108,7 @@ rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
 
 if [ -z "$USEMSVC" ]; then
-  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
+  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -a -z "$APPVEYOR" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
         "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
