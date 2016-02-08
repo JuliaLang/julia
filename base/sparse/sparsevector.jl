@@ -122,7 +122,8 @@ end
 
 Create a sparse vector `S` of length `m` such that `S[I[k]] = V[k]`.
 Duplicates are combined using the `combine` function, which defaults to
-`+` if it is not provided.
+`+` if no `combine` argument is provided, unless the elements of `V` are Booleans
+in which case `combine` defaults to `|`.
 """
 function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, combine::BinaryOp)
     length(I) == length(V) ||
@@ -147,23 +148,25 @@ function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv},
     _sparsevector!(collect(Ti, I), collect(Tv, V), len, combine)
 end
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector) =
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector}) =
     sparsevec(I, V, AddFun())
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, len::Integer) =
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector},
+    len::Integer) =
     sparsevec(I, V, len, AddFun())
+
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}}) =
+    sparsevec(I, V, OrFun())
+
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}},
+    len::Integer) =
+    sparsevec(I, V, len, OrFun())
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, combine::BinaryOp) =
     sparsevec(I, fill(v, length(I)), combine)
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer, combine::BinaryOp) =
     sparsevec(I, fill(v, length(I)), len, combine)
-
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number) =
-    sparsevec(I, v, AddFun())
-
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer) =
-    sparsevec(I, v, len, AddFun())
 
 
 ### Construction from dictionary
