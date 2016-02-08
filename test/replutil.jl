@@ -170,16 +170,16 @@ let undefvar
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
 
     err_str = @except_str [5,4,3][-2,1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{Int64,1}:\n 5\n 4\n 3\n  at index [-2,1]"
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1}:\n 5\n 4\n 3\n  at index [-2,1]"
     err_str = @except_str [5,4,3][1:5] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{Int64,1}:\n 5\n 4\n 3\n  at index [1:5]"
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1}:\n 5\n 4\n 3\n  at index [1:5]"
 
     err_str = @except_str 0::Bool TypeError
-    @test err_str == "TypeError: non-boolean (Int64) used in boolean context"
+    @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: typeassert: expected AbstractFloat, got Int64"
+    @test err_str == "TypeError: typeassert: expected AbstractFloat, got $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: typeassert: expected Type{T}, got Int64"
+    @test err_str == "TypeError: typeassert: expected Type{T}, got $Int"
     err_str = @except_str "" <: AbstractString TypeError
     @test err_str == "TypeError: subtype: expected Type{T}, got ASCIIString"
     err_str = @except_str AbstractString <: "" TypeError
@@ -242,7 +242,7 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test contains(err_str, "MethodError: no method matching (::FunctionLike)()")
     err_str = @except_str [1,2](1) MethodError
-    @test contains(err_str, "MethodError: objects of type Array{Int64,1} are not callable\nUse square brackets [] for indexing an Array.")
+    @test contains(err_str, "MethodError: objects of type Array{$Int,1} are not callable\nUse square brackets [] for indexing an Array.")
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
