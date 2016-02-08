@@ -1264,12 +1264,6 @@ Reflection
 
    Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
 
-.. function:: isgeneric(f::Function) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Determine whether a ``Function`` is generic.
-
 .. function:: function_name(f::Function) -> Symbol
 
    .. Docstring generated from Julia source
