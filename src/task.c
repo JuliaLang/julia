@@ -29,9 +29,6 @@ volatile int jl_in_stackwalk = 0;
 #include <unistd.h>
 #include <sys/mman.h> // for mprotect
 #include <dlfcn.h>   // for dladdr
-// This gives unwind only local unwinding options ==> faster code
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
 #endif
 
 /* This probing code is derived from Douglas Jones' user thread library */

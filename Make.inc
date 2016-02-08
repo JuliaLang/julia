@@ -187,6 +187,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
+#LLVM_USE_CMAKE: defined in deps/Makefile as it depends on LLVM_VER_SHORT
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
@@ -199,6 +200,7 @@ BUILD_LLDB := 0
 
 # Path to cmake (override in Make.user if needed)
 CMAKE ?= cmake
+CMAKE_GENERATOR ?= make
 
 # Point pkg-config to only look at our libraries
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
@@ -460,8 +462,11 @@ endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 LDFLAGS += $(SANITIZE_LDFLAGS)
-DEPS_CFLAGS += $(SANITIZE_OPTS)
-DEPS_CXXFLAGS += $(SANITIZE_OPTS)
+# FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
+#        https://github.com/JuliaLang/julia/issues/13858
+#        use LLVM_SANITIZE to sanitize LLVM
+#DEPS_CFLAGS += $(SANITIZE_OPTS)
+#DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
 TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
@@ -645,6 +650,9 @@ else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
 LIBUNWIND:=-lunwind-generic -lunwind
+# Only for linux since we want to use not yet released libunwind features
+JCFLAGS+=-DSYSTEM_LIBUNWIND
+JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
 ifeq ($(OS),Darwin)
