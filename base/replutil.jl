@@ -92,9 +92,6 @@ function showerror(io::IO, ex::TypeError)
             tstr = string(typeof(ex.got))
         end
         print(io, "$(ex.func): $(ctx)expected $(ex.expected), got $tstr")
-        if ex.func === :apply && ex.expected <: Function && isa(ex.got, AbstractArray)
-            print(io, "\nUse square brackets [] for indexing.")
-        end
     end
 end
 
@@ -124,9 +121,9 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
         code = StackTraces.lookup(b)
-        if code !== lookup && code.from_c
+        if !code.from_c
             if code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(code[1])(complex(x)).")
+                print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
             elseif (code.func == :^ && code.file == symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code.func == :^ && (code.file == symbol("promotion.jl") || code.file == symbol("math.jl"))
@@ -167,7 +164,9 @@ function showerror(io::IO, ex::MethodError)
     f = ex.f
     ft = typeof(f)
     name = ft.name.mt.name
+    f_is_function = false
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+        f_is_function = true
         # See #13033
         T = striptype(ex.args[1])
         if T == nothing
@@ -175,10 +174,13 @@ function showerror(io::IO, ex::MethodError)
         else
             print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
         end
+    elseif isempty(methods(f)) && !isa(f, Function)
+        print(io, "objects of type $ft are not callable")
     else
         if ft <: Function && isempty(ft.parameters) &&
                 isdefined(ft.name.module, name) &&
                 ft == typeof(getfield(ft.name.module, name))
+            f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
             print(io, "no method matching ", f)
@@ -192,9 +194,12 @@ function showerror(io::IO, ex::MethodError)
         end
         print(io, ")")
     end
+    if ft <: AbstractArray
+        print(io, "\nUse square brackets [] for indexing an Array.")
+    end
     # Check for local functions that shadow methods in Base
-    if isdefined(Base, name)
-        basef = eval(Base, name)
+    if f_is_function && isdefined(Base, name)
+        basef = getfield(Base, name)
         if basef !== ex.f && method_exists(basef, arg_types)
             println(io)
             print(io, "you may have intended to import Base.", name)

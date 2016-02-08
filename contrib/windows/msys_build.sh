@@ -108,13 +108,13 @@ rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
 
 if [ -z "$USEMSVC" ]; then
-  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
+  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -o -n "$APPVEYOR" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
         "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
-    export PATH=$PATH:$PWD/mingw$bits/bin
+    export PATH=$PWD/mingw$bits/bin:$PATH
     # If there is a version of make.exe here, it is mingw32-make which won't work
     rm -f mingw$bits/bin/make.exe
   fi

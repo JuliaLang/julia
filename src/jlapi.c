@@ -48,7 +48,7 @@ JL_DLLEXPORT void jl_init(const char *julia_home_dir)
     jl_init_with_image(julia_home_dir, NULL);
 }
 
-JL_DLLEXPORT void *jl_eval_string(const char *str)
+JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {

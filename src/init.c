@@ -67,7 +67,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                             0,    // code_coverage
                             0,    // malloc_log
-                            0,    // opt_level
+                            2,    // opt_level
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                             1,    // depwarn
                             1,    // can_inline
