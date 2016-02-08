@@ -19,8 +19,9 @@
 Create a sparse matrix `S` of dimensions `m x n` such that `S[I[k], J[k]] = V[k]`.
 The `combine` function is used to combine duplicates. If `m` and `n` are not
 specified, they are set to `maximum(I)` and `maximum(J)` respectively. If the
-`combine` function is not supplied, duplicates are added by default. All elements
-of `I` must satisfy `1 <= I[k] <= m`, and all elements of `J` must satisfy `1 <= J[k] <= n`.
+`combine` function is not supplied, `combine` defaults to `+` unless the elements
+of `V` are Booleans in which case `combine` defaults to `|`. All elements of `I` must
+satisfy `1 <= I[k] <= m`, and all elements of `J` must satisfy `1 <= J[k] <= n`.
 """
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti},
                                 J::AbstractVector{Ti},
