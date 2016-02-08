@@ -511,6 +511,27 @@ else
     import Base: Libc, Libdl
 end
 
+if VERSION < v"0.4.0-dev+1653"
+    function Base.mktemp(fn::Function)
+        (tmp_path, tmp_io) = mktemp()
+        try
+            fn(tmp_path, tmp_io)
+        finally
+            close(tmp_io)
+            rm(tmp_path)
+        end
+    end
+
+    function mktempdir(fn::Function)
+        tmpdir = mktempdir()
+        try
+            fn(tmpdir)
+        finally
+            rm(tmpdir, recursive=true)
+        end
+    end
+end
+
 if VERSION < v"0.4.0-dev+2418"
     function findprev(A, start)
         for i = start:-1:1
