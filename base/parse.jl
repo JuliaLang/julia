@@ -171,6 +171,7 @@ float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(flo
 ## interface to parser ##
 
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
+    # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.
     bstr = bytestring(str)
     ex, pos = ccall(:jl_parse_string, Any,
@@ -187,7 +188,7 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
 end
 
 function parse(str::AbstractString; raise::Bool=true)
-    ex, pos = parse(str, start(str), greedy=true, raise=raise)
+    ex, pos = parse(str, 1, greedy=true, raise=raise)
     if isa(ex,Expr) && ex.head === :error
         return ex
     end
