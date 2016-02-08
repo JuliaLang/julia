@@ -182,12 +182,16 @@ static void realize_cycle(jl_cyclectx_t *cyclectx)
 }
 #endif
 
+template<typename T>
 #ifdef LLVM35
-static inline void add_named_global(GlobalObject *gv, void *addr, bool dllimport = true)
+static inline void add_named_global(GlobalObject *gv, T *_addr, bool dllimport = true)
 #else
-static inline void add_named_global(GlobalValue *gv, void *addr, bool dllimport = true)
+static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = true)
 #endif
 {
+    // cast through integer to avoid c++ pedantic warning about casting between
+    // data and code pointers
+    void *addr = (void*)(uintptr_t)_addr;
 #ifdef LLVM34
     StringRef name = gv->getName();
 #ifdef _OS_WINDOWS_
