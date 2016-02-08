@@ -511,27 +511,6 @@ else
     import Base: Libc, Libdl
 end
 
-if VERSION < v"0.4.0-dev+1653"
-    function Base.mktemp(fn::Function)
-        (tmp_path, tmp_io) = mktemp()
-        try
-            fn(tmp_path, tmp_io)
-        finally
-            close(tmp_io)
-            rm(tmp_path)
-        end
-    end
-
-    function mktempdir(fn::Function)
-        tmpdir = mktempdir()
-        try
-            fn(tmpdir)
-        finally
-            rm(tmpdir, recursive=true)
-        end
-    end
-end
-
 if VERSION < v"0.4.0-dev+2418"
     function findprev(A, start)
         for i = start:-1:1
@@ -769,6 +748,38 @@ end
 if VERSION < v"0.5.0-dev+1946"
     const supertype = super
     export supertype
+end
+
+if VERSION < v"0.4.0-dev+1653"
+    function rm_recursive(path)
+        if islink(path) || !isdir(path)
+            Filesystem.unlink(path)
+        else
+            for p in readdir(path)
+                rm_recursive(joinpath(path, p))
+            end
+            rmdir(path)
+        end
+    end
+
+    function Base.mktemp(fn::Function)
+        (tmp_path, tmp_io) = mktemp()
+        try
+            fn(tmp_path, tmp_io)
+        finally
+            close(tmp_io)
+            rm(tmp_path)
+        end
+    end
+
+    function Base.mktempdir(fn::Function)
+        tmpdir = mktempdir()
+        try
+            fn(tmpdir)
+        finally
+            rm_recursive(tmpdir)
+        end
+    end
 end
 
 end # module
