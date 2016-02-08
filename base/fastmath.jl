@@ -205,7 +205,7 @@ ComplexTypes = Union{Complex64, Complex128}
     mul_fast{T<:FloatTypes}(a::T, y::Complex{T}) =
         Complex{T}(a*real(y), a*imag(y))
 
-    div_fast{T<:ComplexTypes}(x::T, y::T) =
+    @inline div_fast{T<:ComplexTypes}(x::T, y::T) =
         T(real(x)*real(y) + imag(x)*imag(y),
           imag(x)*real(y) - real(x)*imag(y)) / abs2(y)
     div_fast{T<:FloatTypes}(x::Complex{T}, b::T) =
