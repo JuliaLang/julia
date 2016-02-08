@@ -668,6 +668,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
             if (b->value && jl_is_datatype(b->value)) {
                 jl_datatype_t *tt = (jl_datatype_t*)b->value;
                 tt->name->module = jl_core_module;
+                if (tt->name->mt)
+                    tt->name->mt->module = jl_core_module;
             }
         }
     }
