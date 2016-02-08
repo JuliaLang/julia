@@ -45,7 +45,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXX
 CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
 
-CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_BUILD_TYPE=Release
+CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix)
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -59,7 +59,7 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
-ifneq ($(LLVM_USE_CMAKE),)
+ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
@@ -325,6 +325,7 @@ LLVM_BUILDTYPE := Debug
 else
 LLVM_BUILDTYPE := Release
 endif
+LLVM_CMAKE_BUILDTYPE := $(LLVM_BUILDTYPE)
 ifeq ($(LLVM_ASSERTIONS),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
@@ -335,6 +336,25 @@ LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
 else
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
 endif
+endif
+
+LLVM_VER_MAJ:=$(word 1, $(subst ., ,$(LLVM_VER)))
+LLVM_VER_MIN:=$(word 2, $(subst ., ,$(LLVM_VER)))
+# define a "short" LLVM version for easy comparisons
+ifeq ($(LLVM_VER),svn)
+LLVM_VER_SHORT:=svn
+else
+LLVM_VER_SHORT:=$(LLVM_VER_MAJ).$(LLVM_VER_MIN)
+endif
+LLVM_VER_PATCH:=$(word 3, $(subst ., ,$(LLVM_VER)))
+ifeq ($(LLVM_VER_PATCH),)
+LLVM_VER_PATCH := 0
+endif
+
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+LLVM_USE_CMAKE := 0
+else
+LLVM_USE_CMAKE := 1
 endif
 
 LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
@@ -379,8 +399,8 @@ LLVM_CPPFLAGS := $(CPPFLAGS)
 LLVM_LDFLAGS := $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
-LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_BUILDTYPE)" -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
-LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS)
+LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
@@ -404,12 +424,16 @@ LLVM_FLAGS += --enable-libcpp
 endif # USE_LIBCPP
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
-# turn off shared LLVM on Windows unless explicitly requested
-ifneq ($(USE_LLVM_SHLIB),1)
-LLVM_FLAGS += --disable-shared
-endif
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
+ifeq ($(USE_LLVM_SHLIB),1)
+# NOTE: we could also --disable-static here (on the condition we link tools
+#       against libLLVM) but there doesn't seem to be a CMake counterpart option
+LLVM_FLAGS += --enable-shared
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
+# NOTE: LLVM_DYLIB_EXPORT_ALL has been removed recently,
+#       and LLVM now defaults to exporting all symbols
+endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
 ifeq ($(OS), WINNT)
@@ -439,8 +463,22 @@ ifeq ($(ARCH), ppc64)
 LLVM_CXXFLAGS += -mminimal-toc
 endif # ARCH == ppc64
 
+# LLVM bug #24157
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),1)
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
+$(error USE_LLVM_SHLIB=1 with LLVM_USE_CMAKE=1 requires LLVM > 3.7.x)
+endif
+endif
+endif
 
 ifeq ($(LLVM_SANITIZE),1)
+# autotools doesn't provide a sanitation build mode (linking libLLVM will fail)
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(LLVM_USE_CMAKE),0)
+$(error LLVM_SANITIZE=1 with USE_LLVM_SHLIB=1 requires LLVM_USE_CMAKE=1)
+endif
+endif
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
@@ -485,12 +523,24 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
+LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
+LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
+endif
 endif
 ifeq ($(BUILD_LLDB),1)
 LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
 # block default building of lldb
 LLVM_MFLAGS += OPTIONAL_DIRS=
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+LLVM_CMAKE += -DLLVM_EXTERNAL_LLDB_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
+endif
 endif
 
 LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
@@ -671,6 +721,7 @@ else ifeq ($(LLVM_VER),3.7.1)
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
+$(eval $(call LLVM_PATCH,llvm-D14260))
 $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
 endif # LLVM_VER
 
@@ -684,31 +735,33 @@ endif
 endif
 
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
-ifneq ($(LLVM_USE_CMAKE),)
+ifeq ($(LLVM_USE_CMAKE),1)
 
-$(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
 	touch -c $@
 
-$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt $(LLVM_PATCH_LIST) | $(llvm_python_workaround)
+$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(CMAKE) --build .
+		$(if $(filter $(CMAKE_GENERATOR),make), \
+		  $(MAKE), \
+		  $(CMAKE) --build .)
 	touch -c $@
 
 else
 
-$(LLVM_BUILDDIR_withtype)/config.status: $(LLVM_SRC_DIR)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/config.status: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$< $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
-$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/config.status $(LLVM_PATCH_LIST) | $(llvm_python_workaround)
+$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/config.status | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(MAKE) $(LLVM_MFLAGS) $(MAKE_COMMON)
@@ -716,22 +769,19 @@ $(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/config.status $(LLVM_PATCH_LIST) |
 
 endif # LLVM_USE_CMAKE
 
-ifeq ($(LLVM_USE_CMAKE),1)
-CHECK_COMMAND := $(CMAKE) --build . check
-else
-CHECK_COMMAND := $(MAKE) $(LLVM_MFLAGS) check
-endif
 $(LLVM_BUILDDIR_withtype)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(CHECK_COMMAND)
+		$(if $(filter $(LLVM_USE_CMAKE),1), \
+		  $(CMAKE) --build . check, \
+		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
+	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
 else
 	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
@@ -1704,15 +1754,11 @@ LIBUNWIND_TARGET_SOURCE := $(BUILDDIR)/libunwind-$(UNWIND_VER)/src/.libs/libunwi
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS :=
 
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.bz2: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://github.com/yuyichao/libunwind/releases/download/libunwind-$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.bz2
-$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.bz2
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
+	$(JLDOWNLOAD) $@ https://github.com/yuyichao/libunwind/releases/download/libunwind-$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.gz
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) xfj $<
-	# cd $(dir $<)/libunwind-$(UNWIND_VER) && \
-	# patch -p1 < $(SRCDIR)/libunwind.patch && \
-	# patch -p1 < $(SRCDIR)/libunwind-001-invalid-dwarf-opcodes-can-cause-references-beyond.patch && \
-	# patch -p1 < $(SRCDIR)/libunwind-aarch64.patch
+	cd $(dir $<) && $(TAR) xfz $<
 	touch -c $@
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure
 	mkdir -p $(dir $@)
@@ -2041,6 +2087,8 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres` -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
+else
+LIBGIT2_OPTS += -DCMAKE_BUILD_TYPE=Release
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
