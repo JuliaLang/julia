@@ -2264,6 +2264,25 @@ value_t fl_map1(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->Stack[first];
 }
 
+value_t fl_foreach(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    if (nargs != 2)
+        lerror(fl_ctx, fl_ctx->ArgError, "for-each: expected 2 arguments");
+    uint32_t argSP = args-fl_ctx->Stack;
+    assert(args >= fl_ctx->Stack && argSP < fl_ctx->N_STACK);
+    if (fl_ctx->SP+2 > fl_ctx->N_STACK) grow_stack(fl_ctx);
+    PUSH(fl_ctx, fl_ctx->T);
+    PUSH(fl_ctx, fl_ctx->T);
+    while (iscons(fl_ctx->Stack[argSP+1])) {
+        fl_ctx->Stack[fl_ctx->SP-2] = fl_ctx->Stack[argSP];
+        fl_ctx->Stack[fl_ctx->SP-1] = car_(fl_ctx->Stack[argSP+1]);
+        _applyn(fl_ctx, 1);
+        fl_ctx->Stack[argSP+1] = cdr_(fl_ctx->Stack[argSP+1]);
+    }
+    POPN(fl_ctx, 2);
+    return fl_ctx->T;
+}
+
 static const builtinspec_t core_builtin_info[] = {
     { "function", fl_function },
     { "function:code", fl_function_code },
@@ -2278,6 +2297,7 @@ static const builtinspec_t core_builtin_info[] = {
     { "append", fl_append },
     { "list*", fl_liststar },
     { "map", fl_map1 },
+    { "for-each", fl_foreach },
     { NULL, NULL }
 };
 
