@@ -139,7 +139,7 @@ const char *jl_intrinsic_name(int f)
     }
 }
 
-static void *runtime_fp[num_intrinsics];
+static void (*runtime_fp[num_intrinsics])(void);
 static unsigned intrinsic_nargs[num_intrinsics];
 
 typedef jl_value_t *(*intrinsic_call_1_arg)(jl_value_t*);
@@ -175,7 +175,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
     abort();
 }
 
-static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void *pfunc)
+static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pfunc)(void))
 {
     intrinsic_nargs[f] = nargs;
     runtime_fp[f] = pfunc;
@@ -203,8 +203,8 @@ void jl_init_intrinsic_functions()
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
 
-#define ADD_I(name, nargs) add_intrinsic(inm, #name, name); add_intrinsic_properties(name, nargs, (void*)&jl_##name);
-#define ADD_HIDDEN(name, nargs) add_intrinsic_properties(name, nargs, (void*)&jl_##name);
+#define ADD_I(name, nargs) add_intrinsic(inm, #name, name); add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
+#define ADD_HIDDEN(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
 #define ALIAS(alias, base) add_intrinsic(inm, #alias, alias); add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
     ADD_HIDDEN(reinterpret, 2);
     INTRINSICS

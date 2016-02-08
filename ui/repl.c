@@ -87,7 +87,7 @@ static const char opts[]  =
     // code generation options
     " --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation\n"
     " -C, --cpu-target <target> Limit usage of cpu features up to <target>\n"
-    " -O, --optimize            Run time-intensive code optimizations\n"
+    " -O, --optimize={0,1,2,3}  Set the optimization level (default 2 if unspecified or 3 if specified as -O)\n"
     " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
@@ -131,7 +131,7 @@ void parse_opts(int *argcp, char ***argvp)
            opt_use_compilecache,
            opt_incremental
     };
-    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O";
+    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:";
     static struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -158,7 +158,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
-        { "optimize",        no_argument,       0, 'O' },
+        { "optimize",        optional_argument, 0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-o",        required_argument, 0, opt_output_o },
@@ -191,6 +191,7 @@ void parse_opts(int *argcp, char ***argvp)
         int lastind = optind;
         int c = getopt_long(argc, argv, shortopts, longopts, 0);
         if (c == -1) break;
+restart_switch:
         switch (c) {
         case 0:
             break;
@@ -199,10 +200,16 @@ void parse_opts(int *argcp, char ***argvp)
             if (optopt) {
                 for (struct option *o = longopts; o->val; o++) {
                     if (optopt == o->val) {
-                        if (strchr(shortopts, o->val))
+                        if (o->has_arg == optional_argument) {
+                            c = o->val;
+                            goto restart_switch;
+                        }
+                        else if (strchr(shortopts, o->val)) {
                             jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
-                        else
+                        }
+                        else {
                             jl_errorf("option `--%s` is missing an argument", o->name);
+                        }
                     }
                 }
                 jl_errorf("unknown option `-%c`", optopt);
@@ -323,6 +330,8 @@ void parse_opts(int *argcp, char ***argvp)
                     codecov = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     codecov = JL_LOG_NONE;
+                else
+                    jl_errorf("julia: invalid argument to --code-coverage (%s)", optarg);
                 break;
             }
             else {
@@ -337,6 +346,8 @@ void parse_opts(int *argcp, char ***argvp)
                     malloclog = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     malloclog = JL_LOG_NONE;
+                else
+                    jl_errorf("julia: invalid argument to --track-allocation (%s)", optarg);
                 break;
             }
             else {
@@ -344,7 +355,22 @@ void parse_opts(int *argcp, char ***argvp)
             }
             break;
         case 'O': // optimize
-            jl_options.opt_level = 1;
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"0"))
+                    jl_options.opt_level = 0;
+                else if (!strcmp(optarg,"1"))
+                    jl_options.opt_level = 1;
+                else if (!strcmp(optarg,"2"))
+                    jl_options.opt_level = 2;
+                else if (!strcmp(optarg,"3"))
+                    jl_options.opt_level = 3;
+                else
+                    jl_errorf("julia: invalid argument to -O (%s)", optarg);
+                break;
+            }
+            else {
+                jl_options.opt_level = 3;
+            }
             break;
         case 'i': // isinteractive
             jl_options.isinteractive = 1;

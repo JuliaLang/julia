@@ -126,7 +126,7 @@ deprecate(:IpAddr)
 export apply
 @noinline function apply(f, args...)
     depwarn("apply(f, x) is deprecated, use `f(x...)` instead", :apply)
-    return Core._apply(call, f, args...)
+    return Core._apply(f, args...)
 end
 
 @deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
