@@ -1162,7 +1162,7 @@ RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
 
 #endif
 
-#if defined(_OS_LINUX_) && defined(LLVM37)
+#if defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
 
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 class RTDyldMemoryManagerUnix : public SectionMemoryManager
