@@ -133,6 +133,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
 
+* `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

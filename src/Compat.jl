@@ -553,6 +553,17 @@ if VERSION < v"0.4.0-dev+2254"
     export Val
 end
 
+if VERSION < v"0.4.0-dev+2840"
+    Base.qr(A, ::Type{Val{true}}; thin::Bool=true) =
+        Base.qr(A, pivot=true, thin=thin)
+    Base.qr(A, ::Type{Val{false}}; thin::Bool=true) =
+        Base.qr(A, pivot=false, thin=thin)
+    Base.qrfact(A, ::Type{Val{true}}) = Base.qrfact(A, pivot=true)
+    Base.qrfact(A, ::Type{Val{false}}) = Base.qrfact(A, pivot=false)
+    Base.qrfact!(A, ::Type{Val{true}}) = Base.qrfact!(A, pivot=true)
+    Base.qrfact!(A, ::Type{Val{false}}) = Base.qrfact!(A, pivot=false)
+end
+
 if VERSION < v"0.4.0-dev+4603"
     # used for C string arguments to ccall
     # (in Julia 0.4, these types also check for embedded NUL chars)
