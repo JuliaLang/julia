@@ -617,7 +617,7 @@ mktempdir() do dir
         ("IOBuffer", (text)->IOBuffer(text))
     ]
 
-    open_streams = []
+    open_streams = Any[]
     function cleanup()
         for s in open_streams
             try close(s) end
@@ -650,26 +650,27 @@ mktempdir() do dir
 
         verbose && println("$name eof...")
         n = length(text) - 1
-        @test read!(io(), Vector{UInt8}(n)) ==
+        @test @compat read!(io(), Vector{UInt8}(n)) ==
               read!(IOBuffer(text), Vector{UInt8}(n))
-        @test (s = io(); read!(s, Vector{UInt8}(n)); !eof(s))
+        @test @compat (s = io(); read!(s, Vector{UInt8}(n)); !eof(s))
         n = length(text)
-        @test read!(io(), Vector{UInt8}(n)) ==
+        @test @compat read!(io(), Vector{UInt8}(n)) ==
               read!(IOBuffer(text), Vector{UInt8}(n))
-        @test (s = io(); read!(s, Vector{UInt8}(n)); eof(s))
+        @test @compat (s = io(); read!(s, Vector{UInt8}(n)); eof(s))
         n = length(text) + 1
-        @test_throws EOFError read!(io(), Vector{UInt8}(n))
-        @test_throws EOFError read!(io(), Vector{UInt8}(n))
+        @test_throws EOFError @compat read!(io(), Vector{UInt8}(n))
+        @test_throws EOFError @compat read!(io(), Vector{UInt8}(n))
 
         old_text = text
         cleanup()
+        const SZ_UNBUFFERED_IO = 65536
 
         for text in [
             old_text,
-            UTF8String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
-            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
-            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
-            UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
+            convert(UTF8String, Char['A' + i % 52 for i in 1:(div(SZ_UNBUFFERED_IO,2))]),
+            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO -1)]),
+            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO   )]),
+            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO +1)])
         ]
 
             write(filename, text)
@@ -681,7 +682,7 @@ mktempdir() do dir
 
 
             verbose && println("$name read...")
-            @test read(io()) == Vector{UInt8}(text)
+            @test @compat read(io()) == UInt8[convert(UInt8, _) for _ in text]
 
             @test read(io()) == read(filename)
 
@@ -691,8 +692,8 @@ mktempdir() do dir
             verbose && println("$name readbytes!...")
             l = length(text)
             for n = [1, 2, l-2, l-1, l, l+1, l+2]
-                a1 = Vector{UInt8}(n);
-                a2 = Vector{UInt8}(n)
+                @compat a1 = Vector{UInt8}(n);
+                @compat a2 = Vector{UInt8}(n)
                 s1 = io()
                 s2 = IOBuffer(text)
                 n1 = readbytes!(s1, a1)
@@ -709,14 +710,14 @@ mktempdir() do dir
             verbose && println("$name read!...")
             l = length(text)
             for n = [1, 2, l-2, l-1, l]
-                @test read!(io(), Vector{UInt8}(n)) ==
+                @test @compat  read!(io(), Vector{UInt8}(n)) ==
                       read!(IOBuffer(text), Vector{UInt8}(n))
-                @test read!(io(), Vector{UInt8}(n)) ==
+                @test @compat read!(io(), Vector{UInt8}(n)) ==
                       read!(filename, Vector{UInt8}(n))
 
                 cleanup()
             end
-            @test_throws EOFError read!(io(), Vector{UInt8}(length(text)+1))
+            @test_throws EOFError @compat read!(io(), Vector{UInt8}(length(text)+1))
 
 
             verbose && println("$name readuntil...")
@@ -744,9 +745,9 @@ mktempdir() do dir
             verbose && println("$name countlines...")
             @test countlines(io()) == countlines(IOBuffer(text))
 
-            verbose && println("$name readcsv...")
-            @test readcsv(io()) == readcsv(IOBuffer(text))
-            @test readcsv(io()) == readcsv(filename)
+            # verbose && println("$name readcsv...")
+            # @test readcsv(io()) == readcsv(IOBuffer(text))
+            # @test readcsv(io()) == readcsv(filename)
 
             cleanup()
         end
@@ -754,26 +755,22 @@ mktempdir() do dir
         text = old_text
         write(filename, text)
 
-        if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
+        verbose && println("$name position...")
+        @test @compat (s = io(); read!(s, Vector{UInt8}(4)); position(s))  == 4
 
-            verbose && println("$name position...")
-            @test (s = io(); read!(s, Vector{UInt8}(4)); position(s))  == 4
-
-            verbose && println("$name seek...")
-            for n = 0:length(text)-1
-                @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
-                cleanup()
-            end
-            verbose && println("$name skip...")
-            for n = 0:length(text)-1
-                @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
-                @test readlines(skip(io(), n)) == readlines(skip(IOBuffer(text), n))
-                cleanup()
-            end
-            verbose && println("$name seekend...")
-            @test readstring(seekend(io())) == ""
+        verbose && println("$name seek...")
+        for n = 0:length(text)-1
+            @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
+            cleanup()
         end
-
+        verbose && println("$name skip...")
+        for n = 0:length(text)-1
+            @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
+            @test readlines(skip(io(), n)) == readlines(skip(IOBuffer(text), n))
+            cleanup()
+        end
+        verbose && println("$name seekend...")
+        @test readstring(seekend(io())) == ""
 
         verbose && println("$name write(::IOStream, ...)")
         to = open("$filename.to", "w")
@@ -786,7 +783,7 @@ mktempdir() do dir
         @test readstring("$filename.to") == text
 
         verbose && println("$name write(::IOBuffer, ...)")
-        to = IOBuffer(Vector{UInt8}(copy(text)), false, true)
+        @compat to = IOBuffer(UInt8[convert(UInt8, _) for _ in text], false, true)
         write(to, io())
         @test takebuf_string(to) == text
 
