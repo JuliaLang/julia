@@ -24,7 +24,7 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
         Function *func = Function::Create(FunctionType::get(T_pjlvalue, args##nargs, false), \
                                           Function::ExternalLinkage, "jl_"#name, m); \
         runtime_func[name] = func; \
-        add_named_global(func, (void*)&jl_##name); \
+        add_named_global(func, &jl_##name); \
     } while (0);
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
@@ -1523,15 +1523,16 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     return NULL;
 }
 
-#define BOX_F(ct,jl_ct)                                                    \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),     \
-                                   "jl_box_"#ct, (void*)&jl_box_##ct, m);
+#define BOX_F(ct,jl_ct)                                                 \
+    box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),       \
+                                   "jl_box_"#ct, &jl_box_##ct, m);
 
 #define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
 #define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
+template<typename T>
 static Function *boxfunc_llvm(FunctionType *ft, const std::string &cname,
-                              void *addr, Module *m)
+                              T *addr, Module *m)
 {
     Function *f =
         Function::Create(ft, Function::ExternalLinkage, cname, m);
