@@ -688,6 +688,9 @@ ifeq ($(shell $(LLVM_CONFIG_HOST) --version),3.3)
 # use delayed expansion (= not :=) because spawn isn't defined until later
 LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
 endif
+else
+# llvm-config-host does not exist (cmake build)
+LLVM_CONFIG_HOST = $(call spawn,$(LLVM_CONFIG))
 endif
 endif
 
