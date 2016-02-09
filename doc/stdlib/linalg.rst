@@ -160,7 +160,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-   The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   ** Note **
+
+   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
+
+   Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
 .. function:: cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
                   SparseMatrixCSC{Complex{<:Real}},
@@ -170,7 +174,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the LDLt factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+   Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+
+   ** Note **
+
+   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 .. function:: cholfact!(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
 
@@ -225,11 +233,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the ``LDLt`` factorization of a sparse symmetric or Hermitian matrix. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
+   Compute the :math:`LDL'` factorization of a sparse symmetric or Hermitian matrix. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-   The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+   ** Note **
+
+   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
+
+   Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
 .. function:: ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
                   SparseMatrixCSC{Complex{<:Real}},
@@ -239,7 +251,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the LDLt factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+   Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+
+   ** Note **
+
+   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 .. function:: ldltfact!(::SymTridiagonal) -> LDLt
 
