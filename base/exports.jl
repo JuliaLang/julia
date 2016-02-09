@@ -1273,6 +1273,7 @@ export
 # filesystem operations
     cd,
     chmod,
+    chown,
     cp,
     ctime,
     download,

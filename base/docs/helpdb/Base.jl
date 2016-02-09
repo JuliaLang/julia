@@ -5428,6 +5428,14 @@ Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. 0o77
 chmod
 
 """
+    chown(path, owner, group=-1)
+
+Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
+is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
+"""
+chown
+
+"""
     gamma(x)
 
 Compute the gamma function of `x`.
