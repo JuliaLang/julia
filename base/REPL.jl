@@ -791,7 +791,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             edit_insert(buf, input)
             string = takebuf_string(buf)
             curspos = position(LineEdit.buffer(s))
-            pos = 0
+            pos = 1
             inputsz = sizeof(input)
             sz = sizeof(string)
             while pos <= sz

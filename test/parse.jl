@@ -336,3 +336,10 @@ end
 let fname = :f
     @test :(function $fname end) == Expr(:function, :f)
 end
+
+# issue #14977
+@test parse("x = 1", 1) == (:(x = 1), 6)
+@test parse("x = 1", 6) == (nothing, 6)
+@test_throws BoundsError parse("x = 1", 0)
+@test_throws BoundsError parse("x = 1", -1)
+@test_throws BoundsError parse("x = 1", 7)
