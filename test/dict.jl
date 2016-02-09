@@ -371,6 +371,7 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test_throws ArgumentError Dict([1])
 @test_throws ArgumentError Dict([(1,2),0])
 
+
 # ImmutableDict
 import Base.ImmutableDict
 let d = ImmutableDict{UTF8String, UTF8String}(),
@@ -440,6 +441,7 @@ let d = ImmutableDict{UTF8String, UTF8String}(),
     @test_throws KeyError d1["key2"]
 end
 
+
 # filtering
 let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
     @test filter(f, d) == filter!(f, copy(d)) ==
@@ -467,3 +469,6 @@ let badKeys = ASCIIString["FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.
     end
     @test d["NIBPD_emv5.0"] == 1
 end
+
+# Test set-like methods
+@test unique(Dict(zip("abc",1:3))) == unique(collect(Dict(zip("abc",1:3))))

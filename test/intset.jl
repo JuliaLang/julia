@@ -132,3 +132,5 @@ pop!(j, 257)
 @test IntSet([1, 2, 4]) <= IntSet(1:10)
 @test IntSet([1, 2, 4]) <= IntSet([1, 2, 4])
 @test IntSet([]) <= IntSet([])
+
+@test unique(IntSet([1, 2, 4])) == unique(collect(IntSet([1, 2, 4])))

@@ -203,6 +203,7 @@ u = unique([1,1,2])
 @test length(u) == 2
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
+@test unique(Set(1:3)) == unique(collect(Set(1:3)))
 
 # filter
 s = Set([1,2,3,4])

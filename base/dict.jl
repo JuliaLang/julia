@@ -30,6 +30,8 @@ function in(p, a::Associative)
              function if you are looking for a key or value respectively.""")
 end
 
+unique(a::Associative) = collect(a)
+
 function summary(t::Associative)
     n = length(t)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))

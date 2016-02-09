@@ -103,6 +103,8 @@ const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
+unique(x::AbstractSet) = collect(x)
+
 function unique(C)
     out = Vector{eltype(C)}()
     seen = Set{eltype(C)}()
