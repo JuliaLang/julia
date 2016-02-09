@@ -1203,8 +1203,11 @@ void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
+#ifndef _CPU_ARM_
     // System unwinder
+    // Linux uses setjmp/longjmp exception handling on ARM.
     __register_frame(Addr);
+#endif
     // Our unwinder
     unw_dyn_info_t *di = new unw_dyn_info_t;
     // In a shared library, this is set to the address of the PLT.
@@ -1266,7 +1269,9 @@ void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
                                            uint64_t LoadAddr,
                                            size_t Size)
 {
+#ifndef _CPU_ARM_
     __deregister_frame(Addr);
+#endif
     // Deregistering with our unwinder requires a lookup table to find the
     // the allocated entry above (or we could look in libunwind's internal
     // data structures).
