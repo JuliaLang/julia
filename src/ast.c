@@ -704,6 +704,12 @@ JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy)
 {
+    if (pos0 < 0 || pos0 > len) {
+        jl_array_t *buf = jl_pchar_to_array(str, len);
+        JL_GC_PUSH1(&buf);
+        // jl_bounds_error roots the arguments.
+        jl_bounds_error((jl_value_t*)buf, jl_box_long(pos0));
+    }
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
