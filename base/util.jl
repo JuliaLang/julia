@@ -218,14 +218,17 @@ end
 function blas_vendor()
     try
         cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
+        cglobal((:openblas_get_num_threads, Base.libblas_name), Void)
         return :openblas
     end
     try
         cglobal((:openblas_set_num_threads64_, Base.libblas_name), Void)
+        cglobal((:openblas_get_num_threads64_, Base.libblas_name), Void)
         return :openblas64
     end
     try
         cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
+        cglobal((:MKL_Get_Max_Threads, Base.libblas_name), Void)
         return :mkl
     end
     return :unknown
@@ -246,9 +249,9 @@ end
 function blas_set_num_threads(n::Integer)
     blas = blas_vendor()
     if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Cint,), n)
     elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Int32,), n)
+        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Cint,), n)
     elseif blas == :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
@@ -258,6 +261,20 @@ function blas_set_num_threads(n::Integer)
     @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
 
     return nothing
+end
+
+function blas_get_num_threads()
+    blas = blas_vendor()
+    if blas == :openblas
+        return Int(ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ()))
+    elseif blas == :openblas64
+        return Int(ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ()))
+    elseif blas == :mkl
+        return Int(ccall((:MKL_Get_Max_Threads, Base.libblas_name), Cint, ()))
+    end
+
+    # OSX BLAS looks at an environment variable
+    @osx_only return parse(Int, get(ENV, "VECLIB_MAXIMUM_THREADS", "0"))
 end
 
 function check_blas()

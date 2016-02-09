@@ -630,6 +630,7 @@ export
 # linear algebra
     bkfact!,
     bkfact,
+    blas_get_num_threads,
     blas_set_num_threads,
     blkdiag,
     chol,

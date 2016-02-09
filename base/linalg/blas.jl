@@ -65,6 +65,13 @@ Set the number of threads the BLAS library should use.
 """
 blas_set_num_threads
 
+"""
+    blas_get_num_threads()
+
+Get the number of threads the BLAS library should use.
+"""
+blas_get_num_threads
+
 # Level 1
 ## copy
 
