@@ -586,7 +586,7 @@
       (memv tok '(#\) #\] #\} else elseif catch finally =))))
 
 (define (line-number-node s)
-  `(line ,(input-port-line (ts:port s)) ,current-filename))
+  `(line ,(input-port-line (ts:port s))))
 
 ;; insert line/file for short-form function defs, otherwise leave alone
 (define (short-form-function-loc ex lno)
@@ -594,7 +594,7 @@
            (eq? (car ex) '=)
            (pair? (cadr ex))
            (eq? (caadr ex) 'call))
-      `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
+      `(= ,(cadr ex) (block (line ,lno) ,(caddr ex)))
       ex))
 
 ;; parse a@b@c@... as (@ a b c ...) for some operator @
