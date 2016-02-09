@@ -58,6 +58,13 @@ ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
 
+ifeq ($(OS),WINNT)
+CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
+ifneq ($(BUILD_OS),WINNT)
+CMAKE_COMMON += -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+endif
+endif
+
 # For now this is LLVM specific, but I expect it won't be in the future
 ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
@@ -426,6 +433,9 @@ endif # USE_LIBCPP
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
+ifneq ($(BUILD_OS),WINNT)
+LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake
+endif # BUILD_OS != WINNT
 endif # OS == WINNT
 ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
@@ -2079,14 +2089,14 @@ LIBGIT2_OBJ_TARGET := $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DTHREADSAFE=ON
 ifeq ($(OS),WINNT)
-LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_BUILD_TYPE=RelWithDebInfo
+LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ifneq ($(ARCH),x86_64)
 LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
 endif
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres` -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
