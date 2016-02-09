@@ -119,6 +119,22 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base.UVError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
+# chown will give an error if the user does not have permissions to change files
+@unix_only if ENV["USER"] =="root"
+    chown(file, -2, -1)  # Change the file owner to nobody
+    @test stat(file).uid !=0
+    chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
+    @test stat(file).gid !=0
+    @test stat(file).uid ==0
+    chown(file, -1, 0)
+    @test stat(file).gid ==0
+    @test stat(file).uid ==0
+else
+    @test_throws Base.UVError chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+    @test_throws Base.UVError chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+end
+
+@windows_only @test chown(file, -2, -2) == nothing  # chown shouldn't cause any errors for Windows
 
 #######################################################################
 # This section tests file watchers.                                   #
