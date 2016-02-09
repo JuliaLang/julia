@@ -160,8 +160,11 @@ extern JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                       const RuntimeDyld::LoadedObjectInfo &L);
 
 #if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
-#define CUSTOM_MEMORY_MANAGER 1
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerOSX
 extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
+#elif defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerUnix
+extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 #endif
 
 namespace {
@@ -268,7 +271,7 @@ public:
         ObjStream(ObjBufferSV),
         MemMgr(
 #ifdef CUSTOM_MEMORY_MANAGER
-            createRTDyldMemoryManagerOSX()
+            CUSTOM_MEMORY_MANAGER()
 #else
             new SectionMemoryManager
 #endif
