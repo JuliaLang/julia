@@ -306,6 +306,14 @@ JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
+{
+    uv_fs_t req;
+    int ret = uv_fs_chown(jl_io_loop, &req, path, uid, gid, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len,
                              int64_t offset)
 {

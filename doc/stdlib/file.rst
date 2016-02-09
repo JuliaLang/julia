@@ -81,6 +81,12 @@
 
    Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported. If ``recursive=true`` and the path is a directory all permissions in that directory will be recursively changed.
 
+.. function:: chown(path, owner, group=-1)
+
+   .. Docstring generated from Julia source
+
+   Change the owner and/or group of ``path`` to ``owner`` and/or ``group``\ . If the value entered for ``owner`` or ``group`` is ``-1`` the corresponding ID will not change. Only integer ``owner``\ s and ``group``\ s are currently supported.
+
 .. function:: stat(file)
 
    .. Docstring generated from Julia source
