@@ -56,11 +56,11 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    "Exports" profiling results in a portable format, returning the set of all backtraces (``data``\ ) and a dictionary that maps the (session-specific) instruction pointers in ``data`` to ``LineInfo`` values that store the file name, function name, and line number. This function allows you to save profiling results for future analysis.
 
-.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, linfo}}
+.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
 
    .. Docstring generated from Julia source
 
-   Given a previous profiling run, determine who called a particular function. Supplying the filename (and optionally, range of line numbers over which the function is defined) allows you to disambiguate an overloaded method. The returned value is a vector containing a count of the number of calls and line information about the caller. One can optionally supply backtrace data obtained from :func:`retrieve`\ ; otherwise, the current internal profile buffer is used.
+   Given a previous profiling run, determine who called a particular function. Supplying the filename (and optionally, range of line numbers over which the function is defined) allows you to disambiguate an overloaded method. The returned value is a vector containing a count of the number of calls and line information about the caller. One can optionally supply backtrace ``data`` obtained from :func:`retrieve`\ ; otherwise, the current internal profile buffer is used.
 
 .. function:: clear_malloc_data()
 
