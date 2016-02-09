@@ -207,11 +207,12 @@ function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray
     D = eachindex(dest)
     Ds = start(D)
     s = 0
-    @inbounds for b in eachindex(I)
+    for b in eachindex(I)
         s+=1
-        if I[b]
+        @inbounds Ib = I[b]
+        if Ib
             d, Ds = next(D, Ds)
-            dest[d] = src[s]
+            @inbounds dest[d] = src[s]
         end
     end
     dest
@@ -222,9 +223,9 @@ end
 @inline function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray)
     D = eachindex(dest)
     Ds = start(D)
-    @inbounds for idx in I
+    for idx in I
         d, Ds = next(D, Ds)
-        dest[d] = src[idx]
+        @inbounds dest[d] = src[idx]
     end
     dest
 end
@@ -237,10 +238,9 @@ end
         D = eachindex(dest)
         Ds = start(D)
         idxlens = index_lengths(src, I...) # TODO: unsplat?
-        @inbounds @nloops $N i d->(1:idxlens[d]) d->(j_d = getindex(I[d], i_d)) begin
+        @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = getindex(I[d], i_d)) begin
             d, Ds = next(D, Ds)
-            v = @ncall $N getindex src j
-            dest[d] = v
+            @inbounds dest[d] = @ncall $N getindex src j
         end
         dest
     end
@@ -289,10 +289,11 @@ function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractArr
     c = 0
     for b in eachindex(I)
         i+=1
-        @inbounds if I[b]
+        @inbounds Ib = I[b]
+        if Ib
             done(X, Xs) && throw_setindex_mismatch(x, c+1)
             (v, Xs) = next(X, Xs)
-            A[i] = v
+            @inbounds A[i] = v
             c += 1
         end
     end
@@ -307,9 +308,9 @@ end
         idxlens = @ncall $N index_lengths A I
         @ncall $N setindex_shape_check X (d->idxlens[d])
         Xs = start(X)
-        @inbounds @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = I_d[i_d]) begin
+        @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = I_d[i_d]) begin
             v, Xs = next(X, Xs)
-            @ncall $N setindex! A v j
+            @inbounds @ncall $N setindex! A v j
         end
         A
     end
@@ -607,7 +608,7 @@ end
         ind = 0
         Xc, Bc = X.chunks, B.chunks
         idxlens = index_lengths(B, I...) # TODO: unsplat?
-        @inbounds @nloops $N i d->(1:idxlens[d]) d->(offset_{d-1} = offset_d + (getindex(I[d], i_d)-1)*stride_d) begin
+        @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (I[d][i_d]-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end
