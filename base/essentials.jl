@@ -194,16 +194,27 @@ const (:) = Colon()
 immutable Val{T}
 end
 
-immutable Generator{F,I}
+immutable Generator{F,I,C}
     f::F
     iter::I
+    cond::C
 end
+
+Generator{F,I}(f::F,iter::I) = Generator(f,iter,x->true)
 
 start(g::Generator) = start(g.iter)
 done(g::Generator, s) = done(g.iter, s)
 function next(g::Generator, s)
     v, s2 = next(g.iter, s)
-    g.f(v), s2
+    v2 = g.f(v)
+    while !g.cond(v2) && !done(g.iter, s2)
+        v, s2 = next(g.iter, s2)
+        v2 = g.f(v)
+    end
+    v2, s2
 end
 
-collect(g::Generator) = map(g.f, g.iter)
+function collect(g::Generator)
+    result = map(g.f, g.iter)
+    filter!(g.cond, result)
+end
