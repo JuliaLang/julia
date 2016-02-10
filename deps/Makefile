@@ -359,11 +359,12 @@ endif
 
 LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
 LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
+LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
 LLVM_LIB_FILE := libLLVMCodeGen.a
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVM_OBJ_SOURCE := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/lib/$(LLVM_LIB_FILE)
+LLVM_OBJ_SOURCE := $(LLVM_BUILDDIR_withtype)/lib/$(LLVM_LIB_FILE)
 else
-LLVM_OBJ_SOURCE := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
+LLVM_OBJ_SOURCE := $(LLVM_BUILDDIR_withtype)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
 endif
 LLVM_OBJ_TARGET := $(build_libdir)/$(LLVM_LIB_FILE)
 
@@ -734,7 +735,6 @@ $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif
 
-LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
 ifeq ($(LLVM_USE_CMAKE),1)
 
 $(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/configure $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
@@ -778,12 +778,14 @@ ifeq ($(OS),$(BUILD_OS))
 		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@
-
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),cd $(LLVM_BUILDDIR_withtype) && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,$(LLVM_BUILDDIR_withtype))$(build_prefix)" -P cmake_install.cmake)
+	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
+	                      cd $(BUILDDIR)/llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) &&\
+	                      $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE))$(build_prefix)" -P cmake_install.cmake)
 else
-	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
+	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
+	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
 	touch -c $@
 
@@ -804,9 +806,9 @@ get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TA
 else
 get-llvm: $(LLVM_SRC_DIR)/configure
 endif
-configure-llvm: $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/config.status
+configure-llvm: $(LLVM_BUILDDIR_withtype)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
-check-llvm: $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)/checked
+check-llvm: $(LLVM_BUILDDIR_withtype)/checked
 install-llvm: $(LLVM_OBJ_TARGET)
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
