@@ -1248,7 +1248,14 @@ end
         Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
         shift = 0.0) -> CHOLMOD.Factor
 
-Compute the LDLt factorization of `A`, reusing the symbolic factorization `F`.
+Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic factorization `F`.
+
+** Note **
+
+This method uses the CHOLMOD library from SuiteSparse, which only supports
+doubles or complex doubles. Input matrices not of those element types will be
+converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
+appropriate.
 """
 cholfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
         SparseMatrixCSC{Complex{T}},
@@ -1296,7 +1303,15 @@ Setting optional `shift` keyword argument computes the factorization of `A+shift
 If the `perm` argument is nonempty,
 it should be a permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+** Note **
+
+This method uses the CHOLMOD library from SuiteSparse, which only supports
+doubles or complex doubles. Input matrices not of those element types will be
+converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
+appropriate.
+
+Many other functions from CHOLMOD are wrapped but not exported from the
+`Base.SparseArrays.CHOLMOD` module.
 """
 cholfact{T<:Real}(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
@@ -1328,7 +1343,14 @@ end
         Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
         shift = 0.0) -> CHOLMOD.Factor
 
-Compute the LDLt factorization of `A`, reusing the symbolic factorization `F`.
+Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
+
+** Note **
+
+This method uses the CHOLMOD library from SuiteSparse, which only supports
+doubles or complex doubles. Input matrices not of those element types will be
+converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
+appropriate.
 """
 ldltfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
@@ -1360,7 +1382,7 @@ end
         Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
         shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
-Compute the `LDLt` factorization of a sparse symmetric or Hermitian matrix.
+Compute the ``LDL'`` factorization of a sparse symmetric or Hermitian matrix.
 A fill-reducing permutation is used.
 `F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\b`.
 The returned factorization object `F` also supports the methods `diag`,
@@ -1377,7 +1399,15 @@ Setting optional `shift` keyword argument computes the factorization of `A+shift
 If the `perm` argument is nonempty,
 it should be a permutation of `1:size(A,1)` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
+** Note **
+
+This method uses the CHOLMOD library from SuiteSparse, which only supports
+doubles or complex doubles. Input matrices not of those element types will be
+converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
+appropriate.
+
+Many other functions from CHOLMOD are wrapped but not exported from the
+`Base.SparseArrays.CHOLMOD` module.
 """
 ldltfact{T<:Real}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
