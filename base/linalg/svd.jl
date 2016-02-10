@@ -54,12 +54,9 @@ svdvals(x::Number) = abs(x)
 svdvals{T, Tr}(S::SVD{T, Tr}) = (S[:S])::Vector{Tr}
 
 # SVD least squares
-function A_ldiv_B!{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
-    n = length(A.S)
-    Sinv = zeros(T, n)
-    k = length(find(A.S .> eps(real(float(one(T))))*maximum(A.S)))
-    Sinv[1:k] = one(T) ./ A.S[1:k]
-    A.Vt[1:k,:]' * (Sinv[1:k] .* (A.U[:,1:k]' * B))
+function A_ldiv_B!{Ta,Tb}(A::SVD{Ta}, B::StridedVecOrMat{Tb})
+    k = searchsortedlast(A.S, eps(real(Ta))*A.S[1], rev=true)
+    sub(A.Vt,1:k,:)' * (sub(A.S,1:k) .\ (sub(A.U,:,1:k)' * B))
 end
 
 # Generalized svd
