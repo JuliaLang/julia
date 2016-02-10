@@ -90,10 +90,14 @@ end
 %% parse int %%
 
 function n = parseintperf(t)
+    p=16.^(7:-1:0);
     for i = 1:t
         n = randi([0,2^32-1],1,'uint32');
         s = sprintf('%08X',n);
-        m = sscanf(s,'%X');
+        m=0;
+        for jj=1:8
+            m=m+(s(jj)-'0'+(-'A'+'9'+1)*(s(jj)>'9'))*p(jj);
+        end
         assert(m == n);
     end
 end
