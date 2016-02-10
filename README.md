@@ -139,6 +139,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `readall` and `readbytes` are now `readstring` and `read` [#14660](https://github.com/JuliaLang/julia/pull/14660)
 
+* `get_bigfloat_precision` is now `precision(BigFloat)`, `set_precision` is `setprecision` and `with_bigfloat_precision` is now also `setprecision`
+[#13232](https://github.com/JuliaLang/julia/pull/13232)
+
+* `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` [#13232](https://github.com/JuliaLang/julia/pull/13232)
+
+
+
 
 ## New macros
 
