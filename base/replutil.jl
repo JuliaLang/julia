@@ -244,11 +244,10 @@ striptype(::Any) = nothing
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.
 function showerror_nostdio(err, msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Void}, ())
-    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, msg)
-    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, ":\n")
-    ccall(:jl_static_show, UInt, (Ptr{Void},Ptr{Void}), stderr_stream,
-          pointer_from_objref(err))
-    ccall(:jl_printf, UInt, (Ptr{Void},Cstring), stderr_stream, "\n")
+    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, msg)
+    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, ":\n")
+    ccall(:jl_static_show, Csize_t, (Ptr{Void},Any), stderr_stream, err)
+    ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, "\n")
 end
 
 function show_method_candidates(io::IO, ex::MethodError)
