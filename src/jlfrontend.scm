@@ -40,7 +40,7 @@
                 ((lambda)       tab)
                 ((local)        tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
-                ((module)       '())
+                ((module toplevel) '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
@@ -73,61 +73,41 @@
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e)
-  (cond ((or (boolean? e) (eof-object? e)
-             ;; special top-level expressions left alone
-             (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
-         e)
-        ((and (pair? e) (memq (car e) '(import importall using export)))
-         e)
-        ((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
-         e)
-        (else
-         (let ((ex0 (julia-expand-macros e)))
-           (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
-               `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
-               (let* ((ex (julia-expand01 ex0))
-                      (gv (toplevel-expr-globals ex))
-                      (th (julia-expand1
-                           `(lambda ()
-                              (scope-block
-                               (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
-                                      ,ex))))))
-                 (if (and (null? (car (caddr th)))
-                          (= 0 (caddr (caddr th))))
-                     ;; if no locals, return just body of function
-                     (cadddr th)
-                     `(thunk ,th))))))))
-
-;; (body (= v _) (return v)) => (= v _)
-(define (simple-assignment? e)
-  (and (length= e 3) (eq? (car e) 'body)
-       (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
-       (eq? (cadr (caddr e)) (cadadr e))))
-
-(define (expand-toplevel-expr- e)
-  (let ((ex (expand-toplevel-expr-- e)))
-    (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
-          ((simple-assignment? ex)  (cadr ex))
-          ((and (length= ex 2) (eq? (car ex) 'body))
-           ;; (body (return x)) => x
-           (cadadr ex))
-          (else ex))))
+  (let ((ex0 (julia-expand-macros e)))
+    (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
+        `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
+        (let* ((ex (julia-expand0 ex0))
+               (gv (toplevel-expr-globals ex))
+               (th (julia-expand1
+                    `(lambda () ()
+                             (scope-block
+                              (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
+                                     ,ex))))))
+          (if (and (null? (car (caddr th)))
+                   (= 0 (caddr (caddr th))))
+              ;; if no locals, return just body of function
+              (cadddr th)
+              `(thunk ,th))))))
 
 (define *in-expand* #f)
 
 (define (expand-toplevel-expr e)
-  (if (and (pair? e) (eq? (car e) 'toplevel))
-      ;;`(toplevel ,@(map expand-toplevel-expr (cdr e)))
-      ;; delay expansion so defined global variables take effect for later
-      ;; toplevel expressions.
-      e
-      (let ((last *in-expand*))
-        (if (not last)
-            (begin (reset-gensyms)
-                   (set! *in-expand* #t)))
-        (let ((ex (expand-toplevel-expr- e)))
-          (set! *in-expand* last)
-          ex))))
+  (cond ((or (atom? e)
+             (and (pair? e)
+                  (or (memq (car e) '(toplevel line module import importall using export))
+                      (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+         e)
+        (else
+         (let ((last *in-expand*))
+           (if (not last)
+               (begin (reset-gensyms)
+                      (set! *in-expand* #t)))
+           (let ((ex (expand-toplevel-expr-- e)))
+             (set! *in-expand* last)
+             (if (and (length= ex 2) (eq? (car ex) 'body))
+                 ;; (body (return x)) => x
+                 (cadadr ex)
+                 ex))))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)

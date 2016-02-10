@@ -163,6 +163,9 @@
 (define (symbol-like? e)
   (or (symbol? e) (jlgensym? e)))
 
+(define (simple-atom? x)
+  (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
+
 ;; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
   (if (decl? v) (cadr v) v))
@@ -233,3 +236,18 @@
 
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
+
+;; flatten nested expressions with the given head
+;; (op (op a b) c) => (op a b c)
+(define (flatten-ex head e)
+  (if (atom? e)
+      e
+      (cons (car e)
+            (apply append!
+                   (map (lambda (x)
+                          (if (and (pair? x) (eq? (car x) head))
+                              (cdr (flatten-ex head x))
+                              (list x)))
+                        (cdr e))))))
+
+(define (flatten-blocks e) (flatten-ex 'block e))

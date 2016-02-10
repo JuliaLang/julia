@@ -472,18 +472,6 @@
 
 (define (iota n) (map-int identity n))
 
-(define (for-each f l . lsts)
-  (define (for-each-n f lsts)
-    (if (pair? (car lsts))
-	(begin (apply f (map car lsts))
-	       (for-each-n f (map cdr lsts)))))
-  (if (null? lsts)
-      (while (pair? l)
-	     (begin (f (car l))
-		    (set! l (cdr l))))
-      (for-each-n f (cons l lsts)))
-  #t)
-
 (define-macro (with-bindings binds . body)
   (let ((vars (map car binds))
 	(vals (map cadr binds))
