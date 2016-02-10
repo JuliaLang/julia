@@ -48,8 +48,7 @@
 
 ;; hygiene
 
-;; a copy of expand-binding-forms, but returning the names of vars
-;; introduced by the forms, instead of their transformations.
+;; return the names of vars introduced by forms, instead of their transformations.
 (define vars-introduced-by-patterns
   (pattern-set
    ;; function with static parameters
