@@ -355,53 +355,6 @@ end
 #  sinh(conj(z)) = conj(sinh(z))
 #  sinh(-z) = -sinh(z)
 
-@test isequal(sinh(complex( 0.0, 0.0)), complex( 0.0, 0.0))
-@test isequal(sinh(complex( 0.0,-0.0)), complex( 0.0,-0.0))
-@test isequal(sinh(complex( 0.0, Inf)), complex( 0.0, NaN))
-@test isequal(sinh(complex( 0.0,-Inf)), complex( 0.0, NaN))
-@test isequal(sinh(complex( 0.0, NaN)), complex( 0.0, NaN))
-
-@test isequal(sinh(complex(-0.0, 0.0)), complex(-0.0, 0.0))
-@test isequal(sinh(complex(-0.0,-0.0)), complex(-0.0,-0.0))
-@test isequal(sinh(complex(-0.0, Inf)), complex(-0.0, NaN))
-@test isequal(sinh(complex(-0.0,-Inf)), complex(-0.0, NaN))
-@test isequal(sinh(complex(-0.0, NaN)), complex(-0.0, NaN))
-
-@test isequal(sinh(complex( 5.0, 0.0)), complex(sinh(5.0), 0.0))
-@test isequal(sinh(complex( 5.0,-0.0)), complex(sinh(5.0),-0.0))
-@test isequal(sinh(complex(-5.0, 0.0)), complex(-sinh(5.0), 0.0))
-@test isequal(sinh(complex(-5.0,-0.0)), complex(-sinh(5.0),-0.0))
-@test isequal(sinh(complex( 5.0, Inf)), complex( NaN, NaN))
-@test isequal(sinh(complex( 5.0, NaN)), complex( NaN, NaN))
-
-@test isequal(sinh(complex( 1e5, 0.0)), complex( Inf, 0.0))
-@test isequal(sinh(complex( 1e5,-0.0)), complex( Inf,-0.0))
-@test isequal(sinh(complex(-1e5, 0.0)), complex(-Inf, 0.0))
-@test isequal(sinh(complex(-1e5,-0.0)), complex(-Inf,-0.0))
-@test isequal(sinh(complex( 1e5, Inf)), complex( NaN, NaN))
-@test isequal(sinh(complex( 1e5, NaN)), complex( NaN, NaN))
-
-@test isequal(sinh(complex( Inf, 0.0)), complex( Inf, 0.0))
-@test isequal(sinh(complex( Inf,-0.0)), complex( Inf,-0.0))
-@test isequal(sinh(complex( Inf, 5.0)), complex(cos(5.0)*Inf,sin(5.0)*Inf))
-@test isequal(sinh(complex( Inf, Inf)), complex( Inf, NaN))
-@test isequal(sinh(complex( Inf,-Inf)), complex( Inf, NaN))
-@test isequal(sinh(complex( Inf, NaN)), complex( Inf, NaN))
-
-@test isequal(sinh(complex(-Inf, 0.0)), complex(-Inf, 0.0))
-@test isequal(sinh(complex(-Inf,-0.0)), complex(-Inf,-0.0))
-@test isequal(sinh(complex(-Inf, 5.0)), complex(cos(5.0)*-Inf,sin(5.0)*Inf))
-@test isequal(sinh(complex(-Inf, Inf)), complex(-Inf, NaN))
-@test isequal(sinh(complex(-Inf,-Inf)), complex(-Inf, NaN))
-@test isequal(sinh(complex(-Inf, NaN)), complex(-Inf, NaN))
-
-@test isequal(sinh(complex( NaN, 0.0)), complex( NaN, 0.0))
-@test isequal(sinh(complex( NaN,-0.0)), complex( NaN,-0.0))
-@test isequal(sinh(complex( NaN, 5.0)), complex( NaN, NaN))
-@test isequal(sinh(complex( NaN, Inf)), complex( NaN, NaN))
-@test isequal(sinh(complex( NaN,-Inf)), complex( NaN, NaN))
-@test isequal(sinh(complex( NaN, NaN)), complex( NaN, NaN))
-
 # sin: defined in terms of sinh
 #  sin(z) = -i*sinh(i*z)
 #  i.e. if sinh(a+ib) = x+iy
@@ -409,234 +362,99 @@ end
 #  sin(conj(z)) = conj(sin(z))
 #  sin(-z) = -sin(z)
 
-@test isequal(sin(complex( 0.0,-0.0)),complex( 0.0,-0.0))
-@test isequal(sin(complex( 0.0, 0.0)),complex( 0.0, 0.0))
-@test isequal(sin(complex( 0.0, 1e5)),complex( 0.0, Inf))
-@test isequal(sin(complex( 0.0,-1e5)),complex( 0.0,-Inf))
-@test isequal(sin(complex( 0.0, Inf)),complex( 0.0, Inf))
-@test isequal(sin(complex( 0.0,-Inf)),complex( 0.0,-Inf))
-@test isequal(sin(complex( 0.0, NaN)),complex( 0.0, NaN))
+# @test isequal(sin(complex( 0, 10000)),complex( 0.0, Inf))
+# @test isequal(sin(complex( 0,-10000)),complex( 0.0,-Inf))
 
-@test isequal(sin(complex( 0, 10000)),complex( 0.0, Inf))
-@test isequal(sin(complex( 0,-10000)),complex( 0.0,-Inf))
+for (x,y) in [(complex( 0.0, 0.0), complex( 0.0, 0.0)),
+              (complex( 0.0, Inf), complex( 0.0, NaN)),
+              (complex( 0.0, NaN), complex( 0.0, NaN)),
+              (complex( 7.2, Inf), complex( NaN, NaN)),
+              (complex( 7.2, NaN), complex( NaN, NaN)),
+              (complex( 7.2, 0.0), complex( sinh(7.2), 0.0)),
+              (complex( 1e5, 0.0), complex( sinh(1e5), 0.0)),
+              (complex( Inf, 0.0), complex( Inf, 0.0)),
+              (complex( Inf, 7.2), Inf*cis(7.2)),
+              (complex( Inf, Inf), complex( Inf, NaN)),
+              (complex( Inf, NaN), complex( Inf, NaN)),
+              (complex( NaN, 0.0), complex( NaN, 0.0)),
+              (complex( NaN, 7.2), complex( NaN, NaN)),
+              (complex( NaN, NaN), complex( NaN, NaN)),
+              ]
 
-@test isequal(sin(complex(-0.0, 0.0)),complex(-0.0, 0.0))
-@test isequal(sin(complex(-0.0,-0.0)),complex(-0.0,-0.0))
-@test isequal(sin(complex(-0.0, 1e5)),complex(-0.0, Inf))
-@test isequal(sin(complex(-0.0,-1e5)),complex(-0.0,-Inf))
-@test isequal(sin(complex(-0.0, Inf)),complex(-0.0, Inf))
-@test isequal(sin(complex(-0.0,-Inf)),complex(-0.0,-Inf))
-@test isequal(sin(complex(-0.0, NaN)),complex(-0.0, NaN))
+    @test isequal(sinh(x), y)
+    @test isequal(sinh(conj(x)), conj(y))
+    @test isequal(sinh(-x), -y)
+    @test isequal(sinh(-conj(x)), -conj(y))
 
-@test isequal(sin(complex( 5.0, Inf)),complex(sin(5.0)*Inf,cos(5.0)* Inf))
-@test isequal(sin(complex( 5.0,-Inf)),complex(sin(5.0)*Inf,cos(5.0)*-Inf))
-@test isequal(sin(complex( 5.0, NaN)),complex( NaN, NaN))
+    xx = complex(imag(x),-real(x))
+    yy = complex(imag(y),-real(y))
 
-@test isequal(sin(complex( Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(sin(complex( Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(sin(complex( Inf, 5.0)), complex( NaN, NaN))
-@test isequal(sin(complex( Inf, Inf)), complex( NaN, Inf))
-@test isequal(sin(complex( Inf,-Inf)), complex( NaN,-Inf))
-@test isequal(sin(complex( Inf, NaN)), complex( NaN, NaN))
+    @test isequal(sin(xx),yy)
+    @test isequal(sin(conj(xx)), conj(yy))
+    @test isequal(sin(-xx), -yy)
+    @test isequal(sin(-conj(xx)), -conj(yy))
 
-@test isequal(sin(complex(-Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(sin(complex(-Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(sin(complex(-Inf, 5.0)), complex( NaN, NaN))
-@test isequal(sin(complex(-Inf, Inf)), complex( NaN, Inf))
-@test isequal(sin(complex(-Inf,-Inf)), complex( NaN,-Inf))
-@test isequal(sin(complex(-Inf, NaN)), complex( NaN, NaN))
-
-@test isequal(sin(complex( NaN, 0.0)),complex( NaN, 0.0))
-@test isequal(sin(complex( NaN,-0.0)),complex( NaN,-0.0))
-@test isequal(sin(complex( NaN, 5.0)),complex( NaN, NaN))
-@test isequal(sin(complex( NaN, Inf)),complex( NaN, Inf))
-@test isequal(sin(complex( NaN,-Inf)),complex( NaN,-Inf))
-@test isequal(sin(complex( NaN, NaN)),complex( NaN, NaN))
-
-
-
-
-
-
-@test isequal(sinpi(complex( 0.0,-0.0)),complex( 0.0,-0.0))
-@test isequal(sinpi(complex( 0.0, 0.0)),complex( 0.0, 0.0))
-@test isequal(sinpi(complex( 0.0, 1e5)),complex( 0.0, Inf))
-@test isequal(sinpi(complex( 0.0,-1e5)),complex( 0.0,-Inf))
-@test isequal(sinpi(complex( 0.0, Inf)),complex( 0.0, Inf))
-@test isequal(sinpi(complex( 0.0,-Inf)),complex( 0.0,-Inf))
-@test isequal(sinpi(complex( 0.0, NaN)),complex( 0.0, NaN))
-
-@test isequal(sinpi(complex( 0, 10000)),complex( 0.0, Inf))
-@test isequal(sinpi(complex( 0,-10000)),complex( 0.0,-Inf))
-
-@test isequal(sinpi(complex(-0.0, 0.0)),complex(-0.0, 0.0))
-@test isequal(sinpi(complex(-0.0,-0.0)),complex(-0.0,-0.0))
-@test isequal(sinpi(complex(-0.0, 1e5)),complex(-0.0, Inf))
-@test isequal(sinpi(complex(-0.0,-1e5)),complex(-0.0,-Inf))
-@test isequal(sinpi(complex(-0.0, Inf)),complex(-0.0, Inf))
-@test isequal(sinpi(complex(-0.0,-Inf)),complex(-0.0,-Inf))
-@test isequal(sinpi(complex(-0.0, NaN)),complex(-0.0, NaN))
-
-@test isequal(sinpi(complex( 5.25, Inf)),complex(sinpi(5.25)*Inf,cospi(5.25)* Inf))
-@test isequal(sinpi(complex( 5.25,-Inf)),complex(sinpi(5.25)*Inf,cospi(5.25)*-Inf))
-@test isequal(sinpi(complex( 5.25, NaN)),complex( NaN, NaN))
-
-@test isequal(sinpi(complex( Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(sinpi(complex( Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(sinpi(complex( Inf, 5.0)), complex( NaN, NaN))
-@test isequal(sinpi(complex( Inf, Inf)), complex( NaN, Inf))
-@test isequal(sinpi(complex( Inf,-Inf)), complex( NaN,-Inf))
-@test isequal(sinpi(complex( Inf, NaN)), complex( NaN, NaN))
-
-@test isequal(sinpi(complex(-Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(sinpi(complex(-Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(sinpi(complex(-Inf, 5.0)), complex( NaN, NaN))
-@test isequal(sinpi(complex(-Inf, Inf)), complex( NaN, Inf))
-@test isequal(sinpi(complex(-Inf,-Inf)), complex( NaN,-Inf))
-@test isequal(sinpi(complex(-Inf, NaN)), complex( NaN, NaN))
-
-@test isequal(sinpi(complex( NaN, 0.0)),complex( NaN, 0.0))
-@test isequal(sinpi(complex( NaN,-0.0)),complex( NaN,-0.0))
-@test isequal(sinpi(complex( NaN, 5.0)),complex( NaN, NaN))
-@test isequal(sinpi(complex( NaN, Inf)),complex( NaN, Inf))
-@test isequal(sinpi(complex( NaN,-Inf)),complex( NaN,-Inf))
-@test isequal(sinpi(complex( NaN, NaN)),complex( NaN, NaN))
-
+    yyy = sin(pi*xx)
+    @test isequal(sinpi(xx), yyy)
+    @test isequal(sinpi(conj(xx)),conj(yyy))
+    @test isequal(sinpi(-xx),-yyy)
+    @test isequal(sinpi(-conj(xx)),-conj(yyy))
+end
 
 # cosh: has properties
 #  cosh(conj(z)) = conj(cosh(z))
 #  coshh(-z) = cosh(z)
 
-@test isequal(cosh(complex( 0.0, 0.0)), complex( 1.0, 0.0))
-@test isequal(cosh(complex( 0.0,-0.0)), complex( 1.0,-0.0))
-@test isequal(cosh(complex( 0.0, Inf)), complex( NaN, 0.0))
-@test isequal(cosh(complex( 0.0,-Inf)), complex( NaN,-0.0))
-@test isequal(cosh(complex( 0.0, NaN)), complex( NaN, 0.0))
-
-@test isequal(cosh(complex(-0.0,-0.0)), complex( 1.0, 0.0))
-@test isequal(cosh(complex(-0.0, 0.0)), complex( 1.0,-0.0))
-@test isequal(cosh(complex(-0.0, Inf)), complex( NaN,-0.0))
-@test isequal(cosh(complex(-0.0,-Inf)), complex( NaN, 0.0))
-@test isequal(cosh(complex(-0.0, NaN)), complex( NaN, 0.0))
-
-@test isequal(cosh(complex( 5.0, Inf)), complex( NaN, NaN))
-@test isequal(cosh(complex( 5.0, NaN)), complex( NaN, NaN))
-
-@test isequal(cosh(complex( Inf, 0.0)), complex( Inf, 0.0))
-@test isequal(cosh(complex( Inf,-0.0)), complex( Inf,-0.0))
-@test isequal(cosh(complex( Inf, 5.0)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
-@test isequal(cosh(complex( Inf,-5.0)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
-@test isequal(cosh(complex( Inf, Inf)), complex( Inf, NaN))
-@test isequal(cosh(complex( Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cosh(complex( Inf, NaN)), complex( Inf, NaN))
-
-@test isequal(cosh(complex(-Inf,-0.0)), complex( Inf, 0.0))
-@test isequal(cosh(complex(-Inf, 0.0)), complex( Inf,-0.0))
-@test isequal(cosh(complex(-Inf,-5.0)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
-@test isequal(cosh(complex(-Inf, 5.0)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
-@test isequal(cosh(complex(-Inf, Inf)), complex( Inf, NaN))
-@test isequal(cosh(complex(-Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cosh(complex(-Inf, NaN)), complex( Inf, NaN))
-
-@test isequal(cosh(complex( NaN, 0.0)), complex( NaN, 0.0))
-@test isequal(cosh(complex( NaN, 5.0)), complex( NaN, NaN))
-@test isequal(cosh(complex( NaN,-0.0)), complex( NaN,-0.0))
-@test isequal(cosh(complex( NaN,-5.0)), complex( NaN, NaN))
-@test isequal(cosh(complex( NaN, NaN)), complex( NaN, NaN))
-
 # cos
 #  cos(z) = cosh(iz)
-#   i.e cos(b-ia) = cosh(a+ib) = cosh(-a-ib)
-#   and cos(b+ia) = cosh(-a+ib)
+#   i.e cos(b-ia) = cosh(a+ib)
+#   and cos(b+ia) = cosh(a-ib)
 #  cos(conj(z)) = conj(cos(z))
 #  cos(-z) = cos(z)
 
-@test isequal(cos(complex( 0.0, 0.0)), complex( 1.0,-0.0))
-@test isequal(cos(complex( 0.0,-0.0)), complex( 1.0, 0.0))
-@test isequal(cos(complex( 0.0, 1e5)), complex( Inf,-0.0))
-@test isequal(cos(complex( 0.0,-1e5)), complex( Inf, 0.0))
-@test isequal(cos(complex( 0.0, Inf)), complex( Inf,-0.0))
-@test isequal(cos(complex( 0.0,-Inf)), complex( Inf, 0.0))
-@test isequal(cos(complex( 0.0, NaN)), complex( NaN, 0.0))
-@test isequal(cos(complex(-0.0, 0.0)), complex( 1.0, 0.0))
-@test isequal(cos(complex(-0.0,-0.0)), complex( 1.0,-0.0))
-@test isequal(cos(complex(-0.0,-Inf)), complex( Inf,-0.0))
-@test isequal(cos(complex(-0.0, Inf)), complex( Inf, 0.0))
-@test isequal(cos(complex(-0.0, NaN)), complex( NaN,-0.0))
 
-@test isequal(cos(complex( 0, 10000)), complex( Inf,-0.0))
-@test isequal(cos(complex( 0,-10000)), complex( Inf, 0.0))
+for (x,y) in [(complex( 0.0, 0.0), complex( 1.0, 0.0)),
+              (complex( 0.0, Inf), complex( NaN, 0.0)),
+              (complex( 0.0, NaN), complex( NaN, 0.0)),
+              (complex( 7.2, Inf), complex( NaN, NaN)),
+              (complex( 7.2, NaN), complex( NaN, NaN)),
+              (complex( 7.2, 0.0), complex( cosh(7.2), 0.0)),
+              (complex( 1e5, 0.0), complex( Inf, 0.0)),
+              (complex( Inf, 0.0), complex( Inf, 0.0)),
+              (complex( Inf, 7.2), Inf*cis(7.2)),
+              (complex( Inf, Inf), complex( Inf, NaN)),
+              (complex( Inf, NaN), complex( Inf, NaN)),
+              (complex( NaN, 0.0), complex( NaN, 0.0)),
+              (complex( NaN, 7.2), complex( NaN, NaN)),
+              (complex( NaN, NaN), complex( NaN, NaN)),
+              ]
+    undef_sign = isequal(x,complex( NaN, 0.0)) || isequal(x,complex( 0.0, NaN))
 
-@test isequal(cos(complex( 5.0,-Inf)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
-@test isequal(cos(complex( 5.0, Inf)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
-@test isequal(cos(complex( 5.0, NaN)), complex( NaN, NaN))
-@test isequal(cos(complex(-5.0,-Inf)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
-@test isequal(cos(complex(-5.0, Inf)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
-@test isequal(cos(complex(-5.0, NaN)), complex( NaN, NaN))
+    @test isequal(cosh(x), y)
+    if !undef_sign
+        @test isequal(cosh(conj(x)), conj(y))
+        @test isequal(cosh(-x), y)
+        @test isequal(cosh(-conj(x)), conj(y))
+    end
 
-@test isequal(cos(complex( Inf, 0.0)), complex( NaN,-0.0))
-@test isequal(cos(complex( Inf,-0.0)), complex( NaN, 0.0))
-@test isequal(cos(complex( Inf, 5.0)), complex( NaN, NaN))
-@test isequal(cos(complex( Inf, Inf)), complex( Inf, NaN))
-@test isequal(cos(complex( Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cos(complex( Inf, NaN)), complex( NaN, NaN))
-@test isequal(cos(complex(-Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(cos(complex(-Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(cos(complex(-Inf, Inf)), complex( Inf, NaN))
-@test isequal(cos(complex(-Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cos(complex(-Inf, NaN)), complex( NaN, NaN))
+    xx = complex(imag(x),-real(x))
+    yy = y
+    @test isequal(cos(xx),yy)
+    if !undef_sign
+        @test isequal(cos(conj(xx)), conj(yy))
+        @test isequal(cos(-xx), yy)
+        @test isequal(cos(-conj(xx)), conj(yy))
+    end
 
-@test isequal(cos(complex( NaN, 0.0)), complex( NaN, 0.0))
-@test isequal(cos(complex( NaN,-0.0)), complex( NaN, 0.0))
-@test isequal(cos(complex( NaN, 5.0)), complex( NaN, NaN))
-@test isequal(cos(complex( NaN, Inf)), complex( Inf, NaN))
-@test isequal(cos(complex( NaN,-Inf)), complex( Inf, NaN))
-@test isequal(cos(complex( NaN, NaN)), complex( NaN, NaN))
+    yyy = cos(pi*xx)
+    @test isequal(cospi(xx), yyy)
+    if !undef_sign
+        @test isequal(cospi(conj(xx)), conj(yyy))
+        @test isequal(cospi(-xx), yyy)
+        @test isequal(cospi(-conj(xx)), conj(yyy))
+    end
+end
 
-
-
-## cospi
-@test isequal(cospi(complex( 0.0, 0.0)), complex( 1.0,-0.0))
-@test isequal(cospi(complex( 0.0,-0.0)), complex( 1.0, 0.0))
-@test isequal(cospi(complex( 0.0, 1e5)), complex( Inf,-0.0))
-@test isequal(cospi(complex( 0.0,-1e5)), complex( Inf, 0.0))
-@test isequal(cospi(complex( 0.0, Inf)), complex( Inf,-0.0))
-@test isequal(cospi(complex( 0.0,-Inf)), complex( Inf, 0.0))
-@test isequal(cospi(complex( 0.0, NaN)), complex( NaN, 0.0))
-@test isequal(cospi(complex(-0.0, 0.0)), complex( 1.0, 0.0))
-@test isequal(cospi(complex(-0.0,-0.0)), complex( 1.0,-0.0))
-@test isequal(cospi(complex(-0.0,-Inf)), complex( Inf,-0.0))
-@test isequal(cospi(complex(-0.0, Inf)), complex( Inf, 0.0))
-@test isequal(cospi(complex(-0.0, NaN)), complex( NaN,-0.0))
-
-@test isequal(cospi(complex( 0, 10000)), complex( Inf,-0.0))
-@test isequal(cospi(complex( 0,-10000)), complex( Inf, 0.0))
-
-@test isequal(cospi(complex( 5.25,-Inf)), complex(cospi(5.25)*Inf,sinpi(5.25)* Inf))
-@test isequal(cospi(complex( 5.25, Inf)), complex(cospi(5.25)*Inf,sinpi(5.25)*-Inf))
-@test isequal(cospi(complex( 5.25, NaN)), complex( NaN, NaN))
-@test isequal(cospi(complex(-5.25,-Inf)), complex(cospi(5.25)*Inf,sinpi(5.25)*-Inf))
-@test isequal(cospi(complex(-5.25, Inf)), complex(cospi(5.25)*Inf,sinpi(5.25)* Inf))
-@test isequal(cospi(complex(-5.25, NaN)), complex( NaN, NaN))
-
-@test isequal(cospi(complex( Inf, 0.0)), complex( NaN,-0.0))
-@test isequal(cospi(complex( Inf,-0.0)), complex( NaN, 0.0))
-@test isequal(cospi(complex( Inf, 5.0)), complex( NaN, NaN))
-@test isequal(cospi(complex( Inf, Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex( Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex( Inf, NaN)), complex( NaN, NaN))
-@test isequal(cospi(complex(-Inf, 0.0)), complex( NaN, 0.0))
-@test isequal(cospi(complex(-Inf,-0.0)), complex( NaN,-0.0))
-@test isequal(cospi(complex(-Inf, Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex(-Inf,-Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex(-Inf, NaN)), complex( NaN, NaN))
-
-@test isequal(cospi(complex( NaN, 0.0)), complex( NaN, 0.0))
-@test isequal(cospi(complex( NaN,-0.0)), complex( NaN, 0.0))
-@test isequal(cospi(complex( NaN, 5.0)), complex( NaN, NaN))
-@test isequal(cospi(complex( NaN, Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex( NaN,-Inf)), complex( Inf, NaN))
-@test isequal(cospi(complex( NaN, NaN)), complex( NaN, NaN))
 
 # tanh
 #  tanh(conj(z)) = conj(tanh(z))
