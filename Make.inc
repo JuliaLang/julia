@@ -338,7 +338,8 @@ endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
 JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
-JCPPFLAGS :=
+# AArch64 needs this flag to generate the .eh_frame used by libunwind
+JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti
 ifneq ($(OS), WINNT)
 # Do no enable on windows to avoid warnings from libuv.
@@ -352,7 +353,8 @@ ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
 JCFLAGS := -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
-JCPPFLAGS :=
+# AArch64 needs this flag to generate the .eh_frame used by libunwind
+JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic
 DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
