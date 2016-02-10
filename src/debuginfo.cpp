@@ -1163,7 +1163,7 @@ RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
 #endif
 
 #if defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
-
+#include <type_traits>
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 class RTDyldMemoryManagerUnix : public SectionMemoryManager
 {
@@ -1183,13 +1183,41 @@ struct unw_table_entry
     int32_t fde_offset;
 };
 
-// static uint8_t *consume_leb128(uint8_t *Addr, size_t Size)
-// {
-//     uint8_t *P = Addr;
-//     while ((*P >> 7) != 0 && P < Addr + Size)
-//         ++P;
-//     return P;
-// }
+// Skip over an arbitrary long LEB128 encoding.
+// Return the pointer to the first unprocessed byte.
+static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End)
+{
+    const uint8_t *P = Addr;
+    while ((*P >> 7) != 0 && P < End)
+        ++P;
+    return P + 1;
+}
+
+// Parse a LEB128 encoding to a type T. Truncate the result if there's more
+// bytes than what there are more bytes than what the type can store.
+// Adjust the pointer to the first unprocessed byte.
+template<typename T> static T parse_leb128(const uint8_t *&Addr,
+                                           const uint8_t *End)
+{
+    typedef typename std::make_unsigned<T>::type uT;
+    uT v = 0;
+    for (int i = 0;i < ((sizeof(T) * 8 - 1) / 7 + 1);i++) {
+        uint8_t a = *Addr;
+        Addr++;
+        v |= uT(a & 0x7f) << (i * 7);
+        if ((a & 0x80) == 0 || Addr >= End) {
+            if (a & 0x40 && std::is_signed<T>::value) {
+                int valid_bits = (i + 1) * 7;
+                if (valid_bits < 64) {
+                    v |= -(uT(1) << valid_bits);
+                }
+            }
+            return T(v);
+        }
+    }
+    Addr = consume_leb128(Addr, End);
+    return T(v);
+}
 
 template <typename U, typename T>
 static U safe_trunc(T t)
@@ -1197,6 +1225,95 @@ static U safe_trunc(T t)
     assert((t >= static_cast<T>(std::numeric_limits<U>::min()))
            && (t <= static_cast<T>(std::numeric_limits<U>::max())));
     return static_cast<U>(t);
+}
+
+// How the address and size in the FDE are encoded.
+enum DW_EH_PE : uint8_t {
+    DW_EH_PE_absptr = 0x00, /* An absolute pointer. The size is determined by
+                             * whether this is a 32-bit or 64-bit address space,
+                             * and will be 32 or 64 bits */
+    DW_EH_PE_omit = 0xff, // The value is omitted
+    DW_EH_PE_uleb128 = 0x01, // The value is an unsigned LEB128
+    DW_EH_PE_udata2 = 0x02,
+    DW_EH_PE_udata4 = 0x03,
+    DW_EH_PE_udata8 = 0x04, /* The value is stored as unsigned data with the
+                             * specified number of bytes. */
+    DW_EH_PE_signed = 0x08, /* A signed number. The size is determined by
+                             * whether this is a 32-bit or 64-bit address space */
+    DW_EH_PE_sleb128 = 0x09, /* A signed LEB128. */
+    DW_EH_PE_sdata2 = 0x0a,
+    DW_EH_PE_sdata4 = 0x0b,
+    DW_EH_PE_sdata8 = 0x0c, /* The value is stored as signed data with the
+                             * specified number of bytes. */
+
+    // In addition the above basic encodings, there are modifiers.
+
+    DW_EH_PE_pcrel = 0x10, // Value is PC relative.
+
+    // We currently don't support the following once.
+    DW_EH_PE_textrel = 0x20, // Value is text relative.
+    DW_EH_PE_datarel = 0x30, // Value is data relative.
+    DW_EH_PE_funcrel = 0x40, // Value is relative to start of function.
+    DW_EH_PE_aligned = 0x50, /* Value is aligned: padding bytes are inserted as
+                              * required to make value be naturally aligned. */
+    DW_EH_PE_indirect = 0x80 /* This is actually the address of the real value. */
+};
+
+// Parse the CIE and return the type of encoding used by FDE
+static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
+{
+    // http://www.airs.com/blog/archives/460
+    // Length (4 bytes)
+    uint32_t cie_size = *(const uint32_t*)Addr;
+    const uint8_t *cie_addr = Addr + 4;
+    const uint8_t *p = cie_addr;
+    const uint8_t *cie_end = cie_addr + cie_size;
+    assert(cie_end <= End);
+    // Check this is an CIE record (CIE ID: 4 bytes)
+    assert(*(const uint32_t*)cie_addr == 0);
+    p += 4;
+    // Check CIE version (1 byte)
+    uint8_t cie_version = *p;
+    assert(cie_version == 1 || cie_version == 3);
+    p++;
+    // Augmentation String (NUL terminate)
+    const char *augmentation = (const char*)p;
+    size_t augmentation_len = strlen(augmentation);
+    // Assume there's no EH Data field, which exist when the augmentation
+    // string has "eh" in it.
+    p += augmentation_len + 1;
+    // Code Alignment Factor (1 byte) should always be 1
+    assert(*p == 1);
+    p++;
+    // Data Alignment Factor (LEB128)
+    assert(cie_end >= p);
+    p = consume_leb128(p, cie_end);
+    // return address register
+    if (cie_version == 1) {
+        p++;
+    }
+    else {
+        p = consume_leb128(p, cie_end);
+    }
+    // Now it's the augmentation data. which may have the information we
+    // are interested in...
+    for (const char *augp = augmentation;;augp++) {
+        switch (*augp) {
+        case 'z':
+            p = consume_leb128(p, cie_end);
+            break;
+        case 'L':
+        case 'P':
+            p++;
+            break;
+        case 'R':
+            // .... the only one we care about ....
+            return static_cast<DW_EH_PE>(*p);
+        default:
+            continue;
+        }
+    }
+    return DW_EH_PE_absptr;
 }
 
 void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
@@ -1215,13 +1332,13 @@ void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
     // not seem to be used on our supported architectures.
     di->gp = 0;
     // I'm not a great fan of the naming of this constant, but it means the
-    // right thing, which is a table of FDEs and ips. The remote is unimportant
+    // right thing, which is a table of FDEs and ips.
     di->format = UNW_INFO_FORMAT_IP_OFFSET;
     di->u.ti.name_ptr = 0;
     di->u.ti.segbase = (unw_word_t)Addr;
     // Now first count the number of FDEs
     size_t nentries = 0;
-    processFDEs((char*)Addr, Size, [&](const char *Entry){ nentries++; });
+    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
 
     uintptr_t start_ip = (uintptr_t)-1;
     uintptr_t end_ip = 0;
@@ -1230,29 +1347,98 @@ void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
     // While we're at it, also record the start_ip and size,
     // which we fill in the table
     unw_table_entry *table = new unw_table_entry[nentries];
+    std::vector<uintptr_t> start_ips(nentries);
     size_t cur_entry = 0;
+    // Cache the previously parsed CIE entry so that we can support multiple
+    // CIE's (may not happen) without parsing it everytime.
+    const uint8_t *cur_cie = nullptr;
+    DW_EH_PE encoding = DW_EH_PE_omit;
     processFDEs((char*)Addr, Size, [&](const char *Entry) {
-            const uintptr_t *EntryPtr = ((const uintptr_t*)Entry) + 1;
-            uintptr_t start = *EntryPtr + (uintptr_t)EntryPtr; // Assume pcrel | sabs8
-            EntryPtr++;
-            uintptr_t size = *EntryPtr;
+            // Skip Length (4bytes) and CIE offset (4bytes)
+            uint32_t fde_size = *(const uint32_t*)Entry;
+            uint32_t cie_id = ((const uint32_t*)Entry)[1];
+            const uint8_t *cie_addr = (const uint8_t*)(Entry + 4 - cie_id);
+            if (cie_addr != cur_cie)
+                encoding = parseCIE(cie_addr, Addr + Size);
+            const uint8_t *fde_end = (const uint8_t*)(Entry + 4 + fde_size);
+            const uint8_t *EntryPtr = (const uint8_t*)(Entry + 8);
+            uintptr_t start = 0;
+            uintptr_t size = 0;
+            // The next two fields are address and size of the PC range
+            // covered by this FDE.
+            if (encoding == DW_EH_PE_absptr || encoding == DW_EH_PE_omit) {
+                assert(fde_size >= 2 * sizeof(void*) + 4);
+                start = *(const uintptr_t*)EntryPtr;
+                size = *(const uintptr_t*)(EntryPtr + sizeof(void*));
+            }
+            else {
+                uintptr_t baseptr = (uintptr_t)EntryPtr;
+                // Only support pcrel for now...
+                assert((encoding & 0xf0) == 0x10 &&
+                       "Only pcrel mode is supported");
+                switch (encoding & 0xf) {
+                case DW_EH_PE_uleb128:
+                    start = baseptr + parse_leb128<uintptr_t>(EntryPtr, fde_end);
+                    size = parse_leb128<uintptr_t>(EntryPtr, fde_end);
+                    break;
+                case DW_EH_PE_udata2:
+                    assert(fde_size >= 2 * 2 + 4);
+                    start = baseptr + ((const uint16_t*)EntryPtr)[0];
+                    size = ((const uint16_t*)EntryPtr)[1];
+                    break;
+                case DW_EH_PE_udata4:
+                    assert(fde_size >= 2 * 4 + 4);
+                    start = baseptr + ((const uint32_t*)EntryPtr)[0];
+                    size = ((const uint32_t*)EntryPtr)[1];
+                    break;
+                case DW_EH_PE_udata8:
+                    assert(fde_size >= 2 * 8 + 4);
+                    start = uintptr_t(baseptr + ((const uint64_t*)EntryPtr)[0]);
+                    size = uintptr_t(((const uint64_t*)EntryPtr)[1]);
+                    break;
+                case DW_EH_PE_signed:
+                    assert(fde_size >= 2 * sizeof(void*) + 4);
+                    start = baseptr + ((const intptr_t*)EntryPtr)[0];
+                    size = ((const intptr_t*)EntryPtr)[1];
+                    break;
+                case DW_EH_PE_sleb128:
+                    start = baseptr + parse_leb128<intptr_t>(EntryPtr, fde_end);
+                    size = parse_leb128<intptr_t>(EntryPtr, fde_end);
+                    break;
+                case DW_EH_PE_sdata2:
+                    assert(fde_size >= 2 * 2 + 4);
+                    start = baseptr + ((const int16_t*)EntryPtr)[0];
+                    size = ((const int16_t*)EntryPtr)[1];
+                    break;
+                case DW_EH_PE_sdata4:
+                    assert(fde_size >= 2 * 4 + 4);
+                    start = baseptr + ((const int32_t*)EntryPtr)[0];
+                    size = ((const int32_t*)EntryPtr)[1];
+                    break;
+                case DW_EH_PE_sdata8:
+                    assert(fde_size >= 2 * 8 + 4);
+                    start = uintptr_t(baseptr + ((const int64_t*)EntryPtr)[0]);
+                    size = uintptr_t(((const int64_t*)EntryPtr)[1]);
+                    break;
+                default:
+                    assert(0 && "Invalid FDE format.");
+                    break;
+                }
+            }
 
             if (start < start_ip)
                 start_ip = start;
             if (end_ip < (start + size))
                 end_ip = start+size;
-        });
-
-    processFDEs((char*)Addr, Size, [&](const char *Entry) {
-            const uintptr_t *EntryPtr = ((const uintptr_t*)Entry) + 1;
-            uintptr_t start = *EntryPtr + (uintptr_t)EntryPtr; // Assume pcrel | sabs8
-            table[cur_entry].start_ip_offset =
-                safe_trunc<int32_t>((intptr_t)start - (intptr_t)start_ip);
             table[cur_entry].fde_offset =
                 safe_trunc<int32_t>((intptr_t)Entry - (intptr_t)Addr);
+            start_ips[cur_entry] = start;
             cur_entry++;
         });
-
+    for (size_t i = 0;i < nentries;i++) {
+        table[i].start_ip_offset =
+            safe_trunc<int32_t>((intptr_t)start_ips[i] - (intptr_t)start_ip);
+    }
     assert(end_ip != 0);
 
     di->u.ti.table_len = nentries;
