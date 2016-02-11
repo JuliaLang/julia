@@ -12,19 +12,20 @@ export
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!
 
-type Atomic{T<:Integer}
+atomicintsmap = Dict(Int8   => "i8",   UInt8   => "i8",
+                     Int16  => "i16",  UInt16  => "i16",
+                     Int32  => "i32",  UInt32  => "i32",
+                     Int64  => "i64",  UInt64  => "i64",
+                     Int128 => "i128", UInt128 => "i128")
+AtomicInts = Union{keys(atomicintsmap)...}
+
+type Atomic{T<:AtomicInts}
     value::T
     Atomic() = new(zero(T))
     Atomic(value) = new(value)
 end
 
 Atomic() = Atomic{Int}()
-
-atomicintsmap = Dict(Int8   => "i8",   UInt8   => "i8",
-                     Int16  => "i16",  UInt16  => "i16",
-                     Int32  => "i32",  UInt32  => "i32",
-                     Int64  => "i64",  UInt64  => "i64",
-                     Int128 => "i128", UInt128 => "i128")
 
 unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_objref(x))
 setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
