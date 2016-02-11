@@ -1,25 +1,41 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 @unix_only begin
+
 _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
 _hasenv(s::AbstractString) = _getenv(s) != C_NULL
-end
-
-@windows_only begin
-const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
-_getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
-_hasenv(s::AbstractString) = _getenvlen(s)!=0 || Libc.GetLastError()!=ERROR_ENVVAR_NOT_FOUND
-end
 
 macro accessEnv(var,errorcase)
-    @unix_only return quote
-         val = _getenv($(esc(var)))
-         if val == C_NULL
+    quote
+        val = _getenv($(esc(var)))
+        if val == C_NULL
             $(esc(errorcase))
-         end
-         bytestring(val)
+        end
+        bytestring(val)
     end
-    @windows_only return quote
+end
+
+function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
+    ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
+    systemerror(:setenv, ret != 0)
+end
+
+function _unsetenv(var::AbstractString)
+    ret = ccall(:unsetenv, Int32, (Cstring,), var)
+    systemerror(:unsetenv, ret != 0)
+end
+
+end # @unix_only
+
+@windows_only begin
+
+const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
+
+_getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
+_hasenv(s::AbstractString) = _getenvlen(s)!=0 || Libc.GetLastError()!=ERROR_ENVVAR_NOT_FOUND
+
+macro accessEnv(var,errorcase)
+    quote
         let var = utf16($(esc(var)))
             len = _getenvlen(var)
             if len == 0
@@ -39,32 +55,20 @@ macro accessEnv(var,errorcase)
     end
 end
 
-function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool)
-    @unix_only begin
-        ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
-        systemerror(:setenv, ret != 0)
-    end
-    @windows_only begin
-        var = utf16(var)
-        if overwrite || !_hasenv(var)
-            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Cwstring),var,val)
-            systemerror(:setenv, ret == 0)
-        end
-    end
-end
-
-_setenv(var::AbstractString, val::AbstractString) = _setenv(var, val, true)
-
-function _unsetenv(var::AbstractString)
-    @unix_only begin
-        ret = ccall(:unsetenv, Int32, (Cstring,), var)
-        systemerror(:unsetenv, ret != 0)
-    end
-    @windows_only begin
-        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Ptr{UInt16}),var,C_NULL)
+function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
+    var = utf16(var)
+    if overwrite || !_hasenv(var)
+        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Cwstring),var,val)
         systemerror(:setenv, ret == 0)
     end
 end
+
+function _unsetenv(var::AbstractString)
+    ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Cwstring,Ptr{UInt16}),var,C_NULL)
+    systemerror(:setenv, ret == 0)
+end
+
+end # @windows_only
 
 ## ENV: hash interface ##
 
