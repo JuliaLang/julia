@@ -107,8 +107,8 @@ include("iterator.jl")
 # For OS specific stuff
 include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
 include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
-include("c.jl")
 include("osutils.jl")
+include("c.jl")
 
 # Core I/O
 include("io.jl")
