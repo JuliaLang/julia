@@ -12,9 +12,6 @@ LIBTARGET := lib$(NAME)
 
 SRCS := flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
-ifeq ($(USEMSVC), 1)
-SRCS += dirname.c
-endif
 
 HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 
