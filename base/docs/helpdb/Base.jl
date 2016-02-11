@@ -9667,7 +9667,9 @@ redirect_stdout(stream)
 """
     print_with_color(color::Symbol, [io], strings...)
 
-Print strings in a color specified as a symbol, for example `:red` or `:blue`.
+Print strings in a color specified as a symbol.
+
+`color` may take any of the values $(Base.available_text_colors_docstring).
 """
 print_with_color
 
