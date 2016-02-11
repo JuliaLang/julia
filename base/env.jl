@@ -5,14 +5,9 @@
 _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
 _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 
-macro accessEnv(var,errorcase)
-    quote
-        val = _getenv($(esc(var)))
-        if val == C_NULL
-            $(esc(errorcase))
-        end
-        bytestring(val)
-    end
+function access_env(onError::Function, var::AbstractString)
+    val = _getenv(var)
+    val == C_NULL ? onError(var) : bytestring(val)
 end
 
 function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
@@ -34,25 +29,18 @@ const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 _getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
 _hasenv(s::AbstractString) = _getenvlen(s)!=0 || Libc.GetLastError()!=ERROR_ENVVAR_NOT_FOUND
 
-macro accessEnv(var,errorcase)
-    quote
-        let var = utf16($(esc(var)))
-            len = _getenvlen(var)
-            if len == 0
-                if Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
-                    return utf8("")
-                else
-                    $(esc(errorcase))
-                end
-            end
-            val = zeros(UInt16,len)
-            ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),var,val,len)
-            if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
-                error(string("getenv: ", var, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
-            end
-            utf8(UTF16String(val))
-        end
+function access_env(onError::Function, str::AbstractString)
+    var = utf16(str)
+    len = _getenvlen(var)
+    if len == 0
+        return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? utf8("") : onError(str)
     end
+    val = zeros(UInt16,len)
+    ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),var,val,len)
+    if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
+        error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
+    end
+    return utf8(UTF16String(val))
 end
 
 function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
@@ -77,8 +65,8 @@ const ENV = EnvHash()
 
 similar(::EnvHash) = Dict{ByteString,ByteString}()
 
-getindex(::EnvHash, k::AbstractString) = @accessEnv k throw(KeyError(k))
-get(::EnvHash, k::AbstractString, def) = @accessEnv k (return def)
+getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
+get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
 in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
