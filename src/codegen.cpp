@@ -606,7 +606,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true
 static jl_cgval_t emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 
-static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx);
 static Value* emit_local_slot(jl_codectx_t *ctx);
 static void mark_gc_use(const jl_cgval_t &v);
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
@@ -2008,15 +2007,6 @@ static void mark_gc_use(const jl_cgval_t &v)
         builder.CreateCall(prepare_call(gckill_func), v.gcroot);
 }
 
-static Value *get_gcrooted(const jl_cgval_t &v, jl_codectx_t *ctx) // TODO: this function should be removed
-{
-    Value *I = boxed(v, ctx);
-    if (!v.isboxed)
-        mark_julia_type(I, true, v.typ, ctx); // force gc-root creation
-    mark_gc_use(v);
-    return I;
-}
-
 // turn an array of arguments into a single object suitable for passing to a jlcall
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 {
@@ -2028,7 +2018,7 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
     int slot = 0;
     assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
-        Value *arg = boxed(**I, ctx); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
+        Value *arg = boxed(**I, ctx, false); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
         GetElementPtrInst *newroot = GetElementPtrInst::Create(LLVM37_param(NULL) largs,
                 ArrayRef<Value*>(ConstantInt::get(T_int32, slot)));
         newroot->insertAfter(ctx->ptlsStates);
@@ -2237,8 +2227,8 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
         return builder.CreateICmpEQ(arg1.V, arg2.V);
     }
 
-    Value *varg1 = get_gcrooted(arg1, ctx);
-    Value *varg2 = boxed(arg2, ctx); // potentially unrooted!
+    Value *varg1 = boxed(arg1, ctx);
+    Value *varg2 = boxed(arg2, ctx, false); // potentially unrooted!
 #ifdef LLVM37
     return builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
 #else
@@ -2335,9 +2325,9 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         if (jl_subtype(ty, (jl_value_t*)jl_type_type, 0)) {
             *ret = emit_expr(args[1], ctx);
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(jltypeassert_func), {get_gcrooted(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx)});
+            builder.CreateCall(prepare_call(jltypeassert_func), {boxed(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx)});
 #else
-            builder.CreateCall2(prepare_call(jltypeassert_func), get_gcrooted(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx));
+            builder.CreateCall2(prepare_call(jltypeassert_func), boxed(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx));
 #endif
             JL_GC_POP();
             return true;
@@ -2440,7 +2430,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_throw && nargs==1) {
-        Value *arg1 = boxed(emit_expr(args[1], ctx), ctx);
+        Value *arg1 = boxed(emit_expr(args[1], ctx), ctx, false); // rooted by throw
         // emit a "conditional" throw so that codegen does't end up trying to emit code after an "unreachable" terminator
         raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
         *ret = jl_cgval_t();
@@ -2842,7 +2832,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             if (isboxed) {
                 assert(at == T_pjlvalue && et == T_pjlvalue);
                 jl_cgval_t origval = i==0 ? theF : emit_expr(args[i], ctx);
-                argvals[idx] = get_gcrooted(origval, ctx);
+                argvals[idx] = boxed(origval, ctx);
                 assert(!isa<UndefValue>(argvals[idx]));
             }
             else if (et->isAggregateType()) {
@@ -3173,7 +3163,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     }
     if (bp != NULL) { // it's a global
         assert(bnd);
-        Value *rval = boxed(emit_expr(r, ctx, true),ctx);
+        Value *rval = boxed(emit_expr(r, ctx, true), ctx, false); // no root needed since this is about to be assigned to a global
 #ifdef LLVM37
         builder.CreateCall(prepare_call(jlcheckassign_func),
                            {literal_pointer_val(bnd),
@@ -3211,7 +3201,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 }
                 return;
             }
-            Value *rval = boxed(rval_info, ctx);
+            Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to variable slot
             builder.CreateStore(rval, bp, vi.isVolatile); // todo: move this closer to the value creation?
         }
         else {
@@ -3448,8 +3438,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
-        Value *a1 = get_gcrooted(emit_expr(args[1], ctx), ctx);
-        Value *a2 = get_gcrooted(emit_expr(args[2], ctx), ctx);
+        Value *a1 = boxed(emit_expr(args[1], ctx), ctx);
+        Value *a2 = boxed(emit_expr(args[2], ctx), ctx);
         Value *mdargs[3] = { a1, a2, literal_pointer_val(args[3]) };
         builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 3));
         return ghostValue(jl_void_type);
@@ -3891,7 +3881,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
 
         // figure out how to repack this type
         if (!specsig) {
-            Value *arg = boxed(inputarg, &ctx);
+            Value *arg = boxed(inputarg, &ctx, false); // don't want a gcroot, since it's about to be but into the jlcall frame anyways
             Value *slot = builder.CreateGEP(myargs, ConstantInt::get(T_int32, FParamIndex++));
             builder.CreateStore(arg, slot);
         }
@@ -3899,7 +3889,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
             Value *arg;
             FParamIndex++;
             if (isboxed) {
-                arg = get_gcrooted(inputarg, &ctx);
+                arg = boxed(inputarg, &ctx);
             }
             else {
                 arg = emit_unbox(t, inputarg, jargty);
@@ -3950,7 +3940,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
     if (isref & 1) {
         assert(!sret);
         // return a jl_value_t*
-        r = boxed(retval, &ctx);
+        r = boxed(retval, &ctx, false); // no gcroot since this is on the return path
     }
     else if (sret && jlfunc_sret) {
         // nothing to do
@@ -4070,7 +4060,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
     jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty, &ctx);
-    builder.CreateRet(boxed(retval, &ctx));
+    builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
 
     return w;
 }
@@ -4713,7 +4703,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 }
             }
             else {
-                Value *argp = boxed(theArg, &ctx);
+                Value *argp = boxed(theArg, &ctx, false); // skip the temporary gcroot since it would be folded to argp anyways
                 builder.CreateStore(argp, lv);
             }
             // get arrayvar data if applicable
@@ -4896,7 +4886,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 retboxed = true;
             }
             if (retboxed) {
-                retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true), &ctx, expr_type(stmt, &ctx));
+                retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true), &ctx, false); // skip the gcroot on the return path
             }
             else if (!type_is_ghost(retty)) {
                 retval = emit_unbox(retty,
