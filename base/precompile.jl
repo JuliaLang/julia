@@ -108,7 +108,7 @@ precompile(Base.LineEdit.write_prompt, (Base.Terminals.TerminalBuffer, Base.Line
 precompile(Base.Multimedia.TextDisplay, (Base.TTY,))
 precompile(Base.Multimedia.display, (Int,))
 precompile(Base.ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
-precompile(Base.REPL.(:(==)), (Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}, Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}))
+precompile(Base.REPL.:(==), (Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}, Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}))
 precompile(Base.REPL.LineEditREPL, (Base.Terminals.TTYTerminal, Bool, String, String, String, String, String, Bool, Bool, Bool, Bool))
 precompile(Base.REPL.LineEditREPL, (Base.Terminals.TTYTerminal,))
 precompile(Base.REPL.REPLBackendRef, (Channel{Any}, Channel{Any}))

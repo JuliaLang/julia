@@ -561,7 +561,7 @@ function stale_cachefile(modpath, cachefile)
             if !isdefined(Main, M)
                 require(M) # should recursively recompile module M if stale
             end
-            if module_uuid(Main.(M)) != uuid
+            if module_uuid(getfield(Main, M)) != uuid
                 return true
             end
         end
