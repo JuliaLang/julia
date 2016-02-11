@@ -408,8 +408,8 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     if (!bt || !jl_is_bitstype(bt)) {
         // it's easier to throw a good error from C than llvm
         if (bt) targ = bt;
-        Value *arg1 = get_gcrooted(emit_expr(targ, ctx), ctx);
-        Value *arg2 = get_gcrooted(emit_expr(x, ctx), ctx);
+        Value *arg1 = boxed(emit_expr(targ, ctx), ctx);
+        Value *arg2 = boxed(emit_expr(x, ctx), ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
@@ -698,9 +698,9 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codec
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
 #ifdef LLVM37
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { get_gcrooted(parg, ctx), iarg });
+    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg });
 #else
-    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), get_gcrooted(parg, ctx), iarg);
+    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), boxed(parg, ctx), iarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {
@@ -759,12 +759,12 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
 static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_cgval_t parg = emit_expr(e, ctx);
-    Value *iarg = get_gcrooted(emit_expr(i, ctx), ctx);
+    Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlpset_func), { get_gcrooted(parg, ctx), xarg, iarg });
+    builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg });
 #else
-    builder.CreateCall3(prepare_call(jlpset_func), get_gcrooted(parg, ctx), xarg, iarg);
+    builder.CreateCall3(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg);
 #endif
     return parg;
 }
@@ -901,7 +901,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *r;
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
-            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
+            Value *x = boxed(emit_expr(args[1], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x});
 #else
@@ -909,8 +909,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 #endif
         }
         else if (nargs == 2) {
-            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
-            Value *y = get_gcrooted(emit_expr(args[2], ctx), ctx);
+            Value *x = boxed(emit_expr(args[1], ctx), ctx);
+            Value *y = boxed(emit_expr(args[2], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y});
 #else
@@ -918,9 +918,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 #endif
         }
         else if (nargs == 3) {
-            Value *x = get_gcrooted(emit_expr(args[1], ctx), ctx);
-            Value *y = get_gcrooted(emit_expr(args[2], ctx), ctx);
-            Value *z = get_gcrooted(emit_expr(args[3], ctx), ctx);
+            Value *x = boxed(emit_expr(args[1], ctx), ctx);
+            Value *y = boxed(emit_expr(args[2], ctx), ctx);
+            Value *z = boxed(emit_expr(args[3], ctx), ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y, z});
 #else
@@ -1067,8 +1067,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             jl_cgval_t arg1 = emit_expr(args[2],ctx);
             jl_cgval_t arg2 = emit_expr(args[3],ctx);
             ifelse_result = builder.CreateSelect(isfalse,
-                    get_gcrooted(arg2, ctx),
-                    get_gcrooted(arg1, ctx));
+                    boxed(arg2, ctx),
+                    boxed(arg1, ctx));
             jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
             mark_gc_use(arg1);
             mark_gc_use(arg2);

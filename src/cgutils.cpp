@@ -1231,7 +1231,8 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
                            prepare_global(jlundeferr_var), ctx);
 }
 
-static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, jl_value_t *jt=NULL);
+static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, bool gcooted=true);
+static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, jl_value_t* type) = delete; // C++11 (temporary to prevent rebase error)
 
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
@@ -1245,11 +1246,11 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
-                         literal_pointer_val(type), boxed(x,ctx)});
+                         literal_pointer_val(type), boxed(x, ctx, false)}); // x is rooted by jl_type_error_rt
 #else
     builder.CreateCall4(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx));
+                        literal_pointer_val(type), boxed(x, ctx, false)); // x is rooted by jl_type_error_rt
 #endif
 }
 
@@ -1258,7 +1259,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
 {
     Value *istype;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
-        Value *vx = boxed(x, ctx, type);
+        Value *vx = boxed(x, ctx);
         istype = builder.
             CreateICmpNE(
 #ifdef LLVM37
@@ -1321,9 +1322,9 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
         }
         else if (ainfo.isboxed) { // jl_datatype_t or boxed jl_value_t
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(jlboundserror_func), { ainfo.V, i });
+            builder.CreateCall(prepare_call(jlboundserror_func), { boxed(ainfo, ctx), i });
 #else
-            builder.CreateCall2(prepare_call(jlboundserror_func), ainfo.V, i);
+            builder.CreateCall2(prepare_call(jlboundserror_func), boxed(ainfo, ctx), i);
 #endif
         }
         else { // unboxed jl_value_t*
@@ -1422,7 +1423,7 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         r = emit_unbox(elty, rhs, jltype);
     }
     else {
-        r = boxed(rhs, ctx, jltype);
+        r = boxed(rhs, ctx);
         if (parent != NULL) emit_write_barrier(ctx, parent, r);
     }
     Value *data;
@@ -1979,18 +1980,9 @@ static Value *call_with_unsigned(Function *ufunc, Value *v)
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
-static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, jl_value_t *jt)
+static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
 {
-    if (jt == NULL) {
-        jt = vinfo.typ;
-    }
-    else if (jt != jl_bottom_type && !jl_is_leaf_type(jt)) {
-        // we can get a sharper type from julia_type_of than expr_type in some
-        // cases, due to ccall's compile-time evaluations of types. see issue #5752
-        jl_value_t *jt2 = vinfo.typ;
-        if (jt2 && jl_subtype(jt2, jt, 0))
-            jt = jt2;
-    }
+    jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL) {
         // We have an undef value on a (hopefully) dead branch
         return UndefValue::get(T_pjlvalue);
@@ -2010,9 +2002,13 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, jl_value_t *jt)
     if (vinfo.ispointer) {
         v = builder.CreateLoad(builder.CreatePointerCast(v, t->getPointerTo()));
     }
-    if (t == T_int1) return julia_bool(v);
+
+    if (t == T_int1)
+        return julia_bool(v);
+
     Constant *c = NULL;
     if ((c = dyn_cast<Constant>(v)) != NULL) {
+        // TODO: we should be able to reuse the original value that constructed this Constant
         jl_value_t *s = static_constant_instance(c, jt);
         if (s) {
             jl_add_linfo_root(ctx->linfo, s);
@@ -2022,38 +2018,56 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, jl_value_t *jt)
 
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
-    if (jb == jl_int8_type)  return call_with_signed(box_int8_func, v);
-    if (jb == jl_int16_type) return call_with_signed(box_int16_func, v);
-    if (jb == jl_int32_type) return call_with_signed(box_int32_func, v);
-    if (jb == jl_int64_type) return call_with_signed(box_int64_func, v);
-    if (jb == jl_float32_type) return builder.CreateCall(prepare_call(box_float32_func), v);
-    //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
+    Value *box = NULL;
+    if (jb == jl_int8_type)
+        box = call_with_signed(box_int8_func, v);
+    else if (jb == jl_int16_type)
+        box = call_with_signed(box_int16_func, v);
+    else if (jb == jl_int32_type)
+        box = call_with_signed(box_int32_func, v);
+    else if (jb == jl_int64_type)
+        box = call_with_signed(box_int64_func, v);
+    else if (jb == jl_float32_type)
+        box = builder.CreateCall(prepare_call(box_float32_func), v);
+    //if (jb == jl_float64_type)
+    //  box = builder.CreateCall(box_float64_func, v);
     // for Float64, fall through to generic case below, to inline alloc & init of Float64 box. cheap, I know.
-    if (jb == jl_uint8_type)  return call_with_unsigned(box_uint8_func, v);
-    if (jb == jl_uint16_type) return call_with_unsigned(box_uint16_func, v);
-    if (jb == jl_uint32_type) return call_with_unsigned(box_uint32_func, v);
-    if (jb == jl_uint64_type) return call_with_unsigned(box_uint64_func, v);
-    if (jb == jl_char_type)   return call_with_unsigned(box_char_func, v);
-    if (jb == jl_gensym_type) {
+    else if (jb == jl_uint8_type)
+        box = call_with_unsigned(box_uint8_func, v);
+    else if (jb == jl_uint16_type)
+        box = call_with_unsigned(box_uint16_func, v);
+    else if (jb == jl_uint32_type)
+        box = call_with_unsigned(box_uint32_func, v);
+    else if (jb == jl_uint64_type)
+        box = call_with_unsigned(box_uint64_func, v);
+    else if (jb == jl_char_type)
+        box = call_with_unsigned(box_char_func, v);
+    else if (jb == jl_gensym_type) {
         unsigned zero = 0;
-        if (v->getType()->isPointerTy()) {
-            v = builder.CreateLoad(v);
-        }
-        v = builder.CreateExtractValue(v, ArrayRef<unsigned>(&zero,1));
-        return call_with_unsigned(box_gensym_func, v);
+        assert(v->getType() == jl_gensym_type->struct_decl);
+        v = builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
+        box = call_with_unsigned(box_gensym_func, v);
     }
-
-    if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
+    else if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
     }
-
-    if (!jb->abstract && jb->size == 0) {
+    else if (!jb->abstract && jb->size == 0) {
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }
+    else {
+        box = init_bits_value(emit_allocobj(jl_datatype_size(jt)), literal_pointer_val(jt), v);
+    }
 
-    return init_bits_value(emit_allocobj(jl_datatype_size(jt)), literal_pointer_val(jt), v);
+    if (gcrooted) {
+        // make a gcroot for the new box
+        // (unless the caller explicitly said this was unnecessary)
+        Value *froot = emit_local_slot(ctx);
+        builder.CreateStore(box, froot);
+    }
+
+    return box;
 }
 
 static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_codectx_t *ctx)
@@ -2153,10 +2167,10 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
                               ConstantInt::get(T_size, jl_field_offset(sty,idx0)));
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
-            Value *r = boxed(rhs, ctx);
-            builder.CreateStore(r,
-                                builder.CreateBitCast(addr, T_ppjlvalue));
+            Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
+            builder.CreateStore(r, builder.CreateBitCast(addr, T_ppjlvalue));
             if (wb) emit_checked_write_barrier(ctx, strct.V, r);
+            mark_gc_use(strct);
         }
         else {
             int align = jl_field_offset(sty, idx0);
@@ -2221,7 +2235,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             // the first field to NULL, and sometimes the GC root
             // for the new struct.
             jl_cgval_t fval_info = emit_expr(args[1],ctx);
-            f1 = get_gcrooted(fval_info, ctx);
+            f1 = boxed(fval_info, ctx);
             j++;
         }
         Value *strct = emit_allocobj(sty->size);
