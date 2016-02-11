@@ -18,9 +18,16 @@ const text_colors = AnyDict(
 
 # Create a docstring with an automatically generated list
 # of colors.
-const available_text_colors = collect(keys(text_colors))
+const possible_formatting_symbols = [:normal, :bold]
+available_text_colors = collect(keys(text_colors))
+available_text_colors =
+    cat(1, intersect(available_text_colors, possible_formatting_symbols),
+        sort(setdiff(  available_text_colors, possible_formatting_symbols)))
+
 const available_text_colors_docstring =
-    join([string("`:", key,"`") for key in available_text_colors], ",\n")
+    string(join([string("`:", key,"`")
+                 for key in available_text_colors[1:end-1]], ",\n"),
+           ", or ", string("`:", available_text_colors[end],"`"));
 """Dictionary of color codes for the terminal.
 
 Available colors are: $available_text_colors_docstring.
