@@ -135,6 +135,14 @@ s = union(Set([5,6,7,8]), Set([7,8,9]))
 s = Set([1,3,5,7])
 union!(s,(2,3,4,5))
 @test isequal(s,Set([1,2,3,4,5,7]))
+@test union!(Set([1]),[false,true,true]) == Set([true,false])
+@test union!(Set([1]),[collect(0x00:0xff); 0x00]) == Set(collect(Int,0x00:0xff))
+@test union!(Set([1]),[collect(range(Int8(-128),256)); Int8(0)]) == Set(collect(Int,range(Int8(-128),256)))
+@test union!(Set(Bool[]),[false,true,true]) == Set([true,false])
+@test union!(Set(UInt8[]),[collect(0x00:0xff); 0x00]) == Set(collect(0x00:0xff))
+@test union!(Set(Int8[]),[collect(range(Int8(-128),256)); Int8(0)]) == Set(collect(range(Int8(-128),256)))
+
+
 
 # intersect
 @test isequal(intersect(Set([1])),Set([1]))
@@ -201,9 +209,16 @@ u = unique([1,1,2])
 @test in(1,u)
 @test in(2,u)
 @test length(u) == 2
+@test unique([]) == []
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
 @test unique(Set(1:3)) == unique(collect(Set(1:3)))
+@test unique([true,true]) == [true]
+@test unique(Int8[1,2,2,3]) == Int8[1,2,3]
+@test unique(UInt8[1,2,2,3]) == UInt8[1,2,3]
+# method used internally for optimization of other unique methods
+@test Base.firstnunique([1,1,2,3],2) == [1,2]
+@test Base.firstnunique([1,1,2,3],0) == Int[]
 
 # filter
 s = Set([1,2,3,4])

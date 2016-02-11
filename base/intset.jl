@@ -68,12 +68,11 @@ function push!(s::IntSet, n::Integer)
     return s
 end
 
-function union!(s::IntSet, ns)
-    for n in ns
-        push!(s, n)
-    end
-    return s
-end
+union!(s::AbstractSet, xs) = _union!(s, xs)
+
+_union!(s::AbstractSet, xs) = rawunion!(s, xs)
+
+rawunion!(s::AbstractSet, xs) = (for x=xs; push!(s,x); end; s)
 
 function pop!(s::IntSet, n::Integer, deflt)
     if n >= s.limit

@@ -54,8 +54,21 @@ function union(s::Set, sets::Set...)
     return u
 end
 const ∪ = union
-union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
-union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs));for x=xs; push!(s,x); end; s)
+
+_union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs)); rawunion!(s, xs))
+
+function _union!{T<:Union{Bool,Int8,UInt8}}(s::Set, xs::AbstractArray{T})
+    uxs = unique(xs)
+    sizehint!(s,length(uxs))
+    rawunion!(s,uxs)
+end
+
+function _union!{T<:Union{Bool,Int8,UInt8}}(s::Set{T}, xs::AbstractArray{T})
+    uxs = unique([collect(s); xs])
+    sizehint!(s,length(uxs))
+    rawunion!(s,uxs)
+end
+
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
@@ -102,6 +115,30 @@ end
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
+
+function firstnunique(C, n::Integer)
+    out = Vector{eltype(C)}()
+    if n > 0
+        seen = Set{eltype(C)}()
+        total = 0
+        for x in C
+            if !in(x, seen)
+                push!(seen, x)
+                push!(out, x)
+                total += 1
+                if total == n
+                    return out
+                end
+            end
+        end
+    end
+    return out
+end
+
+function unique{T<:Union{Bool,Int8,UInt8}}(x::AbstractArray{T})
+    TMAX = Int(typemax(T))-Int(typemin(T))+1
+    firstnunique(x,TMAX)
+end
 
 unique(x::AbstractSet) = collect(x)
 
