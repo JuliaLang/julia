@@ -36,8 +36,6 @@ JL_DLLEXPORT void jl_sigint_action(void)
     jl_throw(jl_interrupt_exception);
 }
 
-static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size);
-
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -45,7 +43,7 @@ static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, 
 #endif
 
 // what to do on a critical error
-static void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size)
+void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size)
 {
     // This function is not allowed to reference any TLS variables.
     // We need to explicitly pass in the TLS buffer pointer when
