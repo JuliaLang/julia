@@ -339,10 +339,15 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     if (addressOf)
         to = to->getContainedType(0);
     Value *slot = emit_static_alloca(to, ctx);
-    if (!jvinfo.ispointer)
+    if (!jvinfo.ispointer) {
         builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
-    else
-        prepare_call(builder.CreateMemCpy(slot, jvinfo.V, (uint64_t)jl_datatype_size(ety), (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
+    }
+    else {
+        prepare_call(builder.CreateMemCpy(slot, jvinfo.V,
+                    (uint64_t)jl_datatype_size(ety),
+                    (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
+        mark_gc_use(jvinfo);
+    }
     return slot;
 }
 
@@ -576,6 +581,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
      * If the argument type is immutable (including bitstype), we pass the loaded llvm value
      * type. Otherwise we pass a pointer to a jl_value_t.
      */
+    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargt);
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
@@ -584,8 +590,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         if (4+i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
-        jl_value_t *argi = args[4+i];
-        jl_cgval_t arg;
+        jl_value_t *argi = args[4 + i];
+        jl_cgval_t &arg = argv[i];
         if (toboxed || !jl_isbits(tti)) {
             arg = emit_expr(argi, ctx, true);
         }
@@ -598,7 +604,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         // make sure args are rooted
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
         argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
-        mark_gc_use(arg); // jwn: must be after the llvmcall
     }
 
     Function *f;
@@ -750,6 +755,12 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
         ctx->to_inline.push_back(inst);
+
+    // after the llvmcall mark fake uses of all of the arguments to ensure the were live
+    for (size_t i = 0; i < nargt; ++i) {
+        const jl_cgval_t &arg = argv[i];
+        mark_gc_use(arg);
+    }
 
     JL_GC_POP();
 
@@ -1257,6 +1268,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // number of parameters to the c function
+    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs - 3)/2);
     for(i = 4; i < nargs + 1; i += 2) {
         // Current C function parameter
         size_t ai = (i - 4) / 2;
@@ -1290,7 +1302,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             inReg = inRegList.at(ai);
         }
 
-        jl_cgval_t arg;
+        jl_cgval_t &arg = argv[ai];
         if (jl_is_abstract_ref_type(jargty)) {
             if (addressOf) {
                 JL_GC_POP();
@@ -1318,7 +1330,6 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         argvals[ai + sret] = llvm_type_rewrite(v, largty,
                 ai + sret < fargt_sig.size() ? fargt_sig.at(ai + sret) : fargt_vasig,
                 false, byRef, issigned, ctx);
-        mark_gc_use(arg); // jwn: must be after the llvmcall
     }
 
 
@@ -1405,6 +1416,20 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx->f->addFnAttr(Attribute::StackProtectReq);
+    }
+
+    // after the ccall itself, mark fake uses of all of the arguments to ensure the were live,
+    // and run over the gcroot list and make give them a `mark_gc_use`
+    for(i = 4; i < nargs + 1; i += 2) {
+        // Current C function parameter
+        size_t ai = (i - 4) / 2;
+        mark_gc_use(argv[ai]);
+
+        // Julia (expression) value of current parameter gcroot
+        jl_value_t *argi = args[i + 1];
+        if (jl_is_long(argi)) continue;
+        jl_cgval_t arg = emit_expr(argi, ctx);
+        mark_gc_use(arg);
     }
 
     JL_GC_POP();
