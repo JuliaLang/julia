@@ -133,9 +133,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
 
-
 * `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
-
 
 * `readall` and `readbytes` are now `readstring` and `read` [#14660](https://github.com/JuliaLang/julia/pull/14660)
 
@@ -144,8 +142,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` [#13232](https://github.com/JuliaLang/julia/pull/13232)
 
-
-
+*  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5.
 
 ## New macros
 

@@ -820,7 +820,11 @@ if VERSION < v"0.5.0-dev+2228"
         s = open(filename)
         EachLine(s, ()->close(s))
     end
+end
 
+if VERSION < v"0.5.0-dev+2023"
+    const displaysize = Base.tty_size
+    export displaysize
 end
 
 
