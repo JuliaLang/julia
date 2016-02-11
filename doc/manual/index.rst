@@ -32,6 +32,7 @@
    interacting-with-julia
    running-external-programs
    calling-c-and-fortran-code
+   handling-operating-system-variation
    embedding
    packages
    profile

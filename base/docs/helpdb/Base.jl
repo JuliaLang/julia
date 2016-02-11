@@ -2095,8 +2095,7 @@ isdigit
 """
     @windows
 
-Given `@windows? a : b`, do `a` on Windows and `b` elsewhere. See documentation for Handling
-Platform Variations in the Calling C and Fortran Code section of the manual.
+Given `@windows? a : b`, do `a` on Windows and `b` elsewhere. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
 """
 :@windows
 
@@ -2104,10 +2103,24 @@ Platform Variations in the Calling C and Fortran Code section of the manual.
     @unix
 
 Given `@unix? a : b`, do `a` on Unix systems (including Linux and OS X) and `b` elsewhere.
-See documentation for Handling Platform Variations in the Calling C and Fortran Code section
-of the manual.
+See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
 """
 :@unix
+
+"""
+    @windows_only
+
+A macro that evaluates the given expression only on Windows systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+"""
+:@windows_only
+
+"""
+    @unix_only
+
+A macro that evaluates the given expression only on Unix systems (including Linux and OS X). See
+documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+"""
+:@unix_only
 
 """
     num2hex(f)
@@ -6538,10 +6551,16 @@ ndims
 """
     @osx
 
-Given `@osx? a : b`, do `a` on OS X and `b` elsewhere. See documentation for Handling
-Platform Variations in the Calling C and Fortran Code section of the manual.
+Given `@osx? a : b`, do `a` on OS X and `b` elsewhere. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
 """
 :@osx
+
+"""
+    @osx_only
+
+A macro that evaluates the given expression only on OS X systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+"""
+:@osx_only
 
 """
     ishermitian(A) -> Bool
@@ -8194,10 +8213,16 @@ cumprod!
 """
     @linux
 
-Given `@linux? a : b`, do `a` on Linux and `b` elsewhere. See documentation for Handling
-Platform Variations in the Calling C and Fortran Code section of the manual.
+Given `@linux? a : b`, do `a` on Linux and `b` elsewhere. See documentation [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
 """
 :@linux
+
+"""
+    @linux_only
+
+A macro that evaluates the given expression only on Linux systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+"""
+:@linux_only
 
 """
     complement(s)

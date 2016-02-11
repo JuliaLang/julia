@@ -1049,33 +1049,3 @@ C++
 
 Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_,
 `Clang <https://github.com/ihnorton/Clang.jl>`_, and `Cxx <https://github.com/Keno/Cxx.jl>`_ packages.
-
-Handling Operating System Variation
------------------------------------
-
-When dealing with platform libraries, it is often necessary to provide special cases
-for various platforms. The variable ``OS_NAME`` can be used to write these special
-cases. Additionally, there are several macros intended to make this easier:
-``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that ``@linux`` and ``@osx`` are mutually
-exclusive subsets of ``@unix``. Their usage takes the form of a ternary conditional
-operator, as demonstrated in the following examples.
-
-Simple blocks::
-
-    ccall( (@windows? :_fopen : :fopen), ...)
-
-Complex blocks::
-
-    @linux? (
-             begin
-                 some_complicated_thing(a)
-             end
-           : begin
-                 some_different_thing(a)
-             end
-           )
-
-Chaining (parentheses optional, but recommended for readability)::
-
-    @windows? :a : (@osx? :b : :c)
-
