@@ -52,11 +52,11 @@ end
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
 # a check for embedded NUL chars in the string (to avoid silent truncation).
 if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
+    bitstype 64 Cstring <: Ref
+    bitstype 64 Cwstring <: Ref
 else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
+    bitstype 32 Cstring <: Ref
+    bitstype 32 Cwstring <: Ref
 end
 
 # construction from typed pointers
