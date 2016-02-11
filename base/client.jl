@@ -16,6 +16,17 @@ const text_colors = AnyDict(
     :bold    => "\033[1m",
 )
 
+# Create a docstring with an automatically generated list
+# of colors.
+const available_text_colors = collect(keys(text_colors))
+const available_text_colors_docstring =
+    join([string("`:", key,"`") for key in available_text_colors], ",\n")
+"""Dictionary of color codes for the terminal.
+
+Available colors are: $available_text_colors_docstring.
+"""
+text_colors
+
 have_color = false
 default_color_warn = :red
 default_color_info = :blue
