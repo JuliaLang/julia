@@ -588,7 +588,7 @@ function _summarysize(obj::ANY, seen, excl)
     ft = typeof(obj).types
     for i in 1:nfields(obj)
         if !isbits(ft[i]) && isdefined(obj,i)
-            val = obj.(i)
+            val = getfield(obj, i)
             if !isa(val,excl)
                 size += summarysize(val, seen, excl)::Int
             end

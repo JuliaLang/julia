@@ -25,7 +25,7 @@
 
 #1. Canonical equivalence
 let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
-    ==(a,b) = Base.(:(==))(a,b)
+    ==(a,b) = Base.:(==)(a,b)
     @test ['C', '̧'] == ['Ç']
     @test ['q', '̇', '̣'] == ['q', '̣', '̇']
     @test ['가'] == ['ᄀ', 'ᅡ']
@@ -34,7 +34,7 @@ end
 
 #2. Compatibility Equivalence
 let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
-    ==(a,b) = Base.(:(==))(a,b)
+    ==(a,b) = Base.:(==)(a,b)
     @test ['ℌ'] == ['ℍ'] == ['H']
     @test ['ﻨ'] == ['ﻧ'] == ['ﻦ'] == ['ﻥ']
     @test ['①'] == ['1']

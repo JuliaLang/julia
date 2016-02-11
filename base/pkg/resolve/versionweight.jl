@@ -18,8 +18,8 @@ Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)
 
 Base.typemin{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemin(T))
 
-for (bf,f) in ((:(:-), :-), (:(:+),:+))
-    @eval function Base.($bf){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+for f in (:-, :+)
+    @eval function Base.$f{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
         av = a.v
         bv = b.v
         la = length(a.v)
@@ -42,7 +42,7 @@ for (bf,f) in ((:(:-), :-), (:(:+),:+))
     end
 end
 
-Base.(:-){T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-{T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
 
 function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     av = a.v
@@ -81,10 +81,10 @@ Base.zero(::Type{VWPreBuildItem}) = VWPreBuildItem()
 
 Base.typemin(::Type{VWPreBuildItem}) = (x=typemin(Int); VWPreBuildItem(x, typemin(HierarchicalValue{Int}), x))
 
-Base.(:-)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
-Base.(:+)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
+Base.:-(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
+Base.:+(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
 
-Base.(:-)(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
+Base.:-(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
 
 function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     c = cmp(a.nonempty, b.nonempty); c != 0 && return c
@@ -122,18 +122,18 @@ Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 const _vwprebuild_min = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
 Base.typemin(::Type{VWPreBuild}) = _vwprebuild_min
 
-function Base.(:-)(a::VWPreBuild, b::VWPreBuild)
+function Base.:-(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return -b
     VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
 end
-function Base.(:+)(a::VWPreBuild, b::VWPreBuild)
+function Base.:+(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return b
     VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
 end
 
-function Base.(:-)(a::VWPreBuild)
+function Base.:-(a::VWPreBuild)
     a === _vwprebuild_zero && return a
     VWPreBuild(-a.nonempty, -a.w)
 end
@@ -177,17 +177,17 @@ Base.zero(::Type{VersionWeight}) = VersionWeight()
 
 Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y,x))
 
-Base.(:-)(a::VersionWeight, b::VersionWeight) =
+Base.:-(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
                   a.prerelease-b.prerelease, a.build-b.build,
                   a.uninstall-b.uninstall)
 
-Base.(:+)(a::VersionWeight, b::VersionWeight) =
+Base.:+(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major+b.major, a.minor+b.minor, a.patch+b.patch,
                   a.prerelease+b.prerelease, a.build+b.build,
                   a.uninstall+b.uninstall)
 
-Base.(:-)(a::VersionWeight) =
+Base.:-(a::VersionWeight) =
     VersionWeight(-a.major, -a.minor, -a.patch,
                   -a.prerelease, -a.build,
                   -a.uninstall)

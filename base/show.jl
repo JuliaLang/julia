@@ -96,7 +96,7 @@ function show_default(io::IO, x::ANY)
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
                 else
-                    show(recur_io, x.(f))
+                    show(recur_io, getfield(x, f))
                 end
                 if i < nf
                     print(io, ',')

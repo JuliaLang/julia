@@ -74,7 +74,7 @@ asin
 
 Subtype operator, equivalent to `issubtype(T1,T2)`.
 """
-Base.(:(<:))
+Base.:(<:)
 
 """
     schedule(t::Task, [val]; error=false)
@@ -235,7 +235,7 @@ besselj
 
 Divide two integers or rational numbers, giving a `Rational` result.
 """
-Base.(:(//))
+Base.:(//)
 
 """
     At_mul_B(A, B)
@@ -279,7 +279,7 @@ sortrows
 
 Element-wise right division operator.
 """
-Base.(:(./))
+Base.:(./)
 
 """
     IPv6(host::Integer) -> IPv6
@@ -557,7 +557,7 @@ ind2sub(a, index)
 
 Element-wise multiplication operator.
 """
-Base.(:(.*))
+Base.:(.*)
 
 """
     ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -760,7 +760,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 0.01818181818181818
 ```
 """
-Base.(:(|>))
+Base.:(|>)
 
 """
     assert(cond)
@@ -899,7 +899,7 @@ diag
 
 Element-wise exponentiation operator.
 """
-Base.(:(.^))
+Base.:(.^)
 
 """
     isspace(c::Union{Char,AbstractString}) -> Bool
@@ -1185,7 +1185,7 @@ sizeof(::AbstractString)
 
 See the [`is`](:func:`is`) operator.
 """
-Base.(:(===))
+Base.:(===)
 
 """
     ReadOnlyMemoryError()
@@ -1638,7 +1638,7 @@ searchsorted
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
 floating-point results for integer arguments.
 """
-Base.(:(/))
+Base.:(/)
 
 """
     connect([host],port) -> TCPSocket
@@ -2540,7 +2540,7 @@ reduce(op, itr)
 
 Element-wise greater-than-or-equals comparison operator.
 """
-Base.(:(.>=))
+Base.:(.>=)
 
 """
     stdm(v, m)
@@ -2693,7 +2693,7 @@ eachindex
 
 Element-wise less-than comparison operator.
 """
-Base.(:(.<))
+Base.:(.<)
 
 """
     UndefRefError()
@@ -2973,7 +2973,7 @@ rest
     getfield(value, name::Symbol)
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
-`getfield(a, :b)`, and the syntax `a.(b)` calls `getfield(a, b)`.
+`getfield(a, :b)`.
 """
 getfield
 
@@ -4175,7 +4175,7 @@ rot180(A, k)
 
 Element-wise less-than-or-equals comparison operator.
 """
-Base.(:(.<=))
+Base.:(.<=)
 
 """
     checkbounds(array, indexes...)
@@ -4525,7 +4525,7 @@ bkfact!
 
 Exponentiation operator.
 """
-Base.(:(^))(x, y)
+Base.:(^)(x, y)
 
 """
     ^(s, n)
@@ -4537,7 +4537,7 @@ julia> "Test "^3
 "Test Test Test "
 ```
 """
-Base.(:(^))(s::AbstractString, n::Int)
+Base.:(^)(s::AbstractString, n::Int)
 
 """
     position(s)
@@ -5363,7 +5363,7 @@ istaskdone
 
 Element-wise greater-than comparison operator.
 """
-Base.(:(.>))
+Base.:(.>)
 
 """
     search(string, chars, [start])
@@ -5666,7 +5666,7 @@ get
 
 Element-wise not-equals comparison operator.
 """
-Base.(:(.!=))
+Base.:(.!=)
 
 """
     lufact!(A) -> LU
@@ -6231,7 +6231,7 @@ isdiag
 
 Equivalent to `!is(x, y)`.
 """
-Base.(:(!==))
+Base.:(!==)
 
 """
     trailing_ones(x::Integer) -> Integer
@@ -6735,7 +6735,7 @@ Collections should generally implement `==` by calling `==` recursively on all c
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
 """
-Base.(:(==))
+Base.:(==)
 
 """
     mapreducedim(f, op, A, dims[, initial])
@@ -7048,7 +7048,7 @@ diagm
 
 Element-wise subtraction operator.
 """
-Base.(:(.-))
+Base.:(.-)
 
 """
     imag(z)
@@ -7082,7 +7082,7 @@ arguments of the new type. Because of the behavior of floating-point NaN values,
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
 """
-Base.(:(<))
+Base.:(<)
 
 """
     EnvHash() -> EnvHash
@@ -7654,7 +7654,7 @@ rpad
     setfield!(value, name::Symbol, x)
 
 Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
-`setfield!(a, :b, c)`, and the syntax `a.(b) = c` calls `setfield!(a, b, c)`.
+`setfield!(a, :b, c)`.
 """
 setfield!
 
@@ -7690,7 +7690,7 @@ countlines
 
 Matrix multiplication.
 """
-Base.(:(*))(::AbstractMatrix, ::AbstractMatrix)
+Base.:(*)(::AbstractMatrix, ::AbstractMatrix)
 
 """
     \\(A, B)
@@ -7707,14 +7707,14 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 """
-Base.(:(\))(A,B)
+Base.:(\)(A,B)
 
 """
     .\\(x, y)
 
 Element-wise left division operator.
 """
-Base.(:(.\))(x,y)
+Base.:(.\)(x,y)
 
 """
     \\(x, y)
@@ -7722,7 +7722,7 @@ Base.(:(.\))(x,y)
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
 """
-Base.(:(\))(x::Number,y::Number)
+Base.:(\)(x::Number,y::Number)
 
 
 """
@@ -7732,7 +7732,7 @@ Base.(:(\))(x::Number,y::Number)
 
 Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
 """
-Base.(:(*))(x, y...)
+Base.:(*)(x, y...)
 
 """
 ```
@@ -7746,7 +7746,7 @@ julia> "Hello " * "world"
 "Hello world"
 ```
 """
-Base.(:(*))(s::AbstractString, t::AbstractString)
+Base.:(*)(s::AbstractString, t::AbstractString)
 
 """
     complement!(s)
@@ -8172,7 +8172,7 @@ ispunct
 
 Returns a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.:
+lengths of dimensions you asked for.
 
     julia> A = rand(2,3,4);
 
@@ -8232,7 +8232,7 @@ airy
 
 Boolean not.
 """
-Base.(:(!))
+Base.:(!)
 
 """
     length(A) -> Integer
@@ -8325,7 +8325,7 @@ NullException
 
 Element-wise equality comparison operator.
 """
-Base.(:(.==))
+Base.:(.==)
 
 """
     cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
@@ -8377,7 +8377,7 @@ intersect
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
 """
-Base.(:(!=))
+Base.:(!=)
 
 """
     @spawn
@@ -8542,7 +8542,7 @@ isprime(::BigInt, ?)
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
 function, and rely on the fallback definition `>(x,y) = y<x`.
 """
-Base.(:(>))
+Base.:(>)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -8665,7 +8665,7 @@ isa
 
 Less-than-or-equals comparison operator.
 """
-Base.(:(<=))
+Base.:(<=)
 
 """
     ProcessExitedException()
@@ -9782,7 +9782,7 @@ midpoints
 
 Element-wise addition operator.
 """
-Base.(:(.+))
+Base.:(.+)
 
 """
     reverseind(v, i)
@@ -10235,7 +10235,7 @@ iswritable
 
 Bitwise or.
 """
-Base.(:(|))
+Base.:(|)
 
 """
     yieldto(task, arg = nothing)
@@ -10428,7 +10428,7 @@ enumerate
 
 Greater-than-or-equals comparison operator.
 """
-Base.(:(>=))
+Base.:(>=)
 
 """
     dawson(x)
@@ -10472,7 +10472,7 @@ colon(start, step, stop)
 
 Bitwise exclusive or.
 """
-Base.(:$)(x, y)
+Base.:$(x, y)
 
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)

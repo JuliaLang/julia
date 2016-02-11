@@ -1528,8 +1528,14 @@
                 ,(expand-forms (last e)))))))
 
    '|.|
-   (lambda (e)
-     `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+   (lambda (e) ; e = (|.| f x)
+     (let ((f (expand-forms (cadr e)))
+           (x (expand-forms (caddr e))))
+       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+         `(call (top getfield) ,f ,x)
+         ; otherwise, came from f.(args...) --> broadcast(f, args...),
+         ; where x = (call (top tuple) args...) at this point:
+         `(call broadcast ,f ,@(cddr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call

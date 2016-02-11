@@ -250,7 +250,7 @@ let err_str,
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
 @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
-@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", Base.(Symbol("@doc"))))
+@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
 method_defs_lineno = @__LINE__
 Base.Symbol() = throw(ErrorException("1"))
@@ -276,7 +276,7 @@ let err_str,
     @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{EightBitTypeT})() at $sp:$(method_defs_lineno + 4)"
     @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{EightBitTypeT{T}}){T}() at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::EightBitTypeT)() at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(Base.(Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) at boot.jl:")
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::FunctionLike)() at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
