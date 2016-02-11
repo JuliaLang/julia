@@ -9,14 +9,6 @@ end
 const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 _getenvlen(var::AbstractString) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt8},UInt32),var,C_NULL,0)
 _hasenv(s::AbstractString) = _getenvlen(s)!=0 || Libc.GetLastError()!=ERROR_ENVVAR_NOT_FOUND
-function _jl_win_getenv(s::UTF16String,len::UInt32)
-    val=zeros(UInt16,len)
-    ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),s,val,len)
-    if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
-        error(string("getenv: ", s, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
-    end
-    val
-end
 end
 
 macro accessEnv(var,errorcase)
@@ -37,7 +29,12 @@ macro accessEnv(var,errorcase)
                     $(esc(errorcase))
                 end
             end
-            utf8(UTF16String(_jl_win_getenv(var,len)))
+            val = zeros(UInt16,len)
+            ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32),var,val,len)
+            if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
+                error(string("getenv: ", var, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
+            end
+            utf8(UTF16String(val))
         end
     end
 end
