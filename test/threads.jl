@@ -136,3 +136,8 @@ using Base.Threads
     @test current_module() == M14726_2
 end
 end
+
+# Ensure only LLVM-supported types can be atomic
+@test_throws TypeError Atomic{Bool}
+@test_throws TypeError Atomic{BigInt}
+@test_throws TypeError Atomic{Float64}
