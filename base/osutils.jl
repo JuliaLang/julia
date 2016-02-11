@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const OS_NAME = ccall(:jl_get_OS_NAME, Any, ())
+
 function is_unix(os::Symbol)
     if (os==:Windows) return false;
     elseif (os==:Linux) return true;
