@@ -815,7 +815,7 @@ function precise_container_types(args, types, vtypes, sv)
             if _any(isvarargtype, result[i])
                 return nothing
             end
-        elseif ti === Union{}
+        elseif isa(ti, Union)
             return nothing
         elseif ti<:Tuple
             if i == n
