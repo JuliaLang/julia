@@ -3031,6 +3031,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 else {
                     fval = emit_expr(args[0], ctx);
                 }
+                jl_add_linfo_root(ctx->linfo, (jl_value_t*)li);
                 result = emit_call_function_object(li, fval, theFptr, args, nargs, expr, ctx);
                 ctx->gc.argDepth = argStart;
                 JL_GC_POP();
