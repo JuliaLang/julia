@@ -26,6 +26,14 @@ immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
+        for i=1:length(nzind)
+            if nzind[i] <= 0
+                throw(ArgumentError("indices must be positive"))
+            end
+            if nzind[i] > n
+                throw(ArgumentError("indices exceeds size of vector"))
+            end
+        end
         new(convert(Int, n), nzind, nzval)
     end
 end

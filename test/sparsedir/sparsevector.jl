@@ -9,6 +9,9 @@ spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
 x1_full = zeros(length(spv_x1))
 x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
 
+@test_throws ArgumentError SparseVector(2, [1, 2, 3], [1, 1, 2])
+@test_throws ArgumentError SparseVector(4, [1, 0], [0, 1])
+
 ### Basic Properties
 
 let x = spv_x1
