@@ -19,9 +19,9 @@ ccall_echo_func{T,U}(x, ::Type{T}, ::Type{U}) = ccall((:test_echo_p, libccalltes
 # Make sure object x is still valid (rooted as argument)
 # when loading the pointer. This works as long as we still keep the argument
 # rooted but might fail if we are smarter about eliminating dead root.
-ccall_echo_load{T,U}(x, ::Type{T}, ::Type{U}) =
+@noinline ccall_echo_load{T,U}(x, ::Type{T}, ::Type{U}) =
     unsafe_load(ccall_echo_func(x, T, U))
-ccall_echo_objref{T,U}(x, ::Type{T}, ::Type{U}) =
+@noinline ccall_echo_objref{T,U}(x, ::Type{T}, ::Type{U}) =
     unsafe_pointer_to_objref(ccall_echo_func(x, Ptr{T}, U))
 type IntLike
     x::Int

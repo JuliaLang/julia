@@ -428,7 +428,7 @@ typedef struct _jl_datatype_t {
     uint32_t haspadding : 1;  // has internal undefined bytes
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     uint32_t uid;
-    void *struct_decl;  //llvm::Value*
+    void *struct_decl;  //llvm::Type*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
     // Last field needs to be pointer size aligned
     // union {
