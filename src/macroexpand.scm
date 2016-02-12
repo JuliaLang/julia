@@ -108,6 +108,10 @@
                              (let ((asgn (cadr (julia-expand0 (car binds)))))
                                (loop (cdr binds)
                                      (cons (cadr asgn) vars))))
+                            ((and (pair? (cadar binds))
+                                  (eq? (caadar binds) 'tuple))
+                             (loop (cdr binds)
+                                   (append (map decl-var (lhs-vars (cadar binds))) vars)))
                             (else '())))
                           (else '())))))
 
