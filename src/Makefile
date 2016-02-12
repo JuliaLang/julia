@@ -35,7 +35,7 @@ SRCS += gc
 endif
 
 ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen disasm debuginfo llvm-simdloop
+SRCS += codegen disasm debuginfo llvm-simdloop llvm-gcroot
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 else
