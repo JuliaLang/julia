@@ -573,14 +573,26 @@ int jl_parse_deperror(int err)
 
 extern int jl_lineno;
 
+static void jl_reset_preserved_values(int np)
+{
+    while (jl_gc_n_preserved_values() > np) {
+        jl_gc_unpreserve();
+    }
+}
+
 jl_value_t *jl_parse_next(void)
 {
+    int np = jl_gc_n_preserved_values();
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
-    if (c == FL_EOF)
+    if (c == FL_EOF) {
+        jl_reset_preserved_values(np);
         return NULL;
+    }
     if (iscons(c)) {
-        if (cdr_(c) == FL_EOF)
+        if (cdr_(c) == FL_EOF) {
+            jl_reset_preserved_values(np);
             return NULL;
+        }
         value_t a = car_(c);
         if (isfixnum(a)) {
             jl_lineno = numval(a);
@@ -591,7 +603,9 @@ jl_value_t *jl_parse_next(void)
     // for error, get most recent line number
     if (iscons(c) && car_(c) == fl_error_sym)
         jl_lineno = numval(fl_applyn(0, symbol_value(symbol("jl-parser-current-lineno"))));
-    return scm_to_julia(c,0);
+    jl_value_t *res = scm_to_julia(c,0);
+    jl_reset_preserved_values(np);
+    return res;
 }
 
 jl_value_t *jl_load_file_string(const char *text, size_t len,
@@ -613,9 +627,7 @@ jl_value_t *jl_expand(jl_value_t *expr)
     value_t arg = julia_to_scm(expr);
     value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")), arg);
     jl_value_t *result = scm_to_julia(e,0);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
+    jl_reset_preserved_values(np);
     return result;
 }
 
@@ -626,9 +638,7 @@ DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     value_t e = fl_applyn(1, symbol_value(symbol("jl-macroexpand")), arg);
     jl_value_t *result;
     result = scm_to_julia(e,0);
-    while (jl_gc_n_preserved_values() > np) {
-        jl_gc_unpreserve();
-    }
+    jl_reset_preserved_values(np);
     return result;
 }
 
