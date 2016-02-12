@@ -1131,7 +1131,7 @@ void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
 {
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
-  processFDEs(Addr, Size, [](const char *Entry) {
+  processFDEs((char*)Addr, Size, [](const char *Entry) {
         if (!libc_register_frame) {
           libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__register_frame");
         }
@@ -1145,7 +1145,7 @@ void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
                                                 uint64_t LoadAddr,
                                                 size_t Size)
 {
-   processFDEs(Addr, Size, [](const char *Entry) {
+   processFDEs((char*)Addr, Size, [](const char *Entry) {
         if (!libc_deregister_frame) {
           libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT,"__deregister_frame");
         }
