@@ -22,8 +22,6 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
-(::Type{T}){T}(arg) = convert(T, arg)::T
-
 convert{T}(::Type{T}, x::T) = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
