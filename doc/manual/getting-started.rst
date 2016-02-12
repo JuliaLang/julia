@@ -18,10 +18,10 @@ command line::
                    _
        _       _ _(_)_     |  A fresh approach to technical computing
       (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-       _ _   _| |_  __ _   |  Type "help()" to list help topics
+       _ _   _| |_  __ _   |  Type "?help" for help.
       | | | | | | |/ _` |  |
-      | | |_| | | | (_| |  |  Version 0.3.0-prerelease+3690 (2014-06-16 05:11 UTC)
-     _/ |\__'_|_|_|\__'_|  |  Commit 1b73f04* (0 days old master)
+      | | |_| | | | (_| |  |  Version 0.4.3 (2016-01-12 21:37 UTC)
+     _/ |\__'_|_|_|\__'_|  |
     |__/                   |  x86_64-apple-darwin13.1.0
 
     julia> 1 + 2
