@@ -26,8 +26,8 @@ available_text_colors =
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
-                 for key in available_text_colors[1:end-1]], ",\n"),
-           ", or ", string("`:", available_text_colors[end],"`"));
+                 for key in available_text_colors], ",\n", ", or \n"))
+
 """Dictionary of color codes for the terminal.
 
 Available colors are: $available_text_colors_docstring.
