@@ -803,6 +803,11 @@ setprecision(BigFloat, 100) do
     @test precision(a) == 100
 end
 
+setprecision(130) do
+    a = big(pi)
+    @test precision(a) == 130
+end
+
 for T in (BigFloat, Float64)
     setrounding(T, RoundDown)
     @test rounding(T) == RoundDown

@@ -823,15 +823,26 @@ if VERSION < v"0.5.0-dev+2228"
 
 end
 
-if VERSION < v"0.5.0-dev+1182"
-    # Pull Request https://github.com/JuliaLang/julia/pull/13232
+
+# Pull Request https://github.com/JuliaLang/julia/pull/13232
+# Rounding and precision functions:
+
+if VERSION >= v"0.5.0-dev+1182"
+    import Base:
+        setprecision, setrounding, rounding
+
+else  # if VERSION < v"0.5.0-dev+1182"
+
     export setprecision
     export setrounding
     export rounding
 
     setprecision(f, ::Type{BigFloat}, prec) = with_bigfloat_precision(f, prec)
     setprecision(::Type{BigFloat}, prec) = set_bigfloat_precision(prec)
+
+    # assume BigFloat if type not explicit:
     setprecision(prec) = setprecision(BigFloat, prec)
+    setprecision(f, prec) = setprecision(f, BigFloat, prec)
 
     Base.precision(::Type{BigFloat}) = get_bigfloat_precision()
 
