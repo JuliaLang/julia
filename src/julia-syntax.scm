@@ -960,6 +960,17 @@
                            (newvar ,name)
                            ,asgn
                            ,blk)))))
+               ;; (a, b, c, ...) = rhs
+               ((and (pair? (cadar binds))
+                     (eq? (caadar binds) 'tuple))
+                (let ((vars (lhs-vars (cadar binds))))
+                  (loop (cdr binds)
+                        `(scope-block
+                          (block
+                           ,@(map (lambda (v) `(local ,v)) vars)
+                           ,@(map (lambda (v) `(newvar ,(decl-var v))) vars)
+                           ,(car binds)
+                           ,blk)))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
@@ -2100,6 +2111,7 @@
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
+        ((decl? e)   (list (decl-var e)))
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-vars (cdr e))))
         (else '())))
