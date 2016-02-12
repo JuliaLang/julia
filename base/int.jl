@@ -260,7 +260,7 @@ end
 
 ## system word size ##
 
-const WORD_SIZE = Int(Int.size)*8
+const WORD_SIZE = convert(Int, Int.size)*8
 
 ## integer promotions ##
 
@@ -303,7 +303,7 @@ typemin(::Type{Int64 }) = -9223372036854775808
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{UInt64}) = UInt64(0)
 typemax(::Type{UInt64}) = 0xffffffffffffffff
-@eval typemin(::Type{UInt128}) = $(UInt128(0))
+@eval typemin(::Type{UInt128}) = $(convert(UInt128, 0))
 @eval typemax(::Type{UInt128}) = $(box(UInt128,unbox(Int128,convert(Int128,-1))))
 @eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<127)
 @eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>1)))
@@ -415,3 +415,5 @@ else
     rem(x::Int128,  y::Int128)  = box(Int128,checked_srem_int(unbox(Int128,x),unbox(Int128,y)))
     rem(x::UInt128, y::UInt128) = box(UInt128,checked_urem_int(unbox(UInt128,x),unbox(UInt128,y)))
 end
+
+(::Type{T}){T}(arg) = convert(T, arg)::T
