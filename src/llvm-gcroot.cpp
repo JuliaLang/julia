@@ -133,7 +133,7 @@ frame_register get_gcroot(Value *ptr)
 
 void collapseRedundantRoots()
 {
-    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
         if (callInst && callInst->getCalledFunction() == gcroot_func) {
@@ -243,7 +243,8 @@ void collapseRedundantRoots()
                             // between the initial store and the replacement store
                             // TODO: do this better once we have liveness information for locals?
                             BasicBlock *current = theStore->getParent();
-                            BasicBlock::iterator bbi = theStore, bbi_end = current->end();
+                            BasicBlock::iterator bbi(theStore);
+                            BasicBlock::iterator bbi_end = current->end();
                             patternMatchSuccess = true;
                             ++bbi;
                             while (patternMatchSuccess) {
@@ -425,7 +426,7 @@ void allocate_frame()
  */
     std::map<BasicBlock*, std::map<frame_register, liveness::id> > bb_uses;
     std::priority_queue< std::pair<unsigned, CallInst*> > frames;
-    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
         if (callInst && callInst->getCalledFunction() == jlcall_frame_func) {
@@ -668,7 +669,7 @@ void allocate_frame()
  */
     unsigned argSpaceSize = 0;
     Instruction *argSlot = NULL;
-    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E = gcframe; I != E; ) {
+    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
         if (callInst && callInst->getCalledFunction() == gcroot_func) {
@@ -717,7 +718,7 @@ void allocate_frame()
 #else
         Type *T_size = T_int32;
 #endif
-        builder.SetInsertPoint(++BasicBlock::iterator(last_gcframe_inst)); // set insert *before* point, e.g. after the gcframe
+        builder.SetInsertPoint(&*(++BasicBlock::iterator(last_gcframe_inst))); // set insert *before* point, e.g. after the gcframe
         DebugLoc noDbg;
         builder.SetCurrentDebugLocation(noDbg);
 
