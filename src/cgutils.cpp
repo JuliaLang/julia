@@ -1241,14 +1241,16 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
                                          ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
                                        ArrayRef<Value*>(zeros));
+    Value *got_val = boxed(x,ctx);
+    assert(!isa<UndefValue>(got_val));
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
-                         literal_pointer_val(type), boxed(x,ctx)});
+                         literal_pointer_val(type), got_val});
 #else
     builder.CreateCall4(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx));
+                        literal_pointer_val(type), got_val);
 #endif
 }
 

@@ -3361,13 +3361,19 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
         Value *cond = emit_unbox(T_int1, condV, (jl_value_t*)jl_bool_type);
         assert(cond->getType() == T_int1);
         return builder.CreateXor(cond, ConstantInt::get(T_int1,1));
+    } else if (condV.typ != (jl_value_t*)jl_bottom_type) {
+        emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
+        if (condV.isboxed) {
+            return builder.CreateICmpEQ(condV.V, tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
+        }
     }
-    emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
-    if (condV.isboxed) {
-        return builder.CreateICmpEQ(condV.V, tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
-    }
-    // not a boolean
-    return ConstantInt::get(T_int1,0); // TODO: replace with Undef
+    // not a boolean (or evaluating the conditon threw)
+    #ifdef JL_DEBUG_BUILD
+    builder.CreateCall(prepare_call(
+        Intrinsic::getDeclaration(builtins_module, Intrinsic::trap)), {});
+    #endif
+    builder.CreateUnreachable();
+    return nullptr;
 }
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool valuepos)
@@ -3508,7 +3514,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         }
         else {
             Value *isfalse = emit_condition(cond, "if", ctx);
-            builder.CreateCondBr(isfalse, ifnot, ifso);
+            if (isfalse)
+                builder.CreateCondBr(isfalse, ifnot, ifso);
         }
         builder.SetInsertPoint(ifso);
     }
