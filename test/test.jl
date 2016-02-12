@@ -146,9 +146,9 @@ end
 @assert typeof(tss[1].results[1]) == Test.Pass
 
 # import the methods needed for defining our own testset type
-import Test: record, finish
-using Test: get_testset_depth, get_testset
-using Test: AbstractTestSet, Result, Pass, Fail, Error
+import Base.Test: record, finish
+using Base.Test: get_testset_depth, get_testset
+using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
 immutable CustomTestSet <: Test.AbstractTestSet
     description::AbstractString
     foo::Int
