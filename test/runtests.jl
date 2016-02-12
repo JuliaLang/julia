@@ -790,4 +790,26 @@ mktempdir() do dir
         cleanup()
     end
 
+
+# https://github.com/JuliaLang/julia/pull/13232
+
+setprecision(BigFloat, 100)
+@test precision(BigFloat) == 100
+setprecision(256)
+@test precision(BigFloat) == 256
+
+setprecision(BigFloat, 100) do
+    a = big(pi)
+    @test precision(a) == 100
+end
+
+for T in (BigFloat, Float64)
+    setrounding(T, RoundDown)
+    @test rounding(T) == RoundDown
+
+    setrounding(T, RoundUp) do
+        @test rounding(T) == RoundUp
+    end
+end
+
 end
