@@ -454,7 +454,7 @@ Text I/O
 
    Print strings in a color specified as a symbol.
 
-   ``color`` may take any of the values ``:black``\ , ``:red``\ , ``:yellow``\ , ``:magenta``\ , ``:green``\ , ``:cyan``\ , ``:white``\ , ``:blue``\ , ``:normal``\ , ``:bold``\ .
+   ``color`` may take any of the values ``:normal``\ , ``:bold``\ , ``:black``\ , ``:blue``\ , ``:cyan``\ , ``:green``\ , ``:magenta``\ , ``:red``\ , ``:white``\ , or  ``:yellow``\ .
 
 .. function:: info(msg)
 
