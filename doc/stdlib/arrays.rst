@@ -859,13 +859,13 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, duplicates are added by default. All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ .
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Boolean in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ .
 
 .. function:: sparsevec(I, V, [m, combine])
 
    .. Docstring generated from Julia source
 
-   Create a sparse vector ``S`` of length ``m`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided.
+   Create a sparse vector ``S`` of length ``m`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if no combine argument is provided, unless the elements of ``V`` are Boolean in which case ``combine`` defaults to |.
 
 .. function:: sparsevec(D::Dict, [m])
 

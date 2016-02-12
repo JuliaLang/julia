@@ -1200,3 +1200,7 @@ let
     @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end
+
+# https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA
+@test sparse([1,1], [1,1], [true, true]) == sparse([1,1], [1,1], [true, true], 1, 1) == fill(true, 1, 1)
+@test sparsevec([1,1], [true, true]) == sparsevec([1,1], [true, true], 1) == fill(true, 1)
