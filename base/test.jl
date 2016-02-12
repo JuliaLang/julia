@@ -13,6 +13,8 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
+include("./port.jl")
+
 export @test, @test_throws
 export @testset
 # Legacy approximate testing functions, yet to be included
@@ -124,6 +126,8 @@ function Base.show(io::IO, t::Error)
     end
 end
 
+# all results will get `push!`ed onto this stream
+const results = Port()
 
 #-----------------------------------------------------------------------
 
@@ -280,24 +284,6 @@ function is to record the testset to the parent's results list, using
 """
 function finish end
 
-"""
-    TestSetException
-
-Thrown when a test set finishes and not all tests passed.
-"""
-type TestSetException <: Exception
-    pass::Int
-    fail::Int
-    error::Int
-end
-
-function Base.show(io::IO, ex::TestSetException)
-    print(io, "Some tests did not pass: ")
-    print(io, ex.pass,  " passed, ")
-    print(io, ex.fail,  " failed, ")
-    print(io, ex.error, " errored.")
-end
-
 #-----------------------------------------------------------------------
 
 """
@@ -308,15 +294,10 @@ A simple fallback test set that throws immediately on a failure.
 immutable FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
-
-# Records nothing, and throws an error immediately whenever a Fail or
-# Error occurs. Takes no action in the event of a Pass result
-record(ts::FallbackTestSet, t::Pass) = t
-function record(ts::FallbackTestSet, t::Union{Fail,Error})
-    println(t)
-    error("There was an error during testing")
+function record(ts::FallbackTestSet, t::Result)
+    push!(results, t)
+    t
 end
-# We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
 
 #-----------------------------------------------------------------------
@@ -335,37 +316,7 @@ type DefaultTestSet <: AbstractTestSet
 end
 DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
 
-# For a passing result, simply store the result
-record(ts::DefaultTestSet, t::Pass) = (push!(ts.results, t); t)
-# For the other result types, immediately print the error message
-# but do not terminate. Print a backtrace.
-function record(ts::DefaultTestSet, t::Union{Fail,Error})
-    print_with_color(:white, ts.description, ": ")
-    print(t)
-    # don't print the backtrace for Errors because it gets printed in the show
-    # method
-    isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
-    println()
-    push!(ts.results, t)
-    t
-end
-
-# When a DefaultTestSet finishes, it records itself to its parent
-# testset, if there is one. This allows for recursive printing of
-# the results at the end of the tests
-record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
-
-# Called at the end of a @testset, behaviour depends on whether
-# this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
-    # If we are a nested test set, do not print a full summary
-    # now - let the parent test set do the printing
-    if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
-        return
-    end
+function Base.show(ts::DefaultTestSet)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     passes, fails, errors, c_passes, c_fails, c_errors = get_test_counts(ts)
@@ -407,11 +358,27 @@ function finish(ts::DefaultTestSet)
     println()
     # Recursively print a summary at every level
     print_counts(ts, 0, align, pass_width, fail_width, error_width, total_width)
-    # Finally throw an error as we are the outermost test set
-    if total != total_pass
-        throw(TestSetException(total_pass,total_fail,total_error))
-    end
+end
 
+# store the results in the enclosing testset and the top level result stream
+function record(ts::DefaultTestSet, t::Union{Result,AbstractTestSet})
+    push!(ts.results, t)
+    push!(results, t)
+    t
+end
+
+# Called at the end of a @testset, behaviour depends on whether
+# this is a child of another testset, or the "root" testset
+function finish(ts::DefaultTestSet)
+    # If we are a nested test set, do not print a full summary
+    # now - let the parent test set do the printing
+    if get_testset_depth() != 0
+        # Attach this test set to the parent test set
+        parent_ts = get_testset()
+        record(parent_ts, ts)
+    else
+        push!(results, ts)
+    end
     # return the testset so it is returned from the @testset macro
     ts
 end
