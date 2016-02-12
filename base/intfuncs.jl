@@ -381,3 +381,30 @@ function binomial{T<:Integer}(n::T, k::T)
     end
     convert(T, copysign(x, sgn))
 end
+
+
+for I in [Int8,Int16,Int32,Int64,Int128,
+          UInt8,UInt16,UInt32,UInt64,UInt128]
+
+    s = I <: Signed ? 's' : 'u'
+    b = sizeof(I) << 3
+    r = b == 8 ? "[2 x i8]" : "{ i$b, i8 }" # LLVM return type
+
+    for op in [:add,:sub,:mul]
+        f = symbol(:safe_,op)
+        @eval @inline function $f(x::$I, y::$I)
+            x,n = Base.llvmcall((
+            $"declare { i$b, i1 } @llvm.$(s)$(op).with.overflow.i$b(i$b, i$b)",
+            $"""
+            %xo = call { i$b, i1 } @llvm.$(s)$(op).with.overflow.i$b(i$b %0, i$b %1)
+            %x  = extractvalue { i$b, i1 } %xo, 0
+            %o1 = extractvalue { i$b, i1 } %xo, 1
+            %o8 = zext i1 %o1 to i8
+            %rx = insertvalue $r undef, i$b %x, 0
+            %r  = insertvalue $r %rx, i8 %o8, 1
+            ret $r %r"""),
+            Tuple{$I,Bool},Tuple{$I,$I},x,y)
+            Nullable(x,n)
+        end
+    end
+end
