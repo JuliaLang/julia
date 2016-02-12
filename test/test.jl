@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Test
+using Base.Test
 
+# ensure an error is thrown if the test doesn't pass
 macro pass(body)
     :(@assert(isa(@test($body), Test.Pass)))
 end
-
 macro pass_throws(t, body)
     :(@assert(isa(@test_throws($t, $body), Test.Pass)))
 end
