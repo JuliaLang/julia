@@ -63,16 +63,34 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
     @test convert(SymTridiagonal,Tridiagonal(Ts)) == Ts
     @test full(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},full(Ts))
+    if elty == Int
+        vv = rand(1:100, n)
+        BB = rand(1:100, n, 2)
+    else
+        vv = convert(Vector{elty}, v)
+        BB = convert(Matrix{elty}, B)
+    end
+    let Bs = BB, vs = vv 
+        for atype in ("Array", "SubArray")
+            if atype == "Array"
+                BB = Bs
+                vv = vs
+            else
+                BB = sub(Bs, 1:n, 1)
+                vv = sub(vs, 1:n)
+            end
+        end
 
-    # tridiagonal linear algebra
-    @test_approx_eq T*v F*v
-    invFv = F\v
-    @test_approx_eq T\v invFv
-    # @test_approx_eq Base.solve(T,v) invFv
-    # @test_approx_eq Base.solve(T, B) F\B
-    Tlu = factorize(T)
-    x = Tlu\v
-    @test_approx_eq x invFv
+        # tridiagonal linear algebra
+        @test_approx_eq T*vv F*vv
+        invFv = F\vv
+        @test_approx_eq T\vv invFv
+        # @test_approx_eq Base.solve(T,v) invFv
+        # @test_approx_eq Base.solve(T, B) F\B
+        Tlu = factorize(T)
+        x = Tlu\vv
+        @test_approx_eq x invFv
+    end
     @test_approx_eq det(T) det(F)
 
     @test_approx_eq T * Base.LinAlg.UnitUpperTriangular(eye(n)) F*eye(n)
