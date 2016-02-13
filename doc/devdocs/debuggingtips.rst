@@ -187,8 +187,27 @@ codegen::
     ... # your breakpoint here
 
 
+Debugging precompilation errors
+-------------------------------
+
+Module precompilation spawns a separate Julia process to precompile each module. Setting a breakpoint
+or catching failures in a precompile worker requires attaching a debugger to the worker. The easiest
+approach is to set the debugger watch for new process launches matching a given name. For example::
+
+    (gdb) attach -w -n julia-debug
+
+or::
+
+    (lldb) process attach -w -n julia-debug
+
+Then run a script/command to start precompilation. As described earlier, use conditional breakpoints
+in the parent process to catch specific file-loading events and narrow the debugging window.
+(some operating systems may require alternative approaches, such as following each ``fork`` from the
+parent process)
+
+
 Mozilla's Record and Replay Framework (rr)
----------------------------------------------
+------------------------------------------
 
 Julia now works out of the box with `rr, <http://rr-project.org/>`_ the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
