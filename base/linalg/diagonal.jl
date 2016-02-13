@@ -64,6 +64,7 @@ function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::Abstr
     i==j ? s : Base.replace_with_centered_mark(s)
 end
 
+parent(D::Diagonal) = D.diag
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
 ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
@@ -107,9 +108,9 @@ end
 *{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
 /{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-*(D::Diagonal, V::Vector) = D.diag .* V
-*(A::Matrix, D::Diagonal) = scale(A,D.diag)
-*(D::Diagonal, A::Matrix) = scale(D.diag,A)
+*(D::Diagonal, V::AbstractVector) = D.diag .* V
+*(A::AbstractMatrix, D::Diagonal) = scale(A,D.diag)
+*(D::Diagonal, A::AbstractMatrix) = scale(D.diag,A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
 At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
