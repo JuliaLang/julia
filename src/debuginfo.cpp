@@ -1201,7 +1201,7 @@ template<typename T> static T parse_leb128(const uint8_t *&Addr,
 {
     typedef typename std::make_unsigned<T>::type uT;
     uT v = 0;
-    for (int i = 0;i < ((sizeof(T) * 8 - 1) / 7 + 1);i++) {
+    for (unsigned i = 0;i < ((sizeof(T) * 8 - 1) / 7 + 1);i++) {
         uint8_t a = *Addr;
         Addr++;
         v |= uT(a & 0x7f) << (i * 7);
