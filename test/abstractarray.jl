@@ -405,6 +405,7 @@ function test_map(::Type{TestAbstractArray})
     f(x) = x + 1
     I = GenericIterator{10}()
     @test map(f, I) == Any[2:11...]
+    @test collect(Base.StreamMapIterator(f, I)) == Any[2:11...]
 
     # AbstractArray map for 2 arg case
     f(x, y) = x + y
@@ -413,6 +414,7 @@ function test_map(::Type{TestAbstractArray})
     C = Float64[1:10...]
     @test Base.map_to!(f, 1, A, B, C) == Real[ 2 * i for i in 1:10 ]
     @test map(f, Int[], Float64[]) == Float64[]
+    @test collect(Base.StreamMapIterator(f, Int[], Float64[])) == Float64[]
 
     # AbstractArray map for N-arg case
     f(x, y, z) = x + y + z
@@ -421,7 +423,9 @@ function test_map(::Type{TestAbstractArray})
     @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
     @test Base.map_to_n!(f, 1, A, (B, C, D)) == Real[ 3 * i for i in 1:10 ]
     @test map(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
+    @test collect(Base.StreamMapIterator(f, B, C, D)) == Float64[ 3 * i for i in 1:10 ]
     @test map(f, Int[], Int[], Complex{Int}[]) == Number[]
+    @test collect(Base.StreamMapIterator(f, Int[], Int[], Complex{Int}[])) == Number[]
 end
 
 function test_map_promote(::Type{TestAbstractArray})
