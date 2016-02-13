@@ -345,7 +345,7 @@ ifneq ($(OS), WINNT)
 # Do no enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
-DEBUGFLAGS := -Og -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -ggdb2 -falign-functions
 endif
 
