@@ -3660,7 +3660,18 @@ static void finalize_gc_frame(Function *F)
 
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
-        Value *getter = tbaa_decorate(tbaa_const, new LoadInst(jltls_states_func_ptr, "", ptlsStates));
+        Value *getter;
+        if (GlobalVariable *GV = M->getGlobalVariable(jltls_states_func_ptr->getName())) {
+            getter = tbaa_decorate(tbaa_const, new LoadInst(GV, "", ptlsStates));
+        }
+        else {
+            // If the global variable doesn't exist, we are coping code out of
+            // the shadow_module to run, in which case, we just use the
+            // function directly.
+            getter = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (intptr_t)jl_get_ptls_states_getter()),
+                jltls_states_func->getFunctionType()->getPointerTo());
+        }
         ptlsStates->setCalledFunction(getter);
     }
     ptlsStates->setAttributes(jltls_states_func->getAttributes());
