@@ -19,7 +19,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # the local partition into the array when viewed as a single dimensional array.
     # this can be removed when @parallel or its equivalent supports looping on
     # a subset of workers.
-    loc_subarr_1d::SubArray{T,1,Array{T,N},Tuple{UnitRange{Int}},1}
+    loc_subarr_1d::SubArray{T,1,Array{T,N},Tuple{UnitRange{Int}},true}
 
     SharedArray(d,p,r,sn) = new(d,p,r,sn)
 end
