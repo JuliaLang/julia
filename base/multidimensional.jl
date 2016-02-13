@@ -20,13 +20,28 @@ immutable CartesianIndex{N}
 end
 
 CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
-@generated function (::Type{CartesianIndex{N}}){N}(index::Integer...)
+(::Type{CartesianIndex})(index::Integer...) = CartesianIndex(index)
+(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex(index)
+# Allow passing tuples smaller than N
+@generated function (::Type{CartesianIndex{N}}){N,M}(index::NTuple{M,Integer})
     length(index) == N && return :(CartesianIndex(index))
     length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
     args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
     :(CartesianIndex(tuple($(args...))))
 end
-(::Type{CartesianIndex{N}}){M,N}(index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
+# Un-nest passed CartesianIndexes
+CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(index)
+@generated function CartesianIndex{N}(index::NTuple{N, Union{Integer, CartesianIndex}})
+    ex = Expr(:tuple)
+    for (i, T) in enumerate(index.parameters)
+        if T <: Integer
+            push!(ex.args, :(index[$i]))
+        else
+            push!(ex.args, Expr(:..., :(index[$i].I)))
+        end
+    end
+    :($(Expr(:meta, :inline)); CartesianIndex($ex))
+end
 
 # length
 length{N}(::CartesianIndex{N})=N
@@ -161,8 +176,10 @@ index_lengths_dim(A, dim) = ()
 index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_lengths_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Real, I...) = (1, index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (1, index_shape_dim(A, dim+N, I...)...)
 @inline index_lengths_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_lengths_dim(A, dim+1, I...)...)
 @inline index_lengths_dim(A, dim, i::AbstractArray, I...) = (length(i), index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (length(i), index_lengths_dim(A, dim+N, I...)...)
 
 # shape of array to create for getindex() with indexes I, dropping scalars
 index_shape(A::AbstractArray, I::AbstractArray) = size(I) # Linear index reshape
@@ -173,8 +190,10 @@ index_shape_dim(A, dim, I::Real...) = ()
 index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_shape_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_shape_dim(A, dim+1, i, I...)...)
 @inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, dim+1, I...)...)
+@inline index_shape_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (index_shape_dim(A, dim+N, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector{Bool}, I...) = (sum(i), index_shape_dim(A, dim+1, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector, I...) = (length(i), index_shape_dim(A, dim+1, I...)...)
+@inline index_shape_dim{N}(A, dim, i::AbstractVector{CartesianIndex{N}}, I...) = (length(i), index_shape_dim(A, dim+N, I...)...)
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 # These are not defined on directly on getindex to avoid
