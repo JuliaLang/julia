@@ -63,7 +63,7 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 #ifdef __APPLE__
     jl_critical_error(sig, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
 #else
-    jl_critical_error(sig, (ucontext_t*)context, jl_bt_data, &jl_bt_size);
+    jl_critical_error(sig, (bt_context_t)context, jl_bt_data, &jl_bt_size);
 #endif
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
