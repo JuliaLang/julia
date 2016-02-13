@@ -699,7 +699,7 @@ void allocate_frame()
     }
     else {
         // Initialize the slots for temporary variables to NULL
-        for (int i = 0; i < maxDepth; i++) {
+        for (unsigned i = 0; i < maxDepth; i++) {
             Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
             argTempi->insertAfter(last_gcframe_inst);
             StoreInst *store = new StoreInst(V_null, argTempi);
