@@ -70,7 +70,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         vv = convert(Vector{elty}, v)
         BB = convert(Matrix{elty}, B)
     end
-    let Bs = BB, vs = vv 
+    let Bs = BB, vs = vv
         for atype in ("Array", "SubArray")
             if atype == "Array"
                 BB = Bs
@@ -102,15 +102,24 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty <: Real
         Ts = SymTridiagonal(d, dl)
         Fs = full(Ts)
-        invFsv = Fs\v
         Tldlt = factorize(Ts)
-        x = Ts\v
-        @test_approx_eq x invFsv
-        @test_approx_eq full(full(Tldlt)) Fs
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
         @test size(Tldlt) == size(Ts)
         if elty <: AbstractFloat
             @test typeof(convert(Base.LinAlg.LDLt{Float32},Tldlt)) == Base.LinAlg.LDLt{Float32,SymTridiagonal{elty}}
+        end
+        let vs = vv
+            for atype in ("Array", "SubArray")
+                if atype == "Array"
+                    vv = vs
+                else
+                    vv = sub(vs, 1:n)
+                end
+            end
+            invFsv = Fs\vv
+            x = Ts\vv
+            @test_approx_eq x invFsv
+            @test_approx_eq full(full(Tldlt)) Fs
         end
     end
 
