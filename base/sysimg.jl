@@ -227,6 +227,7 @@ importall .Serializer
 include("channels.jl")
 include("multi.jl")
 include("managers.jl")
+include("mapiterator.jl")
 
 # code loading
 include("loading.jl")
