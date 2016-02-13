@@ -13,22 +13,16 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat
         dv = convert(Vector{elty}, randn(n))
         ev = convert(Vector{elty}, randn(n-1))
-        b = convert(Matrix{elty}, randn(n, 2))
-        c = convert(Matrix{elty}, randn(n, n))
         if (elty <: Complex)
             dv += im*convert(Vector{elty}, randn(n))
             ev += im*convert(Vector{elty}, randn(n-1))
-            b += im*convert(Matrix{elty}, randn(n, 2))
         end
     elseif relty <: Integer
         dv = convert(Vector{elty}, rand(1:10, n))
         ev = convert(Vector{elty}, rand(1:10, n-1))
-        b = convert(Matrix{elty}, rand(1:10, n, 2))
-        c = convert(Matrix{elty}, rand(1:10, n, n))
         if (elty <: Complex)
             dv += im*convert(Vector{elty}, rand(1:10, n))
             ev += im*convert(Vector{elty}, rand(1:10, n-1))
-            b += im*convert(Matrix{elty}, rand(1:10, n, 2))
         end
     end
 
@@ -96,17 +90,22 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test triu!(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,ev,'U')
         @test_throws ArgumentError triu!(Bidiagonal(dv,ev,'U'),n+1)
 
-        debug && println("Linear solver")
+        if relty <: AbstractFloat
+            c = convert(Matrix{elty}, randn(n,n))
+            b = convert(Matrix{elty}, randn(n, 2))
+            if (elty <: Complex)
+                b += im*convert(Matrix{elty}, randn(n, 2))
+            end
+        elseif relty <: Integer
+            c = convert(Matrix{elty}, rand(1:10, n, n))
+            b = convert(Matrix{elty}, rand(1:10, n, 2))
+            if (elty <: Complex)
+                b += im*convert(Matrix{elty}, rand(1:10, n, 2))
+            end
+        end
         Tfull = full(T)
         condT = cond(map(Complex128,Tfull))
-        x = T \ b
-        tx = Tfull \ b
         promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
-        @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
-        @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
-        @test_throws DimensionMismatch T \ ones(elty,n+1,2)
-        @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
-        @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
         if relty != BigFloat
             x = T.'\c.'
             tx = Tfull.' \ c.'
@@ -121,6 +120,31 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T\b.'
         end
+        @test_throws DimensionMismatch T \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+        let bb = b, cc = c
+            for atype in ("Array", "SubArray")
+                if atype == "Array"
+                    b = bb
+                    c = cc
+                else
+                    b = sub(bb, 1:n)
+                    c = sub(cc, 1:n, 1:2)
+                end
+            end
+            debug && println("Linear solver")
+            x = T \ b
+            tx = Tfull \ b
+            @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+            debug && println("Generic Mat-vec ops")
+            @test_approx_eq T*b Tfull*b
+            @test_approx_eq T'*b Tfull'*b
+            if relty != BigFloat # not supported by pivoted QR
+                @test_approx_eq T/b' Tfull/b'
+            end
+        end
 
         debug && println("Round,float,trunc,ceil")
         if elty <: BlasReal
@@ -132,13 +156,6 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             @test isa(round(Int,T), Bidiagonal)
             @test ceil(Int,T) == Bidiagonal(ceil(Int,T.dv),ceil(Int,T.ev),T.isupper)
             @test isa(ceil(Int,T), Bidiagonal)
-        end
-
-        debug && println("Generic Mat-vec ops")
-        @test_approx_eq T*dv Tfull*dv
-        @test_approx_eq T'*dv Tfull'*dv
-        if relty != BigFloat # not supported by pivoted QR
-            @test_approx_eq T/dv' Tfull/dv'
         end
 
         debug && println("Diagonals")
