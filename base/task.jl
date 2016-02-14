@@ -54,6 +54,24 @@ macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
+function copy(t::Task)
+  t.state != :runnable && t.state != :done &&  error("Only runnable or finished tasks can be copied.")
+  newt = ccall(:jl_copy_task, Any, (Any), t)::Task
+  if t.storage != nothing
+    newt.storage = copy(t.storage)
+  else
+    newt.storage = nothing
+  end
+  newt.code  = t.code
+  newt.result = t.result
+  newt.parent = t.parent
+  newt.last   = t.last
+  newt.consumers = jl_nothing;
+  newt.donenotify = jl_nothing;
+  newt
+end
+
+
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
     expr = :(()->($expr))
@@ -197,6 +215,7 @@ function produce(v)
     t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
     if empty
         schedule_and_wait(t, v)
+        ct = current_task() # When a task is copied, ct should be updated to new task ID.
         while true
             # wait until there are more consumers
             q = ct.consumers
