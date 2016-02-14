@@ -11,6 +11,67 @@ elseif Base.JLOptions().code_coverage == 2
 end
 addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
+# Test remote()
+
+let
+    pool = Base.default_worker_pool()
+
+    count = 0
+    count_condition = Condition()
+
+    function remote_wait(c)
+        @async begin
+            count += 1
+            remote(take!)(c)
+            count -= 1
+            notify(count_condition)
+        end
+        yield()
+    end
+
+    testchannels = [RemoteChannel() for i in 1:nworkers()]
+    testcount = 0
+    @test isready(pool) == true
+    for c in testchannels
+        @test count == testcount
+        remote_wait(c)
+        testcount += 1
+    end
+    @test count == testcount
+    @test isready(pool) == false
+
+    for c in testchannels
+        @test count == testcount
+        put!(c, "foo")
+        testcount -= 1
+        wait(count_condition)
+        @test count == testcount
+        @test isready(pool) == true
+    end
+
+    @test count == 0
+
+    for c in testchannels
+        @test count == testcount
+        remote_wait(c)
+        testcount += 1
+    end
+    @test count == testcount
+    @test isready(pool) == false
+
+    for c in reverse(testchannels)
+        @test count == testcount
+        put!(c, "foo")
+        testcount -= 1
+        wait(count_condition)
+        @test count == testcount
+        @test isready(pool) == true
+    end
+
+    @test count == 0
+end
+
+
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 

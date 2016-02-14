@@ -49,6 +49,7 @@ type JoinPGRPMsg <: AbstractMsg
     self_is_local::Bool
     notify_oid::Tuple
     topology::Symbol
+    worker_pool
 end
 type JoinCompleteMsg <: AbstractMsg
     notify_oid::Tuple
@@ -1045,6 +1046,8 @@ function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
 
     for wt in wait_tasks; wait(wt); end
 
+    set_default_worker_pool(msg.worker_pool)
+
     send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid()))
 end
 
@@ -1070,6 +1073,8 @@ function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream)
 
     ntfy_channel = lookup_ref(msg.notify_oid)
     put!(ntfy_channel, w.id)
+
+    put!(default_worker_pool(), w)
 end
 
 function disable_threaded_libs()
@@ -1384,7 +1389,7 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
-    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid, PGRP.topology))
+    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid, PGRP.topology, default_worker_pool()))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
