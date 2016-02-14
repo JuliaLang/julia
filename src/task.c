@@ -918,7 +918,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     return t;
 }
 
-DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
+JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
 {
     jl_task_t *newt = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(newt, jl_task_type);
