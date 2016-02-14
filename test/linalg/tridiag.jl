@@ -63,16 +63,34 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
     @test convert(SymTridiagonal,Tridiagonal(Ts)) == Ts
     @test full(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},full(Ts))
+    if elty == Int
+        vv = rand(1:100, n)
+        BB = rand(1:100, n, 2)
+    else
+        vv = convert(Vector{elty}, v)
+        BB = convert(Matrix{elty}, B)
+    end
+    let Bs = BB, vs = vv
+        for atype in ("Array", "SubArray")
+            if atype == "Array"
+                BB = Bs
+                vv = vs
+            else
+                BB = sub(Bs, 1:n, 1)
+                vv = sub(vs, 1:n)
+            end
+        end
 
-    # tridiagonal linear algebra
-    @test_approx_eq T*v F*v
-    invFv = F\v
-    @test_approx_eq T\v invFv
-    # @test_approx_eq Base.solve(T,v) invFv
-    # @test_approx_eq Base.solve(T, B) F\B
-    Tlu = factorize(T)
-    x = Tlu\v
-    @test_approx_eq x invFv
+        # tridiagonal linear algebra
+        @test_approx_eq T*vv F*vv
+        invFv = F\vv
+        @test_approx_eq T\vv invFv
+        # @test_approx_eq Base.solve(T,v) invFv
+        # @test_approx_eq Base.solve(T, B) F\B
+        Tlu = factorize(T)
+        x = Tlu\vv
+        @test_approx_eq x invFv
+    end
     @test_approx_eq det(T) det(F)
 
     @test_approx_eq T * Base.LinAlg.UnitUpperTriangular(eye(n)) F*eye(n)
@@ -84,15 +102,24 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty <: Real
         Ts = SymTridiagonal(d, dl)
         Fs = full(Ts)
-        invFsv = Fs\v
         Tldlt = factorize(Ts)
-        x = Ts\v
-        @test_approx_eq x invFsv
-        @test_approx_eq full(full(Tldlt)) Fs
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
         @test size(Tldlt) == size(Ts)
         if elty <: AbstractFloat
             @test typeof(convert(Base.LinAlg.LDLt{Float32},Tldlt)) == Base.LinAlg.LDLt{Float32,SymTridiagonal{elty}}
+        end
+        let vs = vv
+            for atype in ("Array", "SubArray")
+                if atype == "Array"
+                    vv = vs
+                else
+                    vv = sub(vs, 1:n)
+                end
+            end
+            invFsv = Fs\vv
+            x = Ts\vv
+            @test_approx_eq x invFsv
+            @test_approx_eq full(full(Tldlt)) Fs
         end
     end
 
