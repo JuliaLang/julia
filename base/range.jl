@@ -413,46 +413,61 @@ end
 
 ## indexing
 
-getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
-unsafe_getindex{T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}}(v::Range{T},
-                                                                i::Integer) =
+function getindex{T}(v::Range{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(v, i)
+    convert(T, first(v) + (i-1)*step(v))
+end
+function getindex{T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}}(v::Range{T},i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(v, i)
     (first(v) + (i - 1) * step(v)) % T
+end
 
-getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
+function getindex{T}(r::FloatRange{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i);
+    convert(T, (r.start + (i-1)*r.step)/r.divisor)
+end
 
-getindex{T}(r::LinSpace{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+function getindex{T}(r::LinSpace{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i);
+    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+end
 
 getindex(r::Range, ::Colon) = copy(r)
-unsafe_getindex(r::Range, ::Colon) = copy(r)
 
-getindex{T<:Integer}(r::UnitRange, s::UnitRange{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
+function getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + s.start-1)
     range(st, length(s))
 end
 
-getindex{T<:Integer}(r::UnitRange, s::StepRange{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
+function getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + s.start-1)
     range(st, step(s), length(s))
 end
 
-getindex{T<:Integer}(r::StepRange, s::Range{T}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex{T<:Integer}(r::StepRange, s::Range{T})
+function getindex{T<:Integer}(r::StepRange, s::Range{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step(r)*step(s), length(s))
 end
 
-getindex(r::FloatRange, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::FloatRange, s::OrdinalRange)
+function getindex(r::FloatRange, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
 end
 
-getindex(r::LinSpace, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     sl::T = length(s)
     ifirst = first(s)
     ilast = last(s)

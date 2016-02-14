@@ -346,8 +346,10 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
     return r
 end
 
-@inline getindex(B::BitArray, i::Int) = (checkbounds(B, i); unsafe_getindex(B, i))
-@inline unsafe_getindex(B::BitArray, i::Int) = unsafe_bitgetindex(B.chunks, i)
+@inline function getindex(B::BitArray, i::Int)
+    @boundscheck checkbounds(B, i)
+    unsafe_bitgetindex(B.chunks, i)
+end
 
 ## Indexing: setindex! ##
 
@@ -360,20 +362,20 @@ end
     end
 end
 
-@inline setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
-@inline function unsafe_setindex!(B::BitArray, x, i::Int)
+@inline function setindex!(B::BitArray, x, i::Int)
+    @boundscheck checkbounds(B, i)
     unsafe_bitsetindex!(B.chunks, convert(Bool, x), i)
     return B
 end
 
 # logical indexing
-# (when the indexing is provided as an Array{Bool} or a BitArray we can be
-# sure about the behaviour and use unsafe_getindex; in the general case
-# we can't and must use getindex, otherwise silent corruption can happen)
 
 # When indexing with a BitArray, we can operate whole chunks at a time for a ~100x gain
-setindex!(B::BitArray, x, I::BitArray) = (checkbounds(B, I); unsafe_setindex!(B, x, I))
-function unsafe_setindex!(B::BitArray, x, I::BitArray)
+@inline function setindex!(B::BitArray, x, I::BitArray)
+    @boundscheck checkbounds(B, I)
+    _unsafe_setindex!(B, x, I)
+end
+function _unsafe_setindex!(B::BitArray, x, I::BitArray)
     y = convert(Bool, x)
     Bc = B.chunks
     Ic = I.chunks
@@ -392,8 +394,11 @@ end
 
 # Assigning an array of bools is more complicated, but we can still do some
 # work on chunks by combining X and I 64 bits at a time to improve perf by ~40%
-setindex!(B::BitArray, X::AbstractArray, I::BitArray) = (checkbounds(B, I); unsafe_setindex!(B, X, I))
-function unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+@inline function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+    @boundscheck checkbounds(B, I)
+    _unsafe_setindex!(B, X, I)
+end
+function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Bc = B.chunks
     Ic = I.chunks
     length(Bc) == length(Ic) || throw_boundserror(B, I)
@@ -409,7 +414,7 @@ function unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         for j = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
                 lx < c && throw_setindex_mismatch(X, c)
-                x = convert(Bool, unsafe_getindex(X, c))
+                @inbounds x = convert(Bool, X[c])
                 C = ifelse(x, C | u, C & ~u)
                 c += 1
             end
