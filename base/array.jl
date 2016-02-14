@@ -240,11 +240,10 @@ done(a::Array,i) = i == length(a)+1
 getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
 getindex(A::Array, i1::Real, i2::Real, I::Real...) = arrayref(A, to_index(i1), to_index(i2), to_indexes(I...)...)
 
-unsafe_getindex(A::Array, i1::Real, I::Real...) = @inbounds return arrayref(A, to_index(i1), to_indexes(I...)...)
-
 # Faster contiguous indexing using copy! for UnitRange and Colon
-getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
-function unsafe_getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::UnitRange{Int})
+    @_inline_meta
+    @boundscheck checkbounds(A, I)
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
@@ -252,8 +251,7 @@ function unsafe_getindex(A::Array, I::UnitRange{Int})
     end
     return X
 end
-getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
-function unsafe_getindex(A::Array, ::Colon)
+function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
     if lI > 0
@@ -270,11 +268,6 @@ end
 ## Indexing: setindex! ##
 setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
 setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)
-
-# Type inference is confused by `@inbounds return ...` and introduces a
-# !ispointerfree local variable and a GC frame
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) =
-    (@inbounds arrayset(A, convert(T,x)::T, to_index(i1), to_indexes(I...)...); A)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -301,8 +294,9 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copy!
-setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_setindex!(A, X, I))
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+    @_inline_meta
+    @boundscheck checkbounds(A, I)
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
@@ -310,8 +304,7 @@ function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     end
     return A
 end
-setindex!{T}(A::Array{T}, X::Array{T}, c::Colon) = unsafe_setindex!(A, X, c)
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
+function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
     lI = length(A)
     setindex_shape_check(X, lI)
     if lI > 0

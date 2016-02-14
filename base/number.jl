@@ -12,10 +12,17 @@ ndims{T<:Number}(::Type{T}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
 getindex(x::Number) = x
-getindex(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
-getindex(x::Number, I::Integer...) = all([i == 1 for i in I]) ? x : throw(BoundsError())
+function getindex(x::Number, i::Integer)
+    @_inline_meta
+    @boundscheck i == 1 || throw(BoundsError())
+    x
+end
+function getindex(x::Number, I::Integer...)
+    @_inline_meta
+    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    x
+end
 getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
-unsafe_getindex(x::Real, i::Real) = x
 first(x::Number) = x
 last(x::Number) = x
 

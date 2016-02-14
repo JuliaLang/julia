@@ -36,15 +36,22 @@ fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
 
-getindex(D::Diagonal, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_getindex(D, i, j))
-unsafe_getindex{T}(D::Diagonal{T}, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(T)
-unsafe_getindex{T}(D::Diagonal{Matrix{T}}, i::Int, j::Int) = i == j ? D.diag[i] : zeros(T, size(D.diag[i
-], 1), size(D.diag[j], 2))
-
-setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
-function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
+@inline function getindex(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
     if i == j
-        unsafe_setindex!(D.diag, v, i)
+        @inbounds r = D.diag[i]
+    else
+        r = diagzero(D, i, j)
+    end
+    r
+end
+diagzero{T}(::Diagonal{T},i,j) = zero(T)
+diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+
+function setindex!(D::Diagonal, v, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds D.diag[i] = v
     elseif v != 0
         throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
     end
