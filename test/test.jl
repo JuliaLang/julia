@@ -2,40 +2,41 @@
 
 using Base.Test
 
+# ensure an error is thrown if the test doesn't pass
+macro pass(body)
+    :(@assert(isa(@test($body), Test.Pass)))
+end
+macro pass_throws(t, body)
+    :(@assert(isa(@test_throws($t, $body), Test.Pass)))
+end
+
 # test file to test testing
 
 # Test @test
-@test true
-@test 1 == 1
-@test 1 != 2
-@test strip("\t  hi   \n") == "hi"
-@test strip("\t  this should fail   \n") != "hi"
+@pass true
+@pass 1 == 1
+@pass 1 != 2
+@pass strip("\t  hi   \n") == "hi"
+@pass strip("\t  this should fail   \n") != "hi"
 
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
-@test a[1,1,1,1,1] == 10
-@test a[1,1,1,1,1] != 2
+@pass a[1,1,1,1,1] == 10
+@pass a[1,1,1,1,1] != 2
 
-@test rand() != rand()
+@pass rand() != rand()
 
 # Test printing of Pass results
 # Pass - constant
-@test contains(sprint(show, @test true), "Expression: true")
+@pass contains(sprint(show, @test true), "Expression: true")
 # Pass - expression
-@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
-@test contains(sprint(show, @test !false), "Expression: !false")
+@pass contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
+@pass contains(sprint(show, @test !false), "Expression: !false")
 # Pass - exception
-@test contains(sprint(show, @test_throws ErrorException error()),
+@pass contains(sprint(show, @test_throws ErrorException error()),
                 "Thrown: ErrorException")
 
-# Test printing of Fail results
-type NoThrowTestSet <: Base.Test.AbstractTestSet
-    results::Vector
-    NoThrowTestSet(desc) = new([])
-end
-Base.Test.record(ts::NoThrowTestSet, t::Base.Test.Result) = (push!(ts.results, t); t)
-Base.Test.finish(ts::NoThrowTestSet) = ts.results
-fails = @testset NoThrowTestSet begin
+ts = @testset begin
     # Fail - wrong exception
     @test_throws OverflowError error()
     # Fail - no exception
@@ -45,43 +46,26 @@ fails = @testset NoThrowTestSet begin
     # Fail - comparison
     @test 1+1 == 2+2
 end
-for i in 1:4
-    @test isa(fails[i], Base.Test.Fail)
+for result in ts.results
+    @assert isa(result, Test.Fail)
 end
-@test contains(sprint(show, fails[1]), "Thrown: ErrorException")
-@test contains(sprint(show, fails[2]), "No exception thrown")
-@test contains(sprint(show, fails[3]), "Evaluated: false")
-@test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
+@pass contains(sprint(show, ts.results[1]), "Thrown: ErrorException")
+@pass contains(sprint(show, ts.results[2]), "No exception thrown")
+@pass contains(sprint(show, ts.results[3]), "Evaluated: false")
+@pass contains(sprint(show, ts.results[4]), "Evaluated: 2 == 4")
 
-# Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3))
-@test contains(tse_str, "1 passed")
-@test contains(tse_str, "2 failed")
-@test contains(tse_str, "3 errored")
-
-@test Test.finish(Test.FallbackTestSet()) != nothing
-
-OLD_STDOUT = STDOUT
-catch_out = IOStream("")
-rd, wr = redirect_stdout()
-
-# Check that the fallback test set throws immediately
-@test_throws ErrorException (@test 1 == 2)
-
-@testset "no errors" begin
-    @test true
-    @test 1 == 1
-end
+@pass Test.finish(Test.FallbackTestSet()) != nothing
 
 # Test entirely empty test set
-@testset "outer" begin
+ts = @testset "outer" begin
     @testset "inner" begin
     end
 end
 
-try
+@pass length(ts.results) == 1
+@pass isempty(ts.results[1].results)
 
-@testset "outer" begin
+ts = @testset "outer" begin
     @testset "inner1" begin
         @test true
         @test false
@@ -137,49 +121,35 @@ try
         end
     end
 end
-    # These lines shouldn't be called
-    redirect_stdout(OLD_STDOUT)
-    error("No exception was thrown!")
-catch ex
 
-    @test isa(ex, Test.TestSetException)
-    @test ex.pass  == 24
-    @test ex.fail  == 6
-    @test ex.error == 6
-end
+count = Test.get_test_counts(ts)
+@assert count[4] == 24 # passes
+@assert count[5] == 6  # fails
+@assert count[6] == 6  # errors
 
 # Test @test_approx_eq
 # TODO
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1, .4)
+@assert isapprox(.1+.1+.1, .3)
+@assert !isapprox(.1+.1+.1, .4)
 
-@test_throws ErrorException Test.test_approx_eq(ones(10),ones(11),1e-8,"a","b")
-@test_throws ErrorException Test.test_approx_eq(ones(10),zeros(10),1e-8,"a","b")
+@pass_throws ErrorException Test.test_approx_eq(ones(10),ones(11),1e-8,"a","b")
+@pass_throws ErrorException Test.test_approx_eq(ones(10),zeros(10),1e-8,"a","b")
 
 # Test @test_approx_eq_eps
 # TODO
 
-ts = @testset "@testset should return the testset" begin
-    @test true
-end
-@test typeof(ts) == Base.Test.DefaultTestSet
-@test typeof(ts.results[1]) == Base.Test.Pass
-
 tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
     @test true
 end
-@test length(tss) == 3
-@test typeof(tss[1]) == Base.Test.DefaultTestSet
-@test typeof(tss[1].results[1]) == Base.Test.Pass
-
-# now we're done running tests with DefaultTestSet so we can go back to STDOUT
-redirect_stdout(OLD_STDOUT)
+@assert length(tss) == 3
+@assert typeof(tss[1]) == Test.DefaultTestSet
+@assert typeof(tss[1].results[1]) == Test.Pass
 
 # import the methods needed for defining our own testset type
 import Base.Test: record, finish
 using Base.Test: get_testset_depth, get_testset
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+immutable CustomTestSet <: Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
@@ -222,26 +192,26 @@ ts = @testset CustomTestSet "Testing custom testsets" begin
     end
 end
 
-@test typeof(ts) == CustomTestSet
-@test ts.foo == 1
-@test ts.description == "Testing custom testsets"
-@test typeof(ts.results[1]) == CustomTestSet
-@test ts.results[1].description == "custom testset inner 1"
-@test ts.results[1].foo == 1
-@test typeof(ts.results[1].results[1]) == Pass
-@test typeof(ts.results[1].results[2]) == Fail
-@test typeof(ts.results[1].results[3]) == Error
-@test typeof(ts.results[1].results[4]) == Fail
-@test typeof(ts.results[1].results[5]) == Pass
+@assert typeof(ts) == CustomTestSet
+@assert ts.foo == 1
+@assert ts.description == "Testing custom testsets"
+@assert typeof(ts.results[1]) == CustomTestSet
+@assert ts.results[1].description == "custom testset inner 1"
+@assert ts.results[1].foo == 1
+@assert typeof(ts.results[1].results[1]) == Pass
+@assert typeof(ts.results[1].results[2]) == Fail
+@assert typeof(ts.results[1].results[3]) == Error
+@assert typeof(ts.results[1].results[4]) == Fail
+@assert typeof(ts.results[1].results[5]) == Pass
 
-@test typeof(ts.results[2]) == CustomTestSet
-@test ts.results[2].description == "custom testset inner 2"
-@test ts.results[2].foo == 4
-@test typeof(ts.results[2].results[1]) == CustomTestSet
-@test ts.results[2].results[1].foo == 1
-@test typeof(ts.results[2].results[1].results[1]) == Pass
-@test typeof(ts.results[2].results[2]) == CustomTestSet
-@test ts.results[2].results[2].foo == 3
+@assert typeof(ts.results[2]) == CustomTestSet
+@assert ts.results[2].description == "custom testset inner 2"
+@assert ts.results[2].foo == 4
+@assert typeof(ts.results[2].results[1]) == CustomTestSet
+@assert ts.results[2].results[1].foo == 1
+@assert typeof(ts.results[2].results[1].results[1]) == Pass
+@assert typeof(ts.results[2].results[2]) == CustomTestSet
+@assert ts.results[2].results[2].foo == 3
 
 # test custom testset types on testset/for
 tss = @testset CustomTestSet foo=3 "custom testset $i" for i in 1:6
@@ -256,13 +226,30 @@ end
 
 
 for i in 1:6
-    @test typeof(tss[i]) == CustomTestSet
-    @test tss[i].foo == 3
+    @assert typeof(tss[i]) == CustomTestSet
+    @assert tss[i].foo == 3
     for j in 1:3
-        @test typeof(tss[i].results[j]) == CustomTestSet
-        @test tss[i].results[j].foo == 1
-        @test typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
+        @assert typeof(tss[i].results[j]) == CustomTestSet
+        @assert tss[i].results[j].foo == 1
+        @assert typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
     end
-    @test typeof(tss[i].results[4]) == CustomTestSet
-    @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
+    @assert typeof(tss[i].results[4]) == CustomTestSet
+    @assert typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
+
+# result stream
+task = @schedule Test.results |> collect
+sleep(0) # let iterator start so it doesn't miss any results
+
+@testset "result stream" begin
+    @test true
+    @testset "nested" for i in 1:3
+        @test 0 < i < 4
+    end
+    @test false
+end
+
+close(Test.results)
+buffer = wait(task)
+@assert length(buffer) == 9
+@assert isa(buffer[1], Test.Pass)
