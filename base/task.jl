@@ -56,18 +56,14 @@ end
 
 function copy(t::Task)
   t.state != :runnable && t.state != :done &&  error("Only runnable or finished tasks can be copied.")
-  newt = ccall(:jl_copy_task, Any, (Any), t)::Task
+  newt = ccall(:jl_copy_task, Any, (Any, ), t)::Task
   if t.storage != nothing
     newt.storage = copy(t.storage)
   else
     newt.storage = nothing
   end
   newt.code  = t.code
-  newt.result = t.result
-  newt.parent = t.parent
-  newt.last   = t.last
-  newt.consumers = jl_nothing;
-  newt.donenotify = jl_nothing;
+  newt.last  = t.last
   newt
 end
 

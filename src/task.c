@@ -927,6 +927,10 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
     newt->state = t->state;
     newt->start = t->start;
     newt->tls = jl_nothing; // does this point to newt.storate?
+    newt->result = t->result;
+    newt->parent = t->parent;
+    newt->consumers = jl_nothing;
+    newt->donenotify = jl_nothing;
     newt->exception = jl_nothing;
     newt->backtrace = jl_nothing;
     newt->eh = NULL;
@@ -947,7 +951,12 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
 #else // task copying for other stack switching methanism not implemented yet.
 #error not supported yet.
 #endif
-    jl_gc_wb_back(newt); // gc write back for new task.
+
+#ifdef JULIA_ENABLE_THREADING
+    arraylist_new(&t->locks, 0);
+#endif
+
+    jl_gc_wb_back(newt); // gc write barrier for new task.
     return newt;
 }
 
