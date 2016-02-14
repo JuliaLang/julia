@@ -226,6 +226,7 @@ include("serialize.jl")
 importall .Serializer
 include("channels.jl")
 include("multi.jl")
+include("workerpool.jl")
 include("managers.jl")
 
 # code loading
