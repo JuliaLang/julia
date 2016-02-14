@@ -13,6 +13,23 @@ function show(io::IO, t::Task)
     end
 end
 
+function copy(t::Task)
+  t.state != :runnable && t.state != :done &&  error("Only runnable or finished tasks can be copied.")
+  newt = ccall(:jl_copy_task, Any, (Any), t)::Task
+  if t.storage != nothing
+    newt.storage = copy(t.storage)
+  else
+    newt.storage = nothing
+  end
+  newt.code  = t.code
+  newt.result = t.result
+  newt.parent = t.parent
+  newt.last   = t.last
+  newt.consumers = jl_nothing;
+  newt.donenotify = jl_nothing;
+  newt
+end
+
 # Container for a captured exception and its backtrace. Can be serialized.
 type CapturedException
     ex::Any
@@ -208,6 +225,7 @@ function produce(v)
         else
             schedule_and_wait(t, v)
         end
+        ct = current_task() # When a task is copied, ct should be updated to new task ID.
         while true
             # wait until there are more consumers
             q = ct.consumers
