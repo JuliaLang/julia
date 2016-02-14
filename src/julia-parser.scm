@@ -1874,31 +1874,32 @@
           ((eq? t '|'|)
            (take-token s)
            (let ((firstch (read-char (ts:port s))))
-             (if (eqv? firstch #\')
-                 (error "invalid character literal")
-                 (if (and (not (eqv? firstch #\\))
-                          (not (eof-object? firstch))
-                          (eqv? (peek-char (ts:port s)) #\'))
-                     ;; easy case: 1 character, no \
-                     (begin (read-char (ts:port s)) firstch)
-                     (let ((b (open-output-string)))
-                       (let loop ((c firstch))
-                         (if (eqv? c #\')
-                             #t
-                             (begin (write-char (not-eof-1 c) b)
-                                    (if (eqv? c #\\)
-                                        (write-char
-                                         (not-eof-1 (read-char (ts:port s))) b))
-                                    (loop (read-char (ts:port s))))))
-                       (let ((str (unescape-string (io.tostring! b))))
-                         (if (= (length str) 1)
-                             ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
-                             ;; want to use the raw value as a codepoint in this case.
-                             (wchar (aref str 0))
-                             (if (or (not (= (string-length str) 1))
-                                     (not (string.isutf8 str)))
-                                 (error "invalid character literal")
-                                 (string.char str 0)))))))))
+               (if (and (not (eqv? firstch #\\))
+                        (not (eof-object? firstch))
+                        (eqv? (peek-char (ts:port s)) #\'))
+                   ;; easy case: 1 character, no \
+                   (begin (read-char (ts:port s)) firstch)
+                   (let ((b (open-output-string)))
+                     (let loop ((c firstch))
+                       (if (eqv? c #\')
+                           #t
+                           (begin (if (eqv? c #\")
+                                      (error "invalid character literal") ;; issue 14683
+                                      #t)
+                                  (write-char (not-eof-1 c) b)
+                                  (if (eqv? c #\\)
+                                      (write-char
+                                       (not-eof-1 (read-char (ts:port s))) b))
+                                      (loop (read-char (ts:port s))))))
+                     (let ((str (unescape-string (io.tostring! b))))
+                       (if (= (length str) 1)
+                           ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
+                           ;; want to use the raw value as a codepoint in this case.
+                           (wchar (aref str 0))
+                           (if (or (not (= (string-length str) 1))
+                                   (not (string.isutf8 str)))
+                               (error "invalid character literal")
+                               (string.char str 0))))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
