@@ -1471,10 +1471,7 @@
                       ((eqv? c closer)  (loop (cons nxt lst)))
                       ((eq? c 'for)
                        (take-token s)
-                       (let ((gen (parse-generator s nxt #f)))
-                         (if (eqv? (require-token s) #\,)
-                             (take-token s))
-                         (loop (cons gen lst))))
+                       (loop (cons (parse-generator s nxt) lst)))
                       ;; newline character isn't detectable here
                       #;((eqv? c #\newline)
                       (error "unexpected line break in argument list"))
@@ -1529,11 +1526,8 @@
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
 
-(define (parse-generator s first allow-comma)
-  (let ((r (if allow-comma
-               (parse-comma-separated-iters s)
-               (list (parse-iteration-spec s)))))
-    `(generator ,first ,@r)))
+(define (parse-generator s first)
+  `(generator ,first ,@(parse-comma-separated-iters s)))
 
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
@@ -1965,7 +1959,7 @@
                             ex))
                        ((eq? t 'for)
                         (take-token s)
-                        (let ((gen (parse-generator s ex #t)))
+                        (let ((gen (parse-generator s ex)))
                           (if (eqv? (require-token s) #\) )
                               (take-token s)
                               (error "expected \")\""))
