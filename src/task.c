@@ -938,6 +938,7 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
     newt->stkbuf = NULL;
     newt->gcstack = t->gcstack;
     newt->tid = t->tid;
+    newt->started = t->started;
 
     memcpy((void*)newt->ctx, (void*)t->ctx, sizeof(jl_jmp_buf));
 #ifdef COPY_STACKS
@@ -951,8 +952,11 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
         newt->bufsz = 0;
         newt->stkbuf = NULL;
     }
-#else // task copying for other stack switching methanism not implemented yet.
-#error not supported yet.
+#else // TODO: test task copying implementation for !COPY_STACKS.
+    newt->ssize = t->ssize;
+    newt->bufsz = t->bufsz;
+    newt->stkbuf = allocb(t->bufsz);
+    memcpy(newt->stkbuf, t->stkbuf, t->bufsz);
 #endif
 
 #ifdef JULIA_ENABLE_THREADING
