@@ -3656,7 +3656,7 @@ static void finalize_gc_frame(Function *F)
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         Value *getter;
-        if (GlobalVariable *GV = M->getGlobalVariable(jltls_states_func_ptr->getName())) {
+        if (GlobalVariable *GV = M->getGlobalVariable(jltls_states_func_ptr->getName(), true /* AllowLocal */)) {
             getter = tbaa_decorate(tbaa_const, new LoadInst(GV, "", ptlsStates));
         }
         else {
