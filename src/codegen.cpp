@@ -3166,63 +3166,55 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
     // it's a local variable
     jl_varinfo_t &vi = ctx->vars[s];
+    jl_cgval_t rval_info = emit_expr(r, ctx);
+    if (!vi.used)
+        return;
 
-    if (vi.memloc || !vi.hasGCRoot) {
-        // boxed or unused variables
-        jl_cgval_t rval_info = emit_expr(r, ctx);
-        if (!vi.used)
-            return;
-
-        if (vi.memloc) {
-            Value *bp = vi.memloc;
-            if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && (!rval_info.typ || rval_info.typ == jl_bottom_type)) {
-                if (vi.usedUndef) {
-                    // sometimes x = y::Union{} occurs
-                    jl_sym_t *s;
-                    if (jl_is_symbolnode(r))
-                        s = jl_symbolnode_sym(r);
-                    else
-                        s = (jl_sym_t*)r;
-                    builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)s));
-                }
-                return;
-            }
-            Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to variable slot
-            builder.CreateStore(rval, bp, vi.isVolatile); // todo: move this closer to the value creation?
-        }
-        else {
-            // SSA variable w/o gcroot, just track the value info directly
-            assert(vi.isSA);
-            if (!rval_info.isimmutable && !rval_info.isboxed) { // emit a copy of values stored in mutable slots
-                rval_info = mark_julia_type(
-                        emit_unbox(julia_type_to_llvm(rval_info.typ), rval_info, rval_info.typ),
-                        false,
-                        rval_info.typ, ctx);
-            }
-
-            vi.value = rval_info;
-        }
-        // add info to arravar list
-        if (rval_info.isboxed) {
-            // check isboxed in case rval isn't the right type (for example, on a dead branch),
-            // so we don't try to assign it to the arrayvar info
-            jl_arrayvar_t *av = arrayvar_for(l, ctx);
-            if (av != NULL) {
-                assign_arrayvar(*av, rval_info, ctx);
-            }
+    // add info to arravar list
+    if (rval_info.isboxed) {
+        // check isboxed in case rval isn't the right type (for example, on a dead branch),
+        // so we don't try to assign it to the arrayvar info
+        jl_arrayvar_t *av = arrayvar_for(l, ctx);
+        if (av != NULL) {
+            assign_arrayvar(*av, rval_info, ctx);
         }
     }
-    else if (vi.value.isghost) {
+
+    if (vi.memloc) {
+        // boxed or unused variables
+        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && (!rval_info.typ || rval_info.typ == jl_bottom_type)) {
+            if (vi.usedUndef) {
+                // sometimes x = y::Union{} occurs
+                jl_sym_t *s;
+                if (jl_is_symbolnode(r))
+                    s = jl_symbolnode_sym(r);
+                else
+                    s = (jl_sym_t*)r;
+                builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)s));
+            }
+            return;
+        }
+        Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to variable slot
+        builder.CreateStore(rval, vi.memloc, vi.isVolatile);
+    }
+    else if (vi.value.isghost || vi.value.constant) {
         // virtual store
-        (void)emit_expr(r, ctx);
+    }
+    else if (!vi.hasGCRoot) {
+        // SSA variable w/o gcroot, just track the value info directly
+        assert(vi.isSA);
+        if (!rval_info.isimmutable && !rval_info.isboxed) { // emit a copy of values stored in mutable slots
+            rval_info = mark_julia_type(
+                    emit_unbox(julia_type_to_llvm(rval_info.typ), rval_info, rval_info.typ),
+                    false, rval_info.typ, ctx);
+        }
+        vi.value = rval_info;
     }
     else {
         // store unboxed
         assert(vi.value.ispointer);
-        builder.CreateStore(emit_unbox(
-                    julia_type_to_llvm(vi.value.typ),
-                    emit_expr(r, ctx),
-                    vi.value.typ),
+        builder.CreateStore(
+                emit_unbox(julia_type_to_llvm(vi.value.typ), rval_info, vi.value.typ),
                 vi.value.V, vi.isVolatile);
     }
 }
@@ -4553,11 +4545,15 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.vars[s];
-        if (varinfo.value.isghost) {
-            // no need to explicitly load/store a ghost value
+        if (varinfo.value.isghost || varinfo.value.constant) {
+            // no need to explicitly load/store a constant/ghost value
             continue;
         }
-        if (store_unboxed_p(s, &ctx)) {
+        if (jl_is_type_type(varinfo.value.typ) && jl_is_leaf_type(jl_tparam0(varinfo.value.typ))) {
+            // replace T::Type{T} with T
+            varinfo.value = mark_julia_const(jl_tparam0(varinfo.value.typ));
+        }
+        else if (store_unboxed_p(s, &ctx)) {
             if (varinfo.isAssigned) // otherwise, just leave it in the input register
                 alloc_local(s, &ctx);
         }
@@ -4570,10 +4566,11 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
         assert(jl_is_symbol(s));
         jl_varinfo_t &vi = ctx.vars[s];
-        if (vi.isArgument)
+        if (vi.isArgument) {
             continue;
-        if (vi.value.isghost && !vi.usedUndef) {
-            // no need to explicitly load/store a ghost value
+        }
+        if ((vi.value.isghost || vi.value.constant) && !vi.usedUndef) {
+            // no need to explicitly load/store a constant/ghost value
             continue;
         }
         if (store_unboxed_p(s, &ctx)) {
@@ -4586,6 +4583,11 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             }
             if (jl_options.opt_level > 0 && vi.isSA && !vi.isVolatile && !vi.usedUndef) {
                 vi.hasGCRoot = false; // so far...
+            }
+            else if (jl_is_type_type(vi.value.typ) && jl_is_leaf_type(jl_tparam0(vi.value.typ)) && !vi.usedUndef) {
+                // replace T::Type{T} with T
+                vi.value = mark_julia_const(jl_tparam0(vi.value.typ));
+                vi.hasGCRoot = false;
             }
             else {
                 vi.hasGCRoot = true;
@@ -4609,7 +4611,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.vars[s];
         assert(!varinfo.memloc); // arguments shouldn't also have memory locs
-        if (varinfo.value.isghost) {
+        if (varinfo.value.isghost || varinfo.value.constant) {
             // no need to explicitly load/store a ghost value
             varinfo.hasGCRoot = true;
             continue;
@@ -4628,10 +4630,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         jl_varinfo_t &varinfo = ctx.vars[s];
         if (varinfo.memloc || varinfo.isArgument)
             continue; // gc root already created
-        if (store_unboxed_p(s, &ctx) ||
-                (varinfo.value.isghost && !varinfo.usedUndef)) {
+        if ((varinfo.value.isghost || varinfo.value.constant) && !varinfo.usedUndef)
             varinfo.hasGCRoot = true; // will never need a gc-root for this
-        }
+        else if (store_unboxed_p(s, &ctx))
+            varinfo.hasGCRoot = true; // will never need a gc-root for this
         else if (varinfo.hasGCRoot) {
             Value *lv = emit_local_slot(&ctx);
             varnum++;
@@ -4671,13 +4673,18 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         bool isboxed;
         Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
         if (s == unused_sym) {
-            if (specsig && !type_is_ghost(llvmArgType)) AI++;
+            if (specsig && !type_is_ghost(llvmArgType)) ++AI;
             continue;
         }
         jl_varinfo_t &vi = ctx.vars[s];
         jl_cgval_t theArg;
         if (!vi.value.isghost) {
-            if (specsig) {
+            if (vi.value.constant) {
+                assert(vi.memloc == NULL);
+                if (specsig && !type_is_ghost(llvmArgType)) ++AI;
+                continue;
+            }
+            else if (specsig) {
                 if (type_is_ghost(llvmArgType)) // this argument is not actually passed
                     theArg = ghostValue(argType);
                 else if (llvmArgType->isAggregateType())
