@@ -935,6 +935,7 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
     newt->backtrace = jl_nothing;
     newt->eh = NULL;
     newt->gcstack = t->gcstack;
+    newt->tid = t->tid;
 
     memcpy((void*)newt->ctx, (void*)t->ctx, sizeof(jl_jmp_buf));
 #ifdef COPY_STACKS
