@@ -952,11 +952,8 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
         newt->bufsz = 0;
         newt->stkbuf = NULL;
     }
-#else // TODO: test task copying implementation for !COPY_STACKS.
-    newt->ssize = t->ssize;
-    newt->bufsz = t->bufsz;
-    newt->stkbuf = allocb(t->bufsz);
-    memcpy(newt->stkbuf, t->stkbuf, t->bufsz);
+#else // task copying for other stack switching methanism not supported yet.
+#error not supported yet.
 #endif
 
 #ifdef JULIA_ENABLE_THREADING
