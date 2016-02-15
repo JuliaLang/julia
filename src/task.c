@@ -921,8 +921,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
 {
     jl_task_t *newt = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
-    jl_set_typeof(newt, jl_task_type);
+    JL_GC_PUSH1(&newt);
 
+    jl_set_typeof(newt, jl_task_type);
     newt->current_module = t->current_module;
     newt->state = t->state;
     newt->start = t->start;
@@ -934,6 +935,7 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
     newt->exception = jl_nothing;
     newt->backtrace = jl_nothing;
     newt->eh = NULL;
+    newt->stkbuf = NULL;
     newt->gcstack = t->gcstack;
     newt->tid = t->tid;
 
@@ -958,6 +960,7 @@ JL_DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
 #endif
 
     jl_gc_wb_back(newt); // gc write barrier for new task.
+    JL_GC_POP();
     return newt;
 }
 
