@@ -276,7 +276,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         if (!jl_is_abstracttype(ety)) {
             if (jl_is_mutable_datatype(ety)) {
                 // no copy, just reference the data field
-                return builder.CreateBitCast(jvinfo.V, to);
+                return data_pointer(jvinfo, ctx, to);
             }
             else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) {
                 // yes copy
@@ -297,7 +297,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                 }
                 ai->setAlignment(16);
                 prepare_call(
-                    builder.CreateMemCpy(ai, builder.CreateBitCast(jvinfo.V, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+                    builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
                 return builder.CreateBitCast(ai, to);
             }
         }
@@ -315,7 +315,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                 T_int1);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
-        Value *p1 = builder.CreatePointerCast(jvinfo.V, to);
+        Value *p1 = data_pointer(jvinfo, ctx, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
@@ -324,8 +324,8 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        prepare_call(builder.CreateMemCpy(ai, jvinfo.V, nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
-        Value *p2 = builder.CreatePointerCast(ai, to);
+        prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+        Value *p2 = builder.CreateBitCast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
         PHINode *p = builder.CreatePHI(to, 2);
@@ -343,7 +343,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
     }
     else {
-        prepare_call(builder.CreateMemCpy(slot, jvinfo.V,
+        prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
                     (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
         mark_gc_use(jvinfo);
@@ -367,7 +367,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
     ptr = static_eval(arg, ctx, true);
     if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(arg, ctx);
-        jl_cgval_t arg1 = emit_unboxed(arg, ctx);
+        jl_cgval_t arg1 = emit_expr(arg, ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
             emit_cpointercheck(arg1,
                                !strcmp(fname,"ccall") ?
@@ -433,6 +433,27 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 
 typedef AttributeSet attr_type;
 
+static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failure, bool compiletime=false)
+{
+    jl_value_t *constant = NULL;
+    constant = static_eval(ex, ctx, true, true);
+    if (constant || jl_is_gensym(ex))
+        return constant;
+    JL_TRY {
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex,
+                                                 ctx->linfo->sparam_syms,
+                                                 ctx->linfo->sparam_vals);
+    }
+    JL_CATCH {
+        if (compiletime)
+            jl_rethrow_with_add(failure);
+        if (failure)
+            emit_error(failure, ctx);
+        constant = NULL;
+    }
+    return constant;
+}
+
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -443,13 +464,10 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     JL_GC_PUSH1(&rt);
 
     if (nargs == 2) {
-        JL_TRY {
-            rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
-            jl_rethrow_with_add("error interpreting cglobal type");
+        rt = try_eval(args[2], ctx, "error interpreting cglobal pointer type");
+        if (rt == NULL) {
+            JL_GC_POP();
+            return jl_cgval_t();
         }
 
         JL_TYPECHK(cglobal, type, rt);
@@ -507,40 +525,10 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     jl_svec_t *stt = NULL;
     JL_GC_PUSH5(&ir, &rt, &at, &stt, &decl);
-    {
-    JL_TRY {
-        at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall argument tuple");
-    }
-    }
-    {
-    JL_TRY {
-        rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall return type");
-    }
-    }
-    {
-    JL_TRY {
-        ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting IR argument");
-    }
-    }
+    at = try_eval(args[3], ctx, "error statically evaluating llvmcall argument tuple", true);
+    rt = try_eval(args[2], ctx, "error statically evaluating llvmcall return type", true);
+    ir = try_eval(args[1], ctx, "error statically evaluating llvm IR argument", true);
     int i = 1;
-    if (ir == NULL) {
-        jl_error("Cannot statically evaluate first argument to llvmcall");
-    }
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
         if (jl_nfields(ir) != 2)
@@ -592,13 +580,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         }
         jl_value_t *argi = args[4 + i];
         jl_cgval_t &arg = argv[i];
-        if (toboxed || !jl_isbits(tti)) {
-            arg = emit_expr(argi, ctx, true);
-        }
-        else {
-            arg = emit_unboxed(argi, ctx);
-            toboxed = false;
-        }
+        arg = emit_expr(argi, ctx);
 
         Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
         // make sure args are rooted
@@ -969,14 +951,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         rt = jl_tparam0(rtt_);
     }
     else {
-        JL_TRY {
-            rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
+        rt = try_eval(args[2], ctx, NULL);
+        if (rt == NULL) {
             static_rt = false;
-            rt = NULL;
             if (jl_is_type_type(rtt_)) {
                 if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
                     // substitute Ptr{Void} for statically-unknown pointer type
@@ -1051,18 +1028,10 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return jl_cgval_t();
     }
 
-    {
-        JL_TRY {
-            at = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
-            //jl_rethrow_with_add("error interpreting ccall argument tuple");
-            emit_error("error interpreting ccall argument tuple", ctx);
-            JL_GC_POP();
-            return jl_cgval_t();
-        }
+    at = try_eval(args[3], ctx, "error interpreting ccall argument tuple");
+    if (at == NULL) {
+        JL_GC_POP();
+        return jl_cgval_t();
     }
 
     JL_TYPECHK(ccall, simplevector, at);
@@ -1155,7 +1124,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         else {
             assert(!addressOf);
-            ary = emit_unbox(largty, emit_unboxed(argi, ctx), tti);
+            ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
         }
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
@@ -1303,25 +1272,19 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 
         jl_cgval_t &arg = argv[ai];
+        arg = emit_expr((jl_value_t*)argi, ctx);
         if (jl_is_abstract_ref_type(jargty)) {
             if (addressOf) {
                 JL_GC_POP();
                 emit_error("ccall: & on a Ref{T} argument is invalid", ctx);
                 return jl_cgval_t();
             }
-            arg = emit_unboxed((jl_value_t*)argi, ctx);
             if (!jl_is_cpointer_type(arg.typ)) {
                 emit_cpointercheck(arg, "ccall: argument to Ref{T} is not a pointer", ctx);
                 arg.typ = (jl_value_t*)jl_voidpointer_type;
                 arg.isboxed = false;
             }
             jargty = (jl_value_t*)jl_voidpointer_type;
-        }
-        else if (toboxed || largty->isStructTy()) {
-            arg = emit_expr(argi, ctx, true);
-        }
-        else {
-            arg = emit_unboxed(argi, ctx);
         }
 
         Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef, inReg,

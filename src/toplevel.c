@@ -244,15 +244,22 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 {
     if (jl_array_len(e->args) == 0)
         return 0;
-    if (e->head == static_typeof_sym) return 1;
-    jl_value_t *e0 = jl_exprarg(e,0);
+    if (e->head == static_typeof_sym)
+        return 1;
+    jl_value_t *e0 = jl_exprarg(e, 0);
     if (e->head == call_sym) {
-        jl_value_t *sv = jl_static_eval(e0, NULL, m, li, 0, 0);
+        jl_value_t *sv = jl_static_eval(e0, NULL, m, li, li != NULL, 0);
+        if (sv && jl_typeis(sv, jl_intrinsic_type))
+            return 1;
+    }
+    if (0 && e->head == assign_sym && jl_is_gensym(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
+        jl_value_t *e1 = jl_exprarg(e, 1);
+        jl_value_t *sv = jl_static_eval(e1, NULL, m, li, li != NULL, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
     int i;
-    for(i=0; i < jl_array_len(e->args); i++) {
+    for (i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
         if (jl_is_expr(a) && jl_has_intrinsics(li, (jl_expr_t*)a, m))
             return 1;
