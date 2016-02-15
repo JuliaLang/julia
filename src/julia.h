@@ -143,7 +143,6 @@ JL_DLLEXPORT void jl_threading_profile(void);
 #endif
 
 #ifdef JULIA_ENABLE_THREADING
-#define FORCE_ELF
 #define JL_DEFINE_MUTEX(m)                                                \
     uint64_t volatile m ## _mutex = 0;                                    \
     int32_t m ## _lock_count = 0;                                         \
