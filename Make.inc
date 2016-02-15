@@ -387,8 +387,6 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g -falign-functions
 endif
 
-JCPPFLAGS += -ftls-model=global-dynamic
-
 ifeq ($(USECCACHE), 1)
 # expand CC and CXX at declaration time because we will redefine them
 CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
