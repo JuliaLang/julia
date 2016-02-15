@@ -1066,6 +1066,14 @@ function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     end
 end
 
+function ini_hex(x::Integer)
+    len,pt,neg = decode_hex(x)
+    pt = (len-1)<<2
+    len,pt,neg
+end
+
+# not implemented
+ini_hex(x::Integer,ndigits::Int) = throw(MethodError(ini_hex,(x,ndigits)))
 
 #BigFloat
 fix_dec(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
