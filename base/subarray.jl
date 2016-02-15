@@ -18,11 +18,9 @@ end
 function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, dims::NTuple{N, Int})
     SubArray{eltype(P), N, P, I, false}(parent, indexes, dims, 0, 0)
 end
-@generated function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N, Int})
+function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N, Int})
     # Compute the first index and stride
-    first_index = first_index_expr(:parent, :indexes, length(I.parameters))
-    stride1 = stride1expr(I.parameters, :parent, :indexes)
-    :(SubArray{eltype(P), N, P, I, true}(parent, indexes, dims, $first_index, $stride1))
+    SubArray{eltype(P), N, P, I, true}(parent, indexes, dims, compute_first_index(parent, indexes), compute_stride1(parent, indexes))
 end
 
 # The NoSlice one-element vector type keeps dimensions without losing performance
@@ -213,28 +211,26 @@ in(::Int, ::Colon) = true
 
 # Strides are the distance between adjacent elements in a given dimension,
 # so they are well-defined even for non-linear memory layouts
-strides{T,N,P,I}(V::SubArray{T,N,P,I}) = substrides(1, V.parent, 1, V.indexes...)
-substrides(s, parent, dim) = ()
-substrides(s, parent, dim, i::DroppedScalar, I...) = (substrides(s*size(parent, dim), parent, dim+1, I...)...)
-substrides(s, parent, dim, i::NoSlice, I...) = (s, substrides(s*size(parent, dim), parent, dim+1, I...)...)
-substrides(s, parent, dim, i::Union{Range, Colon}, I...) = (s*step(i), substrides(s*size(parent, dim), parent, dim+1, I...)...)
-substrides(s, parent, dim, i, I...) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(i))"))
+strides{T,N,P,I}(V::SubArray{T,N,P,I}) = substrides(V.parent, V.indexes)
+
+substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
+substrides(s, parent, dim, ::Tuple{}) = ()
+substrides(s, parent, dim, I::Tuple{Real, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{AbstractCartesianIndex, Vararg{Any}}) = substrides(s, parent, dim, (I[1].I..., tail(I)...))
+substrides(s, parent, dim, I::Tuple{NoSlice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{Colon, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
-function stride1expr(Itypes, Aexpr, Isym)
-    ex = 1
-    for d = 1:length(Itypes)
-        I = Itypes[d]
-        if I <: Union{DroppedScalar, NoSlice}
-            ex = :($ex * size($Aexpr, $d))
-        else
-            ex = :($ex * step($Isym[$d]))
-            break
-        end
-    end
-    ex
-end
+compute_stride1(parent, I::Tuple) = compute_stride1(1, parent, 1, I)
+compute_stride1(s, parent, dim, I::Tuple{}) = s
+compute_stride1(s, parent, dim, I::Tuple{Union{DroppedScalar, NoSlice}, Vararg{Any}}) =
+    (@_inline_meta; compute_stride1(s*size(parent, dim), parent, dim+1, tail(I)))
+compute_stride1(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = s*step(I[1])
+compute_stride1(s, parent, dim, I::Tuple{Colon, Vararg{Any}}) = s
+compute_stride1(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous{S<:SubArray}(::Type{S}) = false
@@ -253,21 +249,22 @@ function first_index(P::AbstractArray, indexes::Tuple)
     f
 end
 
-function first_index_expr(Asym, Isym::Symbol, n::Int)
-    ex = :(f = s = 1)
-    for i = 1:n
-        ex = quote
-            $ex
-            if isempty($Isym[$i])
-                f = s = 0
-            else
-                f += (first($Isym[$i])-1)*s
-                s *= size($Asym, $i)
-            end
-        end
-    end
-    :($ex; f)
-end
+# Computing the first index simply steps through the indices, accumulating the
+# sum of index each multiplied by the parent's stride.
+# The running sum is `f`; the cumulative stride product is `s`.
+compute_first_index(parent, I::Tuple) = compute_first_index(1, 1, parent, 1, I)
+compute_first_index(f, s, parent, dim, I::Tuple{Real, Vararg{Any}}) =
+    (@_inline_meta; compute_first_index(f + (I[1]-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+compute_first_index(f, s, parent, dim, I::Tuple{NoSlice, Vararg{Any}}) =
+    (@_inline_meta; compute_first_index(f + (I[1].i-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+# Just splat out the cartesian indices and continue
+compute_first_index(f, s, parent, dim, I::Tuple{AbstractCartesianIndex, Vararg{Any}}) =
+    (@_inline_meta; compute_first_index(f, s, parent, dim, (I[1].I..., tail(I)...)))
+compute_first_index(f, s, parent, dim, I::Tuple{Colon, Vararg{Any}}) =
+    (@_inline_meta; compute_first_index(f, s*size(parent, dim), parent, dim+1, tail(I)))
+compute_first_index(f, s, parent, dim, I::Tuple{Any, Vararg{Any}}) =
+    (@_inline_meta; compute_first_index(f + (first(I[1])-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+compute_first_index(f, s, parent, dim, I::Tuple{}) = f
 
 
 unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
