@@ -1075,22 +1075,26 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
         JL_SIGATOMIC_BEGIN();
         #ifdef USE_MCJIT
         if (imaging_mode) {
-            // Copy the function out of the shadow module
-            Module *m = new Module("julia", jl_LLVMContext);
-            jl_setup_module(m);
-            FunctionMover mover(m, shadow_module);
-            mover.CloneFunction((Function*)li->functionObjects.functionObject);
-            if (li->functionObjects.specFunctionObject != NULL)
-                mover.CloneFunction((Function*)li->functionObjects.specFunctionObject);
-            if (li->functionObjects.cFunctionList != NULL) {
-                size_t i;
-                cFunctionList_t *list = (cFunctionList_t*)li->functionObjects.cFunctionList;
-                for (i = 0; i < list->len; i++) {
-                    list->data()[i].f = mover.CloneFunction(list->data()[i].f);
-                }
-            }
-            jl_finalize_module(m);
+            // see if it has been emitted already (as part of compiling something else)
             li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(((Function*)li->functionObjects.functionObject)->getName());
+            if (li->fptr == NULL) {
+                // Copy the function out of the shadow module
+                Module *m = new Module("julia", jl_LLVMContext);
+                jl_setup_module(m);
+                FunctionMover mover(m, shadow_module);
+                mover.CloneFunction((Function*)li->functionObjects.functionObject);
+                if (li->functionObjects.specFunctionObject != NULL)
+                    mover.CloneFunction((Function*)li->functionObjects.specFunctionObject);
+                if (li->functionObjects.cFunctionList != NULL) {
+                    size_t i;
+                    cFunctionList_t *list = (cFunctionList_t*)li->functionObjects.cFunctionList;
+                    for (i = 0; i < list->len; i++) {
+                        list->data()[i].f = mover.CloneFunction(list->data()[i].f);
+                    }
+                }
+                jl_finalize_module(m);
+                li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(((Function*)li->functionObjects.functionObject)->getName());
+            }
         }
         else {
             li->fptr = (jl_fptr_t)getAddressForOrCompileFunction((Function*)li->functionObjects.functionObject);
@@ -3689,14 +3693,12 @@ static void finalize_gc_frame(Function *F)
 
 static void finalize_gc_frame(Module *m)
 {
-#if defined(USE_ORCJIT)
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
     for (auto &F : m->functions()) {
         if (F.isDeclaration())
             continue;
         finalize_gc_frame(&F);
     }
-#endif
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
 #ifndef JULIA_ENABLE_THREADING
     m->getFunction("jl_get_ptls_states")->eraseFromParent();
 #endif
