@@ -1730,7 +1730,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                 for (i=0; i < jl_svec_len(linfo->sparam_syms); i++) {
                     if (sym == (jl_sym_t*)jl_svecref(linfo->sparam_syms, i)) {
                         // static parameter
-                        if (jl_svec_len(ctx->linfo->sparam_vals) > 0)
+                        if (jl_svec_len(linfo->sparam_vals) > 0)
                             return jl_svecref(linfo->sparam_vals, i);
                         else
                             return NULL;
@@ -1742,8 +1742,14 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         }
         return NULL;
     }
-    if (jl_is_gensym(ex))
+    if (jl_is_gensym(ex)) {
+        ssize_t idx = ((jl_gensym_t*)ex)->id;
+        assert(idx >= 0);
+        if (ctx != NULL && ctx->gensym_assigned.at(idx)) {
+            return ctx->gensym_SAvalues.at(idx).constant;
+        }
         return NULL;
+    }
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(jl_base_relative_to(mod),
                                          (jl_sym_t*)jl_fieldref(ex,0));
@@ -3123,7 +3129,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     false, slot.typ, ctx);
         }
         ctx->gensym_SAvalues.at(idx) = slot; // now gensym_SAvalues[idx] contains the SAvalue
-        assert(ctx->gensym_assigned.at(idx) = true); // (assignment, not comparison test)
+        ctx->gensym_assigned.at(idx) = true;
         return;
     }
 
@@ -3292,9 +3298,13 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     if (jl_is_gensym(expr)) {
         ssize_t idx = ((jl_gensym_t*)expr)->id;
         assert(idx >= 0);
-        //assert(ctx->gensym_assigned.at(idx));
-        jl_cgval_t val = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
-        return val;
+        if (!ctx->gensym_assigned.at(idx)) {
+            ctx->gensym_assigned.at(idx) = true; // (assignment, not comparison test)
+            return jl_cgval_t(); // dead code branch
+        }
+        else {
+            return ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
+        }
     }
     if (jl_is_labelnode(expr)) {
         int labelname = jl_labelnode_label(expr);
