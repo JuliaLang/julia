@@ -89,51 +89,6 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(A::AbstractArray) = single_stride_dim(copy_to_array(A))
 
-# # Compare the linear indexing dimension of a SubArray
-# # to a direct computation of strides
-# function cmpLD(Atest::SubArray, Acomp)
-#     # Compute ld, skipping over dropped dimensions
-#     LD = getLD(Atest)
-#     ld = LD
-#     for i = 1:LD
-#         if isa(Atest.indexes[i], Real)
-#             ld -= 1
-#         end
-#     end
-#     ld, single_stride_dim(Acomp)
-# end
-#
-# # Testing linear dimension inference for views-of-views
-# for N = 1:4
-#     @eval begin
-#         function test_viewview{T}(SB, A::Array{T,$N}, f, vindex)
-#             local SSB
-#             @nloops $N j d->(1:length(vindex)) d->(i_d = vindex[j_d]) begin
-#                 I = @ntuple $N d->i_d
-#                 try
-#                     SSB = f(SB, I...)
-#                 catch err
-#                     println(summary(SB))
-#                     println(I)
-#                     rethrow(err)
-#                 end
-#                 SA = f(A, I...)
-#                 ld, ldc = cmpLD(SSB, SA)
-#                 if ld == ldc
-#                 elseif ld <= ldc
-#                     if print_underestimates
-#                         println("Underestimate f = ", f, " on ", summary(SB), " with I = ", I, ", producing ", summary(SSB))
-#                     end
-#                 else
-#                     println(summary(SB))
-#                     println(summary(SSB))
-#                     error("failed on ", I)
-#                 end
-#             end
-#         end
-#     end
-# end
-
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(A, B)
     isgood = true
