@@ -306,4 +306,182 @@ for (name, f) in l
     cleanup()
 end
 
+function test_read_nbyte()
+    fn = tempname()
+    # Write one byte. One byte read should work once
+    # but 2-byte read should throw EOFError.
+    f = open(fn, "w+") do f
+        write(f, 0x55)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt8) == 0x55
+        @test_throws EOFError read(f, UInt8)
+        seek(f, 0)
+        @test_throws EOFError read(f, UInt16)
+    end
+    # Write 2 more bytes. Now 2-byte read should work once
+    # but 4-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x4444)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt16) == 0x4455
+        @test_throws EOFError read(f, UInt16)
+        seek(f, 0)
+        @test_throws EOFError read(f, UInt32)
+    end
+    # Write 4 more bytes. Now 4-byte read should work once
+    # but 8-byte read should fail with EOFError.
+    open(fn, "a+") do f
+        write(f, 0x33333333)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt32) == 0x33444455
+        @test_throws EOFError read(f, UInt32)
+        seek(f, 0)
+        @test_throws EOFError read(f, UInt64)
+    end
+    # Writing one more byte should allow an 8-byte
+    # read to proceed.
+    open(fn, "a+") do f
+        write(f, 0x22)
+        flush(f)
+        seek(f, 0)
+        @test read(f, UInt64) == 0x2233333333444455
+    end
+    rm(fn)
+end
+test_read_nbyte()
+
+
+# DevNull
+@test !isreadable(DevNull)
+@test iswritable(DevNull)
+@test isopen(DevNull)
+@test write(DevNull, 0xff) === 1
+@test write(DevNull, Int32(1234)) === 4
+@test_throws EOFError read(DevNull, UInt8)
+@test close(DevNull) === nothing
+@test flush(DevNull) === nothing
+@test copy(DevNull) === DevNull
+@test eof(DevNull)
+@test print(DevNull, "go to /dev/null") === nothing
+
+
+let s = "qwerty"
+    @test read(IOBuffer(s)) == s.data
+    @test read(IOBuffer(s), 10) == s.data
+    @test read(IOBuffer(s), 1) == s.data[1:1]
+
+    # Test growing output array
+    x = UInt8[]
+    n = readbytes!(IOBuffer(s), x, 10)
+    @test x == s.data
+    @test n == length(x)
+end
+
+
+# Filesystem.File
+f = joinpath(dir, "test.txt")
+open(io->write(io, "123"), f, "w")
+f1 = open(f)
+f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+@test read(f1, UInt8) == read(f2, UInt8) == '1'
+@test read(f1, UInt8) == read(f2, UInt8) == '2'
+@test read(f1, UInt8) == read(f2, UInt8) == '3'
+@test_throws EOFError read(f1, UInt8)
+@test_throws EOFError read(f2, UInt8)
+close(f1)
+close(f2)
+
+a = UInt8[0,0,0]
+f1 = open(f)
+f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+@test read!(f1, a) == read!(f2, a) == UInt8['1','2','3']
+@test_throws EOFError read!(f1, a)
+@test_throws EOFError read!(f2, a)
+close(f1)
+close(f2)
+
+a = UInt8[0,0,0,0]
+f1 = open(f)
+f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+@test_throws EOFError read!(f1, a)
+@test_throws EOFError read!(f2, a)
+close(f1)
+close(f2)
+rm(f)
+
+io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
+@test write(io, "abc") == 3
+close(io)
+@unix_only begin
+    # msvcrt _wchmod documentation states that all files are readable,
+    # so we don't test that it correctly set the umask on windows
+    @test_throws SystemError open(f)
+    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+end
+chmod(f, 0o400)
+f1 = open(f)
+f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+for i = 1:2
+    @test !eof(f1)
+    @test !eof(f2)
+    @test position(f1) == 0
+    @test position(f2) == 0
+    @test readstring(f1) == readstring(f2) == "abc"
+    @test readstring(f1) == readstring(f2) == ""
+    @test position(f1) == 3
+    @test position(f2) == 3
+    @test eof(f1)
+    @test eof(f2)
+    @test seekstart(f1) == f1
+    @test seekstart(f2) == f2
+end
+@test seekend(f1) == f1
+@test seekend(f2) == f2
+@test eof(f1)
+@test eof(f2)
+@test skip(f1, -2) == f1
+@test skip(f2, -2) == f2
+@test position(f1) == 1
+@test position(f2) == 1
+@test_throws SystemError skip(f1, -2)
+@test_throws SystemError skip(f2, -2)
+@test position(f1) == 1
+@test position(f2) == 1
+@test skip(f1, 300) == f1
+@test skip(f2, 300) == f2
+@test position(f1) == 301
+@test position(f2) == 301
+@test eof(f1)
+@test eof(f2)
+@test_throws ArgumentError write(f1, '*')
+@test_throws Base.UVError write(f2, '*')
+close(f1)
+close(f2)
+@test eof(f1)
+@test_throws Base.UVError eof(f2)
+
+@test_throws SystemError open(f, "r+")
+@test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+chmod(f, 0o600)
+f1 = open(f, "r+")
+f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+@test skip(f1, 10) == f1
+@test skip(f2, 10) == f2
+@test eof(f1)
+@test eof(f2)
+@test write(f1, '*') == 1; @test flush(f1) == f1
+@test !eof(f2)
+@test skip(f2, 1) == f2
+@test write(f2, '*') == 1
+@test !eof(f1)
+@test seekstart(f1) == f1
+@test seekstart(f2) == f2
+@test readstring(f1) == readstring(f2) == "abc\0\0\0\0\0\0\0**"
+close(f1)
+close(f2)
+rm(f)
+
 end
