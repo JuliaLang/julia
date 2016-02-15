@@ -350,6 +350,9 @@ typedef struct _jl_lambda_info_t {
     uint8_t inInference : 1;    // flags to tell if inference is running on this function
                                 // used to avoid infinite recursion
     uint8_t inCompile : 1;
+    uint8_t needs_sparam_vals_ducttape : 1; // if there are intrinsic calls,
+                                            // probably require the sparams to compile successfully
+                                            // (and so unspecialized will be created for each linfo instead of linfo->def)
     jl_fptr_t fptr;             // jlcall entry point
 
     // On the old JIT, handles to all Functions generated for this linfo

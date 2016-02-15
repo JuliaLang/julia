@@ -283,10 +283,31 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->ast = ast;
     li->rettype = (jl_value_t*)jl_any_type;
     li->file = null_sym;
+    li->module = ctx;
+    li->sparam_syms = tvars;
+    li->sparam_vals = sparams;
+    li->tfunc = jl_nothing;
+    li->fptr = NULL;
+    li->jlcall_api = 0;
+    li->roots = NULL;
+    li->functionObjects.functionObject = NULL;
+    li->functionObjects.specFunctionObject = NULL;
+    li->functionObjects.cFunctionList = NULL;
+    li->functionID = 0;
+    li->specFunctionID = 0;
+    li->specTypes = NULL;
+    li->inferred = 0;
+    li->inInference = 0;
+    li->inCompile = 0;
+    li->unspecialized = NULL;
+    li->specializations = NULL;
+    li->name = anonymous_sym;
+    li->def = li;
     li->line = 0;
     li->pure = 0;
     li->called = 0xff;
-    if (ast != NULL && jl_is_expr(ast)) {
+    li->needs_sparam_vals_ducttape = 0;
+    if (ast && jl_is_expr(ast)) {
         jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
         if (has_meta(body, pure_sym))
             li->pure = 1;
@@ -316,27 +337,10 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
                 called |= (1<<(i-1));
         }
         li->called = called;
+        if (tvars != jl_emptysvec)
+            if (jl_has_intrinsics(li, (jl_expr_t*)ast, ctx))
+                li->needs_sparam_vals_ducttape = 1;
     }
-    li->module = ctx;
-    li->sparam_syms = tvars;
-    li->sparam_vals = sparams;
-    li->tfunc = jl_nothing;
-    li->fptr = NULL;
-    li->jlcall_api = 0;
-    li->roots = NULL;
-    li->functionObjects.functionObject = NULL;
-    li->functionObjects.specFunctionObject = NULL;
-    li->functionObjects.cFunctionList = NULL;
-    li->functionID = 0;
-    li->specFunctionID = 0;
-    li->specTypes = NULL;
-    li->inferred = 0;
-    li->inInference = 0;
-    li->inCompile = 0;
-    li->unspecialized = NULL;
-    li->specializations = NULL;
-    li->name = anonymous_sym;
-    li->def = li;
     return li;
 }
 
@@ -360,6 +364,7 @@ jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->functionObjects.specFunctionObject = linfo->functionObjects.specFunctionObject;
     new_linfo->functionID = linfo->functionID;
     new_linfo->specFunctionID = linfo->specFunctionID;
+    new_linfo->needs_sparam_vals_ducttape = linfo->needs_sparam_vals_ducttape;
     return new_linfo;
 }
 

@@ -433,6 +433,27 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 
 typedef AttributeSet attr_type;
 
+static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failure, bool compiletime=false)
+{
+    jl_value_t *constant = NULL;
+    constant = static_eval(ex, ctx, true, true);
+    if (constant || jl_is_gensym(ex))
+        return constant;
+    JL_TRY {
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex,
+                                                 ctx->linfo->sparam_syms,
+                                                 ctx->linfo->sparam_vals);
+    }
+    JL_CATCH {
+        if (compiletime)
+            jl_rethrow_with_add(failure);
+        if (failure)
+            emit_error(failure, ctx);
+        constant = NULL;
+    }
+    return constant;
+}
+
 // --- code generator for cglobal ---
 
 static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -443,13 +464,10 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     JL_GC_PUSH1(&rt);
 
     if (nargs == 2) {
-        JL_TRY {
-            rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
-            jl_rethrow_with_add("error interpreting cglobal type");
+        rt = try_eval(args[2], ctx, "error interpreting cglobal pointer type");
+        if (rt == NULL) {
+            JL_GC_POP();
+            return jl_cgval_t();
         }
 
         JL_TYPECHK(cglobal, type, rt);
@@ -507,40 +525,10 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     jl_svec_t *stt = NULL;
     JL_GC_PUSH5(&ir, &rt, &at, &stt, &decl);
-    {
-    JL_TRY {
-        at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall argument tuple");
-    }
-    }
-    {
-    JL_TRY {
-        rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting llvmcall return type");
-    }
-    }
-    {
-    JL_TRY {
-        ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-    }
-    JL_CATCH {
-        jl_rethrow_with_add("error interpreting IR argument");
-    }
-    }
+    at = try_eval(args[3], ctx, "error statically evaluating llvmcall argument tuple", true);
+    rt = try_eval(args[2], ctx, "error statically evaluating llvmcall return type", true);
+    ir = try_eval(args[1], ctx, "error statically evaluating llvm IR argument", true);
     int i = 1;
-    if (ir == NULL) {
-        jl_error("Cannot statically evaluate first argument to llvmcall");
-    }
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (declarations, ir)
         if (jl_nfields(ir) != 2)
@@ -963,14 +951,9 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         rt = jl_tparam0(rtt_);
     }
     else {
-        JL_TRY {
-            rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
+        rt = try_eval(args[2], ctx, NULL);
+        if (rt == NULL) {
             static_rt = false;
-            rt = NULL;
             if (jl_is_type_type(rtt_)) {
                 if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
                     // substitute Ptr{Void} for statically-unknown pointer type
@@ -1045,18 +1028,10 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return jl_cgval_t();
     }
 
-    {
-        JL_TRY {
-            at = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                               ctx->linfo->sparam_syms,
-                                               ctx->linfo->sparam_vals);
-        }
-        JL_CATCH {
-            //jl_rethrow_with_add("error interpreting ccall argument tuple");
-            emit_error("error interpreting ccall argument tuple", ctx);
-            JL_GC_POP();
-            return jl_cgval_t();
-        }
+    at = try_eval(args[3], ctx, "error interpreting ccall argument tuple");
+    if (at == NULL) {
+        JL_GC_POP();
+        return jl_cgval_t();
     }
 
     JL_TYPECHK(ccall, simplevector, at);
