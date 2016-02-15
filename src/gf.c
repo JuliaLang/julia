@@ -334,22 +334,12 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         def = def->unspecialized;
     }
     if (__unlikely(def->unspecialized == NULL)) {
-        int need_sparams = 0; // if there are intrinsics, probably require the sparams to compile successfully
-        if (method->sparam_vals != jl_emptysvec) {
-            jl_value_t *ast = def->ast;
-            JL_GC_PUSH1(&ast);
-            if (!jl_is_expr(ast))
-                ast = jl_uncompress_ast(def, ast);
-            if (jl_has_intrinsics(method, jl_lam_body((jl_expr_t*)ast), method->module))
-                need_sparams = 1;
-            JL_GC_POP();
-        }
-        if (need_sparams) {
+        if (method->def->needs_sparam_vals_ducttape) {
             method->unspecialized = jl_add_static_parameters(def, method->sparam_vals, method->specTypes);
             jl_gc_wb(method, method->unspecialized);
             method->unspecialized->unspecialized = method->unspecialized;
             def = method;
-       }
+        }
         else {
             def->unspecialized = jl_add_static_parameters(def, jl_emptysvec, jl_anytuple_type);
             jl_gc_wb(def, def->unspecialized);
