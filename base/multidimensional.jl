@@ -21,12 +21,12 @@ end
 
 CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
 (::Type{CartesianIndex})(index::Integer...) = CartesianIndex(index)
-(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex(index)
+(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
 # Allow passing tuples smaller than N
 @generated function (::Type{CartesianIndex{N}}){N,M}(index::NTuple{M,Integer})
-    length(index) == N && return :(CartesianIndex(index))
-    length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
-    args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
+    M == N && return :(CartesianIndex(index))
+    M > N && return :(throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $M indexes")))
+    args = [i <= M ? :(index[$i]) : 1 for i = 1:N]
     :(CartesianIndex(tuple($(args...))))
 end
 # Un-nest passed CartesianIndexes
