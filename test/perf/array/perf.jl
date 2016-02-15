@@ -4,7 +4,7 @@ include("../perfutil.jl")
 
 include("indexing.jl")
 
-briefname(A) = string(typeof(A).name.name, " ", typeof(A.parent).name.name, " ", join(map(string, A.indexes), " "))
+briefname(A) = typeof(A).name.name
 
 # Small array tests
 sz = (3,5)
