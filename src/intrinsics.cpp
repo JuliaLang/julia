@@ -351,9 +351,7 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
     }
     else {
         bt = try_eval(targ, ctx, NULL); // TODO: change this to an actual call to staticeval rather than actually executing code
-        if (bt && !jl_is_leaf_type(bt)) {
-            jl_add_linfo_root(ctx->linfo, bt);
-        }
+        if (bt) jl_add_linfo_root(ctx->linfo, bt);
     }
     if (fname && (!bt || !jl_is_bitstype(bt))) {
         jl_errorf("%s: expected bits type as first argument", fname);
@@ -389,9 +387,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
 {
     // Examine the first argument //
     jl_value_t *bt = static_eval(targ, ctx, true, true);
-    if (bt && !jl_is_leaf_type(bt)) {
-        jl_add_linfo_root(ctx->linfo, bt);
-    }
+    if (bt) jl_add_linfo_root(ctx->linfo, bt);
 
     if (!bt || !jl_is_bitstype(bt)) {
         // it's easier to throw a good error from C than llvm
