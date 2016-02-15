@@ -224,25 +224,28 @@ demand, instead of allocating an array and storing them in advance
 (see :ref:`_man-interfaces-iteration`).
 For example, the following expression sums a series without allocating memory::
 
+.. doctest::
+
     julia> sum(1/n^2 for n=1:1000)
     1.6439345666815615
 
-When writing a generator expression with multiple dimensions, it needs to be
-enclosed in parentheses to avoid ambiguity::
+When writing a generator expression with multiple dimensions inside an argument
+list, parentheses are needed to separate the generator from subsequent arguments::
 
-    julia> collect(1/(i+j) for i=1:2, j=1:2)
-    ERROR: function collect does not accept keyword arguments
+    julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
+    ERROR: syntax: invalid iteration specification
 
-In this call, the range ``j=1:2`` was interpreted as a second argument to
-``collect``. This is fixed by adding parentheses::
+All comma-separated expressions after ``for`` are interpreted as ranges. Adding
+parentheses lets us add a third argument to ``map``::
 
-    julia> collect((1/(i+j) for i=1:2, j=1:2))
-    2x2 Array{Float64,2}:
-     0.5       0.333333
-     0.333333  0.25
+.. doctest::
 
-Note that ``collect`` gathers the values produced by an iterator into an array,
-giving the same effect as an array comprehension.
+    julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1:4;])
+    4-element Array{Any,1}:
+     (0.5,1)
+     (0.333333,2)
+     (0.333333,3)
+     (0.25,4)
 
 .. _man-array-indexing:
 
