@@ -39,8 +39,8 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
-            write, read, readavailable, read!, isopen, show,
-            seek, seekend, skip, eof,
+            write, read, unsafe_write, unsafe_read, readavailable, read!,
+            isopen, show, seek, seekend, skip, eof, nb_available,
             check_open, _sizeof_uv_fs, uv_error, UVError
 
 include("path.jl")
@@ -153,7 +153,7 @@ function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     nothing
 end
 
-nb_available(f::File) = filesize(f) - position(f)
+nb_available(f::File) = max(0, filesize(f) - position(f)) # position can be > filesize
 
 eof(f::File) = nb_available(f) == 0
 
