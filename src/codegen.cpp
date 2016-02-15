@@ -2043,6 +2043,8 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 {
+    if (jl_is_leaf_type(val))
+        return;
     JL_GC_PUSH1(&val);
     li = li->def;
     if (li->roots == NULL) {
@@ -3398,6 +3400,11 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         builder.SetInsertPoint(ifso);
     }
     else if (head == call_sym) {
+        jl_value_t *c = static_eval(expr, ctx, true, true);
+        if (c) {
+            jl_add_linfo_root(ctx->linfo, c);
+            return mark_julia_const(c);
+        }
         return emit_call(args, jl_array_dim0(ex->args), ctx, (jl_value_t*)ex);
     }
     else if (head == assign_sym) {
