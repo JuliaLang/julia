@@ -3687,23 +3687,30 @@ static void finalize_gc_frame(Function *F)
 #endif
 }
 
+static void erase_function_from(Module *m, const char *name)
+{
+    Function *func = m->getFunction(name);
+    if (func)
+        func->eraseFromParent();
+}
+
 static void finalize_gc_frame(Module *m)
 {
-#if defined(USE_ORCJIT)
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
     for (auto &F : m->functions()) {
         if (F.isDeclaration())
             continue;
         finalize_gc_frame(&F);
     }
-#endif
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+    // check if the function exists in case there were no function bodies
+    // this can happen during bootstrap for mcjit
 #ifndef JULIA_ENABLE_THREADING
-    m->getFunction("jl_get_ptls_states")->eraseFromParent();
+    erase_function_from(m, "jl_get_ptls_states");
 #endif
-    m->getFunction("julia.gc_root_decl")->eraseFromParent();
-    m->getFunction("julia.gc_root_kill")->eraseFromParent();
-    m->getFunction("julia.gc_store")->eraseFromParent();
-    m->getFunction("julia.jlcall_frame_decl")->eraseFromParent();
+    erase_function_from(m, "julia.gc_root_decl");
+    erase_function_from(m, "julia.gc_root_kill");
+    erase_function_from(m, "julia.gc_store");
+    erase_function_from(m, "julia.jlcall_frame_decl");
 #endif
 }
 
