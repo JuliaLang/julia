@@ -356,3 +356,24 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test_throws ArgumentError Dict(0)
 @test_throws ArgumentError Dict([1])
 @test_throws ArgumentError Dict([(1,2),0])
+
+# issue #15077
+let badKeys = ASCIIString["FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.0",
+                          "SAO2_emv5.0","O2FLOW_ema5.0","preop_Neuro/Psych_","gender_",
+                          "FIO2_ema0.1","PEAK_ema5.0","preop_Reproductive_denies","O2FLOW_ema0.1",
+                          "preop_Endocrine_denies","preop_Respiratory_",
+                          "NIBPM_ema0.1","PROPOFOL_MCG/KG/MIN_decay5.0","NIBPD_ema1.0","NIBPS_ema5.0",
+                          "anesthesiaStartTime","NIBPS_ema1.0","RESPRATE_ema1.0","PEAK_ema0.1",
+                          "preop_GU_denies","preop_Cardiovascular_","PIP_ema5.0","preop_ENT_denies",
+                          "preop_Skin_denies","preop_Renal_denies","asaCode_IIIE","N2OFLOW_emv5.0",
+                          "NIBPD_emv5.0", # <--- here is the key that we later can't find
+                          "NIBPM_ema5.0","preop_Respiratory_complete","ETCO2_ema5.0",
+                          "RESPRATE_ema0.1","preop_Functional Status_<2","preop_Renal_symptoms",
+                          "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
+                          "4UrCWXUsaT"]
+    d = Dict{AbstractString,Float64}()
+    for k in badKeys
+        d[k] = 1
+    end
+    @test d["NIBPD_emv5.0"] == 1
+end
