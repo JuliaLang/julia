@@ -1289,14 +1289,6 @@ function stchanged(new::Union{StateUpdate,VarTable}, old, vars)
     return false
 end
 
-function findlabel(labels, l)
-    i = l+1 > length(labels) ? 0 : labels[l+1]
-    if i == 0
-        error("label ",l," not found")
-    end
-    return i
-end
-
 function label_counter(body)
     l = -1
     for b in body
@@ -1559,14 +1551,6 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
-    labels = zeros(Int, sv.label_counter)
-    for i=1:length(body)
-        b = body[i]
-        if isa(b,LabelNode)
-            labels[b.label+1] = i
-        end
-    end
-
     # our stack frame
     frame = CallStack(ast0, atypes, inference_stack)
     frame.sv = sv
@@ -1695,12 +1679,12 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                     end
                 end
             elseif isa(stmt,GotoNode)
-                pc´ = findlabel(labels,stmt.label)
+                pc´ = stmt.label
             elseif isa(stmt,Expr)
                 hd = stmt.head
                 if is(hd,:gotoifnot)
                     condexpr = stmt.args[1]
-                    l = findlabel(labels,stmt.args[2])
+                    l = stmt.args[2]
                     # constant conditions
                     if is(condexpr,true)
                     elseif is(condexpr,false)
@@ -1764,7 +1748,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                         end
                     end
                 elseif is(hd,:enter)
-                    l = findlabel(labels,stmt.args[1]::Int)
+                    l = stmt.args[1]::Int
                     cur_hand = (l,cur_hand)
                     if handler_at[l] === ()
                         n_handlers += 1
@@ -1829,6 +1813,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             end
             alloc_elim_pass(fulltree, sv)
             getfield_elim_pass(fulltree.args[3], sv)
+            reindex_labels!(fulltree.args[3], sv)
         end
         linfo.inferred = true
         body = Expr(:block)
@@ -3382,6 +3367,30 @@ function replace_getfield!(ast, e::ANY, tupname, vals, field_names, sv, i0)
             e.args[i] = val
         else
             replace_getfield!(ast, a, tupname, vals, field_names, sv, 1)
+        end
+    end
+end
+
+# fix label numbers to always equal the statement index of the label
+function reindex_labels!(e, sv)
+    mapping = zeros(Int, sv.label_counter)
+    for i = 1:length(e.args)
+        el = e.args[i]
+        if isa(el,LabelNode)
+            mapping[el.label] = i
+            e.args[i] = LabelNode(i)
+        end
+    end
+    for i = 1:length(e.args)
+        el = e.args[i]
+        if isa(el,GotoNode)
+            e.args[i] = GotoNode(mapping[el.label])
+        elseif isa(el,Expr)
+            if el.head === :gotoifnot
+                el.args[2] = mapping[el.args[2]]
+            elseif el.head === :enter
+                el.args[1] = mapping[el.args[1]]
+            end
         end
     end
 end
