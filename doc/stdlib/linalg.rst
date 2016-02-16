@@ -65,59 +65,91 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ .
 
-.. function:: lufact(A [,pivot=Val{true}]) -> F
+.. function:: lufact(A [,pivot=Val{true}]) -> F::LU
 
    .. Docstring generated from Julia source
 
-   Compute the LU factorization of ``A``\ . The return type of ``F`` depends on the type of ``A``\ . In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T`` supporting ``+``\ , ``-``\ , ``*`` and ``/`` the return type is ``LU{T,S{T}}``\ . If pivoting is chosen (default) the element type should also support ``abs`` and ``<``\ . When ``A`` is sparse and have element of type ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}`` the return type is ``UmfpackLU``\ . Some examples are shown in the table below.
+   Compute the LU factorization of ``A``\ .
 
-   +-------------------------+--------------------------+------------------------------------------------+
-   | Type of input ``A``     | Type of output ``F``     | Relationship between ``F`` and ``A``           |
-   +=========================+==========================+================================================+
-   | :func:`Matrix`          | ``LU``                   | ``F[:L]*F[:U] == A[F[:p], :]``                 |
-   +-------------------------+--------------------------+------------------------------------------------+
-   | :func:`Tridiagonal`     | ``LU{T,Tridiagonal{T}}`` | ``F[:L]*F[:U] == A[F[:p], :]``                 |
-   +-------------------------+--------------------------+------------------------------------------------+
-   | :func:`SparseMatrixCSC` | ``UmfpackLU``            | ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]`` |
-   +-------------------------+--------------------------+------------------------------------------------+
+   In most cases, if ``A`` is a subtype ``S`` of ``AbstractMatrix{T}`` with an element type ``T`` supporting ``+``\ , ``-``\ , ``*`` and ``/``\ , the return type is ``LU{T,S{T}}``\ . If pivoting is chosen (default) the element type should also support ``abs`` and ``<``\ .
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | Component   | Description                             | ``LU`` | ``LU{T,Tridiagonal{T}}`` | ``UmfpackLU`` |
-   +=============+=========================================+========+==========================+===============+
-   | ``F[:L]``   | ``L`` (lower triangular) part of ``LU`` | ✓      | ✓                        | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:U]``   | ``U`` (upper triangular) part of ``LU`` | ✓      | ✓                        | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:p]``   | (right) permutation ``Vector``          | ✓      | ✓                        | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:P]``   | (right) permutation ``Matrix``          | ✓      | ✓                        |               |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:q]``   | left permutation ``Vector``             |        |                          | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:Rs]``  | ``Vector`` of scaling factors           |        |                          | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
-   | ``F[:(:)]`` | ``(L,U,p,q,Rs)`` components             |        |                          | ✓             |
-   +-------------+-----------------------------------------+--------+--------------------------+---------------+
+   +-----------+-----------------------------------------+
+   | Component | Description                             |
+   +===========+=========================================+
+   | ``F[:L]`` | ``L`` (lower triangular) part of ``LU`` |
+   +-----------+-----------------------------------------+
+   | ``F[:U]`` | ``U`` (upper triangular) part of ``LU`` |
+   +-----------+-----------------------------------------+
+   | ``F[:p]`` | (right) permutation ``Vector``          |
+   +-----------+-----------------------------------------+
+   | ``F[:P]`` | (right) permutation ``Matrix``          |
+   +-----------+-----------------------------------------+
 
-   +--------------------+--------+--------------------------+---------------+
-   | Supported function | ``LU`` | ``LU{T,Tridiagonal{T}}`` | ``UmfpackLU`` |
-   +====================+========+==========================+===============+
-   | ``/``              | ✓      |                          |               |
-   +--------------------+--------+--------------------------+---------------+
-   | ``\``              | ✓      | ✓                        | ✓             |
-   +--------------------+--------+--------------------------+---------------+
-   | ``cond``           | ✓      |                          | ✓             |
-   +--------------------+--------+--------------------------+---------------+
-   | ``det``            | ✓      | ✓                        | ✓             |
-   +--------------------+--------+--------------------------+---------------+
-   | ``logdet``         | ✓      | ✓                        |               |
-   +--------------------+--------+--------------------------+---------------+
-   | ``logabsdet``      | ✓      | ✓                        |               |
-   +--------------------+--------+--------------------------+---------------+
-   | ``size``           | ✓      | ✓                        |               |
-   +--------------------+--------+--------------------------+---------------+
+   The relationship between ``F`` and ``A`` is
+
+   ``F[:L]*F[:U] == A[F[:p], :]``
+
+   ``F`` further supports the following functions:
+
+   +--------------------+--------+--------------------------+
+   | Supported function | ``LU`` | ``LU{T,Tridiagonal{T}}`` |
+   +====================+========+==========================+
+   | :func:`/`          | ✓      |                          |
+   +--------------------+--------+--------------------------+
+   | :func:`\\`         | ✓      | ✓                        |
+   +--------------------+--------+--------------------------+
+   | :func:`cond`       | ✓      |                          |
+   +--------------------+--------+--------------------------+
+   | :func:`det`        | ✓      | ✓                        |
+   +--------------------+--------+--------------------------+
+   | :func:`logdet`     | ✓      | ✓                        |
+   +--------------------+--------+--------------------------+
+   | :func:`logabsdet`  | ✓      | ✓                        |
+   +--------------------+--------+--------------------------+
+   | :func:`size`       | ✓      | ✓                        |
+   +--------------------+--------+--------------------------+
+
+.. function:: lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+
+   .. Docstring generated from Julia source
+
+   Compute the LU factorization of a sparse matrix ``A``\ .
+
+   For sparse ``A`` with real or complex element type, the return type of ``F`` is ``UmfpackLU{Tv, Ti}``\ , with ``Tv`` = ``Float64`` or ``Complex128`` respectively and ``Ti`` is an integer type (``Int32`` or ``Int64``\ ).
+
+   The individual components of the factorization ``F`` can be accessed by indexing:
+
+   +-------------+-----------------------------------------+
+   | Component   | Description                             |
+   +=============+=========================================+
+   | ``F[:L]``   | ``L`` (lower triangular) part of ``LU`` |
+   +-------------+-----------------------------------------+
+   | ``F[:U]``   | ``U`` (upper triangular) part of ``LU`` |
+   +-------------+-----------------------------------------+
+   | ``F[:p]``   | right permutation ``Vector``            |
+   +-------------+-----------------------------------------+
+   | ``F[:q]``   | left permutation ``Vector``             |
+   +-------------+-----------------------------------------+
+   | ``F[:Rs]``  | ``Vector`` of scaling factors           |
+   +-------------+-----------------------------------------+
+   | ``F[:(:)]`` | ``(L,U,p,q,Rs)`` components             |
+   +-------------+-----------------------------------------+
+
+   The relation between ``F`` and ``A`` is
+
+   ``F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]``
+
+   ``F`` further supports the following functions:
+
+   * :func:`\\`
+   * :func:`cond`
+   * :func:`det`
+
+   ** Implementation note **
+
+   ``lufact(A::SparseMatrixCSC)`` uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with ``Float64`` or ``Complex128`` elements, ``lufact`` converts ``A`` into a copy that is of type ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 .. function:: lufact!(A) -> LU
 
