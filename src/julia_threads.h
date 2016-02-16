@@ -24,9 +24,8 @@
 #  include <immintrin.h>
 #endif
 
+// This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
-// Define this struct early so that we are free to use it in the inline
-// functions below.
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     struct _jl_value_t *exception_in_transit;
@@ -239,7 +238,23 @@ JL_DLLEXPORT void jl_threading_profile(void);
 JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
-#ifdef JULIA_ENABLE_THREADING
+// Accessing the tls variables, gc safepoint and gc states
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
+#ifndef JULIA_ENABLE_THREADING
+extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
+#define jl_get_ptls_states() (&jl_tls_states)
+#define jl_gc_state() ((int8_t)0)
+#define jl_gc_safepoint()
+STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
+{
+    (void)state;
+    return old_state;
+}
+#else // ifndef JULIA_ENABLE_THREADING
+typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
+// Make sure jl_gc_state() is always a rvalue
+#define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
 JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
 STATIC_INLINE void jl_gc_safepoint(void)
 {
@@ -251,6 +266,27 @@ STATIC_INLINE void jl_gc_safepoint(void)
     jl_signal_fence();
     (void)v;
 }
+STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
+{
+    jl_get_ptls_states()->gc_state = state;
+    // A safe point is required if we transition from GC-safe region to
+    // non GC-safe region.
+    if (old_state && !state)
+        jl_gc_safepoint();
+    return old_state;
+}
+#endif // ifndef JULIA_ENABLE_THREADING
+STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
+{
+    return jl_gc_state_set(state, jl_gc_state());
+}
+#define jl_gc_unsafe_enter() jl_gc_state_save_and_set(0)
+#define jl_gc_unsafe_leave(state) ((void)jl_gc_state_set((state), 0))
+#define jl_gc_safe_enter() jl_gc_state_save_and_set(JL_GC_STATE_SAFE)
+#define jl_gc_safe_leave(state) ((void)jl_gc_state_set((state), JL_GC_STATE_SAFE))
+
+// Locks
+#ifdef JULIA_ENABLE_THREADING
 #define JL_DEFINE_MUTEX(m)                                                \
     uint64_t volatile m ## _mutex = 0;                                    \
     int32_t m ## _lock_count = 0;                                         \
@@ -310,7 +346,6 @@ STATIC_INLINE void jl_gc_safepoint(void)
 #define JL_LOCK_NOGC(m) JL_LOCK_WAIT(m, )
 #define JL_UNLOCK_NOGC(m) JL_UNLOCK_RAW(m)
 #else // JULIA_ENABLE_THREADING
-#define jl_gc_safepoint()
 #define JL_DEFINE_MUTEX(m)
 #define JL_DEFINE_MUTEX_EXT(m)
 #define JL_LOCK(m) do {} while (0)
