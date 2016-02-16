@@ -16,6 +16,13 @@
 #if defined(__i386__) && defined(__GNUC__) && !defined(__SSE2__)
 #  error Julia can only be built for architectures above Pentium 4. Pass -march=pentium4, or set MARCH=pentium4 and ensure that -march is not passed separately with an older architecture.
 #endif
+#ifdef _COMPILER_MICROSOFT_
+#  include <intrin.h>
+#  include <type_traits>
+#endif
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#  include <immintrin.h>
+#endif
 
 #define JL_MAX_BT_SIZE 80000
 // Define this struct early so that we are free to use it in the inline
@@ -49,17 +56,6 @@ typedef struct _jl_tls_states_t {
     intptr_t bt_data[JL_MAX_BT_SIZE + 1];
 } jl_tls_states_t;
 
-#ifdef _COMPILER_MICROSOFT_
-#  include <intrin.h>
-#  define jl_signal_fence() _ReadWriteBarrier()
-#else
-#  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
-#endif
-
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-#  include <immintrin.h>
-#endif
-
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
@@ -79,13 +75,38 @@ typedef struct _jl_tls_states_t {
 #endif
 
 #if defined(__GNUC__)
-#  define JL_ATOMIC_FETCH_AND_ADD(a, b) __sync_fetch_and_add(a, b)
+#  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_add(obj, arg)                 \
+    __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
 // Returns the original value of `a`
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a, b, c)   \
     __sync_val_compare_and_swap(a, b, c)
 #elif defined(_COMPILER_MICROSOFT_)
-#  define JL_ATOMIC_FETCH_AND_ADD(a, b)                 \
-    _InterlockedExchangeAdd((volatile LONG*)(a), b)
+#  define jl_signal_fence() _ReadWriteBarrier()
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_fetch_add(T *obj, T2 arg)
+{
+    return (T)_InterlockedExchangeAdd8((volatile char*)obj, (char)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_fetch_add(T *obj, T2 arg)
+{
+    return (T)_InterlockedExchangeAdd16((volatile short*)obj, (short)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_fetch_add(T *obj, T2 arg)
+{
+    return (T)_InterlockedExchangeAdd((volatile LONG*)obj, (LONG)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_fetch_add(T *obj, T2 arg)
+{
+    return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
+}
 // Returns the original value of `a`
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a, b, c)                   \
     _InterlockedCompareExchange64((volatile LONG64*)(a), c, b)
