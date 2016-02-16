@@ -27,6 +27,15 @@ let
         StackFrame(:parent, @__FILE__, line_numbers[2]),
         StackFrame(:grandparent, @__FILE__, line_numbers[3])
     ]
+
+    b = PipeBuffer()
+    frame = stack[1]
+    serialize(b, frame)
+    frame2 = deserialize(b)
+    @test frame !== frame2
+    @test frame == frame2
+    @test !isnull(frame.outer_linfo)
+    @test isnull(frame2.outer_linfo)
 end
 
 let
