@@ -10,11 +10,6 @@
 #include "support/dtypes.h"
 
 #ifdef __MIC__
-STATIC_INLINE void cpu_mfence(void)
-{
-    __asm__ __volatile__ ("":::"memory");
-}
-
 STATIC_INLINE void cpu_sfence(void)
 {
     __asm__ __volatile__ ("":::"memory");
@@ -26,11 +21,6 @@ STATIC_INLINE void cpu_lfence(void)
 }
 
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
-STATIC_INLINE void cpu_mfence(void)
-{
-    _mm_mfence();
-}
-
 STATIC_INLINE void cpu_sfence(void)
 {
     _mm_sfence();
@@ -42,11 +32,6 @@ STATIC_INLINE void cpu_lfence(void)
 }
 
 #elif defined(_CPU_AARCH64_)
-STATIC_INLINE void cpu_mfence(void)
-{
-    __asm__ volatile ("dmb ish" ::: "memory");
-}
-
 STATIC_INLINE void cpu_sfence(void)
 {
     __asm__ volatile ("dmb ishst" ::: "memory");
@@ -59,37 +44,28 @@ STATIC_INLINE void cpu_lfence(void)
 
 #elif defined(_CPU_ARM_) && __ARM_ARCH >= 7
 
-STATIC_INLINE void cpu_mfence(void)
+STATIC_INLINE void cpu_sfence(void)
 {
     __asm__ volatile ("dmb" ::: "memory");
 }
 
-STATIC_INLINE void cpu_sfence(void)
-{
-    cpu_mfence();
-}
-
 STATIC_INLINE void cpu_lfence(void)
 {
-    cpu_mfence();
+    __asm__ volatile ("dmb" ::: "memory");
 }
 
 #else
 
-STATIC_INLINE void cpu_mfence(void)
+STATIC_INLINE void cpu_sfence(void)
 {
     // GCC intrinsic
     __atomic_thread_fence(__ATOMIC_SEQ_CST);
 }
 
-STATIC_INLINE void cpu_sfence(void)
-{
-    cpu_mfence();
-}
-
 STATIC_INLINE void cpu_lfence(void)
 {
-    cpu_mfence();
+    // GCC intrinsic
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
 }
 
 #endif /* __MIC__ */
