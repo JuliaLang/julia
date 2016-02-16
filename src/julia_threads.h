@@ -78,9 +78,12 @@ typedef struct _jl_tls_states_t {
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
-// Returns the original value of `a`
-#  define JL_ATOMIC_COMPARE_AND_SWAP(a, b, c)   \
-    __sync_val_compare_and_swap(a, b, c)
+// Returns the original value of `obj`
+// Use the legacy __sync builtins for now, this can also be written using
+// the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
+#  define jl_atomic_compare_exchange(obj, expected, desired)    \
+    __sync_val_compare_and_swap(obj, expected, desired)
+// TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #elif defined(_COMPILER_MICROSOFT_)
 #  define jl_signal_fence() _ReadWriteBarrier()
 template<typename T, typename T2>
@@ -107,9 +110,35 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
-// Returns the original value of `a`
-#  define JL_ATOMIC_COMPARE_AND_SWAP(a, b, c)                   \
-    _InterlockedCompareExchange64((volatile LONG64*)(a), c, b)
+// Returns the original value of `obj`
+template<typename T, typename T2, typename T3>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
+{
+    return (T)_InterlockedCompareExchange8((volatile char*)obj,
+                                           (char)desired, (char)expected);
+}
+template<typename T, typename T2, typename T3>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
+{
+    return (T)_InterlockedCompareExchange16((volatile short*)obj,
+                                            (short)desired, (short)expected);
+}
+template<typename T, typename T2, typename T3>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
+{
+    return (T)_InterlockedCompareExchange((volatile LONG*)obj,
+                                          (LONG)desired, (LONG)expected);
+}
+template<typename T, typename T2, typename T3>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
+{
+    return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
+                                            (__int64)desired, (__int64)expected);
+}
 #else
 #  error "No atomic operations supported."
 #endif
@@ -156,7 +185,7 @@ STATIC_INLINE void jl_gc_safepoint(void)
         else {                                                          \
             for (;;) {                                                  \
                 if (m ## _mutex == 0 &&                                 \
-                    JL_ATOMIC_COMPARE_AND_SWAP(&m ## _mutex, 0,         \
+                    jl_atomic_compare_exchange(&m ## _mutex, 0,         \
                                                uv_thread_self()) == 0) { \
                     m ## _lock_count = 1;                               \
                     break;                                              \
@@ -171,7 +200,7 @@ STATIC_INLINE void jl_gc_safepoint(void)
         if (m ## _mutex == uv_thread_self()) {                          \
             --m ## _lock_count;                                         \
             if (m ## _lock_count == 0) {                                \
-                JL_ATOMIC_COMPARE_AND_SWAP(&m ## _mutex, uv_thread_self(), 0); \
+                jl_atomic_compare_exchange(&m ## _mutex, uv_thread_self(), 0); \
                 jl_cpu_wake();                                          \
             }                                                           \
         }                                                               \
