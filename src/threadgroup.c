@@ -163,7 +163,7 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
                     continue;
                 }
             }
-            cpu_pause();
+            jl_cpu_pause();
         }
         cpu_lfence();
         if (bcast_val)
@@ -183,7 +183,7 @@ int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
     if (tg->tid_map[ext_tid] == 0) {
         for (i = 1;  i < tg->num_threads;  ++i) {
             while (tg->thread_sense[i]->sense == tg->group_sense)
-                cpu_pause();
+                jl_cpu_pause();
         }
         tg->forked = 0;
     }

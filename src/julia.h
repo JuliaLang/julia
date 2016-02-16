@@ -119,8 +119,9 @@ STATIC_INLINE void jl_gc_safepoint(void)
 
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT void *jl_threadgroup(void);
-JL_DLLEXPORT void jl_cpu_pause(void);
 JL_DLLEXPORT void jl_threading_profile(void);
+JL_DLLEXPORT void (jl_cpu_pause)(void);
+JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 #if defined(__GNUC__)
 #  define JL_ATOMIC_FETCH_AND_ADD(a, b) __sync_fetch_and_add(a, b)
@@ -174,6 +175,7 @@ JL_DLLEXPORT void jl_threading_profile(void);
             --m ## _lock_count;                                         \
             if (m ## _lock_count == 0) {                                \
                 JL_ATOMIC_COMPARE_AND_SWAP(&m ## _mutex, uv_thread_self(), 0); \
+                jl_cpu_wake();                                          \
             }                                                           \
         }                                                               \
         else {                                                          \
