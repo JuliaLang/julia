@@ -531,24 +531,55 @@ catch ex
     @test collect(1:5) == sort(map(x->parse(Int, x), errors))
 end
 
-macro test_remoteexception_thrown(expr)
-    quote
-        try
-            $(esc(expr))
-            error("unexpected")
-        catch ex
-            @test typeof(ex) == RemoteException
-            @test typeof(ex.captured) == CapturedException
-            @test typeof(ex.captured.ex) == ErrorException
-            @test ex.captured.ex.msg == "foobar"
-        end
+function test_remoteexception_thrown(expr)
+    try
+        expr()
+        error("unexpected")
+    catch ex
+        @test typeof(ex) == RemoteException
+        @test typeof(ex.captured) == CapturedException
+        @test typeof(ex.captured.ex) == ErrorException
+        @test ex.captured.ex.msg == "foobar"
     end
 end
 
 for id in [id_other, id_me]
-    @test_remoteexception_thrown remotecall_fetch(()->throw(ErrorException("foobar")), id)
-    @test_remoteexception_thrown remotecall_wait(()->throw(ErrorException("foobar")), id)
-    @test_remoteexception_thrown wait(remotecall(()->throw(ErrorException("foobar")), id))
+    test_remoteexception_thrown() do
+        remotecall_fetch(id) do
+            throw(ErrorException("foobar"))
+        end
+    end
+    test_remoteexception_thrown() do
+        remotecall_wait(id) do
+            throw(ErrorException("foobar"))
+        end
+    end
+    test_remoteexception_thrown() do
+        wait(remotecall(id) do
+            throw(ErrorException("foobar"))
+        end)
+    end
+end
+
+# make sure the stackframe from the remote error can be serialized
+let ex
+    try
+        remotecall_fetch(id_other) do
+            @eval module AModuleLocalToOther
+                foo() = error("A.error")
+                foo()
+            end
+        end
+    catch ex
+    end
+    @test (ex::RemoteException).pid == id_other
+    @test ((ex.captured::CapturedException).ex::ErrorException).msg == "A.error"
+    bt = ex.captured.processed_bt::Array{Any,1}
+    @test length(bt) > 1
+    frame, repeated = bt[1]::Tuple{StackFrame, Int}
+    @test frame.func == :foo
+    @test isnull(frame.outer_linfo)
+    @test repeated == 1
 end
 
 # The below block of tests are usually run only on local development systems, since:
