@@ -238,6 +238,14 @@ let n = 12 #Size of matrix problem to test
         @test A[1,n] == convert(elty,0.0)
         @test A[1,1] == a[1]
 
+        debug && println("setindex!")
+        @test_throws ArgumentError A[n,1] = 1
+        @test_throws ArgumentError A[1,n] = 1
+        A[3,3] = A[3,3]
+        A[2,3] = A[2,3]
+        A[3,2] = A[3,2]
+        @test A == fA
+
         debug && println("Diagonal extraction")
         @test diag(A,1) == b
         @test diag(A,-1) == b
@@ -422,6 +430,14 @@ let n = 12 #Size of matrix problem to test
         debug && println("getindex")
         @test_throws BoundsError A[n+1,1]
         @test_throws BoundsError A[1,n+1]
+
+        debug && println("setindex!")
+        @test_throws ArgumentError A[n,1] = 1
+        @test_throws ArgumentError A[1,n] = 1
+        A[3,3] = A[3,3]
+        A[2,3] = A[2,3]
+        A[3,2] = A[3,2]
+        @test A == fA
     end
 end
 
