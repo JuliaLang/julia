@@ -58,16 +58,18 @@ function eigfact{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
 end
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
-# function eig(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true)
-#     F = eigfact(A, permute=permute, scale=scale)
-#     F[:values], F[:vectors]
-# end
-function eig(A::Union{Number, AbstractMatrix}; kwargs...)
-    F = eigfact(A; kwargs...)
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    F = eigfact(A, permute=permute, scale=scale)
     F.values, F.vectors
 end
+function eig(A::AbstractMatrix, args...)
+    F = eigfact(A, args...)
+    F.values, F.vectors
+end
+
 #Calculates eigenvectors
-eigvecs(A::Union{Number, AbstractMatrix}, args...; kwargs...) = eigvecs(eigfact(A, args...; kwargs...))
+eigvecs(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true) =
+    eigvecs(eigfact(A, permute=permute, scale=scale))
 eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vectors]::S
 
 eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
@@ -148,7 +150,11 @@ function eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
     return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
-function eig(A::Union{Number, AbstractMatrix}, B::Union{Number, AbstractMatrix})
+function eig(A::AbstractMatrix, B::AbstractMatrix)
+    F = eigfact(A,B)
+    F.values, F.vectors
+end
+function eig(A::Number, B::Number)
     F = eigfact(A,B)
     F.values, F.vectors
 end
@@ -167,6 +173,8 @@ function eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return eigvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
+
+eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigfact(A, B))
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
 full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors

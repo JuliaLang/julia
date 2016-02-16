@@ -119,22 +119,44 @@ end
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
 
 eigfact!{T<:BlasReal}(A::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigfact{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
+function eigfact{T}(A::SymTridiagonal{T})
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigfact!(copy_oftype(A, S))
+end
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
+eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) =
+    Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
+function eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    return eigfact!(copy_oftype(A, S), irange)
+end
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
+eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) =
+    Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
+function eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    return eigfact!(copy_oftype(A, S), vl, vu)
+end
 
 eigvals!{T<:BlasReal}(A::SymTridiagonal{T}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-eigvals{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
+function eigvals{T}(A::SymTridiagonal{T})
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    return eigvals!(copy_oftype(A, S))
+end
 
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
-eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
+eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) =
+    LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
+function eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    return eigvals!(copy_oftype(A, S), irange)
+end
 
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
-eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
+eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) =
+    LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
+function eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    return eigvals!(copy_oftype(A, S), vl, vu)
+end
 
 #Computes largest and smallest eigenvalue
 eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
