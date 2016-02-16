@@ -2710,3 +2710,51 @@ end
 # issue #12536
 @test Rational{Int16}(1,2) === Rational(Int16(1),Int16(2))
 @test Rational{Int16}(500000,1000000) === Rational(Int16(1),Int16(2))
+
+
+rand_int = rand(Int8)
+
+for T in [Int8, Int16, Int32, Int128, BigInt]
+    @test num(convert(T, rand_int)) == rand_int
+    @test den(convert(T, rand_int)) == 1
+
+    @test typemin(Rational{T}) == -one(T)//zero(T)
+    @test typemax(Rational{T}) == one(T)//zero(T)
+    @test widen(Rational{T}) == Rational{widen(T)}
+end
+
+@test Rational(Float32(rand_int)) == Rational(rand_int)
+
+@test Rational(Rational(rand_int)) == Rational(rand_int)
+
+@test begin
+    var = -Rational(UInt32(0))
+    var == UInt32(0)
+end
+
+@test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+
+@test Complex(rand_int, 0) == Rational(rand_int)
+@test Rational(rand_int) == Complex(rand_int, 0)
+
+@test (Complex(rand_int, 4) == Rational(rand_int)) == false
+@test (Rational(rand_int) == Complex(rand_int, 4)) == false
+
+@test trunc(Rational(BigInt(rand_int), BigInt(3))) == Rational(trunc(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+@test  ceil(Rational(BigInt(rand_int), BigInt(3))) == Rational( ceil(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+@test round(Rational(BigInt(rand_int), BigInt(3))) == Rational(round(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+
+
+for a = -3:3
+    @test Rational(Float32(a)) == Rational(a)
+    @test Rational(a)//2 == a//2
+    @test a//Rational(2) == Rational(a/2)
+    @test a.//[-2, -1, 1, 2] == [-a//2, -a//1, a//1, a//2]
+    for b=-3:3, c=1:3
+        @test b//(a+c*im) == b*a//(a^2+c^2)-(b*c//(a^2+c^2))*im
+        for d=-3:3
+            @test (a+b*im)//(c+d*im) == (a*c+b*d+(b*c-a*d)*im)//(c^2+d^2)
+            @test Complex(Rational(a)+b*im)//Complex(Rational(c)+d*im) == Complex(a+b*im)//Complex(c+d*im)
+        end
+    end
+end
