@@ -132,6 +132,24 @@ svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(
 
 Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
 object `F`, such that `A = F[:U]*F[:D1]*F[:R0]*F[:Q]'` and `B = F[:V]*F[:D2]*F[:R0]*F[:Q]'`.
+
+For an M-by-N matrix `A` and P-by-N matrix `B`,
+
+- `F[:U]` is a M-by-M orthogonal matrix,
+- `F[:V]` is a P-by-P orthogonal matrix,
+- `F[:Q]` is a N-by-N orthogonal matrix,
+- `F[:R0]` is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is
+           nonsingular upper block triangular,
+- `F[:D1]` is a M-by-(K+L) diagonal matrix with 1s in the first K entries,
+- `F[:D2]` is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,
+
+`K+L` is the effective numerical rank of the matrix `[A; B]`.
+
+The entries of `F[:D1]` and `F[:D2]` are related, as explained in the LAPACK
+documentation for the
+[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
+[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
+routine which is called underneath (in LAPACK 3.6.0 and newer).
 """
 function svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
