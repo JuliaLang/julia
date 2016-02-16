@@ -3,6 +3,8 @@
 # printf
 # int
 @test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"
+@test (@sprintf "%a" typemax(Int64)) == "0x7.fffffffffffffffp+60"
+
 for (fmt, val) in (("%i", "42"),
                    ("%u", "42"),
                    ("Test: %i", "Test: 42"),
@@ -13,7 +15,10 @@ for (fmt, val) in (("%i", "42"),
                    ("% i", " 42"),
                    ("%+i", "+42"),
                    ("%4i", "  42"),
-                   ("%-4i", "42  "))
+                   ("%-4i", "42  "),
+                   ("%a","0x2.ap+4"),
+                   ("%20a","            0x2.ap+4"),
+                   ("%-20a","0x2.ap+4            "))
     @test( @eval(@sprintf($fmt, 42) == $val))
 end
 
@@ -80,6 +85,8 @@ end
 
 # hex float
 @test (@sprintf "%a" 1.5) == "0x1.8p+0"
+@test (@sprintf "%a" 1.5f0) == "0x1.8p+0"
+@test (@sprintf "%a" big"1.5") == "0x1.8p+0"
 @test (@sprintf "%#.0a" 1.5) == "0x2.p+0"
 @test (@sprintf "%+30a" 1/3) == "         +0x1.5555555555555p-2"
 
