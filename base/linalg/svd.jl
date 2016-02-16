@@ -28,7 +28,9 @@ Compute the singular value decomposition (SVD) of `A` and return an `SVD` object
 `F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`.
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
 
-If `thin=true` (default), an economy mode decomposition is returned.
+If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
+`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
+``M \\times \\min(M, N)`` for a thin SVD.
 """
 function svdfact{T}(A::StridedVecOrMat{T}; thin::Bool = true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
@@ -43,7 +45,9 @@ svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U*diagm(S)*V'`.
 
-If `thin=true` (default), an economy mode decomposition is returned.
+If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
+`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
+``M \\times \\min(M, N)`` for a thin SVD.
 
 `svd` is a wrapper around [`svdfact`](:func:`svdfact(A)`), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
@@ -114,7 +118,9 @@ GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{
 `svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by
 overwriting the input `A`, instead of creating a copy.
 
-If `thin=true` (default), an economy mode decomposition is returned.
+If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
+`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
+``M \\times \\min(M, N)`` for a thin SVD.
 """
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
