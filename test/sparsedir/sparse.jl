@@ -225,8 +225,31 @@ b = randn(3)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
 @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
-# conj
+# copy!
+let
+    A = sprand(5, 5, 0.2)
+    B = sprand(5, 5, 0.2)
+    copy!(A, B)
+    @test A == B
+    @test pointer(A.nzval) != pointer(B.nzval)
+    @test pointer(A.rowval) != pointer(B.rowval)
+    @test pointer(A.colptr) != pointer(B.colptr)
+    # Test size(A) != size(B)
+    B = sprand(3, 3, 0.2)
+    copy!(A, B)
+    @test A[1:9] == B[:]
+    # Test eltype(A) != eltype(B), size(A) != size(B)
+    B = sparse(rand(Float32, 3, 3))
+    copy!(A, B)
+    @test A[1:9] == B[:]
+    # Test eltype(A) != eltype(B), size(A) == size(B)
+    A = sparse(rand(Float64, 3, 3))
+    B = sparse(rand(Float32, 3, 3))
+    copy!(A, B)
+    @test A == B
+end
 
+# conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
