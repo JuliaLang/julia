@@ -990,3 +990,8 @@ end
 export call
 
 @deprecate_binding LambdaStaticData LambdaInfo
+
+# 4774
+@deprecate transpose(v::AbstractVector) transpose(reshape(v, size(v, 1), 1))
+@deprecate ctranspose(v::AbstractVector) ctranspose(reshape(v, size(v, 1), 1))
+

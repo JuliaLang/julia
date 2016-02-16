@@ -1133,21 +1133,6 @@ vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
 ### linalg.jl
 
-# Transpose
-# (The only sparse matrix structure in base is CSC, so a one-row sparse matrix is worse than dense)
-transpose(x::SparseVector) = _ct(IdFun(), x)
-ctranspose(x::SparseVector) = _ct(ConjFun(), x)
-function _ct{T}(f, x::SparseVector{T})
-    isempty(x) && return Array(T, 1, 0)
-    A = zeros(T, 1, length(x))
-    xnzind = nonzeroinds(x)
-    xnzval = nonzeros(x)
-    for (i,v) in zip(xnzind, xnzval)
-        @inbounds A[i] = f(v)
-    end
-    A
-end
-
 ### BLAS Level-1
 
 # axpy
