@@ -523,14 +523,20 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     vals = Array(V, newsz)
     count0 = h.count
     count = 0
+    maxprobe = max(16, newsz>>6)
 
     for i = 1:sz
         if olds[i] == 0x1
             k = oldk[i]
             v = oldv[i]
-            index = hashindex(k, newsz)
+            index0 = index = hashindex(k, newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
+            end
+            if index - index0 > maxprobe
+                # rare condition: new table size causes more grouping of keys than before
+                # see issue #15077
+                return rehash!(h, newsz*2)
             end
             slots[index] = 0x1
             keys[index] = k
