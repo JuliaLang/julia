@@ -1356,30 +1356,7 @@ JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 
-JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
-#ifndef JULIA_ENABLE_THREADING
-extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
-#define jl_get_ptls_states() (&jl_tls_states)
-#define jl_gc_state() ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
-{
-    (void)state;
-    return old_state;
-}
-#else // ifndef JULIA_ENABLE_THREADING
-typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
-JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
-// Make sure jl_gc_state() is always a rvalue
-#define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
-STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
-{
-    jl_get_ptls_states()->gc_state = state;
-    // A safe point is required if we transition from GC-safe region to
-    // non GC-safe region.
-    if (old_state && !state)
-        jl_gc_safepoint();
-    return old_state;
-}
+#ifdef JULIA_ENABLE_THREADING
 STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
 {
     // For early bootstrap
@@ -1396,14 +1373,6 @@ STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
     locks->items[len] = (void*)unlock_func;
 }
 #endif // ifndef JULIA_ENABLE_THREADING
-STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
-{
-    return jl_gc_state_set(state, jl_gc_state());
-}
-#define jl_gc_unsafe_enter() jl_gc_state_save_and_set(0)
-#define jl_gc_unsafe_leave(state) ((void)jl_gc_state_set((state), 0))
-#define jl_gc_safe_enter() jl_gc_state_save_and_set(JL_GC_STATE_SAFE)
-#define jl_gc_safe_leave(state) ((void)jl_gc_state_set((state), JL_GC_STATE_SAFE))
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
