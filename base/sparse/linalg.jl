@@ -516,7 +516,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
     else
-        throw(ArgumentError("second argment must be either 1 or Inf, got $p"))
+        throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
 end
 
@@ -602,7 +602,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
         end
 
         if T <: Real
-            # Check wether cols of S are parallel to cols of S or S_old
+            # Check whether cols of S are parallel to cols of S or S_old
             for j = 1:t
                 while true
                     repeated = false
