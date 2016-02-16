@@ -49,6 +49,7 @@ function settings(s::Int, shared::Bool)
     end
     return prot, flags, (prot & PROT_WRITE) > 0
 end
+settings(fd::RawFD, shared::Bool) = settings(Int(fd.fd), shared)
 
 # Before mapping, grow the file to sufficient size
 # Note: a few mappable streams do not support lseek. When Julia

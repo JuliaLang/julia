@@ -168,20 +168,23 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         # FIXME these should also be run on windows once the bug causing them to hang gets fixed
         @unix_only let out  = Pipe(),
                        proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out))
-
-            wait(proc)
             close(out.in)
+            result = UInt8[]
+            @async append!(result, read(out))
+            wait(proc)
             @test success(proc)
-            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
+            @test UTF8String(result) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5\n"
         end
 
         @unix_only let out  = Pipe(),
                        proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
-
+            close(out.in)
+            result = UInt8[]
+            @async append!(result, read(out))
             wait(proc)
             close(out.in)
             @test success(proc)
-            @test isempty(readstring(out))
+            @test isempty(result)
         end
     end
 

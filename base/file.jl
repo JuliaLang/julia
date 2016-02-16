@@ -195,12 +195,12 @@ end
 # Obtain a temporary directory's path.
 tempdir() = dirname(tempname())
 
-# Create and return the name of a temporary file along with an IOStream
+# Create and return the name of a temporary file along with an IO
 function mktemp(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
-    return (b, fdio(p, true))
+    return (b, File(RawFD(p)))
 end
 
 # Create and return the name of a temporary directory

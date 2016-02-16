@@ -526,7 +526,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
 
-    s = fdio(fd_mem, true)
+    s = File(RawFD(fd_mem))
 
     # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
     # and only at creation time
