@@ -1278,10 +1278,10 @@ JL_DLLEXPORT void jl_yield(void);
 JL_DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
 JL_DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 
-#define JL_SIGATOMIC_BEGIN() JL_ATOMIC_FETCH_AND_ADD(&jl_defer_signal, 1)
+#define JL_SIGATOMIC_BEGIN() jl_atomic_fetch_add(&jl_defer_signal, 1)
 #define JL_SIGATOMIC_END()                                      \
     do {                                                        \
-        if (JL_ATOMIC_FETCH_AND_ADD(&jl_defer_signal, -1) == 1  \
+        if (jl_atomic_fetch_add(&jl_defer_signal, -1) == 1      \
             && jl_signal_pending != 0) {                        \
             jl_signal_pending = 0;                              \
             jl_sigint_action();                                 \
