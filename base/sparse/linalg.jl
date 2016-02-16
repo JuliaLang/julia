@@ -516,7 +516,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
     else
-        throw(ArgumentError("second argment must be either 1 or Inf, got $p"))
+        throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
 end
 
