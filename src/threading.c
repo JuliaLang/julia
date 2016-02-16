@@ -30,12 +30,6 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
-// utility
-JL_DLLEXPORT void jl_cpu_pause(void)
-{
-    cpu_pause();
-}
-
 #ifdef JULIA_ENABLE_THREADING
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
@@ -194,7 +188,7 @@ void ti_threadfun(void *arg)
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
-        cpu_pause();
+        jl_cpu_pause();
     cpu_lfence();
 
     // Assuming the functions called below doesn't contain unprotected GC

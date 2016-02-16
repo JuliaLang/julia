@@ -342,6 +342,16 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
     jl_gc_safe_leave(state);
 }
 
+JL_DLLEXPORT void (jl_cpu_pause)(void)
+{
+    jl_cpu_pause();
+}
+
+JL_DLLEXPORT void (jl_cpu_wake)(void)
+{
+    jl_cpu_wake();
+}
+
 #ifdef __cplusplus
 }
 #endif
