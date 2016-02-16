@@ -3731,3 +3731,13 @@ let z = (3,9,42)
         @test (a,b,c,d,e) == (1,3,9,42,10)
     end
 end
+
+# issue #15072
+let grphtest = ((1, [2]),)
+    for (s, g) in grphtest
+        g_ = map(s -> s+1, g)
+        @test g_ == [3]
+    end
+    for s = 1:1
+    end
+end
