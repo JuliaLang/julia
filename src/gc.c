@@ -2424,7 +2424,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // one of them to actually run the collection. We can't just let the
     // master thread do the GC since it might be running unmanaged code
     // and can take arbitrarily long time before hitting a safe point.
-    if (JL_ATOMIC_COMPARE_AND_SWAP(&jl_gc_running, 0, 1) != 0) {
+    if (jl_atomic_compare_exchange(&jl_gc_running, 0, 1) != 0) {
 #ifdef JULIA_ENABLE_THREADING
         JL_SIGATOMIC_END();
         jl_wait_for_gc();
