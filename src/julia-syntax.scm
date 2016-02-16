@@ -2188,12 +2188,16 @@
         ((or (not (pair? e)) (quoted? e) (eq? (car e) 'toplevel)) e)
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'lambda)
-         (let* ((env (append (lam:vars e) env))
+         (let* ((lv (lam:vars e))
+                (env (append lv env))
                 (body (resolve-scopes- (lam:body e) env
                                        ;; don't propagate implicit globals
                                        ;; issue #7234
                                        '()
-                                       e renames #t)))
+                                       e
+                                       (filter (lambda (ren) (not (memq (car ren) lv)))
+                                               renames)
+                                       #t)))
            `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok (cadr e))
