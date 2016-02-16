@@ -602,7 +602,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
         end
 
         if T <: Real
-            # Check wether cols of S are parallel to cols of S or S_old
+            # Check whether cols of S are parallel to cols of S or S_old
             for j = 1:t
                 while true
                     repeated = false

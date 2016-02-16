@@ -310,7 +310,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             right_matches = 0
             for i = 1 : min(length(t_i), length(sig))
                 i > 1 && print(buf, ", ")
-                # If isvarargtype then it checks wether the rest of the input arguements matches
+                # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
                     sigstr = string(sig[i].parameters[1], "...")
