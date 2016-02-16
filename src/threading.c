@@ -26,7 +26,6 @@ TODO:
 extern "C" {
 #endif
 
-#include "ia_misc.h"
 #include "threadgroup.h"
 #include "threading.h"
 
@@ -187,9 +186,8 @@ void ti_threadfun(void *arg)
 #endif
 
     // set the thread-local tid and wait for a thread group
-    while (ta->state == TI_THREAD_INIT)
+    while (jl_atomic_load_acquire(&ta->state) == TI_THREAD_INIT)
         jl_cpu_pause();
-    cpu_lfence();
 
     // Assuming the functions called below doesn't contain unprotected GC
     // critical region. In general, the following part of this function
@@ -342,8 +340,7 @@ void jl_start_threads(void)
     // give the threads the world thread group; they will block waiting for fork
     for (i = 0;  i < jl_n_threads - 1;  ++i) {
         targs[i]->tg = tgworld;
-        cpu_sfence();
-        targs[i]->state = TI_THREAD_WORK;
+        jl_atomic_store_release(&targs[i]->state, TI_THREAD_WORK);
     }
 
     uv_barrier_wait(&thread_init_done);
