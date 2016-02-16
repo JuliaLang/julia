@@ -18,13 +18,37 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
     end
     SVD(u,s,vt)
 end
-function svdfact{T}(A::StridedVecOrMat{T};thin = true)
+
+"""
+    svdfact(A, [thin=true]) -> SVD
+
+Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
+
+`U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`,
+`F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`.
+The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
+
+If `thin=true` (default), an economy mode decomposition is returned.
+"""
+function svdfact{T}(A::StridedVecOrMat{T}; thin::Bool = true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     svdfact!(copy_oftype(A, S), thin = thin)
 end
 svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
+"""
+    svd(A, [thin=true]) -> U, S, V
+
+Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
+`A == U*diagm(S)*V'`.
+
+If `thin=true` (default), an economy mode decomposition is returned.
+
+`svd` is a wrapper around [`svdfact`](:func:`svdfact(A)`), extracting all parts
+of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
+efficient.
+"""
 function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
@@ -44,8 +68,19 @@ function getindex(F::SVD, d::Symbol)
     end
 end
 
+"""
+    svdvals!(A)
+
+Returns the singular values of `A`, saving space by overwriting the input.
+"""
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
 svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
+
+"""
+    svdvals(A)
+
+Returns the singular values of `A`.
+"""
 function svdvals{T}(A::AbstractMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     svdvals!(copy_oftype(A, S))
@@ -73,6 +108,14 @@ immutable GeneralizedSVD{T,S} <: Factorization{T}
 end
 GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 
+"""
+    svdfact!(A, [thin=true]) -> SVD
+
+`svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by
+overwriting the input `A`, instead of creating a copy.
+
+If `thin=true` (default), an economy mode decomposition is returned.
+"""
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
     if LAPACK.VERSION[] < v"3.6.0"
@@ -83,11 +126,27 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
+
+"""
+    svdfact(A, B) -> GeneralizedSVD
+
+Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
+object `F`, such that `A = F[:U]*F[:D1]*F[:R0]*F[:Q]'` and `B = F[:V]*F[:D2]*F[:R0]*F[:Q]'`.
+"""
 function svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
+"""
+    svd(A, B) -> U, V, Q, D1, D2, R0
+
+Wrapper around [`svdfact`](:func:`svdfact(A, B)`) extracting all parts of the
+factorization to a tuple. Direct use of
+`svdfact` is therefore generally more efficient. The function returns the generalized SVD of
+`A` and `B`, returning `U`, `V`, `Q`, `D1`, `D2`, and `R0` such that `A = U*D1*R0*Q'` and `B =
+V*D2*R0*Q'`.
+"""
 function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
@@ -141,6 +200,13 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     a[1:k + l] ./ b[1:k + l]
 end
 svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A),copy(B))
+
+"""
+    svdvals(A, B)
+
+Return the generalized singular values from the generalized singular value
+decomposition of `A` and `B`.
+"""
 function svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
