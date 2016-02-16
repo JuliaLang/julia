@@ -1130,6 +1130,15 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
+    if (JL_CPU_WAKE_NOOP &&
+        (fptr == &jl_cpu_wake || ((!f_lib || (intptr_t)f_lib == 2) &&
+                                  f_name && !strcmp(f_name, "jl_cpu_wake")))) {
+        assert(lrt == T_void);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+    }
     if (fptr == (void(*)(void))&jl_is_leaf_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
