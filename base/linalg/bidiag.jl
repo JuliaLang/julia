@@ -222,7 +222,7 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-SpecialMatrix = Union{Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular}
+SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular}
 *(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 #Generic multiplication
