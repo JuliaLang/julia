@@ -835,31 +835,27 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
 }
 
 // returns either an expression or a thunk
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
+jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), arg);
+    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
     jl_value_t *result = scm_to_julia(fl_ctx, e, 0);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
     return result;
 }
 
+JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
+{
+    return jl_call_scm_on_ast("jl-expand-to-thunk", expr);
+}
+
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    fl_context_t *fl_ctx = &ctx->fl;
-    JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
-    value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-macroexpand")), arg);
-    jl_value_t *result;
-    result = scm_to_julia(fl_ctx, e, 0);
-    JL_AST_PRESERVE_POP(ctx, old_roots);
-    jl_ast_ctx_leave(ctx);
-    return result;
+    return jl_call_scm_on_ast("jl-macroexpand", expr);
 }
 
 ssize_t jl_max_jlgensym_in(jl_value_t *v)
@@ -1140,8 +1136,7 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                         jl_value_t *me = jl_exprarg(e,1);
                         if (jl_is_topnode(me) ||
                             (jl_is_symbol(me) && jl_binding_resolved_p(lam->module,(jl_sym_t*)me))) {
-                            jl_value_t *m = jl_static_eval(me, NULL, lam->module,
-                                                           lam, 0, 0);
+                            jl_value_t *m = jl_static_eval(me, NULL, lam->module, lam, 0, 0);
                             if (m && jl_is_module(m))
                                 return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
                         }
