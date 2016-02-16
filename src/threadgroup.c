@@ -17,7 +17,6 @@ extern "C" {
 #endif
 
 #include "options.h"
-#include "ia_misc.h"
 #include "threadgroup.h"
 
 int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
@@ -126,8 +125,8 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 {
     if (tg->tid_map[ext_tid] == 0) {
         tg->envelope = bcast_val ? *bcast_val : NULL;
-        cpu_sfence();
-        tg->group_sense = tg->thread_sense[0]->sense;
+        // synchronize `tg->envelope` and `tg->group_sense`
+        jl_atomic_store_release(&tg->group_sense, tg->thread_sense[0]->sense);
 
         // if it's possible that threads are sleeping, signal them
         if (tg->sleep_threshold) {
@@ -140,7 +139,8 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
         // spin up to threshold ns (count sheep), then sleep
         uint64_t spin_ns;
         uint64_t spin_start = 0;
-        while (tg->group_sense !=
+        // synchronize `tg->envelope` and `tg->group_sense`
+        while (jl_atomic_load_acquire(&tg->group_sense) !=
                tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
             if (tg->sleep_threshold) {
                 if (!spin_start) {
@@ -163,7 +163,6 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
             }
             jl_cpu_pause();
         }
-        cpu_lfence();
         if (bcast_val)
             *bcast_val = tg->envelope;
     }
