@@ -43,7 +43,7 @@ SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
 
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.

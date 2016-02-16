@@ -3,10 +3,6 @@
 #ifndef JULIA_H
 #define JULIA_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 //** Configuration options that affect the Julia ABI **//
 // if this is not defined, only individual dimension sizes are
 // stored and not total length, to save space.
@@ -64,6 +60,12 @@ extern "C" {
 // Nonetheless, we define JL_THREAD and use it to give advanced notice to
 // maintainers of what eventual threading support will change.
 
+#include <julia_threads.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define JL_MAX_BT_SIZE 80000
 // Define this struct early so that we are free to use it in the inline
 // functions below.
@@ -106,7 +108,9 @@ STATIC_INLINE void jl_gc_safepoint(void)
     // This triggers a SegFault when we are in GC
     // Assign it to a variable to make sure the compiler emit the load
     // and to avoid Clang warning for -Wunused-volatile-lvalue
+    jl_signal_fence();
     size_t v = *jl_gc_signal_page;
+    jl_signal_fence();
     (void)v;
 }
 #else // JULIA_ENABLE_THREADING
