@@ -4,6 +4,7 @@ module StackTraces
 
 
 import Base: hash, ==, show
+import Base.Serializer: serialize, deserialize
 
 export StackTrace, StackFrame, stacktrace, catch_stacktrace
 
@@ -12,7 +13,7 @@ export StackTrace, StackFrame, stacktrace, catch_stacktrace
 
 Stack information representing execution context.
 """
-immutable StackFrame
+immutable StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
     func::Symbol
     "the LambdaInfo containing the execution context (if it could be found)"
@@ -20,11 +21,11 @@ immutable StackFrame
     "the path to the file containing the execution context"
     file::Symbol
     "the line number in the file containing the execution context"
-    line::Int
+    line::Int64
     "the path to the file containing the context for code inlined into the execution context"
     inlined_file::Symbol
     "the line number in the file containing the context for code inlined into the execution context"
-    inlined_line::Int
+    inlined_line::Int64
     "true if the code is from C"
     from_c::Bool
     "representation of the pointer to the execution context as returned by `backtrace`"
@@ -60,6 +61,31 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.line, h)
     h = hash(frame.file, h)
     h = hash(frame.func, h)
+end
+
+# provide a custom serializer that skips attempting to serialize the `outer_linfo`
+# which is likely to contain complex references, types, and module references
+# that may not exist on the receiver end
+function serialize(s::SerializationState, frame::StackFrame)
+    Serializer.serialize_type(s, typeof(frame))
+    serialize(s, frame.func)
+    serialize(s, frame.file)
+    serialize(s, frame.inlined_file)
+    write(s.io, frame.line)
+    write(s.io, frame.inlined_line)
+    write(s.io, frame.from_c)
+    write(s.io, frame.pointer)
+end
+
+function deserialize(s::SerializationState, ::Type{StackFrame})
+    func = deserialize(s)
+    file = deserialize(s)
+    inlined_file = deserialize(s)
+    line = read(s.io, Int64)
+    inlined_line = read(s.io, Int64)
+    from_c = read(s.io, Bool)
+    pointer = read(s.io, Int64)
+    return StackFrame(func, Nullable{LambdaInfo}(), file, line, inlined_file, inlined_line, from_c, pointer)
 end
 
 
