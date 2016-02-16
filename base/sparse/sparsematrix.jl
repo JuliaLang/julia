@@ -624,11 +624,12 @@ spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
 """
-    spzeros(m[,n])
+    spzeros([type,]m[,n])
 
 Create a sparse vector of length `m` or sparse matrix of size `m x n`. This
 sparse array will not contain any nonzero values. No storage will be allocated
-for nonzero values during construction.
+for nonzero values during construction. The type defaults to `Float64` if not
+specified.
 """
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
@@ -641,14 +642,21 @@ end
 speye(n::Integer) = speye(Float64, n)
 speye(T::Type, n::Integer) = speye(T, n, n)
 speye(m::Integer, n::Integer) = speye(Float64, m, n)
+
+"""
+    speye(S)
+
+Create a sparse identity matrix with the same structure as that of  `S`.
+"""
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)
 
 """
-    speye(type,m[,n])
+    speye([type,]m[,n])
 
-Create a sparse identity matrix of specified type of size `m x m`. In case `n` is supplied,
-create a sparse identity matrix of size `m x n`.
+Create a sparse identity matrix of size `m x m`. When `n` is supplied,
+create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
+if not specified.
 """
 function speye(T::Type, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
