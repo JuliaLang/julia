@@ -193,6 +193,23 @@ end
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
+function copy!{TvA, TiA, TvB, TiB}(A::SparseMatrixCSC{TvA,TiA},
+                                   B::SparseMatrixCSC{TvB,TiB})
+    # If the two matrices have the same size then all the
+    # elements in A will be overwritten and we can simply copy the
+    # internal fields of B to A.
+    if size(A) == size(B)
+        copy!(A.colptr, B.colptr)
+        resize!(A.nzval, length(B.nzval))
+        resize!(A.rowval, length(B.rowval))
+        copy!(A.rowval, B.rowval)
+        copy!(A.nzval, B.nzval)
+    else
+        invoke(Base.copy!, Tuple{AbstractMatrix{TvA}, AbstractMatrix{TvB}}, A, B)
+    end
+    return A
+end
+
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S))   = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array(Tv, length(S.nzval)))
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array(TvNew, length(S.nzval)))
 similar{Tv, N}(S::SparseMatrixCSC, ::Type{Tv}, d::NTuple{N, Integer}) = spzeros(Tv, d...)
