@@ -22,6 +22,7 @@ macro doc(str, def) Expr(:escape, def) end
 
 ## Load essential files and libraries
 include("essentials.jl")
+include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 

@@ -292,3 +292,73 @@ eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
     x = prod_next(p, st)
     ((x[1][1],x[1][2]...), x[2])
 end
+
+_size(p::Prod2) = (length(p.a), length(p.b))
+_size(p::Prod) = (length(p.a), _size(p.b)...)
+
+"""
+    IteratorND(iter, dims)
+
+Given an iterator `iter` and dimensions tuple `dims`, return an iterator that
+yields the same values as `iter`, but with the specified multi-dimensional shape.
+For example, this determines the shape of the array returned when `collect` is
+applied to this iterator.
+"""
+immutable IteratorND{I,N}
+    iter::I
+    dims::NTuple{N,Int}
+
+    function (::Type{IteratorND}){I,N}(iter::I, shape::NTuple{N,Integer})
+        if length(iter) != prod(shape)
+            throw(DimensionMismatch("dimensions $shape must be consistent with iterator length $(iter(a))"))
+        end
+        new{I,N}(iter, shape)
+    end
+    (::Type{IteratorND}){I<:AbstractProdIterator}(p::I) = IteratorND(p, _size(p))
+end
+
+start(i::IteratorND) = start(i.iter)
+done(i::IteratorND, s) = done(i.iter, s)
+next(i::IteratorND, s) = next(i.iter, s)
+
+size(i::IteratorND) = i.dims
+length(i::IteratorND) = length(i.iter)
+ndims{I,N}(::IteratorND{I,N}) = N
+
+eltype{I}(::IteratorND{I}) = eltype(I)
+
+collect(i::IteratorND) = copy!(Array(eltype(i),size(i)), i)
+
+function collect{I<:IteratorND}(g::Generator{I})
+    sz = size(g.iter)
+    if length(g.iter) == 0
+        return Array(Union{}, sz)
+    end
+    st = start(g)
+    first, st = next(g, st)
+    dest = Array(typeof(first), sz)
+    dest[1] = first
+    return map_to!(g.f, 2, st, dest, g.iter)
+end
+
+# special case for 2d
+function collect{F,I<:Prod2}(g::Generator{IteratorND{I,2},F})
+    f = g.f
+    a = g.iter.iter.a
+    b = g.iter.iter.b
+    sz = size(g.iter)
+    if prod(sz) == 0
+        return Array(Union{}, sz)
+    end
+    fst = f((first(a), first(b)))  # TODO: don't recompute this in the loop
+    dest = Array(typeof(fst), sz)
+    k = 1
+    for j in b
+        for i in a
+            val = f((i, j))  # TODO: handle type changes
+            @inbounds dest[k] = val
+            k += 1
+        end
+    end
+    return dest
+end

@@ -1926,6 +1926,23 @@
               (lower-ccall name RT (cdr argtypes) args))))
          e))
 
+   'generator
+   (lambda (e)
+     (let ((expr   (cadr e))
+           (vars   (map cadr  (cddr e)))
+           (ranges (map caddr (cddr e))))
+       (let* ((argname (if (and (length= vars 1) (symbol? (car vars)))
+                           (car vars)
+                           (gensy)))
+              (splat (if (eq? argname (car vars))
+                         '()
+                         `((= (tuple ,@vars) ,argname)))))
+         (expand-forms
+          `(call (top Generator) (-> ,argname (block ,@splat ,expr))
+                 ,(if (length= ranges 1)
+                      (car ranges)
+                      `(call (top IteratorND) (call (top product) ,@ranges))))))))
+
    'comprehension
    (lambda (e)
      (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))
@@ -2188,12 +2205,16 @@
         ((or (not (pair? e)) (quoted? e) (eq? (car e) 'toplevel)) e)
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'lambda)
-         (let* ((env (append (lam:vars e) env))
+         (let* ((lv (lam:vars e))
+                (env (append lv env))
                 (body (resolve-scopes- (lam:body e) env
                                        ;; don't propagate implicit globals
                                        ;; issue #7234
                                        '()
-                                       e renames #t)))
+                                       e
+                                       (filter (lambda (ren) (not (memq (car ren) lv)))
+                                               renames)
+                                       #t)))
            `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok (cadr e))
