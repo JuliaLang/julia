@@ -32,9 +32,16 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
     @test_throws ArgumentError Bidiagonal(dv,ev)
 
-    #getindex and size
-    BD = Bidiagonal(dv,ev,true)
+    debug && println("getindex, setindex!, and size")
+    BD = Bidiagonal(dv, ev, true)
     @test_throws BoundsError BD[n+1,1]
+    @test BD[2,2] == dv[2]
+    @test BD[2,3] == ev[2]
+    @test_throws ArgumentError BD[2,1] = 1
+    @test_throws ArgumentError BD[3,1] = 1
+    cBD = copy(BD)
+    cBD[2,2] = BD[2,2]
+    @test BD == cBD
     @test_throws ArgumentError size(BD,0)
     @test size(BD,3) == 1
 

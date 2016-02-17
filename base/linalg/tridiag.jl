@@ -30,8 +30,10 @@ function SymTridiagonal(A::AbstractMatrix)
 end
 
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
-convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
+convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) =
+    SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
+convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) =
+    SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
     n = size(M, 1)
     Mf = zeros(T, n, n)
@@ -292,6 +294,16 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
     end
 end
 
+function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
+    if i == j
+        A.dv[i] = x
+    elseif abs(i - j) == 1
+        A.ev[min(i,j)] = x
+    else
+        throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
+    end
+end
+
 ## Tridiagonal matrices ##
 immutable Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
@@ -403,6 +415,17 @@ function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     end
 end
 
+function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
+    if i == j
+        A.d[i] = x
+    elseif i - j == 1
+        A.dl[j] = x
+    elseif j - i == 1
+        A.du[i] = x
+    else
+        throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
+    end
+end
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
