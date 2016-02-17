@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractSet{T}
-
 type IntSet <: AbstractSet{Int}
     bits::Array{UInt32,1}
     limit::Int

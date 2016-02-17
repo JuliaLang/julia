@@ -58,6 +58,9 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+# typed `collect`
+@test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))

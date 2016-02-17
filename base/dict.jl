@@ -2,8 +2,6 @@
 
 # generic operations on associative collections
 
-abstract Associative{K,V}
-
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
@@ -225,6 +223,16 @@ function merge!(d::Associative, others::Associative...)
     end
     return d
 end
+
+# very similar to `merge!`, but accepts any iterable and extends code
+# that would otherwise only use `copy!` with arrays.
+function copy!(dest::Union{Associative,AbstractSet}, src)
+    for x in src
+        push!(dest, x)
+    end
+    return dest
+end
+
 keytype{K,V}(::Type{Associative{K,V}}) = K
 keytype(a::Associative) = keytype(typeof(a))
 keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
@@ -449,19 +457,6 @@ copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
-# TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
-Dict{K,V}(kv::Tuple{Vararg{Tuple{K,V}}})          = Dict{K,V}(kv)
-Dict{K  }(kv::Tuple{Vararg{Tuple{K,Any}}})        = Dict{K,Any}(kv)
-Dict{V  }(kv::Tuple{Vararg{Tuple{Any,V}}})        = Dict{Any,V}(kv)
-Dict{K,V}(kv::Tuple{Vararg{Pair{K,V}}})           = Dict{K,V}(kv)
-Dict{K  }(kv::Tuple{Vararg{Pair{K}}})             = Dict{K,Any}(kv)
-Dict{V  }(kv::Tuple{Vararg{Pair{TypeVar(:K),V}}}) = Dict{Any,V}(kv)
-Dict(     kv::Tuple{Vararg{Pair}})                = Dict{Any,Any}(kv)
-
-Dict{K,V}(kv::AbstractArray{Tuple{K,V}}) = Dict{K,V}(kv)
-Dict{K,V}(kv::AbstractArray{Pair{K,V}})  = Dict{K,V}(kv)
-Dict{K,V}(kv::Associative{K,V})          = Dict{K,V}(kv)
-
 Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
 Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
 Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
@@ -482,9 +477,27 @@ end
 
 dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
+dict_with_eltype(kv, t) = grow_to!(Dict{Union{},Union{}}(), kv)
+
+# this is a special case due to (1) allowing both Pairs and Tuples as elements,
+# and (2) Pair being invariant. a bit annoying.
+function grow_to!{K,V}(dest::Associative{K,V}, itr, st = start(itr))
+    while !done(itr, st)
+        (k,v), st = next(itr, st)
+        if isa(k,K) && isa(v,V)
+            dest[k] = v
+        else
+            new = similar(dest, Pair{typejoin(K,typeof(k)), typejoin(V,typeof(v))})
+            copy!(new, dest)
+            new[k] = v
+            return grow_to!(new, itr, st)
+        end
+    end
+    return dest
+end
 
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
+similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
 
 # conversion between Dict types
 function convert{K,V}(::Type{Dict{K,V}},d::Associative)

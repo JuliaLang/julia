@@ -199,35 +199,99 @@ convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array(T, size(
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
+## copying iterators to containers
+
+# make a collection similar to `c` and appropriate for collecting `itr`
+_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
+_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
+_similar_for(c, T, itr, isz) = similar(c, T)
+
 """
     collect(element_type, collection)
 
 Return an array of type `Array{element_type,1}` of all items in a collection.
 """
-function collect{T}(::Type{T}, itr)
-    if applicable(length, itr)
-        # when length() isn't defined this branch might pollute the
-        # type of the other.
-        a = Array(T,length(itr)::Integer)
-        i = 0
-        for x in itr
-            a[i+=1] = x
-        end
-    else
-        a = Array(T,0)
-        for x in itr
-            push!(a,x)
-        end
-    end
-    return a
-end
+collect{T}(::Type{T}, itr) = collect(Generator(T, itr))
 
 """
     collect(collection)
 
 Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
 """
-collect(itr) = collect(eltype(itr), itr)
+collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
+
+collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
+
+_collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
+    copy!(_similar_for(cont, eltype(itr), itr, isz), itr)
+
+function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
+    a = _similar_for(cont, eltype(itr), itr, isz)
+    for x in itr
+        push!(a,x)
+    end
+    return a
+end
+
+_collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) = grow_to!(_similar_for(c, Union{}, itr, isz), itr)
+
+function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
+    st = start(itr)
+    if done(itr,st)
+        return _similar_for(c, Union{}, itr, isz)
+    end
+    v1, st = next(itr, st)
+    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
+end
+
+function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
+    dest[1] = v1
+    return collect_to!(dest, itr, 2, st)
+end
+
+function collect_to_with_first!(dest, v1, itr, st)
+    push!(dest, v1)
+    return grow_to!(dest, itr, st)
+end
+
+function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
+    # collect to dest array, checking the type of each result. if a result does not
+    # match, widen the result type and re-dispatch.
+    i = offs
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            @inbounds dest[i] = el::T
+            i += 1
+        else
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            @inbounds new[i] = el
+            return collect_to!(new, itr, i+1, st)
+        end
+    end
+    return dest
+end
+
+function grow_to!(dest, itr, st = start(itr))
+    T = eltype(dest)
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            push!(dest, el::T)
+        else
+            new = similar(dest, typejoin(T, S))
+            copy!(new, dest)
+            push!(new, el)
+            return grow_to!(new, itr, st)
+        end
+    end
+    return dest
+end
 
 ## Iteration ##
 start(A::Array) = 1
