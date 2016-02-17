@@ -1071,6 +1071,11 @@ function ini_hex(x::Integer)
     pt = (len-1)<<2
     len,pt,neg
 end
+function ini_HEX(x::Integer)
+    len,pt,neg = decode_HEX(x)
+    pt = (len-1)<<2
+    len,pt,neg
+end
 
 # not implemented
 ini_hex(x::Integer,ndigits::Int) = throw(MethodError(ini_hex,(x,ndigits)))
