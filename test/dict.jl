@@ -448,6 +448,20 @@ let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
 end
 
 # issue #15077
+
+immutable MyString <: AbstractString
+    str::ASCIIString
+end
+import Base.==
+
+const global hashoffset = [UInt(190)]
+
+Base.hash(s::MyString) = hash(s.str) + hashoffset[]
+Base.endof(s::MyString) = endof(s.str)
+Base.next(s::MyString, v::Int) = next(s.str, v)
+Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
+==(a::MyString, b::MyString) = (a.str == b.str)
+
 let badKeys = ASCIIString["FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.0",
                           "SAO2_emv5.0","O2FLOW_ema5.0","preop_Neuro/Psych_","gender_",
                           "FIO2_ema0.1","PEAK_ema5.0","preop_Reproductive_denies","O2FLOW_ema0.1",
@@ -461,9 +475,55 @@ let badKeys = ASCIIString["FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.
                           "RESPRATE_ema0.1","preop_Functional Status_<2","preop_Renal_symptoms",
                           "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
                           "4UrCWXUsaT"]
-    d = Dict{AbstractString,Float64}()
-    for k in badKeys
-        d[k] = 1
+    d = Dict{AbstractString,Int}()
+    for i = 1:length(badKeys)
+        d[badKeys[i]] = i
     end
-    @test d["NIBPD_emv5.0"] == 1
+    # Check all keys for missing values
+    for i = 1:length(badKeys)
+        @test d[badKeys[i]] == i
+    end
+
+    # Walk through all possible hash values (mod size of hash table)
+    for offset = 0:1023
+        d2 = Dict{MyString,Int}()
+        hashoffset[] = offset
+        for i = 1:length(badKeys)
+            d2[MyString(badKeys[i])] = i
+        end
+        # Check all keys for missing values
+        for i = 1:length(badKeys)
+            @test d2[MyString(badKeys[i])] == i
+        end
+    end
+end
+
+immutable MyInt <: Integer
+    val::UInt
+end
+
+Base.hash(v::MyInt) = v.val + hashoffset[]
+Base.endof(v::MyInt) = endof(v.val)
+Base.next(v::MyInt, i::Int) = next(v.val, i)
+Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
+==(a::MyInt, b::MyInt) = (a.val == b.val)
+
+let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9913,0x741c,
+                     0xd01f,0xc822,0x9723,0xb7a0,0xea25,0x7423,0x6029,0x202a,0x822b,0x492c,
+                     0xd02c,0x862d,0x8f34,0xe529,0xf938,0x4f39,0xd03a,0x473b,0x1e3b,0x1d3a,
+                     0xcc39,0x7339,0xcf40,0x8740,0x813d,0xe640,0xc443,0x6344,0x3744,0x2c3d,
+                     0x8c48,0xdf49,0x5743]
+
+    # Walk through all possible hash values (mod size of hash table)
+    for offset = 0:1023
+        d2 = Dict{MyInt, Int}()
+        hashoffset[] = offset
+        for i = 1:length(badKeys)
+            d2[MyInt(badKeys[i])] = i
+        end
+        # Check all keys for missing values
+        for i = 1:length(badKeys)
+            @test d2[MyInt(badKeys[i])] == i
+        end
+    end
 end
