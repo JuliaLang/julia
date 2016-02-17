@@ -586,19 +586,29 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ . The default is to produce a thin decomposition.
+   Compute the singular value decomposition (SVD) of ``A`` and return an ``SVD`` object.
+
+   ``U``\ , ``S``\ , ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``\ , ``F[:S]``\ , ``F[:V]`` and ``F[:Vt]``\ , such that ``A = U*diagm(S)*Vt``\ . The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``\ .
+
+   If ``thin=true`` (default), a thin SVD is returned. For a :math:`M \times N` matrix ``A``\ , ``U`` is :math:`M \times M` for a full SVD (``thin=false``\ ) and :math:`M \times \min(M, N)` for a thin SVD.
 
 .. function:: svdfact!(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
 
-   ``svdfact!`` is the same as :func:`svdfact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   ``svdfact!`` is the same as :func:`svdfact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+
+   If ``thin=true`` (default), a thin SVD is returned. For a :math:`M \times N` matrix ``A``\ , ``U`` is :math:`M \times M` for a full SVD (``thin=false``\ ) and :math:`M \times \min(M, N)` for a thin SVD.
 
 .. function:: svd(A, [thin=true]) -> U, S, V
 
    .. Docstring generated from Julia source
 
-   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of ``A``\ , returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ . If ``thin`` is ``true``\ , an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   Computes the SVD of ``A``\ , returning ``U``\ , vector ``S``\ , and ``V`` such that ``A == U*diagm(S)*V'``\ .
+
+   If ``thin=true`` (default), a thin SVD is returned. For a :math:`M \times N` matrix ``A``\ , ``U`` is :math:`M \times M` for a full SVD (``thin=false``\ ) and :math:`M \times \min(M, N)` for a thin SVD.
+
+   ``svd`` is a wrapper around :func:`svdfact(A)`\ , extracting all parts of the ``SVD`` factorization to a tuple. Direct use of ``svdfact`` is therefore more efficient.
 
 .. function:: svdvals(A)
 
@@ -610,25 +620,38 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Returns the singular values of ``A``\ , while saving space by overwriting the input.
+   Returns the singular values of ``A``\ , saving space by overwriting the input.
 
 .. function:: svdfact(A, B) -> GeneralizedSVD
 
    .. Docstring generated from Julia source
 
-   Compute the generalized SVD of ``A`` and ``B``\ , returning a ``GeneralizedSVD`` Factorization object ``F``\ , such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``\ .
+   Compute the generalized SVD of ``A`` and ``B``\ , returning a ``GeneralizedSVD`` factorization object ``F``\ , such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``\ .
+
+   For an M-by-N matrix ``A`` and P-by-N matrix ``B``\ ,
+
+   * ``F[:U]`` is a M-by-M orthogonal matrix,
+   * ``F[:V]`` is a P-by-P orthogonal matrix,
+   * ``F[:Q]`` is a N-by-N orthogonal matrix,
+   * ``F[:R0]`` is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is            nonsingular upper block triangular,
+   * ``F[:D1]`` is a M-by-(K+L) diagonal matrix with 1s in the first K entries,
+   * ``F[:D2]`` is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,
+
+   ``K+L`` is the effective numerical rank of the matrix ``[A; B]``\ .
+
+   The entries of ``F[:D1]`` and ``F[:D2]`` are related, as explained in the LAPACK documentation for the `generalized SVD <http://www.netlib.org/lapack/lug/node36.html>`_ and the `xGGSVD3 <http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html>`_ routine which is called underneath (in LAPACK 3.6.0 and newer).
 
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
    .. Docstring generated from Julia source
 
-   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
+   Wrapper around :func:`svdfact(A, B)` extracting all parts of the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``\ , returning ``U``\ , ``V``\ , ``Q``\ , ``D1``\ , ``D2``\ , and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``\ .
 
 .. function:: svdvals(A, B)
 
    .. Docstring generated from Julia source
 
-   Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
+   Return the generalized singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
 
 .. function:: givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
 
