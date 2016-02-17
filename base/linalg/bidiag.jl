@@ -37,9 +37,24 @@ function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
     end
-    i == j ? A.dv[i] : (A.isupper && (i == j-1)) || (!A.isupper && (i == j+1)) ? A.ev[min(i,j)] : zero(T)
+    if i == j
+        return A.dv[i]
+    elseif (istriu(A) && (i == j - 1)) || (istril(A) && (i == j + 1))
+        return A.ev[min(i,j)]
+    else
+        return zero(T)
+    end
 end
 
+function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
+    if i == j
+        A.dv[i] = x
+    elseif (istriu(A) && (i == j - 1)) || (istril(A) && (i == j + 1))
+        return A.ev[min(i,j)] = x
+    else
+        throw(ArgumentError("cannot set elements outside main and $(istriu(A) ? "super": "sub") diagonals."))
+    end
+end
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
