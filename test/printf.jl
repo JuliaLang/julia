@@ -4,6 +4,7 @@
 # int
 @test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"
 @test (@sprintf "%a" typemax(Int64)) == "0x7.fffffffffffffffp+60"
+@test (@sprintf "%A" typemax(Int64)) == "0X7.FFFFFFFFFFFFFFFP+60"
 
 for (fmt, val) in (("%i", "42"),
                    ("%u", "42"),
