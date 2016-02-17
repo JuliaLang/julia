@@ -314,7 +314,7 @@ end
 @test_throws Base.Math.AmosException airybi(200)
 @test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
-for elty in [Complex64,Complex128, Complex{BigFloat}]
+for elty in [Complex64,Complex128]
     @test_approx_eq airy(convert(elty,1.8)) 0.0470362168668458052247
     z = convert(elty,z)
     @test_approx_eq airyx(z) airyx(0,z)
@@ -324,6 +324,7 @@ for elty in [Complex64,Complex128, Complex{BigFloat}]
     @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
     @test_throws ArgumentError airyx(5,z)
 end
+@test_throws MethodError airy(complex(big(1.0)))
 
 # bessely0, bessely1, besselj0, besselj1
 @test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
@@ -339,6 +340,11 @@ end
 @test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
 @test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
 
+@test_throws MethodError besselj(1.2,big(1.0))
+@test_throws MethodError besselj(1,complex(big(1.0)))
+@test_throws MethodError besseljx(1,big(1.0))
+@test_throws MethodError besseljx(1,complex(big(1.0)))
+
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 @test_approx_eq besselh(3,1,3) true_h133
@@ -347,6 +353,10 @@ true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 @test_approx_eq besselh(-3,2,3) -conj(true_h133)
 @test_throws Base.Math.AmosException besselh(1,0)
 
+@test_throws MethodError besselh(1,big(1.0))
+@test_throws MethodError besselh(1,complex(big(1.0)))
+@test_throws MethodError besselhx(1,big(1.0))
+@test_throws MethodError besselhx(1,complex(big(1.0)))
 
 # besseli
 true_i33 = 0.95975362949600785698
@@ -356,6 +366,12 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(-3,-3) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
 @test_throws DomainError besseli(0.4,-1.0)
+
+@test_throws MethodError besseli(1,big(1.0))
+@test_throws MethodError besseli(1,complex(big(1.0)))
+@test_throws MethodError besselix(1,big(1.0))
+@test_throws MethodError besselix(1,complex(big(1.0)))
+
 
 # besselj
 @test besselj(0,0) == 1
@@ -385,9 +401,8 @@ j43 = besselj(4,3.)
 @test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
 @test_approx_eq besselj(1.0,3im) besselj(1,3im)
-@test besselj(big(1.0),3im) ≈ besselj(1,3im)
-@test besselj(big(0.1), complex(-0.4)) ≈ 0.820421842809028916 + 0.266571215948350899im
 @test_throws Base.Math.AmosException besselj(20,1000im)
+@test_throws MethodError besselj(big(1.0),3im)
 
 # besselk
 true_k33 = 0.12217037575718356792
@@ -400,6 +415,12 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_throws Base.Math.AmosException besselk(200,0.01)
 # issue #6564
 @test besselk(1.0,0.0) == Inf
+
+@test_throws MethodError besselk(1,big(1.0))
+@test_throws MethodError besselk(1,complex(big(1.0)))
+@test_throws MethodError besselkx(1,big(1.0))
+@test_throws MethodError besselkx(1,complex(big(1.0)))
+
 
 # bessely
 y33 = bessely(3,3.)
@@ -415,11 +436,22 @@ y33 = bessely(3,3.)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
 @test_throws DomainError bessely(1,Float32(-1.0))
 
+@test_throws MethodError bessely(1.2,big(1.0))
+@test_throws MethodError bessely(1,complex(big(1.0)))
+@test_throws MethodError besselyx(1,big(1.0))
+@test_throws MethodError besselyx(1,complex(big(1.0)))
+
+
 #besselhx
-for elty in [Complex64,Complex128, Complex{BigFloat}]
+for elty in [Complex64,Complex128]
     z = convert(elty, 1.0 + 1.9im)
     @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
 end
+
+@test_throws MethodError besselh(1,1,big(1.0))
+@test_throws MethodError besselh(1,1,complex(big(1.0)))
+@test_throws MethodError besselhx(1,1,big(1.0))
+@test_throws MethodError besselhx(1,1,complex(big(1.0)))
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
