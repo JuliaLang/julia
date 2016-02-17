@@ -6,7 +6,7 @@ module IteratorsMD
 import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
-import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
+import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
 
 export CartesianIndex, CartesianRange
 
@@ -14,19 +14,34 @@ export CartesianIndex, CartesianRange
 linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 
 # CartesianIndex
-immutable CartesianIndex{N}
+immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
     I::NTuple{N,Int}
     CartesianIndex(index::NTuple{N,Integer}) = new(index)
 end
 
 CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
-@generated function (::Type{CartesianIndex{N}}){N}(index::Integer...)
-    length(index) == N && return :(CartesianIndex(index))
-    length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
-    args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
+(::Type{CartesianIndex})(index::Integer...) = CartesianIndex(index)
+(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
+# Allow passing tuples smaller than N
+@generated function (::Type{CartesianIndex{N}}){N,M}(index::NTuple{M,Integer})
+    M == N && return :(CartesianIndex(index))
+    M > N && return :(throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $M indexes")))
+    args = [i <= M ? :(index[$i]) : 1 for i = 1:N]
     :(CartesianIndex(tuple($(args...))))
 end
-(::Type{CartesianIndex{N}}){M,N}(index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
+# Un-nest passed CartesianIndexes
+CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(index)
+@generated function CartesianIndex{N}(index::NTuple{N, Union{Integer, CartesianIndex}})
+    ex = Expr(:tuple)
+    for (i, T) in enumerate(index.parameters)
+        if T <: Integer
+            push!(ex.args, :(index[$i]))
+        else
+            push!(ex.args, Expr(:..., :(index[$i].I)))
+        end
+    end
+    :($(Expr(:meta, :inline)); CartesianIndex($ex))
+end
 
 # length
 length{N}(::CartesianIndex{N})=N
@@ -161,8 +176,10 @@ index_lengths_dim(A, dim) = ()
 index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_lengths_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Real, I...) = (1, index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (1, index_shape_dim(A, dim+N, I...)...)
 @inline index_lengths_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_lengths_dim(A, dim+1, I...)...)
 @inline index_lengths_dim(A, dim, i::AbstractArray, I...) = (length(i), index_lengths_dim(A, dim+1, I...)...)
+@inline index_lengths_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (length(i), index_lengths_dim(A, dim+N, I...)...)
 
 # shape of array to create for getindex() with indexes I, dropping scalars
 index_shape(A::AbstractArray, I::AbstractArray) = size(I) # Linear index reshape
@@ -173,8 +190,10 @@ index_shape_dim(A, dim, I::Real...) = ()
 index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_shape_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_shape_dim(A, dim+1, i, I...)...)
 @inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, dim+1, I...)...)
+@inline index_shape_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (index_shape_dim(A, dim+N, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector{Bool}, I...) = (sum(i), index_shape_dim(A, dim+1, I...)...)
 @inline index_shape_dim(A, dim, i::AbstractVector, I...) = (length(i), index_shape_dim(A, dim+1, I...)...)
+@inline index_shape_dim{N}(A, dim, i::AbstractVector{CartesianIndex{N}}, I...) = (length(i), index_shape_dim(A, dim+N, I...)...)
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 # These are not defined on directly on getindex to avoid
@@ -364,116 +383,57 @@ end
 # In such cases we have to collapse the 2d space spanned by the ranges.
 #
 # API:
-#    merge_indexes(V, indexes::NTuple, dims::Dims, linindex)
-# where dims encodes the trailing sizes of the parent array,
+#    merge_indexes(V, indexes::NTuple, index)
 # indexes encodes the view's trailing indexes into the parent array,
-# and linindex encodes the subset of these elements that we'll select.
+# and index encodes the subset of these elements that we'll select.
 #
-# The generic algorithm makes use of div to convert elements
-# of linindex into a cartesian index into indexes, looks up
-# the corresponding cartesian index into the parent, and then uses
-# dims to convert back to a linear index into the parent array.
-#
-# However, a common case is linindex::Range.
-# Since div is slow and in(j::Int, linindex::Range) is fast,
-# it can be much faster to generate all possibilities and
-# then test whether the corresponding linear index is in linindex.
-# One exception occurs when only a small subset of the total
-# is desired, in which case we fall back to the div-based algorithm.
-#@generated function merge_indexes{T<:Integer}(V, parentindexes::NTuple, parentdims::Dims, linindex::Union{Colon,Range{T}}, lindim)
-@generated function merge_indexes_in{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
-    N = length(parentindexes.parameters)   # number of parent axes we're merging
-    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
-    lengthexpr = linindex == Colon ? (:(prod(size(V)[lindim:end]))) : (:(length(linindex)))
-    L = symbol(string("Istride_", N+1))  # length of V's trailing dimensions
+# It returns a CartesianIndex or array of CartesianIndexes.
+
+# Checking 'in' a range is fast -- so check all possibilities and keep the good ones
+@generated function merge_indexes{N}(V, indexes::NTuple{N}, index::Union{Colon, Range})
+    # There may be a vector of cartesian indices in the passed indexes... which
+    # makes the number of indices more than N. Since we pre-allocate the array
+    # of CartesianIndexes, we need to figure out how big to make it
+    M = 0
+    for T in indexes.parameters
+        T <: CartesianIndex ? (M += length(T)) : (M += 1)
+    end
+    index_length_expr = index <: Colon ? symbol(string("Istride_", N+1)) : :(length(index))
     quote
-        n = $lengthexpr
-        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
-        pdimoffset = ndims(V.parent) - length(parentdims)
-        Istride_1 = 1   # parentindexes strides
-        Base.Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
-        Istridet = Base.Cartesian.@ntuple $(N+1) d->Istride_d
-        if n < 0.1*$L   # this has not been carefully tuned
-            return merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
+        Cartesian.@nexprs $N d->(I_d = indexes[d])
+        dimlengths = Cartesian.@ncall $N index_lengths_dim V.parent length(V.indexes)-N+1 I
+        Istride_1 = 1   # strides of the indexes to merge
+        Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimlengths[d])
+        idx_len = $(index_length_expr)
+        if idx_len < 0.1*$(symbol(string("Istride_", N+1)))   # this has not been carefully tuned
+            return merge_indexes_div(V, indexes, index, dimlengths)
         end
-        Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
-        Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into parentindexes
-        Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
+        Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is the linear index
         k = 0
-        index = Array(Int, n)
-        Base.Cartesian.@nloops $N i d->(1:dimsize(V.parent, d+pdimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
-            if in(counter_0, linindex)
-                index[k+=1] = offset_0
+        merged = Array(CartesianIndex{$M}, idx_len)
+        Cartesian.@nloops $N i d->(1:dimlengths[d]) d->(counter_{d-1} = counter_d + (i_d-1)*Istride_d; @inbounds idx_d = I_d[i_d]) begin
+            if counter_0 in index # this branch is elided for ::Colon
+                @inbounds merged[k+=1] = Cartesian.@ncall $N CartesianIndex{$M} idx
             end
         end
-        index
+        merged
     end
 end
 
-# HACK: dispatch seemingly wasn't working properly
-function merge_indexes(V, parentindexes::NTuple, parentdims::Dims, linindex, lindim)
-    if isa(linindex, Colon) || isa(linindex, Range)
-        return merge_indexes_in(V, parentindexes, parentdims, linindex, lindim)
-    end
-    merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
-end
+# mapping getindex across the parent and subindices rapidly gets too big to
+# automatically inline, but it is crucial that it does so to avoid allocations
+# Unlike SubArray's reindex, merge_indexes doesn't drop any indices.
+@inline inlinemap(f, t::Tuple, s::Tuple) = (f(t[1], s[1]), inlinemap(f, tail(t), tail(s))...)
+inlinemap(f, t::Tuple{}, s::Tuple{}) = ()
+inlinemap(f, t::Tuple{}, s::Tuple) = ()
+inlinemap(f, t::Tuple, s::Tuple{}) = ()
 
-# Even simpler is the case where the linear index is ::Colon: return all indexes
-@generated function merge_indexes(V, indexes::NTuple, dims::Dims, ::Colon)
-    N = length(indexes)
-    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
-    quote
-        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
-        dimoffset = ndims(V.parent) - length(dims)
-        n = prod(map(length, indexes))
-        Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
-        Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
-        k = 0
-        index = Array(Int, n)
-        Base.Cartesian.@nloops $N i d->(1:dimsize(V, d+dimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d) begin
-            index[k+=1] = offset_0
-        end
-        index
-    end
-end
+# Otherwise, we fall back to the slow div/rem method, using ind2sub.
+@inline merge_indexes{N}(V, indexes::NTuple{N}, index) = merge_indexes_div(V, indexes, index, index_lengths_dim(V.parent, length(V.indexes)-N+1, indexes...))
 
-# This could be written as a regular function, but performance
-# will be better using Cartesian macros to avoid the heap and
-# an extra loop.
-@generated function merge_indexes_div{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
-    N = length(parentindexes.parameters)
-    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
-    Istride_N = symbol("Istride_$N")
-    lengthexpr = :(length(linindex))
-    quote
-        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
-        Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
-        Istride_1 = 1   # parentindexes strides
-        pdimoffset = ndims(V.parent) - length(parentdims)
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
-        n = $lengthexpr
-        L = $(Istride_N) * dimsize(V.parent, $N+pdimoffset, parentindexes[end])
-        index = Array(Int, n)
-        for i = 1:n
-            k = linindex[i] # k is the parentindexes-centered linear index
-            1 <= k <= L || throw(BoundsError())
-            k -= 1
-            j = 0  # j will be the new parent-centered linear index
-            Base.Cartesian.@nexprs $N d->(d < $N ?
-                begin
-                    c, k = divrem(k, Istride_{$N-d+1})
-                    @inbounds j += (getindex(I_{$N-d+1}, c+1)-1)*Pstride_{$N-d+1}
-                end : begin
-                    @inbounds j += I_1[k+1]
-                end)
-            index[i] = j
-        end
-        index
-    end
-end
+@inline merge_indexes_div{N}(V, indexes::NTuple{N}, index::Real, dimlengths) = CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, index)))
+merge_indexes_div{N}(V, indexes::NTuple{N}, index, dimlengths) = [CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, i))) for i in index]
+merge_indexes_div{N}(V, indexes::NTuple{N}, index::Colon, dimlengths) = [CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, i))) for i in 1:prod(dimlengths)]
 
 
  cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
