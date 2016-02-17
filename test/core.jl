@@ -3741,3 +3741,7 @@ let grphtest = ((1, [2]),)
     for s = 1:1
     end
 end
+
+let f(T) = Type{T}
+    @test Base.return_types(f, Tuple{Type{Int}}) == [Type{Type{Int}}]
+end
