@@ -1098,11 +1098,11 @@ A = sparse(reshape([1.0],1,1))
 Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
-@test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
-# this test fails sometimes, cf. issue #14778
-# @test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
-@test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
-@test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
+# For a discussion of the tolerance, see #14778
+@test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
+@test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
+@test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
+@test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 let Arect = spzeros(10, 6)
