@@ -259,7 +259,7 @@ for writefunc in ((io,x) -> writemime(io, "text/csv", x),
     let x = ["foo", "bar"], io = IOBuffer()
         writefunc(io, x)
         seek(io, 0)
-        @test collect(readcsv(io)) == x
+        @test vec(readcsv(io)) == x
     end
 end
 
