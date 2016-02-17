@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base: union!, unique
+
 ## Diagonal matrices
 
 immutable Diagonal{T} <: AbstractMatrix{T}
@@ -240,4 +242,22 @@ end
 function svdfact(D::Diagonal)
     U, s, V = svd(D)
     SVD(U, s, V')
+end
+
+## Set related methods ##
+function union!{T}(s::AbstractSet, D::Diagonal{T})
+    d = diag(D)
+    if length(d) <= 1
+        return union!(s,d)
+    else
+        return union!(s, [zero(T); d])
+    end
+end
+function unique{T}(D::Diagonal{T})
+    d = diag(D)
+    if length(d) <= 1
+        return d
+    else
+        return unique([d[1]; zero(T); d[2:end]])
+    end
 end

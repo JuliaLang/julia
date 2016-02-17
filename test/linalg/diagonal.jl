@@ -229,6 +229,7 @@ end
 @test_throws SingularException inv(Diagonal([0, 1, 2]))
 @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
 
+
 # allow construct from range
 @test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])
 
@@ -236,3 +237,9 @@ end
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
     @test Diagonal(Matrix{t}[ones(t, 2, 2), ones(t, 3, 3)])[2,1] == zeros(t, 3, 2)
 end
+
+#set-like operations
+@test union!(Set(Int[3]),Diagonal(Int[0,1,2])) == union!(Set(Int[3]),full(Diagonal(Int[0,1,2])))
+@test unique(Diagonal(Int[])) == unique(full(Diagonal(Int[])))
+@test unique(Diagonal([1,0,2])) == unique(full(Diagonal([1,0,2])))
+@test unique(Diagonal([0,1,2])) == unique(full(Diagonal([0,1,2])))

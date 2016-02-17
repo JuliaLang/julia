@@ -1188,6 +1188,7 @@ let A = 2. * speye(5,5)
     @test full(spones(A)) == eye(full(A))
 end
 
+
 let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A + A'
@@ -1224,6 +1225,7 @@ let
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end
 
+
 # https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA
 @test sparse([1,1], [1,1], [true, true]) == sparse([1,1], [1,1], [true, true], 1, 1) == fill(true, 1, 1)
 @test sparsevec([1,1], [true, true]) == sparsevec([1,1], [true, true], 1) == fill(true, 1)
@@ -1244,3 +1246,16 @@ let
     @test issparse(UpperTriangular(full(m))) == false
     @test issparse(LinAlg.UnitUpperTriangular(full(m))) == false
 end
+
+# Set-like tests
+A = sparse([1,2,7,8],[1,1,2,3],[1,2,1,3],8,8)
+@test unique(A) == unique(full(A))
+A = sparse([1,1,2,2],[1,2,1,2],[1,2,1,3],2,2)
+@test unique(A) == unique(full(A))
+A = sparse([2,2,3,3],[2,3,3,3],[1,2,1,3],3,3)
+@test unique(A) == unique(full(A))
+
+A = sparse([1,1,2,2],[1,2,1,2],[1,2,1,3],2,2)
+@test union!(Set([]),A) == union!(Set([]),full(A))
+A = sparse([2,2,3,3],[2,3,3,3],[1,2,1,3],3,3)
+@test union!(Set([]),A) == union!(Set([]),full(A))

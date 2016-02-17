@@ -27,6 +27,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractSet,
     AbstractVector,
     AbstractVecOrMat,
     Array,

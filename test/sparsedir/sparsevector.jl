@@ -824,6 +824,7 @@ s14046 = sprand(5, 1.0)
 @test spzeros(5) + s14046 == s14046
 @test 2*s14046 == s14046 + s14046
 
+
 # Issue 14589
 #test vectors with no zero elements
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
@@ -838,3 +839,13 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+
+#test set_like methods for compatibility with full
+x = SparseVector(15,collect(2:10), [3, 2, -1, 1, 1, -2, 2, -3, 3])
+@test unique(x) == unique(full(x))
+@test union!(Set([1]),x) == union!(Set([1]),full(x))
+x = SparseVector(15,collect(2:10), [3, 2, -1, 0, 1, -2, 2, -3, 3])
+@test unique(x) == unique(full(x))
+x = SparseVector(3, [1,2,3], [1,1,2])
+@test unique(x) == unique(full(x))
+@test union!(Set([1]),x) == union!(Set([1]),full(x))

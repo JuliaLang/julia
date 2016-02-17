@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base: union!, unique
+
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
@@ -294,6 +296,7 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
     end
 end
 
+
 function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     if i == j
         A.dv[i] = x
@@ -301,6 +304,27 @@ function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
         A.ev[min(i,j)] = x
     else
         throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
+    end
+end
+
+## Set-like methods ##
+function union!{T}(s::AbstractSet, A::SymTridiagonal{T})
+    dv, ev = A.dv, A.ev
+    if length(dv) <= 2
+        return union!(s,[dv; ev])
+    else
+        return union!(s,[zero(T); dv; ev])
+    end
+end
+function unique{T}(A::SymTridiagonal{T})
+    dv, ev = A.dv, A.ev
+    # hcat operations put elements in column-major order of potential uniques
+    if length(dv) <= 2
+        return unique([dv[1]; ev; dv[end]])
+    else
+        return unique(hcat([dv[1]; ev[1]],
+                           [zero(T); dv[2]],
+                           [ev[2:end] dv[3:end]]'))
     end
 end
 
@@ -523,4 +547,25 @@ function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
         end
     end
     C
+end
+
+# Set-like methods
+function union!{T}(s::AbstractSet, A::Tridiagonal{T})
+    dl, d, du = A.dl, A.d, A.du
+    if length(d) <= 2
+        return union!(s,[dl;d;du])
+    else
+        return union!(s,[zero(T); dl;d;du])
+    end
+end
+function unique{T}(A::Tridiagonal{T})
+    dl, d, du = A.dl, A.d, A.du
+    # hcat operations put elements in column-major order of potential uniques
+    if length(d) <= 2
+        return unique([d[1]; dl; du ;d[end]])
+    else
+        return unique(hcat([d[1]; dl[1]; zero(T)],
+                            [du[1:end-1] d[2:end-1] dl[2:end]]',
+                            [du[end]; d[end]; d[end]]))
+    end
 end

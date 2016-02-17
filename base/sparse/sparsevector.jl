@@ -3,6 +3,7 @@
 ### Common definitions
 
 import Base: Func, AddFun, MulFun, MaxFun, MinFun, SubFun, sort
+import Base: union!, unique
 
 immutable ComplexFun <: Func{2} end
 (::ComplexFun)(x::Real, y::Real) = complex(x, y)
@@ -16,6 +17,8 @@ typealias BinaryOp Union{Function, Func{2}}
 ### The SparseVector
 
 ### Types
+
+# Assumes that indices in nzind are sorted (so that nzval is also ordered)
 
 immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     n::Int              # the number of elements

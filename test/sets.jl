@@ -213,7 +213,7 @@ u = unique([1,1,2])
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
 @test unique(Set(1:3)) == unique(collect(Set(1:3)))
-@test unique([true,true]) == [true]
+@test unique([true,true]) == Bool[true]
 @test unique(Int8[1,2,2,3]) == Int8[1,2,3]
 @test unique(UInt8[1,2,2,3]) == UInt8[1,2,3]
 # method used internally for optimization of other unique methods

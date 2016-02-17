@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base: union!, unique
+
 # Bidiagonal matrices
 type Bidiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T} # diagonal
@@ -327,3 +329,33 @@ function eigvecs{T}(M::Bidiagonal{T})
     Q #Actually Triangular
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+
+#lookup related methods
+
+## Set-like methods ##
+function union!{T}(s::AbstractSet, A::Bidiagonal{T})
+    dv,ev = A.dv,A.ev
+    if length(dv) == 1
+        return union!(s,dv)
+    else
+        return union!(s,[zero(T);dv;ev])
+    end
+end
+function unique{T}(A::Bidiagonal{T})
+    # hcat operations put elements in column-major order of potential uniques
+    dv,ev = A.dv,A.ev
+    if length(dv) == 1
+        return dv
+    elseif A.isupper
+        # potential unique sequence for above diagonal case is:
+        # (part 1) first diagonal element, then zero element
+        # (part 2) alternating above diagonal / diagonal element pairs
+        return unique(hcat([dv[1],zero(T)],[ev dv[2:end]]'))
+    else
+        # potential unique sequence for below diagonal case is:
+        # (part 1) first diagonal element, then first below diagonal element
+        # (part 2) zero element, then second diagonal element
+        # (part 3) alternating below diagonal / diagonal element pairs
+        return unique(hcat([dv[1],ev[1]],[zero(T),dv[2]],[ev[2:end] dv[3:end]]'))
+    end
+end

@@ -233,3 +233,14 @@ C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
 @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
 @test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
 @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+
+# test set-like operations
+A = Bidiagonal([1,2],[3],true)
+@test unique(A) == [1,0,3,2]
+A = Bidiagonal([1,2],[3],false)
+@test unique(A) == [1,3,0,2]
+A = Bidiagonal([1,2,3],[4,5],true)
+@test unique(A) == [1,0,4,2,5,3]
+A = Bidiagonal([1,2,3],[4,5],false)
+@test unique(A) == [1,4,0,2,5,3]
+@test union!(Set([1]),A) == Set([1,4,0,2,5,3])

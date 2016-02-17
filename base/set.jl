@@ -131,6 +131,7 @@ function firstnunique(C, n::Integer)
                 end
             end
         end
+        return out
     end
     return out
 end
