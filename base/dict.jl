@@ -372,6 +372,10 @@ SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 
 # dict
 
+# These can be changed, to trade off better performance for space
+const global maxallowedprobe = 16
+const global maxprobeshift   = 6
+
 type Dict{K,V} <: Associative{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
@@ -380,10 +384,11 @@ type Dict{K,V} <: Associative{K,V}
     count::Int
     dirty::Bool
     idxfloor::Int  # an index <= the indexes of all used slots
+    maxprobe::Int
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false, 1)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false, 1, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -406,7 +411,8 @@ type Dict{K,V} <: Associative{K,V}
             rehash!(d)
         end
         @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.dirty, d.idxfloor)
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.dirty, d.idxfloor,
+            d.maxprobe)
     end
 end
 Dict() = Dict{Any,Any}()
@@ -495,7 +501,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     vals = Array(V, newsz)
     count0 = h.count
     count = 0
-    maxprobe = max(16, newsz>>6)
+    maxprobe = h.maxprobe
 
     for i = 1:sz
         if olds[i] == 0x1
@@ -505,11 +511,8 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
-            if index - index0 > maxprobe
-                # rare condition: new table size causes more grouping of keys than before
-                # see issue #15077
-                return rehash!(h, newsz*2)
-            end
+            probe = (index - index0) & (newsz-1)
+            probe > maxprobe && (maxprobe = probe)
             slots[index] = 0x1
             keys[index] = k
             vals[index] = v
@@ -527,6 +530,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     h.vals = vals
     h.count = count
     h.ndel = 0
+    h.maxprobe = maxprobe
 
     return h
 end
@@ -562,7 +566,7 @@ end
 function ht_keyindex{K,V}(h::Dict{K,V}, key)
     sz = length(h.keys)
     iter = 0
-    maxprobe = max(16, sz>>6)
+    maxprobe = h.maxprobe
     index = hashindex(key, sz)
     keys = h.keys
 
@@ -575,10 +579,9 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
         end
 
         index = (index & (sz-1)) + 1
-        iter+=1
+        iter += 1
         iter > maxprobe && break
     end
-
     return -1
 end
 
@@ -588,7 +591,7 @@ end
 function ht_keyindex2{K,V}(h::Dict{K,V}, key)
     sz = length(h.keys)
     iter = 0
-    maxprobe = max(16, sz>>6)
+    maxprobe = h.maxprobe
     index = hashindex(key, sz)
     avail = 0
     keys = h.keys
@@ -610,11 +613,22 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
         end
 
         index = (index & (sz-1)) + 1
-        iter+=1
+        iter += 1
         iter > maxprobe && break
     end
 
     avail < 0 && return avail
+
+    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+    # Check if key is not present, may need to keep searching to find slot
+    while iter < maxallowed
+        if !isslotfilled(h,index)
+            h.maxprobe = iter
+            return -index
+        end
+        index = (index & (sz-1)) + 1
+        iter += 1
+    end
 
     rehash!(h, h.count > 64000 ? sz*2 : sz*4)
 
