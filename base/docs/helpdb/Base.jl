@@ -1374,20 +1374,6 @@ for all `i` and `j`.
 mapslices
 
 """
-    svdvals(A)
-
-Returns the singular values of `A`.
-"""
-svdvals(A)
-
-"""
-    svdvals(A, B)
-
-Return only the singular values from the generalized singular value decomposition of `A` and `B`.
-"""
-svdvals(A, B)
-
-"""
     issocket(path) -> Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
@@ -1596,26 +1582,6 @@ of the problem that is solved on each processor.
 peakflops
 
 """
-    svd(A, [thin=true]) -> U, S, V
-
-Wrapper around `svdfact` extracting all parts the factorization to a tuple. Direct use of
-`svdfact` is therefore generally more efficient. Computes the SVD of `A`, returning `U`,
-vector `S`, and `V` such that `A == U*diagm(S)*V'`. If `thin` is `true`, an economy mode
-decomposition is returned. The default is to produce a thin decomposition.
-"""
-svd
-
-"""
-    svd(A, B) -> U, V, Q, D1, D2, R0
-
-Wrapper around `svdfact` extracting all parts the factorization to a tuple. Direct use of
-`svdfact` is therefore generally more efficient. The function returns the generalized SVD of
-`A` and `B`, returning `U`, `V`, `Q`, `D1`, `D2`, and `R0` such that `A = U*D1*R0*Q'` and `B =
-V*D2*R0*Q'`.
-"""
-svd(A::AbstractMatrix, B::AbstractMatrix)
-
-"""
     ones(type, dims)
 
 Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
@@ -1773,13 +1739,6 @@ sumabs(itr)
 Sum absolute values of elements of an array over the given dimensions.
 """
 sumabs(A, dims)
-
-"""
-    svdvals!(A)
-
-Returns the singular values of `A`, while saving space by overwriting the input.
-"""
-svdvals!
 
 """
     consume(task, values...)
@@ -3001,25 +2960,6 @@ Determine whether `T` is a concrete type that can have instances, meaning its on
 are itself and `None` (but `T` itself is not `None`).
 """
 isleaftype
-
-"""
-    svdfact(A, [thin=true]) -> SVD
-
-Compute the Singular Value Decomposition (SVD) of `A` and return an `SVD` object. `U`, `S`,
-`V` and `Vt` can be obtained from the factorization `F` with `F[:U]`, `F[:S]`, `F[:V]` and
-`F[:Vt]`, such that `A = U*diagm(S)*Vt`. If `thin` is `true`, an economy mode decomposition
-is returned. The algorithm produces `Vt` and hence `Vt` is more efficient to extract than
-`V`. The default is to produce a thin decomposition.
-"""
-svdfact(A)
-
-"""
-    svdfact(A, B) -> GeneralizedSVD
-
-Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` Factorization
-object `F`, such that `A = F[:U]*F[:D1]*F[:R0]*F[:Q]'` and `B = F[:V]*F[:D2]*F[:R0]*F[:Q]'`.
-"""
-svdfact(A, B)
 
 """
     string(xs...)
@@ -4577,15 +4517,6 @@ interrupt safe. Intended to be called using `do` block syntax as follows:
     end
 """
 disable_sigint
-
-"""
-    svdfact!(A, [thin=true]) -> SVD
-
-`svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by overwriting the
-input `A`, instead of creating a copy. If `thin` is `true`, an economy mode decomposition is
-returned. The default is to produce a thin decomposition.
-"""
-svdfact!
 
 """
     hist2d(M, e1, e2) -> (edge1, edge2, counts)
