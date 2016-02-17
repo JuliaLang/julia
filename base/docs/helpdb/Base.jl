@@ -3294,7 +3294,7 @@ addprocs(manager::ClusterManager)
     mkpath(path, [mode])
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-0o777, modified by the current file creation mask.
+`0o777`, modified by the current file creation mask.
 """
 mkpath
 
@@ -5369,7 +5369,7 @@ include_string
 """
     chmod(path, mode)
 
-Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. 0o777) are currently supported.
+Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. `0o777`) are currently supported.
 """
 chmod
 
@@ -9908,7 +9908,7 @@ eigfact(A,B)
 """
     mkdir(path, [mode])
 
-Make a new directory with name `path` and permissions `mode`. `mode` defaults to 0o777,
+Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
 modified by the current file creation mask.
 """
 mkdir

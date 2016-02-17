@@ -51,13 +51,13 @@
 
    .. Docstring generated from Julia source
 
-   Make a new directory with name ``path`` and permissions ``mode``\ . ``mode`` defaults to 0o777, modified by the current file creation mask.
+   Make a new directory with name ``path`` and permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
 .. function:: mkpath(path, [mode])
 
    .. Docstring generated from Julia source
 
-   Create all directories in the given ``path``\ , with permissions ``mode``\ . ``mode`` defaults to 0o777, modified by the current file creation mask.
+   Create all directories in the given ``path``\ , with permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
 .. function:: symlink(target, link)
 
@@ -79,7 +79,7 @@
 
    .. Docstring generated from Julia source
 
-   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. 0o777) are currently supported.
+   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported.
 
 .. function:: stat(file)
 
