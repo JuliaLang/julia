@@ -148,9 +148,15 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
-lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) = lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) = lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
-lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) = throw(ArgumentError("matrix type $(typeof(A)) not supported. Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for sparse floating point LU using UMFPACK or lufact(full(A)) for generic dense LU."))
+lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
+lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
+lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
+    "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
+    "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
+    "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
 lufact(A::SparseMatrixCSC, pivot::Type{Val{false}}) = lufact(A)
 
