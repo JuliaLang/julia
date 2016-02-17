@@ -905,6 +905,14 @@ end
 @test sign(1 + im) ≈ (1 + im) / sqrt(2)
 @test sign(1 - im) ≈ (1 - im) / sqrt(2)
 
+for T in (Float16, Float32, Float64)
+    z = Complex(zero(T), zero(T))
+    @test sign(z) === z
+    @test sign(-z) === -z
+    @test sign(conj(z)) === conj(z)
+    @test sign(-conj(z)) === -conj(z)
+end
+
 # cis
 @test_approx_eq cis(0.0+1.0im) 0.367879441171442321595523770161460867445811131031767834507836+0.0im
 @test_approx_eq cis(1.0+0.0im) 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im

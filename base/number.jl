@@ -29,7 +29,7 @@ last(x::Number) = x
 divrem(x,y) = (div(x,y),rem(x,y))
 fldmod(x,y) = (fld(x,y),mod(x,y))
 signbit(x::Real) = x < 0
-sign(x::Number) = x == 0? float(zero(x)) : x/abs(x)
+sign(x::Number) = x == 0 ? x/abs(one(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
 sign(x::Unsigned) = ifelse(x > 0, one(x), x)
 abs(x::Real) = ifelse(signbit(x), -x, x)
