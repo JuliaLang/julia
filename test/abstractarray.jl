@@ -411,23 +411,16 @@ function test_map(::Type{TestAbstractArray})
     A = Array(Int, 10)
     B = Float64[1:10...]
     C = Float64[1:10...]
-    @test Base.map_to!(f, 1, A, B, C) == Real[ 2 * i for i in 1:10 ]
-    @test map(f, Int[], Float64[]) == Float64[]
+    @test map(f, convert(Vector{Int},B), C) == Float64[ 2 * i for i in 1:10 ]
+    @test map(f, Int[], Float64[]) == Union{}[]
 
     # AbstractArray map for N-arg case
     f(x, y, z) = x + y + z
     D = Float64[1:10...]
 
     @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
-    @test Base.map_to_n!(f, 1, A, (B, C, D)) == Real[ 3 * i for i in 1:10 ]
     @test map(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
-    @test map(f, Int[], Int[], Complex{Int}[]) == Number[]
-end
-
-function test_map_promote(::Type{TestAbstractArray})
-    A = [1:10...]
-    f(x) = iseven(x) ? 1.0 : 1
-    @test Base.map_promote(f, A) == fill(1.0, 10)
+    @test map(f, Int[], Int[], Complex{Int}[]) == Union{}[]
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
@@ -492,7 +485,6 @@ test_get(TestAbstractArray)
 test_cat(TestAbstractArray)
 test_ind2sub(TestAbstractArray)
 test_map(TestAbstractArray)
-test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
 test_vcat_depwarn(TestAbstractArray)
 test_13315(TestAbstractArray)
