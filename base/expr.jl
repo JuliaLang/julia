@@ -35,16 +35,16 @@ copy(e::Expr) = (n = Expr(e.head);
                  n.args = astcopy(e.args);
                  n.typ = e.typ;
                  n)
-copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
+copy(s::Slot) = Slot(s.id, s.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union{SymbolNode,Expr}) = copy(x)
+astcopy(x::Union{Slot,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
-==(x::SymbolNode, y::SymbolNode) = x.name === y.name && x.typ === y.typ
+==(x::Slot, y::Slot) = x.id === y.id && x.typ === y.typ
 
 expand(x) = ccall(:jl_expand, Any, (Any,), x)
 macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)

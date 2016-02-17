@@ -413,7 +413,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def)
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
         jl_printf(JL_STDERR,"inference on ");
-        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)argtypes);
+        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
         jl_printf(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
