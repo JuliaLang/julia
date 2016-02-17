@@ -53,7 +53,7 @@ end
 
 function branch(ref::GitReference)
     isempty(ref) && return ""
-    str_ptr_ptr = Ref(LibGit2.Cstring_NULL)
+    str_ptr_ptr = Ref{Cstring}(LibGit2.Cstring_NULL)
     @check ccall((:git_branch_name, :libgit2), Cint,
                   (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
     return bytestring(str_ptr_ptr[])
