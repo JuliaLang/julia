@@ -423,7 +423,7 @@ const apply_type_tfunc = function (A::ANY, args...)
         else
             return Any
         end
-    elseif Union <: headtype
+    elseif isa(headtype, Union)
         return Any
     end
     istuple = (headtype === Tuple)
