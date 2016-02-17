@@ -1388,8 +1388,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         n += jl_printf(out, ")");
     }
     else if (vt == jl_linenumbernode_type) {
-        n += jl_printf(out, "# line %" PRIuPTR " %s",
-                       jl_linenode_line(v), jl_symbol_name(jl_linenode_file(v)));
+        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;

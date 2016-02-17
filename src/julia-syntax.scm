@@ -347,9 +347,7 @@
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
-            ,(if (null? lno)
-                 `(line 0 || ||)
-                 (append (car lno) '(||)))
+            ,@lno
             ,@(if (not ordered-defaults)
                   '()
                   (map make-assignment keynames vals))
@@ -377,9 +375,7 @@
                  (car pargl))
             ,@(cdr pargl) ,@vararg)
           `(block
-            ,@(if (null? lno) '()
-                  ;; TODO jb/functions get a better `name` for functions specified by type
-                  (list (append (car lno) (list (undot-name name)))))
+            ,@lno
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -391,7 +387,6 @@
            positional-sparams)
           `((|::| ,UNUSED (call (|.| Core 'kwftype) ,ftype)) (:: ,kw (top Array)) ,@pargl ,@vararg)
           `(block
-            (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
             ,@(map (lambda (name dflt flag)

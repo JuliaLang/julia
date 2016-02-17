@@ -4288,13 +4288,13 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     bool do_coverage = jl_options.code_coverage == JL_LOG_ALL || (jl_options.code_coverage == JL_LOG_USER && in_user_code);
     bool do_malloc_log = jl_options.malloc_log  == JL_LOG_ALL || (jl_options.malloc_log    == JL_LOG_USER && in_user_code);
     jl_value_t *stmt = skip_meta(stmts);
-    std::string filename = "no file";
+    jl_sym_t *file = lam->file;
+    std::string filename = jl_symbol_name(lam->file);
     char *dbgFuncName = jl_symbol_name(lam->name);
     int lno = -1;
     // look for initial (line num filename [funcname]) node, [funcname] for kwarg methods.
     if (jl_is_linenode(stmt)) {
         lno = jl_linenode_line(stmt);
-        filename = jl_symbol_name(jl_linenode_file(stmt));
     }
     else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym &&
              jl_array_dim0(((jl_expr_t*)stmt)->args) > 0) {
@@ -4810,21 +4810,12 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         if (jl_is_linenode(stmt) ||
             (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
 
-            jl_sym_t *file = NULL;
             if (jl_is_linenode(stmt)) {
                 lno = jl_linenode_line(stmt);
-                file = jl_linenode_file(stmt);
             }
             else if (jl_is_expr(stmt)) {
                 lno = jl_unbox_long(jl_exprarg(stmt,0));
-                if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
-                    jl_value_t *a1 = jl_exprarg(stmt,1);
-                    if (jl_is_symbol(a1)) {
-                        file = (jl_sym_t*)a1;
-                    }
-                }
             }
-            assert(jl_symbol_name(file));
 
 #           ifdef LLVM37
             DIFile *dfil = NULL;
