@@ -1464,7 +1464,7 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
 end
 
 # issue #14482
-@inferred Base.map_to!(Int8, 1, 1, Int8[0], Int[0])
+@inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
 type OOB_Functor{T}; a::T; end

@@ -1086,34 +1086,6 @@ foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
 foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 
-# generic map on any iterator
-function map(f, iters...)
-    result = []
-    len = length(iters)
-    states = [start(iters[idx]) for idx in 1:len]
-    nxtvals = cell(len)
-    cont = true
-    for idx in 1:len
-        if done(iters[idx], states[idx])
-            cont = false
-            break
-        end
-    end
-    while cont
-        for idx in 1:len
-            nxtvals[idx],states[idx] = next(iters[idx], states[idx])
-        end
-        push!(result, f(nxtvals...))
-        for idx in 1:len
-            if done(iters[idx], states[idx])
-                cont = false
-                break
-            end
-        end
-    end
-    result
-end
-
 ## map over arrays ##
 
 ## transform any set of dimensions
@@ -1174,39 +1146,6 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
-
-# using promote_type
-function promote_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
-    # map to dest array, checking the type of each result. if a result does not
-    # match, do a type promotion and re-dispatch.
-    for i = offs:length(A) #Fixme iter
-        @inbounds Ai = A[i]
-        el = f(Ai)
-        S = typeof(el)
-        if S === T || S <: T
-            @inbounds dest[i] = el::T
-        else
-            R = promote_type(T, S)
-            if R !== T
-                new = similar(dest, R)
-                copy!(new,1, dest,1, i-1)
-                new[i] = el
-                return promote_to!(f, i+1, new, A)
-            end
-            @inbounds dest[i] = el
-        end
-    end
-    return dest
-end
-
-function map_promote(f, A::AbstractArray)
-    if isempty(A); return similar(A, Bottom); end
-    first = f(A[1])
-    dest = similar(A, typeof(first))
-    dest[1] = first
-    return promote_to!(f, 2, dest, A)
-end
-
 # These are needed because map(eltype, As) is not inferrable
 promote_eltype_op(::Any) = (@_pure_meta; Bottom)
 promote_eltype_op{T}(op, ::AbstractArray{T}) = (@_pure_meta; promote_op(op, T))
@@ -1225,39 +1164,11 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A)
-    # map to dest array, checking the type of each result. if a result does not
-    # match, widen the result type and re-dispatch.
-    i = offs
-    while !done(A, st)
-        @inbounds Ai, st = next(A, st)
-        el = f(Ai)
-        S = typeof(el)
-        if S === T || S <: T
-            @inbounds dest[i] = el::T
-            i += 1
-        else
-            R = typejoin(T, S)
-            new = similar(dest, R)
-            copy!(new,1, dest,1, i-1)
-            @inbounds new[i] = el
-            return map_to!(f, i+1, st, new, A)
-        end
-    end
-    return dest
-end
+# map on collections
+map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Generator(f,A))
 
-function map(f, A::AbstractArray)
-    if isempty(A)
-        return isa(f,Type) ? similar(A,f) : similar(A)
-    end
-    st = start(A)
-    A1, st = next(A, st)
-    first = f(A1)
-    dest = similar(A, typeof(first))
-    dest[1] = first
-    return map_to!(f, 2, st, dest, A)
-end
+# default to returning an Array for `map` on general iterators
+map(f, A) = collect(Generator(f,A))
 
 ## 2 argument
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
@@ -1265,34 +1176,6 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
         dest[i] = f(A[j], B[k])
     end
     return dest
-end
-
-function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
-    for i = offs:length(A) #Fixme iter
-        @inbounds Ai, Bi = A[i], B[i]
-        el = f(Ai, Bi)
-        S = typeof(el)
-        if (S !== T) && !(S <: T)
-            R = typejoin(T, S)
-            new = similar(dest, R)
-            copy!(new,1, dest,1, i-1)
-            @inbounds new[i] = el
-            return map_to!(f, i+1, new, A, B)
-        end
-        @inbounds dest[i] = el::T
-    end
-    return dest
-end
-
-function map(f, A::AbstractArray, B::AbstractArray)
-    shp = promote_shape(size(A),size(B))
-    if prod(shp) == 0
-        return similar(A, promote_type(eltype(A),eltype(B)), shp)
-    end
-    first = f(A[1], B[1])
-    dest = similar(A, typeof(first), shp)
-    dest[1] = first
-    return map_to!(f, 2, dest, A, B)
 end
 
 ## N argument
@@ -1310,32 +1193,7 @@ end
 
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
 
-function map_to_n!{T,F}(f::F, offs, dest::AbstractArray{T}, As)
-    for i = offs:length(As[1])
-        el = f(ith_all(i, As)...)
-        S = typeof(el)
-        if (S !== T) && !(S <: T)
-            R = typejoin(T, S)
-            new = similar(dest, R)
-            copy!(new,1, dest,1, i-1)
-            @inbounds new[i] = el
-            return map_to_n!(f, i+1, new, As)
-        end
-        @inbounds dest[i] = el::T
-    end
-    return dest
-end
-
-function map(f, As::AbstractArray...)
-    shape = mapreduce(size, promote_shape, As)
-    if prod(shape) == 0
-        return similar(As[1], promote_eltype(As...), shape)
-    end
-    first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first), shape)
-    dest[1] = first
-    return map_to_n!(f, 2, dest, As)
-end
+map(f, iters...) = collect(Generator(f, iters...))
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)

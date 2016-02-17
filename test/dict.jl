@@ -137,6 +137,16 @@ end
 @test_throws ArgumentError first(Dict())
 @test first(Dict(:f=>2)) == (:f=>2)
 
+# constructing Dicts from iterators
+let d = Dict(i=>i for i=1:3)
+    @test isa(d, Dict{Int,Int})
+    @test d == Dict(1=>1, 2=>2, 3=>3)
+end
+let d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
+    @test isa(d, Dict{Real,Real})
+    @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+end
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
