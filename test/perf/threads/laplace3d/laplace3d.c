@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
+// GCC command line: gcc -fopenmp -mavx2 laplace3d.c -o laplace3d
 
 /* Laplace 3D
 
@@ -20,18 +21,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <math.h>
 #include <unistd.h>
 #include <immintrin.h>
 #include <omp.h>
-#include "../../../../src/ia_misc.h"
+
+#if defined(__i386__)
+static inline uint64_t rdtsc(void)
+{
+    uint64_t x;
+    __asm__ volatile (".byte 0x0f, 0x31" : "=A" (x));
+    return x;
+}
+#elif defined(__x86_64__)
+static inline uint64_t rdtsc(void)
+{
+    unsigned hi, lo;
+    __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)lo) | (((uint64_t)hi) << 32);
+}
+#elif defined(_COMPILER_MICROSOFT_)
+#include <intrin.h>
+static inline uint64_t rdtsc(void)
+{
+    return __rdtsc();
+}
+#endif
 
 void l3d_naive(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
 void l3d_auto(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
 void l3d_sse(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
 void l3d_avx(int nx, int padded_nx, int ny, int nz, float *u1, float *u2);
 void l3d_orig(int nx, int ny, int nz, float *u1, float *u2);
-
 
 double cpughz()
 {
@@ -230,17 +252,16 @@ void l3d_auto(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
     __assume_aligned(&u2[1],32);
 #elif defined(__GNUC__)
     if (!(padded_nx%8==0))
-	__builtin_unreachable();
-#if __has_builtin(__builtin_assume_aligned)
-    __builtin_assume_aligned(&u1[1],32);
-    __builtin_assume_aligned(&u2[1],32);
-#endif
+        __builtin_unreachable();
+    // third argument is the misalignment
+    u1 = __builtin_assume_aligned(u1, 32, sizeof(float));
+    u2 = __builtin_assume_aligned(u2, 32, sizeof(float));
 #endif
 
     /* compute on the grid */
     #pragma omp parallel for private(i,j,k,ind)
     for (k = 1;  k < nz-1;  ++k) {
-	for (j = 1;  j < ny-1;  ++j) {
+        for (j = 1;  j < ny-1;  ++j) {
             #pragma vector nontemporal(u2)
             for (i = 1;  i < nx-1;  ++i) {
                 ind = i + j*padded_nx + k*padded_nx*ny;
@@ -263,7 +284,7 @@ void l3d_sse(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
     /* compute on the grid */
     #pragma omp parallel for private(i,j,k,ind)
     for (k = 1;  k < nz-1;  ++k) {
-	for (j = 1;  j < ny-1;  ++j) {
+        for (j = 1;  j < ny-1;  ++j) {
             for (i = 1;  i < nx-1;  i += 4) {
                 ind = i + j*padded_nx + k*padded_nx*ny;
 
@@ -298,7 +319,7 @@ void l3d_avx(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
     /* compute on the grid */
     #pragma omp parallel for private(i,j,k,ind)
     for (k = 1;  k < nz-1;  ++k) {
-	for (j = 1;  j < ny-1;  ++j) {
+        for (j = 1;  j < ny-1;  ++j) {
             for (i = 1;  i < nx-1;  i += 8) {
                 ind = i + j*padded_nx + k*padded_nx*ny;
 
@@ -347,4 +368,3 @@ void l3d_orig(int nx, int ny, int nz, float *u1, float *u2)
         }
     }
 }
-
