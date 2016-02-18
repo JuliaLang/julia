@@ -158,9 +158,6 @@
 
 ;; --- lexer ---
 
-(define special-char?
-  (let ((chrs (string->list "()[]{},;\"`@")))
-    (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
 
 (define (skip-to-eol port)
@@ -438,15 +435,15 @@
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
-    (cond ((or (eof-object? c) (newline? c))  (read-char port))
+    (cond ((or (eof-object? c) (eqv? c #\newline))  (read-char port))
 
-          ((identifier-start-char? c) (accum-julia-symbol c port))
+          ((identifier-start-char? c)     (accum-julia-symbol c port))
 
-          ((special-char? c)    (read-char port))
+          ((string.find "()[]{},;\"`@" c) (read-char port))
 
-          ((char-numeric? c)    (read-number port #f #f))
+          ((string.find "0123456789" c)   (read-number port #f #f))
 
-          ((eqv? c #\#)         (skip-comment port) (next-token port s))
+          ((eqv? c #\#)                   (skip-comment port) (next-token port s))
 
           ;; . is difficult to handle; it could start a number or operator
           ((and (eqv? c #\.)
