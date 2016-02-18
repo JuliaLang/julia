@@ -570,11 +570,10 @@ constructors for abstract types, by explicitly defining methods
 for the appropriate types.
 
 However, in some cases you could consider adding methods to
-``Base.convert`` *instead* of defining a constructor, because defining
-a :func:`convert` method *automatically* defines a corresponding
-constructor, while the reverse is not true.  That is, defining
-``Base.convert(::Type{T}, args...) = ...`` automatically defines a
-constructor ``T(args...) = ...``.
+``Base.convert`` *instead* of defining a constructor, because Julia
+falls back to calling :func:`convert` if no matching constructor
+is found. For example, if no constructor ``T(args...) = ...`` exists
+``Base.convert(::Type{T}, args...) = ...`` is called.
 
 ``convert`` is used extensively throughout Julia whenever one type
 needs to be converted to another (e.g. in assignment, ``ccall``,
