@@ -13,6 +13,7 @@
  Manual
 ########
 
+.. NOTE: keep this list in sync with manual/index.rst
 .. toctree::
    :maxdepth: 1
 
@@ -58,6 +59,7 @@
  Standard Library
 ##################
 
+.. NOTE: keep this list in sync with stdlib/index.rst
 .. toctree::
    :maxdepth: 1
 
@@ -78,6 +80,8 @@
    stdlib/dates
    stdlib/test
    stdlib/c
+   stdlib/libc
+   stdlib/libdl
    stdlib/profile
 
 .. _devdocs:
