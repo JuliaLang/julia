@@ -256,9 +256,11 @@ end
 # The AbstractTestSet interface is defined by three methods:
 # record(AbstractTestSet, Result)
 #   Called by do_test after a test is evaluated
-# start(AbstractTestSet)
+# should_run(AbstractTestSet, Int)
 #   Called after the test set has been pushed onto the test set stack
-#   and right before executing the tests
+#   and right before executing the tests. Returns true as long we should
+#   continue running the tests. The 2nd argument is a counter of how many
+#   times the tests in this testset have run so far.
 # finish(AbstractTestSet)
 #   Called after the test set has been popped from the test set stack
 abstract AbstractTestSet
@@ -273,19 +275,15 @@ if an exception is thrown inside the test block but outside of a `@test` context
 """
 function record end
 
-import Base.start
-
 """
-    start(ts::AbstractTestSet, nruns::Int)
+    should_run(ts::AbstractTestSet, nruns::Int)
 
-Do any setup processing for the given testset before running tests. This is called
-by the `@testset` infrastructure before a test block executes. The `nruns` arg
-counts the number of times the test block has been executed. One common use for this
-function is to record the starting time for timing of testing. Its return value
-indicates if the test block should be run or not.
+Decide if the tests in the testset should be run; returns true if and only if they should.
+The tests are called in a loop and the `nruns` arg counts the number of times the test
+block has been executed. `nruns` is 0 when the tests have not yet executed.
 """
-function start(ts::AbstractTestSet, nruns::Int)
-    nruns < 1 # Default is to only run tests once
+function should_run(ts::AbstractTestSet, nruns::Int)
+    nruns < 1 # Default is to only run tests once, i.e. when num previous runs < 1
 end
 
 """
@@ -376,7 +374,7 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
 # The first time a DefaultTestSet starts it will record the start time
 # so that it can later calculate the elapsed time.
-function start(ts::DefaultTestSet, nruns::Int)
+function should_run(ts::DefaultTestSet, nruns::Int)
     if nruns < 1
         ts.starttime = time()
         return true
@@ -611,7 +609,7 @@ function testset_beginend(args, tests)
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         nruns = 0
-        while start(ts, nruns)
+        while should_run(ts, nruns)
             try
                 $(esc(tests))
             catch err
@@ -669,7 +667,7 @@ function testset_forloop(args, testloop)
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         nruns = 0
-        while start(ts, nruns)
+        while should_run(ts, nruns)
             try
                 $(esc(tests))
             catch err

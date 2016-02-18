@@ -268,8 +268,8 @@ for i in 1:6
 end
 
 
-# import also the start method we can use to control repeated testset execution
-import Base.Test: start
+# import also the should_run method we can use to control repeated testset execution
+import Base.Test: should_run
 # A custom test set that repeats execution of tests a fixed number of times. This specific
 # case can be done with a @testset for loop but is used here for illustration purposes.
 # The start(::AbstractTestSet) method is needed for more refined, advanced use cases
@@ -291,7 +291,9 @@ function finish(ts::RepeatingTestSet)
     ts
 end
 # Repeatedly run tests `reps` times
-start(ts::RepeatingTestSet, nruns::Int) = (nruns < ts.reps)
+function should_run(ts::RepeatingTestSet, nruns::Int)
+    (nruns < ts.reps)
+end
 
 counter_inner = counter_outer = 0
 ts = @testset RepeatingTestSet "Testing custom, repeating testsets" begin
@@ -311,6 +313,8 @@ end
 @test typeof(ts) == RepeatingTestSet
 @test ts.reps == 10
 @test ts.description == "Testing custom, repeating testsets"
+# The counter_outer test is also an implicit test of scope since
+# the counter is not updated if testset block is run in local scope.
 @test counter_outer == 10
 @test length(ts.results) == (10*6)
 @test typeof(ts.results[1]) == Pass
