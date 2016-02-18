@@ -297,6 +297,7 @@ end
 
 counter_inner = counter_outer = 0
 ts = @testset RepeatingTestSet "Testing custom, repeating testsets" begin
+    global counter_outer
     counter_outer += 1
     @test true
     @test false
@@ -305,6 +306,7 @@ ts = @testset RepeatingTestSet "Testing custom, repeating testsets" begin
     @test_throws ErrorException error("this error is a success")
     # this testset should inherit the parent testset type but only repeat twice
     @testset reps=2 "custom, repeating testset inner 1" begin
+        global counter_inner
         counter_inner += 1
         @test true
     end
@@ -313,8 +315,6 @@ end
 @test typeof(ts) == RepeatingTestSet
 @test ts.reps == 10
 @test ts.description == "Testing custom, repeating testsets"
-# The counter_outer test is also an implicit test of scope since
-# the counter is not updated if testset block is run in local scope.
 @test counter_outer == 10
 @test length(ts.results) == (10*6)
 @test typeof(ts.results[1]) == Pass
