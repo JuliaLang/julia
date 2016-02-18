@@ -1,13 +1,11 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Build a system image binary at sysimg_path.dlext.  By default, put the system image
-# next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
-# Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
-# don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
+# Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
+# userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
+# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
 @unix_only function default_sysimg_path(debug=false)
-    joinpath(dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia")),
-             "julia", debug ? "sys-debug" : "sys")
+    splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
 end
 
 @windows_only function default_sysimg_path(debug=false)
