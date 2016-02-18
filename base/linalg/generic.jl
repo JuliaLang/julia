@@ -438,7 +438,7 @@ istriu(x::Number) = true
 istril(x::Number) = true
 isdiag(x::Number) = true
 
-linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T}) = [ones(T, size(X,1)) X] \ y
+linreg{T<:Number}(X::AbstractVector{T}, y::AbstractVector{T}) = [ones(T, size(X,1)) X] \ y
 
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
