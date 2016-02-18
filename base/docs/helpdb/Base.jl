@@ -1228,9 +1228,9 @@ An operation tried to write to memory that is read-only.
 ReadOnlyMemoryError
 
 """
-    startswith(string, prefix | chars)
+    startswith(string, prefix)
 
-Returns `true` if `string` starts with `prefix`. If the second argument is a vector or set
+Returns `true` if `string` starts with `prefix`. If `prefix` is a vector or set
 of characters, tests whether the first character of `string` belongs to that set.
 """
 startswith
@@ -6153,10 +6153,12 @@ Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}``.
 eta
 
 """
-    isdefined([object,] index | symbol)
+    isdefined([m::Module,] s::Symbol)
+    isdefined(object, s::Symbol)
+    isdefined(a::AbstractArray, index::Int)
 
-Tests whether an assignable location is defined. The arguments can be an array and index, a
-composite object and field name (as a symbol), or a module and a symbol. With a single
+Tests whether an assignable location is defined. The arguments can be a module and a symbol,
+a composite object and field name (as a symbol), or an array and index. With a single
 symbol argument, tests whether a global variable with that name is defined in
 `current_module()`.
 """
@@ -8358,9 +8360,9 @@ Returns `true` if `path` is a mount point, `false` otherwise.
 ismount
 
 """
-    endswith(string, suffix | chars)
+    endswith(string, suffix)
 
-Returns `true` if `string` ends with `suffix`. If the second argument is a vector or set of
+Returns `true` if `string` ends with `suffix`. If `suffix` is a vector or set of
 characters, tests whether the last character of `string` belongs to that set.
 """
 endswith
@@ -10294,11 +10296,11 @@ updated as appropriate before returning.
 deepcopy
 
 """
-    widen(type | x)
+    widen(x)
 
-If the argument is a type, return a "larger" type (for numeric types, this will be
+If `x` is a type, return a "larger" type (for numeric types, this will be
 a type with at least as much range and precision as the argument, and usually more).
-Otherwise the argument `x` is converted to `widen(typeof(x))`.
+Otherwise `x` is converted to `widen(typeof(x))`.
 
 ```jldoctest
 julia> widen(Int32)
