@@ -818,3 +818,5 @@ for T in (BigFloat, Float64)
 end
 
 end
+
+@test typeof(displaysize()) == @compat(Tuple{Int, Int})

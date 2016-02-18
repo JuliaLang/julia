@@ -133,9 +133,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
 
-
 * `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
-
 
 * `readall` and `readbytes` are now `readstring` and `read` [#14660](https://github.com/JuliaLang/julia/pull/14660)
 
@@ -144,8 +142,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` [#13232](https://github.com/JuliaLang/julia/pull/13232)
 
-
-
+*  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5.
 
 ## New macros
 
@@ -180,10 +177,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 If you're adding additional compatibility code to this package, the [`bin/version.sh` script is useful for extracting the version number from a git commit SHA. For example, from the git repository of `julia`, run something like this:
 
 ```sh
-bash $ /path/to/Compat/bin/version.sh e3aa57efbc6542efbcc7feac9b1309d628ac6f12
-2418
+bash $ /path/to/Compat/bin/version.sh a378b60fe483130d0d30206deb8ba662e93944da
+0.5.0-dev+2023
 ```
 
 This prints a number `XXXX`, and you can then test whether Julia
-is at least this version by `VERSION >= v"0.4.0-dev+XXXX"` (assuming
-it is a commit from the 0.4 development cycle).
+is at least this version by `VERSION >= v"0.Y.0-dev+XXXX"` (assuming
+it is a commit from the 0.Y development cycle).
