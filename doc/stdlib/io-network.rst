@@ -19,13 +19,13 @@ General I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
+.. function:: open(filename, [read, write, create, truncate, append]) -> IOStream
 
    .. Docstring generated from Julia source
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name, [mode]) -> IOStream
+.. function:: open(filename, [mode]) -> IOStream
 
    .. Docstring generated from Julia source
 
@@ -121,11 +121,12 @@ General I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream or filename, x)
+.. function:: write(stream::IO, x)
+              write(filename::AbstractString, x)
 
    .. Docstring generated from Julia source
 
-   Write the canonical binary representation of a value to the given stream or file. Returns the number of bytes written into the stream.
+   Write the canonical binary representation of a value to the given I/O stream or file. Returns the number of bytes written into the stream.
 
    You can write multiple values with the same :func:``write`` call. i.e. the following are equivalent:
 
@@ -134,39 +135,46 @@ General I/O
        write(stream, x, y...)
        write(stream, x) + write(stream, y...)
 
-.. function:: read(stream, type)
+.. function:: read(stream::IO, T)
 
    .. Docstring generated from Julia source
 
-   Read a value of the given type from a stream, in canonical binary representation.
+   Read a single value of type ``T`` from ``stream``\ , in canonical binary representation.
 
-.. function:: read(stream, type, dims)
-
-   .. Docstring generated from Julia source
-
-   Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
-
-.. function:: read!(stream or filename, array::Array)
+.. function:: read(stream::IO, T, dims)
 
    .. Docstring generated from Julia source
 
-   Read binary data from a stream or file, filling in the argument ``array``\ .
+   Read a series of values of type ``T`` from ``stream``\ , in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of the ``Array{T}`` to return.
 
-.. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
+.. function:: read!(stream::IO, array::Union{Array, BitArray})
+              read!(filename::AbstractString, array::Union{Array, BitArray})
 
    .. Docstring generated from Julia source
 
-   Read at most ``nb`` bytes from the stream into ``b``\ , returning the number of bytes read (increasing the size of ``b`` as needed).
+   Read binary data from an I/O stream or file, filling in ``array``\ .
+
+.. function:: readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
+
+   .. Docstring generated from Julia source
+
+   Read at most ``nb`` bytes from ``stream`` into ``b``\ , returning the number of bytes read. The size of ``b`` will be increased if needed (i.e. if ``nb`` is greater than ``length(b)`` and enough bytes could be read), but it will never be decreased.
 
    See ``read`` for a description of the ``all`` option.
 
-.. function:: read(stream, nb=typemax(Int); all=true)
+.. function:: read(stream::IO, nb=typemax(Int); all=true)
 
    .. Docstring generated from Julia source
 
-   Read at most ``nb`` bytes from the stream, returning a ``Vector{UInt8}`` of the bytes read.
+   Read at most ``nb`` bytes from ``stream``\ , returning a ``Vector{UInt8}`` of the bytes read.
 
    If ``all`` is ``true`` (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If ``all`` is ``false``\ , at most one ``read`` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the ``all`` option.
+
+.. function:: read(filename::AbstractString, args...)
+
+   .. Docstring generated from Julia source
+
+   Open a file and read its contents. ``args`` is passed to ``read``\ : this is equivalent to ``open(io->read(io, args...), filename)``\ .
 
 .. function:: unsafe_read(io, ref, nbytes)
 
@@ -511,35 +519,40 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readstring(stream or filename)
+.. function:: readstring(stream::IO)
+              readstring(filename::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Read the entire contents of an I/O stream or a file as a string.
+   Read the entire contents of an I/O stream or a file as a string. The text is assumed to be encoded in UTF-8.
 
-.. function:: readline(stream=STDIN or filename)
-
-   .. Docstring generated from Julia source
-
-   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given stream or file (defaults to ``STDIN``\ ),
-
-.. function:: readuntil(stream or filename, delim)
+.. function:: readline(stream::IO=STDIN)
+              readline(filename::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Read a string, up to and including the given delimiter byte.
+   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given I/O stream or file (defaults to ``STDIN``\ ). When reading from a file, the text is assumed to be encoded in UTF-8.
 
-.. function:: readlines(stream or filename)
-
-   .. Docstring generated from Julia source
-
-   Read all lines as an array.
-
-.. function:: eachline(stream or filename)
+.. function:: readuntil(stream::IO, delim)
+              readuntil(filename::AbstractString, delim)
 
    .. Docstring generated from Julia source
 
-   Create an iterable object that will yield each line.
+   Read a string from an I/O stream or a file, up to and including the given delimiter byte. The text is assumed to be encoded in UTF-8.
+
+.. function:: readlines(stream::IO)
+              readlines(filename::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Read all lines of an I/O stream or a file as a vector of strings. The text is assumed to be encoded in UTF-8.
+
+.. function:: eachline(stream::IO)
+              eachline(filename::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Create an iterable object that will yield each line from an I/O stream or a file. The text is assumed to be encoded in UTF-8.
 
 .. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 

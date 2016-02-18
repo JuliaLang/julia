@@ -48,9 +48,10 @@ the same object. `fill!(A, Foo())` will return `A` filled with the result of eva
 fill!
 
 """
-    read!(stream or filename, array::Array)
+    read!(stream::IO, array::Union{Array, BitArray})
+    read!(filename::AbstractString, array::Union{Array, BitArray})
 
-Read binary data from a stream or file, filling in the argument `array`.
+Read binary data from an I/O stream or file, filling in `array`.
 """
 read!
 
@@ -445,9 +446,11 @@ the mantissa.
 precision
 
 """
-    readlines(stream or filename)
+    readlines(stream::IO)
+    readlines(filename::AbstractString)
 
-Read all lines as an array.
+Read all lines of an I/O stream or a file as a vector of strings.
+The text is assumed to be encoded in UTF-8.
 """
 readlines
 
@@ -1011,9 +1014,11 @@ See `rounding` for available rounding modes.
 Float32
 
 """
-    readuntil(stream or filename, delim)
+    readuntil(stream::IO, delim)
+    readuntil(filename::AbstractString, delim)
 
-Read a string, up to and including the given delimiter byte.
+Read a string from an I/O stream or a file, up to and including the given delimiter byte.
+The text is assumed to be encoded in UTF-8.
 """
 readuntil
 
@@ -1968,15 +1973,15 @@ value returned by `f`.
 open(f::Function, command::Cmd, mod::AbstractString="r", stdio=DevNull)
 
 """
-    open(file_name, [read, write, create, truncate, append]) -> IOStream
+    open(filename, [read, write, create, truncate, append]) -> IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
 reading only. Returns a stream for accessing the file.
 """
-open(file_name, ::Bool, ::Bool, ::Bool, ::Bool, ::Bool)
+open(filename, ::Bool, ::Bool, ::Bool, ::Bool, ::Bool)
 
 """
-    open(file_name, [mode]) -> IOStream
+    open(filename, [mode]) -> IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -1991,7 +1996,7 @@ equivalent to setting the following boolean groups:
 | a    | write, create, append         |
 | a+   | read, write, create, append   |
 """
-open(file_name, mode="r")
+open(filename, mode="r")
 
 """
     open(f::Function, args...)
@@ -2349,9 +2354,11 @@ the process.
 triu!(M, k)
 
 """
-    readstring(stream or filename)
+    readstring(stream::IO)
+    readstring(filename::AbstractString)
 
 Read the entire contents of an I/O stream or a file as a string.
+The text is assumed to be encoded in UTF-8.
 """
 readstring
 
@@ -2371,9 +2378,11 @@ it is more reliable and efficient, although in some situations it may not be ava
 poll_file
 
 """
-    eachline(stream or filename)
+    eachline(stream::IO)
+    eachline(filename::AbstractString)
 
-Create an iterable object that will yield each line.
+Create an iterable object that will yield each line from an I/O stream or a file.
+The text is assumed to be encoded in UTF-8.
 """
 eachline
 
@@ -4143,10 +4152,11 @@ Squared absolute value of `x`.
 abs2
 
 """
-    write(stream or filename, x)
+    write(stream::IO, x)
+    write(filename::AbstractString, x)
 
-Write the canonical binary representation of a value to the given stream or file. Returns the number
-of bytes written into the stream.
+Write the canonical binary representation of a value to the given I/O stream or file.
+Returns the number of bytes written into the stream.
 
 You can write multiple values with the same :func:`write` call. i.e. the following are
 equivalent:
@@ -6028,20 +6038,28 @@ ERROR: ArgumentError: indices must be unique and sorted
 deleteat!(collection, itr)
 
 """
-    read(stream, type)
+    read(stream::IO, T)
 
-Read a value of the given type from a stream, in canonical binary representation.
+Read a single value of type `T` from `stream`, in canonical binary representation.
 """
 read(stream, t)
 
 """
-    read(stream, type, dims)
+    read(stream::IO, T, dims)
 
-Read a series of values of the given type from a stream, in canonical binary representation.
-`dims` is either a tuple or a series of integer arguments specifying the size of `Array` to
-return.
+Read a series of values of type `T` from `stream`, in canonical binary representation.
+`dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
+to return.
 """
 read(stream, t, dims)
+
+"""
+    read(filename::AbstractString, args...)
+
+Open a file and read its contents. `args` is passed to `read`: this is equivalent to
+`open(io->read(io, args...), filename)`.
+"""
+read(filename, args...)
 
 """
     @timev
@@ -6307,10 +6325,11 @@ Compute the inverse secant of `x`, where the output is in degrees.
 asecd
 
 """
-    readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
+    readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
 
-Read at most `nb` bytes from the stream into `b`, returning the number of bytes read
-(increasing the size of `b` as needed).
+Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
+The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
+and enough bytes could be read), but it will never be decreased.
 
 See `read` for a description of the `all` option.
 """
@@ -7266,10 +7285,12 @@ Return the supertype of DataType `T`.
 supertype
 
 """
-    readline(stream=STDIN or filename)
+    readline(stream::IO=STDIN)
+    readline(filename::AbstractString)
 
 Read a single line of text, including a trailing newline character (if one is reached before
-the end of the input), from the given stream or file (defaults to `STDIN`),
+the end of the input), from the given I/O stream or file (defaults to `STDIN`).
+When reading from a file, the text is assumed to be encoded in UTF-8.
 """
 readline
 
@@ -10084,9 +10105,9 @@ a series of integer arguments.
 cell
 
 """
-    read(stream, nb=typemax(Int); all=true)
+    read(stream::IO, nb=typemax(Int); all=true)
 
-Read at most `nb` bytes from the stream, returning a `Vector{UInt8}` of the bytes read.
+Read at most `nb` bytes from `stream`, returning a `Vector{UInt8}` of the bytes read.
 
 If `all` is `true` (the default), this function will block repeatedly trying to read all
 requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one
