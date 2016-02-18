@@ -501,6 +501,9 @@ STATIC_INLINE void jl_free_aligned(void *p)
 }
 #endif
 
+#define JL_SMALL_BYTE_ALIGNMENT 16
+#define JL_CACHE_BYTE_ALIGNMENT 64
+
 #ifdef __cplusplus
 }
 #endif
