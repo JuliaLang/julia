@@ -977,25 +977,49 @@ System
 
    .. Docstring generated from Julia source
 
-   Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @unix_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Unix systems (including Linux and OS X). See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @osx
 
    .. Docstring generated from Julia source
 
-   Given ``@osx? a : b``\ , do ``a`` on OS X and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@osx? a : b``\ , do ``a`` on OS X and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @osx_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on OS X systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @linux
 
    .. Docstring generated from Julia source
 
-   Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @linux_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Linux systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @windows
 
    .. Docstring generated from Julia source
 
-   Given ``@windows? a : b``\ , do ``a`` on Windows and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@windows? a : b``\ , do ``a`` on Windows and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @windows_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Windows systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 Errors
 ------

@@ -41,6 +41,7 @@
    manual/dates
    manual/running-external-programs
    manual/calling-c-and-fortran-code
+   manual/handling-operating-system-variation
    manual/interacting-with-julia
    manual/embedding
    manual/packages
