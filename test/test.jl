@@ -340,6 +340,7 @@ ts = @testset RepeatingTestSet reps=500 begin
     # Below code is only to handle the very unlikely case that our random testing
     # did not "hit" an array of length 4.
     # But we don't want to flag a failure below even if unlikely
+    global hit_one_of_length_4
     hit_one_of_length_4 = hit_one_of_length_4 || (length(a) == 4)
 end
 
