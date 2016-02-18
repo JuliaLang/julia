@@ -3202,7 +3202,7 @@ y2 = g(x)"))
   :type 'string
   :group 'julia)
 
-(defvar julia-prompt-regexp "julia>"
+(defvar julia-prompt-regexp "^\\w*> "
   "Regexp for matching `inferior-julia' prompt.")
 
 (defvar inferior-julia-mode-map
