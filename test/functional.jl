@@ -178,3 +178,29 @@ let
     foreach((args...)->push!(a,args), [2,4,6], [10,20,30])
     @test a == [(2,10),(4,20),(6,30)]
 end
+
+# generators (#4470, #14848)
+
+@test sum(i/2 for i=1:2) == 1.5
+@test collect(2i for i=2:5) == [4,6,8,10]
+@test collect((i+10j for i=1:2,j=3:4)) == [31 41; 32 42]
+@test collect((i+10j for i=1:2,j=3:4,k=1:1)) == reshape([31 41; 32 42], (2,2,1))
+
+let I = Base.IteratorND(1:27,(3,3,3))
+    @test collect(I) == reshape(1:27,(3,3,3))
+    @test size(I) == (3,3,3)
+    @test length(I) == 27
+    @test eltype(I) === Int
+    @test ndims(I) == 3
+end
+
+let A = collect(Base.Generator(x->2x, Real[1.5,2.5]))
+    @test A == [3,5]
+    @test isa(A,Vector{Float64})
+end
+
+let f(g) = (@test size(g.iter)==(2,3))
+    f(i+j for i=1:2, j=3:5)
+end
+
+@test_throws DimensionMismatch Base.IteratorND(1:2, (2,3))

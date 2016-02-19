@@ -1226,7 +1226,7 @@ function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A::AbstractArray)
+function map_to!{T,F}(f::F, offs, st, dest::AbstractArray{T}, A)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
