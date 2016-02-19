@@ -1285,7 +1285,11 @@ install-atlas: $(ATLAS_OBJ_TARGET)
 ## Mac gfortran BLAS wrapper ##
 GFORTBLAS_FFLAGS :=
 ifeq ($(USE_BLAS64), 1)
+ifeq ($(USEIFC),1)
+GFORTBLAS_FFLAGS += -i8
+else
 GFORTBLAS_FFLAGS += -fdefault-integer-8
+endif
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -1373,10 +1377,7 @@ ARPACK_CFLAGS :=
 
 ifeq ($(USE_BLAS64), 1)
 ARPACK_CFLAGS += -DBLASINT=int64_t
-ifeq ($(USEIFC),1)
-ARPACK_FFLAGS += -i8
-else
-ARPACK_FFLAGS += -fdefault-integer-8
+ifneq ($(USEIFC),1)
 ifeq ($(USE_SYSTEM_BLAS), 0)
 ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 ARPACK_FFLAGS += -cpp -ffixed-line-length-none
