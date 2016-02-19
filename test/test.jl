@@ -172,6 +172,28 @@ end
 @test typeof(tss[1]) == Base.Test.DefaultTestSet
 @test typeof(tss[1].results[1]) == Base.Test.Pass
 
+
+DTS = Base.Test.DefaultTestSet   # So we need not import it...
+global global_var = 0
+nonglobal_var = 0
+@testset "@testset should run in scope where macro called" begin
+    @testset "no testset type specified" begin
+        global global_var += 1
+        nonglobal_var += 1
+    end
+    global global_var
+    @test global_var == 1
+    @test nonglobal_var == 1
+
+    @testset DTS "default testset" begin
+        global global_var += 2
+        nonglobal_var += 3
+    end
+    @test global_var == 3
+    @test nonglobal_var == 4
+end
+
+
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
 
