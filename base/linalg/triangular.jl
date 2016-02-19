@@ -1622,8 +1622,8 @@ function eigvecs{T}(A::AbstractTriangular{T})
         throw(ArgumentError("eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
     end
 end
-det{T}(A::UnitUpperTriangular{T}) = one(T)*one(T)
-det{T}(A::UnitLowerTriangular{T}) = one(T)*one(T)
+det{T}(A::UnitUpperTriangular{T}) = one(T)
+det{T}(A::UnitLowerTriangular{T}) = one(T)
 det{T}(A::UpperTriangular{T}) = prod(diag(A.data))
 det{T}(A::LowerTriangular{T}) = prod(diag(A.data))
 
