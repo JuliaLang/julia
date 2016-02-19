@@ -291,17 +291,17 @@
 
    Return ``string`` with any trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
-.. function:: startswith(string, prefix | chars)
+.. function:: startswith(string, prefix)
 
    .. Docstring generated from Julia source
 
-   Returns ``true`` if ``string`` starts with ``prefix``\ . If the second argument is a vector or set of characters, tests whether the first character of ``string`` belongs to that set.
+   Returns ``true`` if ``string`` starts with ``prefix``\ . If ``prefix`` is a vector or set of characters, tests whether the first character of ``string`` belongs to that set.
 
-.. function:: endswith(string, suffix | chars)
+.. function:: endswith(string, suffix)
 
    .. Docstring generated from Julia source
 
-   Returns ``true`` if ``string`` ends with ``suffix``\ . If the second argument is a vector or set of characters, tests whether the last character of ``string`` belongs to that set.
+   Returns ``true`` if ``string`` ends with ``suffix``\ . If ``suffix`` is a vector or set of characters, tests whether the last character of ``string`` belongs to that set.
 
 .. function:: uppercase(string)
 
