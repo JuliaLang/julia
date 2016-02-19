@@ -1017,7 +1017,7 @@ static NOINLINE void *alloc_big(size_t sz)
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
-    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,allocsz);
+    jl_atomic_fetch_add(&allocd_bytes, allocsz);
     gc_num.bigalloc++;
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
@@ -2108,11 +2108,11 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     ptls->disable_gc = (on == 0);
     if (on && !prev) {
         // disable -> enable
-        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, -1);
+        jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     }
     else if (prev && !on) {
         // enable -> disable
-        JL_ATOMIC_FETCH_AND_ADD(jl_gc_disable_counter, 1);
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
         // check if the GC is running and wait for it to finish
         jl_gc_safepoint();
     }
@@ -2424,7 +2424,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     // one of them to actually run the collection. We can't just let the
     // master thread do the GC since it might be running unmanaged code
     // and can take arbitrarily long time before hitting a safe point.
-    if (JL_ATOMIC_COMPARE_AND_SWAP(jl_gc_running, 0, 1) != 0) {
+    if (jl_atomic_compare_exchange(&jl_gc_running, 0, 1) != 0) {
 #ifdef JULIA_ENABLE_THREADING
         JL_SIGATOMIC_END();
         jl_wait_for_gc();

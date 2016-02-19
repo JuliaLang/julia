@@ -5,10 +5,8 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/MathExtras.h>
 
-extern "C" {
 #include "APInt-C.h"
 #include "julia.h"
-}
 
 using namespace llvm;
 

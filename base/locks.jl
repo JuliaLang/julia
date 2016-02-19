@@ -40,6 +40,7 @@ end
 
 function unlock!(l::TatasLock)
     l.handle[] = 0
+    ccall(:jl_cpu_wake, Void, ())
     return 0
 end
 
@@ -96,6 +97,7 @@ function unlock!(l::RecursiveTatasLock)
     if l.handle[] == 1
         l.ownertid[] = 0
         l.handle[] = 0
+        ccall(:jl_cpu_wake, Void, ())
     else
         l.handle[] -= 1
     end

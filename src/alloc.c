@@ -9,7 +9,6 @@
 #include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
-#include "ia_misc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -420,7 +419,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
 static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
                                size_t len, jl_sym_t *volatile **slot)
 {
-    jl_sym_t *node = *ptree;
+    jl_sym_t *node = jl_atomic_load_acquire(ptree);
     uintptr_t h = hash_symbol(str, len);
 
     // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
@@ -438,12 +437,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
             ptree = &node->left;
         else
             ptree = &node->right;
-        node = *ptree;
-        // We may need a data dependency barrier here to pair with the
-        // cpu write barrier in _jl_symbol so that we won't read a invalid
-        // value from `node`. However, this shouldn't be a problem on all
-        // the architectures we currently support.
-        // https://www.kernel.org/doc/Documentation/memory-barriers.txt
+        node = jl_atomic_load_acquire(ptree);
     }
     if (slot != NULL)
         *slot = ptree;
@@ -462,8 +456,7 @@ static jl_sym_t *_jl_symbol(const char *str, size_t len)
             return node;
         }
         node = mk_symbol(str, len);
-        cpu_sfence();
-        *slot = node;
+        jl_atomic_store_release(slot, node);
         JL_UNLOCK(symbol_table);
     }
     return node;
