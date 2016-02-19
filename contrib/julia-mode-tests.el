@@ -109,6 +109,35 @@ if foo
     end
 end"))
 
+(ert-deftest julia--test-indent-module-keyword ()
+  "Module should not increase indentation at any level."
+  (julia--should-indent
+   "
+module
+begin
+    a = 1
+end
+end"
+   "
+module
+begin
+    a = 1
+end
+end")
+  (julia--should-indent
+   "
+begin
+module
+foo
+end
+end"
+   "
+begin
+    module
+    foo
+    end
+end"))
+
 (ert-deftest julia--test-indent-function ()
   "We should indent function bodies."
   (julia--should-indent
@@ -163,6 +192,21 @@ bar"
      "
 foo() =
     bar"))
+
+(ert-deftest julia--test-indent-operator ()
+  "We should increase indent after the first trailing operator
+but not again after that."
+  (julia--should-indent
+   "
+foo() |>
+bar |>
+baz
+qux"
+   "
+foo() |>
+    bar |>
+    baz
+qux"))
 
 (ert-deftest julia--test-indent-ignores-blank-lines ()
   "Blank lines should not affect indentation of non-blank lines."
