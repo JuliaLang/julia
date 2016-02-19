@@ -1,13 +1,11 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Build a system image binary at sysimg_path.dlext.  By default, put the system image
-# next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
-# Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
-# don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
+# Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
+# userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
+# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
 @unix_only function default_sysimg_path(debug=false)
-    joinpath(dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia")),
-             "julia", debug ? "sys-debug" : "sys")
+    splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
 end
 
 @windows_only function default_sysimg_path(debug=false)
@@ -82,7 +80,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
                 info("System image successfully built at $sysimg_path.ji")
             end
 
-            if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
+            if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
                 if Base.isfile("$sysimg_path.$(Libdl.dlext)")
                     info("To run Julia with this image loaded, run: julia -J $sysimg_path.$(Libdl.dlext)")
                 else
@@ -151,13 +149,6 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     run(`$cc $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
 
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
-    @windows_only begin
-        if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
-            LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
-            LLVM_msg *= " Delete generated sys.dll to avoid these problems"
-            warn( LLVM_msg )
-        end
-    end
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
@@ -176,7 +167,7 @@ if !isinteractive()
         println("   build_sysimg.jl /usr/local/lib/julia/sys core2 ~/my_usrimg.jl --force")
         println()
         println(" Running this script with no arguments is equivalent to:")
-        println("   build_sysimg.jl $(default_sysimg_path) native")
+        println("   build_sysimg.jl $(default_sysimg_path()) native")
         return 0
     end
 
