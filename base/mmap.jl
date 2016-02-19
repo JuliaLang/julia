@@ -87,7 +87,7 @@ function gethandle(io::IO)
     return Int(handle)
 end
 
-settings(sh::Anonymous) = utf16(sh.name), sh.readonly, sh.create
+settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
 settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
 end # @windows_only
 
