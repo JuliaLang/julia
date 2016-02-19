@@ -38,10 +38,13 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base: uvtype, uvhandle, eventloop, fd, position, stat, close,
-            write, read, unsafe_write, unsafe_read, readavailable, read!,
-            isopen, show, seek, seekend, skip, eof, nb_available,
-            check_open, _sizeof_uv_fs, uv_error, UVError
+import Base:
+    UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
+    nb_available, position, read, read!, readavailable, seek, seekend, show,
+    skip, stat, unsafe_read, unsafe_write, utf16to8, utf8to16, uv_error,
+    uvhandle, uvtype, write
+
+@windows_only import Base: cwstring
 
 include("path.jl")
 include("stat.jl")
