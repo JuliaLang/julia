@@ -1945,7 +1945,7 @@ void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 int jl_assign_type_uid(void)
 {
     assert(t_uid_ctr != 0);
-    return JL_ATOMIC_FETCH_AND_ADD(t_uid_ctr, 1);
+    return jl_atomic_fetch_add(&t_uid_ctr, 1);
 }
 
 static int is_cacheable(jl_datatype_t *type)

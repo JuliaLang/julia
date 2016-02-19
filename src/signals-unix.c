@@ -164,7 +164,7 @@ static void jl_thread_resume(int tid, int sig)
 static inline void wait_barrier(void)
 {
     if (waiting_for < 0) {
-        if (JL_ATOMIC_FETCH_AND_ADD(waiting_for, 1) == -1) {
+        if (jl_atomic_fetch_add(&waiting_for, 1) == -1) {
             pthread_cond_broadcast(&signal_caught_cond);
         }
     }
