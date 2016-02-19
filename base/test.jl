@@ -253,9 +253,14 @@ end
 
 #-----------------------------------------------------------------------
 
-# The AbstractTestSet interface is defined by two methods:
+# The AbstractTestSet interface is defined by three methods:
 # record(AbstractTestSet, Result)
 #   Called by do_test after a test is evaluated
+# should_run(AbstractTestSet, Int)
+#   Called after the test set has been pushed onto the test set stack
+#   and right before executing the tests. Should return true as long we should
+#   continue running the tests. The 2nd argument is a counter of how many
+#   times the tests in this testset have run so far.
 # finish(AbstractTestSet)
 #   Called after the test set has been popped from the test set stack
 abstract AbstractTestSet
@@ -269,6 +274,17 @@ test result (which could be an `Error`). This will also be called with an `Error
 if an exception is thrown inside the test block but outside of a `@test` context.
 """
 function record end
+
+"""
+    should_run(ts::AbstractTestSet, nruns::Int)
+
+Decide if the tests should be run; returns true if and only if they should.
+The tests are called in a loop and the `nruns` arg counts the number of times the test
+block has been executed. `nruns` is 0 when the tests have not yet executed.
+"""
+function should_run(ts::AbstractTestSet, nruns::Int)
+    nruns < 1 # Default is to only run tests once, i.e. when num previous runs < 1
+end
 
 """
     finish(ts::AbstractTestSet)
@@ -332,8 +348,11 @@ type DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
     anynonpass::Bool
+    repeats::Int # number of repeated runs of the tests, defaults to 1
+    skip::Bool   # true iff we should not run tests in this testset, defaults to false
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
+DefaultTestSet(desc; repeats=1, skip=false) = 
+    DefaultTestSet(desc, [], false, repeats, skip)
 
 # For a passing result, simply store the result
 record(ts::DefaultTestSet, t::Pass) = (push!(ts.results, t); t)
@@ -354,6 +373,12 @@ end
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
 record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
+
+# If we shouldn't skip this testset and if we have not yet executed the tests
+# the required number of times (default is 1) we should run again.
+function should_run(ts::DefaultTestSet, nruns::Int)
+    (ts.skip == false) && (nruns < ts.repeats)
+end
 
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
@@ -568,25 +593,32 @@ function testset_beginend(args, tests)
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
-    # Generate a block of code that initializes a new testset, adds
-    # it to the task local storage, evaluates the test(s), before
-    # finally removing the testset and giving it a change to take
-    # action (such as reporting the results)
+    testset_code_expr(testsettype, desc, options, tests)
+end
+
+# Generate a block of code that initializes a new testset, adds
+# it to the task local storage, evaluates the test(s), before
+# finally removing the testset and giving it a change to take
+# action (such as reporting the results)
+function testset_code_expr(testsettype, desc, options, tests)
     quote
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
-        try
-            $(esc(tests))
-        catch err
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
+        nruns = 0
+        while should_run(ts, nruns)
+            try
+                $(esc(tests))
+            catch err
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            end
+            nruns += 1
         end
         pop_testset()
         finish(ts)
     end
 end
-
 
 """
 Generate the code for a `@testset` with a `for` loop argument
@@ -626,19 +658,7 @@ function testset_forloop(args, testloop)
     # Uses a similar block as for `@testset`, except that it is
     # wrapped in the outer loop provided by the user
     tests = testloop.args[2]
-    blk = quote
-        ts = $(testsettype)($desc; $options...)
-        push_testset(ts)
-        try
-            $(esc(tests))
-        catch err
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
-        end
-        pop_testset()
-        finish(ts)
-    end
+    blk = testset_code_expr(testsettype, desc, options, tests)
     Expr(:comprehension, blk, [esc(v) for v in loopvars]...)
 end
 

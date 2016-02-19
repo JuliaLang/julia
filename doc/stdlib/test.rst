@@ -248,7 +248,7 @@ Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------
 
 Packages can create their own ``AbstractTestSet`` subtypes by implementing the
-``record`` and ``finish`` methods. The subtype should have a one-argument
+``record``, ``should_run`` and ``finish`` methods. The subtype should have a one-argument
 constructor taking a description string, with any options passed in as keyword
 arguments.
 
@@ -257,6 +257,8 @@ arguments.
    .. Docstring generated from Julia source
 
    Record a result to a testset. This function is called by the ``@testset`` infrastructure each time a contained ``@test`` macro completes, and is given the test result (which could be an ``Error``\ ). This will also be called with an ``Error`` if an exception is thrown inside the test block but outside of a ``@test`` context.
+
+.. function:: should_run(ts::AbstractTestSet, nruns::Int)
 
 .. function:: finish(ts::AbstractTestSet)
 
