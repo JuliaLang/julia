@@ -1371,6 +1371,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
             if (other)
                 other->eraseFromParent();
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
+            realize_pending_globals();
+            finalize_gc_frame(llvmf);
             FPM->run(*llvmf);
 #endif
             llvmf->removeFromParent();
@@ -1379,11 +1381,15 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         }
         else {
             ValueToValueMapTy VMap;
+            Function *oldllvmf = llvmf;
             llvmf = CloneFunction(llvmf, VMap, false);
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
             active_module->getFunctionList().push_back(llvmf);
+            realize_pending_globals();
+            finalize_gc_frame(llvmf);
             FPM->run(*llvmf);
             llvmf->removeFromParent();
+            llvmf->setName(oldllvmf->getName());
 #endif
         }
         JL_GC_POP();
