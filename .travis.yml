@@ -32,6 +32,10 @@ cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps-i686
     - $TRAVIS_BUILD_DIR/deps-x86_64
+branches:
+  only:
+    - master
+    - /release-.*/
 notifications:
     email: false
     irc:
@@ -82,7 +86,9 @@ script:
     - cd .. && mv julia julia2
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
-    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
+    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl all &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
 before_cache:
