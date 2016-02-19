@@ -87,7 +87,7 @@ function gethandle(io::IO)
     return Int(handle)
 end
 
-settings(sh::Anonymous) = utf16(sh.name), sh.readonly, sh.create
+settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
 settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
 end # @windows_only
 
@@ -124,7 +124,7 @@ function mmap{T,N}(io::IO,
 
     @windows_only begin
         name, readonly, create = settings(io)
-        szfile = convert(DWORD, len + offset)
+        szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :

@@ -204,30 +204,93 @@ promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type
 
 Return an array of type `Array{element_type,1}` of all items in a collection.
 """
-function collect{T}(::Type{T}, itr)
-    if applicable(length, itr)
-        # when length() isn't defined this branch might pollute the
-        # type of the other.
-        a = Array(T,length(itr)::Integer)
-        i = 0
-        for x in itr
-            a[i+=1] = x
-        end
-    else
-        a = Array(T,0)
-        for x in itr
-            push!(a,x)
-        end
-    end
-    return a
-end
+collect{T}(::Type{T}, itr) = _collect_t(T, itr, iteratorsize(itr))
 
 """
     collect(collection)
 
 Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
 """
-collect(itr) = collect(eltype(itr), itr)
+collect(itr) = _collect(itr, iteratoreltype(itr), iteratorsize(itr))
+
+_collect(itr, ::HasEltype, isz) = _collect_t(eltype(itr), itr, isz)
+
+_collect_t(T::Type, itr, ::HasLength) = copy!(Array(T,Int(length(itr)::Integer)), itr)
+_collect_t(T::Type, itr, ::HasShape) = copy!(Array(T,convert(Dims,size(itr))), itr)
+function _collect_t(T::Type, itr, ::SizeUnknown)
+    a = Array(T,0)
+    for x in itr
+        push!(a,x)
+    end
+    return a
+end
+
+_collect(itr, ::EltypeUnknown, ::HasLength) = _collect_shaped(itr, (Int(length(itr)),))
+_collect(itr, ::EltypeUnknown, ::HasShape) = _collect_shaped(itr, convert(Dims,size(itr)))
+
+_default_container(itr, elty, sz) = Array(elty, sz)
+_default_container(itr::AbstractArray, elty, sz) = similar(itr, elty, sz)
+
+function collect_to!{T}(itr, offs, st, dest::AbstractArray{T})
+    # collect to dest array, checking the type of each result. if a result does not
+    # match, widen the result type and re-dispatch.
+    i = offs
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            @inbounds dest[i] = el::T
+            i += 1
+        else
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            @inbounds new[i] = el
+            return collect_to!(itr, i+1, st, new)
+        end
+    end
+    return dest
+end
+
+function _collect_shaped(itr, sz)
+    if prod(sz) == 0
+        return _default_container(itr, Union{}, sz)
+    end
+    st = start(itr)
+    v1, st = next(itr, st)
+    dest = _default_container(itr, typeof(v1), sz)
+    dest[1] = v1
+    return collect_to!(itr, 2, st, dest)
+end
+
+function grow_to!{T}(itr, st, dest::AbstractArray{T})
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            push!(dest, el::T)
+        else
+            R = typejoin(T, S)
+            n = length(dest)
+            new = similar(dest, R, n+1)
+            copy!(new,1, dest,1, n)
+            @inbounds new[n+1] = el
+            return grow_to!(itr, st, new)
+        end
+    end
+    return dest
+end
+
+function _collect(itr, ::EltypeUnknown, ::SizeUnknown)
+    st = start(itr)
+    if done(itr,st)
+        return _default_container(itr, Union{}, 0)
+    end
+    v1, st = next(itr, st)
+    dest = _default_container(itr, typeof(v1), 1)
+    dest[1] = v1
+    return grow_to!(itr, st, dest)
+end
 
 ## Iteration ##
 start(A::Array) = 1

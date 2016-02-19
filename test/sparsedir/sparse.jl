@@ -225,8 +225,31 @@ b = randn(3)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
 @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
-# conj
+# copy!
+let
+    A = sprand(5, 5, 0.2)
+    B = sprand(5, 5, 0.2)
+    copy!(A, B)
+    @test A == B
+    @test pointer(A.nzval) != pointer(B.nzval)
+    @test pointer(A.rowval) != pointer(B.rowval)
+    @test pointer(A.colptr) != pointer(B.colptr)
+    # Test size(A) != size(B)
+    B = sprand(3, 3, 0.2)
+    copy!(A, B)
+    @test A[1:9] == B[:]
+    # Test eltype(A) != eltype(B), size(A) != size(B)
+    B = sparse(rand(Float32, 3, 3))
+    copy!(A, B)
+    @test A[1:9] == B[:]
+    # Test eltype(A) != eltype(B), size(A) == size(B)
+    A = sparse(rand(Float64, 3, 3))
+    B = sparse(rand(Float32, 3, 3))
+    copy!(A, B)
+    @test A == B
+end
 
+# conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
@@ -1098,11 +1121,11 @@ A = sparse(reshape([1.0],1,1))
 Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
-@test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
-# this test fails sometimes, cf. issue #14778
-# @test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
-@test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
-@test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
+# For a discussion of the tolerance, see #14778
+@test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
+@test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
+@test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
+@test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 let Arect = spzeros(10, 6)

@@ -4,6 +4,9 @@
 
 abstract Associative{K,V}
 
+iteratorsize{T<:Associative}(::Type{T}) = HasLength()
+iteratoreltype{T<:Associative}(::Type{T}) = HasEltype()
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))

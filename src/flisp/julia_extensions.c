@@ -187,8 +187,10 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     ios_t str;
+    int allascii=1;
     ios_mem(&str, 0);
-    while (jl_id_char(wc)) {
+    do {
+        allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
             uint32_t nwc;
@@ -202,9 +204,9 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         ios_pututf8(&str, wc);
         if (ios_peekutf8(s, &wc) == IOS_EOF)
             break;
-    }
+    } while (jl_id_char(wc));
     ios_pututf8(&str, 0);
-    return symbol(fl_ctx, normalize(fl_ctx, str.buf));
+    return symbol(fl_ctx, allascii ? str.buf : normalize(fl_ctx, str.buf));
 }
 
 static const builtinspec_t julia_flisp_func_info[] = {
