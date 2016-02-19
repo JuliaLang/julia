@@ -351,7 +351,7 @@ type DefaultTestSet <: AbstractTestSet
     repeats::Int # number of repeated runs of the tests, defaults to 1
     skip::Bool   # true iff we should not run tests in this testset, defaults to false
 end
-DefaultTestSet(desc; repeats=1, skip=false) = 
+DefaultTestSet(desc; repeats=1, skip=false) =
     DefaultTestSet(desc, [], false, repeats, skip)
 
 # For a passing result, simply store the result
