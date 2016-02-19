@@ -189,7 +189,7 @@ end
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
 
 function inv{T}(D::Diagonal{T})
-    Di = similar(D.diag)
+    Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
             throw(SingularException(i))
@@ -200,14 +200,14 @@ function inv{T}(D::Diagonal{T})
 end
 
 function pinv{T}(D::Diagonal{T})
-    Di = similar(D.diag)
+    Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
 end
 function pinv{T}(D::Diagonal{T}, tol::Real)
-    Di = similar(D.diag)
+    Di = similar(D.diag, typeof(inv(zero(T))))
     if( !isempty(D.diag) ) maxabsD = maximum(abs(D.diag)) end
     for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )

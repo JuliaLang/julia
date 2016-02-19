@@ -221,10 +221,13 @@ let d = randn(n), D = Diagonal(d)
 end
 
 # inv
-let d = randn(n), D = Diagonal(d)
+for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    D = Diagonal(d)
     @test inv(D) ≈ inv(full(D))
 end
 @test_throws SingularException inv(Diagonal(zeros(n)))
+@test_throws SingularException inv(Diagonal([0, 1, 2]))
+@test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
 
 # allow construct from range
 @test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])
