@@ -72,6 +72,41 @@ end
 lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
+"""
+    lufact(A [,pivot=Val{true}]) -> F::LU
+
+Compute the LU factorization of `A`.
+
+In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
+type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
+pivoting is chosen (default) the element type should also support `abs` and
+`<`.
+
+The individual components of the factorization `F` can be accessed by indexing:
+
+| Component | Description                         |
+|:----------|:------------------------------------|
+| `F[:L]`   | `L` (lower triangular) part of `LU` |
+| `F[:U]`   | `U` (upper triangular) part of `LU` |
+| `F[:p]`   | (right) permutation `Vector`        |
+| `F[:P]`   | (right) permutation `Matrix`        |
+
+The relationship between `F` and `A` is
+
+`F[:L]*F[:U] == A[F[:p], :]`
+
+`F` further supports the following functions:
+
+| Supported function               | `LU` | `LU{T,Tridiagonal{T}}` |
+|:---------------------------------|:-----|:-----------------------|
+| [`/`](:func:`/`)                 | ✓    |                        |
+| [`\\`](:func:`\\`)               | ✓    | ✓                      |
+| [`cond`](:func:`cond`)           | ✓    |                        |
+| [`det`](:func:`det`)             | ✓    | ✓                      |
+| [`logdet`](:func:`logdet`)       | ✓    | ✓                      |
+| [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
+| [`size`](:func:`size`)           | ✓    | ✓                      |
+"""
 function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})
     S = typeof(zero(T)/one(T))
     lufact!(copy_oftype(A, S), pivot)
