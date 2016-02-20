@@ -25,7 +25,11 @@ export
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::AbstractString) = ("",path)
-    homedir() = ENV["HOME"]
+    function homedir()
+        haskey(ENV, "HOME") ||
+            throw(ErrorException("Cannot determine home directory, HOME environment variable is not set"))
+        ENV["HOME"]
+    end
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -39,7 +43,12 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    function homedir()
+        haskey(ENV, "HOME") ||
+            (haskey(ENV, "HOMEDRIVE") && haskey(ENV, "HOMEPATH")) ||
+            throw(ErrorException("Cannot determine home directory, either HOME or both HOMEDRIVE and HOMEPATH should be set"))
+        get(ENV, "HOME", string(ENV["HOMEDRIVE"], ENV["HOMEPATH"]))
+    end
 end
 
 isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
