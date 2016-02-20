@@ -22,8 +22,6 @@
 // Figure out the best signals/timers to use for this platform
 #ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
-#elif _POSIX_C_SOURCE >= 199309L // POSIX.1-2001
-#define HAVE_SIGTIMEDWAIT
 #elif defined(__FreeBSD__) // generic bsd
 #define HAVE_ITIMER
 #else // generic linux
@@ -203,23 +201,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     }
 }
 
-#if defined(HAVE_SIGTIMEDWAIT)
-
-static struct timespec timeoutprof;
-JL_DLLEXPORT int jl_profile_start_timer(void)
-{
-    timeoutprof.tv_sec = nsecprof/GIGA;
-    timeoutprof.tv_nsec = nsecprof%GIGA;
-    pthread_kill(signals_thread, SIGUSR2); // notify signal handler to start timer
-    return 0;
-}
-
-JL_DLLEXPORT void jl_profile_stop_timer(void)
-{
-    pthread_kill(signals_thread, SIGUSR2);
-}
-
-#elif defined(HAVE_TIMER)
+#if defined(HAVE_TIMER)
 // Linux-style
 #include <time.h>
 #include <string.h>  // for memset
@@ -230,8 +212,6 @@ static struct itimerspec itsprof;
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
-    struct sigaction sa;
-    sigset_t ss;
 
     // Establish the signal event
     memset(&sigprof, 0, sizeof(struct sigevent));
@@ -361,45 +341,15 @@ static void *signal_listener(void *arg)
     int sig, critical, profile;
     int i;
     jl_sigsetset(&sset);
-#ifdef HAVE_SIGTIMEDWAIT
-    siginfo_t info;
-    sigaddset(&sset, SIGUSR2);
-    sigprocmask(SIG_SETMASK, &sset, 0);
-#endif
     while (1) {
         profile = 0;
-#ifdef HAVE_SIGTIMEDWAIT
-        if (running) {
-            sig = sigtimedwait(&sset, &info, &timeoutprof);
-        }
-        else {
-            sig = sigwaitinfo(&sset, &info);
-        }
-        if (sig == -1) {
-            int err = errno;
-            if (err == EAGAIN) {
-                // this was a timeout event
-                profile = 1;
-            }
-            else {
-                assert(err == EINTR);
-                continue;
-            }
-        }
-        else if (sig == SIGUSR2) {
-            // notification to toggle profiler
-            running = !running;
-            continue;
-        }
-#else
         sigwait(&sset, &sig);
 #ifndef HAVE_MACH
-#ifdef HAVE_ITIMER
+#  ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);
-#else
+#  else
         profile = (sig == SIGUSR1);
-#endif
-#endif
+#  endif
 #endif
 
         critical = (sig == SIGINT && exit_on_sigint);
