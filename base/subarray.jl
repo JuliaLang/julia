@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 typealias NonSliceIndex Union{Colon, AbstractVector}
-typealias ViewIndex Union{Int, NonSliceIndex}
+typealias ViewIndex Union{Real, NonSliceIndex}
 
 # L is true if the view itself supports fast linear indexing
 immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
@@ -12,8 +12,8 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     stride1::Int       # used only for linear indexing
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
-function SubArray(parent::AbstractArray, indexes::Tuple, dims::Dims)
-    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, dims)
+function SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple)
+    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, convert(Dims, dims))
 end
 function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, dims::NTuple{N, Int})
     SubArray{eltype(P), N, P, I, false}(parent, indexes, dims, 0, 0)
@@ -82,7 +82,7 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-function slice(A::AbstractArray, I...)
+function slice(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     J = to_indexes(I...)
@@ -94,7 +94,7 @@ keep_leading_scalars(T::Tuple{Real, Vararg{Real}}) = T
 keep_leading_scalars(T::Tuple{Real, Vararg{Any}}) = (@_inline_meta; (NoSlice(T[1]), keep_leading_scalars(tail(T))...))
 keep_leading_scalars(T::Tuple{Any, Vararg{Any}}) = (@_inline_meta; (T[1], keep_leading_scalars(tail(T))...))
 
-function sub(A::AbstractArray, I...)
+function sub(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     J = keep_leading_scalars(to_indexes(I...))
@@ -207,7 +207,7 @@ unsafe_getindex(::Colon, i) = to_index(i)
 step(::Colon) = 1
 first(::Colon) = 1
 isempty(::Colon) = false
-in(::Int, ::Colon) = true
+in(::Integer, ::Colon) = true
 
 # Strides are the distance between adjacent elements in a given dimension,
 # so they are well-defined even for non-linear memory layouts

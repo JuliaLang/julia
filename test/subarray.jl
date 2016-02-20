@@ -314,8 +314,8 @@ if !testfull
                      (:,3:7,:),
                      (3:7,:,:),
                      (3:7,6,:),
-                     (3:7,6,6),
-                     (6,3:7,3:7),
+                     (3:7,6,0x6),
+                     (6,UInt(3):UInt(7),3:7),
                      (13:-2:1,:,:),
                      ([8,4,6,12,5,7],:,3:7),
                      (6,6,[8,4,6,12,5,7]),
@@ -444,4 +444,16 @@ let a = ones(Float64, (2,2)),
     b = sub(a, 1:2, 1:2)
     b[2] = 2
     @test b[2] === 2.0
+end
+
+# issue #15138
+let a = [1,2,3],
+    b = sub(a, UInt(1):UInt(2))
+    @test b == slice(a, UInt(1):UInt(2)) == slice(slice(a, :), UInt(1):UInt(2)) == [1,2]
+end
+
+let A = reshape(1:4, 2, 2)
+    B = sub(A, :, :)
+    @test parent(B) === A
+    @test parent(sub(B, 0x1, :)) === parent(slice(B, 0x1, :)) === A
 end
