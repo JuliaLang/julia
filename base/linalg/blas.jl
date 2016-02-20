@@ -57,6 +57,7 @@ export
 
 
 const libblas = Base.libblas_name
+const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, chksquare, axpy!
 
@@ -342,10 +343,10 @@ for (fname, elty) in ((:dgbmv_,:Float64),
 end
 
 ### symv
-for (fname, elty) in ((:dsymv_,:Float64),
-                      (:ssymv_,:Float32),
-                      (:zsymv_,:Complex128),
-                      (:csymv_,:Complex64))
+for (fname, elty, lib) in ((:dsymv_,:Float64,libblas),
+                           (:ssymv_,:Float32,libblas),
+                           (:zsymv_,:Complex128,liblapack),
+                           (:csymv_,:Complex64,liblapack))
     # Note that the complex symv are not BLAS but auiliary functions in LAPACK
     @eval begin
              #      SUBROUTINE DSYMV(UPLO,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
@@ -366,7 +367,7 @@ for (fname, elty) in ((:dsymv_,:Float64),
             if m != length(y)
                 throw(DimensionMismatch("A has size $(size(A)), and y has length $(length(y))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall(($(blasfunc(fname)), $lib), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}),
@@ -565,17 +566,17 @@ for (fname, elty) in ((:dger_,:Float64),
 end
 
 ### syr
-for (fname, elty) in ((:dsyr_,:Float64),
-                      (:ssyr_,:Float32),
-                      (:zsyr_,:Complex128),
-                      (:csyr_,:Complex64))
+for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
+                           (:ssyr_,:Float32,libblas),
+                           (:zsyr_,:Complex128,liblapack),
+                           (:csyr_,:Complex64,liblapack))
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = chksquare(A)
             if length(x) != n
                 throw(DimensionMismatch("A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall(($(blasfunc(fname)), libblas), Void,
+            ccall(($(blasfunc(fname)), $lib), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &n, &α, x,
