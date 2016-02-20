@@ -3745,3 +3745,16 @@ end
 let f(T) = Type{T}
     @test Base.return_types(f, Tuple{Type{Int}}) == [Type{Type{Int}}]
 end
+
+# issue #13229
+module I13229
+    using Base.Test
+    global z = 0
+    @time @profile for i = 1:5
+        function f(x)
+            return x + i
+        end
+        global z = f(i)
+    end
+    @test z == 10
+end
