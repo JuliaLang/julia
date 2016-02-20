@@ -744,3 +744,12 @@ end
 
 # issue #13122
 @test remotecall_fetch(identity, workers()[1], C_NULL) === C_NULL
+
+# issue #11062
+function t11062()
+    @async v11062 = 1
+    v11062 = 2
+end
+
+@test t11062() == 2
+
