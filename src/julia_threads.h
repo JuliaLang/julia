@@ -220,7 +220,7 @@ static inline T jl_atomic_load(volatile T *obj)
 template<typename T>
 static inline T jl_atomic_load_acquire(volatile T *obj)
 {
-    T val = *obj
+    T val = *obj;
     jl_signal_fence();
     return val;
 }
