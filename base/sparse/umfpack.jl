@@ -59,8 +59,8 @@ end
 
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
-    const UmfpackIndexTypes = (:Int32, )
-    typealias UMFITypes Union{Int32}
+    const UmfpackIndexTypes = (:Int32,)
+    typealias UMFITypes Int32
 else
     const UmfpackIndexTypes = (:Int32, :Int64)
     typealias UMFITypes Union{Int32, Int64}
@@ -75,22 +75,20 @@ const umf_ctrl = Array(Float64, UMFPACK_CONTROL)
 ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
 const umf_info = Array(Float64, UMFPACK_INFO)
 
-function show_umf_ctrl(level::Real)
+function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_control, :libumfpack), Void, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
-show_umf_ctrl() = show_umf_ctrl(2.)
 
-function show_umf_info(level::Real)
+function show_umf_info(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_info, :libumfpack), Void,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
 end
-show_umf_info() = show_umf_info(2.)
 
 ## Should this type be immutable?
 type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
@@ -103,6 +101,43 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     nzval::Vector{Tv}
 end
 
+"""
+    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+
+Compute the LU factorization of a sparse matrix `A`.
+
+For sparse `A` with real or complex element type, the return type of `F` is
+`UmfpackLU{Tv, Ti}`, with `Tv` = `Float64` or `Complex128` respectively and
+`Ti` is an integer type (`Int32` or `Int64`).
+
+The individual components of the factorization `F` can be accessed by indexing:
+
+| Component | Description                         |
+|:----------|:------------------------------------|
+| `F[:L]`   | `L` (lower triangular) part of `LU` |
+| `F[:U]`   | `U` (upper triangular) part of `LU` |
+| `F[:p]`   | right permutation `Vector`          |
+| `F[:q]`   | left permutation `Vector`           |
+| `F[:Rs]`  | `Vector` of scaling factors         |
+| `F[:(:)]` | `(L,U,p,q,Rs)` components           |
+
+The relation between `F` and `A` is
+
+`F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]`
+
+`F` further supports the following functions:
+
+- [`\\`](:func:`\\`)
+- [`cond`](:func:`cond`)
+- [`det`](:func:`det`)
+
+** Implementation note **
+
+`lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+SuiteSparse. As this library only supports sparse matrices with `Float64` or
+`Complex128` elements, `lufact` converts `A` into a copy that is of type
+`SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+"""
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 
     zerobased = S.colptr[1] == 0
@@ -113,12 +148,23 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
+lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
+lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
+lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
+    "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
+    "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
+    "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
+lufact(A::SparseMatrixCSC, pivot::Type{Val{false}}) = lufact(A)
+
 
 size(F::UmfpackLU) = (F.m, F.n)
 function size(F::UmfpackLU, dim::Integer)
     if dim < 1
-        error("arraysize: dimension out of range")
+        throw(ArgumentError("size: dimension $dim out of range"))
     elseif dim == 1
         return Int(F.m)
     elseif dim == 2
