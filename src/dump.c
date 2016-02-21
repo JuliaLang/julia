@@ -410,9 +410,9 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
         delayed_fptrs[delayed_fptrs_n].func = func;
         delayed_fptrs[delayed_fptrs_n].cfunc = cfunc;
         delayed_fptrs_n++;
-        if (func > sysimg_fvars_max)
+        if (func > 0 && func > sysimg_fvars_max)
             sysimg_fvars_max = func;
-        if (cfunc > sysimg_fvars_max)
+        if (cfunc > 0 && cfunc > sysimg_fvars_max)
             sysimg_fvars_max = cfunc;
     }
 }

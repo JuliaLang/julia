@@ -13,5 +13,5 @@ show(io, Pair)
 @assert takebuf_string(io) == "Pair{A,B}"
 @assert !Base.inbase(LastMain)
 """
-exename = joinpath(JULIA_HOME, Base.julia_exename())
+exename = Base.julia_cmd()
 run(`$exename -f -e $script`)

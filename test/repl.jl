@@ -403,7 +403,7 @@ end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-let exename = joinpath(JULIA_HOME, Base.julia_exename())
+let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
 @unix_only begin
