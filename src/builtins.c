@@ -1549,15 +1549,17 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 
 JL_DLLEXPORT void jl_(void *jl_value)
 {
-    jl_in_jl_++;
-    JL_TRY {
+    jl_jmp_buf *old_buf = jl_safe_restore;
+    jl_jmp_buf buf;
+    jl_safe_restore = &buf;
+    if (!jl_setjmp(buf, 0)) {
         (void)jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
         jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
     }
-    JL_CATCH {
+    else {
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
     }
-    jl_in_jl_--;
+    jl_safe_restore = old_buf;
 }
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
