@@ -141,3 +141,91 @@ end
 @test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{Float64}
+
+# Test atomic memory ordering with load/store
+type CommBuf
+    var1::Atomic{Int}
+    var2::Atomic{Int}
+    correct_write::Bool
+    correct_read::Bool
+    CommBuf() = new(Atomic{Int}(0), Atomic{Int}(0), false, false)
+end
+function test_atomic_write(commbuf::CommBuf, n::Int)
+    for i in 1:n
+        # The atomic stores guarantee that var1 >= var2
+        commbuf.var1[] = i
+        commbuf.var2[] = i
+    end
+    commbuf.correct_write = true
+end
+function test_atomic_read(commbuf::CommBuf, n::Int)
+    correct = true
+    while true
+        # load var2 before var1
+        var2 = commbuf.var2[]
+        var1 = commbuf.var1[]
+        correct &= var1 >= var2
+        var1 == n && break
+    end
+    commbuf.correct_read = correct
+end
+function test_atomic()
+    commbuf = CommBuf()
+    count = 1_000_000
+    @threads for i in 1:2
+        if i==1
+            test_atomic_write(commbuf, count)
+        else
+            test_atomic_read(commbuf, count)
+        end
+    end
+    @test commbuf.correct_write == true
+    @test commbuf.correct_read == true
+end
+test_atomic()
+
+# Test ordering with fences using Peterson's algorithm
+# Example adapted from <https://en.wikipedia.org/wiki/Peterson%27s_algorithm>
+type Peterson
+    # State for Peterson's algorithm
+    flag::Vector{Atomic{Int}}
+    turn::Atomic{Int}
+    # Collision detection
+    critical::Vector{Atomic{Int}}
+    correct::Vector{Bool}
+    Peterson() =
+        new([Atomic{Int}(0), Atomic{Int}(0)],
+            Atomic{Int}(0),
+            [Atomic{Int}(0), Atomic{Int}(0)],
+            [false, false])
+end
+function test_fence(p::Peterson, id::Int, n::Int)
+    @assert id == mod1(id,2)
+    correct = true
+    otherid = mod1(id+1,2)
+    for i in 1:n
+        p.flag[id][] = 1
+        p.turn[] = otherid
+        atomic_fence()
+        while p.flag[otherid][] != 0 && p.turn[] == otherid
+            # busy wait
+        end
+        # critical section
+        p.critical[id][] = 1
+        correct &= p.critical[otherid][] == 0
+        p.critical[id][] = 0
+        # end of critical section
+        p.flag[id][] = 0
+    end
+    p.correct[id] = correct
+end
+function test_fence()
+    commbuf = Peterson()
+    count = 1_000_000
+    @threads for i in 1:2
+        test_fence(commbuf, i, count)
+    end
+    @test commbuf.correct[1] == true
+    @test commbuf.correct[2] == true
+end
+test_fence()
