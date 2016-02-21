@@ -235,10 +235,6 @@ static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = 
 // --- string constants ---
 static std::map<const std::string, GlobalVariable*> stringConstants;
 
-extern "C" {
-    extern int jl_in_inference;
-}
-
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
 static GlobalVariable *global_proto(GlobalVariable *G)
 {
@@ -261,7 +257,7 @@ static GlobalVariable *stringConst(const std::string &txt)
     // in inference, we can not share string constants between
     // modules as there might be multiple compiles on the stack
     // with calls in between them.
-    if (gv == NULL || jl_in_inference) {
+    if (gv == NULL) {
         std::stringstream ssno;
         std::string vname;
         ssno << strno;

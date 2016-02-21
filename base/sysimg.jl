@@ -48,6 +48,7 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
+(::Type{T}){T}(arg) = convert(T, arg)::T
 include("functors.jl")
 include("checked.jl")
 importall .Checked
@@ -58,27 +59,23 @@ include("subarray.jl")
 include("array.jl")
 
 # Array convenience converting constructors
-(::Type{Array{T}}){T}(m::Integer) = Array{T}(Int(m))
-(::Type{Array{T}}){T}(m::Integer, n::Integer) = Array{T}(Int(m), Int(n))
-(::Type{Array{T}}){T}(m::Integer, n::Integer, o::Integer) = Array{T}(Int(m), Int(n), Int(o))
+(::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
+(::Type{Array{T}}){T}(m::Integer, n::Integer) = Array{T,2}(Int(m), Int(n))
+(::Type{Array{T}}){T}(m::Integer, n::Integer, o::Integer) = Array{T,3}(Int(m), Int(n), Int(o))
 (::Type{Array{T}}){T}(d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
 
-(::Type{Vector{T}}){T}(m::Integer) = Array{T}(m)
-(::Type{Vector{T}}){T}() = Array{T}(0)
-(::Type{Vector})(m::Integer) = Array{Any}(m)
-(::Type{Vector})() = Array{Any}(0)
-
-(::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Array{T}(m, n)
-(::Type{Matrix{T}}){T}() = Array{T}(0, 0)
-(::Type{Matrix})(m::Integer, n::Integer) = Array{Any}(m, n)
-(::Type{Matrix})() = Array{Any}(0, 0)
+(::Type{Vector})() = Array{Any,1}(0)
+(::Type{Vector{T}}){T}(m::Integer) = Array{T,1}(Int(m))
+(::Type{Vector})(m::Integer) = Array{Any,1}(Int(m))
+(::Type{Matrix})() = Array{Any,2}(0, 0)
+(::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
+(::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
 # TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
 Array{T}(::Type{T}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
-Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
+Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
+Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
 # numeric operations
 include("hashing.jl")

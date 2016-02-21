@@ -340,6 +340,9 @@ unsafe_convert{T}(::Type{T}, x::T) = x
 (::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
 (::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
 
+(::Type{Array{T,1}}){T}() = Array{T,1}(0)
+(::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
+
 # TODO: possibly turn these into deprecations
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
 Array{T}(::Type{T}, d::Int...) = Array{T}(d)
