@@ -204,7 +204,7 @@ end
 function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = checksquare(A)
     c = 0
-    P = one(real(T))
+    P = one(T)
     abs_det = zero(real(T))
     @inbounds for i = 1:n
         dg_ii = A.factors[i,i]
@@ -214,36 +214,13 @@ function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
         end
         abs_det += log(abs(dg_ii))
     end
-    s = (isodd(c) ? -one(real(T)) : one(real(T))) * P
+    s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
     abs_det, s
 end
 
-function logdet{T<:Real,S}(A::LU{T,S})
+function logdet(A::LU)
     d, s = logabsdet(A)
-    if s < 0
-        throw(DomainError())
-    end
-    d
-end
-
-_mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
-_mod2pi(x) = mod2pi(x)
-function logdet{T<:Complex,S}(A::LU{T,S})
-    n = checksquare(A)
-    s = zero(T)
-    c = 0
-    @inbounds for i = 1:n
-        if A.ipiv[i] != i
-            c += 1
-        end
-        s += log(A.factors[i,i])
-    end
-    if isodd(c)
-        s = Complex(real(s), imag(s)+π)
-    end
-    r, a = reim(s)
-    a = π - _mod2pi(π - a) #Take principal branch with argument (-pi,pi]
-    complex(r, a)
+    return d + log(s)
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
