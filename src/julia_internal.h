@@ -23,7 +23,7 @@ extern jl_function_t *jl_typeinf_func;
 #if defined(JL_USE_INTEL_JITEVENTS)
 extern unsigned sig_stack_size;
 #endif
-#define jl_in_jl_ jl_get_ptls_states()->in_jl_
+#define jl_safe_restore jl_get_ptls_states()->safe_restore
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
