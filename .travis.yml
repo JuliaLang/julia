@@ -54,6 +54,7 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
+    - JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji"
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
         mkdir -p $HOME/bin;
@@ -62,7 +63,7 @@ before_install:
         ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
         gcc --version;
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
-        export TESTSTORUN="all";
+        TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
         brew update;
         brew install -v jq bar;
@@ -80,13 +81,15 @@ before_install:
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        export TESTSTORUN="core ccall mmap llvmcall threads"; fi # TODO: turn this back to "all" once it's fast enough to not time out
+        JULIA_SYSIMG_BUILD_FLAGS="$JULIA_SYSIMG_BUILD_FLAGS --compile=all";
+        COMPILE_MODE="--compile=min";
+        TESTSTORUN="core ccall mmap llvmcall threads"; fi # TODO: turn this back to "all" once it's fast enough to not time out
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
-    - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji" prefix=/tmp/julia install | moreutils/ts -s "%.s"
+    - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="$JULIA_SYSIMG_BUILD_FLAGS" prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
     - if [ `uname` = "Darwin" ]; then
@@ -99,8 +102,8 @@ script:
         /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
+        /tmp/julia/bin/julia --check-bounds=yes $COMPILE_MODE runtests.jl $TESTSTORUN &&
+        /tmp/julia/bin/julia --check-bounds=yes $COMPILE_MODE runtests.jl libgit2-online pkg
     - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/build/julia-env
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg

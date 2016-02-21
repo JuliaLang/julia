@@ -283,7 +283,6 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
     assert(l->sparam_vals == jl_emptysvec);
     assert(l->specTypes == NULL);
     jl_lambda_info_t *nli = jl_copy_lambda_info(l);
-    nli->unspecialized = l;
     nli->sparam_vals = sp; // no gc_wb needed
     nli->tfunc = jl_nothing;
     nli->specializations = NULL;
@@ -302,7 +301,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
             nli->functionObjects.cFunctionList == NULL &&
             nli->functionID == 0 &&
             nli->specFunctionID == 0));
-    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
+    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF || jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the unspecialized method definition
         jl_lambda_info_t *unspec = l->unspecialized;
         if (unspec != NULL) {
@@ -313,7 +312,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
             nli->functionID = unspec->functionID;
             nli->specFunctionID = unspec->functionID;
         }
-        if (nli->fptr == NULL) {
+        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF && nli->fptr == NULL) {
             jl_printf(JL_STDERR,"code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)nli);
             jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
@@ -326,24 +325,21 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
 {
     // one unspecialized version of a function can be shared among all cached specializations
-    jl_lambda_info_t *def = method;
-    if (def->specTypes) {
+    jl_lambda_info_t *def = method->def;
+    if (method->unspecialized != NULL)
+        return method->unspecialized;
+    if (method->specTypes && def->needs_sparam_vals_ducttape) {
         // a method is a specialization iff it has specTypes
         // but method->unspecialized points to the definition in that case
         // and definition->unspecialized points to the thing to call
-        def = def->unspecialized;
+        method->unspecialized = jl_add_static_parameters(def, method->sparam_vals, method->specTypes);
+        jl_gc_wb(method, method->unspecialized);
+        method->unspecialized->unspecialized = method->unspecialized;
+        def = method;
     }
-    if (__unlikely(def->unspecialized == NULL)) {
-        if (method->def->needs_sparam_vals_ducttape) {
-            method->unspecialized = jl_add_static_parameters(def, method->sparam_vals, method->specTypes);
-            jl_gc_wb(method, method->unspecialized);
-            method->unspecialized->unspecialized = method->unspecialized;
-            def = method;
-        }
-        else {
-            def->unspecialized = jl_add_static_parameters(def, jl_emptysvec, jl_anytuple_type);
-            jl_gc_wb(def, def->unspecialized);
-        }
+    if (def->unspecialized == NULL) {
+        def->unspecialized = jl_add_static_parameters(def, jl_emptysvec, jl_anytuple_type);
+        jl_gc_wb(def, def->unspecialized);
     }
     return def->unspecialized;
 }
@@ -1701,12 +1697,13 @@ static void _compile_all_deq(jl_array_t *found)
             linfo = jl_get_unspecialized(linfo);
         if (!linfo->inferred) {
             // force this function to be recompiled
-            jl_type_infer(linfo, linfo);
+            jl_type_infer(linfo, linfo->def);
             linfo->functionObjects.functionObject = NULL;
             linfo->functionObjects.specFunctionObject = NULL;
             linfo->functionObjects.cFunctionList = NULL;
             linfo->functionID = 0;
             linfo->specFunctionID = 0;
+            linfo->jlcall_api = 0;
         }
 
         // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the unspecialized function)
@@ -1738,7 +1735,7 @@ static void _compile_all_enq_ml(jl_methlist_t *ml, jl_array_t *found)
                     return; // builtin function
                 linfo = jl_get_unspecialized(linfo);
             }
-            if (!linfo->functionID || !linfo->inferred) {
+            if (!linfo->functionID) {
                 // and it still needs to be compiled
                 if (!ml->isstaged)
                     jl_cell_1d_push(found, (jl_value_t*)ml);
