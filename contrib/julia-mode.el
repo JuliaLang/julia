@@ -452,13 +452,6 @@ beginning of the buffer."
   (unless (eq (point) (point-min))
     (backward-char)))
 
-(defvar julia-max-paren-lookback 400
-  "When indenting, don't look back more than this
-many characters to see if there are unclosed parens.
-
-This variable has a major effect on indent performance if set too
-high.")
-
 (defvar julia-max-block-lookback 5000
   "When indenting, don't look back more than this
 many characters to see if there are unclosed blocks.
@@ -471,29 +464,16 @@ high.")
 containing paren before point, so we can align succeeding code
 with it. Returns nil if we're not within nested parens."
   (save-excursion
-    ;; Back up to previous line (beginning-of-line was already called)
-    (backward-char)
-    (let ((min-pos (max (- (point) julia-max-paren-lookback)
-                        (point-min)))
-          (open-count 0))
-      (while (and (> (point) min-pos)
-                  (not (plusp open-count)))
-
-        (when (looking-at (rx (any "[" "]" "(" ")")))
-          (unless (or (julia-in-string) (julia-in-comment))
-            (cond ((looking-at (rx (any "[" "(")))
-                   (incf open-count))
-                  ((looking-at (rx (any "]" ")")))
-                   (decf open-count)))))
-
-        (julia--safe-backward-char))
-
-      (if (plusp open-count)
-          (progn (forward-char 2)
-                 (while (looking-at (rx blank))
-                   (forward-char))
-                 (current-column))
-        nil))))
+    (beginning-of-line)
+    (let ((parser-state (syntax-ppss)))
+      (cond ((nth 3 parser-state) nil)       ;; strings
+            ((= (nth 0 parser-state) 0) nil) ;; top level
+            (t
+             (ignore-errors ;; return nil if any of these movements fail
+               (backward-up-list)
+               (forward-char)
+               (skip-syntax-forward " ")
+               (current-column)))))))
 
 (defun julia-prev-line-skip-blank-or-comment ()
   "Move point to beginning of previous line skipping blank lines
@@ -549,13 +529,10 @@ only comments."
   "Indent current line of julia code."
   (interactive)
   (let* ((point-offset (- (current-column) (current-indentation))))
-    (end-of-line)
     (indent-line-to
      (or
       ;; If we're inside an open paren, indent to line up arguments.
-      (save-excursion
-        (beginning-of-line)
-        (ignore-errors (julia-paren-indent)))
+      (julia-paren-indent)
       ;; indent due to hanging operators or a line ending in =
       (julia-indent-hanging)
       ;; Indent according to how many nested blocks we are in.
