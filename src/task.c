@@ -670,18 +670,30 @@ JL_DLLEXPORT size_t rec_backtrace_ctx(intptr_t *data, size_t maxsize,
                                       unw_context_t *uc)
 {
 #if !defined(_CPU_ARM_) && !defined(_CPU_PPC64_)
-    unw_cursor_t cursor;
-    unw_word_t ip;
-    size_t n=0;
-
-    unw_init_local(&cursor, uc);
-    do {
-        if (n >= maxsize)
-            break;
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
-            break;
-        data[n++] = ip;
-    } while (unw_step(&cursor) > 0);
+    volatile size_t n = 0;
+    jl_jmp_buf *old_buf = jl_safe_restore;
+    jl_jmp_buf buf;
+    jl_safe_restore = &buf;
+    if (!jl_setjmp(buf, 0)) {
+        unw_cursor_t cursor;
+        unw_init_local(&cursor, uc);
+        do {
+            unw_word_t ip;
+            if (n >= maxsize)
+                break;
+            if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
+                break;
+            data[n++] = ip;
+        } while (unw_step(&cursor) > 0);
+    }
+    else {
+        // The unwinding fails likely because a invalid memory read.
+        // Back off one frame since it is likely invalid.
+        // This seems to be good enough on x86 to make the LLVM debug info
+        // reader happy.
+        n = n > 0 ? n - 1 : n;
+    }
+    jl_safe_restore = old_buf;
     return n;
 #else
     return 0;
@@ -830,6 +842,8 @@ JL_DLLEXPORT void jl_gdbbacktrace(void)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
+    if (jl_safe_restore)
+        jl_longjmp(*jl_safe_restore, 1);
     jl_gc_unsafe_enter();
     assert(e != NULL);
     jl_exception_in_transit = e;
@@ -850,7 +864,8 @@ void JL_NORETURN throw_internal(jl_value_t *e)
 JL_DLLEXPORT void jl_throw(jl_value_t *e)
 {
     assert(e != NULL);
-    record_backtrace();
+    if (!jl_safe_restore)
+        record_backtrace();
     throw_internal(e);
 }
 

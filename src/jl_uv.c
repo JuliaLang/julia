@@ -309,7 +309,7 @@ JL_DLLEXPORT int jl_fs_chmod(char *path, int mode)
 JL_DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len,
                              int64_t offset)
 {
-    if (jl_in_jl_)
+    if (jl_safe_restore)
         return write(handle, data, len);
     uv_fs_t req;
     uv_buf_t buf[1];
