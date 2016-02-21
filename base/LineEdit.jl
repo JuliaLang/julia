@@ -747,13 +747,13 @@ immutable KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
+match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, ByteString(cs)))
 match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
 match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
-    eof(term) && return keymap_fcn(nothing, s, "")
+    eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
@@ -761,9 +761,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
 
-keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, s, c)
-    return (s, p) -> begin
+keymap_fcn(f::Void, c) = (s, p) -> return :ok
+function keymap_fcn(f::Function, c)
+    return function (s, p)
         r = f(s, p, c)
         if isa(r, Symbol)
             return r
