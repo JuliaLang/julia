@@ -43,6 +43,7 @@ include("operators.jl")
 include("pointer.jl")
 const checked_add = +
 const checked_sub = -
+(::Type{T}){T}(arg) = convert(T, arg)::T
 
 # core array operations
 include("abstractarray.jl")
@@ -70,20 +71,6 @@ include("iterator.jl")
 
 # compiler
 include("inference.jl")
-
-precompile(CallStack, (Expr, Module, Tuple{Void}, EmptyCallStack))
-precompile(_ieval, (Symbol,))
-precompile(abstract_eval, (LambdaInfo, ObjectIdDict, VarInfo))
-precompile(abstract_interpret, (Bool, ObjectIdDict, VarInfo))
-precompile(delete_var!, (Expr, Symbol))
-precompile(eval_annotate, (LambdaInfo, ObjectIdDict, VarInfo, ObjectIdDict, Array{Any,1}))
-precompile(is_var_assigned, (Expr, Symbol))
-precompile(isconstantfunc, (SymbolNode, VarInfo))
-precompile(occurs_more, (Bool, Function, Int))
-precompile(occurs_more, (UInt8, Function, Int))
-precompile(occurs_undef, (Symbol, Expr))
-precompile(sym_replace, (UInt8, Array{Any,1}, Array{Any,1}, Array{Any,1}, Array{Any,1}))
-precompile(symequal, (Symbol, Symbol))
 
 end # baremodule Inference
 ))
