@@ -104,7 +104,6 @@ export
     SharedArray,
     SharedMatrix,
     SharedVector,
-    StatStruct,
     StepRange,
     StridedArray,
     StridedMatrix,
