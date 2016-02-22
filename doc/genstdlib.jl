@@ -15,13 +15,18 @@ function add_all_docs(it)
     end
 end
 
-function add_all_docs(it, k)
+function add_all_docs(it, k::ANY)
     for (_, v) in it
         all_docs[v] = k
     end
 end
 
 function sym_exported(obj::ANY, m, exports)
+    if isa(obj, Function)
+        try
+            return typeof(obj).name.mt.name in exports
+        end
+    end
     if isa(obj, Union{Function,DataType,Module})
         return symbol(string(obj)) in exports
     elseif isa(obj, IntrinsicFunction)
