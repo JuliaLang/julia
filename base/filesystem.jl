@@ -18,6 +18,7 @@ const S_IXOTH = 0o001
 const S_IRWXO = 0o007
 
 export File,
+       StatStruct,
        # open,
        futime,
        unlink,
