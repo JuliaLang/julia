@@ -252,6 +252,24 @@ y2 = g(x)"
        z)
 y2 = g(x)"))
 
+(ert-deftest julia--test-indentation-of-multi-line-strings ()
+  "Indentation should only affect the first line of a multi-line string."
+    (julia--should-indent
+     "   a = \"\"\"
+    description
+begin
+    foo
+bar
+end
+\"\"\""
+     "a = \"\"\"
+    description
+begin
+    foo
+bar
+end
+\"\"\""))
+
 (defun julia--run-tests ()
   (interactive)
   (if (featurep 'ert)
