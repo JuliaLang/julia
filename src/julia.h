@@ -537,7 +537,7 @@ typedef struct _jl_gcframe_t {
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
-  ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
+  ((void**)rts_var)[-2] = (void*)(((size_t)(n))<<1);                  \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
   memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));           \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
