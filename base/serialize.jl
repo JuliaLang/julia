@@ -446,8 +446,9 @@ function serialize_any(s::SerializationState, x::ANY)
         serialize_type(s, t)
         write(s.io, x)
     else
-        t.mutable && serialize_cycle(s, x) && return
+        t.mutable && haskey(s.table, x) && serialize_cycle(s, x) && return
         serialize_type(s, t)
+        t.mutable && serialize_cycle(s, x)
         for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
