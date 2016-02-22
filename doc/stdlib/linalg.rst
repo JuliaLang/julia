@@ -423,7 +423,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``\ , ``\``\ , ``inv``\ , ``issym``\ , ``ishermitian``\ .
+   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``\ , ``\``\ , ``inv``\ , ``issymmetric``\ , ``ishermitian``\ .
 
    .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_\ .
 
@@ -1093,7 +1093,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``\ , where ``A``\ , ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
 
-.. function:: issym(A) -> Bool
+.. function:: issymmetric(A) -> Bool
 
    .. Docstring generated from Julia source
 

@@ -70,9 +70,9 @@ let n=10
         #trace
         @test trace(asym) == trace(Hermitian(asym))
 
-        # issym, ishermitian
+        # issymmetric, ishermitian
         if eltya <: Real
-            @test issym(Symmetric(asym))
+            @test issymmetric(Symmetric(asym))
             @test ishermitian(Symmetric(asym))
         end
         if eltya <: Complex
