@@ -3770,3 +3770,10 @@ let
         @test isleaftype(vartype)
     end
 end
+
+# issue #15186
+let ex = quote
+             $(if true; :(test); end)
+         end
+    @test ex.args[2] == :test
+end
