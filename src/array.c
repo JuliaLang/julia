@@ -449,8 +449,8 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     return elt;
 }
 
-static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
-                             const char *fname)
+static size_t array_nd_index(jl_array_t *a, jl_value_t *const *args,
+                             size_t nidxs, const char *fname)
 {
     size_t i=0;
     size_t k, stride=1;
@@ -488,7 +488,7 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
     return 1;
 }
 
-int jl_array_isdefined(jl_value_t **args0, int nargs)
+int jl_array_isdefined(jl_value_t *const *args0, int nargs)
 {
     assert(jl_is_array(args0[0]));
     jl_value_t **depwarn_args;
@@ -500,7 +500,7 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
     JL_GC_POP();
 
     jl_array_t *a = (jl_array_t*)args0[0];
-    jl_value_t **args = &args0[1];
+    jl_value_t *const *args = &args0[1];
     size_t nidxs = nargs-1;
     size_t i=0;
     size_t k, stride=1;

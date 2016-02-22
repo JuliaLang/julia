@@ -97,7 +97,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     return 1;
 }
 
-static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
+static inline int sig_match_leaf(jl_value_t *const *args, jl_value_t **sig, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
     size_t i;
@@ -115,7 +115,7 @@ static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
     return 1;
 }
 
-static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig,
+static inline int sig_match_simple(jl_value_t *const *args, size_t n, jl_value_t **sig,
                                    int va, size_t lensig)
 {
     // NOTE: This function is a performance hot spot!!
@@ -767,7 +767,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
     }
 }
 
-jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t **args, size_t n)
+jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t *const *args, size_t n)
 {
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
@@ -841,7 +841,7 @@ nomatch:
     return NULL;
 }
 
-jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs)
+jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *const *args, size_t n, int8_t offs)
 {
     if (n > offs) {
         jl_value_t *a1 = args[offs];

@@ -186,9 +186,9 @@ union jl_typemap_t {
 
 // "jlcall" calling convention signatures.
 // This defines the default ABI used by compiled julia functions.
-typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
+typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t *const*, uint32_t);
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t *const*, uint32_t);
+typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t *const*, uint32_t, jl_svec_t*);
 
 typedef struct {
     union {
@@ -987,7 +987,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params);
-JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
+JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t *const *p, size_t np);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                             jl_svec_t *parameters,
                                             jl_svec_t *fnames, jl_svec_t *ftypes,
@@ -1000,7 +1000,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name,
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
-JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
+JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t *const *args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
@@ -1242,9 +1242,9 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v,
-                                                jl_value_t **idxs, size_t nidxs);
+                                                jl_value_t *const *idxs, size_t nidxs);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v, size_t i);
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v,
+JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t *const *v,
                                                         size_t nv, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs);
@@ -1367,16 +1367,16 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 // calling into julia ---------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *const *args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t *const *args, uint32_t nargs);
 
 STATIC_INLINE
-jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
+jl_value_t *jl_apply(jl_value_t *const *args, uint32_t nargs)
 {
     return jl_apply_generic(args, nargs);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t *const *args, int32_t nargs);
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);

@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t *const *args, uint32_t nargs)
 {
     return jl_call_method_internal(meth, args, nargs);
 }
@@ -1102,7 +1102,7 @@ void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args)
     // not reached
 }
 
-void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na)
+void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t *const *args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args+1, na-1);
     JL_GC_PUSH1(&argtup);
@@ -1112,7 +1112,7 @@ void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);
 
-jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
+jl_tupletype_t *arg_type_tuple(jl_value_t *const *args, size_t nargs)
 {
     jl_tupletype_t *tt;
     size_t i;
@@ -1176,7 +1176,7 @@ JL_DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
     return jl_method_lookup_by_type(mt, types, 0, 0, 1) != NULL;
 }
 
-jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)
+jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t *const *args, size_t nargs, int cache)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt));
     if (entry)
@@ -1711,7 +1711,7 @@ STATIC_INLINE uint32_t int32hash_fast(uint32_t a)
     return a;  // identity hashing seems to work well enough here
 }
 
-STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, size_t n)
+STATIC_INLINE int sig_match_fast(jl_value_t *const *args, jl_value_t *const *sig, size_t i, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
     for (; i < n; i++) {
@@ -1761,7 +1761,7 @@ static void flush_from_cache(jl_typemap_entry_t *entry)
 #define __builtin_return_address(n) _ReturnAddress()
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *const *args, uint32_t nargs)
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -1872,7 +1872,7 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types)
 // every definition has its own private method table for this purpose.
 //
 // NOTE: assumes argument type is a subtype of the lookup type.
-jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs)
+jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t *const *args, size_t nargs)
 {
     jl_svec_t *tpenv = jl_emptysvec;
     jl_tupletype_t *newsig = NULL;
