@@ -3758,3 +3758,15 @@ module I13229
     end
     @test z == 10
 end
+
+# issue #12474
+@generated function f12474(::Any)
+    :(for i in 1
+      end)
+end
+let
+    ast12474 = code_typed(f12474, Tuple{Float64})
+    for (_, vartype) in ast12474[1].args[2][1]
+        @test isleaftype(vartype)
+    end
+end
