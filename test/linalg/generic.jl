@@ -89,7 +89,7 @@ y = ['a','b','c','d','e']
 @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,collect(1:2),['a','b'],collect(1:2))
 
 @test_throws ArgumentError diag(rand(10))
-@test !issym(ones(5,3))
+@test !issymmetric(ones(5,3))
 @test !ishermitian(ones(5,3))
 @test cross(ones(3),ones(3)) == zeros(3)
 
@@ -193,7 +193,7 @@ for elty in [Float32,Float64,Complex64,Complex128]
     @test !isfinite(cond(zero(elty)))
     @test cond(a)          == one(elty)
     @test cond(a,1)        == one(elty)
-    @test issym(a)
+    @test issymmetric(a)
     @test ishermitian(one(elty))
     @test det(a) == a
 end

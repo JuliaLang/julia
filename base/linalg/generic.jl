@@ -382,7 +382,7 @@ condskeel{T<:Integer}(A::AbstractMatrix{T}, p::Real=Inf) = norm(abs(inv(float(A)
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs(inv(A))*abs(A)*abs(x), p)
 condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = norm(abs(inv(float(A)))*abs(A)*abs(x), p)
 
-function issym(A::AbstractMatrix)
+function issymmetric(A::AbstractMatrix)
     m, n = size(A)
     if m != n
         return false
@@ -395,7 +395,7 @@ function issym(A::AbstractMatrix)
     return true
 end
 
-issym(x::Number) = true
+issymmetric(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)

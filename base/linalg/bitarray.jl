@@ -134,8 +134,8 @@ end
 
 ## Structure query functions
 
-issym(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
-ishermitian(A::BitMatrix) = issym(A)
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
+ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
     k0, l0 = Base.get_chunks_id(pos0)

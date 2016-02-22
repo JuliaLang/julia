@@ -664,7 +664,7 @@ export
     ishermitian,
     isposdef!,
     isposdef,
-    issym,
+    issymmetric,
     istril,
     istriu,
     kron,

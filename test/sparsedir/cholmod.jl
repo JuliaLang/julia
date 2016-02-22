@@ -182,10 +182,10 @@ end
 @test eltype(A) == Float64
 @test eltype(chma) == Float64
 
-# test Sparse constructor Symmetric and Hermitian input (and issym and ishermitian)
+# test Sparse constructor Symmetric and Hermitian input (and issymmetric and ishermitian)
 ACSC = sprandn(10, 10, 0.3) + I
-@test issym(Sparse(Symmetric(ACSC, :L)))
-@test issym(Sparse(Symmetric(ACSC, :U)))
+@test issymmetric(Sparse(Symmetric(ACSC, :L)))
+@test issymmetric(Sparse(Symmetric(ACSC, :U)))
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :L)))
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 
@@ -387,7 +387,7 @@ for elty in (Float64, Complex{Float64})
     @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
 
     if elty <: Real
-        @test CHOLMOD.issym(Sparse(A1pd, 0))
+        @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
@@ -397,7 +397,7 @@ for elty in (Float64, Complex{Float64})
         F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
         @test F1 == F2
     else
-        @test !CHOLMOD.issym(Sparse(A1pd, 0))
+        @test !CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))

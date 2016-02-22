@@ -1201,7 +1201,7 @@ b1 = triu(bitrand(n2, n1))
 
 b1 = bitrand(n1,n1)
 b1 |= b1.'
-@check_bit_operation issym(b1) Bool
+@check_bit_operation issymmetric(b1) Bool
 @check_bit_operation ishermitian(b1) Bool
 
 b1 = bitrand(n1)

@@ -102,13 +102,13 @@ let A6965 = [
 end
 
 # Example from Quantum Information Theory
-import Base: size, issym, ishermitian
+import Base: size, issymmetric, ishermitian
 
 type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
-issym(Phi::CPM)=false
+issymmetric(Phi::CPM)=false
 ishermitian(Phi::CPM)=false
 import Base: *
 function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
