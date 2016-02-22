@@ -1227,3 +1227,20 @@ end
 # https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA
 @test sparse([1,1], [1,1], [true, true]) == sparse([1,1], [1,1], [true, true], 1, 1) == fill(true, 1, 1)
 @test sparsevec([1,1], [true, true]) == sparsevec([1,1], [true, true], 1) == fill(true, 1)
+
+# issparse for specialized matrix types
+let
+    m = sprand(10, 10, 0.1)
+    @test issparse(Symmetric(m))
+    @test issparse(Hermitian(m))
+    @test issparse(LowerTriangular(m))
+    @test issparse(LinAlg.UnitLowerTriangular(m))
+    @test issparse(UpperTriangular(m))
+    @test issparse(LinAlg.UnitUpperTriangular(m))
+    @test issparse(Symmetric(full(m))) == false
+    @test issparse(Hermitian(full(m))) == false
+    @test issparse(LowerTriangular(full(m))) == false
+    @test issparse(LinAlg.UnitLowerTriangular(full(m))) == false
+    @test issparse(UpperTriangular(full(m))) == false
+    @test issparse(LinAlg.UnitUpperTriangular(full(m))) == false
+end
