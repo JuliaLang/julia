@@ -152,9 +152,11 @@ end
         systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         systemerror(:GlobalLock, plock==C_NULL)
+        # find NUL terminator (0x0000 16-bit code unit)
         len = 0
         while unsafe_load(plock, len+1) != 0; len += 1; end
-        s = UTF8String(utf16to8(pointer_to_array(plock, len)))
+        # get Vector{UInt16}, transcode data to UTF-8, make a ByteString of it
+        s = bytestring(utf16to8(pointer_to_array(plock, len)))
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), plock))
         return s
     end
