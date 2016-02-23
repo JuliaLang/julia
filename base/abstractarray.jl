@@ -189,7 +189,7 @@ end
 ## Constructors ##
 
 # default arguments to similar()
-similar{T}(a::AbstractArray{T})                          = similar(a, T, size(a))
+similar{T}(a::AbstractArray{T})                          = similar(a, T)
 similar(   a::AbstractArray, T::Type)                    = similar(a, T, size(a))
 similar{T}(a::AbstractArray{T}, dims::DimsInteger)       = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)

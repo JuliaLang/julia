@@ -158,8 +158,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             end
 
             #similar
-            @test_throws ArgumentError similar(D, eltype(D), (n,n+1))
-            @test length(diag(similar(D, eltype(D), (n,n)))) == n
+            @test isa(similar(D), Diagonal{elty})
+            @test isa(similar(D, Int), Diagonal{Int})
+            @test isa(similar(D, (3,2)), Matrix{elty})
+            @test isa(similar(D, Int, (3,2)), Matrix{Int})
 
             #10036
             @test issym(D2)
