@@ -1300,18 +1300,57 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
     for (const char *augp = augmentation;;augp++) {
         switch (*augp) {
         case 'z':
+            // Augmentation Length
             p = consume_leb128(p, cie_end);
             break;
         case 'L':
-        case 'P':
+            // LSDA encoding
             p++;
             break;
         case 'R':
             // .... the only one we care about ....
             return static_cast<DW_EH_PE>(*p);
+        case 'P': {
+            // Personality data
+            // Encoding
+            auto encoding = static_cast<DW_EH_PE>(*p);
+            p++;
+            // Personality function
+            switch (encoding & 0xf) {
+            case DW_EH_PE_uleb128:
+            case DW_EH_PE_sleb128:
+                p = consume_leb128(p, cie_end);
+                break;
+            case DW_EH_PE_udata2:
+            case DW_EH_PE_sdata2:
+                p += 2;
+                break;
+            case DW_EH_PE_udata4:
+            case DW_EH_PE_sdata4:
+                p += 4;
+                break;
+            case DW_EH_PE_udata8:
+            case DW_EH_PE_sdata8:
+                p += 8;
+                break;
+            case DW_EH_PE_signed:
+                p += sizeof(void*);
+                break;
+            default:
+                if (encoding == DW_EH_PE_absptr || encoding == DW_EH_PE_omit) {
+                    p += sizeof(void*);
+                }
+                else {
+                    assert(0 && "Invalid personality encoding.");
+                }
+                break;
+            }
+        }
+            break;
         default:
             continue;
         }
+        assert(cie_end >= p);
     }
     return DW_EH_PE_absptr;
 }
@@ -1421,7 +1460,7 @@ void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
                     size = uintptr_t(((const int64_t*)EntryPtr)[1]);
                     break;
                 default:
-                    assert(0 && "Invalid FDE format.");
+                    assert(0 && "Invalid FDE encoding.");
                     break;
                 }
             }
