@@ -5,6 +5,7 @@
 export
     cd,
     chmod,
+    chown,
     cp,
     cptree,
     mkdir,
@@ -448,5 +449,11 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
             end
         end
     end
+    nothing
+end
+
+function chown(path::AbstractString, owner::Integer, group::Integer=-1)
+    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
+    uv_error("chown",err)
     nothing
 end
