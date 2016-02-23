@@ -368,3 +368,14 @@ str = takebuf_string(io)
 @test !isempty(search(str, "Shell"))
 
 end  # module Test13452
+
+# issue #15163
+type B15163{T}
+    x::Array{T}
+end
+let b = IOBuffer()
+    serialize(b,B15163([1]))
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c,B15163) && c.x == [1]
+end
