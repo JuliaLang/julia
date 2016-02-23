@@ -1,18 +1,25 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+include("special/j0f.jl")
+include("special/j1f.jl")
+include("special/jnf.jl")
+
+besselj0(x::Float32) = J0F.ieee754_j0f(x)
+bessely0(x::Float32) = nan_dom_err(J0F.ieee754_y0f(x), x)
+besselj1(x::Float32) = J1F.ieee754_j1f(x)
+bessely1(x::Float32) = nan_dom_err(J1F.ieee754_y1f(x), x)
+
 for jy in ("j","y"), nu in (0,1)
     jynu = Expr(:quote, symbol(jy,nu))
     jynuf = Expr(:quote, symbol(jy,nu,"f"))
     bjynu = symbol("bessel",jy,nu)
     if jy == "y"
         @eval begin
-            $bjynu(x::Float64) = nan_dom_err(ccall(($jynu,libm),  Float64, (Float64,), x), x)
-            $bjynu(x::Float32) = nan_dom_err(ccall(($jynuf,libm), Float32, (Float32,), x), x)
+            $bjynu(x::Float64) = nan_dom_err(ccall(($jynu,libm), Float64, (Float64,), x), x)
         end
     else
         @eval begin
             $bjynu(x::Float64) = ccall(($jynu,libm),  Float64, (Float64,), x)
-            $bjynu(x::Float32) = ccall(($jynuf,libm), Float32, (Float32,), x)
         end
     end
     @eval begin
@@ -53,7 +60,7 @@ let
               &id, &kode,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1))
-        if ae[1] == 0 || ae[1] == 3  # ignore underflow
+        if ae[1] == 0 || ae[1] == 3 # ignore underflow
             return complex(ai[1],ai[2])
         else
             throw(AmosException(ae[2]))
@@ -231,9 +238,9 @@ besselj(nu::Integer, x::AbstractFloat) = typemin(Int32) <= nu <= typemax(Int32) 
     oftype(x, ccall((:jn, libm), Float64, (Cint, Float64), nu, x)) :
     besselj(Float64(nu), x)
 
-besselj(nu::Integer, x::Float32) = typemin(Int32) <= nu <= typemax(Int32) ?
-    ccall((:jnf, libm), Float32, (Cint, Float32), nu, x) :
-    besselj(Float64(nu), x)
+besselj(nu::Integer, x::Float32) =
+    (typemin(Int32) <= nu <= typemax(Int32) ?
+     JNF.ieee754_jnf(Int32(nu), x) : besselj(Float64(nu), x))
 
 function besseljx(nu::Float64, z::Complex128)
     if nu < 0
@@ -356,7 +363,7 @@ function bessely(nu::Integer, x::Float32)
     if x < 0
         throw(DomainError())
     end
-    return ccall((:ynf, libm), Float32, (Cint, Float32), nu, x)
+    JNF.ieee754_ynf(Int32(nu), x)
 end
 
 function besselyx(nu::Real, x::AbstractFloat)
