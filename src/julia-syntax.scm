@@ -2453,12 +2453,12 @@ f(x) = yt(x)
 (define (clear-capture-bits vinfos)
   (map vinfo:not-capt vinfos))
 
-(define (convert-lambda lam fname interp)
+(define (convert-lambda lam fname interp capt-sp)
   `(lambda ,(lam:args lam)
      (,(clear-capture-bits (car (lam:vinfo lam)))
       ()
       ,(caddr (lam:vinfo lam))
-      ,(cadddr (lam:vinfo lam)))
+      ,(delete-duplicates (append (lam:sp lam) capt-sp)))
      ,(add-box-inits-to-body
        lam
        (cl-convert (cadddr lam) fname lam (table) #f interp))))
@@ -2701,7 +2701,7 @@ f(x) = yt(x)
                                       (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))
                                   ,(last e))))
                        (else
-                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t)))
+                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
                                (newlam    (renumber-jlgensym (linearize (car exprs))))
                                (vi        (lam:vinfo newlam))
@@ -2796,7 +2796,7 @@ f(x) = yt(x)
                                                       (if iskw
                                                           (caddr (lam:args lam2))
                                                           (car (lam:args lam2)))
-                                                      #f)
+                                                      #f capt-sp)
                                      ,(last e))))
                      ,(if exists
                           '(null)
