@@ -101,7 +101,7 @@ type Code
     code::UTF8String
 end
 
-Code(code) = Code("", code)
+Code(code) = Code("julia", code)
 
 function indentcode(stream::IO, block::MD)
     withstream(stream) do
