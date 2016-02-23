@@ -143,43 +143,43 @@ reindex(V, idxs::Tuple{DroppedScalar, Any, Vararg{Any}}, subidxs::Tuple{Any, Any
 
 # In general, we simply re-index the parent indices by the provided ones
 getindex(V::SubArray) = (@_propagate_inbounds_meta; getindex(V, 1))
-function getindex(V::SubArray, I::Int...)
+function getindex(V::SubArray, I::Real...)
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds r = V.parent[reindex(V, V.indexes, I)...]
+    @inbounds r = V.parent[reindex(V, V.indexes, to_indexes(I...))...]
     r
 end
 
 typealias FastSubArray{T,N,P,I} SubArray{T,N,P,I,true}
 getindex(V::FastSubArray) = (@_propagate_inbounds_meta; getindex(V, 1))
-function getindex(V::FastSubArray, i::Int)
+function getindex(V::FastSubArray, i::Real)
     @_inline_meta
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.first_index + V.stride1*(i-1)]
+    @inbounds r = V.parent[V.first_index + V.stride1*(to_index(i)-1)]
     r
 end
 # We can avoid a multiplication if the first parent index is a Colon or UnitRange
 typealias FastContiguousSubArray{T,N,P,I<:Tuple{Union{Colon, UnitRange}, Vararg{Any}}} SubArray{T,N,P,I,true}
-function getindex(V::FastContiguousSubArray, i::Int)
+function getindex(V::FastContiguousSubArray, i::Real)
     @_inline_meta
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.first_index + i-1]
+    @inbounds r = V.parent[V.first_index + to_index(i)-1]
     r
 end
 # We need this because the ::ViewIndex... method would otherwise obscure the Base fallback
-function getindex(V::FastSubArray, I::Int...)
+function getindex(V::FastSubArray, I::Real...)
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds r = getindex(V, sub2ind(size(V), I...))
+    @inbounds r = getindex(V, sub2ind(size(V), to_indexes(I...)...))
     r
 end
 getindex{T,N}(V::SubArray{T,N}, I::ViewIndex...) = (@_propagate_inbounds_meta; copy(slice(V, I...)))
 
 setindex!(V::SubArray, x) = (@_propagate_inbounds_meta; setindex!(V, x, 1))
-function setindex!{T,N}(V::SubArray{T,N}, x, I::Int...)
+function setindex!{T,N}(V::SubArray{T,N}, x, I::Real...)
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds V.parent[reindex(V, V.indexes, I)...] = x
+    @inbounds V.parent[reindex(V, V.indexes, to_indexes(I...))...] = x
     V
 end
 # Nonscalar setindex! falls back to the defaults
