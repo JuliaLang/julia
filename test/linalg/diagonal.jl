@@ -31,6 +31,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test full(abs(D)) == abs(DM)
     @test full(imag(D)) == imag(DM)
 
+    @test parent(D) == d
+    @test D[1,1] == d[1]
+    @test D[1,2] == 0
+
     debug && println("Simple unary functions")
     for op in (-,)
       @test op(D)==op(DM)
