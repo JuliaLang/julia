@@ -33,6 +33,18 @@ end
     @inbounds r = (A.uplo == 'U') == (i < j) ? A.data[i, j] : conj(A.data[j, i])
     r
 end
+
+similar{T}(A::Symmetric, ::Type{T}) = Symmetric(similar(A.data, T))
+# Hermitian version can be simplified when check for imaginary part of
+# diagonal in Hermitian has been removed
+function similar{T}(A::Hermitian, ::Type{T})
+    B = similar(A.data, T)
+    for i = 1:size(A,1)
+        B[i,i] = 0
+    end
+    return Hermitian(B)
+end
+
 full(A::Symmetric) = copytri!(copy(A.data), A.uplo)
 full(A::Hermitian) = copytri!(copy(A.data), A.uplo, true)
 parent(A::HermOrSym) = A.data
