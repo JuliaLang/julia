@@ -107,6 +107,7 @@ export
     qr,
     qrfact!,
     qrfact,
+    lq,
     lqfact!,
     lqfact,
     rank,
