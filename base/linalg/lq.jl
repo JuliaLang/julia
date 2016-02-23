@@ -50,7 +50,7 @@ function getindex(A::LQPackedQ, i::Integer, j::Integer)
     return dot(x, A*y)
 end
 
-getq(A::LQ) = LQPackedQ(A.factors, A.tau)
+getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
 convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
@@ -88,7 +88,7 @@ end
 
 ## Multiplication by LQ
 A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::StridedVecOrMat{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = L*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
+A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
 A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(full(A)), full(A), full(B))
 function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
     TAB = promote_type(TA, TB)
@@ -96,11 +96,11 @@ function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
 end
 function *{TA,TB}(A::LQ{TA},B::QR{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : convert(Factorization{TAB},B))
+    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
 function *{TA,TB}(A::QR{TA},B::LQ{TB})
     TAB = promote_type(TA, TB)
-    A_mul_B!(convert(Factorization{TAB},A), TB==TAB ? copy(B) : convert(Factorization{TAB},B))
+    A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
 
 ## Multiplication by Q
