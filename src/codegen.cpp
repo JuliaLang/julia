@@ -1842,6 +1842,15 @@ static bool local_var_occurs(jl_value_t *e, int sl)
     if (slot_eq(e, sl)) {
         return true;
     }
+    else if (jl_typeis(e,jl_returnnode_type)) {
+        return local_var_occurs(jl_fieldref(e,0),sl);
+    }
+    else if (jl_typeis(e,jl_gotoifnotnode_type)) {
+        return local_var_occurs(jl_fieldref(e,0),sl);
+    }
+    else if (jl_typeis(e,jl_assignnode_type)) {
+        return local_var_occurs(jl_fieldref(e,0),sl) || local_var_occurs(jl_fieldref(e,1),sl);
+    }
     else if (jl_is_expr(e)) {
         jl_expr_t *ex = (jl_expr_t*)e;
         size_t alength = jl_array_dim0(ex->args);
@@ -1859,13 +1868,10 @@ static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l, int *pend
     size_t slength = jl_array_dim0(stmts);
     for(int i=s; i < (int)slength; i++) {
         jl_value_t *st = jl_cellref(stmts,i);
-        if (jl_is_expr(st)) {
-            if (((jl_expr_t*)st)->head == assign_sym) {
-                jl_value_t *ar = jl_exprarg(st, 0);
-                if (jl_is_slot(ar)) {
-                    av.insert(jl_slot_number(ar)-1);
-                }
-            }
+        if (jl_typeis(st, jl_assignnode_type)) {
+            jl_value_t *ar = jl_fieldref(st, 0);
+            if (jl_is_slot(ar))
+                av.insert(jl_slot_number(ar)-1);
         }
         if (jl_is_labelnode(st)) {
             if (jl_labelnode_label(st) == l) {
@@ -1962,10 +1968,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                 simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
             }
         }
-        else if (e->head == assign_sym) {
-            // don't consider assignment LHS as a variable "use"
-            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-        }
         else if (e->head != line_sym) {
             size_t elen = jl_array_dim0(e->args);
             for(i=0; i < elen; i++) {
@@ -1973,6 +1975,16 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             }
         }
         return;
+    }
+    else if (jl_typeis(expr,jl_assignnode_type)) {
+        // don't consider assignment LHS as a variable "use"
+        simple_escape_analysis(jl_fieldref(expr,1), esc, ctx);
+    }
+    else if (jl_typeis(expr,jl_returnnode_type)) {
+        simple_escape_analysis(jl_fieldref(expr,0), esc, ctx);
+    }
+    else if (jl_typeis(expr,jl_gotoifnotnode_type)) {
+        simple_escape_analysis(jl_fieldref(expr,0), esc, ctx);
     }
     if (jl_is_slot(expr)) {
         int i = jl_slot_number(expr)-1;
@@ -3293,6 +3305,34 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         }
         return jl_cgval_t();
     }
+    if (jl_typeis(expr,jl_gotoifnotnode_type)) {
+        jl_value_t *cond = jl_fieldref(expr,0);
+        int labelname = jl_gotoifnotnode_label(expr);
+        BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
+        BasicBlock *ifnot = (*ctx->labels)[labelname];
+        assert(ifnot);
+        // NOTE: if type inference sees a constant condition it behaves as if
+        // the branch weren't there. But LLVM will not see constant conditions
+        // this way until a later optimization pass, so it might see one of our
+        // SSA vars as not dominating all uses. see issue #6068
+        // Work around this by generating unconditional branches.
+        if (cond == jl_true) {
+            builder.CreateBr(ifso);
+        }
+        else if (cond == jl_false) {
+            builder.CreateBr(ifnot);
+        }
+        else {
+            Value *isfalse = emit_condition(cond, "if", ctx);
+            builder.CreateCondBr(isfalse, ifnot, ifso);
+        }
+        builder.SetInsertPoint(ifso);
+        return jl_cgval_t();
+    }
+    if (jl_typeis(expr,jl_assignnode_type)) {
+        emit_assignment(jl_fieldref(expr,0), jl_fieldref(expr,1), ctx);
+        return ghostValue(jl_void_type);
+    }
     if (jl_is_globalref(expr)) {
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
@@ -3344,40 +3384,13 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
-    if (head == goto_ifnot_sym) {
-        jl_value_t *cond = args[0];
-        int labelname = jl_unbox_long(args[1]);
-        BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
-        BasicBlock *ifnot = (*ctx->labels)[labelname];
-        assert(ifnot);
-        // NOTE: if type inference sees a constant condition it behaves as if
-        // the branch weren't there. But LLVM will not see constant conditions
-        // this way until a later optimization pass, so it might see one of our
-        // SSA vars as not dominating all uses. see issue #6068
-        // Work around this by generating unconditional branches.
-        if (cond == jl_true) {
-            builder.CreateBr(ifso);
-        }
-        else if (cond == jl_false) {
-            builder.CreateBr(ifnot);
-        }
-        else {
-            Value *isfalse = emit_condition(cond, "if", ctx);
-            builder.CreateCondBr(isfalse, ifnot, ifso);
-        }
-        builder.SetInsertPoint(ifso);
-    }
-    else if (head == call_sym) {
+    if (head == call_sym) {
         jl_value_t *c = static_eval(expr, ctx, true, true);
         if (c) {
             jl_add_linfo_root(ctx->linfo, c);
             return mark_julia_const(c);
         }
         return emit_call(args, jl_array_dim0(ex->args), ctx, (jl_value_t*)ex);
-    }
-    else if (head == assign_sym) {
-        emit_assignment(args[0], args[1], ctx);
-        return ghostValue(jl_void_type);
     }
     else if (head == static_parameter_sym) {
         return emit_sparam(jl_unbox_long(args[0])-1, ctx);
@@ -4857,15 +4870,13 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         if (do_malloc_log) {
             // Check memory allocation after finishing a line or hitting the next branch
             if (lno != prevlno ||
-                (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == goto_ifnot_sym) ||
-                jl_is_gotonode(stmt)) {
+                (jl_typeis(stmt,jl_gotoifnotnode_type)) || jl_is_gotonode(stmt)) {
                 if (prevlno != -1)
                     mallocVisitLine(filename, prevlno);
                 prevlno = lno;
             }
         }
-        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
-            jl_expr_t *ex = (jl_expr_t*)stmt;
+        if (jl_typeis(stmt,jl_returnnode_type)) {
             Value *retval;
             bool retboxed;
             Type *retty;
@@ -4876,7 +4887,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 retty = T_pjlvalue;
                 retboxed = true;
             }
-            jl_cgval_t retvalinfo = emit_expr(jl_exprarg(ex,0), &ctx);
+            jl_cgval_t retvalinfo = emit_expr(jl_fieldref(stmt,0), &ctx);
             if (retboxed)
                 retval = boxed(retvalinfo, &ctx, false); // skip the gcroot on the return path
             else if (!type_is_ghost(retty))

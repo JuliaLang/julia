@@ -623,7 +623,8 @@ static int is_ast_node(jl_value_t *v)
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
-        jl_is_bool(v) ||
+        jl_is_bool(v) || jl_typeis(v,jl_returnnode_type) ||
+        jl_typeis(v,jl_assignnode_type) || jl_typeis(v,jl_gotoifnotnode_type) ||
         jl_is_topnode(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
@@ -2379,8 +2380,7 @@ void jl_init_serializer(void)
                      // everything above here represents a class of object rather only than a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym,
+                     call_sym, body_sym, line_sym, lambda_sym, jl_symbol("tuple"),
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
@@ -2402,7 +2402,6 @@ void jl_init_serializer(void)
                      jl_box_int32(39), jl_box_int32(40), jl_box_int32(41),
                      jl_box_int32(42), jl_box_int32(43), jl_box_int32(44),
                      jl_box_int32(45), jl_box_int32(46), jl_box_int32(47),
-                     jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2421,7 +2420,6 @@ void jl_init_serializer(void)
                      jl_box_int64(39), jl_box_int64(40), jl_box_int64(41),
                      jl_box_int64(42), jl_box_int64(43), jl_box_int64(44),
                      jl_box_int64(45), jl_box_int64(46), jl_box_int64(47),
-                     jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
@@ -2434,6 +2432,7 @@ void jl_init_serializer(void)
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple),
+                     jl_returnnode_type, jl_assignnode_type, jl_gotoifnotnode_type,
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
@@ -2445,7 +2444,8 @@ void jl_init_serializer(void)
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,
-                     jl_globalref_type->name,
+                     jl_globalref_type->name, jl_returnnode_type->name, jl_assignnode_type->name,
+                     jl_gotoifnotnode_type->name,
 
                      jl_root_task,
 

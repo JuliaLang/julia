@@ -36,15 +36,21 @@ copy(e::Expr) = (n = Expr(e.head);
                  n.typ = e.typ;
                  n)
 copy(s::Slot) = Slot(s.id, s.typ)
+copy(x::AssignNode) = AssignNode(astcopy(x.lhs), astcopy(x.rhs))
+copy(x::ReturnNode) = ReturnNode(astcopy(x.expr))
+copy(x::GotoIfNotNode) = GotoIfNotNode(astcopy(x.cond), x.label)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union{Slot,Expr}) = copy(x)
+astcopy(x::Union{Slot,Expr,AssignNode,ReturnNode,GotoIfNotNode}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
 ==(x::Slot, y::Slot) = x.id === y.id && x.typ === y.typ
+==(x::AssignNode, y::AssignNode) = x.lhs==y.lhs && x.rhs==y.rhs
+==(x::ReturnNode, y::ReturnNode) = x.expr==y.expr
+==(x::GotoIfNotNode, y::GotoIfNotNode) = x.cond==y.cond && x.label==y.label
 
 expand(x) = ccall(:jl_expand, Any, (Any,), x)
 macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)

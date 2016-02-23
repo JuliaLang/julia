@@ -458,6 +458,9 @@ extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_assignnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_returnnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_gotoifnotnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
@@ -657,6 +660,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_slot_number(x) (((intptr_t*)x)[0])
 #define jl_slot_type(x) (((jl_value_t**)x)[1])
 #define jl_gotonode_label(x) (((intptr_t*)x)[0])
+#define jl_gotoifnotnode_label(x) (((intptr_t*)x)[1])
 #define jl_globalref_mod(s) (*(jl_module_t**)s)
 #define jl_globalref_name(s) (((jl_sym_t**)s)[1])
 

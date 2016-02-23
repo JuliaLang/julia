@@ -1178,6 +1178,9 @@ void jl_init_primitives(void)
     add_builtin("TopNode", (jl_value_t*)jl_topnode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
+    add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
+    add_builtin("AssignNode", (jl_value_t*)jl_assignnode_type);
+    add_builtin("GotoIfNotNode", (jl_value_t*)jl_gotoifnotnode_type);
 
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);

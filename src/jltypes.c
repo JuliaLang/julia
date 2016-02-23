@@ -3469,6 +3469,21 @@ void jl_init_types(void)
                         jl_svec(1, jl_symbol("name")),
                         jl_svec(1, jl_sym_type), 0, 0, 1);
 
+    jl_returnnode_type =
+        jl_new_datatype(jl_symbol("ReturnNode"), jl_any_type, jl_emptysvec,
+                        jl_svec(1, jl_symbol("expr")),
+                        jl_svec(1, jl_any_type), 0, 1, 1);
+
+    jl_assignnode_type =
+        jl_new_datatype(jl_symbol("AssignNode"), jl_any_type, jl_emptysvec,
+                        jl_svec(2, jl_symbol("lhs"), jl_symbol("rhs")),
+                        jl_svec(2, jl_any_type, jl_any_type), 0, 1, 2);
+
+    jl_gotoifnotnode_type =
+        jl_new_datatype(jl_symbol("GotoIfNotNode"), jl_any_type, jl_emptysvec,
+                        jl_svec(2, jl_symbol("cond"), jl_symbol("label")),
+                        jl_svec(2, jl_any_type, jl_long_type), 0, 1, 2);
+
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_emptysvec,
                         jl_svec(2, jl_symbol("name"), jl_symbol("parent")),

@@ -64,6 +64,9 @@ end
 
 hash(x::QuoteNode, h::UInt) = hash(x.value, hash(QuoteNode, h))
 hash(x::Slot, h::UInt) = hash(x.id, hash(x.typ, hash(Slot, h)))
+hash(x::ReturnNode, h::UInt) = hash(x.expr, hash(ReturnNode, h))
+hash(x::AssignNode, h::UInt) = hash(x.lhs, hash(x.rhs, hash(AssignNode, h)))
+hash(x::GotoIfNotNode, h::UInt) = hash(x.cond, hash(x.label, hash(GotoIfNotNode, h)))
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
 const hashr_seed = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087

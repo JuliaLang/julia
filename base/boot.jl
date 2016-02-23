@@ -108,6 +108,20 @@
 #    name::Symbol
 #end
 
+#immutable ReturnNode
+#    expr
+#end
+
+#immutable AssignNode
+#    lhs
+#    rhs
+#end
+
+#immutable GotoIfNotNode
+#    cond
+#    label::Int
+#end
+
 # type Task
 #     parent::Task
 #     storage::Any
@@ -140,7 +154,7 @@ export
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, TopNode,
-    GlobalRef, NewvarNode, GenSym, Slot,
+    GlobalRef, NewvarNode, GenSym, Slot, ReturnNode, AssignNode, GotoIfNotNode,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
     # arrayref, arrayset, arraysize,
@@ -308,6 +322,9 @@ eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNod
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(:((::Type{Slot})(n::Int) = $(Expr(:new, :Slot, :n, Any))))
 eval(:((::Type{Slot})(n::Int, t::ANY) = $(Expr(:new, :Slot, :n, :t))))
+eval(:((::Type{ReturnNode})(ex::ANY) = $(Expr(:new, :ReturnNode, :ex))))
+eval(:((::Type{AssignNode})(l::ANY, r::ANY) = $(Expr(:new, :AssignNode, :l, :r))))
+eval(:((::Type{GotoIfNotNode})(cond::ANY, label::Int) = $(Expr(:new, :GotoIfNotNode, :cond, :label))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
 

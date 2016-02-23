@@ -240,8 +240,16 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
+int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
 {
+    if (jl_typeis(v,jl_returnnode_type))
+        return jl_has_intrinsics(li, jl_fieldref(v,0), m);
+    if (jl_typeis(v,jl_assignnode_type))
+        return jl_has_intrinsics(li, jl_fieldref(v,1), m);
+    if (jl_typeis(v,jl_gotoifnotnode_type))
+        return jl_has_intrinsics(li, jl_fieldref(v,0), m);
+    if (!jl_is_expr(v)) return 0;
+    jl_expr_t *e = (jl_expr_t*)v;
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym)
@@ -261,7 +269,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
     int i;
     for (i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics(li, (jl_expr_t*)a, m))
+        if (jl_has_intrinsics(li, a, m))
             return 1;
     }
     return 0;
@@ -297,23 +305,17 @@ static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_expr_t *expr, int co
                     return 1;
                 }
             }
-            else if (jl_is_expr(stmt)) {
-                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
-                    int l = jl_unbox_long(jl_exprarg(stmt,1));
+            else if (jl_typeis(stmt, jl_gotoifnotnode_type)) {
+                if (compileloops) {
+                    int l = jl_gotoifnotnode_label(stmt);
                     if (labls[l/8]&(1<<(l&7))) {
                         return 1;
                     }
                 }
-                // to compile code that uses exceptions
-                /*
-                if (((jl_expr_t*)stmt)->head == enter_sym) {
-                    return 1;
-                }
-                */
             }
         }
     }
-    if (jl_has_intrinsics(li, expr, m)) return 1;
+    if (jl_has_intrinsics(li, (jl_value_t*)expr, m)) return 1;
     return 0;
 }
 
@@ -423,12 +425,10 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
-    //jl_show(ex);
-    //jl_printf(JL_STDOUT, "\n");
-    if (!jl_is_expr(e))
-        return jl_interpret_toplevel_expr(e);
-
     jl_expr_t *ex = (jl_expr_t*)e;
+
+    if (jl_is_expr(ex)) {
+
     if (ex->head == null_sym || ex->head == error_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
@@ -496,17 +496,25 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return res;
     }
 
+    }
+    else if (!jl_typeis(e,jl_assignnode_type) && !jl_typeis(e,jl_returnnode_type)) {
+        return jl_interpret_toplevel_expr(e);
+    }
+
     jl_value_t *thunk=NULL;
     jl_value_t *result;
     jl_lambda_info_t *thk=NULL;
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
-    if (ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
-        ex->head != method_sym) {
+    if (!jl_is_expr(ex) ||
+        (ex->head != body_sym && ex->head != thunk_sym && ex->head != method_sym)) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }
+    if (jl_typeis(ex,jl_returnnode_type))
+        ex = (jl_expr_t*)jl_fieldref(ex,0);
+
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
     if (head == toplevel_sym) {
@@ -710,6 +718,8 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
+JL_DLLEXPORT jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr, int exprs);
+
 static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
 {
     // this occurs when there is a closure being added to an out-of-scope function
@@ -728,6 +738,7 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     for (i = 0; i < l; i++) {
         jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
     }
+    jl_cellset(f->args, 2, jl_call_scm_on_ast("identity", jl_exprarg(f,2), 0));
     // wrap in a LambdaInfo
     jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)f, tvar_syms, jl_emptysvec, jl_current_module);
     jl_preresolve_globals(li->ast, li);

@@ -1145,23 +1145,24 @@ type StateUpdate
 end
 
 function abstract_interpret(e::ANY, vtypes, sv::VarInfo)
-    !isa(e,Expr) && return vtypes
-    # handle assignment
-    if is(e.head,:(=))
-        t = abstract_eval(e.args[2], vtypes, sv)
-        lhs = e.args[1]
+    if isa(e, AssignNode)
+        t = abstract_eval(e.rhs, vtypes, sv)
+        lhs = e.lhs
         if isa(lhs,Slot) || isa(lhs,GenSym)
             # don't bother for GlobalRef
             return StateUpdate(lhs, VarState(t,false), vtypes)
         end
-    elseif is(e.head,:call)
-        abstract_eval(e, vtypes, sv)
-    elseif is(e.head,:gotoifnot)
-        abstract_eval(e.args[1], vtypes, sv)
-    elseif is(e.head,:method)
-        fname = e.args[1]
-        if isa(fname,Slot)
-            return StateUpdate(fname, VarState(Any,false), vtypes)
+    elseif isa(e, GotoIfNotNode)
+        abstract_eval(e.cond, vtypes, sv)
+    end
+    if isa(e,Expr)
+        if is(e.head,:call)
+            abstract_eval(e, vtypes, sv)
+        elseif is(e.head,:method)
+            fname = e.args[1]
+            if isa(fname,Slot)
+                return StateUpdate(fname, VarState(Any,false), vtypes)
+            end
         end
     end
     return vtypes
@@ -1309,20 +1310,21 @@ function find_gensym_uses(e::ANY, uses, line)
             push!(uses, IntSet())
         end
         push!(uses[id], line)
+    elseif isa(e,AssignNode)
+        if isa(e.lhs,GenSym)
+            id = (e.lhs::GenSym).id+1
+            while length(uses) < id
+                push!(uses, IntSet())
+            end
+        end
+        find_gensym_uses(e.rhs, uses, line)
+    elseif isa(e,ReturnNode)
+        find_gensym_uses(e.expr, uses, line)
+    elseif isa(e,GotoIfNotNode)
+        find_gensym_uses(e.cond, uses, line)
     elseif isa(e,Expr)
         b = e::Expr
-        head = b.head
-        if head === :line
-            return
-        end
-        if head === :(=)
-            if isa(b.args[1],GenSym)
-                id = (b.args[1]::GenSym).id+1
-                while length(uses) < id
-                    push!(uses, IntSet())
-                end
-            end
-            find_gensym_uses(b.args[2], uses, line)
+        if b.head === :line
             return
         end
         for a in b.args
@@ -1601,7 +1603,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     end
 
     gensym_uses = find_gensym_uses(body)
-    if length(sv.gensym_types) != length(gensym_uses)
+    if length(sv.gensym_types) < length(gensym_uses)
         sv.gensym_types = Any[ NF for i=1:length(gensym_uses) ]
     end
     gensym_types = sv.gensym_types
@@ -1668,24 +1670,56 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                 end
             elseif isa(stmt,GotoNode)
                 pc´ = stmt.label
+            elseif isa(stmt, GotoIfNotNode)
+                condexpr = stmt.cond
+                l = stmt.label
+                # constant conditions
+                if is(condexpr,true)
+                elseif is(condexpr,false)
+                    pc´ = l
+                else
+                    # general case
+                    handler_at[l] = cur_hand
+                    if stchanged(changes, s[l])
+                        push!(W, l)
+                        s[l] = stupdate!(s[l], changes)
+                    end
+                end
+            elseif isa(stmt, ReturnNode)
+                pc´ = n+1
+                rt = abstract_eval(stmt.expr, s[pc], sv)
+                if frame.recurred
+                    rec = true
+                    if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
+                        toprec = true
+                    end
+                    push!(recpts, pc)
+                    #if dbg
+                    #    show(pc); print(" recurred\n")
+                    #end
+                    frame.recurred = false
+                end
+                #if dbg
+                #    print("at "); show(pc)
+                #    print(" result is "); show(frame.result)
+                #    print(" and rt is "); show(rt)
+                #    print("\n")
+                #end
+                if tchanged(rt, frame.result)
+                    frame.result = tmerge(frame.result, rt)
+                    # revisit states that recursively depend on this
+                    for r in recpts
+                        #if dbg
+                        #    print("will revisit ")
+                        #    show(r)
+                        #    print("\n")
+                        #end
+                        push!(W, r)
+                    end
+                end
             elseif isa(stmt,Expr)
                 hd = stmt.head
-                if is(hd,:gotoifnot)
-                    condexpr = stmt.args[1]
-                    l = stmt.args[2]
-                    # constant conditions
-                    if is(condexpr,true)
-                    elseif is(condexpr,false)
-                        pc´ = l
-                    else
-                        # general case
-                        handler_at[l] = cur_hand
-                        if stchanged(changes, s[l])
-                            push!(W, l)
-                            s[l] = stupdate!(s[l], changes)
-                        end
-                    end
-                elseif is(hd,:type_goto)
+                if is(hd,:type_goto)
                     for i = 2:length(stmt.args)
                         var = stmt.args[i]::GenSym
                         # Store types that need to be fed back via type_goto
@@ -1702,38 +1736,6 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                             typegotoredo = true
                         end
                         sv.fedbackvars[var] = true
-                    end
-                elseif is(hd,:return)
-                    pc´ = n+1
-                    rt = abstract_eval(stmt.args[1], s[pc], sv)
-                    if frame.recurred
-                        rec = true
-                        if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
-                            toprec = true
-                        end
-                        push!(recpts, pc)
-                        #if dbg
-                        #    show(pc); print(" recurred\n")
-                        #end
-                        frame.recurred = false
-                    end
-                    #if dbg
-                    #    print("at "); show(pc)
-                    #    print(" result is "); show(frame.result)
-                    #    print(" and rt is "); show(rt)
-                    #    print("\n")
-                    #end
-                    if tchanged(rt, frame.result)
-                        frame.result = tmerge(frame.result, rt)
-                        # revisit states that recursively depend on this
-                        for r in recpts
-                            #if dbg
-                            #    print("will revisit ")
-                            #    show(r)
-                            #    print("\n")
-                            #end
-                            push!(W, r)
-                        end
                     end
                 elseif is(hd,:enter)
                     l = stmt.args[1]::Int
@@ -1835,8 +1837,24 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::VarInfo, decls, undefs)
         end
         record_var_type(e, t, decls)
         return t === e.typ ? e : Slot(e.id, t)
-    end
-    if !isa(e,Expr)
+    elseif isa(e, AssignNode)
+        s = e.lhs
+        # assignment LHS not subject to all-same-type variable checking,
+        # but the type of the RHS counts as one of its types.
+        rhs = eval_annotate(e.rhs, vtypes, sv, decls, undefs)
+        if isa(s,Slot)
+            # TODO: if this def does not reach any uses, maybe don't do this
+            rhstype = exprtype(rhs, sv)
+            if !is(rhstype,Bottom)
+                record_var_type(s, rhstype, decls)
+            end
+        end
+        return AssignNode(e.lhs, rhs)
+    elseif isa(e, ReturnNode)
+        return ReturnNode(eval_annotate(e.expr, vtypes, sv, decls, undefs))
+    elseif isa(e, GotoIfNotNode)
+        return GotoIfNotNode(eval_annotate(e.cond, vtypes, sv, decls, undefs), e.label)
+    elseif !isa(e,Expr)
         return e
     end
 
@@ -1844,22 +1862,8 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::VarInfo, decls, undefs)
     head = e.head
     if is(head,:static_typeof) || is(head,:line) || is(head,:const)
         return e
-    #elseif is(head,:gotoifnot) || is(head,:return)
-    #    e.typ = Any
-    elseif is(head,:(=))
-    #    e.typ = Any
-        s = e.args[1]
-        # assignment LHS not subject to all-same-type variable checking,
-        # but the type of the RHS counts as one of its types.
-        e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, undefs)
-        if isa(s,Slot)
-            # TODO: if this def does not reach any uses, maybe don't do this
-            rhstype = exprtype(e.args[2], sv)
-            if !is(rhstype,Bottom)
-                record_var_type(s, rhstype, decls)
-            end
-        end
-        return e
+    elseif is(head,:inert)
+        return QuoteNode(e.args[1])
     end
     i0 = is(head,:method) ? 2 : 1
     for i=i0:length(e.args)
@@ -1913,9 +1917,15 @@ function substitute!(e::ANY, na, argexprs, spvals, offset)
             return argexprs[e.id]
         end
         return Slot(e.id+offset, e.typ)
-    end
-    if isa(e,NewvarNode)
+    elseif isa(e,NewvarNode)
         return NewvarNode(substitute!(e.slot, na, argexprs, spvals, offset))
+    elseif isa(e,AssignNode)
+        return AssignNode(substitute!(e.lhs, na, argexprs, spvals, offset),
+                          substitute!(e.rhs, na, argexprs, spvals, offset))
+    elseif isa(e, ReturnNode)
+        return ReturnNode(substitute!(e.expr, na, argexprs, spvals, offset))
+    elseif isa(e, GotoIfNotNode)
+        return GotoIfNotNode(substitute!(e.cond, na, argexprs, spvals, offset), e.label)
     end
     if isa(e,Expr)
         e = e::Expr
@@ -1943,6 +1953,12 @@ function occurs_more(e::ANY, pred, n)
             end
         end
         return c
+    elseif isa(e,AssignNode)
+        return occurs_more(e.lhs,pred,n) + occurs_more(e.rhs,pred,n)
+    elseif isa(e,ReturnNode)
+        return occurs_more(e.expr,pred,n)
+    elseif isa(e,GotoIfNotNode)
+        return occurs_more(e.cond,pred,n)
     end
     if pred(e)
         return 1
@@ -2003,20 +2019,22 @@ end
 function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,Slot)
         return true
-    end
-    if isa(e,Symbol)
+    elseif isa(e,Symbol)
         return allow_volatile
-    end
-    if isa(e,Number) || isa(e,AbstractString) || isa(e,GenSym) ||
+    elseif isa(e,Number) || isa(e,AbstractString) || isa(e,GenSym) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
-    end
-    if isa(e,GlobalRef)
+    elseif isa(e,GlobalRef)
         allow_volatile && return true
         return isconst(e.mod, e.name)
-    end
-    if isconstantref(e, sv) !== false
+    elseif isconstantref(e, sv) !== false
         return true
+    elseif isa(e,ReturnNode)
+        return effect_free(e.expr,sv,allow_volatile)
+    elseif isa(e,GotoIfNotNode)
+        return effect_free(e.cond,sv,allow_volatile)
+    elseif isa(e,AssignNode)
+        return effect_free(e.rhs,sv,allow_volatile)
     end
     if isa(e,Expr)
         e = e::Expr
@@ -2065,8 +2083,6 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                     return false
                 end
             end
-            # fall-through
-        elseif e.head === :return
             # fall-through
         else
             return false
@@ -2453,7 +2469,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
                     vnew = add_slot!(enclosing_ast, aeitype, #=SSA=#false)
                     argexprs[i] = vnew
                 end
-                unshift!(stmts, Expr(:(=), vnew, aei))
+                unshift!(stmts, AssignNode(vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
                 unshift!(stmts, aei)
@@ -2506,18 +2522,18 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
         if isa(a,GotoNode)
             a = a::GotoNode
             body.args[i] = GotoNode(newlabels[a.label+1])
+        elseif isa(a,GotoIfNotNode)
+            body.args[i] = GotoIfNotNode(a.cond, newlabels[a.label+1])
         elseif isa(a,Expr)
             a = a::Expr
             if a.head === :enter
                 a.args[1] = newlabels[a.args[1]+1]
-            elseif a.head === :gotoifnot
-                a.args[2] = newlabels[a.args[2]+1]
             end
         end
     end
 
     # convert return statements into a series of goto's
-    retstmt = genlabel(sv)
+    retlabel = genlabel(sv)
     rettype = (ast.args[3]::Expr).typ
     local retval
     multiret = false
@@ -2527,36 +2543,30 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
         push!(body.args, Expr(:call, TopNode(:error), "fatal error in type inference"))
         lastexpr = nothing
     else
-        @assert isa(lastexpr,Expr) "inference.jl:1774"
-        @assert is(lastexpr.head,:return) "inference.jl:1775"
+        @assert isa(lastexpr,ReturnNode) "inference.jl:1774"
     end
     for a in body.args
-        push!(stmts, a)
-        if isa(a,Expr)
-            a = a::Expr
-            if a.head === :return
-                if !multiret
-                    # create slot first time
-                    retval = add_slot!(enclosing_ast, rettype, false)
-                end
-                multiret = true
-                unshift!(a.args, retval)
-                a.head = :(=)
-                push!(stmts, GotoNode(retstmt.label))
+        if isa(a,ReturnNode)
+            if !multiret
+                # create slot first time
+                retval = add_slot!(enclosing_ast, rettype, false)
             end
+            multiret = true
+            push!(stmts, AssignNode(retval, a.expr))
+            push!(stmts, GotoNode(retlabel.label))
+        else
+            push!(stmts, a)
         end
     end
 
     if multiret
         if lastexpr !== nothing
-            unshift!(lastexpr.args, retval)
-            lastexpr.head = :(=)
-            push!(stmts, lastexpr)
+            push!(stmts, AssignNode(retval, lastexpr.expr))
         end
-        push!(stmts, retstmt)
+        push!(stmts, retlabel)
         expr = retval
     else
-        expr = lastexpr.args[1]
+        expr = lastexpr.expr
     end
 
     if length(stmts) == 1
@@ -2613,6 +2623,10 @@ end
 
 gensym_increment(body::ANY, incr) = body
 gensym_increment(body::GenSym, incr) = GenSym(body.id + incr)
+gensym_increment(e::ReturnNode, incr) = ReturnNode(gensym_increment(e.expr, incr))
+gensym_increment(e::AssignNode, incr) = AssignNode(gensym_increment(e.lhs, incr),
+                                                   gensym_increment(e.rhs, incr))
+gensym_increment(e::GotoIfNotNode, incr) = GotoIfNotNode(gensym_increment(e.cond, incr), e.label)
 function gensym_increment(body::Expr, incr)
     if body.head === :line
         return body
@@ -2658,12 +2672,24 @@ function inlining_pass(e::Expr, sv, ast)
             if isa(ei,Expr)
                 res = inlining_pass(ei, sv, ast)
                 eargs[i] = res[1]
-                if isa(res[2],Array)
-                    sts = res[2]::Array{Any,1}
-                    for j = 1:length(sts)
-                        insert!(eargs, i, sts[j])
-                        i += 1
-                    end
+            elseif isa(ei,AssignNode) && isa(ei.rhs,Expr)
+                res = inlining_pass(ei.rhs, sv, ast)
+                eargs[i] = AssignNode(ei.lhs, res[1])
+            elseif isa(ei,GotoIfNotNode) && isa(ei.cond,Expr)
+                res = inlining_pass(ei.cond, sv, ast)
+                eargs[i] = GotoIfNotNode(res[1], ei.label)
+            elseif isa(ei,ReturnNode) && isa(ei.expr,Expr)
+                res = inlining_pass(ei.expr, sv, ast)
+                eargs[i] = ReturnNode(res[1])
+            else
+                i += 1
+                continue
+            end
+            if isa(res[2],Array)
+                sts = res[2]::Array{Any,1}
+                for j = 1:length(sts)
+                    insert!(eargs, i, sts[j])
+                    i += 1
                 end
             end
             i += 1
@@ -2704,7 +2730,7 @@ function inlining_pass(e::Expr, sv, ast)
                 restype = exprtype(res1,sv)
                 vnew = newvar!(sv, restype)
                 argloc[i] = vnew
-                unshift!(stmts, Expr(:(=), vnew, res1))
+                unshift!(stmts, AssignNode(vnew, res1))
             else
                 argloc[i] = res1
             end
@@ -2858,8 +2884,7 @@ end
 is_var_assigned(ast, v) = isa(v,Slot) && ast.args[2][1][v.id][3]&2 != 0
 
 function delete_var!(ast, id, T)
-    filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
-                 isa(x.args[1],T) && x.args[1].id == id),
+    filter!(x->!(isa(x,AssignNode) && isa(x.lhs,T) && x.lhs.id == id),
             ast.args[3].args)
     ast
 end
@@ -2872,6 +2897,13 @@ function slot_replace!(e, id, rhs, T)
         for i = 1:length(e.args)
             e.args[i] = slot_replace!(e.args[i], id, rhs, T)
         end
+    elseif isa(e,AssignNode)
+        return AssignNode(slot_replace!(e.lhs, id, rhs, T),
+                          slot_replace!(e.rhs, id, rhs, T))
+    elseif isa(e,GotoIfNotNode)
+        return GotoIfNotNode(slot_replace!(e.cond, id, rhs, T), e.label)
+    elseif isa(e,ReturnNode)
+        return ReturnNode(slot_replace!(e.expr, id, rhs, T))
     end
     return e
 end
@@ -2920,15 +2952,15 @@ function find_sa_vars(ast)
     args = ast.args[1]
     for i = 1:length(body)
         e = body[i]
-        if isa(e,Expr) && is(e.head,:(=))
-            lhs = e.args[1]
+        if isa(e,AssignNode)
+            lhs = e.lhs
             if isa(lhs, GenSym)
-                gss[lhs.id] = e.args[2]
+                gss[lhs.id] = e.rhs
             elseif isa(lhs, Slot)
                 id = lhs.id
                 if id > nargs  # exclude args
                     if !haskey(av, id)
-                        av[id] = e.args[2]
+                        av[id] = e.rhs
                     else
                         av2[id] = true
                     end
@@ -2960,15 +2992,17 @@ function occurs_outside_getfield(e::ANY, sym::ANY, sv::VarInfo, field_count, fie
             end
             return true
         end
-        if is(e.head,:(=))
-            return occurs_outside_getfield(e.args[2], sym, sv, field_count, field_names)
-        else
-            for a in e.args
-                if occurs_outside_getfield(a, sym, sv, field_count, field_names)
-                    return true
-                end
+        for a in e.args
+            if occurs_outside_getfield(a, sym, sv, field_count, field_names)
+                return true
             end
         end
+    elseif isa(e,AssignNode)
+        return occurs_outside_getfield(e.rhs, sym, sv, field_count, field_names)
+    elseif isa(e,ReturnNode)
+        return occurs_outside_getfield(e.expr, sym, sv, field_count, field_names)
+    elseif isa(e,GotoIfNotNode)
+        return occurs_outside_getfield(e.cond, sym, sv, field_count, field_names)
     end
     return false
 end
@@ -2987,47 +3021,50 @@ end
 # TODO can probably be removed when we switch to a linear IR
 function getfield_elim_pass(e::Expr, sv)
     for i = 1:length(e.args)
-        ei = e.args[i]
-        if isa(ei,Expr)
-            getfield_elim_pass(ei, sv)
-            if is_known_call(ei, getfield, sv) && length(ei.args)==3 &&
-                (isa(ei.args[3],Int) || isa(ei.args[3],QuoteNode))
-                e1 = ei.args[2]
-                j = ei.args[3]
-                if isa(e1,Expr)
-                    alloc = is_immutable_allocation(e1, sv)
-                    if !is(alloc, false)
-                        flen, fnames = alloc
-                        if isa(j,QuoteNode)
-                            j = findfirst(fnames, j.value)
-                        end
-                        if 1 <= j <= flen
-                            ok = true
-                            for k = 2:length(e1.args)
-                                k == j+1 && continue
-                                if !effect_free(e1.args[k], sv, true)
-                                    ok = false; break
-                                end
-                            end
-                            if ok
-                                e.args[i] = e1.args[j+1]
-                            end
+        e.args[i] = getfield_elim_pass(e.args[i], sv)
+    end
+    if is_known_call(e, getfield, sv) && length(e.args)==3 &&
+        (isa(e.args[3],Int) || isa(e.args[3],QuoteNode))
+        e1 = e.args[2]
+        j = e.args[3]
+        if isa(e1,Expr)
+            alloc = is_immutable_allocation(e1, sv)
+            if !is(alloc, false)
+                flen, fnames = alloc
+                if isa(j,QuoteNode)
+                    j = findfirst(fnames, j.value)
+                end
+                if 1 <= j <= flen
+                    ok = true
+                    for k = 2:length(e1.args)
+                        k == j+1 && continue
+                        if !effect_free(e1.args[k], sv, true)
+                            ok = false; break
                         end
                     end
-                elseif isa(e1,Tuple) && isa(j,Int) && (1 <= j <= length(e1))
-                    e1j = e1[j]
-                    if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
-                         isa(e1j,Type))
-                        e1j = QuoteNode(e1j)
+                    if ok
+                        return e1.args[j+1]
                     end
-                    e.args[i] = e1j
-                elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && isa(j,Int) && (1 <= j <= length(e1.value))
-                    e.args[i] = QuoteNode(e1.value[j])
                 end
             end
+        elseif isa(e1,Tuple) && isa(j,Int) && (1 <= j <= length(e1))
+            e1j = e1[j]
+            if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
+                 isa(e1j,Type))
+                e1j = QuoteNode(e1j)
+            end
+            return e1j
+        elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && isa(j,Int) && (1 <= j <= length(e1.value))
+            return QuoteNode(e1.value[j])
         end
     end
+    return e
 end
+
+getfield_elim_pass(e::AssignNode, sv) = AssignNode(e.lhs, getfield_elim_pass(e.rhs, sv))
+getfield_elim_pass(e::ReturnNode, sv) = ReturnNode(getfield_elim_pass(e.expr, sv))
+getfield_elim_pass(e::GotoIfNotNode, sv) = GotoIfNotNode(getfield_elim_pass(e.cond, sv), e.label)
+getfield_elim_pass(e::ANY, sv) = e
 
 # check if e is a successful allocation of an immutable struct
 # if it is, returns (n,f) such that it is always valid to call
@@ -3065,13 +3102,13 @@ function alloc_elim_pass(ast::Expr, sv::VarInfo)
     i = 1
     while i < length(body)
         e = body[i]
-        if !(isa(e,Expr) && is(e.head,:(=)) && (isa(e.args[1], GenSym) ||
-                                                (isa(e.args[1],Slot) && haskey(vs, e.args[1].id))))
+        if !(isa(e,AssignNode) && (isa(e.lhs, GenSym) ||
+                                   (isa(e.lhs,Slot) && haskey(vs, e.lhs.id))))
             i += 1
             continue
         end
-        var = e.args[1]
-        rhs = e.args[2]
+        var = e.lhs
+        rhs = e.rhs
         alloc = is_immutable_allocation(rhs, sv)
         if !is(alloc,false)
             nv, field_names = alloc
@@ -3092,7 +3129,7 @@ function alloc_elim_pass(ast::Expr, sv::VarInfo)
                 else
                     elty = exprtype(tupelt,sv)
                     tmpv = newvar!(sv, elty)
-                    tmp = Expr(:(=), tmpv, tupelt)
+                    tmp = AssignNode(tmpv, tupelt)
                     insert!(body, i+n_ins, tmp)
                     vals[j] = tmpv
                     n_ins += 1
@@ -3106,46 +3143,49 @@ function alloc_elim_pass(ast::Expr, sv::VarInfo)
     end
 end
 
-function replace_getfield!(ast, e::ANY, tupname, vals, field_names, sv, i0)
-    if !isa(e,Expr)
-        return
+function replace_getfield!(ast, a::Expr, tupname, vals, field_names, sv, i0)
+    for i = i0:length(a.args)
+        a.args[i] = replace_getfield!(ast, a.args[i], tupname, vals, field_names, sv, 1)
     end
-    for i = i0:length(e.args)
-        a = e.args[i]
-        if isa(a,Expr) && is_known_call(a, getfield, sv) &&
-            symequal(a.args[2],tupname)
-            idx = if isa(a.args[3], Int)
-                a.args[3]
-            else
-                @assert isa(a.args[3], QuoteNode)
-                findfirst(field_names, a.args[3].value)
-            end
-            @assert(idx > 0) # clients should check that all getfields are valid
-            val = vals[idx]
-            # original expression might have better type info than
-            # the tuple element expression that's replacing it.
-            if isa(val,Slot)
-                val = val::Slot
-                if a.typ <: val.typ && !typeseq(a.typ,val.typ)
-                    val.typ = a.typ
-                    ast.args[2][1][val.id][2] = a.typ
-                end
-            elseif isa(val,GenSym)
-                val = val::GenSym
-                typ = exprtype(val, sv)
-                if a.typ <: typ && !typeseq(a.typ,typ)
-                    sv.gensym_types[val.id+1] = a.typ
-                end
-            end
-            e.args[i] = val
+    if is_known_call(a, getfield, sv) && symequal(a.args[2],tupname)
+        idx = if isa(a.args[3], Int)
+            a.args[3]
         else
-            replace_getfield!(ast, a, tupname, vals, field_names, sv, 1)
+            @assert isa(a.args[3], QuoteNode)
+            findfirst(field_names, a.args[3].value)
         end
+        @assert(idx > 0) # clients should check that all getfields are valid
+        val = vals[idx]
+        # original expression might have better type info than
+        # the tuple element expression that's replacing it.
+        if isa(val,Slot)
+            val = val::Slot
+            if a.typ <: val.typ && !typeseq(a.typ,val.typ)
+                val.typ = a.typ
+                ast.args[2][1][val.id][2] = a.typ
+            end
+        elseif isa(val,GenSym)
+            val = val::GenSym
+            typ = exprtype(val, sv)
+            if a.typ <: typ && !typeseq(a.typ,typ)
+                sv.gensym_types[val.id+1] = a.typ
+            end
+        end
+        return val
     end
+    a
 end
+replace_getfield!(ast, e::ANY, tupname, vals, field_names, sv, i0) = e
+replace_getfield!(ast, e::AssignNode, tupname, vals, field_names, sv, i0) =
+    AssignNode(e.lhs,
+               replace_getfield!(ast, e.rhs, tupname, vals, field_names, sv, i0))
+replace_getfield!(ast, e::GotoIfNotNode, tupname, vals, field_names, sv, i0) =
+    GotoIfNotNode(replace_getfield!(ast, e.cond, tupname, vals, field_names, sv, i0), e.label)
+replace_getfield!(ast, e::ReturnNode, tupname, vals, field_names, sv, i0) =
+    ReturnNode(replace_getfield!(ast, e.expr, tupname, vals, field_names, sv, i0))
 
 # fix label numbers to always equal the statement index of the label
-function reindex_labels!(e, sv)
+function reindex_labels!(e::Expr, sv)
     mapping = zeros(Int, sv.label_counter)
     for i = 1:length(e.args)
         el = e.args[i]
@@ -3158,12 +3198,10 @@ function reindex_labels!(e, sv)
         el = e.args[i]
         if isa(el,GotoNode)
             e.args[i] = GotoNode(mapping[el.label])
-        elseif isa(el,Expr)
-            if el.head === :gotoifnot
-                el.args[2] = mapping[el.args[2]]
-            elseif el.head === :enter
-                el.args[1] = mapping[el.args[1]]
-            end
+        elseif isa(el, GotoIfNotNode)
+            e.args[i] = GotoIfNotNode(el.cond, mapping[el.label])
+        elseif isa(el,Expr) && el.head === :enter
+            el.args[1] = mapping[el.args[1]]
         end
     end
 end

@@ -498,7 +498,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             e = cdr_(e);
         else
             n++;
-        if (!eo) {
+        if (!eo || (eo==2 && (sym != assign_sym && sym != goto_ifnot_sym &&
+                              sym != return_sym))) {
             if (sym == line_sym && n==2) {
                 // NOTE: n==3 case exists: '(line, linenum, filename, funcname) passes
                 //       the original name through to keyword-arg specializations.
@@ -513,7 +514,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 return temp;
             }
             jl_value_t *scmv = NULL, *temp = NULL;
-            JL_GC_PUSH1(&scmv);
+            JL_GC_PUSH2(&scmv, &temp);
             if (sym == label_sym) {
                 scmv = scm_to_julia_(fl_ctx,car_(e),0);
                 temp = jl_new_struct(jl_labelnode_type, scmv);
@@ -527,7 +528,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 return temp;
             }
             if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e))))) {
-                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                scmv = scm_to_julia_(fl_ctx,car_(e), 2);
                 temp = jl_new_struct(jl_quotenode_type, scmv);
                 JL_GC_POP();
                 return temp;
@@ -541,6 +542,26 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             if (sym == newvar_sym) {
                 scmv = scm_to_julia_(fl_ctx,car_(e),0);
                 temp = jl_new_struct(jl_newvarnode_type, scmv);
+                JL_GC_POP();
+                return temp;
+            }
+            if (sym == return_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                temp = jl_new_struct(jl_returnnode_type, scmv);
+                JL_GC_POP();
+                return temp;
+            }
+            if (sym == assign_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                temp = scm_to_julia_(fl_ctx,car_(cdr_(e)),0);
+                temp = jl_new_struct(jl_assignnode_type, scmv, temp);
+                JL_GC_POP();
+                return temp;
+            }
+            if (sym == goto_ifnot_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                temp = scm_to_julia_(fl_ctx,car_(cdr_(e)),0);
+                temp = jl_new_struct(jl_gotoifnotnode_type, scmv, temp);
                 JL_GC_POP();
                 return temp;
             }
@@ -621,6 +642,18 @@ static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b
     return l;
 }
 
+static value_t julia_to_list3(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b, jl_value_t *c)
+{
+    value_t sa = julia_to_scm_(fl_ctx, a);
+    fl_gc_handle(fl_ctx, &sa);
+    value_t sb = julia_to_scm_(fl_ctx, b);
+    fl_gc_handle(fl_ctx, &sb);
+    value_t sc = julia_to_scm_(fl_ctx, c);
+    value_t l = fl_listn(fl_ctx, 3, sa, sb, sc);
+    fl_free_gc_handles(fl_ctx, 2);
+    return l;
+}
+
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
     if (jl_is_symbol(v))
@@ -687,6 +720,12 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_topnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)top_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_returnnode_type))
+        return julia_to_list2(fl_ctx, (jl_value_t*)return_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_assignnode_type))
+        return julia_to_list3(fl_ctx, (jl_value_t*)assign_sym, jl_fieldref(v,0), jl_fieldref(v,1));
+    if (jl_typeis(v, jl_gotoifnotnode_type))
+        return julia_to_list3(fl_ctx, (jl_value_t*)goto_ifnot_sym, jl_fieldref(v,0), jl_fieldref(v,1));
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
@@ -701,7 +740,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-string")), s);
-    jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, 0);
+    jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, 2);
     jl_ast_ctx_leave(ctx);
     return res;
 }
@@ -729,7 +768,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     if (e == fl_ctx->FL_EOF)
         expr = jl_nothing;
     else
-        expr = scm_to_julia(fl_ctx, e, 0);
+        expr = scm_to_julia(fl_ctx, e, 2);
 
     pos1 = jl_box_long(tosize(fl_ctx, cdr_(p),"parse"));
     jl_ast_ctx_leave(ctx);
@@ -842,14 +881,14 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr)
+jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr, int exprs)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
-    jl_value_t *result = scm_to_julia(fl_ctx, e, 0);
+    jl_value_t *result = scm_to_julia(fl_ctx, e, exprs);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
     return result;
@@ -857,12 +896,12 @@ jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr)
 
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
-    return jl_call_scm_on_ast("jl-expand-to-thunk", expr);
+    return jl_call_scm_on_ast("jl-expand-to-thunk", expr, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
-    return jl_call_scm_on_ast("jl-macroexpand", expr);
+    return jl_call_scm_on_ast("jl-macroexpand", expr, 2);
 }
 
 ssize_t jl_max_jlgensym_in(jl_value_t *v)
@@ -899,8 +938,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
-        jl_cellset(bo->args, 0, (jl_value_t*)jl_exprn(return_sym, 1));
-        jl_cellset(((jl_expr_t*)jl_exprarg(bo,0))->args, 0, expr);
+        jl_cellset(bo->args, 0, jl_new_struct(jl_returnnode_type, expr));
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
@@ -1006,6 +1044,31 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
+    }
+    else if (jl_typeis(expr,jl_returnnode_type)) {
+        jl_value_t *ex = jl_copy_ast(jl_fieldref(expr,0));
+        JL_GC_PUSH1(&ex);
+        jl_value_t *ret = jl_new_struct(jl_returnnode_type, ex);
+        JL_GC_POP();
+        return ret;
+    }
+    else if (jl_typeis(expr,jl_assignnode_type)) {
+        jl_value_t *l=NULL, *r=NULL;
+        JL_GC_PUSH2(&l, &r);
+        l = jl_copy_ast(jl_fieldref(expr,0));
+        r = jl_copy_ast(jl_fieldref(expr,1));
+        jl_value_t *ret = jl_new_struct(jl_assignnode_type, l, r);
+        JL_GC_POP();
+        return ret;
+    }
+    else if (jl_typeis(expr,jl_gotoifnotnode_type)) {
+        jl_value_t *c=NULL, *lab=NULL;
+        JL_GC_PUSH2(&c, &lab);
+        c = jl_copy_ast(jl_fieldref(expr,0));
+        lab = jl_fieldref(expr,1);
+        jl_value_t *ret = jl_new_struct(jl_gotoifnotnode_type, c, lab);
+        JL_GC_POP();
+        return ret;
     }
     else if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
@@ -1131,6 +1194,13 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 jl_exprargset(e, i, jl_preresolve_globals(jl_exprarg(e,i), lam));
             }
         }
+    }
+    else if (jl_typeis(expr, jl_returnnode_type) || jl_typeis(expr, jl_gotoifnotnode_type)) {
+        jl_set_nth_field(expr, 0, jl_preresolve_globals(jl_fieldref(expr,0), lam));
+    }
+    else if (jl_typeis(expr, jl_assignnode_type)) {
+        jl_set_nth_field(expr, 0, jl_preresolve_globals(jl_fieldref(expr,0), lam));
+        jl_set_nth_field(expr, 1, jl_preresolve_globals(jl_fieldref(expr,1), lam));
     }
     return expr;
 }
