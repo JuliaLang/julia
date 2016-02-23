@@ -2236,6 +2236,8 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_value_t *types, int lim)
 {
     assert(jl_nparams(types) > 0);
+    if (jl_tparam0(types) == jl_bottom_type)
+        return (jl_value_t*)jl_alloc_cell_1d(0);
     assert(jl_is_datatype(jl_tparam0(types)));
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
     if (mt == NULL)
