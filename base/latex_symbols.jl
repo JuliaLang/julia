@@ -196,6 +196,7 @@ const latex_symbols = Dict(
     "\\_chi" => "ᵪ",
 
     # Misc. Math and Physics
+    "\\ldots" => "…",
     "\\hbar" => "ħ",
     "\\del" => "∇",
 
