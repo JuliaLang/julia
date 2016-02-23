@@ -270,6 +270,20 @@ bar
 end
 \"\"\""))
 
+(ert-deftest julia--test-indent-of-end-in-brackets ()
+  "Ignore end keyword in brackets for the purposes of indenting blocks."
+  (julia--should-indent
+   "begin
+    begin
+        arr[1: end - 1]
+        end
+end"
+   "begin
+    begin
+        arr[1: end - 1]
+    end
+end"))
+
 (defun julia--run-tests ()
   (interactive)
   (if (featurep 'ert)
