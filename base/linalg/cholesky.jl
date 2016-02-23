@@ -120,7 +120,7 @@ end
 function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0)
     uplochar = char_uplo(uplo)
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
-    return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
+    return CholeskyPivoted{T,typeof(A)}(A, uplochar, piv, rank, tol, info)
 end
 
 """
