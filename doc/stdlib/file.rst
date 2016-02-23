@@ -75,11 +75,11 @@
 
    Returns the value of a symbolic link ``path``\ .
 
-.. function:: chmod(path, mode)
+.. function:: chmod(path, mode; recursive=false)
 
    .. Docstring generated from Julia source
 
-   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported.
+   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported. If ``recursive=true`` and the path is a directory all permissions in that directory will be recursively changed.
 
 .. function:: stat(file)
 
