@@ -46,6 +46,16 @@ let n=10
 
         debug && println("\ntype of a: ", eltya, "\n")
 
+        # similar
+        @test isa(similar(Symmetric(asym)), Symmetric{eltya})
+        @test isa(similar(Hermitian(asym)), Hermitian{eltya})
+        @test isa(similar(Symmetric(asym), Int), Symmetric{Int})
+        @test isa(similar(Hermitian(asym), Int), Hermitian{Int})
+        @test isa(similar(Symmetric(asym), (3,2)), Matrix{eltya})
+        @test isa(similar(Hermitian(asym), (3,2)), Matrix{eltya})
+        @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
+        @test isa(similar(Hermitian(asym), Int, (3,2)), Matrix{Int})
+
         # full
         @test asym == full(Hermitian(asym))
 
