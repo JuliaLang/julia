@@ -525,12 +525,28 @@ only comments."
             ;; above
             (+ julia-indent-offset prev-indent)))))))
 
+(defun julia-indent-in-string ()
+  "Indentation inside strings with newlines is \"manual\",
+meaning always increase indent on TAB and decrease on S-TAB."
+  (save-excursion
+    (beginning-of-line)
+    (when (julia-in-string)
+      (if (member this-command '(julia-latexsub-or-indent
+                                 ess-indent-or-complete))
+          (+ julia-indent-offset (current-indentation))
+        ;; return the current indentation to prevent other functions from
+        ;; indenting inside strings
+        (current-indentation)))))
+
 (defun julia-indent-line ()
   "Indent current line of julia code."
   (interactive)
   (let* ((point-offset (- (current-column) (current-indentation))))
     (indent-line-to
      (or
+      ;; note: if this first function returns nil the beginning of the line
+      ;; cannot be in a string
+      (julia-indent-in-string)
       ;; If we're inside an open paren, indent to line up arguments.
       (julia-paren-indent)
       ;; indent due to hanging operators or a line ending in =
@@ -601,6 +617,14 @@ only comments."
   (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
+
+(defun julia-manual-deindent ()
+  "Deindent by `julia-indent-offset' regardless of current
+indentation context. To be used to manually indent inside
+strings."
+  (interactive)
+  (indent-line-to (max 0 (- (current-indentation) julia-indent-offset))))
+(define-key julia-mode-map (kbd "<backtab>") 'julia-manual-deindent)
 
 (defvar julia-latexsubs (make-hash-table :test 'equal))
 
