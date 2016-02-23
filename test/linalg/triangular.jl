@@ -359,6 +359,9 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_approx_eq A1\B' full(A1)\B'
             @test_approx_eq A1.'\B.' full(A1).'\B.'
             @test_approx_eq A1'\B' full(A1)'\B'
+            @test_throws DimensionMismatch A1\ones(elty1,n+2)
+            @test_throws DimensionMismatch A1'\ones(elty1,n+2)
+            @test_throws DimensionMismatch A1.'\ones(elty1,n+2)
             if t1 == UpperTriangular || t1 == LowerTriangular
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
             end
