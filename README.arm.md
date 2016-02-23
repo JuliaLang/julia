@@ -56,9 +56,9 @@ may be the simplest thing to do.
 If you run into issues building LLVM, see these notes:
 [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
 
-## Raspberry Pi
+## Raspberry Pi 1 / Raspberry Pi Zero
 
-Note: Raspberry Pi is ARMv6, which is not well supported at the moment. However it is
+Note: These chips use ARMv6, which is not well supported at the moment. However it is
 possible to get a working Julia build.
 
 The Raspberry Pi ARM CPU type is not detected by LLVM.  Before starting the
@@ -70,7 +70,20 @@ JULIA_CPU_TARGET=arm1176jzf-s
 ````
 
 It is also preferable to use various system provided dependencies on
-ARMv6 as described in the Build Dependencies section above.
+ARMv6 as described in [Build Dependencies](#build-dependencies).
+
+You may need to increase the swap file size: edit the `/etc/dphys-swapfile`, changing the line
+
+    CONF_SWAPSIZE=100
+
+to
+
+    CONF_SWAPSIZE=512
+
+Then restart the swapfile service:
+
+    sudo /etc/init.d/dphys-swapfile stop
+    sudo /etc/init.d/dphys-swapfile start
 
 ## Raspberry Pi 2
 
