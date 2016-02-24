@@ -36,6 +36,7 @@ for eltya in (Float32, Float64, Complex64, Complex128)
         α = rand(eltya)
         aα = fill(α,1,1)
         @test lqfact(α)[:L]*lqfact(α)[:Q] ≈ lqfact(aα)[:L]*lqfact(aα)[:Q]
+        @test lq(α)[1]*lq(α)[2] ≈ lqfact(aα)[:L]*lqfact(aα)[:Q]
         @test abs(lqfact(α)[:Q][1,1]) ≈ one(eltya)
         tab = promote_type(eltya,eltyb)
 
@@ -45,19 +46,29 @@ debug && println("LQ decomposition")
             let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
                 lqa   = lqfact(a)
                 l,q   = lqa[:L], lqa[:Q]
+                qra   = qrfact(a)
+                @test size(lqa,1) == size(a,1)
+                @test size(lqa,3) == 1
+                @test Base.LinAlg.getq(lqa) == lqa[:Q]
                 @test_throws KeyError lqa[:Z]
+                @test full(lqa') ≈ a'
+                @test lqa * lqa' ≈ a * a'
+                @test lqa' * lqa ≈ a' * a
                 @test q*full(q, thin = false)' ≈ eye(eltya,n)
                 @test l*q ≈ a
                 @test full(lqa) ≈ a
+                @test full(copy(lqa)) ≈ a
                 @test_approx_eq_eps a*(lqa\b) b 3000ε
-                qra    = qrfact(a)
                 @test_approx_eq_eps lqa*b qra[:Q]*qra[:R]*b 3000ε
                 @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
+                @test_approx_eq_eps q'*b full(q, thin=false)'*b 100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
+                @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
+                @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
             end
         end
 
