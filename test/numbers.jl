@@ -2785,12 +2785,12 @@ for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
     @test round(Tf, Rational(1,2), RoundNearestTiesUp) == 1.0
     @test round(Tf, Rational(1,2), RoundNearestTiesAway) == 1.0
 
-   # @test round( almost_half) == 0//1
-   # @test round(-almost_half) == 0//1
-   # @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
-   # @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
-   # @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
-   # @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
+    @test round( almost_half) == 0//1
+    @test round(-almost_half) == 0//1
+    @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
 
     @test round( exactly_half) == 0//1 # rounds to closest _even_ integer
     @test round(-exactly_half) == 0//1 # rounds to closest _even_ integer
@@ -2806,6 +2806,11 @@ for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
     @test round(Tf,  over_half, RoundNearestTiesAway) == 1.0
     @test round(Tf, -over_half, RoundNearestTiesUp) == -1.0
     @test round(Tf, -over_half, RoundNearestTiesAway) == -1.0
+
+    @test round(Tf, 11//2, RoundNearestTiesUp) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesUp) == -5.0
+    @test round(Tf, 11//2, RoundNearestTiesAway) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesAway) == -6.0
 end
 
 let
@@ -2826,3 +2831,8 @@ let
         @test read(io2, typeof(rational2)) == rational2
     end
 end
+
+@test round(11//2) == 6 # rounds to closest _even_ integer
+@test round(-11//2) == -6 # rounds to closest _even_ integer
+@test round(11//3) == 4 # rounds to closest _even_ integer
+@test round(-11//3) == -4 # rounds to closest _even_ integer
