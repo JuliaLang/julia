@@ -820,3 +820,7 @@ end
 end
 
 @test typeof(displaysize()) == @compat(Tuple{Int, Int})
+
+@test Compat.LinAlg.checksquare(randn(4,4)) == 4
+@test Compat.LinAlg.checksquare(randn(4,4), randn(3,3)) == [4,3]
+@test_throws DimensionMismatch Compat.LinAlg.checksquare(randn(4,3))

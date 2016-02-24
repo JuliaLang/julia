@@ -144,6 +144,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 *  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5.
 
+* `Compat.LinAlg.checksquare` [#14601](https://github.com/JuliaLang/julia/pull/14601)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
