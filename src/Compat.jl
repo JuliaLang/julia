@@ -859,4 +859,12 @@ else  # if VERSION < v"0.5.0-dev+1182"
 
 end
 
+module LinAlg
+    if VERSION < v"0.5.0-dev+2022"
+        const checksquare = Base.LinAlg.chksquare
+    else
+        import Base.LinAlg.checksquare
+    end
+end
+
 end # module
