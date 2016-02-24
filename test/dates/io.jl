@@ -311,3 +311,10 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,10,31,0,0,0,9),Dates.RFC1123Format) == "Fri, 31 Oct 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
+
+# Issue 15195
+let f = "YY"
+    @test Dates.format(Dates.Date(1999), f) == "1999"
+    @test Dates.format(Dates.Date(9), f) == "09"
+    @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
+end
