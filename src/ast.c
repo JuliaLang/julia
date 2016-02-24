@@ -981,42 +981,6 @@ JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
     return ((jl_sym_t*)jl_exprarg(atype,1)) == vararg_sym;
 }
 
-static jl_value_t *copy_ast(jl_value_t *expr)
-{
-    if (jl_typeis(expr,jl_array_any_type)) {
-        jl_array_t *a = (jl_array_t*)expr;
-        jl_array_t *na = jl_alloc_cell_1d(jl_array_len(a));
-        JL_GC_PUSH1(&na);
-        size_t i;
-        for(i=0; i < jl_array_len(a); i++)
-            jl_cellset(na, i, copy_ast(jl_cellref(a,i)));
-        JL_GC_POP();
-        return (jl_value_t*)na;
-    }
-    else if (jl_is_expr(expr)) {
-        jl_expr_t *e = (jl_expr_t*)expr;
-        jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
-        JL_GC_PUSH1(&ne);
-        if (e->head == lambda_sym) {
-            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0)));
-            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1)));
-            jl_exprargset(ne, 2, copy_ast(jl_exprarg(e,2)));
-        }
-        else if (e->head == assign_sym) {
-            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0)));
-            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1)));
-        }
-        else {
-            for(size_t i=0; i < jl_array_len(e->args); i++) {
-                jl_exprargset(ne, i, copy_ast(jl_exprarg(e,i)));
-            }
-        }
-        JL_GC_POP();
-        return (jl_value_t*)ne;
-    }
-    return expr;
-}
-
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {
     if (expr == NULL) {
@@ -1051,43 +1015,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         JL_GC_POP();
         return (jl_value_t*)na;
     }
-    else if (jl_is_quotenode(expr)) {
-        jl_value_t *v = jl_fieldref(expr,0);
-        if (jl_is_symbol(v) || jl_is_gensym(v))
-            return expr;
-        jl_value_t *q = NULL;
-        JL_GC_PUSH2(&q, &v);
-        q = jl_copy_ast(v);
-        v = jl_new_struct(jl_quotenode_type, q);
-        JL_GC_POP();
-        return v;
-    }
-    return expr;
-}
-
-static jl_value_t *dont_copy_ast(jl_value_t *expr)
-{
-    if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {
-        return copy_ast(expr);
-    }
-    else if (jl_is_expr(expr)) {
-        jl_expr_t *e = (jl_expr_t*)expr;
-        if (e->head == lambda_sym) {
-            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0)));
-            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1)));
-            jl_exprargset(e, 2, dont_copy_ast(jl_exprarg(e,2)));
-        }
-        else if (e->head == assign_sym) {
-            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0)));
-            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1)));
-        }
-        else {
-            for(size_t i=0; i < jl_array_len(e->args); i++) {
-                jl_exprargset(e, i, dont_copy_ast(jl_exprarg(e,i)));
-            }
-        }
-        return (jl_value_t*)e;
-    }
     return expr;
 }
 
@@ -1102,10 +1029,9 @@ JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
     JL_GC_PUSH1(&ast);
     if (!jl_is_expr(ast)) {
         ast = jl_uncompress_ast(li, ast);
-        ast = dont_copy_ast(ast);
     }
     else {
-        ast = copy_ast(ast);
+        ast = jl_copy_ast(ast);
     }
     JL_GC_POP();
     return ast;
