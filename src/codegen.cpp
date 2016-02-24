@@ -3140,6 +3140,16 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     emit_unbox(vtype, slot, slot.typ),
                     false, slot.typ, ctx);
         }
+        else if (slot.isboxed) {
+            // see if inference had a better type for the gensym than the expression (after inlining getfield on a Tuple)
+            jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+            if (jl_is_array(gensym_types)) {
+                jl_value_t *declType = jl_cellref(gensym_types, idx);
+                if (declType != slot.typ) {
+                    slot = remark_julia_type(slot, declType);
+                }
+            }
+        }
         ctx->gensym_SAvalues.at(idx) = slot; // now gensym_SAvalues[idx] contains the SAvalue
         ctx->gensym_assigned.at(idx) = true;
         return;
