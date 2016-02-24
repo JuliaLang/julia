@@ -60,6 +60,8 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
+similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
+
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
@@ -361,11 +363,8 @@ function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A
 end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
-function similar(M::Tridiagonal, T, dims::Dims)
-    if length(dims) != 2 || dims[1] != dims[2]
-        throw(DimensionMismatch("Tridiagonal matrices must be square"))
-    end
-    Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
+function similar{T}(M::Tridiagonal, ::Type{T})
+    Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T), similar(M.du2, T))
 end
 
 # Operations on Tridiagonal matrices

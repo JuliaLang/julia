@@ -32,7 +32,7 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
     @test_throws ArgumentError Bidiagonal(dv,ev)
 
-    debug && println("getindex, setindex!, and size")
+    debug && println("getindex, setindex!, size, and similar")
     BD = Bidiagonal(dv, ev, true)
     @test_throws BoundsError BD[n+1,1]
     @test BD[2,2] == dv[2]
@@ -44,6 +44,9 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test BD == cBD
     @test_throws ArgumentError size(BD,0)
     @test size(BD,3) == 1
+    @test isa(similar(BD), Bidiagonal{elty})
+    @test isa(similar(BD, Int), Bidiagonal{Int})
+    @test isa(similar(BD, Int, (3,2)), Matrix{Int})
 
     debug && println("show")
     dstring = sprint(Base.print_matrix,BD.dv')
