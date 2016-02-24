@@ -457,3 +457,10 @@ let A = reshape(1:4, 2, 2)
     @test parent(B) === A
     @test parent(sub(B, 0x1, :)) === parent(slice(B, 0x1, :)) === A
 end
+
+# issue #15168
+let A = rand(10), sA = sub(copy(A), :)
+    @test sA[Int16(1)] === sA[Int32(1)] === sA[Int64(1)] === A[1]
+    permute!(sA, collect(Int16, 1:10))
+    @test A == sA
+end
