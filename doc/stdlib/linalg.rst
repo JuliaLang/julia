@@ -685,17 +685,77 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Return the generalized singular values from the generalized singular value decomposition of ``A`` and ``B``\ .
 
-.. function:: givens{T}(::T, ::T, ::Integer, ::Integer) -> {Givens, T}
+.. function:: LinAlg.Givens(i1,i2,c,s) -> G
 
    .. Docstring generated from Julia source
 
-   Computes the tuple ``(G, r) = givens(f, g, i1, i2)`` where ``G`` is a Givens rotation and ``r`` is a scalar such that ``G*x=y`` with ``x[i1]=f``\ , ``x[i2]=g``\ , ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The arguments ``f`` and ``g`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
+   A Givens rotation linear operator. The fields ``c`` and ``s`` represent the cosine and sine of the rotation angle, respectively. The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
 
-.. function:: givens{T}(::AbstractArray{T}, ::Integer, ::Integer, ::Integer) -> {Givens, T}
+   See also: :func:`givens`
+
+.. function:: givens{T}(f::T, g::T, i1::Integer, i2::Integer) -> (G::Givens, r::T)
 
    .. Docstring generated from Julia source
 
-   Computes the tuple ``(G, r) = givens(A, i1, i2, col)`` where ``G`` is Givens rotation and ``r`` is a scalar such that ``G*A[:,col]=y`` with ``y[i1]=r``\ , and ``y[i2]=0``\ . The cosine and sine of the rotation angle can be extracted from the ``Givens`` type with ``G.c`` and ``G.s`` respectively. The element type of ``A`` can be either ``Float32``\ , ``Float64``\ , ``Complex{Float32}``\ , or ``Complex{Float64}``\ . The ``Givens`` type supports left multiplication ``G*A`` and conjugated transpose right multiplication ``A*G'``\ . The type doesn't have a ``size`` and can therefore be multiplied with matrices of arbitrary size as long as ``i2<=size(A,2)`` for ``G*A`` or ``i2<=size(A,1)`` for ``A*G'``\ .
+   Computes the Givens rotation ``G`` and scalar ``r`` such that for any vector ``x`` where
+
+   .. code-block:: julia
+
+       x[i1] = f
+       x[i2] = g
+
+   the result of the multiplication
+
+   .. code-block:: julia
+
+       y = G*x
+
+   has the property that
+
+   .. code-block:: julia
+
+       y[i1] = r
+       y[i2] = 0
+
+   See also: :class:`LinAlg.Givens`
+
+.. function:: givens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)
+
+   .. Docstring generated from Julia source
+
+   Computes the Givens rotation ``G`` and scalar ``r`` such that the result of the multiplication
+
+   .. code-block:: julia
+
+       B = G*x
+
+   has the property that
+
+   .. code-block:: julia
+
+       B[i1] = r
+       B[i2] = 0
+
+   See also: :class:`LinAlg.Givens`
+
+.. function:: givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
+
+   .. Docstring generated from Julia source
+
+   Computes the Givens rotation ``G`` and scalar ``r`` such that the result of the multiplication
+
+   .. code-block:: julia
+
+       B = G*A
+
+   has the property that
+
+   .. code-block:: julia
+
+       B[i1,j] = r
+       B[i2,j] = 0
+
+   See also: :class:`LinAlg.Givens`
 
 .. function:: triu(M)
 
