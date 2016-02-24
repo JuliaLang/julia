@@ -290,18 +290,18 @@ ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
 function round{T}(::Type{T}, x::Rational, ::RoundingMode{:Nearest})
     q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den)+iseven(q))>>1 ? q : q+copysign(one(q),x.num)
+    s = abs(r) < abs((x.den-copysign(typeof(x.den)(4), x.num)+one(x.den)+iseven(q))>>1 + copysign(typeof(x.den)(2), x.num)) ? q : q+copysign(one(q),x.num)
     convert(T,s)
 end
 round{T}(::Type{T}, x::Rational) = round(T,x,RoundNearest)
 function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesAway})
     q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den))>>1 ? q : q+copysign(one(q),x.num)
+    s = abs(r) < abs((x.den-copysign(typeof(x.den)(4), x.num)+one(x.den))>>1 + copysign(typeof(x.den)(2), x.num)) ? q : q+copysign(one(q),x.num)
     convert(T,s)
 end
 function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesUp})
     q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den)+(x.num<0))>>1 ? q : q+copysign(one(q),x.num)
+    s = abs(r) < abs((x.den-copysign(typeof(x.den)(4), x.num)+one(x.den)+(x.num<0))>>1 + copysign(typeof(x.den)(2), x.num)) ? q : q+copysign(one(q),x.num)
     convert(T,s)
 end
 
