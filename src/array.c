@@ -685,6 +685,7 @@ void jl_array_sizehint(jl_array_t *a, size_t sz)
 
 void jl_array_grow_beg(jl_array_t *a, size_t inc)
 {
+    // For pointer array the memory grown should be zero'd
     if (inc == 0) return;
     // designed to handle the case of growing and shrinking at both ends
     if (a->isshared) array_try_unshare(a);
@@ -705,12 +706,8 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
             newlen = limit_overallocation(a, alen, newlen, 2*inc);
             size_t center = (newlen - (alen + inc))/2;
             array_resize_buffer(a, newlen, alen, center+inc);
-            char *newdata = (char*)a->data - (center+inc)*es;
-            if (a->ptrarray) {
-                memset(newdata, 0, (center+inc)*es);
-            }
             a->offset = center;
-            a->data = newdata + center*es;
+            a->data = (char*)a->data - incnb;
         }
         else {
             size_t center = (a->maxsize - (alen + inc))/2;
@@ -720,6 +717,8 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
             a->offset = center;
         }
     }
+    if (a->ptrarray)
+        memset((char*)a->data, 0, incnb);
 #ifdef STORE_ARRAY_LEN
     a->length += inc;
 #endif
