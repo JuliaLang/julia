@@ -5794,7 +5794,7 @@ static void init_julia_llvm_env(Module *m)
 }
 
 // Helper to figure out what features to set for the LLVM target
-// If the user specifies native ( or does not specify ) we default
+// If the user specifies native (or does not specify) we default
 // using the API provided by LLVM
 static inline SmallVector<std::string,10> getTargetFeatures() {
   StringMap<bool> HostFeatures;
@@ -5807,13 +5807,19 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
   // Platform specific overides follow
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #ifndef USE_MCJIT
-    // Temporarily disable Haswell BMI2 features due to LLVM bug.
+  // Temporarily disable Haswell BMI2 features due to LLVM bug.
   HostFeatures["bmi2"] = false;
   HostFeatures["avx2"] = false;
 #endif
 #ifdef V128_BUG
   HostFeatures["avx"] = false;
 #endif
+  // Require cx16 (cmpxchg16b)
+  // We need this for 128-bit atomic operations. We only need this
+  // when threading is enabled; however, to test whether this excludes
+  // important systems, we require this even when threading is
+  // disabled.
+  HostFeatures["cx16"] = true;
 #endif
 
   // Figure out if we know the cpu_target
