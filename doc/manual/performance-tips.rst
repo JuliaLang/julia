@@ -947,6 +947,51 @@ Taken to its extreme, pre-allocation can make your code uglier, so
 performance measurements and some judgment may be required.
 
 
+Use parentheses in arithmetic operations
+----------------------------------------
+
+If your code has a long arithmetic operation involving `+` or `*` operators,
+then consider using parentheses to chain up to four or five operations together.
+This is to avoid the splatting penalty from a longer list of arguments to function
+return statement.
+
+Without parentheses:
+
+    const k = zeros(20)
+    function test_mem()
+        return k[1] + k[2] + k[3] + k[4] + k[5] + 2.0 * k[6] + k[7] + k[8] + k[9] + k[10]
+    end
+
+    function test(n::Int64)
+        ret = 0.0
+        for i = 1:n
+            ret += test_mem()
+        end
+        ret
+    end
+    @time test(100000000)
+
+    5.017971 seconds (900.00 M allocations: 13.411 GB, 15.04% gc time)
+
+With:
+
+    const k = zeros(20)
+    function test_mem()
+        return (k[1] + k[2] + k[3] + k[4] + k[5]) + 2.0 * k[6] + k[7] + k[8] + k[9] + k[10]
+    end
+
+    function test(n::Int64)
+        ret = 0.0
+        for i = 1:n
+            ret += test_mem()
+        end
+        ret
+    end
+    @time test(100000000)
+
+    0.302478 seconds (5.26 k allocations: 248.985 KB)
+
+
 Avoid string interpolation for I/O
 ----------------------------------
 
