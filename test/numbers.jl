@@ -2758,3 +2758,68 @@ for a = -3:3
         end
     end
 end
+
+# issue #15205
+let T = Rational
+    x = Complex{T}(1//3 + 1//4*im)
+    y = Complex{T}(1//2 + 1//5*im)
+    xf = Complex{Float64}(1//3 + 1//4*im)
+    yf = Complex{Float64}(1//2 + 1//5*im)
+    yi = 4
+
+    @test_approx_eq x^y big(xf)^big(yf)
+    @test_approx_eq x^yi big(xf)^yi
+    @test_approx_eq x^true big(xf)^true
+    @test_approx_eq x^false big(xf)^false
+    @test_approx_eq x^1 big(xf)^1
+end
+
+for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
+    almost_half  = Rational(div(typemax(Ti),Ti(2))  , typemax(Ti))
+    over_half    = Rational(div(typemax(Ti),Ti(2))+one(Ti), typemax(Ti))
+    exactly_half = Rational(one(Ti)  , Ti(2))
+
+    @test round(Tf, Rational(1,2), RoundNearestTiesUp) == 1.0
+    @test round(Tf, Rational(1,2), RoundNearestTiesAway) == 1.0
+
+   # @test round( almost_half) == 0//1
+   # @test round(-almost_half) == 0//1
+   # @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
+   # @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
+   # @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
+   # @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
+
+    @test round( exactly_half) == 0//1 # rounds to closest _even_ integer
+    @test round(-exactly_half) == 0//1 # rounds to closest _even_ integer
+    @test round(Tf,  exactly_half, RoundNearestTiesUp) == 1.0
+    @test round(Tf, -exactly_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf,  exactly_half, RoundNearestTiesAway) == 1.0
+    @test round(Tf, -exactly_half, RoundNearestTiesAway) == -1.0
+
+
+    @test round(over_half) == 1//1
+    @test round(-over_half) == -1//1
+    @test round(Tf,  over_half, RoundNearestTiesUp) == 1.0
+    @test round(Tf,  over_half, RoundNearestTiesAway) == 1.0
+    @test round(Tf, -over_half, RoundNearestTiesUp) == -1.0
+    @test round(Tf, -over_half, RoundNearestTiesAway) == -1.0
+end
+
+let
+    io = IOBuffer()
+    rational1 = Rational(1465, 8593)
+    rational2 = Rational(-4500, 9000)
+    @test sprint(io -> show(io, rational1)) == "1465//8593"
+    @test sprint(io -> show(io, rational2)) == "-1//2"
+    let
+        io1 = IOBuffer()
+        write(io1, rational1)
+        io1.ptr = 1
+        @test read(io1, typeof(rational1)) == rational1
+
+        io2 = IOBuffer()
+        write(io2, rational2)
+        io2.ptr = 1
+        @test read(io2, typeof(rational2)) == rational2
+    end
+end
