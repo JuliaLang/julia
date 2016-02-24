@@ -5,7 +5,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T} # diagonal
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
-    function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
+    function Bidiagonal(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
@@ -100,6 +100,8 @@ convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(c
 convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
 
 big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
+
+similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.isupper)
 
 ###################
 # LAPACK routines #

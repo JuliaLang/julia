@@ -121,6 +121,11 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             @test_approx_eq x invFsv
             @test_approx_eq full(full(Tldlt)) Fs
         end
+
+        # similar
+        @test isa(similar(Ts), SymTridiagonal{elty})
+        @test isa(similar(Ts, Int), SymTridiagonal{Int})
+        @test isa(similar(Ts, Int, (3,2)), Matrix{Int})
     end
 
     # eigenvalues/eigenvectors of symmetric tridiagonal
@@ -365,9 +370,9 @@ let n = 12 #Size of matrix problem to test
         @test size(B) == size(A)
         copy!(B,A)
         @test B == A
-        @test_throws DimensionMismatch similar(A,(n,n,2))
-        @test_throws DimensionMismatch similar(A,(n+1,n))
-        @test_throws DimensionMismatch similar(A,(n,n+1))
+        @test isa(similar(A), Tridiagonal{elty})
+        @test isa(similar(A, Int), Tridiagonal{Int})
+        @test isa(similar(A, Int, (3,2)), Matrix{Int})
         @test size(A,3) == 1
         @test_throws ArgumentError size(A,0)
 
