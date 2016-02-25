@@ -2849,8 +2849,16 @@ JL_DLLEXPORT void jl_free(void *p)
 
 JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 {
-    int64_t *pp = (int64_t *)p - 2;
-    size_t szold = pp[0];
+    int64_t *pp;
+    size_t szold;
+    if (p == NULL) {
+        pp = NULL;
+        szold = 0;
+    }
+    else {
+        pp = (int64_t *)p - 2;
+        szold = pp[0];
+    }
     int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold + 16, sz + 16);
     pnew[0] = sz;
     return (void *)(pnew + 2);
