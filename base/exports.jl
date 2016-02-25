@@ -805,7 +805,6 @@ export
     ∪,
 
 # strings and text output
-    ascii,
     base,
     base64encode,
     base64decode,
