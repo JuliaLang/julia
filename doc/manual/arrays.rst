@@ -221,7 +221,7 @@ Generator Expressions
 Comprehensions can also be written without the enclosing square brackets, producing
 an object known as a generator. This object can be iterated to produce values on
 demand, instead of allocating an array and storing them in advance
-(see :ref:`_man-interfaces-iteration`).
+(see <man-interfaces-iteration>).
 For example, the following expression sums a series without allocating memory::
 
 .. doctest::
@@ -242,10 +242,10 @@ parentheses lets us add a third argument to ``map``::
 
     julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1:4;])
     4-element Array{Any,1}:
-     (0.5,1)
-     (0.333333,2)
-     (0.333333,3)
-     (0.25,4)
+    (0.5,1)
+    (0.333333,2)
+    (0.333333,3)
+    (0.25,4)
 
 .. _man-array-indexing:
 
