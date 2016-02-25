@@ -1135,7 +1135,7 @@ Accept keyword args `c` for alternate single character marker.
 """
 function replace_with_centered_mark(s::AbstractString;c::Char = '⋅')
     N = length(s)
-    return join(setindex!([utf8(" ") for i=1:N],string(c),ceil(Int,N/2)))
+    return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
 
 """

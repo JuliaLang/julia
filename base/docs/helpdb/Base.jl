@@ -1871,7 +1871,7 @@ Dict{String,Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
-julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+julia> b = Dict("baz" => 17, "bar" => 4711)
 Dict{String,Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
@@ -2983,29 +2983,6 @@ Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`, and the syntax `a.(b)` calls `getfield(a, b)`.
 """
 getfield
-
-"""
-    utf8(::Array{UInt8,1})
-
-Create a UTF-8 string from a byte array.
-"""
-utf8(::Vector{UInt8})
-
-"""
-    utf8(::Ptr{UInt8}, [length])
-
-Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy
-is made; the ptr can be safely freed. If `length` is specified, the string does not have to
-be 0-terminated.
-"""
-utf8(::Ptr{UInt8}, length::Int = 1)
-
-"""
-    utf8(s)
-
-Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
-"""
-utf8(s)
 
 """
     hvcat(rows::Tuple{Vararg{Int}}, values...)

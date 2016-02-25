@@ -34,7 +34,7 @@ function access_env(onError::Function, str::AbstractString)
     var = cwstring(str)
     len = _getenvlen(var)
     if len == 0
-        return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? utf8("") : onError(str)
+        return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
     end
     val = zeros(UInt16,len)
     ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)

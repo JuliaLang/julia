@@ -230,7 +230,6 @@ write(io::IO, s::String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
 
-utf8(x) = convert(String, x)
 convert(::Type{String}, s::String) = s
 
 function convert(::Type{String}, dat::Vector{UInt8})
@@ -307,7 +306,7 @@ function convert(::Type{String}, a::Vector{UInt8}, invalids_as::AbstractString)
     end
     String(a)
 end
-convert(::Type{String}, s::AbstractString) = utf8(bytestring(s))
+convert(::Type{String}, s::AbstractString) = bytestring(s)
 
 """
 Converts an already validated vector of `UInt16` or `UInt32` to a `String`
@@ -351,6 +350,3 @@ function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
     end
     String(buf)
 end
-
-utf8(p::Ptr{UInt8}) = String(bytestring(p))
-utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))
