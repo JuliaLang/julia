@@ -8839,29 +8839,6 @@ alias the input `x` to modify it in-place.
 filt!
 
 """
-    ascii(::Array{UInt8,1})
-
-Create an ASCII string from a byte array.
-"""
-ascii(::Vector{UInt8})
-
-"""
-    ascii(s)
-
-Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
-"""
-ascii(s)
-
-"""
-    ascii(::Ptr{UInt8}, [length])
-
-Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A
-copy is made; the ptr can be safely freed. If `length` is specified, the string does not
-have to be 0-terminated.
-"""
-ascii(::Ptr{UInt8},?)
-
-"""
     maxabs(itr)
 
 Compute the maximum absolute value of a collection of values.
