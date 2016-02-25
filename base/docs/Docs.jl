@@ -483,7 +483,7 @@ function moddoc(meta, def, def′)
         block = def.args[3].args
         if !def.args[1]
             isempty(block) && error("empty baremodules are not documentable.")
-            insert!(block, 2, :(import Base: call, @doc))
+            insert!(block, 2, :(import Base: @doc))
         end
         push!(block, docex)
         esc(Expr(:toplevel, def))
