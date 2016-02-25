@@ -3777,3 +3777,13 @@ let ex = quote
          end
     @test ex.args[2] == :test
 end
+
+# issue #15180
+function f15180{T}(x::T)
+    X = Array(T, 1)
+    X[1] = x
+    @noinline ef{J}(::J) = (J,X[1]) # Use T
+    ef{J}(::J, ::Int) = (T,J)
+    return ef
+end
+@test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
