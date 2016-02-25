@@ -171,7 +171,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
 
     if restored !== nothing
         for M in restored
-            if isdefined(M, :__META__)
+            if isdefined(M, Base.Docs.META)
                 push!(Base.Docs.modules, M)
             end
         end
