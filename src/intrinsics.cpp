@@ -305,9 +305,13 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     if (jt == (jl_value_t*)jl_bool_type)
         return builder.CreateZExt(builder.CreateTrunc(builder.CreateLoad(p), T_int1), to);
 
-    if (!x.isboxed) // stack has default alignment
+    if (x.isboxed)
+        return builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
+    else if (jt)
+        return build_load(p, jt);
+    else
+        // stack has default alignment
         return builder.CreateLoad(p);
-    return builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
 }
 
 // unbox, trying to determine correct bitstype automatically

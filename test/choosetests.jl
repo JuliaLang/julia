@@ -19,7 +19,7 @@ function choosetests(choices = [])
         "char", "string", "triplequote", "unicode",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
         "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
-        "abstractarray", "intfuncs", "simdloop", "blas", "sparse",
+        "abstractarray", "intfuncs", "simdloop", "vecelement", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",

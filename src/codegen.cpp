@@ -3936,7 +3936,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
         if (lty != NULL && !isboxed) {
             theArg = builder.CreatePointerCast(theArg, PointerType::get(lty,0));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = builder.CreateLoad(theArg);
+                theArg = build_load(theArg, ty);
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
