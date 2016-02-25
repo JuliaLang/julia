@@ -106,7 +106,7 @@ julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink ju
 debug release : % : julia-%
 
 julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl)
+	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(call cygpath_w, $(JULIAHOME)/doc/genstdlib.jl))
 
 docs: julia-genstdlib
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
