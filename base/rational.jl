@@ -288,21 +288,34 @@ trunc{T}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
 floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
 ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:Nearest})
+
+function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:Nearest})
     q,r = divrem(num(x), den(x))
-    s = abs(r) < abs((den(x)-copysign(typeof(den(x))(4), num(x))+one(den(x))+iseven(q))>>1 + copysign(typeof(den(x))(2), num(x))) ? q : q+copysign(one(q),num(x))
-    convert(T,s)
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(Tf, s)
 end
-round{T}(::Type{T}, x::Rational) = round(T,x,RoundNearest)
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesAway})
+
+round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
+
+function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
     q,r = divrem(num(x), den(x))
-    s = abs(r) < abs((den(x)-copysign(typeof(den(x))(4), num(x))+one(den(x)))>>1 + copysign(typeof(den(x))(2), num(x))) ? q : q+copysign(one(q),num(x))
-    convert(T,s)
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(Tf, s)
 end
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesUp})
+
+function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
     q,r = divrem(num(x), den(x))
-    s = abs(r) < abs((den(x)-copysign(typeof(den(x))(4), num(x))+one(den(x))+(num(x)<0))>>1 + copysign(typeof(den(x))(2), num(x))) ? q : q+copysign(one(q),num(x))
-    convert(T,s)
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+(num(x)<0))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(Tf, s)
 end
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
