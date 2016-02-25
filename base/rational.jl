@@ -289,34 +289,58 @@ floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
 ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
 
-function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:Nearest})
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
     q,r = divrem(num(x), den(x))
     s = q
     if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), num(x)))
         s += copysign(one(Tr),num(x))
     end
-    convert(Tf, s)
+    convert(T, s)
 end
 
 round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
 
-function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
     q,r = divrem(num(x), den(x))
     s = q
     if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr))>>1 + copysign(Tr(2), num(x)))
         s += copysign(one(Tr),num(x))
     end
-    convert(Tf, s)
+    convert(T, s)
 end
 
-function round{Tf, Tr}(::Type{Tf}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
     q,r = divrem(num(x), den(x))
     s = q
     if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+(num(x)<0))>>1 + copysign(Tr(2), num(x)))
         s += copysign(one(Tr),num(x))
     end
-    convert(Tf, s)
+    convert(T, s)
 end
+
+function round{T}(::Type{T}, x::Rational{Bool})
+    if den(x) == false && issubtype(T, Union{Integer, Bool})
+        throw(DivideError())
+    end
+    convert(T, x)
+end
+
+round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode) = round(T, x)
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
 floor{T}(x::Rational{T}) = Rational(floor(T,x))
