@@ -8,6 +8,13 @@ using Base.Test
 
 # check sparse matrix construction
 @test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+@test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
+@test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
+@test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
+@test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 1, 0)
+@test_throws ArgumentError sparse([1,2,4], [1,2,3], [1,2,3], 3, 3)
+@test_throws ArgumentError sparse([1,2,3], [1,2,4], [1,2,3], 3, 3)
+@test isequal(sparse(Int[], Int[], Int[], 0, 0), SparseMatrixCSC(0, 0, Int[1], Int[], Int[]))
 
 # check matrix operations
 se33 = speye(3)
@@ -326,7 +333,9 @@ mfe22 = eye(Float64, 2)
 @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
-@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
+@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 2
+# changed from `== 0` to `== 2` in #14798, matching sparse()'s
+# behavioral revision discussed in #12605, #9928, #9906, #6769
 
 # issue #5386
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
@@ -337,7 +346,9 @@ A = speye(Bool, 5)
 @test find(A) == find(x -> x == true, A) == find(full(A))
 
 # issue #5437
-@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 3
+# changed from `== 0` to `== 2` in #14798, matching sparse()'s
+# behavioral revision discussed in #12605, #9928, #9906, #6769
 
 # issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
