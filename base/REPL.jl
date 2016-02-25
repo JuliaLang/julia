@@ -323,11 +323,11 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = utf8(readline(file))
+        line = readline(file)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
-    return utf8("")
+    return ""
 end
 
 function hist_from_file(hp, file)

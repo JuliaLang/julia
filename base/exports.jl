@@ -891,7 +891,6 @@ export
     ucfirst,
     unescape_string,
     uppercase,
-    utf8,
     warn,
     xdump,
 
