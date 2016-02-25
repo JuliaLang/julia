@@ -48,7 +48,7 @@ DocBootstrap
 """
     loaddocs()
 
-Move all docstrings from `DocBootstrap.docs` to their module's `__META__` dict.
+Move all docstrings from `DocBootstrap.docs` to their module's metadata dict.
 """
 function loaddocs()
     node = docs
