@@ -49,6 +49,9 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             naupd(ido, bmat, n, which, nev, TOL, resid, ncv, v, n,
                   iparam, ipntr, workd, workl, lworkl, info)
         end
+        if info[1] != 0
+            throw(ARPACKException(info[1]))
+        end
 
         load_idx = ipntr[1]+zernm1
         store_idx = ipntr[2]+zernm1
