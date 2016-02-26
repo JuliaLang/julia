@@ -128,6 +128,8 @@ Deprecated or removed
 
   * `issym` is deprecated in favor of `issymmetric` to match similar functions (`ishermitian`, ...) ([#15192])
 
+  * `scale` is deprecated in favor of either `α*A`, `Diagonal(x)*A`, or `A*Diagonal(x)`. ([#15258])
+
 Julia v0.4.0 Release Notes
 ==========================
 

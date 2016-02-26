@@ -19,7 +19,7 @@ for Tv in (Float64, Complex128)
         lua = lufact(A)
         @test nnz(lua) == 18
         L,U,p,q,Rs = lua[:(:)]
-        @test_approx_eq scale(Rs,A)[p,q] L*U
+        @test_approx_eq (Diagonal(Rs) * A)[p,q] L * U
 
         @test_approx_eq det(lua) det(full(A))
 
@@ -45,7 +45,7 @@ for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
     lua = lufact(Ac)
     L,U,p,q,Rs = lua[:(:)]
-    @test_approx_eq scale(Rs,Ac)[p,q] L*U
+    @test_approx_eq (Diagonal(Rs) * Ac)[p,q] L * U
 end
 
 for elty in (Float64, Complex128)
@@ -53,7 +53,7 @@ for elty in (Float64, Complex128)
         A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex(randn(min(m, n) + 10), randn(min(m, n) + 10)))
         F = lufact(A)
         L, U, p, q, Rs = F[:(:)]
-        @test_approx_eq scale(Rs,A)[p,q] L*U
+        @test_approx_eq (Diagonal(Rs) * A)[p,q] L * U
     end
 end
 

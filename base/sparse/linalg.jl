@@ -826,12 +826,6 @@ end
 scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
 scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
 
-scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
-    scale!(similar(A, promote_type(Tv,T)), A, b)
-
-scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
-    scale!(similar(A, promote_type(Tv,T)), b, A)
-
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)
     if m == n
