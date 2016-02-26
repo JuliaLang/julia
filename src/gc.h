@@ -271,8 +271,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
 }
 
 void pre_mark(void);
-void post_mark(arraylist_t *list, int dryrun);
-void gc_mark_object_list(arraylist_t *list);
+void gc_mark_object_list(arraylist_t *list, size_t start);
+void visit_mark_stack(void);
 void gc_debug_init(void);
 
 #define jl_thread_heap (jl_get_ptls_states()->heap)
