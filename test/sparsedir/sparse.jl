@@ -978,6 +978,12 @@ perm = randperm(10)
 
 # droptol
 @test Base.droptol!(A,0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
+@test isequal(Base.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1,1,Int[1,1],Int[],Int[]))
+
+# dropzeros
+A = sparse([1 2 3; 4 5 6; 7 8 9])
+A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
+@test Base.dropzeros!(A).colptr == [1, 3, 5, 7]
 
 #trace
 @test_throws DimensionMismatch trace(sparse(ones(5,6)))
@@ -1000,6 +1006,13 @@ AF = full(A)
 @test_throws BoundsError tril(A,-6)
 @test_throws BoundsError triu(A,6)
 @test_throws BoundsError triu(A,-6)
+@test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
+@test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
+@test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
+@test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
+
+# fkeep trim option
+@test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
 
 # test norm
 
