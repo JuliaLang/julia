@@ -2271,9 +2271,10 @@
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
         (else
-         (map (lambda (x)
-                (resolve-scopes- x env implicitglobals lam renames #f))
-              e))))
+         (cons (car e)
+               (map (lambda (x)
+                      (resolve-scopes- x env implicitglobals lam renames #f))
+                    (cdr e))))))
 
 (define (resolve-scopes e) (resolve-scopes- e '() '() #f '() #f))
 
