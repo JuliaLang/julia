@@ -479,6 +479,93 @@ transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.IdFun()
 ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.ConjFun())
 "See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
 
+
+## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
+
+"""
+    fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other, trim::Bool = true)
+
+Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
+
+    f{Tv,Ti}(i::Ti, j::Ti, x::Tv, other::Any) -> Bool
+
+where `i` and `j` are an element's row and column indices, `x` is the element's value,
+and `other` is passed in from the call to `fkeep!`. This method makes a single sweep
+through `A`, requiring `O(A.n, nnz(A))`-time and no space beyond that passed in. If `trim`
+is `true`, this method trims `A.rowval` and `A.nzval` to length `nnz(A)` after dropping
+elements.
+
+Performance note: As of January 2016, `f` should be a functor for this method to perform
+well. This caveat may disappear when the work in `jb/functions` lands.
+"""
+function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other, trim::Bool = true)
+    An = A.n
+    Acolptr = A.colptr
+    Arowval = A.rowval
+    Anzval = A.nzval
+
+    # Sweep through columns, rewriting kept elements in their new positions
+    # and updating the column pointers accordingly as we go.
+    Awritepos = 1
+    oldAcolptrAj = 1
+    @inbounds for Aj in 1:An
+        for Ak in oldAcolptrAj:(Acolptr[Aj+1]-1)
+            Ai = Arowval[Ak]
+            Ax = Anzval[Ak]
+            # If this element should be kept, rewrite in new position
+            if f(Ai, Aj, Ax, other)
+                if Awritepos != Ak
+                    Arowval[Awritepos] = Ai
+                    Anzval[Awritepos] = Ax
+                end
+                Awritepos += 1
+            end
+        end
+        oldAcolptrAj = Acolptr[Aj+1]
+        Acolptr[Aj+1] = Awritepos
+    end
+
+    # Trim A's storage if necessary and desired
+    if trim
+        Annz = Acolptr[end] - 1
+        if length(Arowval) != Annz
+            resize!(Arowval, Annz)
+        end
+        if length(Anzval) != Annz
+            resize!(Anzval, Annz)
+        end
+    end
+
+    A
+end
+
+immutable TrilFunc <: Base.Func{4} end
+immutable TriuFunc <: Base.Func{4} end
+(::TrilFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, k::Integer) = i + k >= j
+(::TriuFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, k::Integer) = j >= i + k
+function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
+    if k > A.n-1 || k < 1-A.m
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    end
+    fkeep!(A, TrilFunc(), k, trim)
+end
+function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
+    if k > A.n-1 || k < 1-A.m
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    end
+    fkeep!(A, TriuFunc(), k, trim)
+end
+
+immutable DroptolFunc <: Base.Func{4} end
+(::DroptolFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, tol::Real) = abs(x) > tol
+droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) = fkeep!(A, DroptolFunc(), tol, trim)
+
+immutable DropzerosFunc <: Base.Func{4} end
+(::DropzerosFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, other) = x != 0
+dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, DropzerosFunc(), Void, trim)
+dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
+
+
 ## Find methods
 
 function find(S::SparseMatrixCSC)
