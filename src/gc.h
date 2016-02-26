@@ -253,8 +253,26 @@ STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
     return &r->meta[pg_idx];
 }
 
+STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
+{
+    *hdr->prev = hdr->next;
+    if (hdr->next) {
+        hdr->next->prev = hdr->prev;
+    }
+}
+
+STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
+{
+    hdr->next = *list;
+    hdr->prev = list;
+    if (*list)
+        (*list)->prev = &hdr->next;
+    *list = hdr;
+}
+
 void pre_mark(void);
 void post_mark(arraylist_t *list, int dryrun);
+void gc_mark_object_list(arraylist_t *list);
 void gc_debug_init(void);
 
 #define jl_thread_heap (jl_get_ptls_states()->heap)

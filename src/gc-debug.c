@@ -171,6 +171,7 @@ static void gc_verify_track(void)
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
         pre_mark();
+        gc_mark_object_list(&to_finalize);
         post_mark(&finalizer_list, 1);
         post_mark(&finalizer_list_marked, 1);
         if (lostval_parents.len == 0) {
@@ -212,6 +213,7 @@ void gc_verify(void)
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
     pre_mark();
+    gc_mark_object_list(&to_finalize);
     post_mark(&finalizer_list, 1);
     post_mark(&finalizer_list_marked, 1);
     int clean_len = bits_save[GC_CLEAN].len;
