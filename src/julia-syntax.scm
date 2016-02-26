@@ -239,6 +239,15 @@
   (or (eq? name 'call) (and (pair? name) (sym-ref? name)
                             (equal? (caddr name) '(inert call)))))
 
+(define (replace-vars e renames)
+  (cond ((symbol? e)      (lookup e renames e))
+        ((or (not (pair? e)) (quoted? e))  e)
+        ((memq (car e) '(-> function scope-block)) e)
+        (else
+         (cons (car e)
+               (map (lambda (x) (replace-vars x renames))
+                    (cdr e))))))
+
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
 (define (method-def-expr- name sparams argl body isstaged)
@@ -258,17 +267,23 @@
             (name  (if iscall #f name))
             (types (llist-types argl))
             (body  (method-lambda-expr argl body))
+            ;; HACK: the typevars need to be bound to jlgensyms, since this code
+            ;; might be moved to a different scope by closure-convert.
+            (temps (map (lambda (x) (make-jlgensym)) names))
+            (renames (map cons names temps))
             (mdef
              (if (null? sparams)
                  `(method ,name (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec)))
                           ,body ,isstaged)
                  `(method ,name
-                          (scope-block
-                           (block
-                            ,@(map (lambda (n) `(local ,n)) names)
-                            ,@(map make-assignment names (symbols->typevars names bounds #t))
-                            (call (top svec) (curly Tuple ,@(dots->vararg types))
-                                  (call (top svec) ,@names))))
+                          (block
+                           ,@(map make-assignment temps (symbols->typevars names bounds #t))
+                           (call (top svec) (curly Tuple
+                                                   ,@(dots->vararg
+                                                      (map (lambda (ty)
+                                                             (replace-vars ty renames))
+                                                           types)))
+                                 (call (top svec) ,@temps)))
                           ,body ,isstaged))))
        (if (and iscall (not (null? argl)))
            (let* ((n (arg-name (car argl)))
@@ -2786,8 +2801,10 @@ f(x) = yt(x)
                             (begin (and name (put! namemap name tname))
                                    typedef)))
                      ,@sp-inits
-                     ,@(map (lambda (gs tvar) (make-assignment gs `(call (top TypeVar) ',tvar (top Any) true)))
-                            method-sp capt-sp)
+                     ,@(if short '()
+                           (map (lambda (gs tvar)
+                                  (make-assignment gs `(call (top TypeVar) ',tvar (top Any) true)))
+                                method-sp capt-sp))
                      ,@(if short '()
                            `((method #f
                                      ,(cl-convert
