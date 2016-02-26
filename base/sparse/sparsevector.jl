@@ -1191,18 +1191,11 @@ scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
 scale!(a::Real, x::AbstractSparseVector) = scale!(nonzeros(x), a)
 scale!(a::Complex, x::AbstractSparseVector) = scale!(nonzeros(x), a)
 
-scale(x::AbstractSparseVector, a::Real) =
-    SparseVector(length(x), copy(nonzeroinds(x)), scale(nonzeros(x), a))
-scale(x::AbstractSparseVector, a::Complex) =
-    SparseVector(length(x), copy(nonzeroinds(x)), scale(nonzeros(x), a))
-
-scale(a::Real, x::AbstractSparseVector) = scale(x, a)
-scale(a::Complex, x::AbstractSparseVector) = scale(x, a)
-
-*(x::AbstractSparseVector, a::Number) = scale(x, a)
-*(a::Number, x::AbstractSparseVector) = scale(x, a)
-.*(x::AbstractSparseVector, a::Number) = scale(x, a)
-.*(a::Number, x::AbstractSparseVector) = scale(x, a)
+# *(x::AbstractSparseVector, a::Real) = SparseVector(length(x), copy(nonzeroinds(x)), scale(nonzeros(x), a))
+# *(x::AbstractSparseVector, a::Complex) = SparseVector(length(x), copy(nonzeroinds(x)), scale(nonzeros(x), a))
+# *(a::Number, x::AbstractSparseVector) = xa)
+# .*(x::AbstractSparseVector, a::Number) = scale(x, a)
+# .*(a::Number, x::AbstractSparseVector) = scale(x, a)
 
 
 # dot

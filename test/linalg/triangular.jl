@@ -207,12 +207,6 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             end
         end
 
-        @test scale(A1,0.5) == 0.5*A1
-        @test scale(0.5,A1) == 0.5*A1
-        @test scale(A1,0.5im) == 0.5im*A1
-        @test scale(0.5im,A1) == 0.5im*A1
-
-
         # Binary operations
         @test A1*0.5 == full(A1)*0.5
         @test 0.5*A1 == 0.5*full(A1)

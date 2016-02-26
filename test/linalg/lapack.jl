@@ -16,7 +16,7 @@ let # syevr
         A = convert(Array{elty, 2}, A)
         Asym = A'A
         vals, Z = LAPACK.syevr!('V', copy(Asym))
-        @test_approx_eq Z*scale(vals, Z') Asym
+        @test_approx_eq Z * (Diagonal(vals) * Z') Asym
         @test all(vals .> 0.0)
         @test_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
         @test_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
