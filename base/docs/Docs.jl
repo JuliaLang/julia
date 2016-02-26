@@ -65,23 +65,16 @@ export doc
 # Basic API / Storage
 
 const modules = Module[]
+const META    = gensym(:meta)
 
-const META′ = :__META__
+meta(m::Module = current_module()) = isdefined(m, META) ? getfield(m, META) : ObjectIdDict()
 
-meta(mod) = mod.(META′)
-
-meta() = meta(current_module())
-
-macro init()
-    META = esc(META′)
-    quote
-        if !isdefined($(Expr(:quote, META′)))
-            const $META = ObjectIdDict()
-            doc!($META, @doc_str $("Documentation metadata for `$(current_module())`."))
-            push!(modules, current_module())
-            nothing
-        end
+function initmeta(m::Module = current_module())
+    if !isdefined(m, META)
+        eval(m, :(const $META = $(ObjectIdDict())))
+        push!(modules, m)
     end
+    nothing
 end
 
 "`doc!(obj, data)`: Associate the metadata `data` with `obj`."
@@ -447,7 +440,6 @@ end
 
 function namedoc(meta, def, def′)
     quote
-        @init
         $(esc(def))
         doc!($(esc(namify(def′))), $(mdify(meta)))
         nothing
@@ -457,7 +449,6 @@ end
 function funcdoc(meta, def, def′)
     f = esc(namify(def′))
     quote
-        @init
         $(esc(def))
         doc!($f, $(esc(signature(def′))), $(mdify(meta)), $(esc(quot(def′))))
         $f
@@ -466,7 +457,6 @@ end
 
 function typedoc(meta, def, def′)
     quote
-        @init
         $(esc(def))
         doc!($(esc(namify(def′))), $(mdify(meta)), $(field_meta(unblock(def′))))
         nothing
@@ -492,7 +482,6 @@ end
 
 function vardoc(meta, def, name)
     quote
-        @init
         $(esc(def))
         doc!(@var($(esc(namify(name)))), $(mdify(meta)))
     end
@@ -584,6 +573,9 @@ function docm(meta, ex, define = true)
     # otherwise calling `loaddocs` would redefine all documented functions and types.
     def = define ? x : nothing
 
+    # Initalise the module's docstring storage.
+    initmeta()
+
     # Method / macro definitions and "call" syntax.
     #
     #   function f(...) ... end
@@ -629,7 +621,7 @@ function docm(meta, ex, define = true)
 
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
-    # retrieved from the `__META__` `ObjectIdDict` without a reference to the string.
+    # retrieved from the module's metadata `ObjectIdDict` without a reference to the string.
     docerror(ex)
 end
 
@@ -666,7 +658,7 @@ Base.DocBootstrap.setexpand!(docm)
 
 # Names are resolved relative to the Base module, so inject the ones we need there.
 
-eval(Base, :(import .Docs: @init, @var, doc!, doc, @doc_str))
+eval(Base, :(import .Docs: @var, doc!, doc, @doc_str))
 
 Base.DocBootstrap.loaddocs()
 
