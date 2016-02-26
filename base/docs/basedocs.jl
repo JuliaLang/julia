@@ -130,7 +130,7 @@ end
 
 @keyword(
     """
-    `baremodule` declares a module that does not contain `using Base`, `import Base.call`,
+    `baremodule` declares a module that does not contain `using Base`
     or a definition of `eval`.  It does still import `Core`.
     """,
     :baremodule
