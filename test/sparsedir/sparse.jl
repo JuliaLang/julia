@@ -74,6 +74,18 @@ a116[p, p] = reshape(1:9, 3, 3)
 s116[p, p] = reshape(1:9, 3, 3)
 @test a116 == s116
 
+# squeeze
+for i = 1:5
+    am = sprand(20, 1, 0.2)
+    av = squeeze(am, 2)
+    @test ndims(av) == 1
+    @test all(av.==am)
+    am = sprand(1, 20, 0.2)
+    av = squeeze(am, 1)
+    @test ndims(av) == 1
+    @test all(av.'.==am)
+end
+
 # matrix-vector multiplication (non-square)
 for i = 1:5
     a = sprand(10, 5, 0.5)
