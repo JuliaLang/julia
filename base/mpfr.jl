@@ -465,6 +465,7 @@ function airyai(x::BigFloat)
     ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
+airy(x::BigFloat) = airyai(x)
 
 function ldexp(x::BigFloat, n::Clong)
     z = BigFloat()
