@@ -1020,7 +1020,7 @@ function sparse(F::Factor)
     else
         LD = sparse(F[:LD])
         L, d = getLd!(LD)
-        A = scale(L, d)*L'
+        A = (L * Diagonal(d)) * L'
     end
     SparseArrays.sortSparseMatrixCSC!(A)
     p = get_perm(F)
