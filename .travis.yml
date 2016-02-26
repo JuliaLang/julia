@@ -12,13 +12,15 @@ matrix:
           packages:
             - bar
             - time
-            - binutils:i386
-            - gcc-5:i386
-            - g++-5:i386
+            - binutils
+            - gcc-5
+            - g++-5
+            - gcc-5-multilib
+            - g++-5-multilib
             - make:i386
-            - cpp-5:i386
             - libssl-dev:i386
-            - gfortran-5:i386
+            - gfortran-5
+            - gfortran-5-multilib
     - os: linux
       env: ARCH="x86_64"
       compiler: "g++-5 -m64"
@@ -61,8 +63,11 @@ before_install:
         ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
         ln -s /usr/bin/g++-5 $HOME/bin/g++;
         ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
+        ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
+        echo "override ARCH=$ARCH" >> Make.user;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
         brew update;
