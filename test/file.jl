@@ -157,7 +157,7 @@ rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
 # chown will give an error if the user does not have permissions to change files
-@unix_only if ENV["USER"] =="root"
+@unix_only if get(ENV, "USER", "") == "root"
     chown(file, -2, -1)  # Change the file owner to nobody
     @test stat(file).uid !=0
     chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
