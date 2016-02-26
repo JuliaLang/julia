@@ -314,7 +314,7 @@ end
 @test_throws Base.Math.AmosException airybi(200)
 @test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
-for elty in [Complex64,Complex128, Complex{BigFloat}]
+for elty in [Complex64,Complex128]
     @test_approx_eq airy(convert(elty,1.8)) 0.0470362168668458052247
     z = convert(elty,z)
     @test_approx_eq airyx(z) airyx(0,z)
@@ -324,6 +324,11 @@ for elty in [Complex64,Complex128, Complex{BigFloat}]
     @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
     @test_throws ArgumentError airyx(5,z)
 end
+
+@test_throws ArgumentError airy(0, big(1im))
+@test_throws ArgumentError airy(0, big(1.0im))
+@test_throws ArgumentError airy(1, big(1im))
+@test_throws ArgumentError airy(1, big(1.0im))
 
 # bessely0, bessely1, besselj0, besselj1
 @test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
@@ -338,6 +343,15 @@ end
 @test_approx_eq besselj1(2.0 + im) besselj(1, 2.0 + im)
 @test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
 @test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
+
+@test_throws ArgumentError besselj0(big(2im))
+@test_throws ArgumentError besselj0(big(2.0im))
+@test_throws ArgumentError besselj1(big(2im))
+@test_throws ArgumentError besselj1(big(2.0im))
+@test_throws ArgumentError bessely0(big(2im))
+@test_throws ArgumentError bessely0(big(2.0im))
+@test_throws ArgumentError bessely1(big(2im))
+@test_throws ArgumentError bessely1(big(2.0im))
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
