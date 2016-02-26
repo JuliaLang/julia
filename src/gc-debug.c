@@ -171,9 +171,10 @@ static void gc_verify_track(void)
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
         pre_mark();
-        gc_mark_object_list(&to_finalize);
-        post_mark(&finalizer_list, 1);
-        post_mark(&finalizer_list_marked, 1);
+        gc_mark_object_list(&to_finalize, 0);
+        gc_mark_object_list(&finalizer_list, 0);
+        gc_mark_object_list(&finalizer_list_marked, 0);
+        visit_mark_stack();
         if (lostval_parents.len == 0) {
             jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -213,9 +214,10 @@ void gc_verify(void)
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
     pre_mark();
-    gc_mark_object_list(&to_finalize);
-    post_mark(&finalizer_list, 1);
-    post_mark(&finalizer_list_marked, 1);
+    gc_mark_object_list(&to_finalize, 0);
+    gc_mark_object_list(&finalizer_list, 0);
+    gc_mark_object_list(&finalizer_list_marked, 0);
+    visit_mark_stack();
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
         gcval_t *v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
