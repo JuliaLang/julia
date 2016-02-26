@@ -3498,6 +3498,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         if (jl_is_type_type(ty) &&
             jl_is_datatype(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
+            assert(nargs <= jl_datatype_nfields(jl_tparam0(ty))+1);
             return emit_new_struct(jl_tparam0(ty),nargs,args,ctx);
         }
         Value *typ = boxed(emit_expr(args[0], ctx), ctx);

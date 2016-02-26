@@ -692,6 +692,7 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
 #define DEFINE_FIELD_ACCESSORS(f)                                       \
     static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)       \
     {                                                                   \
+        assert(i >= 0 && (size_t)i < jl_datatype_nfields(st));          \
         if (st->fielddesc_type == 0) {                                  \
             return ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f;     \
         }                                                               \
@@ -705,6 +706,7 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
     static inline void jl_field_set##f(jl_datatype_t *st, int i,        \
                                        uint32_t val)                    \
     {                                                                   \
+        assert(i >= 0 && (size_t)i < jl_datatype_nfields(st));          \
         if (st->fielddesc_type == 0) {                                  \
             ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f = val;      \
         }                                                               \
