@@ -195,11 +195,26 @@ function _methods_by_ftype(t::ANY, lim)
     end
     return ccall(:jl_matching_methods, Any, (Any,Int32), t, lim)
 end
+
+# matching is an Array{svec(sig, env, meth)}
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Int32), Tuple{t...}, lim)
         new === false && return false
-        append!(matching, new::Array{Any,1})
+        for m in new
+            (tt,env,meth) = m
+            replaced = false
+            for i in 1:length(matching)
+                if meth === matching[i][3]
+                    tt = typejoin(tt, matching[i][1])
+                    env == matching[i][2] || (env = svec())
+                    matching[i] = svec(tt, env, meth)
+                    replaced = true
+                    break
+                end
+            end
+            replaced || push!(matching, m)
+        end
     else
         ti = t[i]
         if isa(ti, Union)

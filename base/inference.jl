@@ -2312,6 +2312,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     if length(linfo.sparam_vals) > 0
         spvals = Any[x for x in linfo.sparam_vals]
     else
+        2 * length(spnames) == length(methsp) || return NF
         spvals = Any[]
         for i = 1:length(spnames)
             methsp[2 * i - 1].name === spnames[i] || error("sp env in the wrong order")
