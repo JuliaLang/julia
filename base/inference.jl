@@ -860,12 +860,13 @@ function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
     if length(argtypes) == 1 # just the function
         return true
     end
-    if is(args,()) || isvarargtype(argtypes[end])
+    if isvarargtype(argtypes[end])
         return false
     end
     for i = 2:length(argtypes)
         t = argtypes[i]
         if !isType(t) || has_typevars(t.parameters[1])
+            args === () && return false
             arg = args[i]
             if isconstantref(arg, sv) === false
                 return false
