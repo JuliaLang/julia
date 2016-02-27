@@ -8,7 +8,7 @@ function gcd{T<:Integer}(a::T, b::T)
         b = rem(a, b)
         a = t
     end
-    abs(a)
+    checked_abs(a)
 end
 
 # binary GCD (aka Stein's) algorithm
@@ -19,8 +19,8 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
-    u = abs(a >> za)
-    v = abs(b >> zb)
+    u = unsigned(abs(a >> za))
+    v = unsigned(abs(b >> zb))
     while u != v
         if u > v
             u, v = v, u
@@ -28,11 +28,14 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
         v -= u
         v >>= trailing_zeros(v)
     end
-    u << k
+    r = u << k
+    # T(r) would throw InexactError; we want OverflowError instead
+    r > typemax(T) && throw(OverflowError())
+    r % T
 end
 
 # explicit a==0 test is to handle case of lcm(0,0) correctly
-lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
+lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : checked_abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
