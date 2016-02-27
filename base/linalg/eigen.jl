@@ -150,6 +150,8 @@ function eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
     return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
+eigfact(A::Number, B::Number) = eigfact(fill(A,1,1), fill(B,1,1))
+
 function eig(A::AbstractMatrix, B::AbstractMatrix)
     F = eigfact(A,B)
     F.values, F.vectors

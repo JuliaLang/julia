@@ -22,6 +22,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
+    α = rand(eltya)
+    β = rand(eltya)
+    eab = eig(α,β)
+    @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
+    @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
+
 debug && println("\ntype of a: ", eltya,"\n")
 debug && println("non-symmetric eigen decomposition")
     d,v   = eig(a)
