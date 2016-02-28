@@ -60,7 +60,7 @@
 //#define GC_TIME
 
 // OBJPROFILE counts objects by type
-//#define OBJPROFILE
+// #define OBJPROFILE
 
 
 // method dispatch profiling --------------------------------------------------
