@@ -3787,3 +3787,61 @@ function f15180{T}(x::T)
     return ef
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
+
+let ary = Vector{Any}(10)
+    check_undef_and_fill(ary, rng) = for i in rng
+        @test !isdefined(ary, i)
+        ary[i] = (Float64(i), i) # some non-cached content
+        @test isdefined(ary, i)
+    end
+    # Check if the memory is initially zerod and fill it with value
+    # to check if these values are not reused later.
+    check_undef_and_fill(ary, 1:10)
+    # Check if the memory grown at the end are zerod
+    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    check_undef_and_fill(ary, 11:20)
+    # Make sure the content of the memory deleted at the end are not reused
+    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 5)
+    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 5)
+    check_undef_and_fill(ary, 16:20)
+
+    # Now check grow/del_end
+    ary = Vector{Any}(1010)
+    check_undef_and_fill(ary, 1:1010)
+    # This del_beg should move the buffer
+    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 1000)
+    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 1000)
+    check_undef_and_fill(ary, 1:1000)
+    ary = Vector{Any}(1010)
+    check_undef_and_fill(ary, 1:1010)
+    # This del_beg should not move the buffer
+    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    check_undef_and_fill(ary, 1:10)
+
+    ary = Vector{Any}(1010)
+    check_undef_and_fill(ary, 1:1010)
+    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+    check_undef_and_fill(ary, 1011:1020)
+    ccall(:jl_array_del_end, Void, (Any, Csize_t), ary, 10)
+    ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 10)
+    check_undef_and_fill(ary, 1:10)
+
+    # Make sure newly malloc'd buffers are filled with 0
+    # test this for a few different sizes since we need to make sure
+    # we are malloc'ing the buffer after the grow_end and malloc is not using
+    # mmap directly (which may return a zero'd new page).
+    for n in [50, 51, 100, 101, 200, 201, 300, 301]
+        ary = Vector{Any}(n)
+        # Try to free the previous buffer that was filled with random content
+        # and to increase the chance of getting a non-zero'd buffer next time
+        gc()
+        gc()
+        gc()
+        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 4)
+        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, n)
+        ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
+        check_undef_and_fill(ary, 1:(2n + 4))
+    end
+end
