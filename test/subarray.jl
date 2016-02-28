@@ -94,6 +94,7 @@ function test_cartesian(A, B)
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
+            @show IA IB A[IA] B[IB]
             isgood = false
             break
         end
