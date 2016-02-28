@@ -168,12 +168,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             @test isa(similar(D, Int, (3,2)), Matrix{Int})
 
             #10036
-            @test issym(D2)
+            @test issymmetric(D2)
             @test ishermitian(D2)
             if elty <: Complex
                 dc = d + im*convert(Vector{elty}, ones(n))
                 D3 = Diagonal(dc)
-                @test issym(D3)
+                @test issymmetric(D3)
                 @test !ishermitian(D3)
             end
 

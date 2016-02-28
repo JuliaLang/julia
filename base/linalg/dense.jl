@@ -340,7 +340,7 @@ end
 logm(a::Complex) = log(a)
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
-    if issym(A)
+    if issymmetric(A)
         return full(sqrtm(Symmetric(A)))
     end
     n = checksquare(A)

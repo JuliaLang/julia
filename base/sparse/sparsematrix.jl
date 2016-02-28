@@ -2911,7 +2911,7 @@ function blkdiag(X::SparseMatrixCSC...)
 end
 
 ## Structure query functions
-issym(A::SparseMatrixCSC) = is_hermsym(A, IdFun())
+issymmetric(A::SparseMatrixCSC) = is_hermsym(A, IdFun())
 
 ishermitian(A::SparseMatrixCSC) = is_hermsym(A, ConjFun())
 

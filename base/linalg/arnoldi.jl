@@ -154,7 +154,7 @@ function _eigs(A, B;
     T = eltype(A)
     iscmplx = T <: Complex
     isgeneral = B !== I
-    sym = issym(A) && !iscmplx
+    sym = issymmetric(A) && !iscmplx
     nevmax=sym ? n-1 : n-2
     if nevmax <= 0
         throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
@@ -297,7 +297,7 @@ end
 ## v = [ left_singular_vector; right_singular_vector ]
 *{T,S}(s::SVDOperator{T,S}, v::Vector{T}) = [s.X * v[s.m+1:end]; s.X' * v[1:s.m]]
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
-issym(s::SVDOperator) = true
+issymmetric(s::SVDOperator) = true
 
 svds{T<:BlasFloat}(A::AbstractMatrix{T}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))

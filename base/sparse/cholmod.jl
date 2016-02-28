@@ -7,7 +7,7 @@ import Base: (*), convert, copy, eltype, get, getindex, show, showarray, size,
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issym, ldltfact, ldltfact!, logdet
+                 issymmetric, ldltfact, ldltfact!, logdet
 
 importall ..SparseArrays
 
@@ -986,7 +986,7 @@ function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}
 end
 function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64})
     s = unsafe_load(A.p)
-    if !issym(A)
+    if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
     end
     return Symmetric(SparseMatrixCSC(s.nrow, s.ncol, increment(pointer_to_array(s.p, (s.ncol + 1,), false)), increment(pointer_to_array(s.i, (s.nzmax,), false)), copy(pointer_to_array(s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
@@ -1536,7 +1536,7 @@ function isposdef{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long})
     true
 end
 
-function issym(A::Sparse)
+function issymmetric(A::Sparse)
     s = unsafe_load(A.p)
     if s.stype != 0
         return isreal(A)

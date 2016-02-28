@@ -990,3 +990,6 @@ end
 export call
 
 @deprecate_binding LambdaStaticData LambdaInfo
+
+# Changed issym to issymmetric. #15192
+@deprecate issym issymmetric
