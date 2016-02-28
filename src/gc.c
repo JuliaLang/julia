@@ -705,10 +705,8 @@ static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int prev_sweep_mask = GC_MARKED;
 static size_t scanned_bytes_goal;
 
-#ifdef OBJPROFILE
-static void *BUFFTY = (void*)0xdeadb00f;
-#endif
-static void *MATY = (void*)0xdeadaa01;
+static const uintptr_t jl_buff_tag = 0x4eade800;
+static void *const jl_malloc_tag = (void*)0xdeadaa01;
 static size_t array_nbytes(jl_array_t*);
 static inline void objprofile_count(void *ty, int old, int sz)
 {
@@ -717,7 +715,7 @@ static inline void objprofile_count(void *ty, int old, int sz)
     if (verifying) return;
 #endif
     if ((intptr_t)ty <= 0x10)
-        ty = BUFFTY;
+        ty = (void*)jl_buff_tag;
     void **bp = ptrhash_bp(&obj_counts[old], ty);
     if (*bp == HT_NOTFOUND)
         *bp = (void*)2;
@@ -725,7 +723,7 @@ static inline void objprofile_count(void *ty, int old, int sz)
         (*((intptr_t*)bp))++;
     bp = ptrhash_bp(&obj_sizes[old], ty);
     if (*bp == HT_NOTFOUND)
-        *bp = (void*)(1 + sz);
+        *bp = (void*)(intptr_t)(1 + sz);
     else
         *((intptr_t*)bp) += sz;
 #endif
@@ -769,9 +767,8 @@ static inline int gc_setmark_big(void *o, int mark_mode)
             perm_scanned_bytes += hdr->sz&~3;
         else
             scanned_bytes += hdr->sz&~3;
-#ifdef OBJPROFILE
-        objprofile_count(jl_typeof(o), mark_mode == GC_MARKED, hdr->sz&~3);
-#endif
+        objprofile_count(jl_typeof(jl_valueof(o)),
+                         mark_mode == GC_MARKED, hdr->sz&~3);
     }
     _gc_setmark(o, mark_mode);
     verify_val(jl_valueof(o));
@@ -796,9 +793,8 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
             perm_scanned_bytes += page->osize;
         else
             scanned_bytes += page->osize;
-#ifdef OBJPROFILE
-        objprofile_count(jl_typeof(o), mark_mode == GC_MARKED, page->osize);
-#endif
+        objprofile_count(jl_typeof(jl_valueof(o)),
+                         mark_mode == GC_MARKED, page->osize);
     }
     _gc_setmark(o, mark_mode);
     page->gc_bits |= mark_mode;
@@ -1674,7 +1670,6 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
     //    int64_t s = perm_scanned_bytes;
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     if (!gc_marked(o)) {
-        //        objprofile_count(jl_typeof(v), 1, 16);
 #ifdef MEMDEBUG
         gc_setmark_big(o, GC_MARKED_NOESC);
 #else
@@ -1848,7 +1843,7 @@ static int push_root(jl_value_t *v, int d, int bits)
             MARK(a,
                  bits = _gc_setmark_pool(o, GC_MARKED_NOESC);
                  if (a->flags.how == 2 && todo) {
-                     objprofile_count(MATY, gc_bits(o) == GC_MARKED, array_nbytes(a));
+                     objprofile_count(jl_malloc_tag, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
                      else
@@ -1858,7 +1853,7 @@ static int push_root(jl_value_t *v, int d, int bits)
             MARK(a,
                  bits = gc_setmark_big(o, GC_MARKED_NOESC);
                  if (a->flags.how == 2 && todo) {
-                     objprofile_count(MATY, gc_bits(o) == GC_MARKED, array_nbytes(a));
+                     objprofile_count(jl_malloc_tag, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
                      else
@@ -2155,12 +2150,13 @@ static void print_obj_profile(htable_t nums, htable_t sizes)
     for(int i=0; i < nums.size; i+=2) {
         if (nums.table[i+1] != HT_NOTFOUND) {
             void *ty = nums.table[i];
-            int num = (int)nums.table[i+1] - 1;
-            size_t sz = (int)ptrhash_get(&sizes, ty) - 1;
-            jl_printf(JL_STDERR, "   %6d : %4d kB of ", num, sz/1024);
-            if (ty == BUFFTY)
+            int num = (intptr_t)nums.table[i + 1] - 1;
+            size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
+            jl_printf(JL_STDERR, "   %6d : %4d kB of (%p) ",
+                      num, (int)(sz / 1024), ty);
+            if (ty == (void*)jl_buff_tag)
                 jl_printf(JL_STDERR, "buffer");
-            else if (ty == MATY)
+            else if (ty == jl_malloc_tag)
                 jl_printf(JL_STDERR, "malloc");
             else
                 jl_static_show(JL_STDERR, (jl_value_t*)ty);
@@ -2467,18 +2463,18 @@ void *allocb(size_t sz)
         jl_throw(jl_memory_exception);
 #ifdef MEMDEBUG
     b = (buff_t*)alloc_big(allocsz);
-    b->header = 0x4EADE800;
+    b->header = jl_buff_tag;
     b->pooled = 0;
 #else
     if (allocsz > GC_MAX_SZCLASS + sizeof(buff_t)) {
         b = (buff_t*)alloc_big(allocsz);
-        b->header = 0x4EADE800;
+        b->header = jl_buff_tag;
         b->pooled = 0;
     }
     else {
         FOR_CURRENT_HEAP ()
             b = (buff_t*)pool_alloc(&pools[szclass(allocsz)]);
-        b->header = 0x4EADE800;
+        b->header = jl_buff_tag;
         b->pooled = 1;
     }
 #endif
