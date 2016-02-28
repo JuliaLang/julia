@@ -45,7 +45,7 @@ include(joinpath(dir, "queens.jl"))
 end
 
 dc_path = joinpath(dir, "dictchannel.jl")
-include(dc_path)
+myid() == 1 || include(dc_path)
 
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
