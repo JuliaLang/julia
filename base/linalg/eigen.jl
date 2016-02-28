@@ -28,7 +28,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(A.values .>
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    issym(A) && return eigfact!(Symmetric(A))
+    issymmetric(A) && return eigfact!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     all(WI .== 0.) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
@@ -81,7 +81,7 @@ eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:value
 Same as `eigvals`, but saves space by overwriting the input `A` (and `B`), instead of creating a copy.
 """
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
-    issym(A) && return eigvals!(Symmetric(A))
+    issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return all(valsim .== 0) ? valsre : complex(valsre, valsim)
 end
@@ -120,7 +120,7 @@ det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     all(alphai .== 0) && return GeneralizedEigen(alphar ./ beta, vr)
@@ -162,7 +162,7 @@ function eig(A::Number, B::Number)
 end
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     return (all(alphai .== 0) ? alphar : complex(alphar, alphai))./beta
 end

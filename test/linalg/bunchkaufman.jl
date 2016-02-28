@@ -49,10 +49,10 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         end
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         for rook in (false, true)
-            bc2 = bkfact(apd, :U, issym(apd), rook)
+            bc2 = bkfact(apd, :U, issymmetric(apd), rook)
             @test_approx_eq inv(bc2) * apd eye(n)
             @test_approx_eq_eps apd * (bc2\b) b 150000ε
-            @test ishermitian(bc2) == !issym(bc2)
+            @test ishermitian(bc2) == !issymmetric(bc2)
         end
 
     end
