@@ -333,7 +333,7 @@ end
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
 # issue #13616
-@test_throws ErrorException collect(eachline(`cat _doesnt_exist__111_`))
+@test_throws ErrorException collect(eachline(pipeline(`cat _doesnt_exist__111_`, stderr=DevNull)))
 
 # make sure windows_verbatim strips quotes
 @windows_only readstring(`cmd.exe /c dir /b spawn.jl`) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))

@@ -3750,7 +3750,7 @@ end
 module I13229
     using Base.Test
     global z = 0
-    @time @profile for i = 1:5
+    @timed @profile for i = 1:5
         function f(x)
             return x + i
         end
