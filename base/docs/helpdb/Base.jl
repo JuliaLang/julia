@@ -219,14 +219,6 @@ Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
 besselj
 
 """
-    @code_lowered
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_lowered`](:func:`code_lowered`) on the resulting expression.
-"""
-:@code_lowered
-
-"""
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
@@ -715,14 +707,6 @@ once all workers, requested by `manager` have been launched. `params` is a dicti
 keyword arguments `addprocs` was called with.
 """
 launch
-
-"""
-    @code_typed
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_typed`](:func:`code_typed`) on the resulting expression.
-"""
-:@code_typed
 
 """
     invdigamma(x)
@@ -3493,13 +3477,6 @@ Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 """
 tril(M,k)
 
-"""
-    @edit
-
-Evaluates the arguments to the function call, determines their types, and calls the `edit`
-function on the resulting expression.
-"""
-:@edit
 
 """
     subtypes(T::DataType)
@@ -3613,14 +3590,6 @@ not representable.
 `digits` and `base` work as for [`round`](:func:`round`).
 """
 trunc
-
-"""
-    @less
-
-Evaluates the arguments to the function call, determines their types, and calls the `less`
-function on the resulting expression.
-"""
-:@less
 
 """
     broadcast_function(f)
@@ -5550,14 +5519,6 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    @code_native
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_native`](:func:`code_native`) on the resulting expression.
-"""
-:@code_native
-
-"""
     flipbits!(B::BitArray{N}) -> BitArray{N}
 
 Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
@@ -5570,14 +5531,6 @@ flipbits!
 Returns the value of a symbolic link `path`.
 """
 readlink
-
-"""
-    @code_warntype
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_warntype`](:func:`code_warntype`) on the resulting expression.
-"""
-:@code_warntype
 
 """
     deg2rad(x)
@@ -8258,16 +8211,6 @@ Converts a packed boolean array to an array of booleans.
 bitunpack
 
 """
-    @which
-
-Applied to a function call, it evaluates the arguments to the specified function call, and
-returns the `Method` object for the method that would be called for those arguments. Applied
-to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
-"""
-:@which
-
-"""
     size(A, [dim...])
 
 Returns a tuple containing the dimensions of `A`. Optionally you can specify the
@@ -8453,14 +8396,6 @@ Read a UDP packet from the specified socket, returning a tuple of (address, data
 address will be either IPv4 or IPv6 as appropriate.
 """
 recvfrom
-
-"""
-    @code_llvm
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_llvm`](:func:`code_llvm`) on the resulting expression.
-"""
-:@code_llvm
 
 """
     nextfloat(f)
