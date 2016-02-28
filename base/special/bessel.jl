@@ -233,7 +233,7 @@ function besselj(nu::Float64, z::Complex128)
 end
 
 besselj(nu::Cint, x::Float64) = ccall((:jn, libm), Float64, (Cint, Float64), nu, x)
-besselj(nu::Cint, x::Float32) = ccall((:jn, libm), Float32, (Cint, Float32), nu, x)
+besselj(nu::Cint, x::Float32) = ccall((:jnf, libm), Float32, (Cint, Float32), nu, x)
 
 
 function besseljx(nu::Float64, z::Complex128)
