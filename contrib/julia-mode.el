@@ -401,12 +401,13 @@ As a result, it is true inside \"foo\", `foo` and 'f'."
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
 KW-LIST is a list of strings.  The word at point is not considered
-a keyword if used as a field name, X.word, or quoted, :word."
+a keyword if used as a field name, X.word, or quoted, :word.
+
+Assumes that point is not inside a comment."
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
        (member (current-word t) kw-list)
-       (not (julia-in-comment))
        ;; 'end' is not a keyword when used for indexing, e.g. foo[end-2]
        (or (not (equal (current-word t) "end"))
            (not (julia-in-brackets)))))
@@ -426,9 +427,7 @@ Do not move back beyond position MIN."
         (setq count
               (cond ((julia-at-keyword julia-block-start-keywords)
                      (+ count 1))
-                    ;; fixme: breaks on strings
-                    ((and (equal (current-word t) "end")
-                          (not (julia-in-comment)) (not (julia-in-brackets)))
+                    ((equal (current-word t) "end")
                      (- count 1))
                     (t count))))
       (if (> count 0)
@@ -547,13 +546,18 @@ meaning always increase indent on TAB and decrease on S-TAB."
       ;; note: if this first function returns nil the beginning of the line
       ;; cannot be in a string
       (julia-indent-in-string)
-      ;; If we're inside an open paren, indent to line up arguments.
+      ;; If we're inside an open paren, indent to line up arguments. After this,
+      ;; we cannot be inside parens which includes brackets
       (julia-paren-indent)
-      ;; indent due to hanging operators or a line ending in =
+      ;; indent due to hanging operators (lines ending in an operator)
       (julia-indent-hanging)
       ;; Indent according to how many nested blocks we are in.
       (save-excursion
         (beginning-of-line)
+        ;; jump out of any comments
+        (let ((state (syntax-ppss)))
+          (when (nth 4 state)
+            (goto-char (nth 8 state))))
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords))
               (last-open-block (julia-last-open-block (- (point) julia-max-block-lookback))))
