@@ -256,8 +256,12 @@ function gen_call_with_extracted_types(fcn, ex0)
                     Expr(:call, typesof, map(esc, args[2:end])...))
     end
     exret = Expr(:none)
+    is_macro = false
     ex = expand(ex0)
-    if !isa(ex, Expr)
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
+        is_macro = true
+        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
+    elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
@@ -280,7 +284,7 @@ function gen_call_with_extracted_types(fcn, ex0)
             end
         end
     end
-    if ex.head == :thunk || exret.head == :none
+    if (!is_macro && ex.head == :thunk) || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
@@ -288,7 +292,7 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_warntype,
+for fname in [:which, :less, :edit, :functionloc, :code_typed, :code_warntype,
               :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
@@ -297,7 +301,80 @@ for fname in [:which, :less, :edit, :code_typed, :code_warntype,
     end
 end
 
-# `methodswith` -- shows a list of methods using the type given
+"""
+    @which
+
+Applied to a function or macro call, it evaluates the arguments to the specified call, and
+returns the `Method` object for the method that would be called for those arguments. Applied
+to a variable, it returns the module in which the variable was bound. It calls out to the
+`which` function.
+"""
+:@which
+
+"""
+    @less
+
+Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+function on the resulting expression.
+"""
+:@less
+
+"""
+    @edit
+
+Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+function on the resulting expression.
+"""
+:@edit
+
+"""
+    @functionloc
+
+Applied to a function or macro call, it evaluates the arguments to the specified call, and
+returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
+It calls out to the `functionloc` function.
+"""
+:@functionloc
+
+"""
+    @code_typed
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_typed`](:func:`code_typed`) on the resulting expression.
+"""
+:@code_typed
+
+"""
+    @code_warntype
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_warntype`](:func:`code_warntype`) on the resulting expression.
+"""
+:@code_warntype
+
+"""
+    @code_lowered
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_lowered`](:func:`code_lowered`) on the resulting expression.
+"""
+:@code_lowered
+
+"""
+    @code_llvm
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_llvm`](:func:`code_llvm`) on the resulting expression.
+"""
+:@code_llvm
+
+"""
+    @code_native
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_native`](:func:`code_native`) on the resulting expression.
+"""
+:@code_native
 
 function type_close_enough(x::ANY, t::ANY)
     x == t && return true
@@ -306,6 +383,7 @@ function type_close_enough(x::ANY, t::ANY)
            (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
 end
 
+# `methodswith` -- shows a list of methods using the type given
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     mt = typeof(f).name.mt
     d = mt.defs
