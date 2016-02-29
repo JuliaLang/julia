@@ -2782,15 +2782,12 @@ for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
     over_half    = Rational(div(typemax(Ti),Ti(2))+one(Ti), typemax(Ti))
     exactly_half = Rational(one(Ti)  , Ti(2))
 
-    @test round(Tf, Rational(1,2), RoundNearestTiesUp) == 1.0
-    @test round(Tf, Rational(1,2), RoundNearestTiesAway) == 1.0
-
-   # @test round( almost_half) == 0//1
-   # @test round(-almost_half) == 0//1
-   # @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
-   # @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
-   # @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
-   # @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
+    @test round( almost_half) == 0//1
+    @test round(-almost_half) == 0//1
+    @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
 
     @test round( exactly_half) == 0//1 # rounds to closest _even_ integer
     @test round(-exactly_half) == 0//1 # rounds to closest _even_ integer
@@ -2806,6 +2803,22 @@ for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
     @test round(Tf,  over_half, RoundNearestTiesAway) == 1.0
     @test round(Tf, -over_half, RoundNearestTiesUp) == -1.0
     @test round(Tf, -over_half, RoundNearestTiesAway) == -1.0
+
+    @test round(Tf, 11//2, RoundNearestTiesUp) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesUp) == -5.0
+    @test round(Tf, 11//2, RoundNearestTiesAway) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesAway) == -6.0
+
+    @test round(Tf, Ti(-1)//zero(Ti)) == -Inf
+    @test round(Tf, one(1)//zero(Ti)) == Inf
+    @test round(Tf, Ti(-1)//zero(Ti), RoundNearestTiesUp) == -Inf
+    @test round(Tf, one(1)//zero(Ti), RoundNearestTiesUp) == Inf
+    @test round(Tf, Ti(-1)//zero(Ti), RoundNearestTiesAway) == -Inf
+    @test round(Tf, one(1)//zero(Ti), RoundNearestTiesAway) == Inf
+
+    @test round(Tf, zero(Ti)//one(Ti)) == 0
+    @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesUp) == 0
+    @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesAway) == 0
 end
 
 let
@@ -2825,4 +2838,21 @@ let
         io2.ptr = 1
         @test read(io2, typeof(rational2)) == rational2
     end
+end
+
+@test round(11//2) == 6//1 # rounds to closest _even_ integer
+@test round(-11//2) == -6//1 # rounds to closest _even_ integer
+@test round(11//3) == 4//1 # rounds to closest _even_ integer
+@test round(-11//3) == -4//1 # rounds to closest _even_ integer
+
+for T in (Float16, Float32, Float64)
+    @test round(T, true//false) === convert(T, Inf)
+    @test round(T, true//true) === one(T)
+    @test round(T, false//true) === zero(T)
+end
+
+for T in (Int8, Int16, Int32, Int64, Bool)
+    @test_throws DivideError round(T, true//false)
+    @test round(T, true//true) === one(T)
+    @test round(T, false//true) === zero(T)
 end
