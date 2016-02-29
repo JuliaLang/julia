@@ -38,7 +38,7 @@ checked_mod{T<:Integer}(x::T, y::T) = no_op_err("checked_mod", T)
 checked_cld{T<:Integer}(x::T, y::T) = no_op_err("checked_cld", T)
 
 typealias SignedInt Union{Int8,Int16,Int32,Int64,Int128}
-typealias UnsignedInt Union{UInt8,UInt16,UInt32,UInt64,UInt128}
+typealias UnsignedInt Union{UInt8,UInt16,UInt32,UInt64,UInt128,Bool}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
@@ -166,6 +166,8 @@ function checked_add{T<:BrokenUnsignedInt}(x::T, y::T)
     x + y
 end
 end
+checked_add(x::Bool, y::Bool) = x + y
+checked_add(x::Bool) = +x
 
 # Handle multiple arguments
 checked_add(x) = x
@@ -212,6 +214,8 @@ function checked_sub{T<:BrokenUnsignedInt}(x::T, y::T)
     x - y
 end
 end
+checked_sub(x::Bool, y::Bool) = x - y
+checked_sub(x::Bool) = -x
 
 """
     Base.checked_mul(x, y)
