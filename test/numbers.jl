@@ -1663,10 +1663,10 @@ end
 @test isnan(eps(-Inf))
 
 @test .1+.1+.1 != .3
-# TODO: uncomment when isapprox() becomes part of base.
-# @test isapprox(.1+.1+.1, .3)
-# @test !isapprox(.1+.1+.1-.3, 0)
-# @test isapprox(.1+.1+.1-.3, 0, eps(.3))
+@test isapprox(.1+.1+.1, .3)
+@test !isapprox(.1+.1+.1-.3, 0)
+@test isapprox(.1+.1+.1-.3, 0, atol=eps(.3))
+@test isapprox(1.1,1.1f0)
 
 @test div(1e50,1) == 1e50
 @test fld(1e50,1) == 1e50
