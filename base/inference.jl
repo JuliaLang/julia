@@ -2386,7 +2386,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
     if incompletematch
         cost *= 4
     end
-    if (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :done) ||
+    if (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :unsafe_next) || istopfunction(topmod, f, :done) ||
        istopfunction(topmod, f, :unsafe_convert) || istopfunction(topmod, f, :cconvert))
         cost ÷= 4
     end

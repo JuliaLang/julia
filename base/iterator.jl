@@ -11,10 +11,10 @@ enumerate(itr) = Enumerate(itr)
 
 length(e::Enumerate) = length(e.itr)
 start(e::Enumerate) = (1, start(e.itr))
-function next(e::Enumerate, state)
-    n = next(e.itr,state[2])
-    (state[1],n[1]), (state[1]+1,n[2])
-end
+next(e::Enumerate, state) = next(e, state, next(e.itr, state[2]))
+unsafe_next(e::Enumerate, state) = next(e, state, unsafe_next(e.itr, state[2]))
+next(e::Enumerate, state, itr_state) = (state[1],itr_state[1]), (state[1]+1,itr_state[2])
+
 done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}

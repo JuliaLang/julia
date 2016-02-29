@@ -1477,7 +1477,7 @@
                    ;; NOTE: enable this to force loop-local var
                    #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
                    ,(lower-tuple-assignment (list lhs state)
-                                            `(call (top next) ,coll ,state))
+                                            `(call (top unsafe_next) ,coll ,state))
                    ,body))))))))
 
 ;; table mapping expression head to a function expanding that form
@@ -2055,7 +2055,7 @@
                    (block
                     (= ,(car is) (call (top +) ,(car is) 1))
                     (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
+                       (call (top unsafe_next) ,(car rv) ,(car states)))
                     ;; *** either this or force all for loop vars local
                     ,.(map (lambda (r) `(local ,r))
                            (lhs-vars (cadr (car ranges))))

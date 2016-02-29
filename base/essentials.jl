@@ -148,6 +148,8 @@ macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
 
+unsafe_next(x,i) = next(x,i)
+
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
