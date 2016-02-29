@@ -152,6 +152,8 @@ export
     Ac_mul_B!,
     Ac_mul_Bc,
     Ac_mul_Bc!,
+    Ac_mul_Bt,
+    Ac_mul_Bt!,
     Ac_rdiv_B,
     Ac_rdiv_Bc,
     At_ldiv_B,
