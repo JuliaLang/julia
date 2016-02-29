@@ -109,6 +109,16 @@ Aref = Ai[1:2:end,1:2:end]
 Asub = sub(Ai, 1:2:5, 1:2:4)
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
+# issue #15286
+let C = zeros(8, 8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4)
+    @test At_mul_B!(sC, A, A) == A'*A
+    @test At_mul_B!(sC, A, B) == A'*B
+end
+let Aim = A .- im, C = zeros(Complex128,8,8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4) .+ im
+    @test Ac_mul_B!(sC, Aim, Aim) == Aim'*Aim
+    @test Ac_mul_B!(sC, Aim, B) == Aim'*B
+end
+
 
 # syrk & herk
 A = reshape(1:1503, 501, 3).-750.0

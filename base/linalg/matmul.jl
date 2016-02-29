@@ -256,7 +256,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
         return matmul3x3!(C,tA,tAt,A,A)
     end
 
-    if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+    if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
         return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
     end
     return generic_matmatmul!(C, tA, tAt, A, A)
@@ -287,7 +287,7 @@ function herk_wrapper!{T<:BlasReal}(C::Union{StridedMatrix{T}, StridedMatrix{Com
     # Result array does not need to be initialized as long as beta==0
     #    C = Array(T, mA, mA)
 
-    if stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+    if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
         return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
     end
     return generic_matmatmul!(C,tA, tAt, A, A)
@@ -325,7 +325,7 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
         return matmul3x3!(C,tA,tB,A,B)
     end
 
-    if stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1)
+    if stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && stride(C, 2) >= size(C, 1)
         return BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
     end
     generic_matmatmul!(C, tA, tB, A, B)
