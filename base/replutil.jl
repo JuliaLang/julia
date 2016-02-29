@@ -404,7 +404,7 @@ function show_trace_entry(io, frame, n)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
-function show_backtrace(io::IO, t, set=1:typemax(Int))
+function show_backtrace(io::IO, t::Vector, set=1:typemax(Int))
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
@@ -416,7 +416,7 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
                     end, t, set)
 end
 
-function show_backtrace(io::IO, top_function::Symbol, t, set)
+function show_backtrace(io::IO, top_function::Symbol, t::Vector, set)
     process_entry(last_frame, n) =
         show_trace_entry(io, last_frame, n)
     process_backtrace(process_entry, top_function, t, set)
@@ -429,7 +429,7 @@ function show_backtrace(io::IO, top_function::Symbol, t::Vector{Any}, set)
 end
 
 # process the backtrace, up to (but not including) top_function
-function process_backtrace(process_func::Function, top_function::Symbol, t, set; skipC = true)
+function process_backtrace(process_func::Function, top_function::Symbol, t::Vector, set; skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0

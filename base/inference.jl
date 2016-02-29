@@ -857,16 +857,17 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
 end
 
 function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
-    if isempty(argtypes)
+    if length(argtypes) == 1 # just the function
         return true
     end
-    if is(args,()) || isvarargtype(argtypes[end])
+    if isvarargtype(argtypes[end])
         return false
     end
-    for i = 2:length(args)
-        arg = args[i]
+    for i = 2:length(argtypes)
         t = argtypes[i]
         if !isType(t) || has_typevars(t.parameters[1])
+            args === () && return false
+            arg = args[i]
             if isconstantref(arg, sv) === false
                 return false
             end
@@ -876,13 +877,13 @@ function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
 end
 
 function _ieval_args(args, argtypes::Vector{Any}, sv::VarInfo)
-    c = cell(length(args)-1)
+    c = cell(length(argtypes) - 1)
     for i = 2:length(argtypes)
         t = argtypes[i]
         if isType(t) && !has_typevars(t.parameters[1])
-            c[i-1] = t.parameters[1]
+            c[i - 1] = t.parameters[1]
         else
-            c[i-1] = _ieval(isconstantref(args[i], sv), sv)
+            c[i - 1] = _ieval(isconstantref(args[i], sv), sv)
         end
     end
     return c
@@ -901,7 +902,6 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
     end
 
     args = _ieval_args(fargs, argtypes, sv)
-    tm = _topmod(sv)
     atype = Tuple{type_typeof(f), Any[type_typeof(a) for a in args]...}
     meth = _methods_by_ftype(atype, 1)
     if meth === false || length(meth) != 1
@@ -923,29 +923,12 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
         end
     end
 
-    local v
     try
         v = f(args...)
+        return type_typeof(v)
     catch
         return false
     end
-    if isa(e, Expr) # replace Expr with a constant
-        stmts = Any[] # check if any arguments aren't effect_free and need to be kept around
-        for i = 1:length(fargs)
-            arg = fargs[i]
-            if !effect_free(arg, sv, false)
-                push!(stmts, arg)
-            end
-        end
-        if isempty(stmts)
-            e.head = :inert # eval_annotate will turn this into a QuoteNode
-            e.args = Any[v]
-        else
-            e.head = :call # should get cleaned up by tuple elimination
-            e.args = Any[top_getfield, Expr(:call, top_tuple, stmts..., v), length(stmts) + 1]
-        end
-    end
-    return type_typeof(v)
 end
 
 
@@ -1929,8 +1912,6 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::VarInfo, decls, undefs)
         return e
     #elseif is(head,:gotoifnot) || is(head,:return)
     #    e.typ = Any
-    elseif is(head,:inert)
-        return QuoteNode(e.args[1])
     elseif is(head,:(=))
     #    e.typ = Any
         s = e.args[1]
@@ -2244,11 +2225,10 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 # `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
-function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing_ast::Expr)
+function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, enclosing_ast::Expr)
     local linfo,
         metharg::Type,
-        atypes = atype.parameters,
-        argexprs = copy(e.args),
+        argexprs = e.args,
         incompletematch = false
 
     if (is(f, typeassert) || is(ft, typeof(typeassert))) && length(atypes)==3
@@ -2281,6 +2261,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     end
 
     local methfunc
+    atype = Tuple{atypes...}
+    if length(atype.parameters)-1 > MAX_TUPLETYPE_LEN
+        atype = limit_tuple_type(atype)
+    end
     meth = _methods_by_ftype(atype, 1)
     if meth === false || length(meth) != 1
         return NF
@@ -2296,6 +2280,31 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     if linfo === NF
         return NF
     end
+    if linfo.pure && isconstantargs(argexprs, atypes, sv)
+        # check if any arguments aren't effect_free and need to be kept around
+        stmts = Any[]
+        for i = 1:length(argexprs)
+            arg = argexprs[i]
+            if !effect_free(arg, sv, false)
+                push!(stmts, arg)
+            end
+        end
+
+        if isType(e.typ) && !has_typevars(e.typ.parameters[1])
+            return (QuoteNode(e.typ.parameters[1]), stmts)
+        end
+
+        constargs = _ieval_args(argexprs, atypes, sv)
+        try
+            v = f(constargs...)
+            return (QuoteNode(v), stmts)
+        catch ex
+            thrw = Expr(:call, TopNode(:throw), QuoteNode(ex))
+            thrw.typ = Bottom
+            return (thrw, stmts)
+        end
+    end
+
     methfunc = meth[3].func
     methsig = meth[3].sig
     if !(atype <: metharg)
@@ -2471,6 +2480,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
 
     @assert na == length(argexprs)
 
+    if argexprs === e.args
+        argexprs = copy(argexprs)
+    end
     if needcopy
         body = astcopy(body)
     end
@@ -2491,7 +2503,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atype::ANY, sv::VarInfo, enclosing
     end
 
     # see if each argument occurs only once in the body expression
-    stmts = []
+    stmts = Any[]
     stmts_free = true # true = all entries of stmts are effect_free
 
     # when 1 method matches the inferred types, there is still a chance
@@ -2925,15 +2937,14 @@ function inlining_pass(e::Expr, sv, ast)
     end
 
     for ninline = 1:100
-        ata = Any[exprtype(e.args[i],sv) for i in 2:length(e.args)]
-        for a in ata
+        ata = cell(length(e.args))
+        ata[1] = ft
+        for i = 2:length(e.args)
+            a = exprtype(e.args[i], sv)
             (a === Bottom || isvarargtype(a)) && return (e, stmts)
+            ata[i] = a
         end
-        atype = Tuple{ft, ata...}
-        if length(atype.parameters)-1 > MAX_TUPLETYPE_LEN
-            atype = limit_tuple_type(atype)
-        end
-        res = inlineable(f, ft, e, atype, sv, ast)
+        res = inlineable(f, ft, e, ata, sv, ast)
         if isa(res,Tuple)
             if isa(res[2],Array) && !isempty(res[2])
                 append!(stmts,res[2])

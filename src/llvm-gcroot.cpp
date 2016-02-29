@@ -620,7 +620,7 @@ void allocate_frame()
                 }
             }
             // delete any StoreInst to a gcframe slot that isn't live
-            if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
+            else if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
                 frame_register def = get_gcroot(storeInst->getPointerOperand());
                 if (CallInst *gcroot = def.first) {
                     if (gcroot->getCalledFunction() == jlcall_frame_func) {

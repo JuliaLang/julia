@@ -41,6 +41,7 @@ macro generated(f)
 end
 
 
+tuple_type_head(::Type{Union{}}) = throw(MethodError(tuple_type_head, (Type{Union{}},)))
 function tuple_type_head{T<:Tuple}(::Type{T})
     @_pure_meta
     T.parameters[1]
