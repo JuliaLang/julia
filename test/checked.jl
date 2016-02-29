@@ -196,6 +196,50 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test_throws DivideError checked_cld(typemax(T), T(0))
 end
 
+# Boolean
+@test checked_add(false) === 0
+@test checked_add(true) === 1
+@test checked_sub(false) === 0
+@test checked_sub(true) === -1
+@test checked_neg(false) === 0
+@test checked_neg(true) === -1
+@test checked_abs(true) === true
+@test checked_abs(false) === false
+@test checked_mul(false) === false
+@test checked_mul(true) === true
+
+@test checked_add(true, true) === 2
+@test checked_add(true, false) === 1
+@test checked_add(false, false) === 0
+@test checked_add(false, true) === 1
+
+@test checked_sub(true, true) === 0
+@test checked_sub(true, false) === 1
+@test checked_sub(false, false) === 0
+@test checked_sub(false, true) === -1
+
+@test checked_mul(true, false) === false
+@test checked_mul(false, false) === false
+@test checked_mul(true, true) === true
+@test checked_mul(false, true) === false
+
+@test checked_div(true, true) === true
+@test checked_div(false, true) === false
+@test_throws DivideError checked_div(true, false)
+@test checked_rem(true, true) === false
+@test checked_rem(false, true) === false
+@test_throws DivideError checked_rem(true, false)
+@test checked_fld(true, true) === true
+@test checked_fld(false, true) === false
+@test_throws DivideError checked_fld(true, false)
+@test checked_mod(true, true) === false
+@test checked_mod(false, true) === false
+@test_throws DivideError checked_mod(true, false)
+@test checked_cld(true, true) === true
+@test checked_cld(false, true) === false
+@test_throws DivideError checked_cld(true, false)
+
+# BigInt
 @test checked_abs(BigInt(-1)) == BigInt(1)
 @test checked_abs(BigInt(1)) == BigInt(1)
 @test checked_neg(BigInt(-1)) == BigInt(1)
