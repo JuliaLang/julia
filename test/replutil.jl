@@ -251,14 +251,14 @@ end
 @test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", Base.(symbol("@doc"))))
 
 method_defs_lineno = @__LINE__
-Base.Symbol() = error(1)
-(::Symbol)() = error(2)
-EightBitType() = error(3)
-(::EightBitType)() = error(4)
-EightBitTypeT() = error(5)
-(::Type{EightBitTypeT{T}}){T}() = error(6)
-(::EightBitTypeT)() = error(7)
-(::FunctionLike)() = error(8)
+Base.Symbol() = throw(ErrorException("1"))
+(::Symbol)() = throw(ErrorException("2"))
+EightBitType() = throw(ErrorException("3"))
+(::EightBitType)() = throw(ErrorException("4"))
+EightBitTypeT() = throw(ErrorException("5"))
+(::Type{EightBitTypeT{T}}){T}() = throw(ErrorException("6"))
+(::EightBitTypeT)() = throw(ErrorException("7"))
+(::FunctionLike)() = throw(ErrorException("8"))
 
 
 let err_str,
