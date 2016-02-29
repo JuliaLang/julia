@@ -1033,19 +1033,7 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     if (m->isstaged)
         func = jl_instantiate_staged(func, tt, env);
 
-    // don't bother computing this if no arguments are tuples
-    for(i=0; i < jl_nparams(tt); i++) {
-        if (jl_is_tuple_type(jl_tparam(tt,i)))
-            break;
-    }
-    if (i < jl_nparams(tt)) {
-        newsig = (jl_tupletype_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                           jl_svec_data(env),
-                                                           jl_svec_len(env)/2);
-    }
-    else {
-        newsig = m->sig;
-    }
+    newsig = m->sig;
     assert(jl_is_tuple_type(newsig));
     jl_lambda_info_t *nf;
     if (!cache)
@@ -1948,7 +1936,6 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     types = (jl_datatype_t*)jl_argtype_with_function(gf, (jl_tupletype_t*)types0);
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_methlist_t *m = (jl_methlist_t*)jl_gf_invoke_lookup(types);
-    size_t i;
 
     if ((jl_value_t*)m == jl_nothing) {
         jl_no_method_error_bare(gf, (jl_value_t*)types0);
@@ -1981,28 +1968,17 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
             jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,m->isstaged,(jl_value_t*)m->invokes);
         }
 
-        newsig = m->sig;
-
         if (m->tvars != jl_emptysvec) {
             jl_value_t *ti =
                 lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
             assert(ti != (jl_value_t*)jl_bottom_type);
             (void)ti;
-            // don't bother computing this if no arguments are tuples
-            for(i=0; i < jl_nparams(tt); i++) {
-                if (jl_is_tuple_type(jl_tparam(tt,i)))
-                    break;
-            }
-            if (i < jl_nparams(tt)) {
-                newsig = (jl_tupletype_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                                   jl_svec_data(tpenv),
-                                                                   jl_svec_len(tpenv)/2);
-            }
         }
         jl_lambda_info_t *func = m->func;
         if (m->isstaged)
             func = jl_instantiate_staged(func, tt, tpenv);
 
+        newsig = m->sig;
         mfunc = cache_method(m->invokes, tt, func, newsig, tpenv, m->isstaged);
     }
 
