@@ -293,7 +293,7 @@ typedef unw_context_t *bt_context_t;
 #define jl_bt_data (jl_get_ptls_states()->bt_data)
 #define jl_bt_size (jl_get_ptls_states()->bt_size)
 JL_DLLEXPORT size_t rec_backtrace(intptr_t *data, size_t maxsize);
-JL_DLLEXPORT size_t rec_backtrace_ctx(intptr_t *data, size_t maxsize, bt_context_t ctx);
+size_t rec_backtrace_ctx(intptr_t *data, size_t maxsize, bt_context_t ctx);
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(intptr_t *data, size_t maxsize, bt_context_t ctx);
 #endif
