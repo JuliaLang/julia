@@ -630,6 +630,35 @@ let d = @doc Undocumented.undocumented
     """)
 end
 
+# `@doc` "metadata".
+
+let m = @doc(DocsTest).meta
+    @test length(m[:results]) == 1
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest)].docs[Union{}]
+    @test m[:binding] == @var(DocsTest)
+    @test m[:typesig] == Union
+end
+
+let m = @doc(DocsTest.f).meta
+    @test length(m[:results]) == 2
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any}]
+    @test m[:results][2] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any, Any}]
+    @test m[:binding] == @var(DocsTest.f)
+    @test m[:typesig] == Union
+end
+
+let m = @doc(DocsTest.f(x)).meta
+    @test length(m[:results]) == 1
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any}]
+    @test m[:binding] == @var(DocsTest.f)
+    @test m[:typesig] == Tuple{Any}
+end
+
+let m = @doc(Undocumented.f).meta
+    @test isempty(m[:results])
+    @test m[:binding] == @var(Undocumented.f)
+    @test m[:typesig] == Union
+end
 
 # Bindings.
 
