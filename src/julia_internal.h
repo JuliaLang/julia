@@ -275,14 +275,24 @@ int has_meta(jl_array_t *body, jl_sym_t *sym);
 // backtraces
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
+#include <dbghelp.h>
 extern HANDLE hMainThread;
-typedef CONTEXT *bt_context_t;
+typedef CONTEXT bt_context_t;
+#if defined(_CPU_X86_64_)
+typedef CONTEXT bt_cursor_t;
+#else
+typedef struct {
+    STACKFRAME64 stackframe;
+    CONTEXT context;
+} bt_cursor_t;
+#endif
 extern volatile int jl_in_stackwalk;
 #else
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
-typedef unw_context_t *bt_context_t;
+typedef unw_context_t bt_context_t;
+typedef unw_cursor_t bt_cursor_t;
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
        (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR > 1))
 // Enable our memory manager only for libunwind with our patch or
@@ -292,18 +302,18 @@ typedef unw_context_t *bt_context_t;
 #endif
 #define jl_bt_data (jl_get_ptls_states()->bt_data)
 #define jl_bt_size (jl_get_ptls_states()->bt_size)
-JL_DLLEXPORT size_t rec_backtrace(intptr_t *data, size_t maxsize);
-size_t rec_backtrace_ctx(intptr_t *data, size_t maxsize, bt_context_t ctx);
+size_t rec_backtrace(uintptr_t *data, size_t maxsize);
+size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
-size_t rec_backtrace_ctx_dwarf(intptr_t *data, size_t maxsize, bt_context_t ctx);
+size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
-void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size);
+void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
                         uintptr_t pointer, int *fromC, int skipC, int skipInline);
-JL_DLLEXPORT void jl_gdblookup(intptr_t ip);
+JL_DLLEXPORT void jl_gdblookup(uintptr_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 static inline char *jl_copy_str(char **to, const char *from)

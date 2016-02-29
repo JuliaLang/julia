@@ -118,7 +118,7 @@ void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
 
     jl_all_task_states[tid].ptls->bt_size =
         rec_backtrace_ctx(jl_all_task_states[tid].ptls->bt_data,
-                          JL_MAX_BT_SIZE, (bt_context_t)&state);
+                          JL_MAX_BT_SIZE, (bt_context_t*)&state);
     jl_all_task_states[tid].ptls->exception_in_transit = exception;
 
     uint64_t rsp = (uint64_t)jl_all_task_states[tid].signal_stack + sig_stack_size;
@@ -372,10 +372,10 @@ void *mach_profile_listener(void *arg)
 
             if (forceDwarf == 0) {
                 // Save the backtrace
-                bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == 1) {
-                bt_size_cur += rec_backtrace_ctx_dwarf((intptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+                bt_size_cur += rec_backtrace_ctx_dwarf((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
             }
             else if (forceDwarf == -1) {
                 jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -383,7 +383,7 @@ void *mach_profile_listener(void *arg)
 
             forceDwarf = -2;
 #else
-            bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
+            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc);
 #endif
 
             // Mark the end of this block with 0

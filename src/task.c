@@ -23,7 +23,6 @@ extern "C" {
 #if defined(_OS_WINDOWS_)
 #include <winbase.h>
 #include <malloc.h>
-#include <dbghelp.h>
 volatile int jl_in_stackwalk = 0;
 #else
 #include <unistd.h>

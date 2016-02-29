@@ -210,9 +210,6 @@ extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
-#ifdef _OS_WINDOWS_
-#include <dbghelp.h>
-#endif
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
 {
