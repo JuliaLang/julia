@@ -237,7 +237,6 @@ static void gc_verify(void)
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
-    check_timeout = 0;
     clear_mark(GC_CLEAN);
     verifying = 1;
     pre_mark();
