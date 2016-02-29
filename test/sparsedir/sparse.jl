@@ -440,6 +440,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test ss116[i,j] == 0
     ss116 = sparse(aa116)
 
+    @test ss116[:,:] == copy(ss116)
+
     # range indexing
     @test full(ss116[i,:]) == aa116[i,:]
     @test full(ss116[:,j]) == aa116[:,j]
@@ -951,6 +953,7 @@ end
 
 # test throws
 A = sprandbool(5,5,0.2)
+@test_throws ArgumentError reinterpret(Complex128,A)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
 @test_throws DimensionMismatch reinterpret(Int8,A,(20,))
 @test_throws DimensionMismatch reshape(A,(20,2))
