@@ -232,8 +232,13 @@ function doc(binding::Binding, sig::Type = Union)
                 push!(results, group.docs[each])
             end
         end
-        # Get the parsed docs, concatenate, and return the result.
-        Markdown.MD(map(parsedoc, results))
+        # Get parsed docs and concatenate them.
+        md = Markdown.MD(map(parsedoc, results))
+        # Save metadata in the generated markdown.
+        md.meta[:results] = results
+        md.meta[:binding] = binding
+        md.meta[:typesig] = sig
+        return md
     end
 end
 
@@ -276,7 +281,12 @@ function summarize(binding::Binding, sig)
     else
         println(io, "Binding `", binding, "` does not exist.")
     end
-    Markdown.parse(seekstart(io))
+    md = Markdown.parse(seekstart(io))
+    # Save metadata in the generated markdown.
+    md.meta[:results] = DocStr[]
+    md.meta[:binding] = binding
+    md.meta[:typesig] = sig
+    return md
 end
 
 function summarize(io::IO, λ::Function, binding)
