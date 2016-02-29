@@ -11,7 +11,6 @@
 // free pages as soon as they are empty. if not defined, then we
 // will wait for the next GC, to allow the space to be reused more
 // efficiently. default = on.
-#define FREE_PAGES_EAGER
 #include <stdlib.h>
 #include <string.h>
 #ifndef _MSC_VER
@@ -316,7 +315,6 @@ static arraylist_t finalizer_list;
 static arraylist_t finalizer_list_marked;
 static arraylist_t to_finalize;
 
-static int check_timeout = 0;
 #define should_timeout() 0
 
 #define gc_bits(o) (((gcval_t*)(o))->gc_bits)
@@ -626,7 +624,6 @@ static uint8_t *page_age(gcpage_t *pg)
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
 
-static int gc_inc_steps = 1;
 #ifdef _P64
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
@@ -656,7 +653,7 @@ static uint64_t total_sweep_time = 0;
 static uint64_t total_mark_time = 0;
 static uint64_t total_fin_time = 0;
 #endif
-int sweeping = 0;
+static int sweeping = 0;
 
 /*
  * The state transition looks like :
@@ -703,7 +700,6 @@ int sweeping = 0;
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int prev_sweep_mask = GC_MARKED;
-static size_t scanned_bytes_goal;
 
 static const uintptr_t jl_buff_tag = 0x4eade800;
 static void *const jl_malloc_tag = (void*)0xdeadaa01;
@@ -728,13 +724,6 @@ static inline void objprofile_count(void *ty, int old, int sz)
         *((intptr_t*)bp) += sz;
 #endif
 }
-
-//static inline void gc_setmark_other(jl_value_t *v, int mark_mode) // unused function
-//{
-//    jl_taggedvalue_t *o = jl_astaggedvalue(v);
-//    _gc_setmark(o, mark_mode);
-//    verify_val(o);
-//}
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
@@ -1369,11 +1358,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t **sweep_page(pool_t *p, gcpage_t *pg, gcval_t **pfl, int sweep_mask, int osize)
 {
-#ifdef FREE_PAGES_EAGER
     int freedall;
-#else
-    int empty;
-#endif
     gcval_t **prev_pfl = pfl;
     gcval_t *v;
     size_t old_nfree = 0, nfree = 0;
@@ -1598,8 +1583,6 @@ static void grow_mark_stack(void)
     mark_stack = mark_stack_base + offset;
     mark_stack_size = newsz;
 }
-
-static int max_msp = 0;
 
 static void reset_remset(void)
 {
@@ -1907,7 +1890,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         refyoung = GC_MARKED_NOESC;
     }
     else if (vt == (jl_value_t*)jl_symbol_type) {
-        //gc_setmark_other(v, GC_MARKED); // symbols have their own allocator and are never freed
+        // symbols have their own allocator and are never freed
     }
     // this check should not be needed but it helps catching corruptions early
     else if (gc_typeof(vt) == (jl_value_t*)jl_datatype_type) {
@@ -1971,7 +1954,6 @@ static int push_root(jl_value_t *v, int d, int bits)
  queue_the_root:
     if (mark_sp >= mark_stack_size) grow_mark_stack();
     mark_stack[mark_sp++] = (jl_value_t*)v;
-    max_msp = max_msp > mark_sp ? max_msp : mark_sp;
     return bits;
 }
 
@@ -1988,11 +1970,8 @@ static void visit_mark_stack_inc(int mark_mode)
 
 static void visit_mark_stack(int mark_mode)
 {
-    int ct = check_timeout;
-    check_timeout = 0;
     visit_mark_stack_inc(mark_mode);
     assert(!mark_sp);
-    check_timeout = ct;
 }
 
 void jl_mark_box_caches(void);
@@ -2005,7 +1984,6 @@ extern jl_module_t *jl_old_base_module;
 extern jl_array_t *jl_module_init_order;
 
 static int inc_count = 0;
-static int quick_count = 0;
 
 // mark the initial root set
 static void pre_mark(void)
@@ -2050,14 +2028,11 @@ static void pre_mark(void)
     gc_push_root(jl_false, 0);
 }
 
-static int n_finalized;
-
 // find unmarked objects that need to be finalized from the finalizer list "list".
 // this must happen last in the mark phase.
 // if dryrun == 1, it does not schedule any actual finalization and only marks finalizers
 static void post_mark(arraylist_t *list, int dryrun)
 {
-    n_finalized = 0;
     for(size_t i=0; i < list->len; i+=2) {
         jl_value_t *v = (jl_value_t*)list->items[i];
         jl_value_t *fin = (jl_value_t*)list->items[i+1];
@@ -2083,7 +2058,6 @@ static void post_mark(arraylist_t *list, int dryrun)
             }
             gc_push_root(v, 0);
             if (!dryrun) schedule_finalization(v, fin);
-            n_finalized++;
         }
         if (!dryrun && isold) {
             arraylist_push(&finalizer_list_marked, v);
@@ -2192,14 +2166,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
 #endif
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     if (!sweeping) {
-
         inc_count++;
-        quick_count++;
-
-        scanned_bytes_goal = inc_count*(live_bytes/gc_inc_steps + mark_sp*sizeof(void*));
-        scanned_bytes_goal = scanned_bytes_goal < MIN_SCAN_BYTES ? MIN_SCAN_BYTES : scanned_bytes_goal;
-        if (gc_inc_steps > 1)
-            check_timeout = 1;
         assert(mark_sp == 0);
 
         // 1. mark every object in the remset
@@ -2320,7 +2287,6 @@ static void _jl_gc_collect(int full, char *stack_hi)
                 last_long_collect_interval = collect_interval;
                 sweep_mask = GC_MARKED;
                 promoted_bytes = 0;
-                quick_count = 0;
             }
             else {
                 collect_interval = default_collect_interval/2;
