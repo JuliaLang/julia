@@ -703,6 +703,9 @@ static int prev_sweep_mask = GC_MARKED;
 
 static const uintptr_t jl_buff_tag = 0x4eade800;
 static void *const jl_malloc_tag = (void*)0xdeadaa01;
+#ifdef OBJPROFILE
+static void *const jl_singleton_tag = (void*)0xdeadaa02;
+#endif
 static size_t array_nbytes(jl_array_t*);
 static inline void objprofile_count(void *ty, int old, int sz)
 {
@@ -710,8 +713,14 @@ static inline void objprofile_count(void *ty, int old, int sz)
 #ifdef GC_VERIFY
     if (verifying) return;
 #endif
-    if ((intptr_t)ty <= 0x10)
+    if ((intptr_t)ty <= 0x10) {
         ty = (void*)jl_buff_tag;
+    }
+    else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
+             jl_typeof(ty) == (jl_value_t*)jl_datatype_type &&
+             ((jl_datatype_t*)ty)->instance) {
+        ty = jl_singleton_tag;
+    }
     void **bp = ptrhash_bp(&obj_counts[old], ty);
     if (*bp == HT_NOTFOUND)
         *bp = (void*)2;
@@ -2126,12 +2135,32 @@ static void print_obj_profile(htable_t nums, htable_t sizes)
             void *ty = nums.table[i];
             int num = (intptr_t)nums.table[i + 1] - 1;
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
-            jl_printf(JL_STDERR, "   %6d : %4d kB of (%p) ",
-                      num, (int)(sz / 1024), ty);
+            static const int ptr_hex_width = 2 * sizeof(void*);
+            if (sz > 2e9) {
+                jl_printf(JL_STDERR, " %6d : %*.1f GB of (%*p) ",
+                          num, 6, ((double)sz) / 1024 / 1024 / 1024,
+                          ptr_hex_width, ty);
+            }
+            else if (sz > 2e6) {
+                jl_printf(JL_STDERR, " %6d : %*.1f MB of (%*p) ",
+                          num, 6, ((double)sz) / 1024 / 1024,
+                          ptr_hex_width, ty);
+            }
+            else if (sz > 2e3) {
+                jl_printf(JL_STDERR, " %6d : %*.1f kB of (%*p) ",
+                          num, 6, ((double)sz) / 1024,
+                          ptr_hex_width, ty);
+            }
+            else {
+                jl_printf(JL_STDERR, " %6d : %*d  B of (%*p) ",
+                          num, 6, (int)sz, ptr_hex_width, ty);
+            }
             if (ty == (void*)jl_buff_tag)
-                jl_printf(JL_STDERR, "buffer");
+                jl_printf(JL_STDERR, "#<buffer>");
             else if (ty == jl_malloc_tag)
-                jl_printf(JL_STDERR, "malloc");
+                jl_printf(JL_STDERR, "#<malloc>");
+            else if (ty == jl_singleton_tag)
+                jl_printf(JL_STDERR, "#<singletons>");
             else
                 jl_static_show(JL_STDERR, (jl_value_t*)ty);
             jl_printf(JL_STDERR, "\n");
