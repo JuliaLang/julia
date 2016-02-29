@@ -27,6 +27,7 @@ type VarInfo
     label_counter::Int   # index of the current highest label for this function
     fedbackvars::ObjectIdDict
     mod::Module
+    linfo::LambdaInfo
 end
 
 function VarInfo(linfo::LambdaInfo, ast=linfo.ast)
@@ -42,18 +43,8 @@ function VarInfo(linfo::LambdaInfo, ast=linfo.ast)
     end
     gensym_types = Any[ NF for i = 1:(ngs::Int) ]
     nl = label_counter(body)+1
-    if length(linfo.sparam_vals) > 0
-        n = length(linfo.sparam_syms)
-        sp = Array(Any, n*2)
-        for i = 1:n
-            sp[i*2-1] = linfo.sparam_syms[i]
-            sp[i*2  ] = linfo.sparam_vals[i]
-        end
-        sp = svec(sp...)
-    else
-        sp = svec()
-    end
-    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module)
+    sp = linfo.sparam_vals
+    VarInfo(sp, vars, gensym_types, vinflist, nl, ObjectIdDict(), linfo.module, linfo)
 end
 
 type VarState
@@ -79,8 +70,8 @@ end
 inference_stack = EmptyCallStack()
 
 function is_static_parameter(sv::VarInfo, s::Symbol)
-    sp = sv.sp
-    for i=1:2:length(sp)
+    sp = sv.linfo.sparam_syms
+    for i=1:length(sp)
         if is(sp[i],s)
             return true
         end
@@ -443,13 +434,13 @@ const apply_type_tfunc = function (A::ANY, args...)
                     push!(tparams, val)
                     continue
                 elseif isa(inference_stack,CallStack) && isa(A[i],Symbol)
-                    sp = inference_stack.sv.sp
+                    sp = inference_stack.sv.linfo.sparam_syms
                     s = A[i]
                     found = false
-                    for j=1:2:length(sp)
+                    for j=1:length(sp)
                         if is(sp[j],s)
                             # static parameter
-                            val = sp[j+1]
+                            val = inference_stack.sv.sp[j]
                             if valid_tparam(val)
                                 push!(tparams, val)
                                 found = true
@@ -1148,11 +1139,11 @@ end
 function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::VarInfo)
     t = get(vtypes,s,NF)
     if is(t,NF)
-        sp = sv.sp
-        for i=1:2:length(sp)
+        sp = sv.linfo.sparam_syms
+        for i=1:length(sp)
             if is(sp[i],s)
                 # static parameter
-                val = sp[i+1]
+                val = sv.sp[i]
                 if isa(val,TypeVar)
                     # static param bound to typevar
                     if Any <: val.ub
@@ -1554,18 +1545,10 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
 
     if length(linfo.sparam_vals) > 0
         # handled by VarInfo constructor
+    elseif isempty(sparams) && !isempty(linfo.sparam_syms)
+        sv.sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
     else
-        sp = Any[]
-        for i = 1:2:length(sparams)
-            push!(sp, sparams[i].name)
-            push!(sp, sparams[i+1])
-        end
-        for i = 1:length(linfo.sparam_syms)
-            sym = linfo.sparam_syms[i]
-            push!(sp, sym)
-            push!(sp, TypeVar(sym, Any, true))
-        end
-        sv.sp = svec(sp...)
+        sv.sp = sparams
     end
 
     args = f_argnames(ast)
@@ -2323,8 +2306,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
     else
         spvals = Any[]
         for i = 1:length(spnames)
-            methsp[2 * i - 1].name === spnames[i] || error("sp env in the wrong order")
-            si = methsp[2 * i]
+            si = methsp[i]
             if isa(si, TypeVar)
                 return NF
             end
