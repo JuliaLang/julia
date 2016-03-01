@@ -1599,20 +1599,17 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
     end
 
     if tfunc_idx == -1
-        if caller === nothing && needtree && in_typeinf_loop
+        if caller === nothing && needtree && in_typeinf_loop && !linfo.inInference
             # if the caller needed the ast, but we are already in the typeinf loop
             # then just return early -- we can't fulfill this request
-            # if the client was typeinf_ext(toplevel), then we cancel the inInference request
             # if the client was inlining, then this means we decided not to try to infer this
             # particular signature (due to signature coarsening in abstract_call_gf_by_type)
             # and attempting to force it now would be a bad idea (non terminating)
-            linfo.inInference = false
             return (nothing, Union{}, false)
         end
         # add lam to be inferred and record the edge
         ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
         sv = VarInfo(linfo, atypes, ast)
-
         if length(linfo.sparam_vals) > 0
             # handled by VarInfo constructor
         elseif isempty(sparams) && !isempty(linfo.sparam_syms)
@@ -1620,11 +1617,8 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
         else
             sv.sp = sparams
         end
-
         # our stack frame inference context
         frame = InferenceState(sv, linfo, optimize)
-        push!(workq, frame)
-        frame.inworkq = true
 
         if cached
             #println(linfo)
@@ -1658,7 +1652,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
             push!(frame.backedges, (me, Ws))
         end
     end
-    typeinf_loop()
+    typeinf_loop(frame)
     return (frame.sv.ast, frame.bestguess, frame.inferred)
 end
 
@@ -1676,14 +1670,15 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     return typeinf_edge(linfo, atypes, sparams, true, optimize, false, nothing)
 end
 function typeinf_ext(linfo::LambdaInfo, toplevel::Bool)
-    return typeinf_edge(linfo, linfo.specTypes, svec(), toplevel, true, true, nothing)
+    return typeinf_edge(linfo, linfo.specTypes, svec(), true, true, true, nothing)
 end
 
 
 in_typeinf_loop = false
-function typeinf_loop()
+function typeinf_loop(frame)
     global in_typeinf_loop
     if in_typeinf_loop
+        frame.inworkq || typeinf_frame(frame)
         return
     end
     in_typeinf_loop = true
@@ -1700,210 +1695,8 @@ function typeinf_loop()
             frame = pop!(workq)
             frame.inworkq = false
         end
-        global global_sv = frame.sv # TODO: actually pass this to all functions that need it
-        W = frame.ip
-        s = frame.stmt_types
-        n = frame.nstmts
-        while !isempty(W)
-            # make progress on the active ip set
-            local pc::Int = first(W), pc´::Int
-            while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
-                #print(pc,": ",s[pc],"\n")
-                delete!(W, pc)
-                frame.sv.currpc = pc
-                frame.sv.static_typeof = false
-                if frame.handler_at[pc] === 0
-                    frame.handler_at[pc] = frame.cur_hand
-                else
-                    frame.cur_hand = frame.handler_at[pc]
-                end
-                stmt = frame.sv.body[pc]
-                changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, frame.sv)
-                if changes === ()
-                    # if there was a Expr(:static_typeof) on this line,
-                    # need to continue to the next pc even though the return type was Bottom
-                    # otherwise, this line threw an error and there is no need to continue
-                    frame.sv.static_typeof || break
-                    changes = s[pc]
-                end
-                if frame.cur_hand !== ()
-                    # propagate type info to exception handler
-                    l = frame.cur_hand[1]
-                    if stchanged(changes, s[l], frame.sv.vars)
-                        push!(W, l)
-                        s[l] = stupdate(s[l], changes, frame.sv.vars)
-                    end
-                end
-                pc´ = pc+1
-                if isa(changes, StateUpdate) && isa((changes::StateUpdate).var, GenSym)
-                    # directly forward changes to a GenSym to the applicable line
-                    changes = changes::StateUpdate
-                    id = (changes.var::GenSym).id + 1
-                    new = changes.vtype.typ
-                    old = frame.sv.gensym_types[id]
-                    if old===NF || !(new <: old)
-                        frame.sv.gensym_types[id] = tmerge(old, new)
-                        for r in frame.gensym_uses[id]
-                            if !is(s[r], ()) # s[r] === () => unreached statement
-                                push!(W, r)
-                            end
-                        end
-                    end
-                elseif isa(stmt, GotoNode)
-                    pc´ = findlabel(frame.labels, (stmt::GotoNode).label)
-                elseif isa(stmt, Expr)
-                    stmt = stmt::Expr
-                    hd = stmt.head
-                    if is(hd, :gotoifnot)
-                        condexpr = stmt.args[1]
-                        l = findlabel(frame.labels, stmt.args[2]::Int)
-                        # constant conditions
-                        if is(condexpr, true)
-                        elseif is(condexpr, false)
-                            pc´ = l
-                        else
-                            # general case
-                            frame.handler_at[l] = frame.cur_hand
-                            if stchanged(changes, s[l], frame.sv.vars)
-                                # add else branch to active IP list
-                                push!(W, l)
-                                s[l] = stupdate(s[l], changes, frame.sv.vars)
-                            end
-                        end
-                    elseif is(hd, :type_goto)
-                        for i = 2:length(stmt.args)
-                            var = stmt.args[i]::GenSym
-                            # Store types that need to be fed back via type_goto
-                            # in gensym_init. After finishing inference, if any
-                            # of these types changed, start over with the fed-back
-                            # types known from the beginning.
-                            # See issue #3821 (using !typeseq instead of !subtype),
-                            # and issue #7810.
-                            id = var.id+1
-                            vt = frame.sv.gensym_types[id]
-                            ot = frame.gensym_init[id]
-                            if ot===NF || !typeseq(vt, ot)
-                                frame.gensym_init[id] = vt
-                                if get(frame.sv.fedbackvars, var, false)
-                                    frame.typegotoredo = true
-                                end
-                            end
-                            frame.sv.fedbackvars[var] = true
-                        end
-                    elseif is(hd, :return)
-                        pc´ = n + 1
-                        rt = abstract_eval(stmt.args[1], s[pc], frame.sv)
-                        if tchanged(rt, frame.bestguess)
-                            # new (wider) return type for frame
-                            frame.bestguess = tmerge(frame.bestguess, rt)
-                            for (caller, callerW) in frame.backedges
-                                # notify backedges of updated type information
-                                for caller_pc in callerW
-                                    push!(caller.ip, caller_pc)
-                                end
-                            end
-                            unmark_fixedpoint(frame)
-                        end
-                    elseif is(hd, :enter)
-                        l = findlabel(frame.labels, stmt.args[1]::Int)
-                        frame.cur_hand = (l, frame.cur_hand)
-                        # propagate type info to exception handler
-                        l = frame.cur_hand[1]
-                        old = s[l]
-                        new = s[pc]::ObjectIdDict
-                        if old === () || stchanged(new, old::ObjectIdDict, frame.sv.vars)
-                            push!(W, l)
-                            s[l] = stupdate(old, new, frame.sv.vars)
-                        end
-#                        if frame.handler_at[l] === 0
-#                            frame.n_handlers += 1
-#                            if frame.n_handlers > 25
-#                                # too many exception handlers slows down inference a lot.
-#                                # for an example see test/libgit2.jl on 0.5-pre master
-#                                # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
-#                                inference_stack = (inference_stack::CallStack).prev
-#                                return (ast0, Any, false)
-#                            end
-#                        end
-                        frame.handler_at[l] = frame.cur_hand
-                    elseif is(hd, :leave)
-                        for i = 1:((stmt.args[1])::Int)
-                            frame.cur_hand = frame.cur_hand[2]
-                        end
-                    end
-                end
-                if pc´<=n && (frame.handler_at[pc´] = frame.cur_hand; true) &&
-                   stchanged(changes, s[pc´], frame.sv.vars)
-                    s[pc´] = stupdate(s[pc´], changes, frame.sv.vars)
-                    pc = pc´
-                elseif pc´ in W
-                    pc = pc´
-                else
-                    break
-                end
-            end
-        end
-
-        # with no active ip's, type inference on frame is done if there are no outstanding (unfinished) edges
-        finished = isempty(frame.edges)
-        if isempty(workq)
-            # oops, there's a cycle somewhere in the `edges` graph
-            # so we've run out off the tree and will need to start work on the loop
-            frame.fixedpoint = true
-        end
-
-        restart = false
-        if finished || frame.fixedpoint
-            if frame.typegotoredo
-                # if any type_gotos changed, clear state and restart.
-                frame.typegotoredo = false
-                for ll = 2:length(s)
-                    s[ll] = ()
-                end
-                empty!(W)
-                push!(W, 1)
-                frame.cur_hand = ()
-                frame.handler_at = Any[ () for i=1:n ]
-                frame.n_handlers = 0
-                frame.sv.gensym_types[:] = frame.gensym_init
-                restart = true
-            else
-                # if a static_typeof was never reached,
-                # use Union{} as its real type and continue
-                # running type inference from its uses
-                # (one of which is the static_typeof)
-                # TODO: this restart should happen just before calling finish()
-                for (fbvar, seen) in frame.sv.fedbackvars
-                    if !seen
-                        frame.sv.fedbackvars[fbvar] = true
-                        id = (fbvar::GenSym).id + 1
-                        for r in frame.gensym_uses[id]
-                            if !is(s[r], ()) # s[r] === () => unreached statement
-                                push!(W, r)
-                            end
-                        end
-                        restart = true
-                    end
-                end
-            end
-
-            if restart
-                push!(workq, frame)
-                frame.inworkq = true
-            elseif finished
-                finish(frame)
-            else # fixedpoint propagation
-                for (i,_) in frame.edges
-                    i = i::InferenceState
-                    if !i.fixedpoint
-                        i.inworkq || push!(workq, i)
-                        i.inworkq = true
-                        i.fixedpoint = true
-                    end
-                end
-            end
-        end
-        if !restart && isempty(workq) && nactive[] > 0
+        typeinf_frame(frame)
+        if isempty(workq) && nactive[] > 0
             # nothing in active has an edge that hasn't reached a fixed-point
             # so all of them can be considered finished now
             for i in active
@@ -1922,6 +1715,221 @@ function typeinf_loop()
 #        pop!(active)
 #    end
     in_typeinf_loop = false
+    nothing
+end
+
+global_sv = nothing
+function typeinf_frame(frame)
+    global global_sv # TODO: actually pass this to all functions that need it
+    last_global_sv = global_sv
+    global_sv = frame.sv
+    W = frame.ip
+    s = frame.stmt_types
+    n = frame.nstmts
+    @label restart_typeinf
+    while !isempty(W)
+        # make progress on the active ip set
+        local pc::Int = first(W), pc´::Int
+        while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
+            #print(pc,": ",s[pc],"\n")
+            delete!(W, pc)
+            frame.sv.currpc = pc
+            frame.sv.static_typeof = false
+            if frame.handler_at[pc] === 0
+                frame.handler_at[pc] = frame.cur_hand
+            else
+                frame.cur_hand = frame.handler_at[pc]
+            end
+            stmt = frame.sv.body[pc]
+            changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, frame.sv)
+            if changes === ()
+                # if there was a Expr(:static_typeof) on this line,
+                # need to continue to the next pc even though the return type was Bottom
+                # otherwise, this line threw an error and there is no need to continue
+                frame.sv.static_typeof || break
+                changes = s[pc]
+            end
+            if frame.cur_hand !== ()
+                # propagate type info to exception handler
+                l = frame.cur_hand[1]
+                if stchanged(changes, s[l], frame.sv.vars)
+                    push!(W, l)
+                    s[l] = stupdate(s[l], changes, frame.sv.vars)
+                end
+            end
+            pc´ = pc+1
+            if isa(changes, StateUpdate) && isa((changes::StateUpdate).var, GenSym)
+                # directly forward changes to a GenSym to the applicable line
+                changes = changes::StateUpdate
+                id = (changes.var::GenSym).id + 1
+                new = changes.vtype.typ
+                old = frame.sv.gensym_types[id]
+                if old===NF || !(new <: old)
+                    frame.sv.gensym_types[id] = tmerge(old, new)
+                    for r in frame.gensym_uses[id]
+                        if !is(s[r], ()) # s[r] === () => unreached statement
+                            push!(W, r)
+                        end
+                    end
+                end
+            elseif isa(stmt, GotoNode)
+                pc´ = findlabel(frame.labels, (stmt::GotoNode).label)
+            elseif isa(stmt, Expr)
+                stmt = stmt::Expr
+                hd = stmt.head
+                if is(hd, :gotoifnot)
+                    condexpr = stmt.args[1]
+                    l = findlabel(frame.labels, stmt.args[2]::Int)
+                    # constant conditions
+                    if is(condexpr, true)
+                    elseif is(condexpr, false)
+                        pc´ = l
+                    else
+                        # general case
+                        frame.handler_at[l] = frame.cur_hand
+                        if stchanged(changes, s[l], frame.sv.vars)
+                            # add else branch to active IP list
+                            push!(W, l)
+                            s[l] = stupdate(s[l], changes, frame.sv.vars)
+                        end
+                    end
+                elseif is(hd, :type_goto)
+                    for i = 2:length(stmt.args)
+                        var = stmt.args[i]::GenSym
+                        # Store types that need to be fed back via type_goto
+                        # in gensym_init. After finishing inference, if any
+                        # of these types changed, start over with the fed-back
+                        # types known from the beginning.
+                        # See issue #3821 (using !typeseq instead of !subtype),
+                        # and issue #7810.
+                        id = var.id+1
+                        vt = frame.sv.gensym_types[id]
+                        ot = frame.gensym_init[id]
+                        if ot===NF || !typeseq(vt, ot)
+                            frame.gensym_init[id] = vt
+                            if get(frame.sv.fedbackvars, var, false)
+                                frame.typegotoredo = true
+                            end
+                        end
+                        frame.sv.fedbackvars[var] = true
+                    end
+                elseif is(hd, :return)
+                    pc´ = n + 1
+                    rt = abstract_eval(stmt.args[1], s[pc], frame.sv)
+                    if tchanged(rt, frame.bestguess)
+                        # new (wider) return type for frame
+                        frame.bestguess = tmerge(frame.bestguess, rt)
+                        for (caller, callerW) in frame.backedges
+                            # notify backedges of updated type information
+                            for caller_pc in callerW
+                                push!(caller.ip, caller_pc)
+                            end
+                        end
+                        unmark_fixedpoint(frame)
+                    end
+                elseif is(hd, :enter)
+                    l = findlabel(frame.labels, stmt.args[1]::Int)
+                    frame.cur_hand = (l, frame.cur_hand)
+                    # propagate type info to exception handler
+                    l = frame.cur_hand[1]
+                    old = s[l]
+                    new = s[pc]::ObjectIdDict
+                    if old === () || stchanged(new, old::ObjectIdDict, frame.sv.vars)
+                        push!(W, l)
+                        s[l] = stupdate(old, new, frame.sv.vars)
+                    end
+#                        if frame.handler_at[l] === 0
+#                            frame.n_handlers += 1
+#                            if frame.n_handlers > 25
+#                                # too many exception handlers slows down inference a lot.
+#                                # for an example see test/libgit2.jl on 0.5-pre master
+#                                # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
+#                                inference_stack = (inference_stack::CallStack).prev
+#                                return (ast0, Any, false)
+#                            end
+#                        end
+                    frame.handler_at[l] = frame.cur_hand
+                elseif is(hd, :leave)
+                    for i = 1:((stmt.args[1])::Int)
+                        frame.cur_hand = frame.cur_hand[2]
+                    end
+                end
+            end
+            if pc´<=n && (frame.handler_at[pc´] = frame.cur_hand; true) &&
+               stchanged(changes, s[pc´], frame.sv.vars)
+                s[pc´] = stupdate(s[pc´], changes, frame.sv.vars)
+                pc = pc´
+            elseif pc´ in W
+                pc = pc´
+            else
+                break
+            end
+        end
+    end
+
+    if frame.inferred
+        # during recursive compilation, this can happen.
+        # now just need to bail since it's already finished.
+        last_global_sv = global_sv
+        return
+    end
+
+    # with no active ip's, type inference on frame is done if there are no outstanding (unfinished) edges
+    finished = isempty(frame.edges)
+    if isempty(workq)
+        # oops, there's a cycle somewhere in the `edges` graph
+        # so we've run out off the tree and will need to start work on the loop
+        frame.fixedpoint = true
+    end
+
+    if finished || frame.fixedpoint
+        if frame.typegotoredo
+            # if any type_gotos changed, clear state and restart.
+            frame.typegotoredo = false
+            for ll = 2:length(s)
+                s[ll] = ()
+            end
+            empty!(W)
+            push!(W, 1)
+            frame.cur_hand = ()
+            frame.handler_at = Any[ () for i=1:n ]
+            frame.n_handlers = 0
+            frame.sv.gensym_types[:] = frame.gensym_init
+            @goto restart_typeinf
+        else
+            # if a static_typeof was never reached,
+            # use Union{} as its real type and continue
+            # running type inference from its uses
+            # (one of which is the static_typeof)
+            # TODO: this restart should happen just before calling finish()
+            for (fbvar, seen) in frame.sv.fedbackvars
+                if !seen
+                    frame.sv.fedbackvars[fbvar] = true
+                    id = (fbvar::GenSym).id + 1
+                    for r in frame.gensym_uses[id]
+                        if !is(s[r], ()) # s[r] === () => unreached statement
+                            push!(W, r)
+                        end
+                    end
+                    @goto restart_typeinf
+                end
+            end
+        end
+
+        if finished
+            finish(frame)
+        else # fixedpoint propagation
+            for (i,_) in frame.edges
+                i = i::InferenceState
+                if !i.fixedpoint
+                    i.inworkq || push!(workq, i)
+                    i.inworkq = true
+                    i.fixedpoint = true
+                end
+            end
+        end
+    end
+    global_sv = last_global_sv
     nothing
 end
 
@@ -1950,6 +1958,11 @@ function finish(me::InferenceState)
     for (i,_) in me.edges
         @assert (i::InferenceState).fixedpoint
     end
+    # below may call back into inference and
+    # see this InferenceState is in an imcomplete state
+    # set `inworkq` to prevent it from trying to look
+    # at the object in any detail
+    me.inworkq = true
 
     # annotate fulltree with type information
     for i = 1:length(me.sv.gensym_types)
