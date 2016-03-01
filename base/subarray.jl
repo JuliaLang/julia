@@ -53,6 +53,11 @@ typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlic
 typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
+# typealiases ensuring that the first dimension has unit stride (used by BLAS)
+typealias UnitStridedVector{T,A<:DenseArray,I<:Tuple{Union{Colon,UnitRange{Int}},Vararg{Int}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}}
+typealias UnitStridedMatrix{T,A<:DenseArray,I<:Tuple{Union{Colon,UnitRange{Int}},Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
+typealias UnitStridedVecOrMat{T} Union{UnitStridedVector{T}, UnitStridedMatrix{T}}
+
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()
 # Leading scalar indexes simply increase the stride

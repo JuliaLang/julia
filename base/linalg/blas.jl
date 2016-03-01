@@ -4,6 +4,7 @@ module BLAS
 
 import Base: copy!, @blasfunc
 import Base.LinAlg: axpy!, dot
+using Base: UnitStridedVector, UnitStridedMatrix, UnitStridedVecOrMat
 
 export
 # Level 1
@@ -863,7 +864,7 @@ for (gemm, elty) in
              #       CHARACTER TRANSA,TRANSB
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function gemm!(transA::Char, transB::Char, alpha::($elty), A::StridedVecOrMat{$elty}, B::StridedVecOrMat{$elty}, beta::($elty), C::StridedVecOrMat{$elty})
+        function gemm!(transA::Char, transB::Char, alpha::($elty), A::UnitStridedVecOrMat{$elty}, B::UnitStridedVecOrMat{$elty}, beta::($elty), C::UnitStridedVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
