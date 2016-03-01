@@ -3189,7 +3189,7 @@ extern void jl_init_int32_int64_cache(void);
 void jl_init_types(void)
 {
     // create base objects
-    jl_datatype_type = jl_new_uninitialized_datatype(10, 1);
+    jl_datatype_type = jl_new_uninitialized_datatype(11, 1);
     jl_set_typeof(jl_datatype_type, jl_datatype_type);
     jl_typename_type = jl_new_uninitialized_datatype(8, 1);
     jl_sym_type = jl_new_uninitialized_datatype(0, 1);
@@ -3211,7 +3211,7 @@ void jl_init_types(void)
     jl_datatype_type->name->primary = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_svec(10, jl_symbol("name"),
+    jl_datatype_type->name->names = jl_svec(11, jl_symbol("name"),
                                             jl_symbol("super"),
                                             jl_symbol("parameters"),
                                             jl_symbol("types"),
@@ -3220,12 +3220,13 @@ void jl_init_types(void)
                                             jl_symbol("abstract"),
                                             jl_symbol("mutable"),
                                             jl_symbol("pointerfree"),
-                                            jl_symbol("ninitialized"));
-    jl_datatype_type->types = jl_svec(10, jl_typename_type, jl_type_type,
+                                            jl_symbol("ninitialized"),
+                                            jl_symbol("depth"));
+    jl_datatype_type->types = jl_svec(11, jl_typename_type, jl_type_type,
                                       jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type,
                                       jl_any_type, // size
-                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -3544,6 +3545,7 @@ void jl_init_types(void)
     jl_svecset(jl_datatype_type->types, 7, (jl_value_t*)jl_bool_type);
     jl_svecset(jl_datatype_type->types, 8, (jl_value_t*)jl_bool_type);
     jl_svecset(jl_datatype_type->types, 9, jl_int32_type);
+    jl_svecset(jl_datatype_type->types, 10, jl_int32_type);
     jl_svecset(jl_tvar_type->types, 3, (jl_value_t*)jl_bool_type);
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);

@@ -346,16 +346,20 @@ add_tfunc(typeof, 1, 1, typeof_tfunc)
 add_tfunc(typeassert, 2, 2,
     (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) : Any))
 
-function type_depth(t::ANY, d::Int=0)
-    if isa(t,Union)
-        t === Bottom && return d
-        return maximum(x->type_depth(x, d+1), t.types)
-    elseif isa(t,DataType)
+function type_depth(t::ANY)
+    if isa(t, Union)
+        t === Bottom && return 0
+        return maximum(type_depth, t.types) + 1
+    elseif isa(t, DataType)
+        t = t::DataType
         P = t.parameters
-        isempty(P) && return d
-        return maximum(x->type_depth(x, d+1), P)
+        isempty(P) && return 0
+        if t.depth == 0
+            t.depth = maximum(type_depth, P) + 1
+        end
+        return t.depth
     end
-    return d
+    return 0
 end
 
 function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)

@@ -596,6 +596,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
     t->nfields = nfields;
     t->haspadding = 0;
     t->pointerfree = 0;
+    t->depth = 0;
     return t;
 }
 
