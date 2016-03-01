@@ -54,6 +54,12 @@ for T in (Float16, Float32, Float64, BigFloat)
     @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
     @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
 end
+@test isequal(true + complex(true,false), complex(true,false) + complex(true,false))
+@test isequal(complex(true,false) + true, complex(true,false) + complex(true,false))
+@test isequal(true - complex(true,false), complex(true,false) - complex(true,false))
+@test isequal(complex(true,false) - true, complex(true,false) - complex(true,false))
+@test isequal(true * complex(true,false), complex(true,false) * complex(true,false))
+@test isequal(complex(true,false) * true, complex(true,false) * complex(true,false))
 
 # Test math functions. We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independent and independently
