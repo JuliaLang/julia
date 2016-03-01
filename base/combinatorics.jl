@@ -196,8 +196,8 @@ function nextprod(a::Vector{Int}, x)
             end
         end
     end
-    best = mx[end] < best ? mx[end] : best
-    return Int(best)  # could overflow, but best to have predictable return type
+    # might overflow, but want predictable return type
+    return mx[end] < best ? Int(mx[end]) : Int(best)
 end
 
 
