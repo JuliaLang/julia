@@ -2775,6 +2775,8 @@ let T = Rational
     @test_approx_eq x^true big(xf)^true
     @test_approx_eq x^false big(xf)^false
     @test_approx_eq x^1 big(xf)^1
+    @test_approx_eq xf^Rational(2, 1) xf*xf
+    @test Complex(1., 1.)^Rational(2,1) == Complex(1., 1.)*Complex(1.,1.) == Complex(0., 2.)
 end
 
 for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
