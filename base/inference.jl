@@ -3514,10 +3514,7 @@ function alloc_elim_pass(ast::Expr, sv::VarInfo)
     end
 end
 
-function replace_getfield!(ast, e::ANY, tupname, vals, field_names, sv, i0)
-    if !isa(e,Expr)
-        return
-    end
+function replace_getfield!(ast, e::Expr, tupname, vals, field_names, sv, i0)
     for i = i0:length(e.args)
         a = e.args[i]
         if isa(a,Expr) && is_known_call(a, getfield, sv) &&
@@ -3551,8 +3548,8 @@ function replace_getfield!(ast, e::ANY, tupname, vals, field_names, sv, i0)
                 end
             end
             e.args[i] = val
-        else
-            replace_getfield!(ast, a, tupname, vals, field_names, sv, 1)
+        elseif isa(a, Expr)
+            replace_getfield!(ast, a::Expr, tupname, vals, field_names, sv, 1)
         end
     end
 end
