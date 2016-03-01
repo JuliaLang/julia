@@ -1584,13 +1584,12 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
 
     // return environment in same order as tvars
-    *penv = jl_alloc_svec_uninit(tvarslen*2);
+    *penv = jl_alloc_svec_uninit(tvarslen);
     for(int tk=0; tk < tvarslen; tk++) {
         jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
         for(e=0; e < eqc.n; e+=2) {
             if (eqc.data[e] == (jl_value_t*)tv) {
-                jl_svecset(*penv, tk*2, tv);
-                jl_svecset(*penv, tk*2+1, eqc.data[e+1]);
+                jl_svecset(*penv, tk, eqc.data[e+1]);
             }
         }
     }
