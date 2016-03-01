@@ -3862,3 +3862,11 @@ end
 @test_throws ErrorException g15259(1,1)
 @eval h15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); getfield(a, 3))
 @test_throws BoundsError h15259(1,1)
+
+# issue #15283
+j15283 = 0
+let
+    k15283 = j15283+=1
+end
+@test j15283 == 1
+@test !isdefined(:k15283)
