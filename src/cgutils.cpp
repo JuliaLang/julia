@@ -1075,6 +1075,9 @@ static Value *emit_typeptr_addr(Value *p)
     return emit_nthptr_addr(p, -offset);
 }
 
+static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, bool gcooted=true);
+static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, jl_value_t* type) = delete; // C++11 (temporary to prevent rebase error)
+
 static Value *emit_typeof(Value *tt)
 {
     // given p, a jl_value_t*, compute its type tag
@@ -1086,17 +1089,21 @@ static Value *emit_typeof(Value *tt)
             T_pjlvalue);
     return tt;
 }
-static Value *emit_typeof(const jl_cgval_t &p)
+static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     // given p, compute its type
     if (!p.constant && p.isboxed && !jl_is_leaf_type(p.typ)) {
-        return emit_typeof(p.V);
+        return mark_julia_type(emit_typeof(p.V), true, jl_datatype_type, ctx);
     }
     jl_value_t *aty = p.typ;
     if (jl_is_type_type(aty)) // convert Int::Type{Int} ==> typeof(Int) ==> DataType
                               // but convert 1::Type{1} ==> typeof(1) ==> Int
         aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
-    return literal_pointer_val(aty);
+    return mark_julia_const(aty);
+}
+static Value *emit_typeof_boxed(const jl_cgval_t &p, jl_codectx_t *ctx)
+{
+    return boxed(emit_typeof(p, ctx), ctx);
 }
 
 static Value *emit_datatype_types(Value *dt)
@@ -1231,9 +1238,6 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
                            prepare_global(jlundeferr_var), ctx);
 }
 
-static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, bool gcooted=true);
-static Value *boxed(const jl_cgval_t &v, jl_codectx_t *ctx, jl_value_t* type) = delete; // C++11 (temporary to prevent rebase error)
-
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
 {
@@ -1272,7 +1276,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
                          ConstantInt::get(T_int32,0));
     }
     else {
-        istype = builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
+        istype = builder.CreateICmpEQ(emit_typeof_boxed(x,ctx), literal_pointer_val(type));
     }
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
@@ -2066,7 +2070,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
 
 static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_codectx_t *ctx)
 {
-    Value *t = emit_typeof(x);
+    Value *t = emit_typeof_boxed(x,ctx);
     emit_typecheck(mark_julia_type(t, true, jl_any_type, ctx), (jl_value_t*)jl_datatype_type, msg, ctx);
 
     Value *istype =
