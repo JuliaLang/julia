@@ -437,11 +437,12 @@ const Cbuf = Array(UInt8, tilebufsize)
 function generic_matmatmul!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
+    mC, nC = size(C)
 
-    if mA == nA == nB == 2
+    if mA == nA == mB == nB == mC == nC == 2
         return matmul2x2!(C, tA, tB, A, B)
     end
-    if mA == nA == nB == 3
+    if mA == nA == mB == nB == mC == nC == 3
         return matmul3x3!(C, tA, tB, A, B)
     end
     _generic_matmatmul!(C, tA, tB, A, B)
