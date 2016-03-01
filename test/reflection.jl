@@ -237,3 +237,7 @@ let rts = return_types(TLayout)
     @test length(rts) >= 3 # general constructor, specific constructor, and call-to-convert adapter(s)
     @test all(rts .== TLayout)
 end
+
+# issue #15280
+function f15280(x) end
+@test functionloc(f15280)[2] > 0
