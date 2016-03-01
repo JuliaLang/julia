@@ -827,3 +827,20 @@ end
 
 @test issymmetric([1 2 3; 2 2 3; 3 3 2])
 @test !issymmetric([1 3 3; 2 2 3; 3 3 2])
+
+let X = randn(10,2), Y = randn(10,2), x = randn(10), y = randn(10)
+    for b in (true, false)
+        if VERSION < v"0.5.0-dev+679"
+            @test cov(x, b) == cov(x, corrected=b)
+        end
+        for d in (1, 2)
+            @test size(cov(X, d), 1) == 8*d - 6
+            @test size(cov(X, d, b), 1) == 8*d - 6
+            @test size(cov(X, Y, d), 1) == 8*d - 6
+            @test size(cov(X, Y, d, b), 1) == 8*d - 6
+
+            @test size(cor(X, d), 1) == 8*d - 6
+            @test size(cor(X, Y, d), 1) == 8*d - 6
+        end
+    end
+end
