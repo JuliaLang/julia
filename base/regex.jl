@@ -327,6 +327,7 @@ compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
 done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
+iteratorsize(::Type{RegexMatchIterator}) = SizeUnknown()
 
 # Assumes prev_match is not nothing
 function next(itr::RegexMatchIterator, prev_match)

@@ -385,6 +385,7 @@ type GenericIterator{N} end
 Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
 Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
+Base.iteratorsize{N}(::Type{GenericIterator{N}}) = Base.SizeUnknown()
 
 function test_map(::Type{TestAbstractArray})
 
