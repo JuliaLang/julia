@@ -244,7 +244,7 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
                     @test typeof(first(graphemes(s_))) == SubString{typeof(s_)}
                 end
                 grph = collect(graphemes(s_))
-                @test isempty(grph) || eltype(grph) == SubString{typeof(s_)}
+                @test eltype(grph) == SubString{typeof(s_)}
                 @test grph == g_
                 @test length(graphemes(s_)) == length(grph)
             end

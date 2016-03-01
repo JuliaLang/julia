@@ -26,9 +26,10 @@ abstract IteratorSize
 immutable SizeUnknown <: IteratorSize end
 immutable HasLength <: IteratorSize end
 immutable HasShape <: IteratorSize end
+immutable IsInfinite <: IteratorSize end
 
 iteratorsize(x) = iteratorsize(typeof(x))
-iteratorsize(::Type) = SizeUnknown()
+iteratorsize(::Type) = HasLength()  # HasLength is the default
 
 and_iteratorsize{T}(isz::T, ::T) = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
@@ -40,19 +41,16 @@ immutable EltypeUnknown <: IteratorEltype end
 immutable HasEltype <: IteratorEltype end
 
 iteratoreltype(x) = iteratoreltype(typeof(x))
-iteratoreltype(::Type) = EltypeUnknown()
+iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
 and_iteratoreltype{T}(iel::T, ::T) = iel
 and_iteratoreltype(a, b) = EltypeUnknown()
 
 iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
-iteratorsize{T<:AbstractString}(::Type{T}) = HasLength()
-iteratorsize{T<:Tuple}(::Type{T}) = HasLength()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 
-iteratoreltype{T<:AbstractArray}(::Type{T}) = HasEltype()
-iteratoreltype{T<:AbstractString}(::Type{T}) = HasEltype()
+iteratoreltype{I,T}(::Type{Generator{I,T}}) = EltypeUnknown()
 iteratoreltype{I,T}(::Type{Generator{I,Type{T}}}) = HasEltype()
 eltype{I,T}(::Type{Generator{I,Type{T}}}) = T

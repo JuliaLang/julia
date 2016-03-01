@@ -253,6 +253,8 @@ function done(t::Task, val)
     istaskdone(t)
 end
 next(t::Task, val) = (t.result, nothing)
+iteratorsize(::Type{Task}) = SizeUnknown()
+iteratoreltype(::Type{Task}) = EltypeUnknown()
 
 isempty(::Task) = error("isempty not defined for Tasks")
 

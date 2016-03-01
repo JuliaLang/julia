@@ -125,6 +125,7 @@ done(f::Filter, s) = s[1]
 
 eltype{I}(::Type{Filter{I}}) = eltype(I)
 iteratoreltype{F,I}(::Type{Filter{F,I}}) = iteratoreltype(I)
+iteratorsize{T<:Filter}(::Type{T}) = SizeUnknown()
 
 # Rest -- iterate starting at the given state
 
@@ -140,6 +141,7 @@ done(i::Rest, st) = done(i.itr, st)
 
 eltype{I}(::Type{Rest{I}}) = eltype(I)
 iteratoreltype{I,S}(::Type{Rest{I,S}}) = iteratoreltype(I)
+iteratorsize{T<:Rest}(::Type{T}) = SizeUnknown()
 
 # Count -- infinite counting
 
@@ -152,11 +154,12 @@ countfrom(start::Number)               = Count(start, one(start))
 countfrom()                            = Count(1, 1)
 
 eltype{S}(::Type{Count{S}}) = S
-iteratoreltype{I<:Count}(::Type{I}) = HasEltype()
 
 start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
+
+iteratorsize{S}(::Type{Count{S}}) = IsInfinite()
 
 # Take -- iterate through the first n elements
 
@@ -168,6 +171,7 @@ take(xs, n::Int) = Take(xs, n)
 
 eltype{I}(::Type{Take{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Take{I}}) = iteratoreltype(I)
+iteratorsize{T<:Take}(::Type{T}) = SizeUnknown()  # TODO
 
 start(it::Take) = (it.n, start(it.xs))
 
@@ -192,6 +196,7 @@ drop(xs, n::Int) = Drop(xs, n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Drop{I}}) = iteratoreltype(I)
+iteratorsize{T<:Drop}(::Type{T}) = SizeUnknown()  # TODO
 
 function start(it::Drop)
     xs_state = start(it.xs)
@@ -217,6 +222,7 @@ cycle(xs) = Cycle(xs)
 
 eltype{I}(::Type{Cycle{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Cycle{I}}) = iteratoreltype(I)
+iteratorsize{I}(::Type{Cycle{I}}) = IsInfinite()
 
 function start(it::Cycle)
     s = start(it.xs)
@@ -241,7 +247,7 @@ immutable Repeated{O}
 end
 repeated(x) = Repeated(x)
 eltype{O}(::Type{Repeated{O}}) = O
-iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
+iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
 start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
