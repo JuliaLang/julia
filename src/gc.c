@@ -263,6 +263,11 @@ typedef struct {
     jl_thread_heap_t *heap;
 } jl_single_heap_index_t;
 
+// Include before gc-debug for objprofile
+static const uintptr_t jl_buff_tag = 0x4eade800;
+static void *const jl_malloc_tag = (void*)0xdeadaa01;
+static void *const jl_singleton_tag = (void*)0xdeadaa02;
+
 #define current_heap __current_heap_idx.heap
 #define current_heap_index __current_heap_idx.index
 // This chould trigger a false positive warning with both gcc and clang
@@ -641,11 +646,6 @@ static int64_t promoted_bytes = 0;
 static size_t current_pg_count = 0;
 static size_t max_pg_count = 0;
 
-#ifdef OBJPROFILE
-static htable_t obj_counts[3];
-static htable_t obj_sizes[3];
-#endif
-
 JL_DLLEXPORT size_t jl_gc_total_freed_bytes=0;
 #ifdef GC_FINAL_STATS
 static uint64_t max_pause = 0;
@@ -701,39 +701,7 @@ static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int prev_sweep_mask = GC_MARKED;
 
-static const uintptr_t jl_buff_tag = 0x4eade800;
-static void *const jl_malloc_tag = (void*)0xdeadaa01;
-#ifdef OBJPROFILE
-static void *const jl_singleton_tag = (void*)0xdeadaa02;
-#endif
 static size_t array_nbytes(jl_array_t*);
-static inline void objprofile_count(void *ty, int old, int sz)
-{
-#ifdef OBJPROFILE
-#ifdef GC_VERIFY
-    if (verifying) return;
-#endif
-    if ((intptr_t)ty <= 0x10) {
-        ty = (void*)jl_buff_tag;
-    }
-    else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
-             jl_typeof(ty) == (jl_value_t*)jl_datatype_type &&
-             ((jl_datatype_t*)ty)->instance) {
-        ty = jl_singleton_tag;
-    }
-    void **bp = ptrhash_bp(&obj_counts[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)2;
-    else
-        (*((intptr_t*)bp))++;
-    bp = ptrhash_bp(&obj_sizes[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)(intptr_t)(1 + sz);
-    else
-        *((intptr_t*)bp) += sz;
-#endif
-}
-
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
 static inline int gc_setmark_big(void *o, int mark_mode)
@@ -2119,66 +2087,6 @@ static void all_pool_stats(void);
 static void big_obj_stats(void);
 #endif
 
-#ifdef OBJPROFILE
-static void reset_obj_profile(void)
-{
-    for(int g=0; g < 3; g++) {
-        htable_reset(&obj_counts[g], 0);
-        htable_reset(&obj_sizes[g], 0);
-    }
-}
-
-static void print_obj_profile(htable_t nums, htable_t sizes)
-{
-    for(int i=0; i < nums.size; i+=2) {
-        if (nums.table[i+1] != HT_NOTFOUND) {
-            void *ty = nums.table[i];
-            int num = (intptr_t)nums.table[i + 1] - 1;
-            size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
-            static const int ptr_hex_width = 2 * sizeof(void*);
-            if (sz > 2e9) {
-                jl_printf(JL_STDERR, " %6d : %*.1f GB of (%*p) ",
-                          num, 6, ((double)sz) / 1024 / 1024 / 1024,
-                          ptr_hex_width, ty);
-            }
-            else if (sz > 2e6) {
-                jl_printf(JL_STDERR, " %6d : %*.1f MB of (%*p) ",
-                          num, 6, ((double)sz) / 1024 / 1024,
-                          ptr_hex_width, ty);
-            }
-            else if (sz > 2e3) {
-                jl_printf(JL_STDERR, " %6d : %*.1f kB of (%*p) ",
-                          num, 6, ((double)sz) / 1024,
-                          ptr_hex_width, ty);
-            }
-            else {
-                jl_printf(JL_STDERR, " %6d : %*d  B of (%*p) ",
-                          num, 6, (int)sz, ptr_hex_width, ty);
-            }
-            if (ty == (void*)jl_buff_tag)
-                jl_printf(JL_STDERR, "#<buffer>");
-            else if (ty == jl_malloc_tag)
-                jl_printf(JL_STDERR, "#<malloc>");
-            else if (ty == jl_singleton_tag)
-                jl_printf(JL_STDERR, "#<singletons>");
-            else
-                jl_static_show(JL_STDERR, (jl_value_t*)ty);
-            jl_printf(JL_STDERR, "\n");
-        }
-    }
-}
-
-static void print_obj_profiles(void)
-{
-    jl_printf(JL_STDERR, "Transient mark :\n");
-    print_obj_profile(obj_counts[0], obj_sizes[0]);
-    jl_printf(JL_STDERR, "Perm mark :\n");
-    print_obj_profile(obj_counts[1], obj_sizes[1]);
-    jl_printf(JL_STDERR, "Remset :\n");
-    print_obj_profile(obj_counts[2], obj_sizes[2]);
-}
-#endif
-
 #if defined(GC_TIME)
 static int saved_mark_sp = 0;
 #endif
@@ -2287,10 +2195,8 @@ static void _jl_gc_collect(int full, char *stack_hi)
             all_pool_stats();
             big_obj_stats();
 #endif
-#ifdef OBJPROFILE
-            print_obj_profiles();
-            reset_obj_profile();
-#endif
+            objprofile_printall();
+            objprofile_reset();
             total_allocd_bytes += allocd_bytes_since_sweep;
             if (prev_sweep_mask == GC_MARKED_NOESC)
                 promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
@@ -2649,12 +2555,7 @@ void jl_gc_init(void)
     arraylist_new(&lostval_parents_done, 0);
 #endif
 
-#ifdef OBJPROFILE
-    for(int g=0; g<3; g++) {
-        htable_new(&obj_counts[g], 0);
-        htable_new(&obj_sizes[g], 0);
-    }
-#endif
+    objprofile_init();
 #ifdef GC_FINAL_STATS
     process_t0 = jl_clock_now();
 #endif
