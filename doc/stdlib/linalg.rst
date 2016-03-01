@@ -823,25 +823,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``\ th diagonal.
 
-.. function:: scale(A, b)
-              scale(b, A)
-
-   .. Docstring generated from Julia source
-
-   Scale an array ``A`` by a scalar ``b``\ , returning a new array.
-
-   If ``A`` is a matrix and ``b`` is a vector, then ``scale(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*diagm(b)``\ ), while ``scale(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``diagm(b)*A``\ ), returning a new array.
-
-   Note: for large ``A``\ , ``scale`` can be much faster than ``A .* b`` or ``b .* A``\ , due to the use of BLAS.
-
 .. function:: scale!(A, b)
               scale!(b, A)
 
    .. Docstring generated from Julia source
 
-   Scale an array ``A`` by a scalar ``b``\ , similar to :func:`scale` but overwriting ``A`` in-place.
+   Scale an array ``A`` by a scalar ``b`` overwriting ``A`` in-place.
 
-   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*diagm(b)``\ ), while ``scale!(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``diagm(b)*A``\ ), again operating in-place on ``A``\ .
+   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*Diagonal(b)``\ ), while ``scale!(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``Diagonal(b)*A``\ ), again operating in-place on ``A``\ .
 
 .. function:: Tridiagonal(dl, d, du)
 

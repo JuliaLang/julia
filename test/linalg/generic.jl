@@ -105,26 +105,6 @@ let aa = reshape([1.:6;], (2,3))
             a = sub(aa, 1:2, 1:2)
         end
 
-        # 2-argument version of scale
-        @test scale(a, 5.) == a*5
-        @test scale(5., a) == a*5
-        @test scale([1.; 2.], a) == a.*[1; 2]
-        @test scale([1; 2], a) == a.*[1; 2]
-        @test scale(eye(Int, 2), 0.5) == 0.5*eye(2)
-        @test scale([1; 2], sub(a, :, :)) == a.*[1; 2]
-        @test scale(sub([1; 2], :), a) == a.*[1; 2]
-        @test_throws DimensionMismatch scale(ones(3), a)
-
-        if atype == "Array"
-            @test scale(a, [1.; 2.; 3.]) == a.*[1 2 3]
-            @test scale(a, [1; 2; 3]) == a.*[1 2 3]
-            @test_throws DimensionMismatch scale(a, ones(2))
-        else
-            @test scale(a, [1.; 2.]) == a.*[1 2]
-            @test scale(a, [1; 2]) == a.*[1 2]
-            @test_throws DimensionMismatch scale(a, ones(3))
-        end
-
         # 2-argument version of scale!
         @test scale!(copy(a), 5.) == a*5
         @test scale!(5., copy(a)) == a*5
@@ -168,15 +148,15 @@ end
 
 # scale real matrix by complex type
 @test_throws InexactError scale!([1.0], 2.0im)
-@test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
-@test isequal(scale(2.0im, [1.0]),             Complex{Float64}[2.0im])
-@test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
-@test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])
-@test isequal(scale(Float64[1.0], 2.0f0im),    Complex{Float64}[2.0im])
-@test isequal(scale(Float32[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
-@test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
-@test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
-@test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
+@test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
+@test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
+@test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
+@test isequal(Float32[1.0] * 2.0im,      Complex{Float64}[2.0im])
+@test isequal(Float64[1.0] * 2.0f0im,    Complex{Float64}[2.0im])
+@test isequal(Float32[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
+@test isequal(Float64[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
+@test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
+@test isequal(BigFloat[1.0] * 2.0f0im,   Complex{BigFloat}[2.0im])
 
 # test scale and scale! for non-commutative multiplication
 q = Quaternion([0.44567, 0.755871, 0.882548, 0.423612])

@@ -228,20 +228,20 @@ sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
 dA = full(sA)
 b = randn(7)
-@test scale(dA, b) == scale(sA, b)
-@test scale(dA, b) == scale!(sC, sA, b)
-@test scale(dA, b) == scale!(copy(sA), b)
+@test dA * Diagonal(b) == sA * Diagonal(b)
+@test dA * Diagonal(b) == scale!(sC, sA, b)
+@test dA * Diagonal(b) == scale!(copy(sA), b)
 b = randn(3)
-@test scale(b, dA) == scale(b, sA)
-@test scale(b, dA) == scale!(sC, b, sA)
-@test scale(b, dA) == scale!(b, copy(sA))
+@test Diagonal(b) * dA == Diagonal(b) * sA
+@test Diagonal(b) * dA == scale!(sC, b, sA)
+@test Diagonal(b) * dA == scale!(b, copy(sA))
 
-@test scale(dA, 0.5) == scale(sA, 0.5)
-@test scale(dA, 0.5) == scale!(sC, sA, 0.5)
-@test scale(dA, 0.5) == scale!(copy(sA), 0.5)
-@test scale(0.5, dA) == scale(0.5, sA)
-@test scale(0.5, dA) == scale!(sC, sA, 0.5)
-@test scale(0.5, dA) == scale!(0.5, copy(sA))
+@test dA * 0.5            == sA * 0.5
+@test dA * 0.5            == scale!(sC, sA, 0.5)
+@test dA * 0.5            == scale!(copy(sA), 0.5)
+@test 0.5 * dA            == 0.5 * sA
+@test 0.5 * dA            == scale!(sC, sA, 0.5)
+@test 0.5 * dA            == scale!(0.5, copy(sA))
 @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 
 # copy!

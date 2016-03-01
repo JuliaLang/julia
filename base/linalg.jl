@@ -111,7 +111,6 @@ export
     lqfact!,
     lqfact,
     rank,
-    scale,
     scale!,
     schur,
     schurfact!,
