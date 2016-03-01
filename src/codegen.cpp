@@ -2309,8 +2309,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 
     else if (f==jl_builtin_typeof && nargs==1) {
         jl_cgval_t arg1 = emit_expr(args[1], ctx);
-        Value *lty = emit_typeof(arg1);
-        *ret = mark_julia_type(lty, true, jl_datatype_type, ctx);
+        *ret = emit_typeof(arg1,ctx);
         JL_GC_POP();
         return true;
     }
@@ -2380,7 +2379,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 if (jl_is_leaf_type(tp0)) {
                     jl_cgval_t arg1 = emit_expr(args[1], ctx);
                     *ret = mark_julia_type(
-                            builder.CreateICmpEQ(emit_typeof(arg1),
+                            builder.CreateICmpEQ(emit_typeof_boxed(arg1,ctx),
                                                  literal_pointer_val(tp0)),
                             false,
                             jl_bool_type, ctx);
