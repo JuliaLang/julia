@@ -146,6 +146,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Compat.LinAlg.checksquare` [#14601](https://github.com/JuliaLang/julia/pull/14601)
 
+* `issym` is now `issymmetric` [#15192](https://github.com/JuliaLang/julia/pull/15192)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

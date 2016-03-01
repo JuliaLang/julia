@@ -867,4 +867,9 @@ module LinAlg
     end
 end
 
+if VERSION < v"0.5.0-dev+2915"
+    const issymmetric = issym
+    export issymmetric
+end
+
 end # module
