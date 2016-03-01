@@ -4713,8 +4713,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             else if (specsig) {
                 if (type_is_ghost(llvmArgType)) // this argument is not actually passed
                     theArg = ghostValue(argType);
-                else if (llvmArgType->isAggregateType())
+                else if (llvmArgType->isAggregateType()) {
                     theArg = mark_julia_slot(&*AI++, argType); // this argument is by-pointer
+                    theArg.isimmutable = true;
+                }
                 else
                     theArg = mark_julia_type(&*AI++, isboxed, argType, &ctx, /*needsgcroot*/false);
             }

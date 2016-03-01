@@ -1567,6 +1567,15 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
             jl_value_t *jt = jl_field_type(stt, 0);
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
             Value *ptr = data_pointer(strct, ctx);
+            if (!stt->mutabl) {
+                // just compute the pointer and let user load it when necessary
+                Type *fty = julia_type_to_llvm(jt);
+                Value *addr = builder.CreateGEP(builder.CreatePointerCast(ptr, PointerType::get(fty,0)), idx);
+                jl_cgval_t fieldval = mark_julia_slot(addr, jt);
+                fieldval.gcroot = strct.gcroot;
+                *ret = fieldval;
+                return true;
+            }
             *ret = typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
             return true;
         }
@@ -1653,7 +1662,9 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             LLVM37_param(julia_type_to_llvm(strct.typ))
             strct.V, 0, idx);
         assert(!jt->mutabl);
-        return typed_load(addr, NULL, jfty, ctx, tbaa_immut);
+        jl_cgval_t fieldval = mark_julia_slot(addr, jfty);
+        fieldval.gcroot = strct.gcroot;
+        return fieldval;
     }
     else {
         assert(strct.V->getType()->isVectorTy());
