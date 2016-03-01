@@ -183,6 +183,42 @@ function det(F::BunchKaufman)
     return d
 end
 
+function logabsdet(F::BunchKaufman)
+    M = F.LD
+    p = F.ipiv
+    n = size(F.LD, 1)
+
+    s = one(real(eltype(F)))
+    i = 1
+    abs_det = zero(real(eltype(F)))
+    while i <= n
+        if p[i] > 0
+            elm = M[i,i]
+            s *= sign(elm)
+            abs_det += log(abs(elm))
+            i += 1
+        else
+            if F.uplo == 'U'
+                elm = M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] - (issymmetric(F) ? M[i, i + 1] : conj(M[i, i + 1])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
+            else
+                elm = M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] - (issymmetric(F) ? M[i + 1, i] : conj(M[i + 1, i])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
+            end
+            i += 2
+        end
+    end
+    return abs_det, s
+end
+
+function logdet(F::BunchKaufman)
+    d, s = logabsdet(F)
+    return d + log(s)
+end
+
+
 ## reconstruct the original matrix
 ## TODO: understand the procedure described at
 ## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf
