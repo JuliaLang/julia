@@ -30,7 +30,7 @@ debug && println("\ntype of a: ", eltya, "\n")
 debug && println("singular value decomposition")
     usv = svdfact(a)
     @test usv[:S] === svdvals(usv)
-    @test usv[:U]*scale(usv[:S],usv[:Vt]) ≈ a
+    @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
     @test full(usv) ≈ a
     @test usv[:Vt]' ≈ usv[:V]
     @test_throws KeyError usv[:Z]

@@ -113,7 +113,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
 
         # scal
         α = rand(elty)
-        @test BLAS.scal(n,α,a,1) ≈ scale(α,a)
+        @test BLAS.scal(n,α,a,1) ≈ α * a
 
         # trsv
         A = triu(rand(elty,n,n))

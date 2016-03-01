@@ -38,8 +38,6 @@ function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     end
     C
 end
-scale(A::AbstractMatrix, b::AbstractVector) = scale!(similar(A, promote_op(MulFun(),eltype(A),eltype(b))), A, b)
-scale(b::AbstractVector, A::AbstractMatrix) = scale!(similar(b, promote_op(MulFun(),eltype(b),eltype(A)), size(A)), b, A)
 
 # Dot products
 

@@ -106,8 +106,10 @@ end
 /{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::AbstractVector) = D.diag .* V
-*(A::AbstractMatrix, D::Diagonal) = scale(A,D.diag)
-*(D::Diagonal, A::AbstractMatrix) = scale(D.diag,A)
+*(A::AbstractMatrix, D::Diagonal) =
+    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), A, D.diag)
+*(D::Diagonal, A::AbstractMatrix) =
+    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), D.diag, A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
 At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
@@ -181,8 +183,8 @@ function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, B::AbstractMatrix) = scale(1 ./ D.diag, B)
-(\)(D::Diagonal, b::AbstractVector) = reshape(scale(1 ./ D.diag, reshape(b, length(b), 1)), length(b))
+(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
 
 function inv{T}(D::Diagonal{T})
