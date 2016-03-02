@@ -1031,45 +1031,34 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         bool isboxed;
         Type *llt1 = julia_type_to_llvm(t1, &isboxed);
         Value *ifelse_result;
-        if (!isboxed && t1 == t2) {
-            // emit X and Y arguments
-            jl_cgval_t x = emit_expr(args[2], ctx);
-            jl_cgval_t y = emit_expr(args[3], ctx);
-            // check the return value was valid
+        // emit X and Y arguments
+        jl_cgval_t x = emit_expr(args[2], ctx);
+        jl_cgval_t y = emit_expr(args[3], ctx);
+        // check the return value was valid
+        if (x.typ == jl_bottom_type && y.typ == jl_bottom_type)
+            return jl_cgval_t(); // undefined
+        if (x.typ == jl_bottom_type)
+            return y;
+        if (y.typ == jl_bottom_type)
+            return x;
+        if (t1 != t2)
+            isboxed = true;
+        if (!isboxed) {
             if (type_is_ghost(llt1))
                 return x;
-            if (x.typ == jl_bottom_type && y.typ == jl_bottom_type)
-                return jl_cgval_t(); // undefined
-            if (x.typ == jl_bottom_type)
-                return y;
-            if (y.typ == jl_bottom_type)
-                return x;
-            // ensure that X and Y have the same llvm Type
-            Value *vx, *vy;
-            if (x.ispointer) // TODO: elid this load if unnecessary
-                vx = builder.CreateLoad(data_pointer(x, ctx, llt1->getPointerTo(0)));
-            else
-                vx = x.V;
-            if (y.ispointer) // TODO: elid this load if unnecessary
-                vy = builder.CreateLoad(data_pointer(y, ctx, llt1->getPointerTo(0)));
-            else
-                vy = y.V;
-            ifelse_result = builder.CreateSelect(isfalse, vy, vx);
-            mark_gc_use(x);
-            mark_gc_use(y);
-            return mark_julia_type(ifelse_result, false, t2, ctx);
+            ifelse_result = builder.CreateSelect(isfalse,
+                    emit_unbox(llt1, y, t1),
+                    emit_unbox(llt1, x, t1));
         }
         else {
-            jl_cgval_t arg1 = emit_expr(args[2],ctx);
-            jl_cgval_t arg2 = emit_expr(args[3],ctx);
             ifelse_result = builder.CreateSelect(isfalse,
-                    boxed(arg2, ctx),
-                    boxed(arg1, ctx));
-            jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-            mark_gc_use(arg1);
-            mark_gc_use(arg2);
-            return mark_julia_type(ifelse_result, true, jt, ctx);
+                    boxed(y, ctx),
+                    boxed(x, ctx));
         }
+        jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
+        mark_gc_use(x);
+        mark_gc_use(y);
+        return mark_julia_type(ifelse_result, isboxed, jt, ctx);
     }
 
     default: {
