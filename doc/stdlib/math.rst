@@ -230,7 +230,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Left bit shift operator, ``x << n``\ . The result is ``x`` shifted left by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s. This is equivalent to ``x * 2^n``\ .
+   Left bit shift operator, ``x << n``\ . For ``n >= 0``\ , the result is ``x`` shifted left by ``n`` bits, filling with ``0``\ s. This is equivalent to ``x * 2^n``\ . For ``n < 0``\ , this is equivalent to ``x >> -n``\ .
 
    .. doctest::
 
@@ -250,7 +250,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Right bit shift operator, ``x >> n``\ . The result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s if ``x >= 0``\ , ``1``\ s if ``x < 0``\ , preserving the sign of ``x``\ . This is equivalent to ``fld(x, 2^n)``\ .
+   Right bit shift operator, ``x >> n``\ . For ``n >= 0``\ , the result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s if ``x >= 0``\ , ``1``\ s if ``x < 0``\ , preserving the sign of ``x``\ . This is equivalent to ``fld(x, 2^n)``\ . For ``n < 0``\ , this is equivalent to ``x << -n``\ .
 
    .. doctest::
 
@@ -279,9 +279,9 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Unsigned right bit shift operator, ``x >>> n``\ . The result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s.
+   Unsigned right bit shift operator, ``x >>> n``\ . For ``n >= 0``\ , the result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s. For ``n < 0``\ , this is equivalent to ``x [<<](:func:``\ <<``) -n``\ ].
 
-   For ``Unsigned`` integer types, this is eqivalent to :func:`>>`\ . For ``Signed`` integer types, this is equivalent to ``(unsigned(x) >> n) % typeof(x)``\ .
+   For ``Unsigned`` integer types, this is eqivalent to :func:`>>`\ . For ``Signed`` integer types, this is equivalent to ``signed(unsigned(x) >> n)``\ .
 
    .. doctest::
 

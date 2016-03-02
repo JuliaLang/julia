@@ -346,23 +346,23 @@ for (fJ, fC) in ((:-, :neg), (:~, :com))
     end
 end
 
-function <<(x::BigInt, c::Int)
-    c < 0 && throw(DomainError())
+function <<(x::BigInt, c::UInt)
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
 
-function >>(x::BigInt, c::Int)
-    c < 0 && throw(DomainError())
+function >>(x::BigInt, c::UInt)
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
 
->>>(x::BigInt, c::Int) = x >> c
+>>>(x::BigInt, c::UInt) = x >> c
+
+
 
 trailing_zeros(x::BigInt) = Int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 trailing_ones(x::BigInt) = Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))

@@ -156,6 +156,10 @@ end
 @test BigInt(5) >> 1 == 2
 @test BigInt(-5) << 3 == -40
 @test BigInt(-5) >> 1 == -3
+@test BigInt(5) >> -3 == 40
+@test BigInt(5) << -1 == 2
+@test BigInt(-5) >> -3 == -40
+@test BigInt(-5) << -1 == -3
 
 @test ~BigInt(123) == -124
 @test BigInt(123) & BigInt(234) == 106
