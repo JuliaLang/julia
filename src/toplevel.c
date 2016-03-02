@@ -277,45 +277,49 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_expr_t *expr, int compileloops, jl_module_t *m)
+static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_array_t *body, int compileloops, jl_module_t *m)
 {
-    assert(jl_is_expr(expr));
-    if (expr->head==body_sym && compileloops) {
-        jl_array_t *body = expr->args;
-        size_t i, maxlabl=0;
-        // compile if there are backwards branches
-        for(i=0; i < jl_array_len(body); i++) {
-            jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_labelnode(stmt)) {
-                int l = jl_labelnode_label(stmt);
-                if (l > maxlabl) maxlabl = l;
+    size_t i, maxlabl=0;
+    // compile if there are backwards branches
+    for(i=0; i < jl_array_len(body); i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_labelnode(stmt)) {
+            int l = jl_labelnode_label(stmt);
+            if (l > maxlabl) maxlabl = l;
+        }
+    }
+    size_t sz = (maxlabl+1+7)/8;
+    char *labls = (char*)alloca(sz); memset(labls,0,sz);
+    for(i=0; i < jl_array_len(body); i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_labelnode(stmt)) {
+            int l = jl_labelnode_label(stmt);
+            labls[l/8] |= (1<<(l&7));
+        }
+        else if (compileloops && jl_is_gotonode(stmt)) {
+            int l = jl_gotonode_label(stmt);
+            if (labls[l/8]&(1<<(l&7))) {
+                return 1;
             }
         }
-        size_t sz = (maxlabl+1+7)/8;
-        char *labls = (char*)alloca(sz); memset(labls,0,sz);
-        for(i=0; i < jl_array_len(body); i++) {
-            jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_labelnode(stmt)) {
-                int l = jl_labelnode_label(stmt);
-                labls[l/8] |= (1<<(l&7));
-            }
-            else if (compileloops && jl_is_gotonode(stmt)) {
-                int l = jl_gotonode_label(stmt);
+        else if (jl_typeis(stmt, jl_gotoifnotnode_type)) {
+            if (compileloops) {
+                int l = jl_gotoifnotnode_label(stmt);
                 if (labls[l/8]&(1<<(l&7))) {
                     return 1;
                 }
             }
-            else if (jl_typeis(stmt, jl_gotoifnotnode_type)) {
-                if (compileloops) {
-                    int l = jl_gotoifnotnode_label(stmt);
-                    if (labls[l/8]&(1<<(l&7))) {
-                        return 1;
-                    }
-                }
-            }
         }
+        if (jl_has_intrinsics(li, stmt, m)) return 1;
     }
-    if (jl_has_intrinsics(li, (jl_value_t*)expr, m)) return 1;
+    return 0;
+}
+
+static int jl_eval_expr_with_compiler_p(jl_value_t *e, int compileloops, jl_module_t *m)
+{
+    if (jl_is_expr(e) && ((jl_expr_t*)e)->head == body_sym)
+        return jl_eval_with_compiler_p(NULL, ((jl_expr_t*)e)->args, compileloops, m);
+    if (jl_has_intrinsics(NULL, e, m)) return 1;
     return 0;
 }
 
@@ -529,14 +533,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
-        if (!jl_is_expr(thk->ast)) {
-            thk->ast = jl_uncompress_ast(thk, thk->ast);
-            jl_gc_wb(thk, thk->ast);
-        }
-        ewc = jl_eval_with_compiler_p(thk, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        assert(jl_typeis(thk->code, jl_array_any_type));
+        ewc = jl_eval_with_compiler_p(thk, thk->code, fast, jl_current_module);
     }
     else {
-        if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {
+        if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, jl_current_module)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
@@ -558,7 +559,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
         if (!jl_in_inference) {
-            jl_type_infer(thk, thk);
+            jl_type_infer(thk);
         }
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);
@@ -628,25 +629,19 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname)
 {
-    jl_array_t *vinfo;
-    size_t nvars;
+    size_t nvars = jl_array_len(li->slotnames);
 
-    if (li->ast && jl_is_expr(li->ast)) {
-        vinfo = jl_lam_vinfo((jl_expr_t*)li->ast);
-        nvars = jl_array_len(vinfo);
-        for(size_t i=0; i < jl_svec_len(t); i++) {
-            for(size_t j=0; j < nvars; j++) {
-                jl_value_t *tv = jl_svecref(t,i);
-                if (jl_is_typevar(tv)) {
-                    if ((jl_sym_t*)jl_cellref((jl_array_t*)jl_cellref(vinfo,j),0) ==
-                        ((jl_tvar_t*)tv)->name) {
-                        jl_printf(JL_STDERR,
-                                  "WARNING: local variable %s conflicts with a static parameter in %s",
-                                  jl_symbol_name(((jl_tvar_t*)tv)->name),
-                                  jl_symbol_name(fname));
-                        print_func_loc(JL_STDERR, li);
-                        jl_printf(JL_STDERR, ".\n");
-                    }
+    for(size_t i=0; i < jl_svec_len(t); i++) {
+        for(size_t j=0; j < nvars; j++) {
+            jl_value_t *tv = jl_svecref(t,i);
+            if (jl_is_typevar(tv)) {
+                if ((jl_sym_t*)jl_cellref(li->slotnames, j) == ((jl_tvar_t*)tv)->name) {
+                    jl_printf(JL_STDERR,
+                              "WARNING: local variable %s conflicts with a static parameter in %s",
+                              jl_symbol_name(((jl_tvar_t*)tv)->name),
+                              jl_symbol_name(fname));
+                    print_func_loc(JL_STDERR, li);
+                    jl_printf(JL_STDERR, ".\n");
                 }
             }
         }
@@ -741,7 +736,7 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     jl_cellset(f->args, 2, jl_call_scm_on_ast("identity", jl_exprarg(f,2), 0));
     // wrap in a LambdaInfo
     jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)f, tvar_syms, jl_emptysvec, jl_current_module);
-    jl_preresolve_globals(li->ast, li);
+    jl_preresolve_globals((jl_value_t*)li, li);
     JL_GC_POP();
     return li;
 }
@@ -786,7 +781,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         jl_value_t *elt = jl_tparam(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
-                          jl_symbol_name(jl_lam_argname(f,i)),
+                          jl_symbol_name((jl_sym_t*)jl_cellref(f->slotnames,i)),
                           jl_symbol_name(name), jl_symbol_name(f->file),
                           f->line);
         }
@@ -807,9 +802,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     }
 
     jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
-    if (jl_boot_file_loaded && f->ast && jl_is_expr(f->ast)) {
-        f->ast = jl_compress_ast(f, f->ast);
-        jl_gc_wb(f, f->ast);
+    if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
+        f->code = jl_compress_ast(f, f->code);
+        jl_gc_wb(f, f->code);
     }
     JL_GC_POP();
 }

@@ -187,21 +187,19 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def);
+void jl_type_infer(jl_lambda_info_t *li);
 
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                            int cache, int inexact);
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
-jl_sym_t *jl_decl_var(jl_value_t *ex);
 
 jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_value_t *jl_lam_gensyms(jl_expr_t *l);
 jl_array_t *jl_lam_staticparams(jl_expr_t *l);
-jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);

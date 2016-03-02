@@ -274,12 +274,33 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
+JL_DLLEXPORT void jl_lambda_info_init_properties(jl_lambda_info_t *li)
+{
+    int i;
+    uint8_t called=0;
+    for(i=1; i < li->nargs && i <= 8; i++) {
+        jl_value_t *ai = jl_cellref(li->slotnames,i);
+        if (ai == (jl_value_t*)unused_sym) continue;
+        if (jl_unbox_long(jl_cellref(li->slotflags,i))&64)
+            called |= (1<<(i-1));
+    }
+    li->called = called;
+    if (li->sparam_syms != jl_emptysvec) {
+        size_t l = jl_array_len(li->code);
+        for(i=0; i < l; i++) {
+            if (jl_has_intrinsics(li, jl_cellref(li->code,i), li->module)) {
+                li->needs_sparam_vals_ducttape = 1;
+                break;
+            }
+        }
+    }
+}
+
 JL_DLLEXPORT void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
-    li->ast = ast; jl_gc_wb(li, ast);
-    if (!jl_is_expr(ast))
-        return;
+    assert(jl_is_expr(ast));
     jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
+    li->code = body; jl_gc_wb(li, li->code);
     if (has_meta(body, pure_sym))
         li->pure = 1;
     jl_value_t *body1 = skip_meta(body);
@@ -291,28 +312,42 @@ JL_DLLEXPORT void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
         li->file = (jl_sym_t*)jl_exprarg(body1, 1);
         li->line = jl_unbox_long(jl_exprarg(body1, 0));
     }
-    jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
-    jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
-    li->nslots = jl_array_len(vis);
-    jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)li->ast);
-    li->ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_long(gensym_types));
+    jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
+    jl_array_t *args = jl_lam_args((jl_expr_t*)ast);
+    size_t nslots = jl_array_len(vis);
     size_t narg = jl_array_len(args);
-    uint8_t called=0;
-    int i, j=0;
-    for(i=1; i < narg && i <= 8; i++) {
-        jl_value_t *ai = jl_cellref(args,i);
-        if (ai == (jl_value_t*)unused_sym || !jl_is_symbol(ai)) continue;
-        jl_value_t *vj;
-        do {
-            vj = jl_cellref(vis, j++);
-        } while (jl_cellref(vj,0) != ai);
-        if (jl_unbox_long(jl_cellref(vj,2))&64)
-            called |= (1<<(i-1));
+    li->nargs = narg;
+    li->isva = narg>0 && jl_is_rest_arg(jl_cellref(args, narg-1));
+    jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)ast);
+    size_t ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_long(gensym_types));
+    li->slotnames = jl_alloc_cell_1d(nslots);
+    li->slottypes = jl_alloc_cell_1d(nslots);
+    li->slotflags = jl_alloc_cell_1d(nslots);
+    li->gensymtypes = jl_alloc_cell_1d(ngensym);
+    int i;
+    for(i=0; i < nslots; i++) {
+        jl_value_t *vi = jl_cellref(vis, i);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(vi, 0);
+        assert(jl_is_symbol(name));
+        char *str = jl_symbol_name(name);
+        if (i > 0 && name != unused_sym) {
+            if (str[0] == '#') {
+                // convention for renamed variables: #...#original_name
+                char *nxt = strchr(str + 1, '#');
+                if (nxt)
+                    name = jl_symbol(nxt+1);
+                else if (str[1] == 's')  // compiler-generated temporaries, #sXXX
+                    name = dot_sym;
+            }
+        }
+        jl_cellset(li->slotnames, i, name);
+        jl_cellset(li->slottypes, i, jl_cellref(vi, 1));
+        jl_cellset(li->slotflags, i, jl_cellref(vi, 2));
     }
-    li->called = called;
-    if (li->sparam_syms != jl_emptysvec)
-        if (jl_has_intrinsics(li, (jl_expr_t*)ast, li->module))
-            li->needs_sparam_vals_ducttape = 1;
+    for(i=0; i < ngensym; i++) {
+        jl_cellset(li->gensymtypes, i, jl_any_type);
+    }
+    jl_lambda_info_init_properties(li);
 }
 
 JL_DLLEXPORT
@@ -322,7 +357,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
                                   NWORDS(sizeof(jl_lambda_info_t)));
-    li->ast = ast;
+    li->code = NULL;
+    li->slotnames = li->slottypes = li->slotflags = li->gensymtypes = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
     li->file = null_sym;
     li->module = ctx;
@@ -349,15 +385,27 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->pure = 0;
     li->called = 0xff;
     li->needs_sparam_vals_ducttape = 0;
-    if (ast != NULL)
+    if (ast != NULL) {
+        JL_GC_PUSH1(&li);
         jl_lambda_info_set_ast(li, ast);
+        JL_GC_POP();
+    }
     return li;
 }
 
-jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 {
     jl_lambda_info_t *new_linfo =
-        jl_new_lambda_info(linfo->ast, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
+        jl_new_lambda_info(NULL, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
+    new_linfo->code = linfo->code;
+    new_linfo->slotnames = linfo->slotnames;
+    new_linfo->slottypes = linfo->slottypes;
+    new_linfo->slotflags = linfo->slotflags;
+    new_linfo->gensymtypes = linfo->gensymtypes;
+    new_linfo->called = linfo->called;
+    new_linfo->nargs = linfo->nargs;
+    new_linfo->isva = linfo->isva;
+    new_linfo->pure = linfo->pure;
     new_linfo->rettype = linfo->rettype;
     new_linfo->tfunc = linfo->tfunc;
     new_linfo->name = linfo->name;

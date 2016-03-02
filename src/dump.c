@@ -611,14 +611,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
 
 static int is_ast_node(jl_value_t *v)
 {
-    if (jl_is_lambda_info(v)) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        if (jl_is_expr(li->ast)) {
-            li->ast = jl_compress_ast(li, li->ast);
-            jl_gc_wb(li, li->ast);
-        }
-        return 0;
-    }
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_gensym(v) ||
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
@@ -795,7 +787,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_lambda_info(v)) {
         writetag(s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        jl_serialize_value(s, li->ast);
+        jl_serialize_value(s, li->code);
+        jl_serialize_value(s, li->slotnames);
+        jl_serialize_value(s, li->slottypes);
+        jl_serialize_value(s, li->slotflags);
+        jl_serialize_value(s, li->gensymtypes);
         jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
@@ -814,10 +810,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 for(i=0; i < l; i += 3) {
                     if (!jl_is_leaf_type(jl_cellref(tf,i))) {
                         jl_value_t *ret = jl_cellref(tf,i+1);
-                        if (jl_is_tuple(ret)) {
-                            jl_value_t *ast = jl_fieldref(ret, 0);
-                            if (jl_is_array(ast) && jl_array_len(ast) > 500)
-                                jl_cellset(tf, i+1, jl_fieldref(ret,1));
+                        if (jl_is_lambda_info(ret)) {
+                            jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
+                            if (jl_is_array(code) && jl_array_len(code) > 500)
+                                jl_cellset(tf, i+1, ((jl_lambda_info_t*)ret)->rettype);
                         }
                     }
                 }
@@ -830,10 +826,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
         write_int8(s, li->called);
+        write_int8(s, li->isva);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
-        write_int32(s, li->nslots);
-        write_int32(s, li->ngensym);
+        write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->module);
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1426,8 +1422,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                                       NWORDS(sizeof(jl_lambda_info_t)));
         if (usetable)
             arraylist_push(&backref_list, li);
-        li->ast = jl_deserialize_value(s, &li->ast);
-        jl_gc_wb(li, li->ast);
+        li->code = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->code); jl_gc_wb(li, li->code);
+        li->slotnames = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotnames); jl_gc_wb(li, li->slotnames);
+        li->slottypes = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slottypes); jl_gc_wb(li, li->slottypes);
+        li->slotflags = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotflags); jl_gc_wb(li, li->slotflags);
+        li->gensymtypes = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->gensymtypes); jl_gc_wb(li, li->gensymtypes);
         li->rettype = jl_deserialize_value(s, &li->rettype);
         jl_gc_wb(li, li->rettype);
         li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
@@ -1445,11 +1444,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
         li->called = read_int8(s);
+        li->isva = read_int8(s);
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->file);
         li->line = read_int32(s);
-        li->nslots = read_int32(s);
-        li->ngensym = read_int32(s);
+        li->nargs = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
         jl_gc_wb(li, li->module);
         li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
@@ -2035,7 +2034,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
+JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 {
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
@@ -2057,7 +2056,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 
     //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
-    jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
+    jl_array_t *v = jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0 && last_tlv == NULL) {
         li->def->roots = NULL;
     }
@@ -2070,7 +2069,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     return v;
 }
 
-JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
+JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *data)
 {
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(dump); // Might GC
@@ -2085,7 +2084,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *dat
     ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
     int en = jl_gc_enable(0); // Might GC
-    jl_value_t *v = jl_deserialize_value(&src, NULL);
+    jl_array_t *v = (jl_array_t*)jl_deserialize_value(&src, NULL);
     jl_gc_enable(en);
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;

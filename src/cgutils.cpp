@@ -1461,8 +1461,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(e)) {
         int idx = ((jl_gensym_t*)e)->id;
-        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
-        return (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+        jl_array_t *gensym_types = ctx->linfo->gensymtypes;
+        return jl_cellref(gensym_types, idx);
     }
     if (jl_typeis(e, jl_slot_type)) {
         jl_value_t *typ = jl_slot_type(e);

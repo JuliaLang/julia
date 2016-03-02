@@ -20,9 +20,8 @@ Helper to test that every slot is in range after inlining.
 """
 function test_inlined_symbols(func, argtypes)
     linfo = code_typed(func, argtypes)[1]
-    locals = linfo.args[2][1]
-    nl = length(locals)
-    ast = linfo.args[3]
+    nl = length(linfo.slottypes)
+    ast = Expr(:body); ast.args = Base.uncompressed_ast(linfo)
     walk(ast) do e
         if isa(e, Slot)
             @test 1 <= e.id <= nl

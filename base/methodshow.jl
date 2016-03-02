@@ -34,8 +34,7 @@ function arg_decl_parts(m::Method)
         tv = Any[tv...]
     end
     li = m.func
-    e = uncompressed_ast(li)
-    argnames = e.args[1]
+    argnames = li.slotnames[1:li.nargs]
     s = symbol("?")
     decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
                 for i = 1:length(m.sig.parameters)]

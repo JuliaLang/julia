@@ -293,7 +293,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
       for example, if an unspecialized method is needed,
       the slow compiled code should be associated with
       method->unspecialized, not method */
-    assert(!nli->ast ||
+    assert(!nli->code ||
            (nli->fptr == NULL &&
             nli->jlcall_api == 0 &&
             nli->functionObjects.functionObject == NULL &&
@@ -335,7 +335,7 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         method->unspecialized = jl_add_static_parameters(def, method->sparam_vals, method->specTypes);
         jl_gc_wb(method, method->unspecialized);
         method->unspecialized->unspecialized = method->unspecialized;
-        def = method;
+        return method->unspecialized;
     }
     if (def->unspecialized == NULL) {
         def->unspecialized = jl_add_static_parameters(def, jl_emptysvec, jl_anytuple_type);
@@ -389,13 +389,9 @@ jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *typ
     return jl_method_list_insert(pml, type, method, jl_emptysvec, 0, 0, cache_array ? cache_array : (jl_value_t*)mt)->func;
 }
 
-/*
-  run type inference on lambda "li" in-place, for given argument types.
-  "def" is the original method definition of which this is an instance;
-  can be equal to "li" if not applicable.
-*/
+// run type inference on lambda "li" in-place, for given argument types.
 int jl_in_inference = 0;
-void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def)
+void jl_type_infer(jl_lambda_info_t *li)
 {
     JL_LOCK(codegen); // Might GC
     int last_ii = jl_in_inference;
@@ -406,25 +402,17 @@ void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def)
         // called
         assert(li->inInference == 0);
         li->inInference = 1;
-        jl_value_t *fargs[4];
+        jl_value_t *fargs[3];
         fargs[0] = (jl_value_t*)jl_typeinf_func;
         fargs[1] = (jl_value_t*)li;
         fargs[2] = (jl_value_t*)li->specTypes;
-        fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
         jl_printf(JL_STDERR,"inference on ");
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
         jl_printf(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
-        jl_value_t *newast = jl_apply(fargs, 4);
-        jl_value_t *defast = def->ast;
-        li->ast = jl_fieldref(newast, 0);
-        jl_gc_wb(li, li->ast);
-        li->rettype = jl_fieldref(newast, 1);
-        jl_gc_wb(li, li->rettype);
-        // if type inference bails out it returns def->ast
-        li->inferred = li->ast != defast;
+        (void)jl_apply(fargs, 3);
 #endif
         li->inInference = 0;
     }
@@ -815,7 +803,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     else
         (void)jl_method_cache_insert(mt, type, newmeth);
 
-    if (newmeth->ast != NULL) {
+    if (newmeth->code != NULL) {
         jl_array_t *spe = method->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);
@@ -828,7 +816,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
         jl_gc_wb(method, method->specializations);
         if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) // don't bother with typeinf if compile is off
             if (jl_symbol_name(newmeth->name)[0] != '@')  // don't bother with typeinf on macros
-                jl_type_infer(newmeth, method);
+                jl_type_infer(newmeth);
     }
     JL_GC_POP();
     JL_UNLOCK(codegen);
@@ -891,15 +879,16 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     assert(jl_svec_len(generator->sparam_syms) == jl_svec_len(sparam_vals));
     assert(generator->unspecialized == NULL && generator->specTypes == jl_anytuple_type);
     //if (!generated->inferred)
-    //    jl_type_infer(generator, generator);  // this doesn't help all that much
+    //    jl_type_infer(generator);  // this doesn't help all that much
 
     ex = jl_exprn(lambda_sym, 2);
 
-    jl_expr_t *generatorast = (jl_expr_t*)generator->ast;
-    if (!jl_is_expr(generatorast))
-        generatorast = (jl_expr_t*)jl_uncompress_ast(generator, (jl_value_t*)generatorast);
-    jl_array_t *argnames = jl_lam_args(generatorast);
+    int nargs = generator->nargs;
+    jl_array_t *argnames = jl_alloc_cell_1d(nargs);
     jl_cellset(ex->args, 0, argnames);
+    size_t i;
+    for(i=0; i < nargs; i++)
+        jl_cellset(argnames, i, jl_cellref(generator->slotnames,i));
 
     jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
     jl_cellset(ex->args, 1, scopeblock);
@@ -913,8 +902,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
 
     // invoke code generator
     assert(jl_nparams(tt) == jl_array_len(argnames) ||
-           (jl_is_rest_arg(jl_cellref(argnames, jl_array_len(argnames)-1)) &&
-            (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
+           (generator->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
     jl_cellset(body->args, 1, jl_call_unspecialized(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
     if (generator->sparam_syms != jl_emptysvec) {
@@ -930,6 +918,9 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
     jl_lambda_info_t *func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
     func->name = generator->name;
+    func->def = generator;
+    if (generator->isva)
+        func->isva = 1;
     JL_GC_POP();
     return func;
 }
@@ -1446,7 +1437,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
     } JL_CATCH {
         goto not_found;
     }
-    if (sf == NULL || sf->ast == NULL || sf->inInference)
+    if (sf == NULL || sf->code == NULL || sf->inInference)
         goto not_found;
     if (sf->functionObjects.functionObject == NULL) {
         if (sf->fptr != NULL)
@@ -1662,7 +1653,7 @@ static void _compile_all_deq(jl_array_t *found)
             linfo = jl_get_unspecialized(linfo);
         if (!linfo->inferred) {
             // force this function to be recompiled
-            jl_type_infer(linfo, linfo->def);
+            jl_type_infer(linfo);
             linfo->functionObjects.functionObject = NULL;
             linfo->functionObjects.specFunctionObject = NULL;
             linfo->functionObjects.cFunctionList = NULL;

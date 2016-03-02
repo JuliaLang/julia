@@ -3337,7 +3337,7 @@ end
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # meta nodes for optional positional arguments
-@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[2].args[3]).args[3].args[1].args[1] === :inline
+@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[2].args[3])[1].args[1] === :inline
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
@@ -3766,9 +3766,7 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    for (_, vartype) in ast12474[1].args[2][1]
-        @test isleaftype(vartype)
-    end
+    @test all(isleaftype, ast12474[1].slottypes)
 end
 
 # issue #15186
@@ -3855,7 +3853,7 @@ end
 @eval f15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); (a.x, a.y, getfield(a,1), getfield(a, 2)))
 @test isempty(filter(x -> isa(x,Expr) && x.head === :(=) &&
                           isa(x.args[2], Expr) && x.args[2].head === :new,
-                     code_typed(f15259, (Any,Int))[1].args[3].args))
+                     code_typed(f15259, (Any,Int))[1].code))
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)

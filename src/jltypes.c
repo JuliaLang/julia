@@ -3500,28 +3500,29 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(18, jl_symbol("ast"), jl_symbol("rettype"),
+                        jl_svec(22, jl_symbol("code"), jl_symbol("slotnames"),
+                                jl_symbol("slottypes"), jl_symbol("slotflags"),
+                                jl_symbol("gensymtypes"), jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"), jl_symbol("sparam_vals"),
                                 jl_symbol("tfunc"), jl_symbol("name"),
-                                jl_symbol("roots"),
-                                /* jl_symbol("specTypes"),
-                                   jl_symbol("unspecialized"),
-                                   jl_symbol("specializations")*/
-                                jl_symbol(""), jl_symbol(""), jl_symbol(""),
+                                jl_symbol("roots"), jl_symbol("specTypes"),
+                                jl_symbol("unspecialized"), jl_symbol("specializations"),
                                 jl_symbol("module"), jl_symbol("def"),
                                 jl_symbol("file"), jl_symbol("line"),
-                                jl_symbol("nslots"), jl_symbol("ngensym"),
-                                jl_symbol("inferred"), jl_symbol("pure")),
-                        jl_svec(18, jl_any_type, jl_any_type,
+                                jl_symbol("nargs"), jl_symbol("inferred"),
+                                jl_symbol("pure"), jl_symbol("isva")),
+                        jl_svec(22, jl_any_type, jl_array_any_type, // TODO array of Symbol instead
+                                jl_array_any_type, jl_any_type, // TODO array of UInt8
+                                jl_array_any_type, jl_any_type,
                                 jl_simplevector_type, jl_simplevector_type,
                                 jl_any_type, jl_sym_type,
                                 jl_any_type, jl_any_type,
                                 jl_any_type, jl_array_any_type,
                                 jl_module_type, jl_any_type,
                                 jl_sym_type, jl_int32_type,
-                                jl_int32_type, jl_int32_type,
+                                jl_int32_type, jl_bool_type,
                                 jl_bool_type, jl_bool_type),
-                        0, 1, 5);
+                        0, 1, 10);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),

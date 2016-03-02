@@ -570,7 +570,6 @@ typedef struct {
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *handlers;
     jl_module_t *module;
-    jl_expr_t *ast;
     jl_lambda_info_t *linfo;
     Value *spvals_ptr;
     Value *argArray;
@@ -762,7 +761,7 @@ static bool store_unboxed_p(int s, jl_codectx_t *ctx)
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
 {
-    return (jl_sym_t*)jl_cellref(jl_cellref(jl_lam_vinfo(ctx->ast), s), 0);
+    return (jl_sym_t*)jl_cellref(ctx->linfo->slotnames, s);
 }
 
 static void alloc_local(int s, jl_codectx_t *ctx)
@@ -3113,7 +3112,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else if (slot.isboxed) {
             // see if inference had a better type for the gensym than the expression (after inlining getfield on a Tuple)
-            jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+            jl_value_t *gensym_types = (jl_value_t*)ctx->linfo->gensymtypes;
             if (jl_is_array(gensym_types)) {
                 jl_value_t *declType = jl_cellref(gensym_types, idx);
                 if (declType != slot.typ) {
@@ -3974,7 +3973,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f, bool sret)
+static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sret)
 {
     std::stringstream funcName;
     const std::string &fname = f->getName().str();
@@ -4007,7 +4006,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     ctx.spvals_ptr = NULL;
     allocate_gc_frame(b0, &ctx);
 
-    size_t nargs = jl_array_dim0(jl_lam_args(ast));
+    size_t nargs = lam->nargs;
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
@@ -4060,12 +4059,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     assert(definitions && "Capturing definitions is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
-    jl_expr_t *ast = (jl_expr_t*)lam->ast;
-    JL_GC_PUSH1(&ast);
-    if (!jl_is_expr(ast)) {
-        ast = (jl_expr_t*)jl_uncompress_ast(lam, (jl_value_t*)ast);
-    }
-    assert(jl_is_expr(ast));
+    jl_array_t *code = lam->code;
+    JL_GC_PUSH1(&code);
+    if (!jl_typeis(code,jl_array_any_type))
+        code = jl_uncompress_ast(lam, code);
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
     std::map<int, jl_arrayvar_t> arrayvars;
@@ -4076,7 +4073,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.labels = &labels;
     ctx.handlers = &handlers;
     ctx.module = lam->module;
-    ctx.ast = ast;
     ctx.linfo = lam;
     ctx.funcName = jl_symbol_name(lam->name);
     ctx.vaSlot = -1;
@@ -4087,12 +4083,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     ctx.spvals_ptr = NULL;
 
     // step 2. process var-info lists to see what vars need boxing
-    jl_value_t *gensym_types = jl_lam_gensyms(ast);
-    int n_gensyms = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_gensym(gensym_types));
-    jl_array_t *largs = jl_lam_args(ast);
-    size_t largslen = jl_array_dim0(largs);
-    jl_array_t *vinfos = jl_lam_vinfo(ast);
-    size_t vinfoslen = jl_array_dim0(vinfos);
+    jl_array_t *gensym_types = lam->gensymtypes;
+    int n_gensyms = jl_array_len(gensym_types);
+    size_t largslen = lam->nargs;
+    size_t vinfoslen = jl_array_dim0(lam->slotnames);
     ctx.slots.resize(vinfoslen);
     size_t nreq = largslen;
     int va = 0;
@@ -4102,10 +4096,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                             // compiling this would cause all specializations to inherit
                             // this code and could create an broken compile / function cache
 
-    if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,largslen-1))) {
+    if (nreq > 0 && lam->isva) {
         nreq--;
         va = 1;
-        jl_sym_t *vn = jl_decl_var(jl_cellref(largs,largslen-1));
+        jl_sym_t *vn = (jl_sym_t*)jl_cellref(lam->slotnames,largslen-1);
         if (vn != unused_sym)
             ctx.vaSlot = largslen-1;
     }
@@ -4113,8 +4107,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 
     size_t i;
     for(i=0; i < nreq; i++) {
-        jl_value_t *arg = jl_cellref(largs,i);
-        jl_sym_t *argname = jl_decl_var(arg);
+        jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames,i);
         if (argname == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
         varinfo.isArgument = true;
@@ -4128,17 +4121,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
 
     for(i=0; i < vinfoslen; i++) {
-        jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
-        assert(jl_is_array(vi));
-        jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
-        assert(jl_is_symbol(vname));
         jl_varinfo_t &varinfo = ctx.slots[i];
-        varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
+        jl_value_t *flags = jl_cellref(lam->slotflags,i);
+        varinfo.isAssigned = (jl_vinfo_assigned(flags)!=0);
         varinfo.escapes = false;
-        varinfo.isSA = (jl_vinfo_sa(vi)!=0);
-        varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || (!varinfo.isArgument && !lam->inferred);
+        varinfo.isSA = (jl_vinfo_sa(flags)!=0);
+        varinfo.usedUndef = (jl_vinfo_usedundef(flags)!=0) || (!varinfo.isArgument && !lam->inferred);
         if (!varinfo.isArgument || varinfo.isAssigned) {
-            jl_value_t *typ = jl_cellref(vi,1);
+            jl_value_t *typ = jl_cellref(lam->slottypes,i);
             if (!jl_is_type(typ))
                 typ = (jl_value_t*)jl_any_type;
             varinfo.value = mark_julia_type((Value*)NULL, false, typ, &ctx);
@@ -4147,11 +4137,14 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 
     // step 3. some variable analysis
 
+    jl_array_t *stmts = code;
+    size_t stmtslen = jl_array_dim0(stmts);
+
     // finish recording escape info
-    simple_escape_analysis((jl_value_t*)ast, true, &ctx);
+    for(i=0; i < stmtslen; i++)
+        simple_escape_analysis(jl_cellref(stmts,i), true, &ctx);
 
     // determine which vars need to be volatile
-    jl_array_t *stmts = jl_lam_body(ast)->args;
     mark_volatile_vars(stmts, ctx.slots);
 
     // step 4. determine function signature
@@ -4220,8 +4213,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         definitions->specFunctionObject = f;
         if (declarations)
             declarations->specFunctionObject = function_proto(f);
-        fwrap = gen_jlcall_wrapper(lam, ast,
-            (llvm::Function*)lam->functionObjects.specFunctionObject, ctx.sret);
+        fwrap = gen_jlcall_wrapper(lam, (llvm::Function*)lam->functionObjects.specFunctionObject, ctx.sret);
         definitions->functionObject = fwrap;
         if (declarations)
             declarations->functionObject = function_proto(fwrap);
@@ -4399,7 +4391,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     if (ctx.debug_enabled) {
         // Go over all arguments and local variables and initialize their debug information
         for(i=0; i < nreq; i++) {
-            jl_sym_t *argname = jl_decl_var(jl_cellref(largs,i));
+            jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames,i);
             if (argname == unused_sym) continue;
             jl_varinfo_t &varinfo = ctx.slots[i];
 #ifdef LLVM38
@@ -4447,7 +4439,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 #endif
         }
         for(i=0; i < vinfoslen; i++) {
-            jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
+            jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
             jl_varinfo_t &varinfo = ctx.slots[i];
             if (varinfo.isArgument)
                 continue;
@@ -4493,7 +4485,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         // Declare arguments early so llvm in case any of the below emits basic blocks
         // before we get to loading local variables
         for(i=0; i < nreq; i++) {
-            jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+            jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames, i);
             if (s == unused_sym) continue;
             if (ctx.slots[i].dinfo != (MDNode*)NULL) {
                 SmallVector<int64_t, 9> addr;
@@ -4532,7 +4524,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     // must be in the first basic block for the llvm mem2reg pass to work
     int n_roots = 0;
     for(i=0; i < largslen; i++) {
-        jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
         if (varinfo.value.isghost || varinfo.value.constant) {
@@ -4553,7 +4545,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         maybe_alloc_arrayvar(i, &ctx);
     }
     for(i=0; i < vinfoslen; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
         assert(jl_is_symbol(s));
         jl_varinfo_t &vi = ctx.slots[i];
         if (vi.isArgument) {
@@ -4597,7 +4589,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     // get pointers for locals stored in the gc frame array (argTemp)
     int varnum = 0;
     for(i=0; i < largslen; i++) {
-        jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
         assert(!varinfo.memloc); // arguments shouldn't also have memory locs
@@ -4635,7 +4627,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     // now handled by explicit :newvar nodes
 
     // step 10. allocate space for exception handler contexts
-    size_t stmtslen = jl_array_dim0(stmts);
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
@@ -4657,7 +4648,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     if (ctx.sret)
         AI++; // skip sret slot
     for(i=0; i < nreq; i++) {
-        jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);

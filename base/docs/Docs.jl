@@ -96,31 +96,6 @@ function doc(obj)
     get_obj_meta(obj)
 end
 
-function write_lambda_signature(io::IO, lam::LambdaInfo)
-    ex = Base.uncompressed_ast(lam)
-    write(io, '(')
-    nargs = length(ex.args[1])
-    for (i,arg) in enumerate(ex.args[1])
-        i==1 && continue
-        if isa(arg,Expr)
-            argname, argtype = arg.args
-        else
-            argname, argtype = arg, :Any
-        end
-        if argtype === :Any || argtype === :ANY
-            write(io, argname)
-        elseif isa(argtype,Expr) && argtype.head === :... &&
-               (argtype.args[end] === :Any || argtype.args[end] === :ANY)
-            write(io, argname, "...")
-        else
-            write(io, argname, "::", argtype)
-        end
-        i < nargs && write(io, ',')
-    end
-    write(io, ')')
-    return io
-end
-
 function functionsummary(func::Function)
     io  = IOBuffer()
     write(io, "```julia\n")
