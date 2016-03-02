@@ -1694,6 +1694,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
         switch (how) {
             case 1: { // rehash ObjectIdDict
                 jl_array_t **a = (jl_array_t**)jl_data_ptr(v);
+                // Assume *a don't need a write barrier
                 jl_idtable_rehash(a, jl_array_len(*a));
                 jl_gc_wb(v, *a);
                 break;

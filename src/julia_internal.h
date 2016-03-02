@@ -136,6 +136,8 @@ extern JL_THREAD void *jl_stackbase;
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
+// the first argument to jl_idtable_rehash is used to return a value
+// make sure it is rooted if it is used after the function returns
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 #ifdef _OS_LINUX_
