@@ -14,9 +14,12 @@ typealias LineNum Int
 typealias VarTable ObjectIdDict
 
 
-#TODO: the distinction between VarInfo and InferenceState is arbitrary and unnecessary
+type VarState
+    typ
+    undef::Bool
+end
 
-type VarInfo
+type InferenceState
     atypes #::Type       # type sig
     ast #::Expr
     body::Array{Any,1}   # ast body
@@ -29,36 +32,8 @@ type VarInfo
     mod::Module
     currpc::LineNum
     static_typeof::Bool
-    inf #::InferenceState
 
-    function VarInfo(linfo::LambdaInfo, sig::ANY=linfo.specTypes, ast=linfo.ast)
-        if !isa(ast,Expr)
-            ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
-        end
-        assert(is(ast.head,:lambda))
-        vinflist = ast.args[2][1]::Array{Any,1}
-        vars = map(vi->vi[1], vinflist)
-        body = (ast.args[3].args)::Array{Any,1}
-        ngs = ast.args[2][3]
-        if !isa(ngs,Int)
-            ngs = length(ngs::Array)
-        end
-        gensym_types = Any[ NF for i = 1:(ngs::Int) ]
-        nl = label_counter(body)+1
-        sp = linfo.sparam_vals
-
-        return new(sig, ast, body, sp, vars, gensym_types, vinflist, nl, Dict{GenSym, Bool}(), linfo.module, 0, false)
-    end
-end
-
-type VarState
-    typ
-    undef::Bool
-end
-
-type InferenceState
     # info on the state of inference and the linfo
-    sv::VarInfo
     linfo::LambdaInfo
     args::Vector{Any}
     labels::Vector{Int}
@@ -87,9 +62,26 @@ type InferenceState
     optimize::Bool
     inferred::Bool
     tfunc_idx::Int
-    function InferenceState(sv::VarInfo, linfo::LambdaInfo, optimize::Bool)
-        body = sv.body
-        labels = zeros(Int, sv.label_counter)
+
+    function InferenceState(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, ast, optimize::Bool)
+        if !isa(ast,Expr)
+            ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
+        end
+        assert(is(ast.head,:lambda))
+        vinflist = ast.args[2][1]::Array{Any,1}
+        vars = map(vi->vi[1], vinflist)
+        body = (ast.args[3].args)::Array{Any,1}
+        nl = label_counter(body)+1
+
+        if length(linfo.sparam_vals) > 0
+            sp = linfo.sparam_vals
+        elseif isempty(sparams) && !isempty(linfo.sparam_syms)
+            sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
+        else
+            sp = sparams
+        end
+
+        labels = zeros(Int, nl)
         for i = 1:length(body)
             b = body[i]
             if isa(b,LabelNode)
@@ -101,15 +93,14 @@ type InferenceState
         s = Any[ () for i=1:n ]
         # initial types
         s[1] = ObjectIdDict()
-        for v in sv.vars
+        for v in vars
             s[1][v] = VarState(Bottom,true)
         end
 
-        args = f_argnames(sv.ast)
+        args = f_argnames(ast)
         la = length(args)
-        atypes = sv.atypes
         if la > 0
-            lastarg = sv.ast.args[1][la]
+            lastarg = ast.args[1][la]
             if is_rest_arg(lastarg)
                 if atypes === Tuple
                     if la > 1
@@ -151,10 +142,8 @@ type InferenceState
         end
 
         gensym_uses = find_gensym_uses(body)
-        if length(sv.gensym_types) != length(gensym_uses)
-            sv.gensym_types = Any[ NF for i=1:length(gensym_uses) ]
-        end
-        gensym_init = copy(sv.gensym_types)
+        gensym_types = Any[ NF for i=1:length(gensym_uses) ]
+        gensym_init = copy(gensym_types)
 
         # exception handlers
         cur_hand = ()
@@ -164,7 +153,10 @@ type InferenceState
         W = IntSet()
         push!(W, 1) #initial pc to visit
 
-        frame = new(sv, linfo, args, labels, s, Union{}, W, n,
+        frame = new(
+            atypes, ast, body, sp, vars, gensym_types, vinflist, nl, Dict{GenSym, Bool}(), linfo.module, 0, false,
+
+            linfo, args, labels, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             gensym_uses, gensym_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
@@ -172,7 +164,6 @@ type InferenceState
             false, false, false, optimize, false, -1)
         push!(active, frame)
         nactive[] += 1
-        sv.inf = frame
         return frame
     end
 end
@@ -194,8 +185,8 @@ function _any(f::ANY, a)
     return false
 end
 
-function is_static_parameter(sv::VarInfo, s::Symbol)
-    sp = sv.inf.linfo.sparam_syms
+function is_static_parameter(sv::InferenceState, s::Symbol)
+    sp = sv.linfo.sparam_syms
     for i=1:length(sp)
         if is(sp[i],s)
             return true
@@ -213,9 +204,9 @@ function contains_is(itr, x::ANY)
     return false
 end
 
-is_local(sv::VarInfo, s::GenSym) = true
-is_local(sv::VarInfo, s::Symbol) = contains_is(sv.vars, s)
-is_global(sv::VarInfo, s::Symbol) = !is_local(sv,s) && !is_static_parameter(sv,s)
+is_local(sv::InferenceState, s::GenSym) = true
+is_local(sv::InferenceState, s::Symbol) = contains_is(sv.vars, s)
+is_global(sv::InferenceState, s::Symbol) = !is_local(sv,s) && !is_static_parameter(sv,s)
 
 function _iisconst(s::Symbol, sv)
     m = sv.mod
@@ -226,7 +217,7 @@ _ieval(x::ANY, sv) =
     ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Any, Any),
           sv.mod, x, svec(), svec())
 
-_topmod(sv::VarInfo) = _topmod(sv.mod)
+_topmod(sv::InferenceState) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
 function istopfunction(topmod, f::ANY, sym)
@@ -563,12 +554,12 @@ const apply_type_tfunc = function (A::ANY, args...)
             push!(tparams, aip1)
         else
             if i<=lA
-                val = extract_simple_tparam(A[i], global_sv::VarInfo)
+                val = extract_simple_tparam(A[i], global_sv::InferenceState)
                 if val !== Bottom
                     push!(tparams, val)
                     continue
                 elseif isa(A[i],Symbol)
-                    sp = global_sv.inf.linfo.sparam_syms
+                    sp = global_sv.linfo.sparam_syms
                     s = A[i]
                     found = false
                     for j=1:length(sp)
@@ -687,7 +678,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtype::ANY)
     return tf[3](argtypes...)
 end
 
-function isconstantref(f::ANY, sv::VarInfo)
+function isconstantref(f::ANY, sv::InferenceState)
     if isa(f,TopNode)
         m = _topmod(sv)
         return isconst(m, f.name) && isdefined(m, f.name) && f
@@ -864,9 +855,9 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
         ls = length(sig.parameters)
         # look at the existing edges to detect growing argument lists
         limitlength = false
-        for (callee, _) in (sv.inf::InferenceState).edges
+        for (callee, _) in sv.edges
             callee = callee::InferenceState
-            if linfo.def === callee.linfo.def && ls > length(callee.sv.atypes.parameters)
+            if linfo.def === callee.linfo.def && ls > length(callee.atypes.parameters)
                 limitlength = true
                 break
             end
@@ -879,16 +870,16 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
             infstate = infstate::InferenceState
             if linfo.def === infstate.linfo.def
                 td = type_depth(sig)
-                if ls > length(infstate.sv.atypes.parameters)
+                if ls > length(infstate.atypes.parameters)
                     limitlength = true
                 end
-                if td > type_depth(infstate.sv.atypes)
+                if td > type_depth(infstate.atypes)
                     # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
                     if td > MAX_TYPE_DEPTH
                         sig = limit_type_depth(sig, 0, true, [])
                         break
                     else
-                        p1, p2 = sig.parameters, infstate.sv.atypes.parameters
+                        p1, p2 = sig.parameters, infstate.atypes.parameters
                         if length(p2) == ls
                             limitdepth = false
                             newsig = Array(Any, ls)
@@ -953,7 +944,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
     return rettype
 end
 
-function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::VarInfo)
+function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
     argtype = typeintersect(types,limit_tuple_type(argtype))
     if is(argtype,Bottom)
         return Bottom
@@ -1035,7 +1026,7 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
     return abstract_call(af, (), Any[type_typeof(af), Vararg{Any}], vtypes, sv, ())
 end
 
-function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
+function isconstantargs(args, argtypes::Vector{Any}, sv::InferenceState)
     if length(argtypes) == 1 # just the function
         return true
     end
@@ -1055,7 +1046,7 @@ function isconstantargs(args, argtypes::Vector{Any}, sv::VarInfo)
     return true
 end
 
-function _ieval_args(args, argtypes::Vector{Any}, sv::VarInfo)
+function _ieval_args(args, argtypes::Vector{Any}, sv::InferenceState)
     c = cell(length(argtypes) - 1)
     for i = 2:length(argtypes)
         t = argtypes[i]
@@ -1108,7 +1099,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
 end
 
 
-function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, sv::VarInfo, e)
+function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState, e)
     t = pure_eval_call(f, fargs, argtypes, sv, e)
     t !== false && return t
     if is(f,_apply) && length(fargs)>1
@@ -1166,7 +1157,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
     return abstract_call_gf(f, fargs, Tuple{argtypes...}, e, sv)
 end
 
-function abstract_eval_call(e, vtypes::VarTable, sv::VarInfo)
+function abstract_eval_call(e, vtypes::VarTable, sv::InferenceState)
     argtypes = Any[abstract_eval(a, vtypes, sv) for a in e.args]
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
@@ -1203,7 +1194,7 @@ function abstract_eval_call(e, vtypes::VarTable, sv::VarInfo)
     return abstract_call(f, e.args, argtypes, vtypes, sv, e)
 end
 
-function abstract_eval(e::ANY, vtypes::VarTable, sv::VarInfo)
+function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     if isa(e,QuoteNode)
         v = (e::QuoteNode).value
         return type_typeof(v)
@@ -1315,7 +1306,7 @@ function abstract_eval_global(M::Module, s::Symbol)
     return Any
 end
 
-function abstract_eval_gensym(s::GenSym, sv::VarInfo)
+function abstract_eval_gensym(s::GenSym, sv::InferenceState)
     typ = sv.gensym_types[s.id+1]
     if typ === NF
         return Bottom
@@ -1323,10 +1314,10 @@ function abstract_eval_gensym(s::GenSym, sv::VarInfo)
     return typ
 end
 
-function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::VarInfo)
+function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::InferenceState)
     t = get(vtypes,s,NF)
     if is(t,NF)
-        sp = sv.inf.linfo.sparam_syms
+        sp = sv.linfo.sparam_syms
         for i=1:length(sp)
             if is(sp[i],s)
                 # static parameter
@@ -1370,7 +1361,7 @@ function getindex(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-function abstract_interpret(e::ANY, vtypes::VarTable, sv::VarInfo)
+function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
     !isa(e,Expr) && return vtypes
     # handle assignment
     if is(e.head,:(=))
@@ -1538,7 +1529,7 @@ function find_gensym_uses(e::ANY, uses, line)
     end
 end
 
-function newvar!(sv::VarInfo, typ)
+function newvar!(sv::InferenceState, typ)
     id = length(sv.gensym_types)
     push!(sv.gensym_types, typ)
     return GenSym(id)
@@ -1609,16 +1600,8 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
         end
         # add lam to be inferred and record the edge
         ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
-        sv = VarInfo(linfo, atypes, ast)
-        if length(linfo.sparam_vals) > 0
-            # handled by VarInfo constructor
-        elseif isempty(sparams) && !isempty(linfo.sparam_syms)
-            sv.sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
-        else
-            sv.sp = sparams
-        end
         # our stack frame inference context
-        frame = InferenceState(sv, linfo, optimize)
+        frame = InferenceState(linfo, atypes, sparams, ast, optimize)
 
         if cached
             #println(linfo)
@@ -1639,21 +1622,20 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
     end
 
     if caller !== nothing
-        me = caller.inf
-        if haskey(me.edges, frame)
-            Ws = me.edges[frame]::Vector{Int}
+        if haskey(caller.edges, frame)
+            Ws = caller.edges[frame]::Vector{Int}
             if !(caller.currpc in Ws)
                 push!(Ws, caller.currpc)
             end
         else
             @assert caller.currpc > 0
             Ws = Int[caller.currpc]
-            me.edges[frame] = Ws
-            push!(frame.backedges, (me, Ws))
+            caller.edges[frame] = Ws
+            push!(frame.backedges, (caller, Ws))
         end
     end
     typeinf_loop(frame)
-    return (frame.sv.ast, frame.bestguess, frame.inferred)
+    return (frame.ast, frame.bestguess, frame.inferred)
 end
 
 function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, caller)
@@ -1722,7 +1704,7 @@ global_sv = nothing
 function typeinf_frame(frame)
     global global_sv # TODO: actually pass this to all functions that need it
     last_global_sv = global_sv
-    global_sv = frame.sv
+    global_sv = frame
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
@@ -1733,28 +1715,28 @@ function typeinf_frame(frame)
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             #print(pc,": ",s[pc],"\n")
             delete!(W, pc)
-            frame.sv.currpc = pc
-            frame.sv.static_typeof = false
+            frame.currpc = pc
+            frame.static_typeof = false
             if frame.handler_at[pc] === 0
                 frame.handler_at[pc] = frame.cur_hand
             else
                 frame.cur_hand = frame.handler_at[pc]
             end
-            stmt = frame.sv.body[pc]
-            changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, frame.sv)
+            stmt = frame.body[pc]
+            changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, frame)
             if changes === ()
                 # if there was a Expr(:static_typeof) on this line,
                 # need to continue to the next pc even though the return type was Bottom
                 # otherwise, this line threw an error and there is no need to continue
-                frame.sv.static_typeof || break
+                frame.static_typeof || break
                 changes = s[pc]
             end
             if frame.cur_hand !== ()
                 # propagate type info to exception handler
                 l = frame.cur_hand[1]
-                if stchanged(changes, s[l], frame.sv.vars)
+                if stchanged(changes, s[l], frame.vars)
                     push!(W, l)
-                    s[l] = stupdate(s[l], changes, frame.sv.vars)
+                    s[l] = stupdate(s[l], changes, frame.vars)
                 end
             end
             pc´ = pc+1
@@ -1763,9 +1745,9 @@ function typeinf_frame(frame)
                 changes = changes::StateUpdate
                 id = (changes.var::GenSym).id + 1
                 new = changes.vtype.typ
-                old = frame.sv.gensym_types[id]
+                old = frame.gensym_types[id]
                 if old===NF || !(new <: old)
-                    frame.sv.gensym_types[id] = tmerge(old, new)
+                    frame.gensym_types[id] = tmerge(old, new)
                     for r in frame.gensym_uses[id]
                         if !is(s[r], ()) # s[r] === () => unreached statement
                             push!(W, r)
@@ -1787,10 +1769,10 @@ function typeinf_frame(frame)
                     else
                         # general case
                         frame.handler_at[l] = frame.cur_hand
-                        if stchanged(changes, s[l], frame.sv.vars)
+                        if stchanged(changes, s[l], frame.vars)
                             # add else branch to active IP list
                             push!(W, l)
-                            s[l] = stupdate(s[l], changes, frame.sv.vars)
+                            s[l] = stupdate(s[l], changes, frame.vars)
                         end
                     end
                 elseif is(hd, :type_goto)
@@ -1803,19 +1785,19 @@ function typeinf_frame(frame)
                         # See issue #3821 (using !typeseq instead of !subtype),
                         # and issue #7810.
                         id = var.id+1
-                        vt = frame.sv.gensym_types[id]
+                        vt = frame.gensym_types[id]
                         ot = frame.gensym_init[id]
                         if ot===NF || !typeseq(vt, ot)
                             frame.gensym_init[id] = vt
-                            if get(frame.sv.fedbackvars, var, false)
+                            if get(frame.fedbackvars, var, false)
                                 frame.typegotoredo = true
                             end
                         end
-                        frame.sv.fedbackvars[var] = true
+                        frame.fedbackvars[var] = true
                     end
                 elseif is(hd, :return)
                     pc´ = n + 1
-                    rt = abstract_eval(stmt.args[1], s[pc], frame.sv)
+                    rt = abstract_eval(stmt.args[1], s[pc], frame)
                     if tchanged(rt, frame.bestguess)
                         # new (wider) return type for frame
                         frame.bestguess = tmerge(frame.bestguess, rt)
@@ -1834,9 +1816,9 @@ function typeinf_frame(frame)
                     l = frame.cur_hand[1]
                     old = s[l]
                     new = s[pc]::ObjectIdDict
-                    if old === () || stchanged(new, old::ObjectIdDict, frame.sv.vars)
+                    if old === () || stchanged(new, old::ObjectIdDict, frame.vars)
                         push!(W, l)
-                        s[l] = stupdate(old, new, frame.sv.vars)
+                        s[l] = stupdate(old, new, frame.vars)
                     end
 #                        if frame.handler_at[l] === 0
 #                            frame.n_handlers += 1
@@ -1856,8 +1838,8 @@ function typeinf_frame(frame)
                 end
             end
             if pc´<=n && (frame.handler_at[pc´] = frame.cur_hand; true) &&
-               stchanged(changes, s[pc´], frame.sv.vars)
-                s[pc´] = stupdate(s[pc´], changes, frame.sv.vars)
+               stchanged(changes, s[pc´], frame.vars)
+                s[pc´] = stupdate(s[pc´], changes, frame.vars)
                 pc = pc´
             elseif pc´ in W
                 pc = pc´
@@ -1894,7 +1876,7 @@ function typeinf_frame(frame)
             frame.cur_hand = ()
             frame.handler_at = Any[ () for i=1:n ]
             frame.n_handlers = 0
-            frame.sv.gensym_types[:] = frame.gensym_init
+            frame.gensym_types[:] = frame.gensym_init
             @goto restart_typeinf
         else
             # if a static_typeof was never reached,
@@ -1902,9 +1884,9 @@ function typeinf_frame(frame)
             # running type inference from its uses
             # (one of which is the static_typeof)
             # TODO: this restart should happen just before calling finish()
-            for (fbvar, seen) in frame.sv.fedbackvars
+            for (fbvar, seen) in frame.fedbackvars
                 if !seen
-                    frame.sv.fedbackvars[fbvar] = true
+                    frame.fedbackvars[fbvar] = true
                     id = (fbvar::GenSym).id + 1
                     for r in frame.gensym_uses[id]
                         if !is(s[r], ()) # s[r] === () => unreached statement
@@ -1965,12 +1947,12 @@ function finish(me::InferenceState)
     me.inworkq = true
 
     # annotate fulltree with type information
-    for i = 1:length(me.sv.gensym_types)
-        if me.sv.gensym_types[i] === NF
-            me.sv.gensym_types[i] = Union{}
+    for i = 1:length(me.gensym_types)
+        if me.gensym_types[i] === NF
+            me.gensym_types[i] = Union{}
         end
     end
-    fulltree = type_annotate(me.sv.ast, me.stmt_types, me.sv, me.bestguess, me.args)
+    fulltree = type_annotate(me.ast, me.stmt_types, me, me.bestguess, me.args)
 
     # make sure (meta pure) is stripped from full tree
     @assert fulltree.args[3].head === :body
@@ -1981,17 +1963,17 @@ function finish(me::InferenceState)
     # run optimization passes on fulltree
     if me.optimize
         if JLOptions().can_inline == 1
-            fulltree.args[3] = inlining_pass(fulltree.args[3], me.sv, fulltree)[1]
+            fulltree.args[3] = inlining_pass(fulltree.args[3], me, fulltree)[1]
             # inlining can add variables
-            me.sv.vars = append_any(f_argnames(fulltree), map(vi->vi[1], fulltree.args[2][1]))
+            me.vars = append_any(f_argnames(fulltree), map(vi->vi[1], fulltree.args[2][1]))
             inbounds_meta_elim_pass(fulltree.args[3])
         end
-        alloc_elim_pass(fulltree, me.sv)
-        getfield_elim_pass(fulltree.args[3], me.sv)
+        alloc_elim_pass(fulltree, me)
+        getfield_elim_pass(fulltree.args[3], me)
     end
 
     # finalize and record the linfo result
-    me.sv.ast = fulltree
+    me.ast = fulltree
     me.inferred = true
 
     compressedtree = ccall(:jl_compress_ast, Any, (Any,Any), me.linfo.def, fulltree)
@@ -2031,7 +2013,7 @@ function record_var_type(e::Symbol, t::ANY, decls)
     end
 end
 
-function eval_annotate(e::ANY, vtypes::ANY, sv::VarInfo, decls, undefs)
+function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, decls, undefs)
     if isa(e, Symbol)
         e = e::Symbol
 
@@ -2219,7 +2201,7 @@ end
 
 const emptydict = ObjectIdDict()
 
-function exprtype(x::ANY, sv::VarInfo)
+function exprtype(x::ANY, sv::InferenceState)
     if isa(x,Expr)
         return (x::Expr).typ
     elseif isa(x,SymbolNode)
@@ -2389,7 +2371,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 # `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
-function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, enclosing_ast::Expr)
+function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::InferenceState, enclosing_ast::Expr)
     local linfo,
         metharg::Type,
         argexprs = e.args,
@@ -2967,7 +2949,7 @@ function mk_getfield(texpr, i, T)
     e
 end
 
-function mk_tuplecall(args, sv::VarInfo)
+function mk_tuplecall(args, sv::InferenceState)
     e = Expr(:call, top_tuple, args...)
     e.typ = tuple_tfunc(Tuple{Any[exprtype(x,sv) for x in args]...})
     e
@@ -3364,7 +3346,7 @@ symequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 symequal(x::GenSym    , y::GenSym)     = is(x.id,y.id)
 symequal(x::ANY       , y::ANY)        = is(x,y)
 
-function occurs_outside_getfield(e::ANY, sym::ANY, sv::VarInfo, field_count, field_names)
+function occurs_outside_getfield(e::ANY, sym::ANY, sv::InferenceState, field_count, field_names)
     if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
         return true
     end
@@ -3452,7 +3434,7 @@ end
 # check if e is a successful allocation of an immutable struct
 # if it is, returns (n,f) such that it is always valid to call
 # getfield(..., 1 <= x <= n) or getfield(..., x in f) on the result
-function is_immutable_allocation(e :: ANY, sv::VarInfo)
+function is_immutable_allocation(e :: ANY, sv::InferenceState)
     isa(e, Expr) || return false
     if is_known_call(e, tuple, sv)
         return (length(e.args)-1,())
@@ -3476,7 +3458,7 @@ function is_immutable_allocation(e :: ANY, sv::VarInfo)
 end
 # eliminate allocation of unnecessary immutables
 # that are only used as arguments to safe getfield calls
-function alloc_elim_pass(ast::Expr, sv::VarInfo)
+function alloc_elim_pass(ast::Expr, sv::InferenceState)
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
