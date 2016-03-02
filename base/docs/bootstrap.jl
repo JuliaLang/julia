@@ -51,11 +51,17 @@ DocBootstrap
 Move all docstrings from `DocBootstrap.docs` to their module's metadata dict.
 """
 function loaddocs()
-    node = docs
+    # To keep the ordering of docstrings consistent within the entire docsystem we need to
+    # reverse the contents of `docs` (a stack) before evaluating each docstring.
+    node  = docs
+    stack = []
     while node ≠ nothing
-        mod, str, obj = node.head
-        eval(mod, :(Base.@doc($str, $obj, false)))
+        push!(stack, node.head)
         node = node.tail
+    end
+    while !isempty(stack)
+        mod, str, obj = pop!(stack)
+        eval(mod, :(Base.@doc($str, $obj, false)))
     end
     global docs = nothing
 end

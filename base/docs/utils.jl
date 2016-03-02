@@ -341,11 +341,18 @@ end
 
 ## Searching specific documentation objects
 function docsearch(haystack::MultiDoc, needle)
-    for v in values(haystack.fields)
-        docsearch(v, needle) && return true
-    end
     for v in values(haystack.docs)
         docsearch(v, needle) && return true
+    end
+    false
+end
+
+function docsearch(haystack::DocStr, needle)
+    docsearch(parsedoc(haystack), needle) && return true
+    if haskey(haystack.data, :fields)
+        for doc in values(haystack.data[:fields])
+            docsearch(doc, needle) && return true
+        end
     end
     false
 end
@@ -394,10 +401,7 @@ function apropos(io::IO, needle::Regex)
         # Module doc might be in README.md instead of the META dict
         docsearch(doc(mod), needle) && println(io, mod)
         for (k, v) in meta(mod)
-            (k === meta(mod) || k === mod) && continue
-            if docsearch(v, needle)
-                println(io, k)
-            end
+            docsearch(v, needle) && println(io, k)
         end
     end
 end
