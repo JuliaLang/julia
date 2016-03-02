@@ -3870,3 +3870,9 @@ let
 end
 @test j15283 == 1
 @test !isdefined(:k15283)
+
+# issue #15264
+module Test15264
+    mod1{T}(x::T) = x < 1 ? x : mod1(x-1)
+end
+@test Test15264.mod1 !== Base.mod1

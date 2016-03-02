@@ -1111,10 +1111,6 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
         if (!jl_local_in_linfo(lam, (jl_sym_t*)expr))
             return jl_module_globalref(lam->module, (jl_sym_t*)expr);
     }
-    else if (jl_is_lambda_info(expr)) {
-        jl_lambda_info_t *l = (jl_lambda_info_t*)expr;
-        (void)jl_preresolve_globals(l->ast, l);
-    }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == lambda_sym) {
