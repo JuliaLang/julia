@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.Docs: meta
+import Base.Docs: meta, @var, DocStr, parsedoc
 
 # Test helpers.
 function docstrings_equal(d1, d2)
@@ -10,6 +10,7 @@ function docstrings_equal(d1, d2)
     writemime(io2, MIME"text/markdown"(), d2)
     takebuf_string(io1) == takebuf_string(io2)
 end
+docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
 function docstring_startswith(d1, d2)
     io1 = IOBuffer()
@@ -18,6 +19,7 @@ function docstring_startswith(d1, d2)
     writemime(io2, MIME"text/markdown"(), d2)
     startswith(takebuf_string(io1), takebuf_string(io2))
 end
+docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
@@ -160,65 +162,67 @@ function multidoc! end
 
 end
 
-@test meta(DocsTest)[DocsTest] == doc"DocsTest"
+@test docstrings_equal(@doc(DocsTest), doc"DocsTest")
 
 # Check that plain docstrings store a module reference.
 # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
-@test meta(DocsTest)[DocsTest].meta[:module] == DocsTest
+@test meta(DocsTest)[@var(DocsTest)].docs[Union{}].data[:module] == DocsTest
 
-let f = DocsTest.f
+let f = @var(DocsTest.f)
     md = meta(DocsTest)[f]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f-1")
     @test docstrings_equal(md.docs[Tuple{Any,Any}], doc"f-2")
 end
 
-let s = DocsTest.s
+let s = @var(DocsTest.s)
     md = meta(DocsTest)[s]
     @test docstrings_equal(md.docs[Tuple{Any,}], doc"s-1")
     @test docstrings_equal(md.docs[Tuple{Any,Any}], doc"s-2")
 end
 
-let g = DocsTest.g
+let g = @var(DocsTest.g)
     md = meta(DocsTest)[g]
     @test docstrings_equal(md.docs[Union{}], doc"g")
 end
 
-let h = DocsTest.h
+let h = @var(DocsTest.h)
     md = meta(DocsTest)[h]
     sig = Union{Tuple{}, Tuple{Any}, Tuple{Any, Any}, Tuple{Any, Any, Any}}
     @test docstrings_equal(md.docs[sig], doc"h/0-3")
 end
 
-let AT = DocsTest.AT
+let AT = @var(DocsTest.AT)
     md = meta(DocsTest)[AT]
     @test docstrings_equal(md.docs[Union{}], doc"AT")
 end
 
-let BT = DocsTest.BT
+let BT = @var(DocsTest.BT)
     md = meta(DocsTest)[BT]
     @test docstrings_equal(md.docs[Union{}], doc"BT")
 end
 
-let BT2 = DocsTest.BT2
+let BT2 = @var(DocsTest.BT2)
     md = meta(DocsTest)[BT2]
     @test docstrings_equal(md.docs[Union{}], doc"BT2")
 end
 
-let T = DocsTest.T
+let T = @var(DocsTest.T)
     md = meta(DocsTest)[T]
-    @test docstrings_equal(md.docs[Union{}], doc"T")
-    @test docstrings_equal(md.fields[:x], doc"T.x")
-    @test docstrings_equal(md.fields[:y], doc"T.y")
+    d  = md.docs[Union{}]
+    @test docstrings_equal(d, doc"T")
+    @test d.data[:fields][:x] == "T.x"
+    @test d.data[:fields][:y] == "T.y"
 end
 
-let IT = DocsTest.IT
+let IT = @var(DocsTest.IT)
     md = meta(DocsTest)[IT]
-    @test docstrings_equal(md.docs[Union{}], doc"IT")
-    @test docstrings_equal(md.fields[:x], doc"IT.x")
-    @test docstrings_equal(md.fields[:y], doc"IT.y")
+    d  = md.docs[Union{}]
+    @test docstrings_equal(d, doc"IT")
+    @test d.data[:fields][:x] == "IT.x"
+    @test d.data[:fields][:y] == "IT.y"
 end
 
-@test @doc(DocsTest.TA) == doc"TA"
+@test docstrings_equal(@doc(DocsTest.TA), doc"TA")
 
 @test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()")
 @test docstrings_equal(@doc(DocsTest.@mac()), doc"@mac()")
@@ -226,11 +230,11 @@ end
 @test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr)), doc"@mac(x::Int, y::Expr, z = 0)")
 @test docstrings_equal(@doc(DocsTest.@mac(x::Int, y::Expr, z)), doc"@mac(x::Int, y::Expr, z = 0)")
 let m = doc"""
+        @mac()
+
         @mac(x)
 
         @mac(x::Int, y::Expr, z = 0)
-
-        @mac()
 
         :@mac
         """
@@ -238,8 +242,8 @@ let m = doc"""
     @test docstrings_equal(@doc(:(DocsTest.@mac)), m)
 end
 
-@test @doc(DocsTest.G) == doc"G"
-@test @doc(DocsTest.K) == doc"K"
+@test docstrings_equal(@doc(DocsTest.G), doc"G")
+@test docstrings_equal(@doc(DocsTest.K), doc"K")
 
 let d1 = @doc(DocsTest.t(::AbstractString)),
     d2 = doc"t-1"
@@ -261,8 +265,8 @@ let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
     @test docstrings_equal(d1,d2)
 end
 
-let fields = meta(DocsTest)[DocsTest.FieldDocs].fields
-    @test haskey(fields, :one) && fields[:one] == doc"one"
+let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
+    @test haskey(fields, :one) && fields[:one] == "one"
     @test haskey(fields, :two) && fields[:two] == doc"two"
 end
 
@@ -352,17 +356,17 @@ end
 
 end
 
-let md = meta(MacroGenerated)[MacroGenerated.f]
+let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
-    @test md.docs[Tuple{Any}] == doc"f"
+    @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
 end
 
 @test isdefined(MacroGenerated, :_f)
 
-let md = meta(MacroGenerated)[MacroGenerated.g]
+let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
-    @test md.docs[Tuple{Any}] == doc"g"
-    @test md.docs[Tuple{Any, Any}] == doc"g"
+    @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
+    @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
 end
 
 @test isdefined(MacroGenerated, :_g)
@@ -417,7 +421,7 @@ read(x) = x
 
 end
 
-let md = Base.Docs.meta(I11798)[I11798.read],
+let md = Base.Docs.meta(I11798)[@var(I11798.read)],
     d1 = md.docs[md.order[1]],
     d2 = doc"read"
     @test docstrings_equal(d1,d2)
@@ -432,7 +436,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 
 end
 
-let fd = meta(I12515)[Base.collect]
+let fd = meta(I12515)[@var(Base.collect)]
     @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
 end
 
@@ -447,7 +451,7 @@ f12593_2() = 1
 @test (@doc f12593_1) !== nothing
 @test (@doc f12593_2) !== nothing
 
-@test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
+# @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
 @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
@@ -512,7 +516,13 @@ end
 )
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Int}), doc"foo from A")
 @test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Float64}), doc"foo from B")
-@test Docs.doc(I13068.A.foo, Tuple{Char}) === nothing
+@test docstrings_equal(Docs.doc(I13068.A.foo, Tuple{Char}),
+    doc"""
+    foo from A
+
+    foo from B
+    """
+)
 
 # Issue #13905.
 @test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(symbol("@x")))
@@ -550,12 +560,12 @@ Binding `Undocumented.bindingdoesnotexist` does not exist.
 No documentation found.
 
 **Summary:**
-```julia
+```
 abstract Undocumented.A <: Any
 ```
 
 **Subtypes:**
-```julia
+```
 Undocumented.B
 Undocumented.C
 ```
@@ -565,12 +575,12 @@ Undocumented.C
 No documentation found.
 
 **Summary:**
-```julia
+```
 abstract Undocumented.B <: Undocumented.A
 ```
 
 **Subtypes:**
-```julia
+```
 Undocumented.D
 ```
 """)
@@ -579,7 +589,7 @@ Undocumented.D
 No documentation found.
 
 **Summary:**
-```julia
+```
 type Undocumented.C <: Undocumented.A
 ```
 """)
@@ -588,12 +598,12 @@ type Undocumented.C <: Undocumented.A
 No documentation found.
 
 **Summary:**
-```julia
+```
 immutable Undocumented.D <: Undocumented.B
 ```
 
 **Fields:**
-```julia
+```
 one   :: Any
 two   :: UTF8String
 three :: Float64
@@ -620,20 +630,49 @@ let d = @doc Undocumented.undocumented
     """)
 end
 
+# `@doc` "metadata".
+
+let m = @doc(DocsTest).meta
+    @test length(m[:results]) == 1
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest)].docs[Union{}]
+    @test m[:binding] == @var(DocsTest)
+    @test m[:typesig] == Union
+end
+
+let m = @doc(DocsTest.f).meta
+    @test length(m[:results]) == 2
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any}]
+    @test m[:results][2] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any, Any}]
+    @test m[:binding] == @var(DocsTest.f)
+    @test m[:typesig] == Union
+end
+
+let m = @doc(DocsTest.f(x)).meta
+    @test length(m[:results]) == 1
+    @test m[:results][1] === Docs.meta(DocsTest)[@var(DocsTest.f)].docs[Tuple{Any}]
+    @test m[:binding] == @var(DocsTest.f)
+    @test m[:typesig] == Tuple{Any}
+end
+
+let m = @doc(Undocumented.f).meta
+    @test isempty(m[:results])
+    @test m[:binding] == @var(Undocumented.f)
+    @test m[:typesig] == Union
+end
 
 # Bindings.
 
-import Base.Docs: @var, Binding
+import Base.Docs: @var, Binding, defined
 
 let x = Binding(Base, symbol("@time"))
-    @test x.defined == true
+    @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x
     @test @var(Base.Pkg.@time) == x
 end
 
 let x = Binding(Base.LinAlg, :norm)
-    @test x.defined == true
+    @test defined(x) == true
     @test @var(norm) == x
     @test @var(Base.norm) == x
     @test @var(Base.LinAlg.norm) == x
@@ -641,7 +680,7 @@ let x = Binding(Base.LinAlg, :norm)
 end
 
 let x = Binding(Core, :Int)
-    @test x.defined == true
+    @test defined(x) == true
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
@@ -649,25 +688,25 @@ let x = Binding(Core, :Int)
 end
 
 let x = Binding(Base, :Pkg)
-    @test x.defined == true
+    @test defined(x) == true
     @test @var(Pkg) == x
     @test @var(Base.Pkg) == x
     @test @var(Main.Pkg) == x
 end
 
 let x = Binding(Base, :VERSION)
-    @test x.defined == true
+    @test defined(x) == true
     @test @var(VERSION) == x
     @test @var(Base.VERSION) == x
 end
 
 let x = Binding(Base, :bindingdoesnotexist)
-    @test x.defined == false
+    @test defined(x) == false
     @test @var(Base.bindingdoesnotexist) == x
 end
 
 let x = Binding(Main, :bindingdoesnotexist)
-    @test x.defined == false
+    @test defined(x) == false
     @test @var(bindingdoesnotexist) == x
 end
 
