@@ -354,7 +354,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     return li;
 }
 
-jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
+JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 {
     jl_lambda_info_t *new_linfo =
         jl_new_lambda_info(linfo->ast, linfo->sparam_syms, linfo->sparam_vals, linfo->module);

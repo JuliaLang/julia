@@ -558,7 +558,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
         if (!jl_in_inference) {
-            jl_type_infer(thk, thk);
+            jl_type_infer(thk);
         }
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);

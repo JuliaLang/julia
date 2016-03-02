@@ -1084,25 +1084,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-// given a new lambda_info with static parameter values, make a copy
-// of the tree with declared types evaluated and static parameters passed
-// on to all enclosed functions.
-// this tree can then be further mutated by optimization passes.
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
-{
-    jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;
-    JL_GC_PUSH1(&ast);
-    if (!jl_is_expr(ast)) {
-        ast = jl_uncompress_ast(li, ast);
-    }
-    else {
-        ast = jl_copy_ast(ast);
-    }
-    JL_GC_POP();
-    return ast;
-}
-
 JL_DLLEXPORT int jl_is_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();

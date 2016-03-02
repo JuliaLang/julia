@@ -734,7 +734,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e)
             end
         end
         #print(m,"\n")
-        (_tree,rt) = typeinf(linfo, sig, m[2], linfo)
+        (_tree,rt) = typeinf(linfo, sig, m[2])
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
@@ -767,7 +767,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY)
     if linfo === NF
         return Any
     end
-    return typeinf(linfo::LambdaInfo, ti, env, linfo)[2]
+    return typeinf(linfo::LambdaInfo, ti, env)[2]
 end
 
 # `types` is an array of inferred types for expressions in `args`.
@@ -888,7 +888,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
         return false
     end
     if !linfo.pure
-        typeinf(linfo, meth[1], meth[2], linfo)
+        typeinf(linfo, meth[1], meth[2])
         if !linfo.pure
             return false
         end
@@ -1341,26 +1341,52 @@ end
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-function typeinf_ext(linfo, atypes::ANY, def)
+function typeinf_ext(linfo, atypes::ANY)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, svec(), def, true, true)
+    (newlinfo,ty) = typeinf(linfo, atypes, svec(), true, true)
     inference_stack = last
-    return result
+    linfo.inferred = newlinfo !== linfo.def
+    if linfo.inferred && newlinfo !== linfo
+        linfo.rettype = ty
+        # if type inference bails out it returns def.ast
+        linfo.ast = newlinfo.ast
+        linfo.nslots = newlinfo.nslots
+        linfo.ngensym = newlinfo.ngensym
+        linfo.pure = newlinfo.pure
+    end
+    nothing
 end
 
-typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true,false)
-typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true,false)
+# copy a LambdaInfo just enough to make it not share data with li.def
+function unshare_linfo(li::LambdaInfo, inplace)
+    if !inplace && li === li.def
+        li = ccall(:jl_copy_lambda_info, Any, (Any,), li)::LambdaInfo
+    end
+    if !isa(li.ast, Expr)
+        li.ast = ccall(:jl_uncompress_ast, Any, (Any,Any), li, li.ast)
+    elseif li.ast === li.def.ast
+        li.ast = astcopy(li.ast)
+    end
+    return li
+end
+
+function compress!(li::LambdaInfo)
+    if isa(li.ast, Expr)
+        li.ast = ccall(:jl_compress_ast, Any, (Any,Any), li.def, li.ast)
+    end
+    li
+end
 
 CYCLE_ID = 1
 
 #trace_inf = false
 #enable_trace_inf(on) = (global trace_inf=on)
 
-# def is the original unspecialized version of a method. we aggregate all
+# linfo.def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop, needtree)
+function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, needtree=false, inplace=false)
     if linfo.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
@@ -1370,6 +1396,7 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop
     curtype = Bottom
     redo = false
     # check cached t-functions
+    def = linfo.def
     tf = def.tfunc
     if !is(tf,nothing)
         tfarr = tf::Array{Any,1}
@@ -1390,19 +1417,19 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop
                         return (nothing, code)
                     end
                 else
-                    return code  # else code is a tuple (ast, type)
+                    return (code, code.rettype)  # else code is a LambdaInfo
                 end
             end
         end
     end
     # TODO: typeinf currently gets stuck without this
     if linfo.name === :abstract_interpret || linfo.name === :alloc_elim_pass || linfo.name === :abstract_call_gf
-        return (linfo.ast, Any)
+        return (linfo, Any)
     end
 
-    (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
-    if fulltree === ()
-        return (fulltree, result::Type)
+    (newcode, result, rec) = typeinf_uncached(linfo, atypes, sparams, curtype, true, inplace)
+    if newcode === nothing
+        return (newcode, result::Type)
     end
 
     if !redo
@@ -1424,24 +1451,25 @@ function typeinf(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, cop
         tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        tfarr[idx+1] = rec ? result : (fulltree,result)
+        tfarr[idx+1] = rec ? result : newcode
         tfarr[idx+2] = rec
     else
-        def.tfunc[tfunc_idx] = rec ? result : (fulltree,result)
+        def.tfunc[tfunc_idx] = rec ? result : newcode
         def.tfunc[tfunc_idx+1] = rec
     end
 
-    return (fulltree, result::Type)
+    return (newcode, result::Type)
 end
 
 typeinf_uncached(linfo, atypes::ANY, sparams::ANY; optimize=true) =
-    typeinf_uncached(linfo, atypes, sparams, linfo, Bottom, true, optimize)
+    typeinf_uncached(linfo, atypes, sparams, Bottom, optimize, false)
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 # compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
-function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, def, curtype, cop, optimize)
+function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, curtype, optimize, inplace)
+    def = linfo.def
     ast0 = def.ast
     #if dbg
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
@@ -1510,7 +1538,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             end
             CYCLE_ID += 1
             #print("*==> ", f.result,"\n")
-            return ((),f.result,true)
+            return (nothing,f.result,true)
         end
         f = f.prev
     end
@@ -1521,11 +1549,8 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
 
     #if dbg print("typeinf ", linfo.name, " ", atypes, "\n") end
 
-    if cop
-        ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
-    else
-        ast = linfo.ast
-    end
+    linfo = unshare_linfo(linfo, inplace)
+    ast = linfo.ast
 
     sv = VarInfo(linfo, ast)
 
@@ -1599,7 +1624,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             s[1][i] = VarState(lastatype, false)
         end
     elseif la != 0
-        return ((), Bottom, false) # wrong number of arguments
+        return (linfo, Bottom, false) # wrong number of arguments
     end
 
     gensym_uses = find_gensym_uses(body)
@@ -1747,7 +1772,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
                             # for an example see test/libgit2.jl on 0.5-pre master
                             # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
                             inference_stack = (inference_stack::CallStack).prev
-                            return (ast0, Any, false)
+                            return (def, Any, false)
                         end
                     end
                     handler_at[l] = cur_hand
@@ -1805,15 +1830,17 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
             linfo.nslots = length(fulltree.args[2][1])
             linfo.ngensym = length(sv.gensym_types)
         end
-        linfo.inferred = true
         body = Expr(:block)
         body.args = fulltree.args[3].args::Array{Any,1}
         linfo.pure = popmeta!(body, :pure)[1]
-        fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
+        linfo.ast = fulltree
+        compress!(linfo)
+        linfo.rettype = frame.result
+        linfo.inferred = true
     end
 
     inference_stack = (inference_stack::CallStack).prev
-    return (fulltree, frame.result, rec)
+    return (linfo, frame.result, rec)
 end
 
 function record_var_type(s::Slot, t::ANY, decls)
@@ -2243,15 +2270,14 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
     methargs = metharg.parameters
     nm = length(methargs)
 
-    (ast, ty) = typeinf(linfo, metharg, methsp, linfo, true, true)
-    if is(ast,())
+    (linfo, ty) = typeinf(linfo, metharg, methsp, true)
+    if is(linfo,nothing)
         return NF
     end
+    ast = linfo.ast
 
     if !isa(ast,Expr)
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
-    else
-        ast = astcopy(ast)
     end
     ast = ast::Expr
     vinflist = ast.args[2][1]::Array{Any,1}

@@ -814,10 +814,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 for(i=0; i < l; i += 3) {
                     if (!jl_is_leaf_type(jl_cellref(tf,i))) {
                         jl_value_t *ret = jl_cellref(tf,i+1);
-                        if (jl_is_tuple(ret)) {
-                            jl_value_t *ast = jl_fieldref(ret, 0);
+                        if (jl_is_lambda_info(ret)) {
+                            jl_value_t *ast = ((jl_lambda_info_t*)ret)->ast;
                             if (jl_is_array(ast) && jl_array_len(ast) > 500)
-                                jl_cellset(tf, i+1, jl_fieldref(ret,1));
+                                jl_cellset(tf, i+1, ((jl_lambda_info_t*)ret)->rettype);
                         }
                     }
                 }

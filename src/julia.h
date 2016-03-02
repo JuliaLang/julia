@@ -176,6 +176,13 @@ typedef struct _jl_lambda_info_t {
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
     jl_value_t *ast;
+    /*
+    jl_value_t *code;  // compressed uint8 array, or Any array of statements
+    jl_array_t *slotnames; // names of local variables
+    jl_array_t *slottypes;
+    jl_array_t *varinfo;  // local var bit flags
+    jl_array_t *gensymtypes;
+    */
     jl_value_t *rettype;
     // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_syms;
@@ -197,6 +204,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inferred;
     int8_t pure;
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
+    //uint8_t isva;
 
     // hidden fields:
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
@@ -1233,7 +1241,6 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li);
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
