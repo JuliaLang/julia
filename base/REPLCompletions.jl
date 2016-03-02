@@ -35,7 +35,7 @@ function complete_symbol(sym, ffunc)
             b = mod.(s)
             if isa(b, Module)
                 mod = b
-            elseif Base.isstructtype(typeof(b))
+            elseif Base.isstructtype(typeof(b)) && !isa(b, Tuple)
                 lookup_module = false
                 t = typeof(b)
             else
@@ -51,7 +51,7 @@ function complete_symbol(sym, ffunc)
             for i in 1:length(fields)
                 s == fields[i] || continue
                 t = t.types[i]
-                Base.isstructtype(t) || return UTF8String[]
+                (Base.isstructtype(t) && !(t <: Tuple)) || return UTF8String[]
                 found = true
                 break
             end
