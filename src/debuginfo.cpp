@@ -88,7 +88,9 @@ struct FuncInfo {
 struct ObjectInfo {
     const object::ObjectFile *object;
     size_t size;
-#ifdef LLVM37
+#ifdef LLVM39
+    DIContext *context;
+#elif defined(LLVM37)
     const llvm::LoadedObjectInfo *L;
 #elif defined(LLVM36)
     size_t slide;
@@ -389,7 +391,13 @@ public:
                 linfo = linfo_it->second;
                 linfo_in_flight.erase(linfo_it);
             }
-            ObjectInfo tmp = {&debugObj, (size_t)Size, L.clone().release(), linfo};
+            ObjectInfo tmp = {&debugObj, (size_t)Size,
+#ifdef LLVM39
+                new DWARFContextInMemory(debugObj, &L),
+#else
+                L.clone().release(),
+#endif
+                linfo};
             objectmap[Addr] = tmp;
         }
 
@@ -461,7 +469,9 @@ public:
                 obj.getObjectFile();
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size,
-#ifdef LLVM37
+#ifdef LLVM39
+                new DWARFContextInMemory(*objfile, &L),
+#elif defined(LLVM37)
                 L.clone().release(),
 #elif defined(LLVM36)
                 (size_t)SectionAddr,
@@ -936,7 +946,9 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
         DIContext *context = NULL; // versions of MCJIT < 3.7 can't handle MachO relocations
 #else
 #ifdef LLVM36
-#ifdef LLVM37
+#if defined(LLVM39)
+        DIContext *context = it->second.context;
+#elif defined(LLVM37)
         DIContext *context = new DWARFContextInMemory(*it->second.object, it->second.L);
 #else
         DIContext *context = DIContext::getDWARFContext(*it->second.object);
@@ -947,7 +959,9 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 #endif
 #endif
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer, 1, fromC);
+#ifndef LLVM39
         delete context;
+#endif
     }
 
 #else // !USE_MCJIT
