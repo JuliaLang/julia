@@ -245,4 +245,7 @@ temp_pkg_dir() do
             @test ex.msg == "Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
         end
     end
+
+    # Test Pkg.Read.url works
+    @test Pkg.Read.url("Example") == "git://github.com/JuliaLang/Example.jl.git"
 end
