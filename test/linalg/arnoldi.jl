@@ -102,13 +102,13 @@ let A6965 = [
 end
 
 # Example from Quantum Information Theory
-import Base: size, issym, ishermitian
+import Base: size, issymmetric, ishermitian
 
 type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
-issym(Phi::CPM)=false
+issymmetric(Phi::CPM)=false
 ishermitian(Phi::CPM)=false
 import Base: *
 function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
@@ -204,3 +204,11 @@ let # complex svds test
     @test_throws ArgumentError svds(A,nsv=0)
     @test_throws ArgumentError svds(A,nsv=20)
 end
+
+# test promotion
+eigs(rand(1:10, 10, 10))
+eigs(rand(1:10, 10, 10), rand(1:10, 10, 10) |> t -> t't)
+svds(rand(1:10, 10, 8))
+@test_throws MethodError eigs(big(rand(1:10, 10, 10)))
+@test_throws MethodError eigs(big(rand(1:10, 10, 10)), rand(1:10, 10, 10))
+@test_throws MethodError svds(big(rand(1:10, 10, 8)))

@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 file = tempname()
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 t = "Hello World".data
 @test Mmap.mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
 gc(); gc()
@@ -11,12 +9,12 @@ gc(); gc()
 gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 gc(); gc()
-@test_throws ArgumentError Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) # 0-dimension results in len=0
+@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array(UInt8,(0,0,0))
 @test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
 gc(); gc()
 @test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
 gc(); gc()
-@test_throws ArgumentError Mmap.mmap(file, Array{UInt8,2}, (0,12))
+@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array(UInt8,(0,0))
 m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape("He".data,(1,2,1))
 finalize(m); m=nothing; gc()
@@ -48,13 +46,13 @@ close(s)
 gc(); gc()
 
 s = open(f->f,file,"w")
-@test_throws ArgumentError Mmap.mmap(file) # requested len=0 on empty file
-@test_throws ArgumentError Mmap.mmap(file,Vector{UInt8},0)
+@test Mmap.mmap(file) == Array(UInt8, 0) # requested len=0 on empty file
+@test Mmap.mmap(file,Vector{UInt8},0) == Array(UInt8, 0)
 m = Mmap.mmap(file,Vector{UInt8},12)
 m[:] = "Hello World\n".data
 Mmap.sync!(m)
 finalize(m); m=nothing; gc()
-@test open(readall,file) == "Hello World\n"
+@test open(readstring,file) == "Hello World\n"
 
 s = open(file, "r")
 close(s)
@@ -89,15 +87,12 @@ m = Mmap.mmap(file, Vector{UInt8}, 1, sz+1)
 @test m[1] == 0x00
 finalize(m); m=nothing; gc()
 
-# Uncomment out once #11351 is resolved
-# s = open(file, "r")
-# m = Mmap.mmap(s)
-# @test_throws ReadOnlyMemoryError m[5] = Vector{UInt8}('x') # tries to setindex! on read-only array
-# finalize(m); m=nothing; gc()
+s = open(file, "r")
+m = Mmap.mmap(s)
+@test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
+finalize(m); m=nothing; gc()
 
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 
 s = open(file, "r")
 m = Mmap.mmap(s)
@@ -115,9 +110,7 @@ close(s)
 finalize(m); finalize(c); finalize(d)
 m=nothing; c=nothing; d=nothing; gc()
 
-s = open(file, "w") do f
-    write(f, "Hello World\n")
-end
+write(file, "Hello World\n")
 
 s = open(file, "r")
 @test isreadonly(s) == true
@@ -237,9 +230,9 @@ n = read(s, Int)
 A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
 @test A == A2
 seek(s, 0)
-A3 = Mmap.mmap(s, Matrix{Int}, (m,n), convert(FileOffset,2*sizeof(Int)))
+A3 = Mmap.mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
-A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(FileOffset,(2+150*m)*sizeof(Int)))
+A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)
 finalize(A2); finalize(A3); finalize(A4)
@@ -285,3 +278,16 @@ n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
 finalize(m); m = nothing; gc()
+
+# test #14885
+file = tempname()
+touch(file)
+open(file, "r+") do s
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 0);
+    Mmap.sync!(A)
+    finalize(A); A = nothing; gc()
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 1);
+    Mmap.sync!(A)
+    finalize(A); A = nothing; gc()
+end
+rm(file)

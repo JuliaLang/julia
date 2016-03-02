@@ -39,7 +39,9 @@ end
 
 # Ptr
 create_serialization_stream() do s
-    @test_throws ErrorException serialize(s, C_NULL)
+    serialize(s, C_NULL)
+    seekstart(s)
+    @test deserialize(s) === C_NULL
 end
 
 # Integer
@@ -230,6 +232,30 @@ create_serialization_stream() do s # slices
     @test deserialize(s) == slc2
 end
 
+# Objects that have a SubArray as a type in a type-parameter list
+module ArrayWrappers
+
+immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+    data::A
+end
+Base.size(A::ArrayWrapper) = size(A.data)
+Base.size(A::ArrayWrapper, d) = size(A.data, d)
+Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
+
+end
+
+let A = rand(3,4)
+    for B in (sub(A, :, 2:4), slice(A, 2, 1:3))
+        C = ArrayWrappers.ArrayWrapper{Float64,2,typeof(B)}(B)
+        io = IOBuffer()
+        serialize(io, C)
+        seek(io, 0)
+        Cd = deserialize(io)
+        @test size(Cd) == size(C)
+        @test Cd == B
+    end
+end
+
 # Function
 serialize_test_function() = 1
 serialize_test_function2 = ()->1
@@ -242,32 +268,32 @@ create_serialization_stream() do s # Base generic function
     seek(s, 0)
     @test deserialize(s) === sin
     @test deserialize(s) === typeof
-    @test deserialize(s) == serialize_test_function
-    @test deserialize(s).code.ast == Base.uncompressed_ast(serialize_test_function2.code)
+    @test deserialize(s)() === 1
+    @test deserialize(s)() === 1
 end
 
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    yieldto(t)
+    wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.code.code.ast == Base.uncompressed_ast(f.code)
     @test r.storage[:v] == 2
     @test r.state == :done
     @test r.exception == nothing
 end
 
+immutable MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
-    t = Task(()->error("Test"))
-    @test_throws ErrorException yieldto(t)
+    t = Task(()->throw(MyErrorTypeTest()))
+    @test_throws MyErrorTypeTest wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, ErrorException)
+    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable type
@@ -280,16 +306,34 @@ create_serialization_stream() do s
 end
 
 # cycles
+module CycleFoo
+    echo(x)=x
+end
 create_serialization_stream() do s
-    A = Any[1,2,3,4,5]
+    echo(x) = x
+    afunc = (x)->x
+    A = Any[1,2,3,abs,abs,afunc,afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
     A[3] = A
     serialize(s, A)
     seekstart(s)
     b = deserialize(s)
     @test b[3] === b
     @test b[1] == 1
-    @test b[5] == 5
-    @test length(b) == 5
+    @test b[4] === abs
+    @test b[5] === b[4]
+    @test b[5](-1) == 1
+
+    @test b[6] === b[7]
+    @test b[6]("Hello") == "Hello"
+
+    @test b[8] === b[9]
+    @test b[8]("World") == "World"
+
+    @test b[10] === b[11]
+    @test b[10]("foobar") == "foobar"
+
+    @test b[end] == 5
+    @test length(b) == length(A)
     @test isa(b,Vector{Any})
 end
 
@@ -300,4 +344,38 @@ create_serialization_stream() do s
     seekstart(s)
     r2 = deserialize(s)
     @test r1 == r2
+end
+
+# issue #13452
+module Test13452
+using Base.Test
+
+module Shell
+export foo
+foo(x) = error("Instances must implement foo")
+end
+
+module Instance1
+using ..Shell
+Shell.foo(x::Int) = "This is an Int"
+end
+
+using .Shell, .Instance1
+io = IOBuffer()
+serialize(io, foo)
+str = takebuf_string(io)
+@test isempty(search(str, "Instance1"))
+@test !isempty(search(str, "Shell"))
+
+end  # module Test13452
+
+# issue #15163
+type B15163{T}
+    x::Array{T}
+end
+let b = IOBuffer()
+    serialize(b,B15163([1]))
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c,B15163) && c.x == [1]
 end

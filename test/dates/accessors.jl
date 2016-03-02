@@ -40,7 +40,7 @@
 # test_dates(-10000,10000) takes about 15 seconds
 # test_dates(year(typemin(Date)),year(typemax(Date))) is full range
 # and would take.......a really long time
-function test_dates(from,to)
+function test_dates1(from,to)
     y = m = d = 0
     test_day = Dates.totaldays(from,1,1)
     for y in from:to
@@ -54,10 +54,10 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(0,2100)
+test_dates1(0,2100)
 
 # Test year, month, day, hour, minute
-function test_dates()
+function test_dates1()
     y = m = d = h = mi = 0
     for m = 1:12
         for d = 1:Dates.daysinmonth(y,m)
@@ -77,10 +77,10 @@ function test_dates()
         end
     end
 end
-test_dates()
+test_dates1()
 
 # Test second, millisecond
-function test_dates()
+function test_dates2()
     y = m = d = h = mi = s = ms = 0
     for y in [-2013,-1,0,1,2013]
         for m in [1,6,12]
@@ -102,9 +102,9 @@ function test_dates()
         end
     end
 end
-test_dates()
+test_dates2()
 
-function test_dates(from,to)
+function test_dates2(from,to)
     y = m = d = 0
     for y in from:to
         for m = 1:12
@@ -117,7 +117,7 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(0,2100)
+test_dates2(0,2100)
 
 # week function
 # Tests from https://en.wikipedia.org/wiki/ISO_week_date

@@ -10,40 +10,7 @@ typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
 typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 
-call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
-call{T}(::Type{Vector{T}}) = Array{T}(0)
-call(::Type{Vector}, m::Integer) = Array{Any}(m)
-call(::Type{Vector}) = Array{Any}(0)
-
-call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
-call{T}(::Type{Matrix{T}}) = Array{T}(0, 0)
-call(::Type{Matrix}, m::Integer, n::Integer) = Array{Any}(m, n)
-call(::Type{Matrix}) = Array{Any}(0, 0)
-
 ## Basic functions ##
-
-# convert Arrays to pointer arrays for ccall
-function call{P<:Ptr,T<:Ptr}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
-    return RefArray(a) # effectively a no-op
-end
-function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
-    if (!isbits(T) && T <: eltype(P))
-        # this Array already has the right memory layout for the requested Ref
-        return RefArray(a,1,false) # root something, so that this function is type-stable
-    else
-        ptrs = Array(P, length(a)+1)
-        roots = Array(Any, length(a))
-        for i = 1:length(a)
-            root = cconvert(P, a[i])
-            ptrs[i] = unsafe_convert(P, root)::P
-            roots[i] = root
-        end
-        ptrs[length(a)+1] = C_NULL
-        return RefArray(ptrs,1,roots)
-    end
-end
-cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
-cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
 
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
@@ -183,19 +150,9 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
 end
 
 function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
-    # note: checking bit pattern
-    xT = convert(T,x)
-    if isbits(T) && nfields(T)==0 &&
-        ((sizeof(T)==1 && reinterpret(UInt8, xT) == 0) ||
-         (sizeof(T)==2 && reinterpret(UInt16, xT) == 0) ||
-         (sizeof(T)==4 && reinterpret(UInt32, xT) == 0) ||
-         (sizeof(T)==8 && reinterpret(UInt64, xT) == 0))
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
-              a, 0, length(a)*sizeof(T))
-    else
-        for i in eachindex(a)
-            @inbounds a[i] = xT
-        end
+    xT = convert(T, x)
+    for i in eachindex(a)
+        @inbounds a[i] = xT
     end
     return a
 end
@@ -236,8 +193,9 @@ end
 
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
-convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
+
+convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
+convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array(T, size(x)), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
@@ -274,7 +232,7 @@ collect(itr) = collect(eltype(itr), itr)
 ## Iteration ##
 start(A::Array) = 1
 next(a::Array,i) = (a[i],i+1)
-done(a::Array,i) = (i > length(a))
+done(a::Array,i) = i == length(a)+1
 
 ## Indexing: getindex ##
 
@@ -282,11 +240,10 @@ done(a::Array,i) = (i > length(a))
 getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
 getindex(A::Array, i1::Real, i2::Real, I::Real...) = arrayref(A, to_index(i1), to_index(i2), to_indexes(I...)...)
 
-unsafe_getindex(A::Array, i1::Real, I::Real...) = @inbounds return arrayref(A, to_index(i1), to_indexes(I...)...)
-
 # Faster contiguous indexing using copy! for UnitRange and Colon
-getindex(A::Array, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_getindex(A, I))
-function unsafe_getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::UnitRange{Int})
+    @_inline_meta
+    @boundscheck checkbounds(A, I)
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
@@ -294,8 +251,7 @@ function unsafe_getindex(A::Array, I::UnitRange{Int})
     end
     return X
 end
-getindex(A::Array, c::Colon) = unsafe_getindex(A, c)
-function unsafe_getindex(A::Array, ::Colon)
+function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
     if lI > 0
@@ -305,15 +261,13 @@ function unsafe_getindex(A::Array, ::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{T<:Real}(A::Array, I::Range{T})
-    return [ A[to_index(i)] for i in I ]
+function getindex{S,T<:Real}(A::Array{S}, I::Range{T})
+    return S[ A[to_index(i)] for i in I ]
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x), to_index(i1))
-setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x), to_index(i1), to_index(i2), to_indexes(I...)...)
-
-unsafe_setindex!{T}(A::Array{T}, x, i1::Real, I::Real...) = @inbounds return arrayset(A, convert(T,x), to_index(i1), to_indexes(I...)...)
+setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -340,8 +294,9 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copy!
-setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int}) = (checkbounds(A, I); unsafe_setindex!(A, X, I))
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+    @_inline_meta
+    @boundscheck checkbounds(A, I)
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
@@ -349,8 +304,7 @@ function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     end
     return A
 end
-setindex!{T}(A::Array{T}, X::Array{T}, c::Colon) = unsafe_setindex!(A, X, c)
-function unsafe_setindex!{T}(A::Array{T}, X::Array{T}, ::Colon)
+function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
     lI = length(A)
     setindex_shape_check(X, lI)
     if lI > 0
@@ -426,9 +380,9 @@ end
 
 function push!{T}(a::Array{T,1}, item)
     # convert first so we don't grow the array if the assignment won't work
-    item = convert(T, item)
+    itemT = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
-    a[end] = item
+    a[end] = itemT
     return a
 end
 
@@ -827,10 +781,12 @@ function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    s = start(a)
+    mi = i = 1
+    m, s = next(a, s)
+    while !done(a, s)
+        ai, s = next(a, s)
+        i += 1
         if ai > m || m!=m
             m = ai
             mi = i
@@ -843,10 +799,12 @@ function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    m = a[1]
-    mi = 1
-    for i=2:length(a)
-        ai = a[i]
+    s = start(a)
+    mi = i = 1
+    m, s = next(a, s)
+    while !done(a, s)
+        ai, s = next(a, s)
+        i += 1
         if ai < m || m!=m
             m = ai
             mi = i
@@ -863,19 +821,6 @@ indmin(a) = findmin(a)[2]
 function indexin(a::AbstractArray, b::AbstractArray)
     bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
-end
-
-# findin (the index of intersection)
-function findin(a, b::UnitRange)
-    ind = Array(Int, 0)
-    f = first(b)
-    l = last(b)
-    for i = 1:length(a)
-        if f <= a[i] <= l
-            push!(ind, i)
-        end
-    end
-    ind
 end
 
 function findin(a, b)

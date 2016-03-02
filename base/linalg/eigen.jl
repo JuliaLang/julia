@@ -28,7 +28,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(A.values .>
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    issym(A) && return eigfact!(Symmetric(A))
+    issymmetric(A) && return eigfact!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     all(WI .== 0.) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
@@ -58,21 +58,30 @@ function eigfact{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
 end
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
-# function eig(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true)
-#     F = eigfact(A, permute=permute, scale=scale)
-#     F[:values], F[:vectors]
-# end
-function eig(A::Union{Number, AbstractMatrix}; kwargs...)
-    F = eigfact(A; kwargs...)
+function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+    F = eigfact(A, permute=permute, scale=scale)
     F.values, F.vectors
 end
+function eig(A::AbstractMatrix, args...)
+    F = eigfact(A, args...)
+    F.values, F.vectors
+end
+
 #Calculates eigenvectors
-eigvecs(A::Union{Number, AbstractMatrix}, args...; kwargs...) = eigvecs(eigfact(A, args...; kwargs...))
+eigvecs(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true) =
+    eigvecs(eigfact(A, permute=permute, scale=scale))
 eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vectors]::S
 
 eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
+
+"""
+
+    eigvals!(A,[irange,][vl,][vu]) -> values
+
+Same as `eigvals`, but saves space by overwriting the input `A` (and `B`), instead of creating a copy.
+"""
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
-    issym(A) && return eigvals!(Symmetric(A))
+    issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return all(valsim .== 0) ? valsre : complex(valsre, valsim)
 end
@@ -111,7 +120,7 @@ det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     all(alphai .== 0) && return GeneralizedEigen(alphar ./ beta, vr)
@@ -141,13 +150,19 @@ function eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
     return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
 
-function eig(A::Union{Number, AbstractMatrix}, B::Union{Number, AbstractMatrix})
+eigfact(A::Number, B::Number) = eigfact(fill(A,1,1), fill(B,1,1))
+
+function eig(A::AbstractMatrix, B::AbstractMatrix)
+    F = eigfact(A,B)
+    F.values, F.vectors
+end
+function eig(A::Number, B::Number)
     F = eigfact(A,B)
     F.values, F.vectors
 end
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
+    issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     return (all(alphai .== 0) ? alphar : complex(alphar, alphai))./beta
 end
@@ -160,6 +175,8 @@ function eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return eigvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
+
+eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigfact(A, B))
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
 full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors

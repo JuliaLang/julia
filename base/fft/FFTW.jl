@@ -101,16 +101,16 @@ alignment_of(A::FakeArray) = Int32(0)
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Cstring,Ptr{UInt8}), fname, "w")
+    f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :w)
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
-    ccall(:fputs, Int32, (Ptr{UInt8},Ptr{Void}), " "^256, f)
+    ccall(:fputs, Int32, (Ptr{UInt8},Ptr{Void}), " "^256, f) # no NUL, hence no Cstring
     ccall((:fftwf_export_wisdom_to_file,libfftwf), Void, (Ptr{Void},), f)
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
 function import_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Cstring,Ptr{UInt8}), fname, "r")
+    f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :r)
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
        ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0
@@ -430,7 +430,7 @@ function fix_kinds(region, kinds)
         if length(kinds) > length(region)
             throw(ArgumentError("too many transform kinds"))
         else
-            if length(kinds) == 0
+            if isempty(kinds)
                 throw(ArgumentError("must supply a transform kind"))
             end
             k = Array(Int32, length(region))
@@ -454,10 +454,9 @@ end
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
 
-    @eval function call{K,inplace,N}(::Type{cFFTWPlan{$Tc,K,inplace,N}},
-                                     X::StridedArray{$Tc,N},
-                                     Y::StridedArray{$Tc,N},
-                                     region, flags::Integer, timelimit::Real)
+    @eval function (::Type{cFFTWPlan{$Tc,K,inplace,N}}){K,inplace,N}(X::StridedArray{$Tc,N},
+                                                                     Y::StridedArray{$Tc,N},
+                                                                     region, flags::Integer, timelimit::Real)
         direction = K
         set_timelimit($Tr, timelimit)
         R = copy(region)
@@ -475,10 +474,9 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return cFFTWPlan{$Tc,K,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{rFFTWPlan{$Tr,$FORWARD,inplace,N}},
-                                   X::StridedArray{$Tr,N},
-                                   Y::StridedArray{$Tc,N},
-                                   region, flags::Integer, timelimit::Real)
+    @eval function (::Type{rFFTWPlan{$Tr,$FORWARD,inplace,N}}){inplace,N}(X::StridedArray{$Tr,N},
+                                                                          Y::StridedArray{$Tc,N},
+                                                                          region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -496,10 +494,9 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan{$Tr,$FORWARD,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{rFFTWPlan{$Tc,$BACKWARD,inplace,N}},
-                                   X::StridedArray{$Tc,N},
-                                   Y::StridedArray{$Tr,N},
-                                   region, flags::Integer, timelimit::Real)
+    @eval function (::Type{rFFTWPlan{$Tc,$BACKWARD,inplace,N}}){inplace,N}(X::StridedArray{$Tc,N},
+                                                                           Y::StridedArray{$Tr,N},
+                                                                           region, flags::Integer, timelimit::Real)
         R = copy(region)
         region = circshift([region...],-1) # FFTW halves last dim
         set_timelimit($Tr, timelimit)
@@ -517,11 +514,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         return rFFTWPlan{$Tc,$BACKWARD,inplace,N}(plan, flags, R, X, Y)
     end
 
-    @eval function call{inplace,N}(::Type{r2rFFTWPlan{$Tr,ANY,inplace,N}},
-                                   X::StridedArray{$Tr,N},
-                                   Y::StridedArray{$Tr,N},
-                                   region, kinds, flags::Integer,
-                                   timelimit::Real)
+    @eval function (::Type{r2rFFTWPlan{$Tr,ANY,inplace,N}}){inplace,N}(X::StridedArray{$Tr,N},
+                                                                       Y::StridedArray{$Tr,N},
+                                                                       region, kinds, flags::Integer,
+                                                                       timelimit::Real)
         R = copy(region)
         knd = fix_kinds(region, kinds)
         set_timelimit($Tr, timelimit)
@@ -540,11 +536,10 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
     end
 
     # support r2r transforms of complex = transforms of real & imag parts
-    @eval function call{inplace,N}(::Type{r2rFFTWPlan{$Tc,ANY,inplace,N}},
-                                   X::StridedArray{$Tc,N},
-                                   Y::StridedArray{$Tc,N},
-                                   region, kinds, flags::Integer,
-                                   timelimit::Real)
+    @eval function (::Type{r2rFFTWPlan{$Tc,ANY,inplace,N}}){inplace,N}(X::StridedArray{$Tc,N},
+                                                                       Y::StridedArray{$Tc,N},
+                                                                       region, kinds, flags::Integer,
+                                                                       timelimit::Real)
         R = copy(region)
         knd = fix_kinds(region, kinds)
         set_timelimit($Tr, timelimit)
@@ -717,6 +712,25 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
+"""
+    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input FFT, similar to [`plan_fft`](:func:`plan_fft`) except for
+[`rfft`](:func:`rfft`) instead of [`fft`](:func:`fft`). The first two arguments, and the
+size of the transformed result, are the same as for [`rfft`](:func:`rfft`).
+"""
+plan_rfft
+
+"""
+    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input unnormalized transform, similar to
+[`plan_rfft`](:func:`plan_rfft`) except for [`brfft`](:func:`brfft`) instead of
+[`rfft`](:func:`rfft`). The first two arguments and the size of the transformed result, are
+the same as for [`brfft`](:func:`brfft`).
+"""
+plan_brfft
+
 # FFTW r2r transforms (low-level interface)
 
 for f in (:r2r, :r2r!)
@@ -744,6 +758,56 @@ function plan_r2r!{T<:fftwNumber,N}(X::StridedArray{T,N}, kinds, region;
                                     timelimit::Real=NO_TIMELIMIT)
     r2rFFTWPlan{T,ANY,true,N}(X, X, region, kinds, flags, timelimit)
 end
+
+"""
+    r2r(A, kind [, dims])
+
+Performs a multidimensional real-input/real-output (r2r) transform
+of type `kind` of the array `A`, as defined in the FFTW manual.
+`kind` specifies either a discrete cosine transform of various types
+(`FFTW.REDFT00`, `FFTW.REDFT01`, `FFTW.REDFT10`, or
+`FFTW.REDFT11`), a discrete sine transform of various types
+(`FFTW.RODFT00`, `FFTW.RODFT01`, `FFTW.RODFT10`, or
+`FFTW.RODFT11`), a real-input DFT with halfcomplex-format output
+(`FFTW.R2HC` and its inverse `FFTW.HC2R`), or a discrete
+Hartley transform (`FFTW.DHT`).  The `kind` argument may be
+an array or tuple in order to specify different transform types
+along the different dimensions of `A`; `kind[end]` is used
+for any unspecified dimensions.  See the FFTW manual for precise
+definitions of these transform types, at http://www.fftw.org/doc.
+
+The optional `dims` argument specifies an iterable subset of
+dimensions (e.g. an integer, range, tuple, or array) to transform
+along. `kind[i]` is then the transform type for `dims[i]`,
+with `kind[end]` being used for `i > length(kind)`.
+
+See also [`plan_r2r`](:func:`plan_r2r`) to pre-plan optimized r2r transforms.
+"""
+FFTW.r2r
+
+"""
+    r2r!(A, kind [, dims])
+
+Same as [`r2r`](:func:`r2r`), but operates in-place on `A`, which must be
+an array of real or complex floating-point numbers.
+"""
+FFTW.r2r!
+
+"""
+    plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+Similar to [`plan_fft`](:func:`Base.plan_fft`), but corresponds to [`r2r!`](:func:`r2r!`).
+"""
+FFTW.plan_r2r!
+
+"""
+    plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+
+Pre-plan an optimized r2r transform, similar to [`plan_fft`](:func:`Base.plan_fft`)
+except that the transforms (and the first three arguments)
+correspond to [`r2r`](:func:`r2r`) and [`r2r!`](:func:`r2r!`), respectively.
+"""
+FFTW.plan_r2r
 
 # mapping from r2r kind to the corresponding inverse transform
 const inv_kind = Dict{Int,Int}(R2HC => HC2R, HC2R => R2HC, DHT => DHT,

@@ -67,6 +67,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test_approx_eq full(lapd) apd
     l = lapd[:L]
     @test_approx_eq l*l' apd
+    @test triu(capd.factors) ≈ lapd[:U]
+    @test tril(lapd.factors) ≈ capd[:L]
 
     #pivoted upper Cholesky
     if eltya != BigFloat
@@ -125,8 +127,8 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg.chol!(X*X', Val{:L}))
-    U = full(Base.LinAlg.chol!(X*X', Val{:U}))
+    L = full(Base.LinAlg.chol!(X*X', LowerTriangular))
+    U = full(Base.LinAlg.chol!(X*X', UpperTriangular))
     XX = full(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
@@ -141,7 +143,16 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    for ul in (:U, :L)
-        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{Val{ul}}},copy(A), Val{ul}))
+    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+end
+
+# Test up- and downdates
+let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
+    for uplo in (:U, :L)
+        AcA = A'A
+        F = cholfact(AcA, uplo)
+        @test LinAlg.lowrankupdate(F, v)[uplo] ≈ cholfact(AcA + v*v')[uplo]
+        @test LinAlg.lowrankdowndate(F, v)[uplo] ≈ cholfact(AcA - v*v')[uplo]
     end
 end

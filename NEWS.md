@@ -1,3 +1,135 @@
+Julia v0.5.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+  * Generator expressions, e.g. `f(i) for i in 1:n` (#4470). This returns an iterator
+    that computes the specified values on demand.
+
+  * Macro expander functions are now generic, so macros can have multiple definitions
+    (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
+    However note that the argument types refer to the syntax tree representation, and not
+    to the types of run time values.
+
+  * `x ∈ X` is now a synonym for `x in X` in `for` loops and comprehensions,
+    as it already was in comparisons ([#13824]).
+
+Language changes
+----------------
+
+  * Each function and closure now has its own type. The captured variables of a closure
+    are fields of its type. `Function` is now an abstract type, and is the default supertype
+    of functions and closures. All functions, including anonymous functions,
+    are generic and support all features (e.g. keyword arguments).
+    Instead of adding methods to `call`, methods are added by type using the syntax
+    `(::ftype)(...) = ...`. `call` is deprecated ([#13412]).
+
+  * `using` and `import` are now case-sensitive even on case-insensitive filesystems (common on Mac and Windows) ([#13542]).
+
+  * Relational symbols are now allowed as infix operators ([#8036]).
+
+  * A warning is always given when a method is overwritten (previously, this was done only when the new
+    and old definitions were in separate modules) ([#14759]).
+
+Command-line option changes
+---------------------------
+
+Compiler/Runtime improvements
+-----------------------------
+
+Library improvements
+--------------------
+
+  * Most of the  combinatorics functions have been moved from `Base`
+    to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
+
+  * Packages:
+
+    * The package system (`Pkg`) is now based on the `libgit2` library, rather
+      than running the `git` program, increasing performance (especially on
+      Windows) ([#11196]).
+
+    * Package-development functions like `Pkg.tag` and `Pkg.publish`
+      have been moved to an external [PkgDev] package ([#13387]).
+
+  * The `Base.Test` module now has a `@testset` feature to bundle
+    tests together and delay throwing an error until the end ([#13062]).
+
+    * The new features are mirrored in the
+      [BaseTestNext](https://github.com/IainNZ/BaseTestNext.jl)
+      package for users who would like to use the new functionality on Julia v0.4.
+
+    * The [BaseTestDeprecated](https://github.com/IainNZ/BaseTestDeprecated.jl)
+      package provides the old-style `handler` functionality, for compatibility
+      with code that needs to support both Julia v0.4 and v0.5.
+
+  * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
+    function argument as the first argument to allow for do-block syntax ([#13338]).
+
+  * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
+
+  * Linear algebra:
+
+    * All dimensions indexed by scalars are now dropped, whereas previously only
+      trailing scalar dimensions would be omitted from the result.
+
+    * New `normalize` and `normalize!` convenience functions for normalizing
+      vectors ([#13681]).
+
+    * QR
+
+      * New method for generic QR with column pivoting ([#13480]).
+
+      * New method for polar decompositions of `AbstractVector`s ([#13681]).
+
+    * A new `SparseVector` type allows for one-dimensional sparse arrays.
+      Slicing and reshaping sparse matrices now return vectors when
+      appropriate. The `sparsevec` function returns a one-dimensional sparse
+      vector instead of a one-column sparse matrix. ([#13440])
+
+    * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
+    and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243],[#14424])
+
+    * All `sparse` methods now retain provided numerical zeros as structural nonzeros; to
+      drop numerical zeros, use `dropzeros!` ([#14798],[#15242]).
+
+  * New `foreach` function for calling a function on every element of a collection when
+    the results are not needed.
+
+  * `Cmd(cmd; ...)` now accepts new Windows-specific options `windows_verbatim`
+    (to alter Windows command-line generation) and `windows_hide` (to
+    suppress creation of new console windows) ([#13780]).
+
+  * Statistics:
+
+    * Improve performance of `quantile` ([#14413]).
+
+  * The new `Base.StackTraces` module makes stack traces easier to use programmatically. ([#14469])
+
+Deprecated or removed
+---------------------
+
+  * The following function names have been simplified and unified ([#13232]):
+
+    * `get_bigfloat_precision`  -> `precision(BigFloat)`
+    * `set_bigfloat_precision`  -> `setprecision`
+    * `with_bigfloat_precision` -> `setprecision`
+
+    * `get_rounding`            -> `rounding`
+    * `set_rounding`            -> `setrounding`
+    * `with_rounding`           -> `setrounding`
+
+  * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated
+    in favor of versions that require the matrix to be in factored form
+    ([#13496]).
+
+  * Deprecate `chol(A,Val{:U/:L})` in favor of `chol(A)` ([#13680]).
+
+  * `issym` is deprecated in favor of `issymmetric` to match similar functions (`ishermitian`, ...) ([#15192])
+
+  * `scale` is deprecated in favor of either `α*A`, `Diagonal(x)*A`, or `A*Diagonal(x)`. ([#15258])
+
 Julia v0.4.0 Release Notes
 ==========================
 
@@ -54,11 +186,13 @@ New language features
   * Support for inter-task communication using `Channels` ([#12264]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#channels for details.
 
-  * RemoteRefs now point to remote channels. The remote channels can be of length greater than 1.
+  * `RemoteRef`s now point to remote channels. The remote channels can be of length greater than 1.
     Default continues to be of length 1 ([#12385]).
     See http://docs.julialang.org/en/latest/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
 
   * `@__LINE__` special macro now available to reflect invocation source line number ([#12727]).
+
+  * `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
 
 Language changes
 ----------------
@@ -278,6 +412,8 @@ Library improvements
 
     * Capture groups in regular expressions can now be named using PCRE syntax, `(?P<group_name>...)`. Capture group matches can be accessed by name by indexing a `Match` object with the name of the group ([#11566]).
 
+    * `countlines()` now counts all lines, not just non-empty ([#11947]).
+
   * Array and AbstractArray improvements
 
     * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s. Array iteration should generally be written as `for i in eachindex(A) ... end` rather than `for i = 1:length(A) ... end` ([#8432]).
@@ -388,7 +524,7 @@ Library improvements
 
   * Other improvements
 
-    * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
+    * You can now tab-complete emoji via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
     * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 
@@ -402,9 +538,9 @@ Library improvements
 
     * Added `recvfrom` to get source address of UDP packets ([#9418]).
 
-    * ClusterManager performance improvements ([#9309]) and support for changing transports([#9434]).
+    * `ClusterManager` performance improvements ([#9309]) and support for changing transports([#9434]).
 
-    * Added Base.get_process_title / Base.set_process_title ([#9957]).
+    * Added `Base.get_process_title` / `Base.set_process_title` ([#9957]).
 
     * `readavailable` now returns a byte vector instead of a string.
 
@@ -448,7 +584,7 @@ Deprecated or removed
      end
     ```
 
-  * indexing with Reals that are not subtypes of Integers (Rationals, AbstractFloat, etc.) has been deprecated ([#10458]).
+  * indexing with `Real`s that are not subtypes of `Integer` (`Rational`, `AbstractFloat`, etc.) has been deprecated ([#10458]).
 
   * `push!(A)` has been deprecated, use `append!` instead of splatting arguments to `push!` ([#10400]).
 
@@ -461,7 +597,7 @@ Deprecated or removed
   * The `Graphics` module has been removed from `Base` and is now a
     standalone package ([#10150], [#9862]).
 
-  * The `Woodbury` special matrix type has been removed from LinAlg ([#10024]).
+  * The `Woodbury` special matrix type has been removed from `LinAlg` ([#10024]).
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
@@ -910,7 +1046,7 @@ Deprecated or removed
 
   * The `Stat` type is renamed `StatStruct` ([#4670]).
 
-  * `set_rounding`, `get_rounding` and `with_rounding` now take an additional
+  * `setrounding`, `rounding` and `setrounding` now take an additional
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007]).
 
@@ -1260,6 +1396,7 @@ Too numerous to mention.
 [pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
+[PkgDev]: https://github.com/JuliaLang/PkgDev.jl
 <!--- generated by NEWS-update.jl: -->
 [#13]: https://github.com/JuliaLang/julia/issues/13
 [#69]: https://github.com/JuliaLang/julia/issues/69
@@ -1491,6 +1628,7 @@ Too numerous to mention.
 [#7917]: https://github.com/JuliaLang/julia/issues/7917
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
+[#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8113]: https://github.com/JuliaLang/julia/issues/8113
 [#8135]: https://github.com/JuliaLang/julia/issues/8135
@@ -1523,6 +1661,7 @@ Too numerous to mention.
 [#8827]: https://github.com/JuliaLang/julia/issues/8827
 [#8832]: https://github.com/JuliaLang/julia/issues/8832
 [#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8846]: https://github.com/JuliaLang/julia/issues/8846
 [#8854]: https://github.com/JuliaLang/julia/issues/8854
 [#8867]: https://github.com/JuliaLang/julia/issues/8867
 [#8872]: https://github.com/JuliaLang/julia/issues/8872
@@ -1555,6 +1694,7 @@ Too numerous to mention.
 [#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
 [#9597]: https://github.com/JuliaLang/julia/issues/9597
+[#9627]: https://github.com/JuliaLang/julia/issues/9627
 [#9666]: https://github.com/JuliaLang/julia/issues/9666
 [#9690]: https://github.com/JuliaLang/julia/issues/9690
 [#9701]: https://github.com/JuliaLang/julia/issues/9701
@@ -1602,6 +1742,7 @@ Too numerous to mention.
 [#11105]: https://github.com/JuliaLang/julia/issues/11105
 [#11145]: https://github.com/JuliaLang/julia/issues/11145
 [#11171]: https://github.com/JuliaLang/julia/issues/11171
+[#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11241]: https://github.com/JuliaLang/julia/issues/11241
 [#11279]: https://github.com/JuliaLang/julia/issues/11279
 [#11347]: https://github.com/JuliaLang/julia/issues/11347
@@ -1613,6 +1754,7 @@ Too numerous to mention.
 [#11849]: https://github.com/JuliaLang/julia/issues/11849
 [#11891]: https://github.com/JuliaLang/julia/issues/11891
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
+[#11947]: https://github.com/JuliaLang/julia/issues/11947
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12025]: https://github.com/JuliaLang/julia/issues/12025
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
@@ -1629,3 +1771,26 @@ Too numerous to mention.
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
 [#12727]: https://github.com/JuliaLang/julia/issues/12727
 [#12739]: https://github.com/JuliaLang/julia/issues/12739
+[#13062]: https://github.com/JuliaLang/julia/issues/13062
+[#13232]: https://github.com/JuliaLang/julia/issues/13232
+[#13338]: https://github.com/JuliaLang/julia/issues/13338
+[#13387]: https://github.com/JuliaLang/julia/issues/13387
+[#13412]: https://github.com/JuliaLang/julia/issues/13412
+[#13440]: https://github.com/JuliaLang/julia/issues/13440
+[#13465]: https://github.com/JuliaLang/julia/issues/13465
+[#13480]: https://github.com/JuliaLang/julia/issues/13480
+[#13496]: https://github.com/JuliaLang/julia/issues/13496
+[#13542]: https://github.com/JuliaLang/julia/issues/13542
+[#13680]: https://github.com/JuliaLang/julia/issues/13680
+[#13681]: https://github.com/JuliaLang/julia/issues/13681
+[#13780]: https://github.com/JuliaLang/julia/issues/13780
+[#13824]: https://github.com/JuliaLang/julia/issues/13824
+[#13897]: https://github.com/JuliaLang/julia/issues/13897
+[#14114]: https://github.com/JuliaLang/julia/issues/14114
+[#14243]: https://github.com/JuliaLang/julia/issues/14243
+[#14413]: https://github.com/JuliaLang/julia/issues/14413
+[#14424]: https://github.com/JuliaLang/julia/issues/14424
+[#14469]: https://github.com/JuliaLang/julia/issues/14469
+[#14759]: https://github.com/JuliaLang/julia/issues/14759
+[#14798]: https://github.com/JuliaLang/julia/issues/14798
+[#15242]: https://github.com/JuliaLang/julia/issues/15242

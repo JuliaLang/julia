@@ -232,10 +232,14 @@ function blas_vendor()
 end
 
 if blas_vendor() == :openblas64
-    blasfunc(x) = string(x)*"64_"
+    macro blasfunc(x)
+        return Expr(:quote, symbol(x, "64_"))
+    end
     openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
-    blasfunc(x) = string(x)
+    macro blasfunc(x)
+        return Expr(:quote, x)
+    end
     openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
 
@@ -329,7 +333,7 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 ## warnings and messages ##
 
 function info(io::IO, msg...; prefix="INFO: ")
-    println_with_color(:blue, io, prefix, chomp(string(msg...)))
+    println_with_color(info_color(), io, prefix, chomp(string(msg...)))
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
@@ -351,7 +355,7 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    print_with_color(:red, io, prefix, str)
+    print_with_color(warn_color(), io, prefix, str)
     if bt !== nothing
         show_backtrace(io, bt)
     end
@@ -373,7 +377,16 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
     cpu_target = bytestring(opts.cpu_target)
     image_file = bytestring(opts.image_file)
-    `$julia -C$cpu_target -J$image_file`
+    compile = if opts.compile_enabled == 0
+                  "no"
+              elseif opts.compile_enabled == 2
+                  "all"
+              elseif opts.compile_enabled == 3
+                  "min"
+              else
+                  "yes"
+              end
+    `$julia -C$cpu_target -J$image_file --compile=$compile`
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"

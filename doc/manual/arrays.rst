@@ -87,9 +87,9 @@ Function                                            Description
                                                     defaulting to the element type and dimensions of ``A`` if omitted.
 :func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
                                                     specified element type
-:func:`rand(dims) <rand>`                           `:obj:`Array` of ``Float64``\ s with random, iid[#]_ and uniformly
+:func:`rand(dims) <rand>`                           :obj:`Array` of ``Float64``\ s with random, iid[#]_ and uniformly
                                                     distributed values in the half-open interval :math:`[0, 1)`
-:func:`randn(dims) <randn>`                         `:obj:`Array` of ``Float64``\ s with random, iid and standard normally
+:func:`randn(dims) <randn>`                         :obj:`Array` of ``Float64``\ s with random, iid and standard normally
                                                     distributed random values
 :func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
 :func:`eye(m, n) <eye>`                             ``m``-by-``n`` identity matrix
@@ -213,6 +213,40 @@ that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
+.. _man-generator-expressions:
+
+Generator Expressions
+---------------------
+
+Comprehensions can also be written without the enclosing square brackets, producing
+an object known as a generator. This object can be iterated to produce values on
+demand, instead of allocating an array and storing them in advance
+(see <man-interfaces-iteration>).
+For example, the following expression sums a series without allocating memory::
+
+.. doctest::
+
+    julia> sum(1/n^2 for n=1:1000)
+    1.6439345666815615
+
+When writing a generator expression with multiple dimensions inside an argument
+list, parentheses are needed to separate the generator from subsequent arguments::
+
+    julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
+    ERROR: syntax: invalid iteration specification
+
+All comma-separated expressions after ``for`` are interpreted as ranges. Adding
+parentheses lets us add a third argument to ``map``::
+
+.. doctest::
+
+    julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1:4;])
+    4-element Array{Any,1}:
+    (0.5,1)
+    (0.333333,2)
+    (0.333333,3)
+    (0.25,4)
+
 .. _man-array-indexing:
 
 Indexing
@@ -233,8 +267,8 @@ where each ``I_k`` may be:
 The result ``X`` generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of ``X`` containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions
-indexed with scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. All dimensions indexed with scalars are
+dropped. For example, the result of ``A[2, I, 3]`` will be a vector with size
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
 a dimension indexed by a boolean vector will be the number of true values in the vector.
 As a special part of this syntax, the ``end`` keyword may be used to represent the last
@@ -528,7 +562,7 @@ where elements are stored in column-major order (see additional notes in
 :ref:`man-performance-tips`). :obj:`Vector` and :obj:`Matrix` are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing,
 assignment, and a few other basic storage-specific operations are all
-that have to be implemented for `:obj:`Array`, so that the rest of the array
+that have to be implemented for :obj:`Array`, so that the rest of the array
 library can be implemented in a generic manner.
 
 :obj:`SubArray` is a specialization of :obj:`AbstractArray` that performs
@@ -541,7 +575,7 @@ can later be used to index the original array indirectly.
 
 :obj:`StridedVector` and :obj:`StridedMatrix` are convenient aliases defined
 to make it possible for Julia to call a wider range of BLAS and LAPACK
-functions by passing them either `:obj:`Array` or :obj:`SubArray` objects, and
+functions by passing them either :obj:`Array` or :obj:`SubArray` objects, and
 thus saving inefficiencies from memory allocation and copying.
 
 The following example computes the QR decomposition of a small section
@@ -735,7 +769,7 @@ reference.
 
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | Sparse                                 | Dense                            | Description                                |
-+----------------------------------------+----------------------------------+--------------------------------------------+
++========================================+==================================+============================================+
 | :func:`spzeros(m,n) <spzeros>`         | :func:`zeros(m,n) <zeros>`       | Creates a *m*-by-*n* matrix of zeros.      |
 |                                        |                                  | (:func:`spzeros(m,n) <spzeros>` is empty.) |
 +----------------------------------------+----------------------------------+--------------------------------------------+

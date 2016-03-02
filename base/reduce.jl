@@ -36,10 +36,10 @@ function mapfoldl_impl(f, op, v0, itr, i)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if done(itr, i)
-        return v0
+        return r_promote(op, v0)
     else
         (x, i) = next(itr, i)
-        v = op(v0, f(x))
+        v = op(r_promote(op, v0), f(x))
         while !done(itr, i)
             (x, i) = next(itr, i)
             v = op(v, f(x))
@@ -71,10 +71,10 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if i == 0
-        return v0
+        return r_promote(op, v0)
     else
         x = itr[i]
-        v  = op(f(x), v0)
+        v  = op(f(x), r_promote(op, v0))
         while i > 1
             x = itr[i -= 1]
             v = op(f(x), v)
@@ -93,12 +93,12 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 
 # mapreduce_***_impl require ifirst < ilast
 function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds fx1 = r_promote(op, f(A[ifirst]))
-    @inbounds fx2 = f(A[ifirst+=1])
-    @inbounds v = op(fx1, fx2)
+    fx1 = r_promote(op, f(A[ifirst]))
+    fx2 = f(A[ifirst+=1])
+    v = op(fx1, fx2)
     while ifirst < ilast
-        @inbounds fx = f(A[ifirst+=1])
-        v = op(v, fx)
+        @inbounds Ai = A[ifirst+=1]
+        v = op(v, f(Ai))
     end
     return v
 end
@@ -131,20 +131,22 @@ mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T)::T)
 mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
-function _mapreduce{T}(f, op, A::AbstractArray{T})
+_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
+
+function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
     n = Int(length(A))
     if n == 0
         return mr_empty(f, op, T)
     elseif n == 1
         return r_promote(op, f(A[1]))
     elseif n < 16
-        @inbounds fx1 = r_promote(op, f(A[1]))
-        @inbounds fx2 = r_promote(op, f(A[2]))
+        fx1 = r_promote(op, f(A[1]))
+        fx2 = r_promote(op, f(A[2]))
         s = op(fx1, fx2)
         i = 2
         while i < n
-            @inbounds fx = f(A[i+=1])
-            s = op(s, fx)
+            @inbounds Ai = A[i+=1]
+            s = op(s, f(Ai))
         end
         return s
     else
@@ -152,7 +154,9 @@ function _mapreduce{T}(f, op, A::AbstractArray{T})
     end
 end
 
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
+_mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
+
+mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
 mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
@@ -180,7 +184,7 @@ sc_finish(::OrFun)  = false
 ## short-circuiting (sc) mapreduce definitions
 
 function mapreduce_sc_impl(f, op, itr::AbstractArray)
-    @inbounds for x in itr
+    for x in itr
         shortcircuits(op, f(x)) && return shorted(op)
     end
     return sc_finish(op)
@@ -220,11 +224,10 @@ mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 ## sum
 
 function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds begin
-        s = r_promote(op, f(a[ifirst])) + f(a[ifirst+1])
-        @simd for i = ifirst+2:ilast
-            s += f(a[i])
-        end
+    s = r_promote(op, f(a[ifirst])) + f(a[ifirst+1])
+    @simd for i = ifirst+2:ilast
+        @inbounds ai = a[i]
+        s += f(ai)
     end
     s
 end
@@ -273,9 +276,6 @@ end
 prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
-prod(A::AbstractArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
-
 ## maximum & minimum
 
 function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
@@ -283,11 +283,13 @@ function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     v = f(A[first])
     i = first + 1
     while v != v && i <= last
-        @inbounds v = f(A[i])
+        @inbounds Ai = A[i]
+        v = f(Ai)
         i += 1
     end
     while i <= last
-        @inbounds x = f(A[i])
+        @inbounds Ai = A[i]
+        x = f(Ai)
         if x > v
             v = x
         end
@@ -301,11 +303,13 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v = f(A[first])
     i = first + 1
     while v != v && i <= last
-        @inbounds v = f(A[i])
+        @inbounds Ai = A[i]
+        v = f(Ai)
         i += 1
     end
     while i <= last
-        @inbounds x = f(A[i])
+        @inbounds Ai = A[i]
+        x = f(Ai)
         if x < v
             v = x
         end
@@ -390,22 +394,18 @@ end
 function count(pred, itr)
     n = 0
     for x in itr
-        pred(x) && (n += 1)
-    end
-    return n
-end
-
-function count(pred, a::AbstractArray)
-    n = 0
-    for i = 1:length(a)
-        @inbounds if pred(a[i])
-            n += 1
-        end
+        n += pred(x)
     end
     return n
 end
 
 immutable NotEqZero <: Func{1} end
-call(::NotEqZero, x) = x != 0
+(::NotEqZero)(x) = x != 0
 
+"""
+    countnz(A)
+
+Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
+For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
+"""
 countnz(a) = count(NotEqZero(), a)

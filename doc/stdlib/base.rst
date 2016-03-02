@@ -30,7 +30,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
+   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`\ ).
 
 .. function:: atexit(f)
 
@@ -64,11 +64,11 @@ Getting Around
 
    Compute the amount of memory used by all unique objects reachable from the argument. Keyword argument ``exclude`` specifies a type of objects to exclude from the traversal.
 
-.. function:: edit(file::AbstractString, [line])
+.. function:: edit(path::AbstractString, [line])
 
    .. Docstring generated from Julia source
 
-   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
+   Edit a file or directory optionally providing a line number to edit the file at. Returns to the julia prompt when you quit the editor.
 
 .. function:: edit(function, [types])
 
@@ -126,13 +126,13 @@ Getting Around
 
    Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
-   When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
+   When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
 
 .. function:: Base.compilecache(module::ByteString)
 
    .. Docstring generated from Julia source
 
-   Creates a precompiled cache file for module (see help for ``require``) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``, which defaults to ``~/.julia/lib/VERSION``. See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
+   Creates a precompiled cache file for module (see help for ``require``\ ) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
@@ -141,6 +141,8 @@ Getting Around
    Specify whether the file calling this function is precompilable. If ``isprecompilable`` is ``true``\ , then ``__precompile__`` throws an exception when the file is loaded by ``using``\ /``import``\ /``require`` *unless* the file is being precompiled, and in a module file it causes the module to be automatically precompiled when it is imported. Typically, ``__precompile__()`` should occur before the ``module`` declaration in the file, or better yet ``VERSION >= v"0.4" && __precompile__()`` in order to be backward-compatible with Julia 0.3.
 
    If a module or file is *not* safely precompilable, it should call ``__precompile__(false)`` in order to throw an error if Julia attempts to precompile it.
+
+   ``__precompile__()`` should *not* be used in a module unless all of its dependencies are also using ``__precompile__()``\ . Failure to do so can result in a runtime error when loading the module.
 
 .. function:: include(path::AbstractString)
 
@@ -166,7 +168,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Search through all documention for a string, ignoring case.
+   Search through all documentation for a string, ignoring case.
 
 .. function:: which(f, types)
 
@@ -306,7 +308,7 @@ All Objects
 
    Get a unique integer id for ``x``\ . ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``\ .
 
-.. function:: hash(x[, h])
+.. function:: hash(x[, h::UInt])
 
    .. Docstring generated from Julia source
 
@@ -342,47 +344,46 @@ All Objects
 
    While it isn't normally necessary, user-defined types can override the default ``deepcopy`` behavior by defining a specialized version of the function ``deepcopy_internal(x::T, dict::ObjectIdDict)`` (which shouldn't otherwise be used), where ``T`` is the type to be specialized for, and ``dict`` keeps track of objects copied so far within the recursion. Within the definition, ``deepcopy_internal`` should be used in place of ``deepcopy``\ , and the ``dict`` variable should be updated as appropriate before returning.
 
-.. function:: isdefined([object,] index | symbol)
+.. function:: isdefined([m::Module,] s::Symbol)
+              isdefined(object, s::Symbol)
+              isdefined(a::AbstractArray, index::Int)
 
    .. Docstring generated from Julia source
 
-   Tests whether an assignable location is defined. The arguments can be an array and index, a composite object and field name (as a symbol), or a module and a symbol. With a single symbol argument, tests whether a global variable with that name is defined in ``current_module()``\ .
+   Tests whether an assignable location is defined. The arguments can be a module and a symbol, a composite object and field name (as a symbol), or an array and index. With a single symbol argument, tests whether a global variable with that name is defined in ``current_module()``\ .
 
 .. function:: convert(T, x)
 
    .. Docstring generated from Julia source
 
-   Convert ``x`` to a value of type ``T``.
+   Convert ``x`` to a value of type ``T``\ .
 
-   If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if
-   ``x`` is not representable by ``T``, for example if ``x`` is not
-   integer-valued, or is outside the range supported by ``T``.
+   If ``T`` is an ``Integer`` type, an :exc:`InexactError` will be raised if ``x`` is not representable by ``T``\ , for example if ``x`` is not integer-valued, or is outside the range supported by ``T``\ .
 
    .. doctest::
 
-      julia> convert(Int, 3.0)
-      3
+       julia> convert(Int, 3.0)
+       3
 
-      julia> convert(Int, 3.5)
-      ERROR: InexactError()
-       in convert at int.jl:209
+       julia> convert(Int, 3.5)
+       ERROR: InexactError()
+        in convert at int.jl:209
 
-   If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return
-   the closest value to ``x`` representable by ``T``.
+   If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
 
    .. doctest::
 
-      julia> x = 1/3
-      0.3333333333333333
+       julia> x = 1/3
+       0.3333333333333333
 
-      julia> convert(Float32, x)
-      0.33333334f0
+       julia> convert(Float32, x)
+       0.33333334f0
 
-      julia> convert(Rational{Int32}, x)
-      1//3
+       julia> convert(Rational{Int32}, x)
+       1//3
 
-      julia> convert(Rational{Int64}, x)
-      6004799503160661//18014398509481984
+       julia> convert(Rational{Int64}, x)
+       6004799503160661//18014398509481984
 
 .. function:: promote(xs...)
 
@@ -396,11 +397,11 @@ All Objects
 
    Convert ``y`` to the type of ``x`` (``convert(typeof(x), y)``\ ).
 
-.. function:: widen(type | x)
+.. function:: widen(x)
 
    .. Docstring generated from Julia source
 
-   If the argument is a type, return a "larger" type (for numeric types, this will be a type with at least as much range and precision as the argument, and usually more). Otherwise the argument ``x`` is converted to ``widen(typeof(x))``\ .
+   If ``x`` is a type, return a "larger" type (for numeric types, this will be a type with at least as much range and precision as the argument, and usually more). Otherwise ``x`` is converted to ``widen(typeof(x))``\ .
 
    .. doctest::
 
@@ -419,7 +420,7 @@ All Objects
 Types
 -----
 
-.. function:: super(T::DataType)
+.. function:: supertype(T::DataType)
 
    .. Docstring generated from Julia source
 
@@ -521,30 +522,30 @@ Types
 
    Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ , and the syntax ``a.(b) = c`` calls ``setfield!(a, b, c)``\ .
 
-.. function:: fieldoffsets(type)
+.. function:: fieldoffset(type, i)
 
    .. Docstring generated from Julia source
 
-   The byte offset of each field of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct type:
+   The byte offset of field ``i`` of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct type:
 
    .. doctest::
 
-       julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
+       julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
 
-       julia> structinfo(StatStruct)
-       12-element Array{Tuple{Int64,Symbol,DataType},1}:
-        (0,:device,UInt64)
-        (8,:inode,UInt64)
-        (16,:mode,UInt64)
-        (24,:nlink,Int64)
-        (32,:uid,UInt64)
-        (40,:gid,UInt64)
-        (48,:rdev,UInt64)
-        (56,:size,Int64)
-        (64,:blksize,Int64)
-        (72,:blocks,Int64)
-        (80,:mtime,Float64)
-        (88,:ctime,Float64)
+       julia> structinfo(Base.Filesystem.StatStruct)
+       12-element Array{Tuple{UInt64,Symbol,Type{_}},1}:
+        (0x0000000000000000,:device,UInt64)
+        (0x0000000000000008,:inode,UInt64)
+        (0x0000000000000010,:mode,UInt64)
+        (0x0000000000000018,:nlink,Int64)
+        (0x0000000000000020,:uid,UInt64)
+        (0x0000000000000028,:gid,UInt64)
+        (0x0000000000000030,:rdev,UInt64)
+        (0x0000000000000038,:size,Int64)
+        (0x0000000000000040,:blksize,Int64)
+        (0x0000000000000048,:blocks,Int64)
+        (0x0000000000000050,:mtime,Float64)
+        (0x0000000000000058,:ctime,Float64)
 
 .. function:: fieldtype(T, name::Symbol | index::Int)
 
@@ -556,8 +557,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
-   Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
+   Return ``true`` iff value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
 
 .. function:: isbits(T)
 
@@ -601,17 +601,17 @@ Types
 
    .. Docstring generated from Julia source
 
-   Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``, respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
+   Create an :obj:`Enum` type with name ``EnumName`` and enum member values of ``EnumValue1`` and ``EnumValue2`` with optional assigned values of ``x`` and ``y``\ , respectively. ``EnumName`` can be used just like other types and enum member values as regular values, such as
 
    .. doctest::
 
-      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+       julia> @enum FRUIT apple=1 orange=2 kiwi=3
 
-      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(Int(x))"
-      f (generic function with 1 method)
+       julia> f(x::FRUIT) = "I'm a FRUIT with value: $(Int(x))"
+       f (generic function with 1 method)
 
-      julia> f(apple)
-      "I'm a FRUIT with value: 1"
+       julia> f(apple)
+       "I'm a FRUIT with value: 1"
 
 .. function:: instances(T::Type)
 
@@ -630,8 +630,8 @@ Generic Functions
 
    .. doctest::
 
-   	julia> method_exists(length, Tuple{Array})
-   	true
+       julia> method_exists(length, Tuple{Array})
+       true
 
 .. function:: applicable(f, args...) -> Bool
 
@@ -699,8 +699,7 @@ Syntax
 
    .. Docstring generated from Julia source
 
-   Only valid in the context of an ``Expr`` returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
-   section of the Metaprogramming chapter of the manual for more details and examples.
+   Only valid in the context of an ``Expr`` returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros` section of the Metaprogramming chapter of the manual for more details and examples.
 
 .. function:: gensym([tag])
 
@@ -739,15 +738,13 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
-   value if it is present; otherwise, throws a ``NullException``.
+   Attempt to access the value of the ``Nullable`` object, ``x``\ . Returns the value if it is present; otherwise, throws a ``NullException``\ .
 
 .. function:: get(x, y)
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
-   the value if it is present; otherwise, returns ``convert(T, y)``.
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``\ . Returns the value if it is present; otherwise, returns ``convert(T, y)``\ .
 
 .. function:: isnull(x)
 
@@ -773,7 +770,7 @@ System
 .. data:: DevNull
 
    Used in a stream redirect to discard all data written to it. Essentially equivalent to /dev/null on Unix or NUL on Windows.
-   Usage: ``run(`cat test.txt` |> DevNull)``
+   Usage: ``run(pipeline(`cat test.txt`, DevNull))``
 
 .. function:: success(command)
 
@@ -798,27 +795,6 @@ System
    .. Docstring generated from Julia source
 
    Send a signal to a process. The default is to terminate the process.
-
-.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
-
-   .. Docstring generated from Julia source
-
-   Start running ``command`` asynchronously, and return a tuple
-   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
-   reads from the process's standard output and ``stdio`` optionally
-   specifies the process's standard input stream.  If ``mode`` is
-   ``"w"``, then ``stream`` writes to the process's standard input
-   and ``stdio`` optionally specifies the process's standard output
-   stream.
-
-.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
-
-   .. Docstring generated from Julia source
-
-   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
-   on the resulting read or write stream, then closes the stream
-   and waits for the process to complete.  Returns the value returned
-   by ``f``.
 
 .. function:: Sys.set_process_title(title::AbstractString)
 
@@ -850,6 +826,26 @@ System
 
    Mark a command object so that it will be run in a new process group, allowing it to outlive the julia process, and not have Ctrl-C interrupts passed to it.
 
+.. function:: Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide,
+                            env, dir)
+
+   .. Docstring generated from Julia source
+
+   Construct a new ``Cmd`` object, representing an external program and arguments, from ``cmd``\ , while changing the settings of the optional keyword arguments:
+
+   * ``ignorestatus::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd``   will not throw an error if the return code is nonzero.
+   * ``detach::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd`` will be   run in a new process group, allowing it to outlive the ``julia`` process   and not have Ctrl-C passed to it.
+   * ``windows_verbatim::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows   the ``Cmd`` will send a command-line string to the process with no quoting   or escaping of arguments, even arguments containing spaces.  (On Windows,   arguments are sent to a program as a single "command-line" string, and   programs are responsible for parsing it into arguments.  By default,   empty arguments and arguments with spaces or tabs are quoted with double   quotes ``"`` in the command line, and ``\`` or ``"`` are preceded by backslashes.   ``windows_verbatim=true`` is useful for launching programs that parse their   command line in nonstandard ways.)  Has no effect on non-Windows systems.
+   * ``windows_hide::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows no   new console window is displayed when the ``Cmd`` is executed.  This has   no effect if a console is already open or on non-Windows systems.
+   * ``env``\ : Set environment variables to use when running the ``Cmd``\ .  ``env``   is either a dictionary mapping strings to strings, an array   of strings of the form ``"var=val"``\ , an array or tuple of ``"var"=>val``   pairs, or ``nothing``\ .  In order to modify (rather than replace)   the existing environment, create ``env`` by ``copy(ENV)`` and then   set ``env["var"]=val`` as desired.
+   * ``dir::AbstractString``\ : Specify a working directory for the command (instead   of the current directory).
+
+   For any keywords that are not specified, the current settings from ``cmd`` are used.   Normally, to create a ``Cmd`` object in the first place, one uses backticks, e.g.
+
+   .. code-block:: julia
+
+       Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
+
 .. function:: setenv(command, env; dir=working_dir)
 
    .. Docstring generated from Julia source
@@ -872,9 +868,11 @@ System
 
    **Examples**:
 
-     * ``run(pipeline(`ls`, `grep xyz`))``
-     * ``run(pipeline(`ls`, "out.txt"))``
-     * ``run(pipeline("out.txt", `grep xyz`))``
+   .. code-block:: julia
+
+       run(pipeline(`ls`, `grep xyz`))
+       run(pipeline(`ls`, "out.txt"))
+       run(pipeline("out.txt", `grep xyz`))
 
 .. function:: pipeline(command; stdin, stdout, stderr, append=false)
 
@@ -884,8 +882,10 @@ System
 
    **Examples**:
 
-     * ``run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))``
-     * ``run(pipeline(`update`, stdout="log.txt", append=true))``
+   .. code-block:: julia
+
+       run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
+       run(pipeline(`update`, stdout="log.txt", append=true))
 
 .. function:: gethostname() -> AbstractString
 
@@ -893,11 +893,11 @@ System
 
    Get the local machine's host name.
 
-.. function:: getipaddr() -> AbstractString
+.. function:: getipaddr() -> IPAddr
 
    .. Docstring generated from Julia source
 
-   Get the IP address of the local machine, as a string of the form "x.x.x.x".
+   Get the IP address of the local machine.
 
 .. function:: getpid() -> Int32
 
@@ -921,19 +921,19 @@ System
 
    .. Docstring generated from Julia source
 
-   Set a timer to be read by the next call to :func:`toc` or :func:`toq`. The macro call ``@time expr`` can also be used to time evaluation.
+   Set a timer to be read by the next call to :func:`toc` or :func:`toq`\ . The macro call ``@time expr`` can also be used to time evaluation.
 
 .. function:: toc()
 
    .. Docstring generated from Julia source
 
-   Print and return the time elapsed since the last :func:`tic`.
+   Print and return the time elapsed since the last :func:`tic`\ .
 
 .. function:: toq()
 
    .. Docstring generated from Julia source
 
-   Return, but do not print, the time elapsed since the last :func:`tic`.
+   Return, but do not print, the time elapsed since the last :func:`tic`\ .
 
 .. function:: @time
 
@@ -979,25 +979,49 @@ System
 
    .. Docstring generated from Julia source
 
-   Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @unix_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Unix systems (including Linux and OS X). See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @osx
 
    .. Docstring generated from Julia source
 
-   Given ``@osx? a : b``\ , do ``a`` on OS X and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@osx? a : b``\ , do ``a`` on OS X and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @osx_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on OS X systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @linux
 
    .. Docstring generated from Julia source
 
-   Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @linux_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Linux systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: @windows
 
    .. Docstring generated from Julia source
 
-   Given ``@windows? a : b``\ , do ``a`` on Windows and ``b`` elsewhere. See documentation for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+   Given ``@windows? a : b``\ , do ``a`` on Windows and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: @windows_only
+
+   .. Docstring generated from Julia source
+
+   A macro that evaluates the given expression only on Windows systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 Errors
 ------
@@ -1006,13 +1030,13 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Raise an ``ErrorException`` with the given message
+   Raise an ``ErrorException`` with the given message.
 
 .. function:: throw(e)
 
    .. Docstring generated from Julia source
 
-   Throw an object as an exception
+   Throw an object as an exception.
 
 .. function:: rethrow([e])
 
@@ -1054,7 +1078,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   The asserted condition did not evalutate to ``true``\ . Optional argument ``msg`` is a descriptive error string.
+   The asserted condition did not evaluate to ``true``\ . Optional argument ``msg`` is a descriptive error string.
 
 .. function:: BoundsError([a],[i])
 
@@ -1254,17 +1278,17 @@ Reflection
 
    Get an array of the fields of a ``DataType``\ .
 
+.. function:: fieldname(x::DataType, i)
+
+   .. Docstring generated from Julia source
+
+   Get the name of field ``i`` of a ``DataType``\ .
+
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
-
-.. function:: isgeneric(f::Function) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Determine whether a ``Function`` is generic.
 
 .. function:: function_name(f::Function) -> Symbol
 
@@ -1357,7 +1381,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
+   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`\ .
 
    All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 
@@ -1371,7 +1395,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to ``STDOUT``\ .
 
 .. function:: @code_native
 

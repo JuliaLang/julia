@@ -10,6 +10,8 @@
 cd `dirname "$0"`/../..
 # Stop on error
 set -e
+# Make sure stdin exists (not true on appveyor msys2)
+exec < /dev/null
 
 curlflags="curl --retry 10 -k -L -y 5"
 checksum_download() {
@@ -24,21 +26,6 @@ checksum_download() {
   $curlflags -O "$url"
   deps/jlchecksum "$f"
 }
-
-# Fail fast on AppVeyor if there are newer pending commits in this PR
-if [ -n "$APPVEYOR_PULL_REQUEST_NUMBER" ]; then
-  # download a handy cli json parser
-  if ! [ -e jq.exe ]; then
-    $curlflags -O http://stedolan.github.io/jq/download/win64/jq.exe
-  fi
-  av_api_url="https://ci.appveyor.com/api/projects/StefanKarpinski/julia/history?recordsNumber=50"
-  query=".builds | map(select(.pullRequestId == \"$APPVEYOR_PULL_REQUEST_NUMBER\"))[0].buildNumber"
-  latestbuild="$(curl $av_api_url | ./jq "$query")"
-  if [ -n "$latestbuild" -a "$latestbuild" != "null" -a "$latestbuild" != "$APPVEYOR_BUILD_NUMBER" ]; then
-    echo "There are newer queued builds for this pull request, failing early."
-    exit 1
-  fi
-fi
 
 # If ARCH environment variable not set, choose based on uname -m
 if [ -z "$ARCH" -a -z "$XC_HOST" ]; then
@@ -56,12 +43,15 @@ if [ "$ARCH" = x86_64 ]; then
   exc=seh
   echo "override MARCH = x86-64" >> Make.user
   echo 'USE_BLAS64 = 1' >> Make.user
+  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
+  echo 'LIBBLASNAME = libopenblas64_' >> Make.user
 else
   bits=32
   archsuffix=86
   exc=sjlj
-  echo "override MARCH = i686" >> Make.user
-  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+  echo "override MARCH = pentium4" >> Make.user
+  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
+  echo 'LIBBLASNAME = libopenblas' >> Make.user
 fi
 
 # Set XC_HOST if in Cygwin or Linux
@@ -103,43 +93,45 @@ if ! [ -e julia-installer.exe ]; then
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
-for i in bin/*.dll Git/bin/msys-1.0.dll Git/bin/msys-perl5_8.dll Git/bin/*.exe; do
+for i in bin/*.dll Git/usr/bin/*.dll Git/usr/bin/*.exe; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
 done
+echo "override PCRE_INCL_PATH =" >> Make.user
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
+rm -f usr/bin/libgcc_s_s*-1.dll
+rm -f usr/bin/libgfortran-3.dll
+rm -f usr/bin/libquadmath-0.dll
+rm -f usr/bin/libssp-0.dll
+rm -f usr/bin/libstdc++-6.dll
 
 if [ -z "$USEMSVC" ]; then
-  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
+  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -o -n "$APPVEYOR" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
         "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
-    export PATH=$PATH:$PWD/mingw$bits/bin
+    export PATH=$PWD/mingw$bits/bin:$PATH
     # If there is a version of make.exe here, it is mingw32-make which won't work
     rm -f mingw$bits/bin/make.exe
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.3-$ARCH-w64-mingw32-juliadeps.7z
-  # The MinGW binary version of LLVM doesn't include libgtest or libgtest_main
-  mkdir -p usr/lib
-  $AR cr usr/lib/libgtest.a
-  $AR cr usr/lib/libgtest_main.a
+  f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r04.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
   echo "override XC_HOST = " >> Make.user
-  export CC="$PWD/deps/libuv/compile cl -nologo -MD -Z7"
-  export AR="$PWD/deps/libuv/ar-lib lib"
+  export CC="$PWD/deps/srccache/libuv/compile cl -nologo -MD -Z7"
+  export AR="$PWD/deps/srccache/libuv/ar-lib lib"
   export LD="$PWD/linkld link"
   echo "override CC = $CC" >> Make.user
   echo 'override CXX = $(CC) -EHsc' >> Make.user
@@ -153,16 +145,9 @@ checksum_download \
     "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
+echo 'override LLVM_CONFIG := $(JULIAHOME)/usr/tools/llvm-config.exe' >> Make.user
+echo 'override LLVM_SIZE := $(JULIAHOME)/usr/tools/llvm-size.exe' >> Make.user
 
-if [ -n "$APPVEYOR" ]; then
-  for i in make.exe touch.exe msys-intl-8.dll msys-iconv-2.dll; do
-    f="/c/MinGW/msys/1.0/bin/$i"
-    if [ -e $f ]; then
-      cp $f /bin/$i
-    fi
-  done
-fi
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
     echo "Install the Cygwin package for 'make' and try again."
@@ -175,8 +160,6 @@ if [ -z "`which make 2>/dev/null`" ]; then
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
-  # msysgit has an ancient version of touch that fails with `touch -c nonexistent`
-  cp usr/Git/bin/echo.exe bin/touch.exe
   export PATH=$PWD/bin:$PATH
 fi
 
@@ -184,8 +167,6 @@ for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
-echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
-echo 'LIBBLASNAME = libopenblas' >> Make.user
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
 echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 echo 'JULIA_SYSIMG_BUILD_FLAGS=--output-ji ../usr/lib/julia/sys.ji' >> Make.user
@@ -199,12 +180,6 @@ echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
-  make -C deps get-libuv
-  # Create a modified version of compile for wrapping link
-  sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
-    -e 's|$dir/$lib|$dir/lib$lib|g' deps/libuv/compile > linkld
-  chmod +x linkld
-
   # Openlibm doesn't build well with MSVC right now
   echo 'USE_SYSTEM_OPENLIBM = 1' >> Make.user
   # Since we don't have a static library for openlibm
@@ -215,13 +190,20 @@ if [ -n "$USEMSVC" ]; then
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
   echo 'override STAGE1_DEPS += dsfmt' >> Make.user
+
+  # Create a modified version of compile for wrapping link
+  sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
+    -e 's|$dir/$lib|$dir/lib$lib|g' deps/srccache/libuv/compile > linkld
+  chmod +x linkld
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
   make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user
 fi
+echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make VERBOSE=1
+make -j3 VERBOSE=1
+make build-stats
 #make debug

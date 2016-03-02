@@ -32,7 +32,7 @@ BitArray(dims::Int...) = BitArray(dims)
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}
 
-call(::Type{BitVector}) = BitArray{1}(0)
+(::Type{BitVector})() = BitArray{1}(0)
 
 ## utility functions ##
 
@@ -224,7 +224,7 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
-    length(B) == 0 && return B
+    isempty(B) && return B
     Bc = B.chunks
     if !y
         fill!(Bc, 0)
@@ -310,21 +310,17 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     ind = 1
     @inbounds begin
         for i = 1:length(Bc)-1
-            u = UInt64(1)
             c = UInt64(0)
             for j = 0:63
-                A[ind]!=0 && (c |= u)
+                c |= (UInt64(A[ind] != 0) << j)
                 ind += 1
-                u <<= 1
             end
             Bc[i] = c
         end
-        u = UInt64(1)
         c = UInt64(0)
         for j = 0:_mod64(l-1)
-            A[ind]!=0 && (c |= u)
+            c |= (UInt64(A[ind] != 0) << j)
             ind += 1
-            u <<= 1
         end
         Bc[end] = c
     end
@@ -350,8 +346,10 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
     return r
 end
 
-@inline getindex(B::BitArray, i::Int) = (checkbounds(B, i); unsafe_getindex(B, i))
-@inline unsafe_getindex(B::BitArray, i::Int) = unsafe_bitgetindex(B.chunks, i)
+@inline function getindex(B::BitArray, i::Int)
+    @boundscheck checkbounds(B, i)
+    unsafe_bitgetindex(B.chunks, i)
+end
 
 ## Indexing: setindex! ##
 
@@ -359,28 +357,25 @@ end
     i1, i2 = get_chunks_id(i)
     u = UInt64(1) << i2
     @inbounds begin
-        if x
-            Bc[i1] |= u
-        else
-            Bc[i1] &= ~u
-        end
+        c = Bc[i1]
+        Bc[i1] = ifelse(x, c | u, c & ~u)
     end
 end
 
-setindex!(B::BitArray, x, i::Int) = (checkbounds(B, i); unsafe_setindex!(B, x, i))
-@inline function unsafe_setindex!(B::BitArray, x, i::Int)
+@inline function setindex!(B::BitArray, x, i::Int)
+    @boundscheck checkbounds(B, i)
     unsafe_bitsetindex!(B.chunks, convert(Bool, x), i)
     return B
 end
 
 # logical indexing
-# (when the indexing is provided as an Array{Bool} or a BitArray we can be
-# sure about the behaviour and use unsafe_getindex; in the general case
-# we can't and must use getindex, otherwise silent corruption can happen)
 
 # When indexing with a BitArray, we can operate whole chunks at a time for a ~100x gain
-setindex!(B::BitArray, x, I::BitArray) = (checkbounds(B, I); unsafe_setindex!(B, x, I))
-function unsafe_setindex!(B::BitArray, x, I::BitArray)
+@inline function setindex!(B::BitArray, x, I::BitArray)
+    @boundscheck checkbounds(B, I)
+    _unsafe_setindex!(B, x, I)
+end
+function _unsafe_setindex!(B::BitArray, x, I::BitArray)
     y = convert(Bool, x)
     Bc = B.chunks
     Ic = I.chunks
@@ -399,8 +394,11 @@ end
 
 # Assigning an array of bools is more complicated, but we can still do some
 # work on chunks by combining X and I 64 bits at a time to improve perf by ~40%
-setindex!(B::BitArray, X::AbstractArray, I::BitArray) = (checkbounds(B, I); unsafe_setindex!(B, X, I))
-function unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+@inline function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
+    @boundscheck checkbounds(B, I)
+    _unsafe_setindex!(B, X, I)
+end
+function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Bc = B.chunks
     Ic = I.chunks
     length(Bc) == length(Ic) || throw_boundserror(B, I)
@@ -416,12 +414,8 @@ function unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         for j = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
                 lx < c && throw_setindex_mismatch(X, c)
-                x = convert(Bool, unsafe_getindex(X, c))
-                if x
-                    C |= u
-                else
-                    C &= ~u
-                end
+                @inbounds x = convert(Bool, X[c])
+                C = ifelse(x, C | u, C & ~u)
                 c += 1
             end
             u <<= 1
@@ -1153,7 +1147,7 @@ end
 function reverse!(B::BitVector)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
     # h = 64 - k. Walk from either end (with indexes i and j) reversing chunks
-    # and seperately ORing their two blocks into place.
+    # and separately ORing their two blocks into place.
     #
     #           chunk 3                  chunk 2                  chunk 1
     # ┌───────────────┬───────┐┌───────────────┬───────┐┌───────────────┬───────┐
@@ -1488,7 +1482,7 @@ sum(A::BitArray, region) = reducedim(AddFun(), A, region)
 sum(B::BitArray) = countnz(B)
 
 function all(B::BitArray)
-    length(B) == 0 && return true
+    isempty(B) && return true
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)-1
@@ -1500,7 +1494,7 @@ function all(B::BitArray)
 end
 
 function any(B::BitArray)
-    length(B) == 0 && return false
+    isempty(B) && return false
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)
@@ -1533,7 +1527,7 @@ map!(f::Function, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_b
 # iterates bit-by-bit.
 function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
-    length(A) == 0 && return dest
+    isempty(A) && return dest
     for i=1:length(A.chunks)-1
         dest.chunks[i] = f(A.chunks[i])
     end
@@ -1542,7 +1536,7 @@ function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
 end
 function map!(f::BitFunctorBinary, dest::BitArray, A::BitArray, B::BitArray)
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
-    length(A) == 0 && return dest
+    isempty(A) && return dest
     for i=1:length(A.chunks)-1
         dest.chunks[i] = f(A.chunks[i], B.chunks[i])
     end
@@ -1738,22 +1732,21 @@ function vcat(A::BitMatrix...)
     return B
 end
 
+function cat(catdim::Integer, X::Integer...)
+    reshape([X...], (ones(Int,catdim-1)..., length(X)))
+end
+
 # general case, specialized for BitArrays and Integers
 function cat(catdim::Integer, X::Union{BitArray, Integer}...)
     nargs = length(X)
     # using integers results in conversion to Array{Int}
     # (except in the all-Bool case)
-    has_bitarray = false
     has_integer = false
     for a in X
-        if isa(a, BitArray)
-            has_bitarray = true
-        else
-            has_integer = true
+        if isa(a, Integer)
+            has_integer = true; break
         end
     end
-    # just integers and no BitArrays -> general case
-    has_bitarray || return invoke(cat, Tuple{Integer, Vararg{Any}}, catdim, X...)
     dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
     d_max = maximum(ndimsX)

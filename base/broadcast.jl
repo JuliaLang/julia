@@ -3,10 +3,9 @@
 module Broadcast
 
 using ..Cartesian
-import Base.promote_eltype
-import Base.@get!
-import Base.num_bit_chunks, Base._msk_end, Base.unsafe_bitgetindex
-import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .%, .<<, .>>, .^
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
+using Base: AddFun, SubFun, MulFun, LDivFun, RDivFun, PowFun
+import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
 
@@ -104,16 +103,34 @@ end
 const bitcache_chunks = 64 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
 
+function bpack(z::UInt64)
+    z |= z >>> 7
+    z |= z >>> 14
+    z |= z >>> 28
+    z &= 0xFF
+    return z
+end
+
 function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
     ind = 1
     nc = min(bitcache_chunks, length(Bc)-bind+1)
-    for i = 1:nc
-        u = UInt64(1)
+    C8 = reinterpret(UInt64, C)
+    nc8 = (nc >>> 3) << 3
+    @inbounds for i = 1:nc8
         c = UInt64(0)
-        for j = 1:64
-            C[ind] && (c |= u)
+        for j = 0:8:63
+            c |= (bpack(C8[ind]) << j)
             ind += 1
-            u <<= 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+    ind = (ind-1) << 3 + 1
+    @inbounds for i = (nc8+1):nc
+        c = UInt64(0)
+        for j = 0:63
+            c |= (UInt64(C[ind]) << j)
+            ind += 1
         end
         Bc[bind] = c
         bind += 1
@@ -232,7 +249,7 @@ for (Bsig, Asig, gbf, gbb) in
 end
 
 
-broadcast(f, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
+broadcast(f, As...) = broadcast!(f, Array(promote_eltype_op(f, As...), broadcast_shape(As...)), As...)
 
 bitbroadcast(f, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
@@ -286,35 +303,29 @@ end
 
 ## elementwise operators ##
 
-.*(As::AbstractArray...) = broadcast(*, As...)
+.÷(A::AbstractArray, B::AbstractArray) = broadcast(÷, A, B)
 .%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
 .<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
 .>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
 
-eltype_plus(As::AbstractArray...) = promote_eltype(As...)
-eltype_plus(As::AbstractArray{Bool}...) = typeof(true+true)
+eltype_plus(As::AbstractArray...) = promote_eltype_op(AddFun(), As...)
 
 .+(As::AbstractArray...) = broadcast!(+, Array(eltype_plus(As...), broadcast_shape(As...)), As...)
 
-type_minus(T, S) = promote_type(T, S)
-type_minus(::Type{Bool}, ::Type{Bool}) = typeof(true-true)
-
 function .-(A::AbstractArray, B::AbstractArray)
-    broadcast!(-, Array(type_minus(eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
+    broadcast!(-, Array(promote_op(SubFun(), eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
 end
 
-type_div(T,S) = promote_type(T,S)
-type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = typeof(one(T)/one(S))
-type_div{T,S}(::Type{Complex{T}},::Type{Complex{S}}) = Complex{type_div(T,S)}
-type_div{T,S}(::Type{Complex{T}},::Type{S})          = Complex{type_div(T,S)}
-type_div{T,S}(::Type{T},::Type{Complex{S}})          = Complex{type_div(T,S)}
+eltype_mul(As::AbstractArray...) = promote_eltype_op(MulFun(), As...)
+
+.*(As::AbstractArray...) = broadcast!(*, Array(eltype_mul(As...), broadcast_shape(As...)), As...)
 
 function ./(A::AbstractArray, B::AbstractArray)
-    broadcast!(/, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(/, Array(promote_op(RDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 function .\(A::AbstractArray, B::AbstractArray)
-    broadcast!(\, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(\, Array(promote_op(LDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
@@ -327,12 +338,8 @@ function .//(A::AbstractArray, B::AbstractArray)
     broadcast!(//, Array(type_rdiv(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
-type_pow(T,S) = promote_type(T,S)
-type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
-type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
-
 function .^(A::AbstractArray, B::AbstractArray)
-    broadcast!(^, Array(type_pow(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(^, Array(promote_op(PowFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 ## element-wise comparison operators returning BitArray ##
@@ -373,6 +380,7 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
                              (:.< , :bitcache_lt , :<   ),
                              (:.!=, :bitcache_neq, :!=  ),
                              (:.<=, :bitcache_le , :<=  ))
+    @eval ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
     for (sigA, sigB, expA, expB, shape) in ((:Any, :AbstractArray,
                                              :A, :(B[ind]),
                                              :(size(B))),
@@ -380,7 +388,6 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
                                              :(A[ind]), :B,
                                              :(size(A))))
         @eval begin
-            ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
             function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
                 left = l - ind + 1
                 @inbounds begin

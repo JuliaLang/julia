@@ -59,9 +59,8 @@
   trycatch lambda if and pair? eq? car quote thrown-value cadr caddr raise])  let #fn(">000s1^|C6B0|m62}Mm02}Nm1530]2c0c1L1c2c3|32L1c4}3133c2c5|32g66C0c6g6g7L2L1g6L3540g7g8K;" [#fn(nconc)
   lambda #fn(map) #fn("5000r1|F650|M;|;" [])
   #fn(copy-list) #fn("5000r1|F650|\x84;e040;" [void]) letrec]))
-	  *whitespace* "\t\n\v\f\r \u0085  ᠎           \u2028\u2029  　" 1+
-	  #fn("6000r1|aw;" [] 1+) 1- #fn("6000r1|ax;" [] 1-) 1arg-lambda?
-	  #fn("7000r1|F16T02|Mc0<16J02|NF16B02|\x84F16:02e1|\x84a42;" [lambda
+	  1+ #fn("6000r1|aw;" [] 1+) 1-
+	  #fn("6000r1|ax;" [] 1-) 1arg-lambda? #fn("7000r1|F16T02|Mc0<16J02|NF16B02|\x84F16:02e1|\x84a42;" [lambda
   length=] 1arg-lambda?)
 	  <= #fn("6000r2|}X17602|}W;" [] <=) >
 	  #fn("6000r2}|X;" [] >) >= #fn("6000r2}|X17602|}W;" [] >=)
@@ -129,7 +128,8 @@
   #fn(constant?) #fn(top-level-value) length> 255 compile-in bcode:stack
   compile-arglist emit tcall.l call.l builtin->instruction cadr length= lambda
   inlineable? compile-let compile-builtin-call tcall call] compile-app)
-	  compile-arglist #fn("8000r3e0c1|}q2g2322c2g241;" [for-each #fn("9000r1e0~\x7f^|342e1~a42;" [compile-in
+	  compile-arglist #fn("8000r3c0c1|}q2g2322c2g241;" [#fn(for-each)
+							    #fn("9000r1e0~\x7f^|342e1~a42;" [compile-in
   bcode:stack]) #fn(length)] compile-arglist)
 	  compile-begin #fn("9000r4g3?6?0e0|}g2e13044;g3N?6>0e0|}g2g3M44;e0|}^g3M342e2|c3322e4|}g2g3N44;" [compile-in
   void emit pop compile-begin] compile-begin)
@@ -153,8 +153,8 @@
   compile-in #fn(top-level-value) eof-object loadv in-env? compile-app quote
   self-evaluating? if compile-if begin compile-begin prog1 compile-prog1 lambda
   call-with-values #fn("7000r0e0~\x7f42;" [compile-f-])
-  #fn("9000r2e0~c1|332}\x87K0e2c3~\x7fq2}322e0~c4c5}3143;];" [emit loadv
-							      for-each #fn("9000r1e0~\x7f|^44;" [compile-sym])
+  #fn("9000r2e0~c1|332}\x87K0c2c3~\x7fq2}322e0~c4c5}3143;];" [emit loadv #fn(for-each)
+							      #fn("9000r1e0~\x7f|^44;" [compile-sym])
 							      closure #fn(length)])
   and compile-and or compile-or while compile-while cddr for compile-for caddr
   cadddr return ret set! compile-set! trycatch 1arg-lambda? error "trycatch: second form must be a 1-argument lambda"] compile-in)
@@ -238,9 +238,7 @@
 	  extend-env #fn("8000r3e0}g2`33|K;" [vars-to-env] extend-env) filter
 	  #fn("9000r2]c0|q1m62g6|}_L143;" [#fn("8000r3g2]}F6Q02~}M316?0g2}M_KPNm2530]2}Nm15\x0e/2N;" [] filter-)] filter)
 	  fits-i8 #fn("7000r1|I16F02e0|b\xb03216:02e1|b\xaf42;" [>= <=] fits-i8)
-	  foldl #fn("9000r3g2\x8540};e0||g2M}32g2N43;" [foldl] foldl) for-each
-	  #fn(">000s2]\x8c7g7c0g7q1O2g2\x85I0]}F6@02|}M312}Nm15\x1f/5<0g7M|}g2K322];" [#fn("9000r2}MF6J0|c0c1}32Q22~M|c0c2}3242;];" [#fn(map)
-  #.car #.cdr] for-each-n)] for-each)
+	  foldl #fn("9000r3g2\x8540};e0||g2M}32g2N43;" [foldl] foldl)
 	  get-defined-vars #fn("7000r1e0~M|3141;" [delete-duplicates] [#0=(#fn("8000r1|?640_;|Mc0<16602|NF6d0|\x84C16702|\x84L117S02|\x84F16E02e1|31C16:02e1|31L117402_;|Mc2\x82?0c3c4~M|N32v2;_;" [define
   caadr begin #fn(nconc) #fn(map)] [#0#]))])
 	  identity #fn("5000r1|;" [] identity) in-env?
@@ -323,25 +321,26 @@
 	  nreconc #fn("7000r2e0}|42;" [reverse!-] nreconc) odd?
 	  #fn("6000r1e0|31@;" [even?] odd?) positive? #fn("7000r1e0|`42;" [>] positive?)
 	  princ #fn(";000s0e0^k02c1g5q1c2|q1c3g6q1tg6302;" [*print-readably* #fn("5000r0~k0;" [*print-readably*])
-							    #fn("7000r0e0c1~42;" [for-each
+							    #fn("7000r0c0c1~42;" [#fn(for-each)
   #fn(write)]) #fn("6000r1~302c0|41;" [#fn(raise)])] princ)
-	  print #fn("9000s0e0c1|42;" [for-each #fn(write)] print)
+	  print #fn("9000s0c0c1|42;" [#fn(for-each)
+				      #fn(write)] print)
 	  print-exception #fn("=000r1|F16D02|Mc0<16:02e1|b4326P0e2c3|\x84c4e5|31c6352e7e8|31315!0|F16D02|Mc9<16:02e1|b4326N0e2|\x84c:e8|31c;342e7e5|31315\xea0|F16@02|Mc<<16602|NF6?0e2c=|\x84c>335\xc60|F16802|Mc?<6B0e2c@312e2|NQ25\xa70|F16802|McA<6G0eBe5|31312e2cC|\x84325\x830eD|3116:02e1|b2326c0e7|M312e2cE312|\x84cFg53117602g5C670e2540e7g531\x8e15>0e2cG312e7|312e2eH41;" [type-error
   length= princ "type error: " ": expected " caddr ", got " print cadddr
   bounds-error ": index " " out of bounds for " unbound-error "eval: variable "
   " has no value" error "error: " load-error print-exception "in file " list?
   ": " #fn(string?) "*** Unhandled exception: " *linefeed*] print-exception)
-	  print-stack-trace #fn("?000r1]]\x8c5\x8c6g5c0g5q1O2g6c1g5q1O2e2e3|e4670b5540b43231e5e6c7c8c9303232`\x8c9e:c;g9g6g8q3g742;" [#fn("=000r3c0|31g2Kc1|31c1}31\x82?0c2c3c4g7L341;c5|31`e6c7g83131c8g8~}g7q4u;" [#fn(function:name)
+	  print-stack-trace #fn("?000r1]]\x8c5\x8c6g5c0g5q1O2g6c1g5q1O2e2e3|e4670b5540b43231e5e6c7c8c9303232`\x8c9c:c;g9g6g8q3g742;" [#fn("=000r3c0|31g2Kc1|31c1}31\x82?0c2c3c4g7L341;c5|31`e6c7g83131c8g8~}g7q4u;" [#fn(function:name)
   #fn(function:code) #fn(raise) thrown-value ffound #fn(function:vals) 1- #fn(length)
   #fn("8000r1e0~|[316>0\x7fM~|[i2i343;];" [closure?])] find-in-f)
-  #fn(";000r2c0~|}q3c1tg66I0c2e3c4c5e6g63132c73241;c8;" [#fn("8000r0e0c1~\x7fq2i2322^;" [for-each
+  #fn(";000r2c0~|}q3c1tg66I0c2e3c4c5e6g63132c73241;c8;" [#fn("8000r0c0c1~\x7fq2i2322^;" [#fn(for-each)
   #fn("8000r1~M|\x7f_43;" [])]) #fn("6000r1|F16B02|Mc0<16802|\x84c1<680e2|41;c3|41;" [thrown-value
   ffound caddr #fn(raise)]) #fn(symbol) string.join #fn(map)
 							 #fn(string) reverse!
 							 "/" lambda] fn-name)
   reverse! list-tail *interactive* filter closure? #fn(map)
   #fn("6000r1|E16802c0|41;" [#fn(top-level-value)])
-  #fn(environment) for-each #fn("8000r1e0c1~Mc2332e3\x7fM|`[i232e4|31NK312e5302~~MawO;" [princ
+  #fn(environment) #fn(for-each) #fn("8000r1e0c1~Mc2332e3\x7fM|`[i232e4|31NK312e5302~~MawO;" [princ
   "#" " " print vector->list newline])] print-stack-trace)
 	  print-to-string #fn("8000r1c030c1|g5322c2g541;" [#fn(buffer)
 							   #fn(write)
@@ -371,8 +370,9 @@
 	  simple-sort #fn("9000r1|A17602|NA640|;|Me0c1g5|q2c2g5q142;" [call-with-values
   #fn("7000r0e0c1~q1\x7fN42;" [separate #fn("6000r1|~X;" [])])
   #fn("9000r2c0e1|31~L1e1}3143;" [#fn(nconc) simple-sort])] simple-sort)
-	  string.join #fn("9000r2|\x8550c0;c130c2g6|M322e3c4g6}q2|N322c5g641;" [""
-  #fn(buffer) #fn(io.write) for-each #fn("7000r1c0~\x7f322c0~|42;" [#fn(io.write)])
+	  string.join #fn("9000r2|\x8550c0;c130c2g6|M322c3c4g6}q2|N322c5g641;" [""
+  #fn(buffer) #fn(io.write) #fn(for-each)
+  #fn("7000r1c0~\x7f322c0~|42;" [#fn(io.write)])
   #fn(io.tostring!)] string.join)
 	  string.map #fn("=000r2c030c1}31`]g8g7X6P02c2g6|c3}g83231322c4}g832m85\x0c/\x8e12c5g641;" [#fn(buffer)
   #fn(length) #fn(io.putc) #fn(string.char)

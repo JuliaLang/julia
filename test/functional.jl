@@ -42,6 +42,22 @@ end
 # issue #4718
 @test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+let z = zip(1:2)
+    @test collect(z) == [(1,), (2,)]
+    # Issue #13979
+    @test eltype(z) == Tuple{Int}
+end
+
+let z = zip(1:2, 3:4)
+    @test collect(z) == [(1,3), (2,4)]
+    @test eltype(z) == Tuple{Int,Int}
+end
+
+let z = zip(1:2, 3:4, 5:6)
+    @test collect(z) == [(1,3,5), (2,4,6)]
+    @test eltype(z) == Tuple{Int,Int,Int}
+end
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
@@ -138,3 +154,53 @@ let i = 0
         i <= 10 || break
     end
 end
+
+# product
+# -------
+
+@test isempty(Base.product(1:2,1:0))
+@test isempty(Base.product(1:2,1:0,1:10))
+@test isempty(Base.product(1:2,1:10,1:0))
+@test isempty(Base.product(1:0,1:2,1:10))
+@test collect(Base.product(1:2,3:4)) == [(1,3),(2,3),(1,4),(2,4)]
+@test isempty(collect(Base.product(1:0,1:2)))
+@test length(Base.product(1:2,1:10,4:6)) == 60
+
+# foreach
+let
+    a = []
+    foreach(()->push!(a,0))
+    @test a == [0]
+    a = []
+    foreach(x->push!(a,x), [1,5,10])
+    @test a == [1,5,10]
+    a = []
+    foreach((args...)->push!(a,args), [2,4,6], [10,20,30])
+    @test a == [(2,10),(4,20),(6,30)]
+end
+
+# generators (#4470, #14848)
+
+@test sum(i/2 for i=1:2) == 1.5
+@test collect(2i for i=2:5) == [4,6,8,10]
+@test collect((i+10j for i=1:2,j=3:4)) == [31 41; 32 42]
+@test collect((i+10j for i=1:2,j=3:4,k=1:1)) == reshape([31 41; 32 42], (2,2,1))
+
+let I = Base.IteratorND(1:27,(3,3,3))
+    @test collect(I) == reshape(1:27,(3,3,3))
+    @test size(I) == (3,3,3)
+    @test length(I) == 27
+    @test eltype(I) === Int
+    @test ndims(I) == 3
+end
+
+let A = collect(Base.Generator(x->2x, Real[1.5,2.5]))
+    @test A == [3,5]
+    @test isa(A,Vector{Float64})
+end
+
+let f(g) = (@test size(g.iter)==(2,3))
+    f(i+j for i=1:2, j=3:5)
+end
+
+@test_throws DimensionMismatch Base.IteratorND(1:2, (2,3))

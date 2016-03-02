@@ -7,7 +7,9 @@ end
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
-    SystemError(p::AbstractString, e::Integer) = new(p, e)
+    extrainfo
+    SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
+    SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
     SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 
@@ -68,7 +70,7 @@ ccall(:jl_get_system_hooks, Void, ())
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
-function finalizer(o::ANY, f::Union{Function,Ptr})
+function finalizer(o::ANY, f::ANY)
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end

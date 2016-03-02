@@ -2,7 +2,7 @@
 
 module Profile
 
-import Base: hash, ==
+import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 
 export @profile
 
@@ -23,6 +23,16 @@ end
 ####
 #### User-level functions
 ####
+
+"""
+    init(; n::Integer, delay::Float64)
+
+Configure the `delay` between backtraces (measured in seconds), and the number `n` of
+instruction pointers that may be stored. Each instruction pointer corresponds to a single
+line of code; backtraces generally consist of a long list of instruction pointers. Default
+settings can be obtained by calling this function with no arguments, and each can be set
+independently using keywords or in the order `(n, delay)`.
+"""
 function init(; n::Union{Void,Integer} = nothing, delay::Union{Void,Float64} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
@@ -45,9 +55,33 @@ end
 # Use a max size of 1M profile samples, and fire timer every 1ms
 @windows? (__init__() = init(1_000_000, 0.01)) : (__init__() = init(1_000_000, 0.001))
 
+"""
+    clear()
+
+Clear any existing backtraces from the internal buffer.
+"""
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_size()[2], maxdepth::Int = typemax(Int), sortedby::Symbol = :filefuncline)
+"""
+    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline)
+
+Prints profiling results to `io` (by default, `STDOUT`). If you do not
+supply a `data` vector, the internal buffer of accumulated backtraces
+will be used. `format` can be `:tree` or `:flat`. If `C==true`,
+backtraces from C and Fortran code are shown. `combine==true` merges
+instruction pointers that correspond to the same line of
+code. `maxdepth` can be used to limit the depth of printing in `:tree`
+format, while `sortedby` can be used to control the order in `:flat`
+format (`:filefuncline` sorts by the source line, whereas `:count`
+sorts in order of number of collected samples).
+"""
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data);
+        format = :tree,
+        C = false,
+        combine = true,
+        maxdepth::Int = typemax(Int),
+        sortedby::Symbol = :filefuncline)
+    cols = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, C, combine, cols, maxdepth)
     elseif format == :flat
@@ -56,8 +90,26 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = ge
         throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
 end
+
+"""
+    print([io::IO = STDOUT,] data::Vector, lidict::Dict; kwargs)
+
+Prints profiling results to `io`. This variant is used to examine results exported by a
+previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
+a dictionary `lidict` of line information.
+
+See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
+"""
 print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
 
+"""
+    retrieve() -> data, lidict
+
+"Exports" profiling results in a portable format, returning the set of all backtraces
+(`data`) and a dictionary that maps the (session-specific) instruction pointers in `data` to
+`LineInfo` values that store the file name, function name, and line number. This function
+allows you to save profiling results for future analysis.
+"""
 function retrieve()
     data = fetch()
     copy(data), getdict(data)
@@ -65,8 +117,20 @@ end
 
 function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{UInt, LineInfo}([ip=>lookup(ip) for ip in uip])
+    Dict{UInt, StackFrame}([ip=>lookup(ip) for ip in uip])
 end
+
+"""
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
+
+Given a previous profiling run, determine who called a particular function. Supplying the
+filename (and optionally, range of line numbers over which the function is defined) allows
+you to disambiguate an overloaded method. The returned value is a vector containing a count
+of the number of calls and line information about the caller. One can optionally supply
+backtrace `data` obtained from [`retrieve`](:func:`retrieve`); otherwise, the current internal
+profile buffer is used.
+"""
+function callers end
 
 function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
     if filename === nothing && linerange === nothing
@@ -89,37 +153,16 @@ callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs
 ##
 # Reset the malloc log. Used to avoid counting memory allocated during
 # compilation.
+
+"""
+    clear_malloc_data()
+
+Clears any stored memory allocation data when running julia with `--track-allocation`.
+Execute the command(s) you want to test (to force JIT-compilation), then call
+[`clear_malloc_data`](:func:`clear_malloc_data`). Then execute your command(s) again, quit
+Julia, and examine the resulting `*.mem` files.
+"""
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
-
-
-####
-#### Internal interface
-####
-immutable LineInfo
-    func::ByteString
-    file::ByteString
-    line::Int
-    inlined_file::ByteString
-    inlined_line::Int
-    fromC::Bool
-    ip::Int64 # large enough that this struct can be losslessly read on any machine (32 or 64 bit)
-end
-
-const UNKNOWN = LineInfo("?", "?", -1, "?", -1, true, 0)
-
-#
-# If the LineInfo has function and line information, we consider two of them the same
-# if they share the same function/line information. For unknown functions, line==ip
-# so we never actually need to consider the .ip field.
-#
-==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
-
-function hash(li::LineInfo, h::UInt)
-    h += 0xf4fbda67fe20ce88 % UInt
-    h = hash(li.line, h)
-    h = hash(li.file, h)
-    h = hash(li.func, h)
-end
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
@@ -134,22 +177,22 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-function lookup(ip::Ptr{Void})
-    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
-    if length(info) == 7
-        return LineInfo(string(info[1]), string(info[2]), Int(info[3]), string(info[4]), Int(info[5]), info[6], Int64(info[7]))
-    else
-        return UNKNOWN
-    end
-end
-lookup(ip::UInt) = lookup(convert(Ptr{Void},ip))
-
 error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
     -3=>"cannot start the timer for profiling",
     -4=>"cannot unblock SIGUSR1")
 
+
+"""
+    fetch() -> data
+
+Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
+like [`clear`](:func:`clear`), can affect `data` unless you first make a copy. Note that the
+values in `data` have meaning only on this machine in the current session, because it
+depends on the exact memory addresses used in JIT-compiling. This function is primarily for
+internal use; [`retrieve`](:func:`retrieve`) may be a better choice for most users.
+"""
 function fetch()
     len = len_data()
     maxlen = maxlen_data()
@@ -198,7 +241,7 @@ function parse_flat(iplist, n, lidict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.fromC && !C) for x in lilist]
+    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     lilist, n
@@ -217,7 +260,7 @@ function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     print_flat(io, lilist, n, combine, cols, sortedby)
 end
 
-function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
+function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
@@ -242,26 +285,35 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
     end
     wcounts = max(6, ndigits(maximum(n)))
     maxline = 0
-    maxfile = 0
-    maxfunc = 0
+    maxfile = 6
+    maxfunc = 10
     for li in lilist
         maxline = max(maxline, li.line)
-        maxfile = max(maxfile, length(li.file))
-        maxfunc = max(maxfunc, length(li.func))
+        maxfile = max(maxfile, length(string(li.file)))
+        maxfunc = max(maxfunc, length(string(li.func)))
     end
     wline = max(5, ndigits(maxline))
     ntext = cols - wcounts - wline - 3
-    if maxfile+maxfunc <= ntext
+    maxfunc += 25
+    if maxfile + maxfunc <= ntext
         wfile = maxfile
         wfunc = maxfunc
     else
         wfile = floor(Integer,2*ntext/5)
         wfunc = floor(Integer,3*ntext/5)
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
+    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
         li = lilist[i]
-        println(io, lpad(string(n[i]), wcounts, " "), " ", rpad(truncto(li.file, wfile), wfile, " "), " ", rpad(truncto(li.func, wfunc), wfunc, " "), " ", lpad(string(li.line), wline, " "))
+        Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
+        Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
+        Base.print(io, lpad(string(li.line), wline, " "), " ")
+        fname = string(li.func)
+        if !li.from_c && !isnull(li.outer_linfo)
+            fname = sprint(show_spec_linfo, li)
+        end
+        Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
+        println(io)
     end
 end
 
@@ -287,9 +339,9 @@ function tree_aggregate{T<:Unsigned}(data::Vector{T})
     bt, counts
 end
 
-tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
+tree_format_linewidth(x::StackFrame) = ndigits(x.line)+6
 
-function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
+function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Integer)
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
@@ -310,24 +362,26 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
             if showextra
                 base = string(base, "+", nextra, " ")
             end
-            if li.line == li.ip
+            if li.line == li.pointer
                 strs[i] = string(base,
                           rpad(string(counts[i]), ndigcounts, " "),
-                          " ","unknown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
+                          " ",
+                          "unknown function (pointer: 0x",
+                          hex(li.pointer,2*sizeof(Ptr{Void})),
                           ")")
             else
-                base = string(base,
+                fname = string(li.func)
+                if !li.from_c && !isnull(li.outer_linfo)
+                    fname = sprint(show_spec_linfo, li)
+                end
+                strs[i] = string(base,
                               rpad(string(counts[i]), ndigcounts, " "),
                               " ",
-                              truncto(string(li.file), widthfile),
+                              rtruncto(string(li.file), widthfile),
+                              ":",
+                              li.line == -1 ? "?" : string(li.line),
                               "; ",
-                              truncto(string(li.func), widthfunc),
-                              "; ")
-                if li.line == -1
-                    strs[i] = string(base, "(unknown line)")
-                else
-                    strs[i] = string(base, "line: ", li.line)
-                end
+                              ltruncto(fname, widthfunc))
             end
         else
             strs[i] = ""
@@ -344,7 +398,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     # Organize backtraces into groups that are identical up to this level
     if combine
         # Combine based on the line information
-        d = Dict{LineInfo,Vector{Int}}()
+        d = Dict{StackFrame,Vector{Int}}()
         for i = 1:length(bt)
             ip = bt[i][level+1]
             key = lidict[ip]
@@ -357,7 +411,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts
         dlen = length(d)
-        lilist = Array(LineInfo, dlen)
+        lilist = Array(StackFrame, dlen)
         group = Array(Vector{Int}, dlen)
         n = Array(Int, dlen)
         i = 1
@@ -381,7 +435,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Array(LineInfo, dlen)
+        lilist = Array(StackFrame, dlen)
         group = Array(Vector{Int}, dlen)
         n = Array(Int, dlen)
         i = 1
@@ -432,7 +486,7 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
 end
 
 function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
-    counts = Dict{LineInfo, Int}()
+    counts = Dict{StackFrame, Int}()
     lastmatched = false
     for id in bt
         if id == 0
@@ -456,16 +510,26 @@ function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
 end
 
 # Utilities
-function truncto(str::ByteString, w::Int)
+function rtruncto(str::ByteString, w::Int)
     ret = str;
     if length(str) > w
         ret = string("...", str[end-w+4:end])
     end
     ret
 end
+function ltruncto(str::ByteString, w::Int)
+    ret = str;
+    if length(str) > w
+        ret = string(str[1:w-4], "...")
+    end
+    ret
+end
+
+
+truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
-function liperm(lilist::Vector{LineInfo})
+function liperm(lilist::Vector{StackFrame})
     comb = Array(ByteString, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
@@ -484,7 +548,7 @@ warning_empty() = warn("""
             Profile.init().""")
 
 function purgeC(data, lidict)
-    keep = Bool[d == 0 || lidict[d].fromC == false for d in data]
+    keep = Bool[d == 0 || lidict[d].from_c == false for d in data]
     data[keep]
 end
 

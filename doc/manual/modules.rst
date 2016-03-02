@@ -6,12 +6,14 @@
 
 .. index:: module, baremodule, using, import, export, importall
 
-Modules in Julia are separate global variable workspaces. They are
-delimited syntactically, inside ``module Name ... end``. Modules allow
-you to create top-level definitions without worrying about name conflicts
-when your code is used together with somebody else's. Within a module, you
-can control which names from other modules are visible (via importing),
-and specify which of your names are intended to be public (via exporting).
+Modules in Julia are separate variable workspaces, i.e. they introduce
+a new global scope. They are delimited syntactically, inside ``module
+Name ... end``. Modules allow you to create top-level definitions (aka
+global variables) without worrying about name conflicts when your code
+is used together with somebody else's. Within a module, you can
+control which names from other modules are visible (via importing),
+and specify which of your names are intended to be public (via
+exporting).
 
 The following example demonstrates the major features of modules. It is
 not meant to be run, but is shown for illustrative purposes::
@@ -160,10 +162,8 @@ contain ``using Base``, since this is needed in the vast majority of cases.
 Default top-level definitions and bare modules
 ----------------------------------------------
 
-In addition to ``using Base``, modules also perform ``import Base.call`` by
-default, to facilitate adding constructors to new types.
-A new module also automatically contains a definition of the ``eval`` function,
-which evaluates expressions within the context of that module.
+In addition to ``using Base``, modules also automatically contain a definition
+of the ``eval`` function, which evaluates expressions within the context of that module.
 
 If these default definitions are not wanted, modules can be defined using the
 keyword ``baremodule`` instead (note: ``Core`` is still imported, as per above).
@@ -172,8 +172,6 @@ In terms of ``baremodule``, a standard ``module`` looks like this::
     baremodule Mod
 
     using Base
-
-    import Base.call
 
     eval(x) = Core.eval(Mod, x)
     eval(m,x) = Core.eval(m, x)
@@ -282,6 +280,10 @@ therein.  If you know that it is *not* safe to precompile your module
 throw an error (and thereby prevent the module from being imported by
 any other precompiled module).
 
+``__precompile__()`` should *not* be used in a module unless all of its
+dependencies are also using ``__precompile__()``. Failure to do so can result
+in a runtime error when loading the module.
+
 In order to make your module work with precompilation,
 however, you may need to change your module to explicitly separate any
 initialization steps that must occur at *runtime* from steps that can
@@ -354,7 +356,7 @@ not a standalone interpreter that also generates compiled code.
 
 Other known potential failure scenarios include:
 
-1. Global counters (for example, for attempting to unique identifying objects)
+1. Global counters (for example, for attempting to uniquely identify objects)
    Consider the following code snippet::
 
     type UniquedById
@@ -419,3 +421,9 @@ A few other points to be aware of:
 
 4. WeakRef objects and finalizers are not currently handled properly by the serializer
    (this will be fixed in an upcoming release).
+
+It is sometimes helpful during module development to turn off incremental precompilation.
+The command line flag ``--compilecache={yes|no}`` enables you to toggle module precompilation on and off.
+When Julia is started with ``--compilecache=no`` the serialized modules in the compile cache are ignored when loading modules and module dependencies.
+``Base.compilecache()`` can still be called manually and it will respect ``__precompile__()`` directives for the module.
+The state of this command line flag is passed to ``Pkg.build()`` to disable automatic precompilation triggering when installing, updating, and explicitly building packages.

@@ -3,7 +3,7 @@
 include("formatting.jl")
 
 const margin = 2
-cols() = Base.tty_size()[2]
+cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
     isempty(content) && return
@@ -14,7 +14,7 @@ function term(io::IO, content::Vector, cols)
     term(io, content[end], cols)
 end
 
-term(io::IO, md::MD, columns = cols()) = term(io, md.content, columns)
+term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
 
 function term(io::IO, md::Paragraph, columns)
     print(io, " "^margin)
@@ -28,7 +28,6 @@ function term(io::IO, md::BlockQuote, columns)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
-    println(io)
 end
 
 function term(io::IO, md::List, columns)
@@ -93,7 +92,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, md)
+    print(io, replace(md, r"[\s\t\n]+", " "))
 end
 
 function terminline(io::IO, md::Bold)
@@ -104,12 +103,21 @@ function terminline(io::IO, md::Italic)
     with_output_format(:underline, terminline, io, md.text)
 end
 
+function terminline(io::IO, md::LineBreak)
+    println(io)
+end
+
 function terminline(io::IO, md::Image)
-    print(io, "(Image: $(md.alt))")
+    terminline(io, "(Image: $(md.alt))")
 end
 
 function terminline(io::IO, md::Link)
     terminline(io, md.text)
+end
+
+function terminline(io::IO, md::Footnote)
+    print(io, "[^", md.id, "]")
+    md.text ≡ nothing || (print(io, ":"); terminline(io, md.text))
 end
 
 function terminline(io::IO, code::Code)

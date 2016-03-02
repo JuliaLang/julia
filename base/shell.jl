@@ -81,7 +81,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
                     if done(s,k)
                         error("unterminated double quote")
                     end
-                    if s[k] == '"' || s[k] == '$'
+                    if s[k] == '"' || s[k] == '$' || s[k] == '\\'
                         update_arg(s[i:j-1]); i = k
                         c, k = next(s,k)
                     end

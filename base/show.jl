@@ -1,8 +1,74 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 show(x) = show(STDOUT::IO, x)
+print(io::IO, s::Symbol) = (write(io,s); nothing)
 
-print(io::IO, s::Symbol) = (write(io,s);nothing)
+immutable IOContext{IO_t <: IO} <: AbstractPipe
+    io::IO_t
+    dict::ImmutableDict{Symbol, Any}
+    function IOContext(io::IO_t, dict::ImmutableDict{Symbol, Any})
+        assert(!(IO_t <: IOContext))
+        return new(io, dict)
+    end
+end
+
+"""
+    IOContext{<:IO} <: IO
+
+IOContext provides a mechanism for passing output-configuration keyword arguments through arbitrary show methods.
+
+In short, it is an immutable Dictionary that is a subclass of IO.
+
+    IOContext(io::IO, KV::Pair)
+
+Create a new entry in the IO Dictionary for the key => value pair
+
+ - use `(key => value) in dict` to see if this particular combination is in the properties set
+ - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+
+    IOContext(io::IO, context::IOContext)
+
+Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
+"""
+IOContext
+
+IOContext(io::IOContext) = io
+IOContext(io::IO) = IOContext(io, ImmutableDict{Symbol,Any}())
+
+IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
+IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
+
+IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, value))
+IOContext(io::IOContext, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(io.dict, key, value))
+
+IOContext(io::IO, context::IO) = IOContext(io)
+IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
+
+show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
+
+pipe_reader(io::IOContext) = io.io
+pipe_writer(io::IOContext) = io.io
+lock(io::IOContext) = lock(io.io)
+unlock(io::IOContext) = unlock(io.io)
+
+in(key_value::Pair, io::IOContext) = in(key_value, io.dict, is)
+in(key_value::Pair, io::IO) = false
+haskey(io::IOContext, key) = haskey(io.dict, key)
+haskey(io::IO, key) = false
+getindex(io::IOContext, key) = getindex(io.dict, key)
+getindex(io::IO, key) = throw(KeyError(key))
+get(io::IOContext, key, default) = get(io.dict, key, default)
+get(io::IO, key, default) = default
+
+"    limit_output(io) -> Bool
+Output hinting for identifying contexts where the user requested a compact output"
+limit_output(::ANY) = _limit_output::Bool
+limit_output(io::IOContext) = get(io, :limit_output, _limit_output::Bool) === true
+_limit_output = false # delete with with_output_limit deprecation
+
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
+
 
 show(io::IO, x::ANY) = show_default(io, x)
 function show_default(io::IO, x::ANY)
@@ -11,37 +77,21 @@ function show_default(io::IO, x::ANY)
     print(io, '(')
     nf = nfields(t)
     if nf != 0 || t.size==0
-        recorded = false
-        shown_set = get(task_local_storage(), :SHOWNSET, nothing)
-        if shown_set === nothing
-            shown_set = ObjectIdDict()
-            task_local_storage(:SHOWNSET, shown_set)
-        end
-
-        try
-            if x in keys(shown_set)
-                print(io, "#= circular reference =#")
-            else
-                shown_set[x] = true
-                recorded = true
-
-                for i=1:nf
-                    f = fieldname(t, i)
-                    if !isdefined(x, f)
-                        print(io, undef_ref_str)
-                    else
-                        show(io, x.(f))
-                    end
-                    if i < nf
-                        print(io, ',')
-                    end
+        if (:SHOWN_SET => x) in io
+            print(io, "#= circular reference =#")
+        else
+            recur_io = IOContext(io, :SHOWN_SET => x)
+            for i=1:nf
+                f = fieldname(t, i)
+                if !isdefined(x, f)
+                    print(io, undef_ref_str)
+                else
+                    show(recur_io, x.(f))
+                end
+                if i < nf
+                    print(io, ',')
                 end
             end
-        catch e
-            rethrow(e)
-
-        finally
-            if recorded; delete!(shown_set, x); end
         end
     else
         nb = t.size
@@ -68,16 +118,11 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
 end
 
 function show(io::IO, f::Function)
-    if isgeneric(f)
-        if is_exported_from_stdlib(f.env.name, f.env.module) || f.env.module === Main
-            print(io, f.env.name)
-        else
-            print(io, f.env.module, ".", f.env.name)
-        end
-    elseif isdefined(f, :env) && isa(f.env,Symbol)
-        print(io, f.env)
+    mt = typeof(f).name.mt
+    if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+        print(io, mt.name)
     else
-        print(io, "(anonymous function)")
+        print(io, mt.module, ".", mt.name)
     end
 end
 
@@ -103,7 +148,7 @@ end
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (length(x.parameters) > 0 || x.name === Tuple.name) && x !== Tuple
+    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         print(io, '{')
         n = length(x.parameters)
         for i = 1:n
@@ -113,12 +158,6 @@ function show(io::IO, x::DataType)
         print(io, '}')
     end
 end
-
-showcompact(io::IO, x) = show(io, x)
-showcompact(x) = showcompact(STDOUT::IO, x)
-
-showcompact_lim(io, x) = _limit_output ? showcompact(io, x) : show(io, x)
-showcompact_lim(io, x::Number) = _limit_output ? showcompact(io, x) : print(io, x)
 
 macro show(exs...)
     blk = Expr(:block)
@@ -169,13 +208,14 @@ function show(io::IO, m::Module)
     end
 end
 
-function show(io::IO, l::LambdaStaticData)
+function show(io::IO, l::LambdaInfo)
     print(io, "AST(")
     show(io, uncompressed_ast(l))
     print(io, ")")
 end
 
-function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, compact=false, i1=1, l=length(itr))
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
+                          i1=1, l=length(itr))
     print(io, op)
     newline = true
     first = true
@@ -187,14 +227,12 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 multiline = false
             else
                 x = itr[i]
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
                 newline && multiline && println(io)
                 if !isbits(x) && is(x, itr)
                     print(io, "#= circular reference =#")
-                elseif compact
-                    showcompact_lim(io, x)
                 else
-                    show(io, x)
+                    showcompact_lim(io, x)
                 end
             end
             i += 1
@@ -215,7 +253,7 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
     print(io, cl)
 end
 
-function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, i1=1, n=typemax(Int))
+function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax(Int))
     print(io, op)
     state = start(itr)
     newline = true
@@ -227,7 +265,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, 
     if !done(itr,state)
         while true
             x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+            multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
             newline && multiline && println(io)
             if !isbits(x) && is(x, itr)
                 print(io, "#= circular reference =#")
@@ -328,6 +366,7 @@ isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
+const prec_decl = operator_precedence(:(::))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -342,23 +381,36 @@ is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
 unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
 
+function is_intrinsic_expr(x::ANY)
+    isa(x, IntrinsicFunction) && return true
+    if isa(x, GlobalRef)
+        x = x::GlobalRef
+        return (x.mod == Base && isdefined(Base, x.name) &&
+                isa(getfield(Base, x.name), IntrinsicFunction))
+    elseif isa(x, TopNode)
+        x = x::TopNode
+        return (isdefined(Base, x.name) &&
+                isa(getfield(Base, x.name), IntrinsicFunction))
+    end
+    return false
+end
+
 ## AST printing helpers ##
+
+typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty)
+function show_expr_type(io::IO, ty, emph)
     if is(ty, Function)
         print(io, "::F")
     elseif is(ty, IntrinsicFunction)
         print(io, "::I")
     else
-        emph = get(task_local_storage(), :TYPEEMPHASIZE, false)::Bool
         if emph && !isleaftype(ty)
             emphasize(io, "::$ty")
         else
-            if !is(ty, Any)
-                print(io, "::$ty")
-            end
+            print(io, "::$ty")
         end
     end
 end
@@ -442,7 +494,10 @@ show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.',
 
 function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
     print(io, ex.name)
-    show_expr_type(io, ex.typ)
+    emphstate = typeemphasize(io)
+    if emphstate || ex.typ !== Any
+        show_expr_type(io, ex.typ, emphstate)
+    end
 end
 
 function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
@@ -479,8 +534,17 @@ end
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
+    emphstate = typeemphasize(io)
     show_type = true
-    emphstate = get(task_local_storage(), :TYPEEMPHASIZE, false)
+    if (ex.head == :(=) ||
+        ex.head == :boundscheck ||
+        ex.head == :gotoifnot ||
+        ex.head == :return)
+        show_type = false
+    end
+    if !emphstate && ex.typ === Any
+        show_type = false
+    end
     # dot (i.e. "x.y")
     if is(head, :(.))
         show_unquoted(io, args[1], indent + indent_width)
@@ -519,7 +583,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         head !== :row && print(io, cl)
 
     # function call
-    elseif head == :call && nargs >= 1
+    elseif head === :call && nargs >= 1
         func = args[1]
         fname = isa(func,GlobalRef) ? func.name : func
         func_prec = operator_precedence(fname)
@@ -528,8 +592,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
-            show_type = task_local_storage(:TYPEEMPHASIZE, false)
+        if (in(ex.args[1], (GlobalRef(Base, :box), TopNode(:box), :throw)) ||
+            ismodulecall(ex) ||
+            (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
+            show_type = false
+        end
+        if show_type
+            prec = prec_decl
         end
 
         # scalar multiplication (i.e. "100x")
@@ -552,20 +621,23 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
-            if length(func_args) > 1
+            na = length(func_args)
+            if na == 2 || (na > 2 && func in (:+, :++, :*))
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
                     show_list(io, func_args, sep, indent, func_prec, true)
                 end
-            else
+            elseif na == 1
                 # 1-argument call to normally-binary operator
                 op, cl = expr_calls[head]
                 print(io, "(")
                 show_unquoted(io, func, indent)
                 print(io, ")")
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
+            else
+                show_call(io, head, func, func_args, indent)
             end
 
         # normal function (i.e. "f(x,y)")
@@ -705,18 +777,21 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[2], indent+indent_width)
 
     elseif is(head, :string)
-        a = map(args) do x
+        print(io, '"')
+        for x in args
             if !isa(x,AbstractString)
+                print(io, "\$(")
                 if isa(x,Symbol) && !(x in quoted_syms)
-                    string("\$(", x, ")")
+                    print(io, x)
                 else
-                    string("\$(", sprint(show_unquoted,x), ")")
+                    show_unquoted(io, x)
                 end
+                print(io, ")")
             else
-                sprint(print_escaped, x, "\"\$")
+                print_escaped(io, x, "\"\$")
             end
         end
-        print(io, '"', a..., '"')
+        print(io, '"')
 
     elseif (is(head, :&)#= || is(head, :$)=#) && length(args) == 1
         print(io, head)
@@ -728,7 +803,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # transpose
     elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1
-        show_unquoted(io, args[1])
+        if isa(args[1], Symbol)
+            show_unquoted(io, args[1])
+        else
+            print(io, "(")
+            show_unquoted(io, args[1])
+            print(io, ")")
+        end
         print(io, head)
 
     elseif is(head, :import) || is(head, :importall) || is(head, :using)
@@ -749,9 +830,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # print anything else as "Expr(head, args...)"
     else
         show_type = false
-        emph = get(task_local_storage(), :TYPEEMPHASIZE, false)::Bool &&
-               (ex.head === :lambda || ex.head == :method)
-        task_local_storage(:TYPEEMPHASIZE, emph)
+        if emphstate && ex.head !== :lambda && ex.head !== :method
+            io = IOContext(io, :TYPEEMPHASIZE => false)
+            emphstate = false
+        end
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -760,14 +842,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-    if (ex.head == :(=) ||
-        ex.head == :boundscheck ||
-        ex.head == :gotoifnot ||
-        ex.head == :return)
-        show_type = false
-    end
-    show_type && show_expr_type(io, ex.typ)
-    task_local_storage(:TYPEEMPHASIZE, emphstate)
+    show_type && show_expr_type(io, ex.typ, emphstate)
 end
 
 function ismodulecall(ex::Expr)
@@ -775,6 +850,26 @@ function ismodulecall(ex::Expr)
         isa(ex.args[2], Symbol) &&
         isdefined(current_module(), ex.args[2]) &&
         isa(getfield(current_module(), ex.args[2]), Module)
+end
+
+function show(io::IO, tv::TypeVar)
+    tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
+    if isa(tvar_env, Vector{Any})
+        have_env = true
+        in_env = (tv in tvar_env::Vector{Any})
+    else
+        have_env = false
+        in_env = true
+    end
+    if !in_env && !is(tv.lb, Bottom)
+        show(io, tv.lb)
+        print(io, "<:")
+    end
+    write(io, tv.name)
+    if have_env ? !in_env : !is(tv.ub, Any)
+        print(io, "<:")
+        show(io, tv.ub)
+    end
 end
 
 # dump & xdump - structured tree representation like R's str()
@@ -847,7 +942,7 @@ xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
 # Types
 xdump(fn::Function, io::IO, x::Union, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
-    println(io, x, "::", typeof(x), " ", " <: ", super(x))
+    println(io, x, "::", typeof(x), " ", " <: ", supertype(x))
     fields = fieldnames(x)
     if n > 0
         for idx in 1:min(10, length(fields))
@@ -887,14 +982,14 @@ function dumptype(io::IO, x, n::Int, indent)
                          any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
                         targs = join(t.parameters, ",")
                         println(io, indent, "  ", s,
-                                length(t.parameters) > 0 ? "{$targs}" : "",
+                                !isempty(t.parameters) ? "{$targs}" : "",
                                 " = ", t)
                     end
                 elseif isa(t, Union)
                     if any(tt -> string(x.name) == typargs(tt), t.types)
                         println(io, indent, "  ", s, " = ", t)
                     end
-                elseif isa(t, DataType) && super(t).name == x.name
+                elseif isa(t, DataType) && supertype(t).name == x.name
                     # type aliases
                     if string(s) != string(t.name)
                         println(io, indent, "  ", s, " = ", t.name)
@@ -919,7 +1014,7 @@ xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
 xdump(fn::Function, io::IO, args...) = throw(ArgumentError("invalid arguments to xdump"))
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
+xdump(args...) = xdump(xdump, IOContext(STDOUT::IO, :limit_output => true), args...)
 xdump(arg::IO) = xdump(xdump, STDOUT::IO, arg)
 
 # Here are methods specifically for dump:
@@ -931,7 +1026,7 @@ dump(io::IO, x::AbstractString, n::Int, indent) =
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 dump(io::IO, args...) = throw(ArgumentError("invalid arguments to dump"))
 dump(arg::IO) = xdump(dump, STDOUT::IO, arg)
-dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
+dump(args...) = dump(IOContext(STDOUT::IO, :limit_output => true), args...)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(io, typeof(x), " len ", length(x))
@@ -956,48 +1051,66 @@ dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-alignment(x::Any) = (0, length(sprint(showcompact_lim, x)))
-alignment(x::Number) = (length(sprint(showcompact_lim, x)), 0)
-alignment(x::Integer) = (length(sprint(showcompact_lim, x)), 0)
-function alignment(x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact_lim, x))
-    m === nothing ? (length(sprint(showcompact_lim, x)), 0) :
+"""
+`alignment(X)` returns a tuple (left,right) showing how many characters are
+needed on either side of an alignment feature such as a decimal point.
+"""
+alignment(io::IO, x::Any) = (0, length(sprint(0, showcompact_lim, x, env=io)))
+alignment(io::IO, x::Number) = (length(sprint(0, showcompact_lim, x, env=io)), 0)
+"`alignment(42)` yields (2,0)"
+alignment(io::IO, x::Integer) = (length(sprint(0, showcompact_lim, x, env=io)), 0)
+"`alignment(4.23)` yields (1,3) for `4` and `.23`"
+function alignment(io::IO, x::Real)
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(0, showcompact_lim, x, env=io))
+    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
-function alignment(x::Complex)
-    m = match(r"^(.*[\+\-])(.*)$", sprint(showcompact_lim, x))
-    m === nothing ? (length(sprint(showcompact_lim, x)), 0) :
+"`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
+function alignment(io::IO, x::Complex)
+    m = match(r"^(.*[\+\-])(.*)$", sprint(0, showcompact_lim, x, env=io))
+    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
-function alignment(x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(showcompact_lim, x))
-    m === nothing ? (length(sprint(showcompact_lim, x)), 0) :
+function alignment(io::IO, x::Rational)
+    m = match(r"^(.*?/)(/.*)$", sprint(0, showcompact_lim, x, env=io))
+    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
 const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
+"""
+`alignment(X, rows, cols, cols_if_complete, cols_otherwise, sep)` returns the
+alignment for specified parts of array `X`, returning the (left,right) info.
+It will look in X's `rows`, `cols` (both lists of indices)
+and figure out what's needed to be fully aligned, for example looking all
+the way down a column and finding out the maximum size of each element.
+Parameter `sep::Integer` is number of spaces to put between elements.
+`cols_if_complete` and `cols_otherwise` indicate screen width to use.
+Alignment is reported as a vector of (left,right) tuples, one for each
+column going across the screen.
+"""
 function alignment(
-    X::AbstractVecOrMat,
+    io::IO, X::AbstractVecOrMat,
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
-    a = []
-    for j in cols
+    a = Tuple{Int, Int}[]
+    for j in cols # need to go down each column one at a time
         l = r = 0
-        for i in rows
+        for i in rows # plumb down and see what largest element sizes are
             if isassigned(X,i,j)
-                aij = alignment(X[i,j])
+                aij = alignment(io, X[i,j])
             else
                 aij = undef_ref_alignment
             end
-            l = max(l, aij[1])
-            r = max(r, aij[2])
+            l = max(l, aij[1]) # left characters
+            r = max(r, aij[2]) # right characters
         end
-        push!(a, (l, r))
+        push!(a, (l, r)) # one tuple per column of X, pruned to screen width
         if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
-            pop!(a)
+            pop!(a) # remove this latest tuple if we're already beyond screen width
             break
         end
     end
@@ -1009,27 +1122,50 @@ function alignment(
     return a
 end
 
+"""
+Unexported convenience function used in body of `replace_in_print_matrix`
+methods. By default returns a string of the same width as original with a
+centered cdot, used in printing of structural zeros of structured matrices.
+Accept keyword args `c` for alternate single character marker.
+"""
+function replace_with_centered_mark(s::AbstractString;c::Char = '⋅')
+    N = length(s)
+    return join(setindex!([utf8(" ") for i=1:N],string(c),ceil(Int,N/2)))
+end
+
+"""
+`print_matrix_row(io, X, A, i, cols, sep)` produces the aligned output for
+a single matrix row X[i, cols] where the desired list of columns is given.
+The corresponding alignment A is used, and the separation between elements
+is specified as string sep.
+`print_matrix_row` will also respect compact output for elements.
+"""
 function print_matrix_row(io::IO,
     X::AbstractVecOrMat, A::Vector,
-    i::Integer, cols::AbstractVector, sep::AbstractString
-)
+    i::Integer, cols::AbstractVector, sep::AbstractString)
     for k = 1:length(A)
         j = cols[k]
-        if isassigned(X,i,j)
+        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
-            a = alignment(x)
-            sx = sprint(showcompact_lim, x)
+            a = alignment(io, x)
+            sx = sprint(0, showcompact_lim, x, env=io)
         else
             a = undef_ref_alignment
             sx = undef_ref_str
         end
-        l = repeat(" ", A[k][1]-a[1])
+        l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
         r = repeat(" ", A[k][2]-a[2])
-        print(io, l, sx, r)
+        prettysx = replace_in_print_matrix(X,i,j,sx)
+        print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
     end
 end
 
+"""
+`print_matrix_vdots` is used to show a series of vertical ellipsis instead
+of a bunch of rows for long matrices. Not only is the string vdots shown
+but it also repeated every M elements if desired.
+"""
 function print_matrix_vdots(io::IO,
     vdots::AbstractString, A::Vector, sep::AbstractString, M::Integer, m::Integer
 )
@@ -1046,79 +1182,102 @@ function print_matrix_vdots(io::IO,
     end
 end
 
+"""
+`print_matrix(io, X)` composes an entire matrix, taking into account the screen size.
+If X is too big, it will be nine-sliced with vertical, horizontal, or diagonal
+ellipsis inserted as appropriate.
+Optional parameters are screen size tuple sz such as (24,80),
+string pre prior to the matrix (e.g. opening bracket), which will cause
+a corresponding same-size indent on following rows,
+string post on the end of the last row of the matrix.
+Also options to use different ellipsis characters hdots,
+vdots, ddots. These are repeated every hmod or vmod elements.
+"""
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      sz::Tuple{Integer, Integer} = (s = tty_size(); (s[1]-4, s[2])),
-                      pre::AbstractString = " ",
-                      sep::AbstractString = "  ",
-                      post::AbstractString = "",
+                      pre::AbstractString = " ",  # pre-matrix string
+                      sep::AbstractString = "  ", # separator between elements
+                      post::AbstractString = "",  # post-matrix string
                       hdots::AbstractString = "  \u2026  ",
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    rows, cols = sz
-    cols -= length(pre) + length(post)
-    presp = repeat(" ", length(pre))
+    if !limit_output(io)
+        screenheight = screenwidth = typemax(Int)
+    else
+        sz = displaysize(io)
+        screenheight, screenwidth = sz[1] - 4, sz[2]
+    end
+    screenwidth -= length(pre) + length(post)
+    presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
-    ss = length(sep)
+    sepsize = length(sep)
     m, n = size(X,1), size(X,2)
-    if m <= rows # rows fit
-        A = alignment(X,1:m,1:n,cols,cols,ss)
-        if n <= length(A) # rows and cols fit
-            for i = 1:m
+    # To figure out alignments, only need to look at as many rows as could
+    # fit down screen. If screen has at least as many rows as A, look at A.
+    # If not, then we only need to look at the first and last chunks of A,
+    # each half a screen height in size.
+    halfheight = div(screenheight,2)
+    rowsA = m <= screenheight ? (1:m) : [1:halfheight; m-div(screenheight-1,2)+1:m]
+    # Similarly for columns, only necessary to get alignments for as many
+    # columns as could conceivably fit across the screen
+    maxpossiblecols = div(screenwidth, 1+sepsize)
+    colsA = n <= maxpossiblecols ? (1:n) : [1:maxpossiblecols; (n-maxpossiblecols+1):n]
+    A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
+    # Nine-slicing is accomplished using print_matrix_row repeatedly
+    if m <= screenheight # rows fit vertically on screen
+        if n <= length(A) # rows and cols fit so just print whole matrix in one piece
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,A,i,1:n,sep)
+                print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == m ? post : postsp)
                 if i != m; println(io, ); end
             end
-        else # rows fit, cols don't
-            c = div(cols-length(hdots)+1,2)+1
-            R = reverse(alignment(X,1:m,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
-            L = alignment(X,1:m,1:n,c,c,ss)
-            for i = 1:m
+        else # rows fit down screen but cols don't, so need horizontal ellipsis
+            c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize)) # alignments for right
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,L,i,1:length(L),sep)
+                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
                 print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
+                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == m ? post : postsp)
                 if i != m; println(io, ); end
             end
         end
-    else # rows don't fit
-        t = div(rows,2)
-        I = [1:t; m-div(rows-1,2)+1:m]
-        A = alignment(X,I,1:n,cols,cols,ss)
-        if n <= length(A) # rows don't fit, cols do
-            for i in I
+    else # rows don't fit so will need vertical ellipsis
+        if n <= length(A) # rows don't fit, cols do, so only vertical ellipsis
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,A,i,1:n,sep)
+                print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == m ? post : postsp)
-                if i != I[end]; println(io, ); end
-                if i == t
+                if i != rowsA[end]; println(io, ); end
+                if i == halfheight
                     print(io, i == 1 ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
                     println(io, i == m ? post : postsp)
                 end
             end
-        else # neither rows nor cols fit
-            c = div(cols-length(hdots)+1,2)+1
-            R = reverse(alignment(X,I,n:-1:1,c,c,ss))
-            c = cols - sum(map(sum,R)) - (length(R)-1)*ss - length(hdots)
-            L = alignment(X,I,1:n,c,c,ss)
-            r = mod((length(R)-n+1),vmod)
-            for i in I
+        else # neither rows nor cols fit, so use all 3 kinds of dots
+            c = div(screenwidth-length(hdots)+1,2)+1
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize))
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize)
+            r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
+            for i in rowsA
                 print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,L,i,1:length(L),sep)
+                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
                 print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,R,i,n-length(R)+1:n,sep)
+                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == m ? post : postsp)
-                if i != I[end]; println(io, ); end
-                if i == t
+                if i != rowsA[end]; println(io, ); end
+                if i == halfheight
                     print(io, i == 1 ? pre : presp)
-                    print_matrix_vdots(io, vdots,L,sep,vmod,1)
+                    print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
-                    print_matrix_vdots(io, vdots,R,sep,vmod,r)
+                    print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
                     println(io, i == m ? post : postsp)
                 end
             end
@@ -1126,16 +1285,29 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     end
 end
 
-summary(x) = string(typeof(x))
+"""
+    summary(x)
 
-dims2string(d) = length(d) == 0 ? "0-dimensional" :
+Return a string giving a brief description of a value. By default returns
+`string(typeof(x))`, e.g. `Int64`.
+
+For arrays, returns a string of size and type info,
+e.g. `10-element Array{Int64,1}`.
+"""
+summary(x) = string(typeof(x)) # e.g. Int64
+
+# sizes such as 0-dimensional, 4-dimensional, 2x3
+dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), 'x')
 
+# anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(a::AbstractArray) =
     string(dims2string(size(a)), " ", typeof(a))
 
-function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
+# n-dimensional arrays
+function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
+    limit::Bool = limit_output(io)
     if isempty(a)
         return
     end
@@ -1176,11 +1348,9 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
     end
 end
 
-# global flag for limiting output
-# TODO: this should be replaced with a better mechanism. currently it is only
-# for internal use in showing arrays.
-_limit_output = false
-
+"""
+`print_matrix_repr(io, X)` prints matrix X with opening and closing square brackets.
+"""
 function print_matrix_repr(io, X::AbstractArray)
     compact, prefix = array_eltype_show_how(X)
     prefix *= "["
@@ -1209,9 +1379,7 @@ end
 # array output. Not sure I want to do it this way.
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
-                   header::Bool=true, limit::Bool=_limit_output,
-                   sz = (s = tty_size(); (s[1]-4, s[2])), repr=false)
-    rows, cols = sz
+                   header::Bool=true, repr=false)
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
@@ -1222,61 +1390,46 @@ function showarray(io::IO, X::AbstractArray;
                 return print(io, undef_ref_str)
             end
         end
-        if !limit
-            rows = cols = typemax(Int)
-            sz = (rows, cols)
-        end
         if repr
-            if ndims(X)<=2
+            if ndims(X) <= 2
                 print_matrix_repr(io, X)
             else
-                show_nd(io, X, limit, print_matrix_repr, false)
+                show_nd(io, X, print_matrix_repr, false)
             end
         else
             punct = (" ", "  ", "")
-            if ndims(X)<=2
-                print_matrix(io, X, sz, punct...)
+            if ndims(X) <= 2
+                print_matrix(io, X, punct...)
             else
-                show_nd(io, X, limit,
-                        (io,slice)->print_matrix(io,slice,sz,punct...),
+                show_nd(io, X,
+                        (io, slice) -> print_matrix(io, slice, punct...),
                         !repr)
             end
         end
     end
 end
 
-show(io::IO, X::AbstractArray) = showarray(io, X, header=_limit_output, repr=!_limit_output)
-
-function with_output_limit(thk, lim=true)
-    global _limit_output
-    last = _limit_output
-    _limit_output = lim
-    try
-        thk()
-    finally
-        _limit_output = last
-    end
-end
+show(io::IO, X::AbstractArray) = showarray(io, X, header=limit_output(io), repr=!limit_output(io))
 
 showall(x) = showall(STDOUT, x)
 function showall(io::IO, x)
-    if _limit_output==false
+    if !limit_output(io)
         show(io, x)
     else
-        with_output_limit(false) do
-            show(io, x)
-        end
+        show(IOContext(io, :limit_output => false), x)
     end
 end
 
-showlimited(x) = showlimited(STDOUT, x)
-function showlimited(io::IO, x)
-    if _limit_output==true
+# TODO: deprecated. remove this once methods for showcompact are gone
+showcompact_lim(io, x) = limit_output(io) ? showcompact(io, x) : show(io, x)
+showcompact_lim(io, x::Number) = limit_output(io) ? showcompact(io, x) : print(io, x)
+
+showcompact(x) = showcompact(STDOUT, x)
+function showcompact(io::IO, x)
+    if limit_output(io)
         show(io, x)
     else
-        with_output_limit(true) do
-            show(io, x)
-        end
+        show(IOContext(io, :limit_output => true), x)
     end
 end
 
@@ -1295,12 +1448,16 @@ end
 
 function show_vector(io::IO, v, opn, cls)
     compact, prefix = array_eltype_show_how(v)
+    limited = limit_output(io)
+    if limited && !compact
+        io = IOContext(io, :limit_output => false)
+    end
     print(io, prefix)
-    if _limit_output && length(v) > 20
-        show_delim_array(io, v, opn, ",", "", false, compact, 1, 10)
+    if limited && length(v) > 20
+        show_delim_array(io, v, opn, ",", "", false, 1, 10)
         print(io, "  \u2026  ")
         n = length(v)
-        show_delim_array(io, v, "", ",", cls, false, compact, n-9, 10)
+        show_delim_array(io, v, "", ",", cls, false, n-9, 10)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
@@ -1326,7 +1483,7 @@ print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
 print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
-    length(B) == 0 && return
+    isempty(B) && return
     Bc = B.chunks
     for i = 1:length(Bc)-1
         print_bit_chunk(io, Bc[i])

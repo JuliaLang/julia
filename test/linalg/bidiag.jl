@@ -8,16 +8,22 @@ n = 10 #Size of test matrix
 srand(1)
 
 debug && println("Bidiagonal matrices")
-for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     debug && println("elty is $(elty), relty is $(relty)")
-    dv = convert(Vector{elty}, randn(n))
-    ev = convert(Vector{elty}, randn(n-1))
-    b = convert(Matrix{elty}, randn(n, 2))
-    c = convert(Matrix{elty}, randn(n, n))
-    if (elty <: Complex)
-        dv += im*convert(Vector{elty}, randn(n))
-        ev += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Matrix{elty}, randn(n, 2))
+    if relty <: AbstractFloat
+        dv = convert(Vector{elty}, randn(n))
+        ev = convert(Vector{elty}, randn(n-1))
+        if (elty <: Complex)
+            dv += im*convert(Vector{elty}, randn(n))
+            ev += im*convert(Vector{elty}, randn(n-1))
+        end
+    elseif relty <: Integer
+        dv = convert(Vector{elty}, rand(1:10, n))
+        ev = convert(Vector{elty}, rand(1:10, n-1))
+        if (elty <: Complex)
+            dv += im*convert(Vector{elty}, rand(1:10, n))
+            ev += im*convert(Vector{elty}, rand(1:10, n-1))
+        end
     end
 
     debug && println("Test constructors")
@@ -26,11 +32,21 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
     @test_throws ArgumentError Bidiagonal(dv,ev)
 
-    #getindex and size
-    BD = Bidiagonal(dv,ev,true)
+    debug && println("getindex, setindex!, size, and similar")
+    BD = Bidiagonal(dv, ev, true)
     @test_throws BoundsError BD[n+1,1]
+    @test BD[2,2] == dv[2]
+    @test BD[2,3] == ev[2]
+    @test_throws ArgumentError BD[2,1] = 1
+    @test_throws ArgumentError BD[3,1] = 1
+    cBD = copy(BD)
+    cBD[2,2] = BD[2,2]
+    @test BD == cBD
     @test_throws ArgumentError size(BD,0)
     @test size(BD,3) == 1
+    @test isa(similar(BD), Bidiagonal{elty})
+    @test isa(similar(BD, Int), Bidiagonal{Int})
+    @test isa(similar(BD, Int, (3,2)), Matrix{Int})
 
     debug && println("show")
     dstring = sprint(Base.print_matrix,BD.dv')
@@ -84,44 +100,72 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test triu!(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,ev,'U')
         @test_throws ArgumentError triu!(Bidiagonal(dv,ev,'U'),n+1)
 
-        debug && println("Linear solver")
+        if relty <: AbstractFloat
+            c = convert(Matrix{elty}, randn(n,n))
+            b = convert(Matrix{elty}, randn(n, 2))
+            if (elty <: Complex)
+                b += im*convert(Matrix{elty}, randn(n, 2))
+            end
+        elseif relty <: Integer
+            c = convert(Matrix{elty}, rand(1:10, n, n))
+            b = convert(Matrix{elty}, rand(1:10, n, 2))
+            if (elty <: Complex)
+                b += im*convert(Matrix{elty}, rand(1:10, n, 2))
+            end
+        end
         Tfull = full(T)
         condT = cond(map(Complex128,Tfull))
-        x = T \ b
-        tx = Tfull \ b
-        @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
-        @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
-        @test_throws DimensionMismatch T \ ones(elty,n+1,2)
-        @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
-        @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+        promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
         if relty != BigFloat
             x = T.'\c.'
             tx = Tfull.' \ c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            elty <: AbstractFloat && @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T.'\b.'
             x = T'\c.'
             tx = Tfull' \ c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T'\b.'
             x = T\c.'
             tx = Tfull\c.'
-            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             @test_throws DimensionMismatch T\b.'
+        end
+        @test_throws DimensionMismatch T \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
+        @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+        let bb = b, cc = c
+            for atype in ("Array", "SubArray")
+                if atype == "Array"
+                    b = bb
+                    c = cc
+                else
+                    b = sub(bb, 1:n)
+                    c = sub(cc, 1:n, 1:2)
+                end
+            end
+            debug && println("Linear solver")
+            x = T \ b
+            tx = Tfull \ b
+            @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
+            @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+            debug && println("Generic Mat-vec ops")
+            @test_approx_eq T*b Tfull*b
+            @test_approx_eq T'*b Tfull'*b
+            if relty != BigFloat # not supported by pivoted QR
+                @test_approx_eq T/b' Tfull/b'
+            end
         end
 
         debug && println("Round,float,trunc,ceil")
         if elty <: BlasReal
             @test floor(Int,T) == Bidiagonal(floor(Int,T.dv),floor(Int,T.ev),T.isupper)
+            @test isa(floor(Int,T), Bidiagonal)
             @test trunc(Int,T) == Bidiagonal(trunc(Int,T.dv),trunc(Int,T.ev),T.isupper)
+            @test isa(trunc(Int,T), Bidiagonal)
             @test round(Int,T) == Bidiagonal(round(Int,T.dv),round(Int,T.ev),T.isupper)
+            @test isa(round(Int,T), Bidiagonal)
             @test ceil(Int,T) == Bidiagonal(ceil(Int,T.dv),ceil(Int,T.ev),T.isupper)
-        end
-
-        debug && println("Generic Mat-vec ops")
-        @test_approx_eq T*dv Tfull*dv
-        @test_approx_eq T'*dv Tfull'*dv
-        if relty != BigFloat # not supported by pivoted QR
-            @test_approx_eq T/dv' Tfull/dv'
+            @test isa(ceil(Int,T), Bidiagonal)
         end
 
         debug && println("Diagonals")
@@ -129,11 +173,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_throws ArgumentError diag(T,n+1)
 
         debug && println("Eigensystems")
-        d1, v1 = eig(T)
-        d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-        @test_approx_eq isupper?d1:reverse(d1) d2
-        if elty <: Real
-            Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+        if relty <: AbstractFloat
+            d1, v1 = eig(T)
+            d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
+            @test_approx_eq isupper?d1:reverse(d1) d2
+            if elty <: Real
+                Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+            end
         end
 
         debug && println("Singular systems")
@@ -157,8 +203,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.isupper)
         @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.isupper)
         for isupper2 in (true, false)
-            dv = convert(Vector{elty}, randn(n))
-            ev = convert(Vector{elty}, randn(n-1))
+            dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
+            ev = convert(Vector{elty}, relty <: AbstractFloat ? randn(n-1) : rand(1:10, n-1))
             T2 = Bidiagonal(dv, ev, isupper2)
             Tfull2 = full(T2)
             for op in (+, -, *)
@@ -180,9 +226,13 @@ let A = Bidiagonal([1,2,3], [0,0], true)
     @test isdiag(A)
 end
 
+# test construct from range
+@test Bidiagonal(1:3, 1:2, true) == [1 1 0; 0 2 2; 0 0 3]
+
 #test promote_rule
 A = Bidiagonal(ones(Float32,10),ones(Float32,9),true)
 B = rand(Float64,10,10)
 C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
+@test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
 @test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
 @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))

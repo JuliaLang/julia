@@ -85,16 +85,15 @@ end
 
 #############################################################################
 
-function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
-    n = length(x)
+function unsafe_write(b::Base64EncodePipe, x::Ptr{UInt8}, n::UInt)
     s = 1 # starting index
     # finish any cached data to write:
     if b.nb == 1
         if n >= 2
-            write(b.io, b64(b.b0, x[1], x[2])...)
+            write(b.io, b64(b.b0, unsafe_load(x, 1), unsafe_load(x, 2))...)
             s = 3
         elseif n == 1
-            b.b1 = x[1]
+            b.b1 = unsafe_load(x, 1)
             b.nb = 2
             return
         else
@@ -102,7 +101,7 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
         end
     elseif b.nb == 2
         if n >= 1
-            write(b.io, b64(b.b0, b.b1, x[1])...)
+            write(b.io, b64(b.b0, b.b1, unsafe_load(x, 1))...)
             s = 2
         else
             return
@@ -110,16 +109,16 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
     end
     # write all groups of three bytes:
     while s + 2 <= n
-        write(b.io, b64(x[s], x[s+1], x[s+2])...)
+        write(b.io, b64(unsafe_load(x, s), unsafe_load(x, s + 1), unsafe_load(x, s + 2))...)
         s += 3
     end
     # cache any leftover bytes:
     if s + 1 == n
-        b.b0 = x[s]
-        b.b1 = x[s+1]
+        b.b0 = unsafe_load(x, s)
+        b.b1 = unsafe_load(x, s + 1)
         b.nb = 2
     elseif s == n
-        b.b0 = x[s]
+        b.b0 = unsafe_load(x, s)
         b.nb = 1
     else
         b.nb = 0
@@ -179,7 +178,7 @@ type Base64DecodePipe <: IO
 end
 
 function read(b::Base64DecodePipe, t::Type{UInt8})
-    if length(b.cache) > 0
+    if !isempty(b.cache)
         return shift!(b.cache)
     else
         empty!(b.encvec)
@@ -193,14 +192,14 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
     end
 end
 
-eof(b::Base64DecodePipe) = length(b.cache) == 0 && eof(b.io)
+eof(b::Base64DecodePipe) = isempty(b.cache) && eof(b.io)
 close(b::Base64DecodePipe) = nothing
 
 # Decodes a base64-encoded string
 function base64decode(s)
     b = IOBuffer(s)
     try
-        return readbytes(Base64DecodePipe(b))
+        return read(Base64DecodePipe(b))
     finally
         close(b)
     end

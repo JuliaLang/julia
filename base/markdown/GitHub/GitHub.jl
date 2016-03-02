@@ -20,7 +20,11 @@ function fencedcode(stream::IO, block::MD)
             line_start = position(stream)
             if startswith(stream, string(ch) ^ n)
                 if !startswith(stream, string(ch))
-                    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    if flavor == "math"
+                        push!(block, LaTeX(takebuf_string(buffer) |> chomp))
+                    else
+                        push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    end
                     return true
                 else
                     seek(stream, line_start)
@@ -57,5 +61,5 @@ end
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
                 github_table, github_paragraph,
 
-                linebreak, escapes, en_dash, inline_code, asterisk_bold,
-                asterisk_italic, image, link]
+                linebreak, escapes, en_dash, inline_tex, inline_code, asterisk_bold,
+                asterisk_italic, image, footnote, link]

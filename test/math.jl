@@ -13,6 +13,17 @@
 @test clamp(4.0, 1, 3) == 3.0
 
 @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+@test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+@test !(pi == e)
+@test !(e == 1//2)
+@test 1//2 <= e
+@test big(1//2) < e
+@test e < big(20//6)
+@test e^pi == exp(pi)
+@test e^2 == exp(2)
+@test e^2.4 == exp(2.4)
+@test e^(2//3) == exp(2//3)
 
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
@@ -108,6 +119,7 @@ for T in (Float32, Float64)
     @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
     @test isequal(hypot(T(3),T(4)), T(5))
     @test isequal(log(T(1)), T(0))
+    @test isequal(log(e,T(1)), T(0))
     @test_approx_eq_eps log(T(e)) T(1) eps(T)
     @test isequal(log10(T(1)), T(0))
     @test isequal(log10(T(10)), T(1))
@@ -157,13 +169,26 @@ for T in (Float32, Float64)
     @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
     @test_approx_eq tan(x) sin(x)/cos(x)
     @test_approx_eq tanh(x) sinh(x)/cosh(x)
+
+    #Edge cases
+    @test isinf(log(zero(T)))
+    @test isnan(log(convert(T,NaN)))
+    @test_throws DomainError log(-one(T))
+    @test isinf(log1p(-one(T)))
+    @test isnan(log1p(convert(T,NaN)))
+    @test_throws DomainError log1p(convert(T,-2.0))
 end
+@test_approx_eq exp10(5) exp10(5.0)
+@test_approx_eq exp2(Float16(2.)) exp2(2.)
+@test log(e) == 1
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
     @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
     @test_approx_eq rad2deg([pi/T(4), pi/T(3)]) [45, 60]
     @test_approx_eq rad2deg(T(1)*pi) 180
+    @test_approx_eq rad2deg(T(1)) rad2deg(true)
+    @test_approx_eq deg2rad(T(1)) deg2rad(true)
 end
 
 # degree-based trig functions
@@ -186,7 +211,6 @@ for T = (Float32,Float64,Rational{Int})
     @test cosd(convert(T,-90))::fT === zero(fT)
     @test cosd(convert(T,-270))::fT === zero(fT)
 
-
     for x = -3:0.3:3
         @test_approx_eq_eps sinpi(convert(T,x))::fT convert(fT,sin(pi*x)) eps(pi*convert(fT,x))
         @test_approx_eq_eps cospi(convert(T,x))::fT convert(fT,cos(pi*x)) eps(pi*convert(fT,x))
@@ -198,21 +222,38 @@ for T = (Float32,Float64,Rational{Int})
     T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
     @test sinpi(convert(T,-1.0))::fT === -zero(fT)
     @test sinpi(convert(T,-2.0))::fT === -zero(fT)
+    @test_throws DomainError sinpi(convert(T,Inf))
 
     @test cospi(convert(T,0.5))::fT === zero(fT)
     @test cospi(convert(T,1.5))::fT === zero(fT)
     @test cospi(convert(T,-0.5))::fT === zero(fT)
     @test cospi(convert(T,-1.5))::fT === zero(fT)
+    @test_throws DomainError cospi(convert(T,Inf))
 
     # check exact values
     @test sind(convert(T,30)) == 0.5
     @test cosd(convert(T,60)) == 0.5
     @test sind(convert(T,150)) == 0.5
     @test sinpi(one(T)/convert(T,6)) == 0.5
+    @test_throws DomainError sind(convert(T,Inf))
+    @test_throws DomainError cosd(convert(T,Inf))
     T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
     T == Rational{Int} && @test sinpi(5//6) == 0.5
 end
 
+@test sinpi(1) == 0
+@test sinpi(-1) == -0
+@test cospi(1) == -1
+@test cospi(2) == 1
+
+@test sinc(1) == 0
+@test sinc(complex(1,0)) == 0
+@test sinc(0) == 1
+@test sinc(Inf) == 0
+@test cosc(1) == -1
+@test cosc(0) == 0
+@test cosc(complex(1,0)) == -1
+@test cosc(Inf) == 0
 
 # check type stability
 for T = (Float32,Float64,BigFloat)
@@ -221,11 +262,14 @@ for T = (Float32,Float64,BigFloat)
     end
 end
 
-
 # error functions
+@test_approx_eq erf(Float16(1)) 0.84270079294971486934
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
+@test_approx_eq erfc(Float16(1)) 0.15729920705028513066
 @test_approx_eq erfcx(1) 0.42758357615580700442
+@test_approx_eq erfcx(Float32(1)) 0.42758357615580700442
+@test_approx_eq erfcx(Complex64(1)) 0.42758357615580700442
 @test_approx_eq erfi(1) 1.6504257587975428760
 @test_approx_eq erfinv(0.84270079294971486934) 1
 @test_approx_eq erfcinv(0.15729920705028513066) 1
@@ -251,7 +295,7 @@ for elty in [Float32,Float64]
     end
     @test erfinv(one(elty)) == Inf
     @test erfinv(-one(elty)) == -Inf
-    @test_throws DomainError erfinv(2.0*one(elty))
+    @test_throws DomainError erfinv(convert(elty,2.0))
 
     @test erfcinv(zero(elty)) == Inf
     @test_throws DomainError erfcinv(-one(elty))
@@ -280,6 +324,7 @@ for elty in [Complex64,Complex128]
     @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
     @test_throws ArgumentError airyx(5,z)
 end
+@test_throws MethodError airy(complex(big(1.0)))
 
 # bessely0, bessely1, besselj0, besselj1
 @test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
@@ -295,6 +340,11 @@ end
 @test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
 @test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
 
+@test_throws MethodError besselj(1.2,big(1.0))
+@test_throws MethodError besselj(1,complex(big(1.0)))
+@test_throws MethodError besseljx(1,big(1.0))
+@test_throws MethodError besseljx(1,complex(big(1.0)))
+
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 @test_approx_eq besselh(3,1,3) true_h133
@@ -303,6 +353,10 @@ true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 @test_approx_eq besselh(-3,2,3) -conj(true_h133)
 @test_throws Base.Math.AmosException besselh(1,0)
 
+@test_throws MethodError besselh(1,big(1.0))
+@test_throws MethodError besselh(1,complex(big(1.0)))
+@test_throws MethodError besselhx(1,big(1.0))
+@test_throws MethodError besselhx(1,complex(big(1.0)))
 
 # besseli
 true_i33 = 0.95975362949600785698
@@ -312,6 +366,12 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(-3,-3) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
 @test_throws DomainError besseli(0.4,-1.0)
+
+@test_throws MethodError besseli(1,big(1.0))
+@test_throws MethodError besseli(1,complex(big(1.0)))
+@test_throws MethodError besselix(1,big(1.0))
+@test_throws MethodError besselix(1,complex(big(1.0)))
+
 
 # besselj
 @test besselj(0,0) == 1
@@ -327,12 +387,20 @@ j33 = besselj(3,3.)
 @test besselj(-3,-3) == j33
 @test besselj(-3,3) == -j33
 @test besselj(3,-3) == -j33
+@test besselj(3,3f0) ≈ j33
+@test besselj(3,complex(3.)) ≈ j33
+@test besselj(3,complex(3f0)) ≈ j33
+@test besselj(3,complex(3)) ≈ j33
 
 j43 = besselj(4,3.)
 @test besselj(4,3) == j43
 @test besselj(-4,-3) == j43
 @test besselj(-4,3) == j43
 @test besselj(4,-3) == j43
+@test besselj(4,3f0) ≈ j43
+@test besselj(4,complex(3.)) ≈ j43
+@test besselj(4,complex(3f0)) ≈ j43
+@test besselj(4,complex(3)) ≈ j43
 
 @test_approx_eq j33 0.30906272225525164362
 @test_approx_eq j43 0.13203418392461221033
@@ -342,6 +410,7 @@ j43 = besselj(4,3.)
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
 @test_approx_eq besselj(1.0,3im) besselj(1,3im)
 @test_throws Base.Math.AmosException besselj(20,1000im)
+@test_throws MethodError besselj(big(1.0),3im)
 
 # besselk
 true_k33 = 0.12217037575718356792
@@ -354,6 +423,12 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_throws Base.Math.AmosException besselk(200,0.01)
 # issue #6564
 @test besselk(1.0,0.0) == Inf
+
+@test_throws MethodError besselk(1,big(1.0))
+@test_throws MethodError besselk(1,complex(big(1.0)))
+@test_throws MethodError besselkx(1,big(1.0))
+@test_throws MethodError besselkx(1,complex(big(1.0)))
+
 
 # bessely
 y33 = bessely(3,3.)
@@ -369,11 +444,22 @@ y33 = bessely(3,3.)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
 @test_throws DomainError bessely(1,Float32(-1.0))
 
+@test_throws MethodError bessely(1.2,big(1.0))
+@test_throws MethodError bessely(1,complex(big(1.0)))
+@test_throws MethodError besselyx(1,big(1.0))
+@test_throws MethodError besselyx(1,complex(big(1.0)))
+
+
 #besselhx
 for elty in [Complex64,Complex128]
     z = convert(elty, 1.0 + 1.9im)
     @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
 end
+
+@test_throws MethodError besselh(1,1,big(1.0))
+@test_throws MethodError besselh(1,1,complex(big(1.0)))
+@test_throws MethodError besselhx(1,1,big(1.0))
+@test_throws MethodError besselhx(1,1,complex(big(1.0)))
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
@@ -407,8 +493,13 @@ end
 @test_approx_eq beta(3,5) 1/105
 @test_approx_eq lbeta(5,4) log(beta(5,4))
 @test_approx_eq beta(5,4) beta(4,5)
-@test_approx_eq beta(-1/2, 3) -16/3
+@test beta(-1/2, 3) ≈ beta(-1/2 + 0im, 3 + 0im) ≈ -16/3
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
+@test beta(Float32(5),Float32(4)) == beta(Float32(4),Float32(5))
+@test beta(3,5) ≈ beta(3+0im,5+0im)
+@test(beta(3.2+0.1im,5.3+0.3im) ≈ exp(lbeta(3.2+0.1im,5.3+0.3im)) ≈
+      0.00634645247782269506319336871208405439180447035257028310080 -
+      0.00169495384841964531409376316336552555952269360134349446910im)
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
@@ -428,6 +519,8 @@ end
 for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
     @test factorial(x) == gamma(1+x)
 end
+@test lfact(1) == 0
+@test lfact(2) == lgamma(3)
 
 # digamma
 for elty in (Float32, Float64)
@@ -472,16 +565,27 @@ for elty in (Float32, Float64)
         @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
+@test abs(invdigamma(2)) == abs(invdigamma(2.))
 
 @test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
+@test_approx_eq polygamma(20, Float16(7.)) -4.644616027240543262561198814998587152547
 
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12
+@test_approx_eq eta(Float32(2)) eta(2)
+@test_approx_eq eta(Complex64(2)) eta(2)
 @test_approx_eq zeta(0) -0.5
 @test_approx_eq zeta(2) pi^2/6
+@test_approx_eq zeta(Complex64(2)) zeta(2)
 @test_approx_eq zeta(4) pi^4/90
 @test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
+@test_approx_eq zeta(1,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(1.,Float16(2.)) zeta(1,2.)
+@test_approx_eq zeta(Float16(1.),Float16(2.)) zeta(1,2.)
+@test isnan(zeta(NaN))
+@test isnan(zeta(complex(0,Inf)))
+@test isnan(zeta(complex(-Inf,0)))
 
 # quadgk
 @test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
@@ -536,6 +640,9 @@ end
 @test polygamma(4, -0.0) == Inf == -polygamma(4, +0.0)
 @test zeta(4, +0.0) == Inf == zeta(4, -0.0)
 @test zeta(5, +0.0) == Inf == -zeta(5, -0.0)
+@test zeta(Inf, 1.) == 1
+@test zeta(Inf, 2.) == 0
+@test isnan(zeta(NaN, 1.))
 @test isa([digamma(x) for x in [1.0]], Vector{Float64})
 @test isa([trigamma(x) for x in [1.0]], Vector{Float64})
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
@@ -576,7 +683,7 @@ for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
 end
 
 # modf
-for elty in (Float32, Float64)
+for elty in (Float16, Float32, Float64)
     @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
     @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
     @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
@@ -624,7 +731,7 @@ end
 for n = 0:28
     @test log(2,2^n) == n
 end
-with_bigfloat_precision(10_000) do
+setprecision(10_000) do
     @test log(2,big(2)^100) == 100
     @test log(2,big(2)^200) == 200
     @test log(2,big(2)^300) == 300
@@ -658,3 +765,8 @@ end
 @test_throws DomainError 2 ^ -2
 @test_throws DomainError (-2)^(2.2)
 @test_throws DomainError (-2.0)^(2.2)
+
+# issue #13748
+let A = [1 2; 3 4]; B = [5 6; 7 8]; C = [9 10; 11 12]
+    @test muladd(A,B,C) == A*B + C
+end

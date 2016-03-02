@@ -10,7 +10,7 @@
 # This section tests relpath computation. #
 ###########################################
 function test_relpath()
-    sep = Base.path_separator
+    sep = Base.Filesystem.path_separator
     filepaths = [
         "$(sep)home$(sep)user$(sep).julia$(sep)Test1$(sep)docs$(sep)api$(sep)Test1.md",
         "$(sep)home$(sep)user$(sep).julia$(sep)Test1$(sep)docs$(sep)api$(sep)lib$(sep)file1.md",

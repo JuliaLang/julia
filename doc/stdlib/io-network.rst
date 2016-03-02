@@ -19,27 +19,45 @@ General I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
+.. function:: open(filename, [read, write, create, truncate, append]) -> IOStream
 
    .. Docstring generated from Julia source
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(file_name, [mode]) -> IOStream
+.. function:: open(filename, [mode]) -> IOStream
 
    .. Docstring generated from Julia source
 
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``\ , and are equivalent to setting the following boolean groups:
 
-   ==== =================================
-    r    read
-    r+   read, write
-    w    write, create, truncate
-    w+   read, write, create, truncate
-    a    write, create, append
-    a+   read, write, create, append
-   ==== =================================
+   +------+-------------------------------+
+   | Mode | Description                   |
+   +======+===============================+
+   | r    | read                          |
+   +------+-------------------------------+
+   | r+   | read, write                   |
+   +------+-------------------------------+
+   | w    | write, create, truncate       |
+   +------+-------------------------------+
+   | w+   | read, write, create, truncate |
+   +------+-------------------------------+
+   | a    | write, create, append         |
+   +------+-------------------------------+
+   | a+   | read, write, create, append   |
+   +------+-------------------------------+
 
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
+
+   .. Docstring generated from Julia source
+
+   Start running ``command`` asynchronously, and return a tuple ``(stream,process)``\ .  If ``mode`` is ``"r"``\ , then ``stream`` reads from the process's standard output and ``stdio`` optionally specifies the process's standard input stream.  If ``mode`` is ``"w"``\ , then ``stream`` writes to the process's standard input and ``stdio`` optionally specifies the process's standard output stream.
+
+.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+   .. Docstring generated from Julia source
+
+   Similar to ``open(command, mode, stdio)``\ , but calls ``f(stream)`` on the resulting read or write stream, then closes the stream and waits for the process to complete.  Returns the value returned by ``f``\ .
 
 .. function:: open(f::Function, args...)
 
@@ -47,7 +65,7 @@ General I/O
 
    Apply the function ``f`` to the result of ``open(args...)`` and close the resulting file descriptor upon completion.
 
-   **Example**: ``open(readall, "file.txt")``
+   **Example**: ``open(readstring, "file.txt")``
 
 .. function:: IOBuffer() -> IOBuffer
 
@@ -65,7 +83,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create a read-only IOBuffer on the data underlying the given string
+   Create a read-only IOBuffer on the data underlying the given string.
 
 .. function:: IOBuffer([data,],[readable,writable,[maxsize]])
 
@@ -77,7 +95,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Obtain the contents of an ``IOBuffer`` as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.
+   Obtain the contents of an ``IOBuffer`` as an array, without copying. Afterwards, the ``IOBuffer`` is reset to its initial state.
 
 .. function:: takebuf_string(b::IOBuffer)
 
@@ -103,45 +121,76 @@ General I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream, x)
+.. function:: write(stream::IO, x)
+              write(filename::AbstractString, x)
 
    .. Docstring generated from Julia source
 
-   Write the canonical binary representation of a value to the given stream.
+   Write the canonical binary representation of a value to the given I/O stream or file. Returns the number of bytes written into the stream.
 
-.. function:: read(stream, type)
+   You can write multiple values with the same :func:``write`` call. i.e. the following are equivalent:
 
-   .. Docstring generated from Julia source
+   .. code-block:: julia
 
-   Read a value of the given type from a stream, in canonical binary representation.
+       write(stream, x, y...)
+       write(stream, x) + write(stream, y...)
 
-.. function:: read(stream, type, dims)
-
-   .. Docstring generated from Julia source
-
-   Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
-
-.. function:: read!(stream, array::Array)
+.. function:: read(stream::IO, T)
 
    .. Docstring generated from Julia source
 
-   Read binary data from a stream, filling in the argument ``array``\ .
+   Read a single value of type ``T`` from ``stream``\ , in canonical binary representation.
 
-.. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b); all=true)
-
-   .. Docstring generated from Julia source
-
-   Read at most ``nb`` bytes from the stream into ``b``\ , returning the number of bytes read (increasing the size of ``b`` as needed).
-
-   See ``readbytes`` for a description of the ``all`` option.
-
-.. function:: readbytes(stream, nb=typemax(Int); all=true)
+.. function:: read(stream::IO, T, dims)
 
    .. Docstring generated from Julia source
 
-   Read at most ``nb`` bytes from the stream, returning a ``Vector{UInt8}`` of the bytes read.
+   Read a series of values of type ``T`` from ``stream``\ , in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of the ``Array{T}`` to return.
+
+.. function:: read!(stream::IO, array::Union{Array, BitArray})
+              read!(filename::AbstractString, array::Union{Array, BitArray})
+
+   .. Docstring generated from Julia source
+
+   Read binary data from an I/O stream or file, filling in ``array``\ .
+
+.. function:: readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
+
+   .. Docstring generated from Julia source
+
+   Read at most ``nb`` bytes from ``stream`` into ``b``\ , returning the number of bytes read. The size of ``b`` will be increased if needed (i.e. if ``nb`` is greater than ``length(b)`` and enough bytes could be read), but it will never be decreased.
+
+   See ``read`` for a description of the ``all`` option.
+
+.. function:: read(stream::IO, nb=typemax(Int); all=true)
+
+   .. Docstring generated from Julia source
+
+   Read at most ``nb`` bytes from ``stream``\ , returning a ``Vector{UInt8}`` of the bytes read.
 
    If ``all`` is ``true`` (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If ``all`` is ``false``\ , at most one ``read`` call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the ``all`` option.
+
+.. function:: read(filename::AbstractString, args...)
+
+   .. Docstring generated from Julia source
+
+   Open a file and read its contents. ``args`` is passed to ``read``\ : this is equivalent to ``open(io->read(io, args...), filename)``\ .
+
+.. function:: unsafe_read(io, ref, nbytes)
+
+   .. Docstring generated from Julia source
+
+   Copy nbytes from the IO stream object into ref (converted to a pointer).
+
+   It is recommended that IO subtypes override the exact method signature below to provide more efficient implementations: ``unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)``
+
+.. function:: unsafe_write(io, ref, nbytes)
+
+   .. Docstring generated from Julia source
+
+   Copy nbytes from ref (converted to a pointer) into the IO stream object.
+
+   It is recommended that IO subtypes override the exact method signature below to provide more efficient implementations: ``unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)``
 
 .. function:: position(s)
 
@@ -177,28 +226,25 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Add a mark at the current position of stream ``s``.  Returns the marked position.
+   Add a mark at the current position of stream ``s``\ . Returns the marked position.
 
-   See also :func:`unmark`, :func:`reset`, :func:`ismarked`
+   See also :func:`unmark`\ , :func:`reset`\ , :func:`ismarked`\ .
 
 .. function:: unmark(s)
 
    .. Docstring generated from Julia source
 
-   Remove a mark from stream ``s``.
-   Returns ``true`` if the stream was marked, ``false`` otherwise.
+   Remove a mark from stream ``s``\ . Returns ``true`` if the stream was marked, ``false`` otherwise.
 
-   See also :func:`mark`, :func:`reset`, :func:`ismarked`
+   See also :func:`mark`\ , :func:`reset`\ , :func:`ismarked`\ .
 
 .. function:: reset(s)
 
    .. Docstring generated from Julia source
 
-   Reset a stream ``s`` to a previously marked position, and remove the mark.
-   Returns the previously marked position.
-   Throws an error if the stream is not marked.
+   Reset a stream ``s`` to a previously marked position, and remove the mark. Returns the previously marked position. Throws an error if the stream is not marked.
 
-   See also :func:`mark`, :func:`unmark`, :func:`ismarked`
+   See also :func:`mark`\ , :func:`unmark`\ , :func:`ismarked`\ .
 
 .. function:: ismarked(s)
 
@@ -206,7 +252,7 @@ General I/O
 
    Returns ``true`` if stream ``s`` is marked.
 
-   See also :func:`mark`, :func:`unmark`, :func:`reset`
+   See also :func:`mark`\ , :func:`unmark`\ , :func:`reset`\ .
 
 .. function:: eof(stream) -> Bool
 
@@ -220,6 +266,18 @@ General I/O
 
    Determine whether a stream is read-only.
 
+.. function:: iswritable(io) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if the specified IO object is writable (if that can be determined).
+
+.. function:: isreadable(io) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if the specified IO object is readable (if that can be determined).
+
 .. function:: isopen(object) -> Bool
 
    .. Docstring generated from Julia source
@@ -230,7 +288,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Write an arbitrary value to a stream in an opaque format, such that it can be read back by ``deserialize``\ . The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image.
+   Write an arbitrary value to a stream in an opaque format, such that it can be read back by ``deserialize``\ . The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image. ``Ptr`` values are serialized as all-zero bit patterns (``NULL``\ ).
 
 .. function:: deserialize(stream)
 
@@ -248,7 +306,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`\ .
 
 .. function:: print_joined(io, items, delim, [last])
 
@@ -272,19 +330,19 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be replaced elsewhere.
+   Create a pipe to which all C and Julia level ``STDOUT`` output will be redirected. Returns a tuple ``(rd,wr)`` representing the pipe ends. Data written to ``STDOUT`` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old ``STDOUT`` object was cached by the user and needs to be replaced elsewhere.
 
 .. function:: redirect_stdout(stream)
 
    .. Docstring generated from Julia source
 
-   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that ``stream`` must be a TTY, a Pipe or a TcpSocket.
+   Replace ``STDOUT`` by stream for all C and julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
 
 .. function:: redirect_stderr([stream])
 
    .. Docstring generated from Julia source
 
-   Like redirect_stdout, but for STDERR
+   Like ``redirect_stdout``\ , but for ``STDERR``\ .
 
 .. function:: redirect_stdin([stream])
 
@@ -296,13 +354,13 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read the entirety of ``x`` as a string but remove trailing newlines. Equivalent to ``chomp(readall(x))``\ .
+   Read the entirety of ``x`` as a string but remove trailing newlines. Equivalent to ``chomp(readstring(x))``\ .
 
 .. function:: truncate(file,n)
 
    .. Docstring generated from Julia source
 
-   Resize the file or buffer given by the first argument to exactly ``n`` bytes, filling previously unallocated space with '\\0' if the file or buffer is grown
+   Resize the file or buffer given by the first argument to exactly ``n`` bytes, filling previously unallocated space with '\\0' if the file or buffer is grown.
 
 .. function:: skipchars(stream, predicate; linecomment::Char)
 
@@ -334,6 +392,29 @@ General I/O
 
    Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``\ .
 
+.. function:: IOContext{<:IO} <: IO
+
+   .. Docstring generated from Julia source
+
+   IOContext provides a mechanism for passing output-configuration keyword arguments through arbitrary show methods.
+
+   In short, it is an immutable Dictionary that is a subclass of IO.
+
+   .. code-block:: julia
+
+       IOContext(io::IO, KV::Pair)
+
+   Create a new entry in the IO Dictionary for the key => value pair
+
+   * use ``(key => value) in dict`` to see if this particular combination is in the properties set
+   * use ``get(dict, key, default)`` to retrieve the most recent value for a particular key
+
+   .. code-block:: julia
+
+       IOContext(io::IO, context::IOContext)
+
+   Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
+
 Text I/O
 --------
 
@@ -347,7 +428,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Show a more compact representation of a value. This is used for printing array elements. If a new type has a different compact representation, it should overload ``showcompact(io, x)`` where the first argument is a stream.
+   Show a more compact representation of a value. This is used for printing array elements. If a new type has a different compact representation, it should test ``Base.limit_output(io)`` in its normal ``show`` method.
 
 .. function:: showall(x)
 
@@ -359,7 +440,9 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ . For arrays, returns strings like "2x2 Float64 Array".
+   Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ , e.g. ``Int64``\ .
+
+   For arrays, returns a string of size and type info, e.g. ``10-element Array{Int64,1}``\ .
 
 .. function:: print(x)
 
@@ -371,13 +454,15 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Print (using :func:`print`) ``x`` followed by a newline.
+   Print (using :func:`print`\ ) ``x`` followed by a newline.
 
 .. function:: print_with_color(color::Symbol, [io], strings...)
 
    .. Docstring generated from Julia source
 
-   Print strings in a color specified as a symbol, for example ``:red`` or ``:blue``\ .
+   Print strings in a color specified as a symbol.
+
+   ``color`` may take any of the values ``:normal``\ , ``:bold``\ , ``:black``\ , ``:blue``\ , ``:cyan``\ , ``:green``\ , ``:magenta``\ , ``:red``\ , ``:white``\ , or  ``:yellow``\ .
 
 .. function:: info(msg)
 
@@ -434,41 +519,40 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readall(stream::IO)
+.. function:: readstring(stream::IO)
+              readstring(filename::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Read the entire contents of an I/O stream as a string.
+   Read the entire contents of an I/O stream or a file as a string. The text is assumed to be encoded in UTF-8.
 
-.. function:: readall(filename::AbstractString)
-
-   .. Docstring generated from Julia source
-
-   Open ``filename``\ , read the entire contents as a string, then close the file. Equivalent to ``open(readall, filename)``\ .
-
-.. function:: readline(stream=STDIN)
+.. function:: readline(stream::IO=STDIN)
+              readline(filename::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given ``stream`` (defaults to ``STDIN``\ ),
+   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given I/O stream or file (defaults to ``STDIN``\ ). When reading from a file, the text is assumed to be encoded in UTF-8.
 
-.. function:: readuntil(stream, delim)
-
-   .. Docstring generated from Julia source
-
-   Read a string, up to and including the given delimiter byte.
-
-.. function:: readlines(stream)
+.. function:: readuntil(stream::IO, delim)
+              readuntil(filename::AbstractString, delim)
 
    .. Docstring generated from Julia source
 
-   Read all lines as an array.
+   Read a string from an I/O stream or a file, up to and including the given delimiter byte. The text is assumed to be encoded in UTF-8.
 
-.. function:: eachline(stream)
+.. function:: readlines(stream::IO)
+              readlines(filename::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Create an iterable object that will yield each line from a stream.
+   Read all lines of an I/O stream or a file as a vector of strings. The text is assumed to be encoded in UTF-8.
+
+.. function:: eachline(stream::IO)
+              eachline(filename::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Create an iterable object that will yield each line from an I/O stream or a file. The text is assumed to be encoded in UTF-8.
 
 .. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
@@ -564,6 +648,18 @@ Text I/O
    .. Docstring generated from Julia source
 
    Decodes the base64-encoded ``string`` and returns a ``Vector{UInt8}`` of the decoded bytes.
+
+.. function:: displaysize(io) -> (lines, columns)
+
+   .. Docstring generated from Julia source
+
+   Return the nominal size of the screen that may be used for rendering output to this io object
+
+.. function:: limit_output(io) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Output hinting for identifying contexts where the user requested a compact output
 
 Multimedia I/O
 --------------
@@ -704,7 +800,7 @@ Memory-mapped I/O
    Create an ``IO``\ -like object for creating zeroed-out mmapped-memory that is not tied to a file for use in ``Mmap.mmap``\ . Used by ``SharedArray`` for creating shared memory arrays.
 
 .. function:: Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-              Mmap.mmap(type::Type{Array{T,N}}, dims)
+                     Mmap.mmap(type::Type{Array{T,N}}, dims)
 
    .. Docstring generated from Julia source
 
@@ -714,48 +810,50 @@ Memory-mapped I/O
 
    ``dims`` is a tuple or single ``Integer`` specifying the size or length of the array.
 
-   The file is passed via the stream argument, either as an open ``IOStream`` or filename string.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
+   The file is passed via the stream argument, either as an open ``IOStream`` or filename string. When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
 
-   If no ``type`` argument is specified, the default is ``Vector{UInt8}``.
+   If no ``type`` argument is specified, the default is ``Vector{UInt8}``\ .
 
-   Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``.
+   Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an ``IOStream``\ .
 
-   The ``grow`` keyword argument specifies whether the disk file should be grown to accomodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
+   The ``grow`` keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.
 
    The ``shared`` keyword argument specifies whether the resulting ``Array`` and changes made to it will be visible to other processes mapping the same file.
 
-   For example, the following code::
+   For example, the following code
 
-      # Create a file for mmapping
-      # (you could alternatively use mmap to do this step, too)
-      A = rand(1:20, 5, 30)
-      s = open("/tmp/mmap.bin", "w+")
-      # We'll write the dimensions of the array as the first two Ints in the file
-      write(s, size(A,1))
-      write(s, size(A,2))
-      # Now write the data
-      write(s, A)
-      close(s)
+   .. code-block:: julia
 
-      # Test by reading it back in
-      s = open("/tmp/mmap.bin")   # default is read-only
-      m = read(s, Int)
-      n = read(s, Int)
-      A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
+       # Create a file for mmapping
+       # (you could alternatively use mmap to do this step, too)
+       A = rand(1:20, 5, 30)
+       s = open("/tmp/mmap.bin", "w+")
+       # We'll write the dimensions of the array as the first two Ints in the file
+       write(s, size(A,1))
+       write(s, size(A,2))
+       # Now write the data
+       write(s, A)
+       close(s)
 
-   creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
+       # Test by reading it back in
+       s = open("/tmp/mmap.bin")   # default is read-only
+       m = read(s, Int)
+       n = read(s, Int)
+       A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
 
-   A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
+   creates a ``m``\ -by-``n`` ``Matrix{Int}``\ , linked to the file associated with stream ``s``\ .
+
+   A more portable file would need to encode the word size – 32 bit or 64 bit – and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
 .. function:: Mmap.mmap(io, BitArray, [dims, offset])
 
    .. Docstring generated from Julia source
 
-   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`, but the byte representation is different.
+   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap`\ , but the byte representation is different.
 
-   **Example**:  ``B = Mmap.mmap(s, BitArray, (25,30000))``
+   **Example**: ``B = Mmap.mmap(s, BitArray, (25,30000))``
 
-   This would create a 25-by-30000 ``BitArray``, linked to the file associated with stream ``s``.
+   This would create a 25-by-30000 ``BitArray``\ , linked to the file associated with stream ``s``\ .
 
 .. function:: Mmap.sync!(array)
 
@@ -766,19 +864,19 @@ Memory-mapped I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TcpSocket
+.. function:: connect([host],port) -> TCPSocket
 
    .. Docstring generated from Julia source
 
-   Connect to the host ``host`` on port ``port``
+   Connect to the host ``host`` on port ``port``\ .
 
 .. function:: connect(path) -> PipeEndpoint
 
    .. Docstring generated from Julia source
 
-   Connect to the Named Pipe / Domain Socket at ``path``
+   Connect to the Named Pipe / Domain Socket at ``path``\ .
 
-.. function:: listen([addr,]port) -> TcpServer
+.. function:: listen([addr,]port) -> TCPServer
 
    .. Docstring generated from Julia source
 
@@ -788,7 +886,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Create and listen on a Named Pipe / Domain Socket
+   Create and listen on a Named Pipe / Domain Socket.
 
 .. function:: getaddrinfo(host)
 
@@ -796,17 +894,17 @@ Network I/O
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
-.. function:: parseip(addr)
+.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
 
    .. Docstring generated from Julia source
 
-   Parse a string specifying an IPv4 or IPv6 ip address.
+   Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
 .. function:: IPv4(host::Integer) -> IPv4
 
    .. Docstring generated from Julia source
 
-   Returns IPv4 object from ip address formatted as Integer
+   Returns IPv4 object from ip address formatted as Integer.
 
 .. function:: IPv6(host::Integer) -> IPv6
 
@@ -826,11 +924,11 @@ Network I/O
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (UInt16,TcpServer)
+.. function:: listenany(port_hint) -> (UInt16,TCPServer)
 
    .. Docstring generated from Julia source
 
-   Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
+   Create a ``TCPServer`` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 
 .. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
 
@@ -862,11 +960,11 @@ Network I/O
 
    This behavior of this function varies slightly across platforms. See <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 
-.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPv4, port::Integer)
+.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
 
    .. Docstring generated from Julia source
 
-   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices.
+   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices. ``ipv6only`` parameter disables dual stack mode. If it's ``true``\ , only IPv6 stack is created.
 
 .. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
 

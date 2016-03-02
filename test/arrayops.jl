@@ -24,6 +24,15 @@ b = a+a
 @test isequal(1./[1,2,5], [1.0,0.5,0.2])
 @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
+@test isequal(2.%[1,2,3], [0,0,2])
+@test isequal([1,2,3].%2, [1,0,1])
+@test isequal(2.÷[1,2,3], [2,1,0])
+@test isequal([1,2,3].÷2, [0,1,1])
+@test isequal(-2.%[1,2,3], [0,0,-2])
+@test isequal([-1,-2,-3].%2, [-1,0,-1])
+@test isequal(-2.÷[1,2,3], [-2,-1,0])
+@test isequal([-1,-2,-3].÷2, [0,-1,-1])
+
 @test isequal(1.<<[1,2,5], [2,4,32])
 @test isequal(128.>>[1,2,5], [64,32,4])
 @test isequal(2.>>1, 1)
@@ -93,7 +102,7 @@ a = rand(1, 1, 8, 8, 1)
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 @test A[2:6] == [2:6;]
-@test A[1:3,2,2:4] == cat(3,46:48,86:88,126:128)
+@test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
 @test A[:,3:9] == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
@@ -111,7 +120,7 @@ tmp = cat([1,3],blk,blk)
 
 x = rand(2,2)
 b = x[1,:]
-@test isequal(size(b), (1, 2))
+@test isequal(size(b), (2,))
 b = x[:,1]
 @test isequal(size(b), (2,))
 
@@ -129,7 +138,7 @@ B[[3,1],[2,4]] = [21 22; 23 24]
 B[4,[2,3]] = 7
 @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
+@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
 a = [3, 5, -7, 6]
 b = [4, 6, 2, -7, 1]
@@ -306,7 +315,7 @@ for i = 1:3
 end
 @test isequal(a,findn(z))
 
-#argmin argmax
+#findmin findmax indmin indmax
 @test indmax([10,12,9,11]) == 2
 @test indmin([10,12,9,11]) == 3
 @test findmin([NaN,3.2,1.8]) == (1.8,3)
@@ -315,6 +324,16 @@ end
 @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
 @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
 @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+
+# #14085
+@test findmax(4:9) == (9,6)
+@test indmax(4:9) == 6
+@test findmin(4:9) == (4,1)
+@test indmin(4:9) == 1
+@test findmax(5:-2:1) == (5,1)
+@test indmax(5:-2:1) == 1
+@test findmin(5:-2:1) == (1,3)
+@test indmin(5:-2:1) == 3
 
 ## permutedims ##
 
@@ -575,12 +594,12 @@ let
 
     @test isequal(c[:,1], cv)
     @test isequal(c[:,3], cv2)
-    @test isequal(c[4,:], [2.0 2.0 2.0 2.0]*1000)
+    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
 
     c = cumsum_kbn(A, 2)
 
-    @test isequal(c[1,:], cv2')
-    @test isequal(c[3,:], cv')
+    @test isequal(c[1,:], cv2)
+    @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 
 end
@@ -838,6 +857,11 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
+# comprehension in let-bound function
+let x⊙y = sum([x[i]*y[i] for i=1:length(x)])
+    @test [1,2] ⊙ [3,4] == 11
+end
+
 @test_throws DomainError (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1
 
@@ -940,7 +964,7 @@ end
 
 # Handle block matrices
 A = [randn(2,2) for i = 1:2, j = 1:2]
-@test issym(A.'A)
+@test issymmetric(A.'A)
 A = [complex(randn(2,2), randn(2,2)) for i = 1:2, j = 1:2]
 @test ishermitian(A'A)
 
@@ -1090,6 +1114,15 @@ I2 = CartesianIndex((-1,5,2))
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
 
+# CartesianIndex allows construction at a particular dimensionality
+@test length(CartesianIndex{3}()) == 3
+@test length(CartesianIndex{3}(1,2)) == 3
+@test length(CartesianIndex{3}((1,2))) == 3
+@test length(CartesianIndex{3}(1,2,3)) == 3
+@test length(CartesianIndex{3}((1,2,3))) == 3
+@test_throws DimensionMismatch CartesianIndex{3}(1,2,3,4)
+@test_throws DimensionMismatch CartesianIndex{3}((1,2,3,4))
+
 @test length(I1) == 3
 
 a = spzeros(2,3)
@@ -1141,10 +1174,10 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
-@test eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
-@test eachindex(zeros(3),sub(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2)) == CartesianRange((3,2,2))
-@test eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2)) == 1:8
+@test @inferred(eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@test @inferred(eachindex(zeros(3),sub(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 
 
 #rotates
@@ -1233,7 +1266,7 @@ b = rand(6,7)
 # return type declarations (promote_op)
 module RetTypeDecl
     using Base.Test
-    import Base: +, *, .*
+    import Base: +, *, .*, zero
 
     immutable MeterUnits{T,P} <: Number
         val::T
@@ -1243,9 +1276,11 @@ module RetTypeDecl
     m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
     m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
 
-    (+){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,1}(x.val+y.val)
+    (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
+    (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+    zero{T,pow}(x::MeterUnits{T,pow}) = MeterUnits{T,pow}(zero(T))
 
     Base.promote_op{R,S}(::Base.AddFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),1}
     Base.promote_op{R,S}(::Base.MulFun, ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
@@ -1255,6 +1290,8 @@ module RetTypeDecl
     @test @inferred([m,m]+m) == [m+m,m+m]
     @test @inferred(m.*[m,m]) == [m2,m2]
     @test @inferred([m,m].*m) == [m2,m2]
+    @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
+    @test @inferred([m m].*[m,m]) == [m2 m2; m2 m2]
 end
 
 # range, range ops
@@ -1265,3 +1302,168 @@ B = 1.5:5.5
 #slice dim error
 A = zeros(5,5)
 @test_throws ArgumentError slicedim(A,0,1)
+
+###
+### LinearSlow workout
+###
+immutable LinSlowMatrix{T} <: DenseArray{T,2}
+    data::Matrix{T}
+end
+
+# This is the default, but just to be sure
+Base.linearindexing{A<:LinSlowMatrix}(::Type{A}) = Base.LinearSlow()
+
+Base.size(A::LinSlowMatrix) = size(A.data)
+
+Base.getindex(A::LinSlowMatrix, i::Integer) = error("Not defined")
+Base.getindex(A::LinSlowMatrix, i::Integer, j::Integer) = A.data[i,j]
+
+Base.setindex!(A::LinSlowMatrix, v, i::Integer) = error("Not defined")
+Base.setindex!(A::LinSlowMatrix, v, i::Integer, j::Integer) = A.data[i,j] = v
+
+A = rand(3,5)
+B = LinSlowMatrix(A)
+S = sub(A, :, :)
+
+@test A == B
+@test B == A
+@test isequal(A, B)
+@test isequal(B, A)
+
+for (a,b) in zip(A, B)
+    @test a == b
+end
+for (a,s) in zip(A, S)
+    @test a == s
+end
+
+C = copy(B)
+@test A == C
+@test B == C
+
+@test vec(A) == vec(B) == vec(S)
+@test minimum(A) == minimum(B) == minimum(S)
+@test maximum(A) == maximum(B) == maximum(S)
+
+a, ai = findmin(A)
+b, bi = findmin(B)
+s, si = findmin(S)
+@test a == b == s
+@test ai == bi == si
+
+a, ai = findmax(A)
+b, bi = findmax(B)
+s, si = findmax(S)
+@test a == b == s
+@test ai == bi == si
+
+fill!(B, 2)
+@test all(x->x==2, B)
+
+iall = (1:size(A,1)).*ones(Int,size(A,2))'
+jall = ones(Int,size(A,1)).*(1:size(A,2))'
+i,j = findn(B)
+@test vec(i) == vec(iall)
+@test vec(j) == vec(jall)
+fill!(S, 2)
+i,j = findn(S)
+@test vec(i) == vec(iall)
+@test vec(j) == vec(jall)
+
+copy!(B, A)
+copy!(S, A)
+
+@test cat(1, A, B, S) == cat(1, A, A, A)
+@test cat(2, A, B, S) == cat(2, A, A, A)
+
+@test cumsum(A, 1) == cumsum(B, 1) == cumsum(S, 1)
+@test cumsum(A, 2) == cumsum(B, 2) == cumsum(S, 2)
+
+@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1) == mapslices(v->sort(v), S, 1)
+@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2) == mapslices(v->sort(v), S, 2)
+
+@test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
+@test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
+
+@test A + 1 == B + 1 == S + 1
+@test 2*A == 2*B == 2*S
+@test A/3 == B/3 == S/3
+
+# issue #13250
+x13250 = zeros(3)
+x13250[UInt(1):UInt(2)] = 1.0
+@test x13250[1] == 1.0
+@test x13250[2] == 1.0
+@test x13250[3] == 0.0
+
+immutable SquaresVector <: AbstractArray{Int, 1}
+    count::Int
+end
+Base.size(S::SquaresVector) = (S.count,)
+Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+Base.getindex(S::SquaresVector, i::Int) = i*i
+foo_squares = SquaresVector(5)
+@test convert(Array{Int}, foo_squares) == [1,4,9,16,25]
+@test convert(Array{Int, 1}, foo_squares) == [1,4,9,16,25]
+
+# issue #13254
+let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
+    f1() = [1]
+    f2() = [1;]
+    f3() = [1;2]
+    f4() = [1;2.0]
+    f5() = [1 2]
+    f6() = [1 2.0]
+    f7() = Int[1]
+    f8() = Float64[1]
+    f9() = Int[1;]
+    f10() = Float64[1;]
+    f11() = Int[1;2]
+    f12() = Float64[1;2]
+    f13() = Int[1;2.0]
+    f14() = Int[1 2]
+    f15() = Float64[1 2]
+    f16() = Int[1 2.0]
+    f17() = [1:2;]
+    f18() = Int[1:2;]
+    f19() = Float64[1:2;]
+    f20() = [1:2;1:2]
+    f21() = Int[1:2;1:2]
+    f22() = Float64[1:2;1:2]
+    f23() = [1:2;1.0:2.0]
+    f24() = Int[1:2;1.0:2.0]
+    f25() = [1:2 1:2]
+    f26() = Int[1:2 1:2]
+    f27() = Float64[1:2 1:2]
+    f28() = [1:2 1.0:2.0]
+    f29() = Int[1:2 1.0:2.0]
+    f30() = [A;]
+    f31() = Int[A;]
+    f32() = Float64[A;]
+    f33() = [A;A]
+    f34() = Int[A;A]
+    f35() = Float64[A;A]
+    f36() = [A;B]
+    f37() = Int[A;B]
+    f38() = [A A]
+    f39() = Int[A A]
+    f40() = Float64[A A]
+    f41() = [A B]
+    f42() = Int[A B]
+
+    for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
+              f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
+              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
+        @test isleaftype(Base.return_types(f, ())[1])
+    end
+end
+
+# issue #14482
+@inferred Base.map_to!(Int8, 1, 1, Int8[0], Int[0])
+
+# make sure @inbounds isn't used too much
+type OOB_Functor{T}; a::T; end
+(f::OOB_Functor)(i::Int) = f.a[i]
+let f = OOB_Functor([1,2])
+    @test_throws BoundsError map(f, [1,2,3,4,5])
+end

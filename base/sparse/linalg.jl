@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.LinAlg: chksquare
+import Base.LinAlg: checksquare
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -102,8 +102,11 @@ function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     Y
 end
 
+(*)(X::Diagonal, A::SparseMatrixCSC) = scale!(copy(A), X.diag, A)
+(*)(A::SparseMatrixCSC, X::Diagonal) = scale!(copy(A), A, X.diag)
+
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
-# http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
+# http://dl.acm.org/citation.cfm?id=355796
 
 (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
 
@@ -160,37 +163,17 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    C = Base.SparseMatrix.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
+    C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
     return C
 end
 
 ## solvers
-function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
-    if eltype(b)<:Complex; A = complex(A); end
-
-    if istril(A)
-        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
-        # the case where there are zeros on the diagonal and error out.
-        # It also does not work in the complex case. VBS.
-        #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
-        return fwdTriSolve!(A, b)
-    end
-    if istriu(A); return bwdTriSolve!(A, b); end
-    return A_ldiv_B!(lufact(A),b)
-end
-
 function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
-    n = length(B)
-    if isa(B, Vector)
-        nrowB = n
-        ncolB = 1
-    else
-        nrowB, ncolB = size(B)
-    end
-    ncol = chksquare(A)
+    nrowB, ncolB  = size(B, 1), size(B, 2)
+    ncol = LinAlg.checksquare(A)
     if nrowB != ncol
-        throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
     aa = A.nzval
@@ -199,33 +182,44 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 
     joff = 0
     for k = 1:ncolB
-        for j = 1:(nrowB-1)
-            jb = joff + j
+        for j = 1:nrowB
             i1 = ia[j]
-            i2 = ia[j+1]-1
-            B[jb] /= aa[i1]
-            bj = B[jb]
-            for i = i1+1:i2
-                B[joff+ja[i]] -= bj*aa[i]
+            i2 = ia[j + 1] - 1
+
+            # loop through the structural zeros
+            ii = i1
+            jai = ja[ii]
+            while ii <= i2 && jai < j
+                ii += 1
+                jai = ja[ii]
+            end
+
+            # check for zero pivot and divide with pivot
+            if jai == j
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
+                ii += 1
+            else
+                throw(LinAlg.SingularException(j))
+            end
+
+            # update remaining part
+            for i = ii:i2
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
         joff += nrowB
-        B[joff] /= aa[end]
     end
-    return B
+    B
 end
 
 function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
-    n = length(B)
-    if isa(B, Vector)
-        nrowB = n
-        ncolB = 1
-    else
-        nrowB, ncolB = size(B)
+    nrowB, ncolB = size(B, 1), size(B, 2)
+    ncol = LinAlg.checksquare(A)
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
-    ncol = chksquare(A)
-    if nrowB != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)")) end
 
     aa = A.nzval
     ja = A.rowval
@@ -233,21 +227,42 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 
     joff = 0
     for k = 1:ncolB
-        for j = nrowB:-1:2
-            jb = joff + j
+        for j = nrowB:-1:1
             i1 = ia[j]
-            i2 = ia[j+1]-1
-            B[jb] /= aa[i2]
-            bj = B[jb]
-            for i = i2-1:-1:i1
-                B[joff+ja[i]] -= bj*aa[i]
+            i2 = ia[j + 1] - 1
+
+            # loop through the structural zeros
+            ii = i2
+            jai = ja[ii]
+            while ii >= i1 && jai > j
+                ii -= 1
+                jai = ja[ii]
+            end
+
+            # check for zero pivot and divide with pivot
+            if jai == j
+                bj = B[joff + jai]/aa[ii]
+                B[joff + jai] = bj
+                ii -= 1
+            else
+                throw(LinAlg.SingularException(j))
+            end
+
+            # update remaining part
+            for i = ii:-1:i1
+                B[joff + ja[i]] -= bj*aa[i]
             end
         end
-        B[joff+1] /= aa[1]
         joff += nrowB
     end
-   return B
+    B
 end
+
+A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+
+(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, full(B))
+(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, full(B))
 
 ## triu, tril
 
@@ -501,14 +516,14 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     elseif p == 2
         throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
     else
-        throw(ArgumentError("second argment must be either 1 or Inf, got $p"))
+        throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
 end
 
 function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
-    n = chksquare(A)
+    n = checksquare(A)
     F = factorize(A)
     if t <= 0
         throw(ArgumentError("number of blocks must be a positive integer"))
@@ -587,7 +602,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
         end
 
         if T <: Real
-            # Check wether cols of S are parallel to cols of S or S_old
+            # Check whether cols of S are parallel to cols of S or S_old
             for j = 1:t
                 while true
                     repeated = false
@@ -752,7 +767,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
-# Copy colptr and rowval from one SparseMatrix to another
+# Copy colptr and rowval from one sparse matrix to another
 function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
     if C.colptr !== A.colptr
         resize!(C.colptr, length(A.colptr))
@@ -800,20 +815,29 @@ function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
     C
 end
 
-scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC) = scale!(C, A, b)
+function scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC)
+    size(A)==size(C) || throw(DimensionMismatch())
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
+    scale!(C.nzval, b, A.nzval)
+    C
+end
 
 scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
 scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
 
-scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
-    scale!(similar(A, promote_type(Tv,T)), A, b)
-
-scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
-    scale!(similar(A, promote_type(Tv,T)), b, A)
-
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)
     if m == n
+        if istril(A)
+            if istriu(A)
+                return Diagonal(A)
+            else
+                return LowerTriangular(A)
+            end
+        elseif istriu(A)
+            return UpperTriangular(A)
+        end
         AC = CHOLMOD.Sparse(A)
         if ishermitian(AC)
             try

@@ -13,7 +13,9 @@ LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,t
 
 # StridedMatrix
 function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
-    pivot==Val{false} && return generic_lufact!(A, pivot)
+    if pivot === Val{false}
+        return generic_lufact!(A, pivot)
+    end
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
@@ -70,6 +72,41 @@ end
 lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
+"""
+    lufact(A [,pivot=Val{true}]) -> F::LU
+
+Compute the LU factorization of `A`.
+
+In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
+type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
+pivoting is chosen (default) the element type should also support `abs` and
+`<`.
+
+The individual components of the factorization `F` can be accessed by indexing:
+
+| Component | Description                         |
+|:----------|:------------------------------------|
+| `F[:L]`   | `L` (lower triangular) part of `LU` |
+| `F[:U]`   | `U` (upper triangular) part of `LU` |
+| `F[:p]`   | (right) permutation `Vector`        |
+| `F[:P]`   | (right) permutation `Matrix`        |
+
+The relationship between `F` and `A` is
+
+`F[:L]*F[:U] == A[F[:p], :]`
+
+`F` further supports the following functions:
+
+| Supported function               | `LU` | `LU{T,Tridiagonal{T}}` |
+|:---------------------------------|:-----|:-----------------------|
+| [`/`](:func:`/`)                 | ✓    |                        |
+| [`\\`](:func:`\\`)               | ✓    | ✓                      |
+| [`cond`](:func:`cond`)           | ✓    |                        |
+| [`det`](:func:`det`)             | ✓    | ✓                      |
+| [`logdet`](:func:`logdet`)       | ✓    | ✓                      |
+| [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
+| [`size`](:func:`size`)           | ✓    | ✓                      |
+"""
 function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})
     S = typeof(zero(T)/one(T))
     lufact!(copy_oftype(A, S), pivot)
@@ -150,7 +187,7 @@ Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) =
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
 function det{T,S}(A::LU{T,S})
-    n = chksquare(A)
+    n = checksquare(A)
     A.info > 0 && return zero(typeof(A.factors[1]))
     P = one(T)
     c = 0
@@ -164,11 +201,11 @@ function det{T,S}(A::LU{T,S})
     return P * s
 end
 
-function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
-    n = chksquare(A)
+function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+    n = checksquare(A)
     c = 0
     P = one(T)
-    abs_det = zero(T)
+    abs_det = zero(real(T))
     @inbounds for i = 1:n
         dg_ii = A.factors[i,i]
         P *= sign(dg_ii)
@@ -177,36 +214,13 @@ function logabsdet{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
         end
         abs_det += log(abs(dg_ii))
     end
-    s = (isodd(c) ? -one(T) : one(T)) * P
+    s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
     abs_det, s
 end
 
-function logdet{T<:Real,S}(A::LU{T,S})
+function logdet(A::LU)
     d, s = logabsdet(A)
-    if s < 0
-        throw(DomainError())
-    end
-    d
-end
-
-_mod2pi(x::BigFloat) = mod(x, big(2)*π) # we don't want to export this, but we use it below
-_mod2pi(x) = mod2pi(x)
-function logdet{T<:Complex,S}(A::LU{T,S})
-    n = chksquare(A)
-    s = zero(T)
-    c = 0
-    @inbounds for i = 1:n
-        if A.ipiv[i] != i
-            c += 1
-        end
-        s += log(A.factors[i,i])
-    end
-    if isodd(c)
-        s = Complex(real(s), imag(s)+π)
-    end
-    r, a = reim(s)
-    a = π - _mod2pi(π - a) #Take principal branch with argument (-pi,pi]
-    complex(r, a)
+    return d + log(s)
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
@@ -233,7 +247,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -256,7 +270,7 @@ function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{t
         end
         if n > 1
             i = n-1
-            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact

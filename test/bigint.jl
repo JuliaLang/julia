@@ -280,3 +280,19 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
 @test_throws InexactError convert(BigInt, 2.1)
 @test_throws InexactError convert(BigInt, big(2.1))
+
+# issue #13367
+@test trunc(BigInt,2.1) == 2
+@test round(BigInt,2.1) == 2
+@test floor(BigInt,2.1) == 2
+@test ceil(BigInt,2.1) == 3
+
+@test trunc(BigInt,2.1f0) == 2
+@test round(BigInt,2.1f0) == 2
+@test floor(BigInt,2.1f0) == 2
+@test ceil(BigInt,2.1f0) == 3
+
+@test_throws InexactError trunc(BigInt,Inf)
+@test_throws InexactError round(BigInt,Inf)
+@test_throws InexactError floor(BigInt,Inf)
+@test_throws InexactError ceil(BigInt,Inf)

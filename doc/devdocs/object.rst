@@ -136,7 +136,7 @@ Symbols::
 
     jl_sym_t *jl_symbol(const char *str);
 
-Functions and LambdaStaticData::
+Functions and LambdaInfo::
 
     jl_function_t *jl_new_generic_function(jl_sym_t *name);
     jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
@@ -166,6 +166,9 @@ then tagged with its type::
     jl_value_t *jl_gc_allocobj(size_t nbytes);
     void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
 
+Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer size.
+Memory is allocated from a pool for smaller objects, or directly with :c:func:`malloc` for large objects.
+
 .. sidebar:: :ref:`man-singleton-types`
 
     Singleton types have only one instance and no data fields.
@@ -174,6 +177,3 @@ then tagged with its type::
     e.g. :data:`nothing::Void`.
 
     See :ref:`man-singleton-types` and :ref:`man-nothing`
-
-Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer size.
-Memory is allocated from a pool for smaller objects, or directly with :c:func:`malloc` for large objects.

@@ -14,6 +14,8 @@
    ast
    types
    object
+   functions
+   callconv
    cartesian
    meta
    subarrays
@@ -21,3 +23,4 @@
    llvm
    stdio
    promote-op
+   boundscheck

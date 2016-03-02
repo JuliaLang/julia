@@ -242,7 +242,7 @@ Julia syntax. As an alternative, Julia allows "splicing" or interpolation
 of literals or expressions into quoted expressions. Interpolation is
 indicated by the ``$`` prefix.
 
-In this example, the literal value of `a` is interpolated:
+In this example, the literal value of ``a`` is interpolated:
 
 .. doctest::
 
@@ -535,7 +535,7 @@ Building an advanced macro
 Here is a simplified definition of Julia's :obj:`@assert` macro::
 
     macro assert(ex)
-        return :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
+        return :( $ex ? nothing : throw(AssertionError($(string(ex)))) )
     end
 
 This macro can be used like this:
@@ -550,8 +550,8 @@ This macro can be used like this:
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
 
-    1==1.0 ? nothing : error("Assertion failed: ", "1==1.0")
-    1==0 ? nothing : error("Assertion failed: ", "1==0")
+    1==1.0 ? nothing : throw(AssertionError("1==1.0"))
+    1==0 ? nothing : throw(AssertionError("1==0"))
 
 That is, in the first call, the expression ``:(1==1.0)`` is spliced into
 the test condition slot, while the value of ``string(:(1==1.0))`` is
@@ -572,8 +572,8 @@ ellipses following the last argument::
 
     macro assert(ex, msgs...)
         msg_body = isempty(msgs) ? ex : msgs[1]
-        msg = string("assertion failed: ", msg_body)
-        return :($ex ? nothing : error($msg))
+        msg = string(msg_body)
+        return :($ex ? nothing : throw(AssertionError($msg)))
     end
 
 Now :obj:`@assert` has two modes of operation, depending upon the number of
@@ -961,7 +961,7 @@ function is generated is really an implementation detail; it *might* be only
 once, but it *might* also be more often. As a consequence, you should
 *never* write a generated function with side effects - when, and how often,
 the side effects occur is undefined. (This is true for macros too - and just
-like for macros, the use of `eval` in a generated function is a sign that
+like for macros, the use of :func:`eval` in a generated function is a sign that
 you're doing something the wrong way.)
 
 The example generated function ``foo`` above did not do anything a normal
@@ -1017,12 +1017,12 @@ These examples are hopefully helpful to illustrate how generated functions
 work, both in the definition end and at the call site; however, *don't
 copy them*, for the following reasons:
 
-* the `foo` function has side-effects, and it is undefined exactly when,
+* the ``foo`` function has side-effects, and it is undefined exactly when,
   how often or how many times these side-effects will occur
-* the `bar` function solves a problem that is better solved with multiple
-  dispatch - defining `bar(x) = x` and `bar(x::Integer) = x^2` will do
+* the ``bar`` function solves a problem that is better solved with multiple
+  dispatch - defining ``bar(x) = x`` and ``bar(x::Integer) = x^2`` will do
   the same thing, but it is both simpler and faster.
-* the `baz` function is pathologically insane
+* the ``baz`` function is pathologically insane
 
 Instead, now that we have a better understanding for how generated functions
 work, let's use them to build some more advanced functionality...
@@ -1036,7 +1036,7 @@ indices - in other words, to calculate the index ``i`` that can be used to
 index into an array ``A`` using ``A[i]``, instead of ``A[x,y,z,...]``. One
 possible implementation is the following::
 
-    function sub2ind_loop(dims::NTuple{N}, I::Integer...)
+    function sub2ind_loop{N}(dims::NTuple{N}, I::Integer...)
         ind = I[N] - 1
         for i = N-1:-1:1
             ind = I[i]-1 + dims[i]*ind

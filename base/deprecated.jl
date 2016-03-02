@@ -56,15 +56,6 @@ macro deprecate(old,new)
     end
 end
 
-remove_linenums!(ex) = ex
-function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)), ex.args)
-    for subex in ex.args
-        remove_linenums!(subex)
-    end
-    ex
-end
-
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
@@ -85,13 +76,12 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), bt[i], true)
+        lkup = StackTraces.lookup(bt[i])
         i += 1
-        if lkup === ()
+        if lkup === StackTraces.UNKNOWN
             continue
         end
-        fname, file, line, inlinedat_file, inlinedat_line, fromC = lkup
-        if fname == funcsym
+        if lkup.func == funcsym
             break
         end
     end
@@ -99,6 +89,16 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
         return bt[i]
     end
     return C_NULL
+end
+
+deprecate(s::Symbol) = deprecate(current_module(), s)
+deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+
+macro deprecate_binding(old, new)
+    Expr(:toplevel,
+         Expr(:export, esc(old)),
+         Expr(:const, Expr(:(=), esc(old), esc(new))),
+         Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
 # 0.4 deprecations
@@ -111,24 +111,22 @@ end
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export UdpSocket
 const TcpSocket = TCPSocket
-const UdpSocket = UDPSocket
+deprecate(:TcpSocket)
 const IpAddr = IPAddr
+deprecate(:IpAddr)
+@deprecate_binding UdpSocket UDPSocket
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
-export Nothing
-const Nothing = Void
-
-export None
-const None = Union{}
+@deprecate_binding Nothing Void
+@deprecate_binding None Union{}
 
 export apply
 @noinline function apply(f, args...)
     depwarn("apply(f, x) is deprecated, use `f(x...)` instead", :apply)
-    return Core._apply(call, f, args...)
+    return Core._apply(f, args...)
 end
 
 @deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
@@ -150,16 +148,15 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-export String
-const String = AbstractString
+@deprecate_binding String AbstractString
 
-export Uint, Uint8, Uint16, Uint32, Uint64, Uint128
-const Uint = UInt
-const Uint8 = UInt8
-const Uint16 = UInt16
-const Uint32 = UInt32
-const Uint64 = UInt64
-const Uint128 = UInt128
+# 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
+@deprecate_binding Uint    UInt
+@deprecate_binding Uint8   UInt8
+@deprecate_binding Uint16  UInt16
+@deprecate_binding Uint32  UInt32
+@deprecate_binding Uint64  UInt64
+@deprecate_binding Uint128 UInt128
 
 @deprecate zero{T}(::Type{Ptr{T}}) Ptr{T}(0)
 @deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
@@ -178,8 +175,7 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
-export Base64Pipe
-const Base64Pipe = Base64EncodePipe
+@deprecate_binding Base64Pipe Base64EncodePipe
 @deprecate base64 base64encode
 
 @deprecate prevind(a::Any, i::Integer)   i-1
@@ -208,8 +204,7 @@ const Base64Pipe = Base64EncodePipe
 @deprecate error(ex::Exception) throw(ex)
 @deprecate error{E<:Exception}(::Type{E}) throw(E())
 
-export MemoryError
-const MemoryError = OutOfMemoryError
+@deprecate_binding MemoryError OutOfMemoryError
 
 @deprecate map!(f::Callable, dest::StridedArray, A::StridedArray, B::Number) broadcast!(f, dest, A, B)
 @deprecate map!(f::Callable, dest::StridedArray, A::Number, B::StridedArray) broadcast!(f, dest, A, B)
@@ -250,13 +245,35 @@ const MemoryError = OutOfMemoryError
 @deprecate float64(s::AbstractString)   parse(Float64,s)
 @deprecate float32(s::AbstractString)   parse(Float32,s)
 
-for (f,t) in ((:integer, Integer), (:signed, Signed),
-              (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
-              (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
-              (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64),
-              (:uint128, UInt128))
+for (f,t) in ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned))
     @eval begin
         @deprecate $f(x::AbstractArray) round($t, x)
+    end
+end
+
+for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
+              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
+              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
+    ex1 = sprint(io->show_unquoted(io,:([parse($t,s) for s in a])))
+    ex2 = sprint(io->show_unquoted(io,:(round($t, a))))
+    name = Expr(:quote,f)
+    @eval begin
+        function ($f)(x::AbstractArray)
+            if all(y->isa(y,AbstractString), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex1, " instead."), $name)
+                return [parse($t,s) for s in x]
+            elseif all(y->isa(y,Number), x)
+                depwarn(string($name,"(a::AbstractArray) is deprecated, use ", $ex2, " instead."), $name)
+                return round($t, x)
+            end
+            y = similar(x,$t)
+            i = 1
+            for e in x
+                y[i] = ($f)(e)
+                i += 1
+            end
+            y
+        end
     end
 end
 
@@ -342,13 +359,6 @@ end
 @deprecate integer(x::Ptr)   convert(UInt, x)
 @deprecate unsigned(x::Ptr)  convert(UInt, x)
 
-for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
-              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
-              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
-    @eval begin
-        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
-    end
-end
 for (f,t) in ((:float32, Float32), (:float64, Float64))
     @eval begin
         @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parse($t,s) for s in a]
@@ -424,7 +434,7 @@ end
 to_index_nodep(i::Real) = convert(Int,i)::Int
 
 @noinline function to_index(i::Real)
-    depwarn("indexing with non Integer Reals is deprecated", :to_index)
+    depwarn("Indexing with non-Integer Reals is deprecated.  It may be that your index arose from an integer division of the form i/j, in which case you should consider using i÷j or div(i,j) instead.", :to_index)
     to_index_nodep(i)
 end
 
@@ -495,7 +505,13 @@ export float32_isvalid, float64_isvalid
 @deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
 
 # 12087
-@deprecate call(P::Base.DFT.Plan, A) P * A
+@deprecate call(P::Base.DFT.ScaledPlan, A) P * A
+if Base.USE_GPL_LIBS
+    @deprecate call(P::Base.FFTW.DCTPlan, A) P * A
+    @deprecate call(P::Base.FFTW.cFFTWPlan, A) P * A
+    @deprecate call(P::Base.FFTW.rFFTWPlan, A) P * A
+    @deprecate call(P::Base.FFTW.r2rFFTWPlan, A) P * A
+end
 for f in (:plan_fft, :plan_ifft, :plan_bfft, :plan_fft!, :plan_ifft!, :plan_bfft!, :plan_rfft)
     @eval @deprecate $f(A, dims, flags) $f(A, dims; flags=flags)
     @eval @deprecate $f(A, dims, flags, tlim) $f(A, dims; flags=flags, timelimit=tlim)
@@ -542,21 +558,34 @@ function start_timer(t, d, r)
     error("start_timer is deprecated. Use Timer(callback, delay, repeat) instead.")
 end
 
-const UnionType = Union
-export UnionType
+@deprecate_binding UnionType Union
 
-const MathConst = Irrational
+@deprecate_binding MathConst Irrational
 
 macro math_const(sym, val, def)
     depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
     :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
 end
-
-export MathConst, @math_const
+export @math_const
 
 # 11280, mmap
 
 export msync
+
+"""
+    msync(ptr, len, [flags])
+
+Forces synchronization of the [`mmap`](:func:`mmap`)ped memory region from `ptr` to
+`ptr+len`. Flags defaults to `MS_SYNC`, but can be a combination of `MS_ASYNC`, `MS_SYNC`,
+or `MS_INVALIDATE`. See your platform man page for specifics. The flags argument is not
+valid on Windows.
+
+You may not need to call `msync`, because synchronization is performed at intervals
+automatically by the operating system. However, you can call this directly if, for example,
+you are concerned about losing the result of a long-running calculation.
+"""
+function msync end
+
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
 
@@ -573,10 +602,10 @@ export mmap
         throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
     end
     # Set the offset to a page boundary
-    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
+    offset_page::Int64 = floor(Integer,offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
-    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, len_page, prot, flags, fd, offset_page)
     systemerror("memory mapping failed", reinterpret(Int,p) == -1)
     # Also return a pointer that compensates for any adjustment in the offset
     return p, Int(offset-offset_page)
@@ -626,7 +655,7 @@ type SharedMemSpec
     create :: Bool
 end
 export mmap_array
-@noinline function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::FileOffset)
+@noinline function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union{IO,SharedMemSpec}, offset::Int64)
     depwarn("`mmap_array` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap_array)
     if isa(s,SharedMemSpec)
         a = Mmap.Anonymous(s.name, s.readonly, s.create)
@@ -637,7 +666,7 @@ export mmap_array
 end
 end
 
-@deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset=position(s)) mmap(s, BitArray, dims, offset)
+@deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::Int64=position(s)) mmap(s, BitArray, dims, offset)
 @deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)
 
 # T[a:b] and T[a:s:b]
@@ -661,14 +690,36 @@ end
 
 ## require ##
 
+function maybe_require_file(name::AbstractString)
+    isabspath(name) && return name
+    isfile(name) && return abspath(name)
+    if !endswith(name,".jl")
+        fname = string(name,".jl")
+        isfile(fname) && return abspath(fname)
+    end
+    return name
+end
+
 include("require.jl")
 @noinline function require(f::AbstractString)
-    if !(endswith(f,".jl") || contains(f,path_separator))
-        # for require("Name") this function shouldn't be needed at all
-        error("use `using` or `import` to load packages")
-    end
     depwarn("`require` is deprecated, use `using` or `import` instead", :require)
-    OldRequire.require(f)
+    if endswith(f,".jl") || contains(f,Filesystem.path_separator)
+        # specifying file path
+        OldRequire.require(f)
+    else
+        # require("Foo") --- ambiguous. might be file or package
+        filename = maybe_require_file(f)
+        if filename == f
+            mod = symbol(require_modname(f))
+            M = current_module()
+            if isdefined(M,mod) && isa(eval(M,mod),Module)
+                return
+            end
+            require(mod)
+        else
+            OldRequire.require(f)
+        end
+    end
 end
 @noinline function require(f::AbstractString, fs::AbstractString...)
     require(f)
@@ -767,8 +818,7 @@ end
 
 @deprecate iseltype(x,T)  eltype(x) <: T
 
-const FloatingPoint = AbstractFloat
-export FloatingPoint
+@deprecate_binding FloatingPoint AbstractFloat
 
 # 11447
 
@@ -787,3 +837,165 @@ export FloatingPoint
 end
 
 @deprecate cartesianmap(f, dims) for idx in CartesianRange(dims); f(idx.I...); end
+
+@deprecate Union(args...) Union{args...}
+
+# 0.5 deprecations
+
+# 12839
+const AsyncStream = IO
+deprecate(:AsyncStream)
+
+for f in (:remotecall, :remotecall_fetch, :remotecall_wait)
+    @eval begin
+        @deprecate ($f)(w::LocalProcess, f::Function, args...)    ($f)(f, w::LocalProcess, args...)
+        @deprecate ($f)(w::Worker, f::Function, args...)          ($f)(f, w::Worker, args...)
+        @deprecate ($f)(id::Integer, f::Function, args...)        ($f)(f, id::Integer, args...)
+    end
+end
+
+# 13232
+@deprecate with_bigfloat_precision setprecision
+@deprecate set_bigfloat_precision(prec) setprecision(prec)
+@deprecate get_bigfloat_precision() precision(BigFloat)
+
+@deprecate set_rounding setrounding
+@deprecate with_rounding setrounding
+@deprecate get_rounding rounding
+
+#13465
+@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) covm(x, mean, corrected)
+@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) covm(X, mean, vardim, corrected)
+@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) covm(x, mean[1], y, mean[2], corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) covm(X, mean[1], Y, mean[2], vardim, corrected)
+
+@deprecate cor(x::AbstractVector; mean=Base.mean(x)) corm(x, mean)
+@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) corm(X, mean, vardim)
+@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) corm(x, mean[1], y, mean[2])
+@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) corm(X, mean[1], Y, mean[2], vardim)
+
+@deprecate_binding SparseMatrix SparseArrays
+
+#13496
+@deprecate A_ldiv_B!(A::SparseMatrixCSC, B::StridedVecOrMat) A_ldiv_B!(factorize(A), B)
+
+@deprecate chol(A::Number, ::Type{Val{:U}})         chol(A)
+@deprecate chol(A::AbstractMatrix, ::Type{Val{:U}}) chol(A)
+@deprecate chol(A::Number, ::Type{Val{:L}})         ctranspose(chol(A))
+@deprecate chol(A::AbstractMatrix, ::Type{Val{:L}}) ctranspose(chol(A))
+
+# Number updates
+
+# rem1 is inconsistent for x==0: The result should both have the same
+# sign as x, and should be non-zero.
+function rem1{T<:Real}(x::T, y::T)
+    depwarn("`rem1(x,y)` is discontinued, as it cannot be defined consistently for `x==0`. Rewrite the expression using `mod1` instead.", :rem1)
+    rem(x-1,y)+1
+end
+
+# Filesystem module updates
+
+@deprecate_binding FS Filesystem
+
+isreadable(path...) = isreadable(stat(path...))
+iswritable(path...) = iswritable(stat(path...))
+isexecutable(path...) = isexecutable(stat(path...))
+function isreadable(st::Filesystem.StatStruct)
+    depwarn("isreadable is deprecated as it implied that the file would actually be readable by the user; consider using `isfile` instead. see also the system man page for `access`", :isreadable)
+    return (st.mode & 0o444) > 0
+end
+function iswritable(st::Filesystem.StatStruct)
+    depwarn("iswritable is deprecated as it implied that the file would actually be writable by the user; consider using `isfile` instead. see also the system man page for `access`", :iswritable)
+    return (st.mode & 0o222) > 0
+end
+function isexecutable(st::Filesystem.StatStruct)
+    depwarn("isexecutable is deprecated as it implied that the file would actually be executable by the user; consider using `isfile` instead. see also the system man page for `access`", :isexecutable)
+    return (st.mode & 0o111) > 0
+end
+export isreadable, iswritable, isexecutable
+
+@deprecate RemoteRef RemoteChannel
+
+function tty_size()
+    depwarn("tty_size is deprecated. use `displaysize(io)` as a replacement", :tty_size)
+    if isdefined(Base, :active_repl)
+        os = REPL.outstream(Base.active_repl)
+        if isa(os, Terminals.TTYTerminal)
+            return displaysize(os)
+        end
+    end
+    if isdefined(Base, :STDOUT)
+        return displaysize(STDOUT)
+    end
+    return displaysize()
+end
+
+#14335
+@deprecate super(T::DataType) supertype(T)
+
+function with_output_limit(thk, lim=true) # thk is usually show()
+    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit_output => lim)` as a replacement", :with_output_limit)
+    global _limit_output
+    last = _limit_output
+    _limit_output::Bool = lim
+    try
+        thk()
+    finally
+        _limit_output = last
+    end
+end
+
+#14555
+@deprecate_binding Coff_t Int64
+@deprecate_binding FileOffset Int64
+
+#14474
+macro boundscheck(yesno,blk)
+    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", symbol("@boundscheck"))
+    if yesno === true
+        :(@inbounds $(esc(blk)))
+    end
+end
+
+
+@deprecate parseip(str::AbstractString) parse(IPAddr, str)
+
+#https://github.com/JuliaLang/julia/issues/14608
+@deprecate readall readstring
+@deprecate readbytes read
+
+@deprecate field_offset(x::DataType, idx) fieldoffset(x, idx+1)
+@noinline function fieldoffsets(x::DataType)
+    depwarn("fieldoffsets is deprecated. use `map(idx->fieldoffset(x, idx), 1:nfields(x))` instead", :fieldoffsets)
+    nf = nfields(x)
+    offsets = Array(Int, nf)
+    for i = 1:nf
+        offsets[i] = fieldoffset(x, i)
+    end
+    return offsets
+end
+export fieldoffsets
+
+# 14766
+@deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
+
+@deprecate isgeneric(f) isa(f,Function)
+
+# need to do this manually since the front end deprecates method defs of `call`
+const call = @eval function(f, args...; kw...)
+    $(Expr(:meta, :noinline))
+    depwarn("call(f,args...) is deprecated, use f(args...) instead.", :call)
+    f(args...; kw...)
+end
+export call
+
+@deprecate_binding LambdaStaticData LambdaInfo
+
+# Changed issym to issymmetric. #15192
+@deprecate issym issymmetric
+
+# 15258
+@deprecate scale(α::Number, A::AbstractArray) α*A
+@deprecate scale(A::AbstractArray, α::Number) A*α
+@deprecate scale(A::AbstractMatrix, x::AbstractVector) A*Diagonal(x)
+@deprecate scale(x::AbstractVector, A::AbstractMatrix) Diagonal(x)*A

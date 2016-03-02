@@ -17,7 +17,7 @@ On ubuntu, you'll need the following packages installed:
     texlive-lang-cjk
     texlive-latex-extra
 
-On OS X, you can install install MacTex using the GUI installer
+On OS X, you can install MacTex using the GUI installer
 
 
 Building the documentation

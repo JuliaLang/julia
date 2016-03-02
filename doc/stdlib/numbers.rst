@@ -42,11 +42,11 @@ Data Formats
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``UInt8`` array of character values to use as digit symbols.
 
-.. function:: digits(n, [base], [pad])
+.. function:: digits([T], n, [base], [pad])
 
    .. Docstring generated from Julia source
 
-   Returns an array of the digits of ``n`` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``\ .
+   Returns an array with element type ``T`` (default ``Int``\ ) of the digits of ``n`` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``\ .
 
 .. function:: digits!(array, n, [base])
 
@@ -126,19 +126,19 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Byte-swap an integer
+   Byte-swap an integer.
 
 .. function:: num2hex(f)
 
    .. Docstring generated from Julia source
 
-   Get a hexadecimal string of the binary representation of a floating point number
+   Get a hexadecimal string of the binary representation of a floating point number.
 
 .. function:: hex2num(str)
 
    .. Docstring generated from Julia source
 
-   Convert a hexadecimal string to the floating point number it represents
+   Convert a hexadecimal string to the floating point number it represents.
 
 .. function:: hex2bytes(s::ASCIIString)
 
@@ -223,7 +223,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether a floating point number is subnormal
+   Test whether a floating point number is subnormal.
 
 .. function:: isfinite(f) -> Bool
 
@@ -235,19 +235,19 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether a number is infinite
+   Test whether a number is infinite.
 
 .. function:: isnan(f) -> Bool
 
    .. Docstring generated from Julia source
 
-   Test whether a floating point number is not a number (NaN)
+   Test whether a floating point number is not a number (NaN).
 
 .. function:: inf(f)
 
    .. Docstring generated from Julia source
 
-   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``\ .
 
 .. function:: nan(f)
 
@@ -259,13 +259,13 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Get the next floating point number in lexicographic order
+   Get the next floating point number in lexicographic order.
 
 .. function:: prevfloat(f) -> AbstractFloat
 
    .. Docstring generated from Julia source
 
-   Get the previous floating point number in lexicographic order
+   Get the previous floating point number in lexicographic order.
 
 .. function:: isinteger(x) -> Bool
 
@@ -277,7 +277,7 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether ``x`` or all its elements are numerically equal to some real number
+   Test whether ``x`` or all its elements are numerically equal to some real number.
 
 .. function:: Float32(x [, mode::RoundingMode])
 
@@ -293,7 +293,7 @@ General Number Functions and Constants
        julia> Float32(1/3, RoundUp)
        0.33333334f0
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: Float64(x [, mode::RoundingMode])
 
@@ -309,65 +309,49 @@ General Number Functions and Constants
        julia> Float64(pi, RoundUp)
        3.1415926535897936
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: BigInt(x)
 
    .. Docstring generated from Julia source
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything
-   that can be converted to an ``Int``).  The usual mathematical operators are
-   defined for this type, and results are promoted to a ``BigInt``.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``\ ).  The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``\ .
 
-   Instances can be constructed from strings via :func:`parse`, or using the
-   ``big`` string literal.
+   Instances can be constructed from strings via :func:`parse`\ , or using the ``big`` string literal.
 
 .. function:: BigFloat(x)
 
    .. Docstring generated from Julia source
 
-   Create an arbitrary precision floating point number. ``x`` may be
-   an ``Integer``, a ``Float64`` or a ``BigInt``. The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a ``BigFloat``.
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``\ , a ``Float64`` or a ``BigInt``\ . The usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``\ .
 
-   Note that because decimal literals are converted to floating point numbers
-   when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead
-   prefer to initialize constants from strings via :func:`parse`, or using the
-   ``big`` string literal.
+   Note that because decimal literals are converted to floating point numbers when parsed, ``BigFloat(2.1)`` may not yield what you expect. You may instead prefer to initialize constants from strings via :func:`parse`\ , or using the ``big`` string literal.
 
    .. doctest::
 
-      julia> BigFloat(2.1)
-      2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+       julia> BigFloat(2.1)
+       2.100000000000000088817841970012523233890533447265625000000000000000000000000000
 
-      julia> big"2.1"
-      2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+       julia> big"2.1"
+       2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
-.. function:: get_rounding(T)
-
-   .. Docstring generated from Julia source
-
-   Get the current floating point rounding mode for type ``T``, controlling
-   the rounding of basic arithmetic functions (:func:`+`, :func:`-`,
-   :func:`*`, :func:`/` and :func:`sqrt`) and type conversion.
-
-   Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``,
-   ``RoundDown``, and ``RoundFromZero`` (``BigFloat`` only).
-
-.. function:: set_rounding(T, mode)
+.. function:: rounding(T)
 
    .. Docstring generated from Julia source
 
-   Set the rounding mode of floating point type ``T``, controlling the
-   rounding of basic arithmetic functions (:func:`+`, :func:`-`, :func:`*`,
-   :func:`/` and :func:`sqrt`) and type conversion.
+   Get the current floating point rounding mode for type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
 
-   Note that this may affect other types, for instance changing the rounding
-   mode of ``Float64`` will change the rounding mode of ``Float32``. See
-   ``get_rounding`` for available modes
+   Valid modes are ``RoundNearest``\ , ``RoundToZero``\ , ``RoundUp``\ , ``RoundDown``\ , and ``RoundFromZero`` (``BigFloat`` only).
 
-.. function:: with_rounding(f::Function, T, mode)
+.. function:: setrounding(T, mode)
+
+   .. Docstring generated from Julia source
+
+   Set the rounding mode of floating point type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
+
+   Note that this may affect other types, for instance changing the rounding mode of ``Float64`` will change the rounding mode of ``Float32``\ . See ``rounding`` for available modes
+
+.. function:: setrounding(f::Function, T, mode)
 
    .. Docstring generated from Julia source
 
@@ -375,12 +359,12 @@ General Number Functions and Constants
 
    .. code-block:: julia
 
-       old = get_rounding(T)
-       set_rounding(T, mode)
+       old = rounding(T)
+       setrounding(T, mode)
        f()
-       set_rounding(T, old)
+       setrounding(T, old)
 
-   See ``get_rounding`` for available rounding modes.
+   See ``rounding`` for available rounding modes.
 
 .. function:: get_zero_subnormals() -> Bool
 
@@ -537,30 +521,32 @@ The ``BigFloat`` type implements arbitrary-precision floating-point arithmetic u
 
    Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
 
-.. function:: get_bigfloat_precision()
+.. function:: precision(BigFloat)
 
    .. Docstring generated from Julia source
 
    Get the precision (in bits) currently used for ``BigFloat`` arithmetic.
 
-.. function:: set_bigfloat_precision(x::Int64)
+.. function:: setprecision([T=BigFloat,] precision::Int)
 
    .. Docstring generated from Julia source
 
-   Set the precision (in bits) to be used to ``BigFloat`` arithmetic.
+   Set the precision (in bits) to be used for ``T`` arithmetic.
 
-.. function:: with_bigfloat_precision(f::Function,precision::Integer)
+.. function:: setprecision(f::Function, [T=BigFloat,] precision::Integer)
 
    .. Docstring generated from Julia source
 
-   Change the ``BigFloat`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
+   Change the ``T`` arithmetic precision (in bits) for the duration of ``f``\ . It is logically equivalent to:
 
    .. code-block:: julia
 
-       old = get_bigfloat_precision()
-       set_bigfloat_precision(precision)
+       old = precision(BigFloat)
+       setprecision(BigFloat, precision)
        f()
-       set_bigfloat_precision(old)
+       setprecision(BigFloat, old)
+
+   Often used as ``setprecision(T, precision) do ... end``
 
 .. _random-numbers:
 
@@ -605,8 +591,8 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Pick a random element or array of random elements from the set of values specified by ``S``\ ; ``S`` can be
 
-     * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
-     * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
+   * an indexable collection (for example ``1:n`` or ``['x','y','z']``\ ), or
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for   integers (this is not applicable to ``BigInt``\ ), and to :math:`[0, 1)` for floating point numbers;
 
    ``S`` defaults to ``Float64``\ .
 

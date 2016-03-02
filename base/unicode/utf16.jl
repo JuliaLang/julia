@@ -259,7 +259,7 @@ function map(fun, str::UTF16String)
         if !isa(c2, Char)
             throw(UnicodeError(UTF_ERR_MAP_CHAR, 0, 0))
         end
-        uc = reinterpret(UInt32, c2)
+        uc = UInt32(c2)
         if uc < 0x10000
             if is_surrogate_codeunit(UInt16(uc))
                 throw(UnicodeError(UTF_ERR_INVALID_CHAR, 0, uc))

@@ -18,10 +18,10 @@ command line::
                    _
        _       _ _(_)_     |  A fresh approach to technical computing
       (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-       _ _   _| |_  __ _   |  Type "help()" to list help topics
+       _ _   _| |_  __ _   |  Type "?help" for help.
       | | | | | | |/ _` |  |
-      | | |_| | | | (_| |  |  Version 0.3.0-prerelease+3690 (2014-06-16 05:11 UTC)
-     _/ |\__'_|_|_|\__'_|  |  Commit 1b73f04* (0 days old master)
+      | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)
+     _/ |\__'_|_|_|\__'_|  |  Commit 2bb94d6 (11 days old master)
     |__/                   |  x86_64-apple-darwin13.1.0
 
     julia> 1 + 2
@@ -51,19 +51,22 @@ argument to the julia command::
 
 As the example implies, the following command-line arguments to julia
 are taken as command-line arguments to the program ``script.jl``, passed
-in the global constant ``ARGS``. ``ARGS`` is also set when script code
-is given using the ``-e`` option on the command line (see the ``julia``
-help output below). For example, to just print the arguments given to a
-script, you could do this::
+in the global constant ``ARGS``. The name of the script itself is passed
+in as the global ``PROGRAM_FILE``. Note that ``ARGS`` is also set when script
+code is given using the ``-e`` option on the command line (see the ``julia``
+help output below) but ``PROGRAM_FILE`` will be empty. For example, to just
+print the arguments given to a script, you could do this::
 
-    $ julia -e 'for x in ARGS; println(x); end' foo bar
+    $ julia -e 'println(PROGRAM_FILE); for x in ARGS; println(x); end' foo bar
+
     foo
     bar
 
 Or you could put that code into a script and run it::
 
-    $ echo 'for x in ARGS; println(x); end' > script.jl
+    $ echo 'println(PROGRAM_FILE); for x in ARGS; println(x); end' > script.jl
     $ julia script.jl foo bar
+    script.jl
     foo
     bar
 
@@ -112,6 +115,7 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -J, --sysimage <file>     Start up with the given system image file
      --precompiled={yes|no}    Use precompiled code from system image if available
+     --compilecache={yes|no}   Enable/disable incremental precompilation of modules
      -H, --home <dir>          Set location of julia executable
      --startup-file={yes|no}   Load ~/.juliarc.jl
      -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)

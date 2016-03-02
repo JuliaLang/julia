@@ -51,7 +51,18 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-fieldnames(t::DataType) = Symbol[n for n in t.name.names ]
+"""
+    fieldname(x::DataType, i)
+
+Get the name of field `i` of a `DataType`.
+"""
+fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+
+"""
+    fieldnames(x::DataType)
+
+Get an array of the fields of a `DataType`.
+"""
 function fieldnames(v)
     t = typeof(v)
     if !isa(t,DataType)
@@ -59,8 +70,7 @@ function fieldnames(v)
     end
     return fieldnames(t)
 end
-
-fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 
 isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
@@ -71,25 +81,52 @@ isconst(m::Module, s::Symbol) =
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # type predicates
-isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
-isstructtype(t::DataType) = nfields(t) != 0 || (t.size==0 && !t.abstract)
-isstructtype(x) = false
-isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
-isbits(t::Type) = false
-isbits(x) = isbits(typeof(x))
-isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
+isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
+isstructtype(x) = (@_pure_meta; false)
+isbits(t::DataType) = (@_pure_meta; !t.mutable & t.pointerfree & isleaftype(t))
+isbits(t::Type) = (@_pure_meta; false)
+isbits(x) = (@_pure_meta; isbits(typeof(x)))
+isleaftype(t::ANY) = (@_pure_meta; ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0)
 
-typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-typeseq(a::ANY,b::ANY) = a<:b && b<:a
+typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
 
-function fieldoffsets(x::DataType)
-    offsets = Array(Int, nfields(x))
-    ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
-    offsets
-end
+"""
+    fieldoffset(type, i)
 
-type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
-field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)
+The byte offset of field `i` of a type relative to the data start. For example, we could
+use it in the following manner to summarize information about a struct type:
+
+```jldoctest
+julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
+
+julia> structinfo(Base.Filesystem.StatStruct)
+12-element Array{Tuple{UInt64,Symbol,Type{_}},1}:
+ (0x0000000000000000,:device,UInt64)
+ (0x0000000000000008,:inode,UInt64)
+ (0x0000000000000010,:mode,UInt64)
+ (0x0000000000000018,:nlink,Int64)
+ (0x0000000000000020,:uid,UInt64)
+ (0x0000000000000028,:gid,UInt64)
+ (0x0000000000000030,:rdev,UInt64)
+ (0x0000000000000038,:size,Int64)
+ (0x0000000000000040,:blksize,Int64)
+ (0x0000000000000048,:blocks,Int64)
+ (0x0000000000000050,:mtime,Float64)
+ (0x0000000000000058,:ctime,Float64)
+```
+"""
+fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+
+"""
+    fieldtype(T, name::Symbol | index::Int)
+
+Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
+"""
+fieldtype
+
+type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
 # return all instances, for types that can be enumerated
 function instances end
@@ -100,7 +137,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     for s in names(m,true)
         if isdefined(m,s)
             t = eval(m,s)
-            if isa(t, DataType) && t.name.name == s && super(t).name == x.name
+            if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
                 ti = typeintersect(t, x)
                 ti != Bottom && push!(sts, ti)
             elseif isa(t, Module) && !in(t, visited)
@@ -114,11 +151,10 @@ subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
 # function reflection
-isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
-
-function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
+function_name(f::Function) = typeof(f).name.mt.name
 
 function to_tuple_type(t::ANY)
+    @_pure_meta
     if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
         t = Tuple{t...}
     end
@@ -132,57 +168,70 @@ function to_tuple_type(t::ANY)
     t
 end
 
-tt_cons(t::ANY, tup::ANY) = Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...}
+tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
-code_lowered(f, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f, t))
-function methods(f::Function,t::ANY)
-    if !isgeneric(f)
+code_lowered(f, t::ANY=Tuple) = map(m->uncompressed_ast(m.func), methods(f, t))
+function methods(f::ANY,t::ANY)
+    if isa(f,Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     Any[m[3] for m in _methods(f,t,-1)]
 end
-methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
+    ft = isa(f,Type) ? Type{f} : typeof(f)
     if isa(t,Type)
-        _methods(f, Any[t.parameters...], length(t.parameters), lim, [])
+        _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
     else
-        _methods(f, Any[t...], length(t), lim, [])
+        _methods_by_ftype(Tuple{ft, t...}, lim)
     end
 end
-function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
-    if i == 0
-        new = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, Tuple{t...}, lim)
-        if new === false
-            return false
+function _methods_by_ftype(t::ANY, lim)
+    tp = t.parameters
+    nu = 1
+    for ti in tp
+        if isa(ti, Union)
+            nu *= length(ti.types)
         end
+    end
+    if 1 < nu <= 64
+        return _methods(Any[tp...], length(tp), lim, [])
+    end
+    return ccall(:jl_matching_methods, Any, (Any,Int32), t, lim)
+end
+function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
+    if i == 0
+        new = ccall(:jl_matching_methods, Any, (Any,Int32), Tuple{t...}, lim)
+        new === false && return false
         append!(matching, new::Array{Any,1})
     else
         ti = t[i]
         if isa(ti, Union)
             for ty in (ti::Union).types
                 t[i] = ty
-                if _methods(f,t,i-1,lim,matching) === false
+                if _methods(t,i-1,lim,matching) === false
                     t[i] = ty
                     return false
                 end
             end
             t[i] = ti
         else
-            return _methods(f,t,i-1,lim,matching)
+            return _methods(t,i-1,lim,matching)
         end
     end
     matching
 end
 
-function methods(f::Function)
-    if !isgeneric(f)
-        throw(ArgumentError("argument is not a generic function"))
+function methods(f::ANY)
+    ft = typeof(f)
+    if ft <: Type || !isempty(ft.parameters)
+        # for these types of `f`, not every method in the table will necessarily
+        # match, so we need to filter based on its type.
+        methods(f, Tuple{Vararg{Any}})
+    else
+        ft.name.mt
     end
-    f.env
 end
-
-methods(x::ANY) = methods(call, Tuple{isa(x,Type) ? Type{x} : typeof(x), Vararg{Any}})
 
 function length(mt::MethodTable)
     n = 0
@@ -199,13 +248,13 @@ next(mt::MethodTable, m::Method) = (m,m.next)
 done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
-uncompressed_ast(l::LambdaStaticData) =
+uncompressed_ast(l::LambdaInfo) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
-    t = to_tuple_type(t)
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
+    t = tt_cons(Core.Typeof(f), to_tuple_type(t))
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, wrapper, native)
 
     if llvmf == C_NULL
         error("no method found for the specified argument types")
@@ -221,31 +270,26 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     return str
 end
 
-code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata=true, dump_module=false) =
+code_llvm(io::IO, f::ANY, types::ANY=Tuple, strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(f::ANY, types::ANY) = code_llvm(STDOUT, f, types)
-code_llvm_raw(f::ANY, types::ANY) = code_llvm(STDOUT, f, types, false)
-code_llvm(io::IO, f::ANY, t::ANY, args...) =
-    code_llvm(io, call,
-              tt_cons(isa(f, Type) ? Type{f} : typeof(f), t), args...)
+code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
+code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
 
-code_native(io::IO, f::Function, types::ANY) =
+code_native(io::IO, f::ANY, types::ANY=Tuple) =
     print(io, _dump_function(f, types, true, false, false, false))
-code_native(f::ANY, types::ANY) = code_native(STDOUT, f, types)
-code_native(io::IO, f::ANY, t::ANY) =
-    code_native(io, call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
+code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m, types)
-    linfo = Core.Inference.func_for_method(m[3],types,m[2])
+    linfo = Core.Inference.func_for_method(m[3],m[1],m[2])
     if linfo === Core.Inference.NF
         error("cannot call @generated function `", m[3], "` ",
               "with abstract argument types: ", types)
     end
-    linfo::LambdaStaticData
+    linfo::LambdaInfo
 end
 
-function code_typed(f::Function, types::ANY; optimize=true)
+function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
@@ -258,20 +302,14 @@ function code_typed(f::Function, types::ANY; optimize=true)
                                                          optimize=false)
         end
         if !isa(tree, Expr)
-            push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
-        else
-            push!(asts, tree)
+            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)
         end
+        push!(asts, tree)
     end
     asts
 end
 
-function code_typed(f, t::ANY; optimize=true)
-    code_typed(call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t),
-               optimize=optimize)
-end
-
-function return_types(f::Function, types::ANY)
+function return_types(f::ANY, types::ANY=Tuple)
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
@@ -282,11 +320,10 @@ function return_types(f::Function, types::ANY)
     rt
 end
 
-function return_types(f, t::ANY)
-    return_types(call, tt_cons(isa(f, Type) ? Type{f} : typeof(f), t))
-end
-
 function which(f::ANY, t::ANY)
+    if isa(f,Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
     t = to_tuple_type(t)
     if isleaftype(t)
         ms = methods(f, t)
@@ -294,13 +331,8 @@ function which(f::ANY, t::ANY)
         length(ms)!=1 && error("no unique matching method for the specified argument types")
         ms[1]
     else
-        if !isa(f,Function)
-            t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-            f = call
-        elseif !isgeneric(f)
-            throw(ArgumentError("argument is not a generic function"))
-        end
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
+        ft = isa(f,Type) ? Type{f} : typeof(f)
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any,), Tuple{ft, t.parameters...})
         if m === nothing
             error("no method found for the specified argument types")
         end
@@ -318,7 +350,7 @@ function which_module(m::Module, s::Symbol)
 end
 
 function functionloc(m::Method)
-    lsd = m.func.code::LambdaStaticData
+    lsd = m.func::LambdaInfo
     ln = lsd.line
     if ln <= 0
         error("could not determine location of method definition")
@@ -332,8 +364,14 @@ function functionloc(f)
     m = methods(f)
     if length(m) > 1
         error("function has multiple methods; please specify a type signature")
+    elseif isempty(m)
+        if isa(f,Function)
+            error("function has no definitions")
+        else
+            error("object is not callable")
+        end
     end
-    functionloc(m.defs)
+    functionloc(first(m))
 end
 
 function function_module(f, types::ANY)
@@ -341,5 +379,11 @@ function function_module(f, types::ANY)
     if isempty(m)
         error("no matching methods")
     end
-    m[1].func.code.module
+    m[1].func.module
+end
+
+function method_exists(f::ANY, t::ANY)
+    t = to_tuple_type(t)
+    t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
+    return ccall(:jl_method_exists, Cint, (Any, Any), typeof(f).name.mt, t) != 0
 end

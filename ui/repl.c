@@ -34,6 +34,18 @@
 extern "C" {
 #endif
 
+#ifdef JULIA_ENABLE_THREADING
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
+{
+#  if !defined(_COMPILER_MICROSOFT_)
+    static __thread jl_tls_states_t tls_states;
+#  else
+    static __declspec(thread) jl_tls_states_t tls_states;
+#  endif
+    return &tls_states;
+}
+#endif
+
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
@@ -47,6 +59,7 @@ static const char opts[]  =
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " --precompiled={yes|no}    Use precompiled code from system image if available\n"
+    " --compilecache={yes|no}   Enable/disable incremental precompilation of modules\n"
     " -H, --home <dir>          Set location of julia executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
     " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
@@ -72,9 +85,9 @@ static const char opts[]  =
     " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n\n"
 
     // code generation options
-    " --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation\n"
+    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
     " -C, --cpu-target <target> Limit usage of cpu features up to <target>\n"
-    " -O, --optimize            Run time-intensive code optimizations\n"
+    " -O, --optimize={0,1,2,3}  Set the optimization level (default 2 if unspecified or 3 if specified as -O)\n"
     " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
@@ -115,9 +128,10 @@ void parse_opts(int *argcp, char ***argvp)
            opt_output_o,
            opt_output_ji,
            opt_use_precompiled,
+           opt_use_compilecache,
            opt_incremental
     };
-    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
+    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:";
     static struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -132,6 +146,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
         { "precompiled",     required_argument, 0, opt_use_precompiled },
+        { "compilecache",    required_argument, 0, opt_use_compilecache },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "machinefile",     required_argument, 0, opt_machinefile },
@@ -143,7 +158,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
-        { "optimize",        no_argument,       0, 'O' },
+        { "optimize",        optional_argument, 0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-o",        required_argument, 0, opt_output_o },
@@ -160,27 +175,47 @@ void parse_opts(int *argcp, char ***argvp)
         { 0, 0, 0, 0 }
     };
     // getopt handles argument parsing up to -- delineator
-    int lastind = optind;
     int argc = *argcp;
+    char **argv = *argvp;
     if (argc > 0) {
         for (int i=0; i < argc; i++) {
-            if (!strcmp((*argvp)[i], "--")) {
+            if (!strcmp(argv[i], "--")) {
                 argc = i;
                 break;
             }
         }
     }
-    int c;
     char *endptr;
-    opterr = 0;
-    int skip = 0;
-    while ((c = getopt_long(argc,*argvp,shortopts,longopts,0)) != -1) {
+    opterr = 0; // suppress getopt warning messages
+    while (1) {
+        int lastind = optind;
+        int c = getopt_long(argc, argv, shortopts, longopts, 0);
+        if (c == -1) break;
+restart_switch:
         switch (c) {
         case 0:
             break;
         case '?':
-        if (optind != lastind) skip++;
-            lastind = optind;
+        case ':':
+            if (optopt) {
+                for (struct option *o = longopts; o->val; o++) {
+                    if (optopt == o->val) {
+                        if (o->has_arg == optional_argument) {
+                            c = o->val;
+                            goto restart_switch;
+                        }
+                        else if (strchr(shortopts, o->val)) {
+                            jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
+                        }
+                        else {
+                            jl_errorf("option `--%s` is missing an argument", o->name);
+                        }
+                    }
+                }
+                jl_errorf("unknown option `-%c`", optopt);
+            } else {
+                jl_errorf("unknown option `%s`", argv[lastind]);
+            }
             break;
         case 'v': // version
             jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
@@ -217,6 +252,14 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.use_precompiled = JL_OPTIONS_USE_PRECOMPILED_NO;
             else
                 jl_errorf("julia: invalid argument to --precompiled={yes|no} (%s)", optarg);
+            break;
+        case opt_use_compilecache:
+            if (!strcmp(optarg,"yes"))
+                jl_options.use_compilecache = JL_OPTIONS_USE_COMPILECACHE_YES;
+            else if (!strcmp(optarg,"no"))
+                jl_options.use_compilecache = JL_OPTIONS_USE_COMPILECACHE_NO;
+            else
+                jl_errorf("julia: invalid argument to --compilecache={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -276,6 +319,8 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
             else if (!strcmp(optarg,"all"))
                 jl_options.compile_enabled = JL_OPTIONS_COMPILE_ALL;
+            else if (!strcmp(optarg,"min"))
+                jl_options.compile_enabled = JL_OPTIONS_COMPILE_MIN;
             else
                 jl_errorf("julia: invalid argument to --compile (%s)", optarg);
             break;
@@ -287,6 +332,8 @@ void parse_opts(int *argcp, char ***argvp)
                     codecov = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     codecov = JL_LOG_NONE;
+                else
+                    jl_errorf("julia: invalid argument to --code-coverage (%s)", optarg);
                 break;
             }
             else {
@@ -301,6 +348,8 @@ void parse_opts(int *argcp, char ***argvp)
                     malloclog = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     malloclog = JL_LOG_NONE;
+                else
+                    jl_errorf("julia: invalid argument to --track-allocation (%s)", optarg);
                 break;
             }
             else {
@@ -308,7 +357,22 @@ void parse_opts(int *argcp, char ***argvp)
             }
             break;
         case 'O': // optimize
-            jl_options.opt_level = 1;
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"0"))
+                    jl_options.opt_level = 0;
+                else if (!strcmp(optarg,"1"))
+                    jl_options.opt_level = 1;
+                else if (!strcmp(optarg,"2"))
+                    jl_options.opt_level = 2;
+                else if (!strcmp(optarg,"3"))
+                    jl_options.opt_level = 3;
+                else
+                    jl_errorf("julia: invalid argument to -O (%s)", optarg);
+                break;
+            }
+            else {
+                jl_options.opt_level = 3;
+            }
             break;
         case 'i': // isinteractive
             jl_options.isinteractive = 1;
@@ -391,7 +455,6 @@ void parse_opts(int *argcp, char ***argvp)
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
-    optind -= skip;
     *argvp += optind;
     *argcp -= optind;
 }
@@ -454,13 +517,15 @@ static void print_profile(void)
 }
 #endif
 
-static int true_main(int argc, char *argv[])
+static NOINLINE int true_main(int argc, char *argv[])
 {
-    if (jl_base_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
+    if (jl_core_module != NULL) {
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
         if (args == NULL) {
             args = jl_alloc_cell_1d(0);
-            jl_set_const(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            JL_GC_PUSH1(&args);
+            jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
+            JL_GC_POP();
         }
         assert(jl_array_len(args) == 0);
         jl_array_grow_end(args, argc);
@@ -476,7 +541,7 @@ static int true_main(int argc, char *argv[])
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
-        jl_apply(start_client, NULL, 0);
+        jl_apply(&start_client, 1);
         return 0;
     }
 
@@ -572,6 +637,14 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
+#endif
+#ifdef JULIA_ENABLE_THREADING
+    // We need to make sure this function is called before any reference to
+    // TLS variables. Since the compiler is free to move calls to
+    // `jl_get_ptls_states()` around, we should avoid referencing TLS
+    // variables in this function. (Mark `true_main` as noinline for this
+    // reason).
+    jl_set_ptls_states_getter(jl_get_ptls_states_static);
 #endif
     libsupport_init();
     parse_opts(&argc, (char***)&argv);

@@ -3,7 +3,7 @@
 srand(123)
 using Base.Test
 
-using Base.SparseMatrix.CHOLMOD
+using Base.SparseArrays.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
@@ -174,7 +174,6 @@ let # Issue 9160
     end
 end
 
-
 # Issue #9915
 @test speye(2)\speye(2) == eye(2)
 
@@ -183,10 +182,10 @@ end
 @test eltype(A) == Float64
 @test eltype(chma) == Float64
 
-# test Sparse constructor Symmetric and Hermitian input (and issym and ishermitian)
+# test Sparse constructor Symmetric and Hermitian input (and issymmetric and ishermitian)
 ACSC = sprandn(10, 10, 0.3) + I
-@test issym(Sparse(Symmetric(ACSC, :L)))
-@test issym(Sparse(Symmetric(ACSC, :U)))
+@test issymmetric(Sparse(Symmetric(ACSC, :L)))
+@test issymmetric(Sparse(Symmetric(ACSC, :U)))
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :L)))
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 
@@ -318,8 +317,8 @@ for elty in (Float64, Complex{Float64})
     A1pdSparse = CHOLMOD.Sparse(
         A1pd.m,
         A1pd.n,
-        Base.SparseMatrix.decrement(A1pd.colptr),
-        Base.SparseMatrix.decrement(A1pd.rowval),
+        Base.SparseArrays.decrement(A1pd.colptr),
+        Base.SparseArrays.decrement(A1pd.rowval),
         A1pd.nzval)
 
     ## High level interface
@@ -388,7 +387,7 @@ for elty in (Float64, Complex{Float64})
     @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
 
     if elty <: Real
-        @test CHOLMOD.issym(Sparse(A1pd, 0))
+        @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2))
         F2 = CHOLMOD.Sparse(cholfact(A1pd, shift=2))
@@ -398,7 +397,7 @@ for elty in (Float64, Complex{Float64})
         F2 = CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
         @test F1 == F2
     else
-        @test !CHOLMOD.issym(Sparse(A1pd, 0))
+        @test !CHOLMOD.issymmetric(Sparse(A1pd, 0))
         @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
         F1 = CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2))
@@ -410,27 +409,27 @@ for elty in (Float64, Complex{Float64})
         @test F1 == F2
     end
 
-    ### update!
+    ### cholfact!/ldltfact!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(F.p).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
     F = cholfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)
@@ -564,7 +563,7 @@ b = rand(3)
 Asp = As[p,p]
 LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
 # LDp = sparse(Fs[:LD])
-Lp, dp = Base.SparseMatrix.CHOLMOD.getLd!(copy(LDp))
+Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
 Dp = spdiagm(dp)
 @test_approx_eq Fs\b Af\b
 @test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
@@ -597,3 +596,39 @@ Base.writemime(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1
 # Element promotion and type inference
 @inferred cholfact(As)\ones(Int, size(As, 1))
 @inferred ldltfact(As)\ones(Int, size(As, 1))
+
+# Issue 14076
+@test cholfact(sparse([1,2,3,4], [1,2,3,4], Float32[1,4,16,64]))\[1,4,16,64] == ones(4)
+
+# Issue 14134
+A = SparseArrays.CHOLMOD.Sparse(sprandn(10,5,0.1) + I |> t -> t't)
+b = IOBuffer()
+serialize(b, A)
+seekstart(b)
+Anew = deserialize(b)
+@test_throws ArgumentError show(Anew)
+@test_throws ArgumentError size(Anew)
+@test_throws ArgumentError Anew[1]
+@test_throws ArgumentError Anew[2,1]
+F = cholfact(A)
+serialize(b, F)
+seekstart(b)
+Fnew = deserialize(b)
+@test_throws ArgumentError Fnew\ones(5)
+@test_throws ArgumentError show(Fnew)
+@test_throws ArgumentError size(Fnew)
+@test_throws ArgumentError diag(Fnew)
+@test_throws ArgumentError logdet(Fnew)
+
+# Issue with promotion during conversion to CHOLMOD.Dense
+@test SparseArrays.CHOLMOD.Dense(ones(Float32, 5)) == ones(5, 1)
+@test SparseArrays.CHOLMOD.Dense(ones(Int, 5)) == ones(5, 1)
+@test SparseArrays.CHOLMOD.Dense(ones(Complex{Float32}, 5, 2)) == ones(5, 2)
+
+# Further issue with promotion #14894
+@test cholfact(speye(Float16, 5))\ones(5) == ones(5)
+@test cholfact(Symmetric(speye(Float16, 5)))\ones(5) == ones(5)
+@test cholfact(Hermitian(speye(Complex{Float16}, 5)))\ones(5) == ones(Complex{Float64}, 5)
+@test_throws MethodError cholfact(speye(BigFloat, 5))
+@test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
+@test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))

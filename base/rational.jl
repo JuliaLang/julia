@@ -57,6 +57,15 @@ function show(io::IO, x::Rational)
     show(io, den(x))
 end
 
+function read{T<:Integer}(s::IO, ::Type{Rational{T}})
+    r = read(s,T)
+    i = read(s,T)
+    r//i
+end
+function write(s::IO, z::Rational)
+    write(s,num(z),den(z))
+end
+
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
 convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x), convert(T,1))
 
@@ -279,22 +288,59 @@ trunc{T}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
 floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
 ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:Nearest})
-    q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den)+iseven(q))>>1 ? q : q+copysign(one(q),x.num)
-    convert(T,s)
+
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
+    q,r = divrem(num(x), den(x))
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(T, s)
 end
-round{T}(::Type{T}, x::Rational) = round(T,x,RoundNearest)
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesAway})
-    q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den))>>1 ? q : q+copysign(one(q),x.num)
-    convert(T,s)
+
+round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
+
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
+    q,r = divrem(num(x), den(x))
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(T, s)
 end
-function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesUp})
-    q,r = divrem(x.num,x.den)
-    s = abs(r) < (x.den+one(x.den)+(x.num<0))>>1 ? q : q+copysign(one(q),x.num)
-    convert(T,s)
+
+function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
+    if den(x) == zero(Tr) && T <: Integer
+        throw(DivideError())
+    elseif den(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    end
+    q,r = divrem(num(x), den(x))
+    s = q
+    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+(num(x)<0))>>1 + copysign(Tr(2), num(x)))
+        s += copysign(one(Tr),num(x))
+    end
+    convert(T, s)
 end
+
+function round{T}(::Type{T}, x::Rational{Bool})
+    if den(x) == false && issubtype(T, Union{Integer, Bool})
+        throw(DivideError())
+    end
+    convert(T, x)
+end
+
+round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode) = round(T, x)
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
 floor{T}(x::Rational{T}) = Rational(floor(T,x))

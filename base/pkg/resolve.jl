@@ -7,6 +7,7 @@ include("resolve/interface.jl")
 include("resolve/maxsum.jl")
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
+import ...Pkg.PkgError
 
 export resolve, sanity_check
 
@@ -34,7 +35,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
                     msg *= "\n  (you may try increasing the value of the" *
                            "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
                 end
-                error(msg)
+                throw(PkgError(msg))
             end
             rethrow(err)
         end
@@ -49,7 +50,8 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString} = Set{ByteString}())
+function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                      pkgs::Set{ByteString} = Set{ByteString}())
 
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 

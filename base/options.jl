@@ -28,6 +28,7 @@ immutable JLOptions
     worker::Int8
     handle_signals::Int8
     use_precompiled::Int8
+    use_compilecache::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
@@ -36,3 +37,17 @@ immutable JLOptions
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
+
+function show(io::IO, opt::JLOptions)
+    println(io, "JLOptions(")
+    fields = fieldnames(opt)
+    nfields = length(fields)
+    for (i,f) in enumerate(fieldnames(opt))
+        v = getfield(opt,f)
+        if isa(v, Ptr{UInt8})
+            v = v != C_NULL ? bytestring(v) : ""
+        end
+        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+    end
+    print(io,")")
+end

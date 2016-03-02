@@ -1,5 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# filesystem operations
+
+export
+    watch_file,
+    poll_fd,
+    poll_file,
+    FileMonitor,
+    PollingFileWatcher,
+    FDWatcher
+
+import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
+    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
+    associate_julia_struct, disassociate_julia_struct
+@windows_only import Base.WindowsRawSocket
+
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
@@ -32,7 +47,6 @@ FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fdtimeout() = FDEvent(false, false, true)
 
-
 type FileMonitor
     handle::Ptr{Void}
     file::ByteString
@@ -52,9 +66,7 @@ type FileMonitor
     end
 end
 
-abstract UVPollingWatcher
-
-type PollingFileWatcher <: UVPollingWatcher
+type PollingFileWatcher
     handle::Ptr{Void}
     file::ByteString
     interval::UInt32
@@ -150,7 +162,7 @@ type _FDWatcher
         end
     end
 end
-type FDWatcher <: UVPollingWatcher
+type FDWatcher
     watcher::_FDWatcher
     readable::Bool
     writable::Bool
@@ -195,6 +207,12 @@ function _uv_hook_close(uv::FileMonitor)
     uv.active = false
     notify(uv.notify, ("", FileEvent()))
     nothing
+end
+
+function __init__()
+    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, (Ptr{Void}, Cint, Cint))
+    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}))
+    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, (Ptr{Void}, Ptr{Int8}, Int32, Int32))
 end
 
 function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)

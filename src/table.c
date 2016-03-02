@@ -6,7 +6,7 @@
 #define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
 
 #define keyhash(k)     jl_object_id(k)
-#define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
+#define h2index(hv,sz) (size_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
@@ -113,7 +113,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     return NULL;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
     void **bp = jl_table_lookup_bp(&h, key);
@@ -122,7 +122,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
     return h;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
@@ -131,7 +131,7 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
     return (jl_value_t*)*bp;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
@@ -143,7 +143,7 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
     return val;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 {
     if (i&1) i++;

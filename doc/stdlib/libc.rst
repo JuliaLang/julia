@@ -46,9 +46,13 @@
 
 .. function:: GetLastError()
 
+   .. Docstring generated from Julia source
+
    Call the Win32 ``GetLastError`` function [only available on Windows].
 
 .. function:: FormatMessage(n=GetLastError())
+
+   .. Docstring generated from Julia source
 
    Convert a Win32 system call error code to a descriptive string [only available on Windows].
 
@@ -86,9 +90,9 @@
 
    .. Docstring generated from Julia source
 
-   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
+   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``\ . Flags defaults to ``MS_SYNC``\ , but can be a combination of ``MS_ASYNC``\ , ``MS_SYNC``\ , or ``MS_INVALIDATE``\ . See your platform man page for specifics. The flags argument is not valid on Windows.
 
-   You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   You may not need to call ``msync``\ , because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. data:: MS_ASYNC
 

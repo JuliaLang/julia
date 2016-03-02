@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 73c9630..3dedd0a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -217,7 +217,7 @@ ELSE ()
+ 	ENDIF ()
+ 
+ 	IF (NOT AMIGA AND USE_OPENSSL)
+-		FIND_PACKAGE(OpenSSL)
++		FIND_PACKAGE(OpenSSL REQUIRED)
+ 	ENDIF ()
+ 
+ 	IF (CURL_FOUND)

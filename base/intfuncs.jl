@@ -8,7 +8,7 @@ function gcd{T<:Integer}(a::T, b::T)
         b = rem(a, b)
         a = t
     end
-    abs(a)
+    checked_abs(a)
 end
 
 # binary GCD (aka Stein's) algorithm
@@ -19,8 +19,8 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
-    u = abs(a >> za)
-    v = abs(b >> zb)
+    u = unsigned(abs(a >> za))
+    v = unsigned(abs(b >> zb))
     while u != v
         if u > v
             u, v = v, u
@@ -28,11 +28,14 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
         v -= u
         v >>= trailing_zeros(v)
     end
-    u << k
+    r = u << k
+    # T(r) would throw InexactError; we want OverflowError instead
+    r > typemax(T) && throw(OverflowError())
+    r % T
 end
 
 # explicit a==0 test is to handle case of lcm(0,0) correctly
-lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
+lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : checked_abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
@@ -108,11 +111,11 @@ end
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # b^p mod m
-function powermod{T}(b::Integer, p::Integer, m::T)
+function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
     p < 0 && throw(DomainError())
-    b = oftype(m,mod(b,m))  # this also checks for divide by zero
-    p == 0 && return mod(one(b),m)
+    p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
+    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
     local r::T
@@ -128,6 +131,9 @@ function powermod{T}(b::Integer, p::Integer, m::T)
     end
     return r
 end
+
+# optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
+powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
 # smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
@@ -308,16 +314,16 @@ bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
 bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
 bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
+digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1) = digits(T, n, base, pad)
+
+function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    m = max(pad,ndigits0z(n,base))
-    a = zeros(T,m)
-    digits!(a, n, base)
-    return a
+    digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
 
-function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
+    base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
     for i = 1:length(a)
         a[i] = rem(n, base)
         n = div(n, base)

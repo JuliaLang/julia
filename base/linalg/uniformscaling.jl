@@ -89,7 +89,7 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
 end
 
 function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
-    n = chksquare(A)
+    n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B,A)
     @inbounds for i = 1:n
@@ -99,7 +99,7 @@ function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
 end
 
 function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
-    n = chksquare(A)
+    n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B, A)
     @inbounds for i = 1:n
@@ -108,7 +108,7 @@ function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     B
 end
 function (-){TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
-    n = chksquare(A)
+    n = checksquare(A)
     B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
     @inbounds for j = 1:n
         B[j,j] += J.λ
@@ -128,15 +128,15 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = J.λ*inv(A)
+/(J::UniformScaling, A::AbstractMatrix) = scale!(J.λ, inv(A))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\{T<:Number}(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) = inv(A)*J.λ
+\{T<:Number}(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) = scale!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = inv(A)*J.λ
+\(A::AbstractMatrix, J::UniformScaling) = scale!(inv(A), J.λ)
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
 

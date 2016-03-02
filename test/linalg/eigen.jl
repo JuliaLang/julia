@@ -22,6 +22,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
+    α = rand(eltya)
+    β = rand(eltya)
+    eab = eig(α,β)
+    @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
+    @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
+
 debug && println("\ntype of a: ", eltya,"\n")
 debug && println("non-symmetric eigen decomposition")
     d,v   = eig(a)
@@ -44,7 +50,7 @@ debug && println("symmetric generalized eigenproblem")
     asym_sg = asym[1:n1, 1:n1]
     a_sg = a[:,n1+1:n2]
     f = eigfact(asym_sg, a_sg'a_sg)
-    @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
+    @test_approx_eq asym_sg*f[:vectors] (a_sg'a_sg*f[:vectors]) * Diagonal(f[:values])
     @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
     @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
     @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
@@ -60,7 +66,7 @@ debug && println("Non-symmetric generalized eigenproblem")
     a1_nsg = a[1:n1, 1:n1]
     a2_nsg = a[n1+1:n2, n1+1:n2]
     f = eigfact(a1_nsg, a2_nsg)
-    @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
+    @test_approx_eq a1_nsg*f[:vectors] (a2_nsg*f[:vectors]) * Diagonal(f[:values])
     @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
     @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
     @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
@@ -69,4 +75,10 @@ debug && println("Non-symmetric generalized eigenproblem")
     d,v = eig(a1_nsg, a2_nsg)
     @test d == f[:values]
     @test v == f[:vectors]
+end
+
+# test a matrix larger than 140-by-140 for #14174
+let a = rand(200, 200)
+    f = eigfact(a)
+    @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
 end

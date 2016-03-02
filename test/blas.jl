@@ -84,8 +84,8 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_approx_eq BLAS.axpy!(α,copy(x1),copy(x2)) x2 + α*x1
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), rand(elty, n + 1))
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
-            @test_throws BoundsError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
-            @test_throws BoundsError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
+            @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
+            @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
             @test_approx_eq BLAS.axpy!(α,copy(x1),1:n,copy(x2),1:n) x2 + α*x1
         else
             z1 = convert(Vector{elty}, complex(randn(n), randn(n)))
@@ -94,8 +94,8 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_approx_eq BLAS.axpy!(α, copy(z1), copy(z2)) z2 + α * z1
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), rand(elty, n + 1))
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), 1:div(n, 2), copy(z2), 1:(div(n, 2) + 1))
-            @test_throws BoundsError BLAS.axpy!(α, copy(z1), 0:div(n,2), copy(z2), 1:(div(n, 2) + 1))
-            @test_throws BoundsError BLAS.axpy!(α, copy(z1), 1:div(n,2), copy(z2), 0:(div(n, 2) - 1))
+            @test_throws ArgumentError BLAS.axpy!(α, copy(z1), 0:div(n,2), copy(z2), 1:(div(n, 2) + 1))
+            @test_throws ArgumentError BLAS.axpy!(α, copy(z1), 1:div(n,2), copy(z2), 0:(div(n, 2) - 1))
             @test_approx_eq BLAS.axpy!(α,copy(z1),1:n,copy(z2),1:n) z2 + α*z1
         end
 
@@ -113,7 +113,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
 
         # scal
         α = rand(elty)
-        @test BLAS.scal(n,α,a,1) ≈ scale(α,a)
+        @test BLAS.scal(n,α,a,1) ≈ α * a
 
         # trsv
         A = triu(rand(elty,n,n))
@@ -132,7 +132,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
 
         A = rand(elty,n,n)
         A = A + A.'
-        @test issym(A)
+        @test issymmetric(A)
         @test_approx_eq triu(BLAS.syr!('U',α,x,copy(A))) triu(A + α*x*x.')
         @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
 
@@ -150,8 +150,8 @@ for elty in [Float32, Float64, Complex64, Complex128]
         BLAS.copy!(x2, 1:n, x1, 1:n)
         @test x2 == x1
         @test_throws DimensionMismatch BLAS.copy!(x2, 1:n, x1, 1:(n - 1))
-        @test_throws BoundsError BLAS.copy!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
-        @test_throws BoundsError BLAS.copy!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
+        @test_throws ArgumentError BLAS.copy!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
+        @test_throws ArgumentError BLAS.copy!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
 
         # symv and hemv
 

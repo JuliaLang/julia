@@ -22,7 +22,7 @@ end
 
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
 run(args::Cmd; dir="", out=STDOUT) = Base.run(pipeline(cmd(args,dir=dir), out))
-readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
+readstring(args::Cmd; dir="") = Base.readstring(cmd(args,dir=dir))
 readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 
 function success(args::Cmd; dir="")

@@ -1,5 +1,31 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Operations with the file system (paths) ##
+
+export
+    cd,
+    chmod,
+    chown,
+    cp,
+    cptree,
+    mkdir,
+    mkpath,
+    mktemp,
+    mktempdir,
+    mv,
+    pwd,
+    rename,
+    readlink,
+    readdir,
+    rm,
+    samefile,
+    sendfile,
+    symlink,
+    tempdir,
+    tempname,
+    touch,
+    walkdir
+
 # get and set current directory
 
 function pwd()
@@ -15,7 +41,7 @@ end
 cd() = cd(homedir())
 
 @unix_only function cd(f::Function, dir::AbstractString)
-    fd = ccall(:open,Int32,(Ptr{UInt8},Int32),".",0)
+    fd = ccall(:open,Int32,(Cstring,Int32),:.,0)
     systemerror(:open, fd == -1)
     try
         cd(dir)
@@ -39,7 +65,7 @@ cd(f::Function) = cd(f, homedir())
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
-    systemerror(:mkdir, ret != 0)
+    systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
 function mkpath(path::AbstractString, mode::Unsigned=0o777)
@@ -47,25 +73,42 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
-    mkdir(path, mode)
+    try
+        mkdir(path, mode)
+    # If there is a problem with making the directory, but the directory
+    # does in fact exist, then ignore the error. Else re-throw it.
+    catch err
+        if isa(err, SystemError) && isdir(path)
+            return
+        else
+            rethrow()
+        end
+    end
 end
 
 mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
-function rm(path::AbstractString; recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
-        @windows_only if !iswritable(path); chmod(path, 0o777); end
-        FS.unlink(path)
+        try
+            @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
+            unlink(path)
+        catch err
+            if force && isa(err, UVError) && err.code==Base.UV_ENOENT
+                return
+            end
+            rethrow()
+        end
     else
         if recursive
             for p in readdir(path)
-                rm(joinpath(path, p), recursive=true)
+                rm(joinpath(path, p), force=force, recursive=true)
             end
         end
         @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
         @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
-        systemerror(:rmdir, ret != 0)
+        systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
 
@@ -106,7 +149,7 @@ function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bo
             cptree(srcname, joinpath(dst, name); remove_destination=remove_destination,
                                                  follow_symlinks=follow_symlinks)
         else
-            FS.sendfile(srcname, joinpath(dst, name))
+            sendfile(srcname, joinpath(dst, name))
         end
     end
 end
@@ -119,23 +162,22 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
     elseif isdir(src)
         cptree(src, dst; remove_destination=remove_destination, follow_symlinks=follow_symlinks)
     else
-        FS.sendfile(src, dst)
+        sendfile(src, dst)
     end
 end
 
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
-    FS.rename(src, dst)
+    rename(src, dst)
 end
 
 function touch(path::AbstractString)
-    f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
-    @assert f.handle >= 0
+    f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
         t = time()
         futime(f,t,t)
     finally
-        FS.close(f)
+        close(f)
     end
 end
 
@@ -143,7 +185,7 @@ end
 # Obtain a temporary filename.
 function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Ptr{UInt8}, (Ptr{UInt8},Ptr{UInt8}), d, "julia")
+    p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
     systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
     Libc.free(p)
@@ -156,7 +198,7 @@ tempdir() = dirname(tempname())
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
+    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
     return (b, fdio(p, true))
 end
@@ -164,7 +206,7 @@ end
 # Create and return the name of a temporary directory
 function mktempdir(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8},), b)
+    p = ccall(:mkdtemp, Cstring, (Cstring,), b)
     systemerror(:mktempdir, p == C_NULL)
     return bytestring(p)
 end
@@ -177,23 +219,25 @@ function tempdir()
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
     end
-    resize!(temppath,lentemppath+1)
-    return utf8(UTF16String(temppath))
+    resize!(temppath,lentemppath)
+    return UTF8String(utf16to8(temppath))
 end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
+const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
+    tempp = cwstring(temppath)
     tname = Array(UInt16,32767)
-    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Cwstring,Ptr{UInt16},UInt32,Ptr{UInt16}), temppath,utf16("jul"),uunique,tname)
+    uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
-    resize!(tname,lentname+1)
-    return utf8(UTF16String(tname))
+    resize!(tname,lentname)
+    return UTF8String(utf16to8(tname))
 end
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))
-    return (filename, open(filename,"r+"))
+    return (filename, Base.open(filename, "r+"))
 end
 function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
@@ -202,7 +246,7 @@ function mktempdir(parent=tempdir())
             seed += 1
         end
         filename = tempname(parent, seed)
-        ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), utf16(filename))
+        ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
         if ret == 0
             return filename
         end
@@ -247,7 +291,7 @@ function readdir(path::AbstractString)
     offset = 0
 
     for i = 1:file_count
-        entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{UInt8},
+        entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Cstring,
                                  (Ptr{UInt8}, Int32), uv_readdir_req, offset))
         push!(entries, entry)
         offset += sizeof(entry) + 1   # offset to the next entry
@@ -260,3 +304,156 @@ function readdir(path::AbstractString)
 end
 
 readdir() = readdir(".")
+
+"""
+    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+
+The walkdir method return an iterator that walks the directory tree of a directory. The iterator returns a tuple containing
+`(rootpath, dirs, files)`. The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError
+it will raise the error. A custom error handling function can be provided through `onerror` keyword argument, the function
+is called with a SystemError as argument.
+
+    for (root, dirs, files) in walkdir(".")
+        println("Directories in \$root")
+        for dir in dirs
+            println(joinpath(root, dir)) # path to directories
+        end
+        println("Files in \$root")
+        for file in files
+            println(joinpath(root, file)) # path to files
+        end
+    end
+
+"""
+function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
+    content = nothing
+    try
+        content = readdir(root)
+    catch err
+        isa(err, SystemError) || throw(err)
+        onerror(err)
+        #Need to return an empty task to skip the current root folder
+        return Task(()->())
+    end
+    dirs = Array(eltype(content), 0)
+    files = Array(eltype(content), 0)
+    for name in content
+        if isdir(joinpath(root, name))
+            push!(dirs, name)
+        else
+            push!(files, name)
+        end
+    end
+
+    function _it()
+        if topdown
+            produce(root, dirs, files)
+        end
+        for dir in dirs
+            path = joinpath(root,dir)
+            if follow_symlinks || !islink(path)
+                for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
+                    produce(root_l, dirs_l, files_l)
+                end
+            end
+        end
+        if !topdown
+            produce(root, dirs, files)
+        end
+    end
+    Task(_it)
+end
+
+function unlink(p::AbstractString)
+    err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
+    uv_error("unlink", err)
+    nothing
+end
+
+# For move command
+function rename(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
+    # on error, default to cp && rm
+    if err < 0
+        # remove_destination: is already done in the mv function
+        cp(src, dst; remove_destination=false, follow_symlinks=false)
+        rm(src; recursive=true)
+    end
+    nothing
+end
+
+function sendfile(src::AbstractString, dst::AbstractString)
+    local src_open = false,
+          dst_open = false,
+          src_file,
+          dst_file
+    try
+        src_file = open(src, JL_O_RDONLY)
+        src_open = true
+        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
+             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
+        dst_open = true
+
+        bytes = filesize(stat(src_file))
+        sendfile(dst_file, src_file, Int64(0), Int(bytes))
+    finally
+        if src_open && isopen(src_file)
+            close(src_file)
+        end
+        if dst_open && isopen(dst_file)
+            close(dst_file)
+        end
+    end
+end
+
+@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
+function symlink(p::AbstractString, np::AbstractString)
+    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
+        error("Windows XP does not support soft symlinks")
+    end
+    flags = 0
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    @windows_only if err < 0 && !isdir(p)
+        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    end
+    uv_error("symlink",err)
+end
+
+function readlink(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_readlink, Int32,
+            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+            eventloop(), req, path, C_NULL)
+        if ret < 0
+            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+            uv_error("readlink", ret)
+            assert(false)
+        end
+        tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+        return tgt
+    finally
+        Libc.free(req)
+    end
+end
+
+function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
+    err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
+    uv_error("chmod", err)
+    if recursive && isdir(path)
+        for p in readdir(path)
+            if !islink(joinpath(path, p))
+                chmod(joinpath(path, p), mode, recursive=true)
+            end
+        end
+    end
+    nothing
+end
+
+function chown(path::AbstractString, owner::Integer, group::Integer=-1)
+    err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
+    uv_error("chown",err)
+    nothing
+end

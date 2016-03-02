@@ -13,7 +13,6 @@ export
     StreamREPL
 
 import Base:
-    AsyncStream,
     Display,
     display,
     writemime,
@@ -58,10 +57,10 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
+                eval(Main, :(ans = $(getindex)($(Any[ans]), 1)))
                 backend.in_eval = true
-                eval(Main, :(ans = $(Any[ans])[1]))
-                backend.in_eval = false
                 value = eval(Main, ast)
+                backend.in_eval = false
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
             end
@@ -160,10 +159,11 @@ immutable REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL)
+function run_repl(repl::AbstractREPL, consumer = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
+    consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
     backend
 end
@@ -385,7 +385,7 @@ function add_history(hist::REPLHistoryProvider, s)
     str = rstrip(bytestring(s.input_buffer))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    length(hist.history) > 0 &&
+    !isempty(hist.history) &&
         mode == hist.modes[end] && str == hist.history[end] && return
     push!(hist.modes, mode)
     push!(hist.history, str)
@@ -507,7 +507,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
         if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m == :ok
-                if length(prefix) == 0
+                if isempty(prefix)
                     # on empty prefix search, move cursor to the end
                     LineEdit.move_input_end(s)
                 else
@@ -538,18 +538,18 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
-    b = a + sizeof(searchdata) - 1
-    if !skip_current && (0 < a <= b <= response_buffer.size) &&
-       searchdata == bytestring(response_buffer.data[a:b])
-        return true
-    end
+    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata)))
 
-    searchfunc,delta = backwards ? (rsearch,0) : (search,1)
+    !skip_current && searchdata == response_str[a:b] && return true
+
+    searchfunc, searchstart, skipfunc = backwards ? (rsearch, b, prevind) :
+                                                    (search,  a, nextind)
+    skip_current && (searchstart = skipfunc(response_str, searchstart))
 
     # Start searching
     # First the current response buffer
-    if 1 <= a+delta <= length(response_str)
-        match = searchfunc(response_str, searchdata, a+delta)
+    if 1 <= searchstart <= endof(response_str)
+        match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match)-1)
             return true
@@ -574,8 +574,10 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 end
 
 function history_reset_state(hist::REPLHistoryProvider)
-    hist.last_idx = hist.cur_idx
-    hist.cur_idx = length(hist.history) + 1
+    if hist.cur_idx != length(hist.history) + 1
+        hist.last_idx = hist.cur_idx
+        hist.cur_idx = length(hist.history) + 1
+    end
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
@@ -711,14 +713,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         keymap_func_data = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(repl, julia_prompt) do line
-            line = strip(line)
-            haskey(Docs.keywords, symbol(line)) ? # Special-case keywords, which won't parse
-                :(Base.Docs.@repl $(symbol(line))) :
-                Base.syntax_deprecation_warnings(false) do
-                    parse("Base.Docs.@repl $line", raise=false)
-                end
-        end)
+        on_done = respond(Docs.helpmode, repl, julia_prompt))
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
@@ -733,6 +728,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         on_done = respond(repl, julia_prompt) do line
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
+
 
     ################################# Stage II #############################
 
@@ -795,7 +791,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             edit_insert(buf, input)
             string = takebuf_string(buf)
             curspos = position(LineEdit.buffer(s))
-            pos = 0
+            pos = 1
             inputsz = sizeof(input)
             sz = sizeof(string)
             while pos <= sz
@@ -884,7 +880,7 @@ end
 
 outstream(s::StreamREPL) = s.stream
 
-StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
@@ -892,7 +888,7 @@ input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
 
-function run_repl(stream::AsyncStream)
+function run_repl(stream::IO)
     repl =
     @async begin
         repl_channel = Channel(1)

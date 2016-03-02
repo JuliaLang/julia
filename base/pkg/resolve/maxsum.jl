@@ -25,7 +25,7 @@ type MaxSumParams
     function MaxSumParams()
         accuracy = parse(Int,get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
         if accuracy <= 0
-            error("JULIA_PKGRESOLVE_ACCURACY must be >= 1")
+            error("JULIA_PKGRESOLVE_ACCURACY must be > 0")
         end
         nondec_iterations = accuracy * 20
         dec_interval = accuracy * 10
@@ -65,7 +65,7 @@ type Graph
     gdir::Vector{Vector{Int}}
 
     # adjacency dict:
-    #   allows to retrieve the indices in gadj, so that
+    #   allows one to retrieve the indices in gadj, so that
     #   gadj[p0][adjdict[p1][p0]] = p1
     adjdict::Vector{Dict{Int,Int}}
 

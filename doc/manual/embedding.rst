@@ -29,13 +29,15 @@ We start with a simple C program that initializes Julia and calls some Julia cod
            julia time to cleanup pending write requests
            and run all finalizers
       */
-      jl_atexit_hook();
+      jl_atexit_hook(0);
       return 0;
   }
 
 In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_DIR``, one can compile the above test program ``test.c`` with ``gcc`` using::
 
-    gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
+    gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib/julia test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
+
+Then if the environment variable ``JULIA_HOME`` is set to ``$JULIA_DIR/bin``, the output ``test`` program can be executed.
 
 Alternatively, look at the ``embedding.c`` program in the Julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_options`` options while linking against ``libjulia``.
 
@@ -73,7 +75,7 @@ now **JULIA_INIT_DIR** which is defined by *julia-config.jl*.::
   {
      jl_init(JULIA_INIT_DIR);
      (void)jl_eval_string("println(sqrt(2.0))");
-     jl_atexit_hook();
+     jl_atexit_hook(0);
      return 0;
   }
 

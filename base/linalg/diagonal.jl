@@ -5,7 +5,8 @@
 immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
-Diagonal(A::Matrix) = Diagonal(diag(A))
+Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
@@ -13,11 +14,8 @@ convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
 convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
 convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
-function similar{T}(D::Diagonal, ::Type{T}, d::Tuple{Int,Int})
-    if d[1] != d[2]
-        throw(ArgumentError("diagonal matrix must be square"))
-    end
-    return Diagonal{T}(Array(T,d[1]))
+function similar{T}(D::Diagonal, ::Type{T})
+    return Diagonal{T}(similar(D.diag, T))
 end
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
@@ -35,22 +33,39 @@ fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
 
-getindex(D::Diagonal, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_getindex(D, i, j))
-unsafe_getindex{T}(D::Diagonal{T}, i::Int, j::Int) = i == j ? unsafe_getindex(D.diag, i) : zero(T)
-
-setindex!(D::Diagonal, v, i::Int, j::Int) = (checkbounds(D, i, j); unsafe_setindex!(D, v, i, j))
-function unsafe_setindex!(D::Diagonal, v, i::Int, j::Int)
+@inline function getindex(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
     if i == j
-        unsafe_setindex!(D.diag, v, i)
+        @inbounds r = D.diag[i]
+    else
+        r = diagzero(D, i, j)
+    end
+    r
+end
+diagzero{T}(::Diagonal{T},i,j) = zero(T)
+diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+
+function setindex!(D::Diagonal, v, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds D.diag[i] = v
     elseif v != 0
         throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
     end
     D
 end
 
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
+    i==j ? s : Base.replace_with_centered_mark(s)
+end
+
+parent(D::Diagonal) = D.diag
+
 ishermitian{T<:Real}(D::Diagonal{T}) = true
 ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
-issym(D::Diagonal) = true
+issymmetric(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
@@ -90,9 +105,11 @@ end
 *{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
 /{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-*(D::Diagonal, V::Vector) = D.diag .* V
-*(A::Matrix, D::Diagonal) = scale(A,D.diag)
-*(D::Diagonal, A::Matrix) = scale(D.diag,A)
+*(D::Diagonal, V::AbstractVector) = D.diag .* V
+*(A::AbstractMatrix, D::Diagonal) =
+    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), A, D.diag)
+*(D::Diagonal, A::AbstractMatrix) =
+    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), D.diag, A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
 At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
@@ -121,7 +138,10 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
         if d == zero(T)
             throw(SingularException(i))
         end
-        V[i,:] *= inv(d)
+        d⁻¹ = inv(d)
+        for j=1:size(V,2)
+            @inbounds V[i,j] *= d⁻¹
+        end
     end
     V
 end
@@ -163,12 +183,12 @@ function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-\(D::Diagonal, B::StridedMatrix) = scale(1 ./ D.diag, B)
-\(D::Diagonal, b::StridedVector) = reshape(scale(1 ./ D.diag, reshape(b, length(b), 1)), length(b))
-\(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
+(\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
 
 function inv{T}(D::Diagonal{T})
-    Di = similar(D.diag)
+    Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
             throw(SingularException(i))
@@ -179,15 +199,15 @@ function inv{T}(D::Diagonal{T})
 end
 
 function pinv{T}(D::Diagonal{T})
-    Di = similar(D.diag)
+    Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
 end
 function pinv{T}(D::Diagonal{T}, tol::Real)
-    Di = similar(D.diag)
-    if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
+    Di = similar(D.diag, typeof(inv(zero(T))))
+    if( !isempty(D.diag) ) maxabsD = maximum(abs(D.diag)) end
     for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])

@@ -18,7 +18,7 @@ extern "C" {
 static int c_locale_initialized = 0;
 static locale_t c_locale;
 
-locale_t get_c_locale()
+locale_t get_c_locale(void)
 {
   if(!c_locale_initialized)
   {
@@ -28,12 +28,12 @@ locale_t get_c_locale()
   return c_locale;
 }
 
-double strtod_c(const char *nptr, char **endptr)
+JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 {
   return strtod_l(nptr, endptr, get_c_locale());
 }
 
-float strtof_c(const char *nptr, char **endptr)
+JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 {
   return strtof_l(nptr, endptr, get_c_locale());
 }
@@ -98,7 +98,7 @@ double parse_inf_or_nan(const char *p, char **endptr)
 }
 
 
-double strtod_c(const char *nptr, char **endptr)
+JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
 {
     char *fail_pos;
     double val;
@@ -285,9 +285,9 @@ double strtod_c(const char *nptr, char **endptr)
 }
 
 
-float strtof_c(const char *nptr, char **endptr)
+JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 {
-  return (float) strtod_c(nptr, endptr);
+  return (float) jl_strtod_c(nptr, endptr);
 }
 
 #endif

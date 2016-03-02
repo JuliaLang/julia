@@ -29,7 +29,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	from: @(#)DEFS.h	5.1 (Berkeley) 4/23/90
+ *      from: @(#)DEFS.h        5.1 (Berkeley) 4/23/90
  * $FreeBSD: src/sys/i386/include/asm.h,v 1.14 2007/08/22 04:26:07 jkoshy Exp $
  */
 

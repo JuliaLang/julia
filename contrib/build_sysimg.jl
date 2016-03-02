@@ -1,13 +1,22 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Build a system image binary at sysimg_path.dlext.  By default, put the system image
-# next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
-# Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
-# don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-@unix_only const default_sysimg_path = joinpath(dirname(Libdl.dlpath("libjulia")),"sys")
-@windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
-function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
+# Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
+# userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
+# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
+@unix_only function default_sysimg_path(debug=false)
+    splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
+end
+
+@windows_only function default_sysimg_path(debug=false)
+    joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+end
+
+function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=nothing; force=false, debug=false)
+    if sysimg_path == nothing
+        sysimg_path = default_sysimg_path(debug)
+    end
+
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
@@ -25,8 +34,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Enter base/ and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
-        julia = joinpath(JULIA_HOME, "julia")
-        ld = find_system_linker()
+        julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
+        cc = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to
         try
@@ -39,8 +48,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
         # Copy in userimg.jl if it exists...
         if userimg_path != nothing
-            if !isreadable(userimg_path)
-                error("$userimg_path is not readable, ensure it is an absolute path!")
+            if !isfile(userimg_path)
+                error("$userimg_path is not found, ensure it is an absolute path!")
             end
             if isfile("userimg.jl")
                 error("$base_dir/userimg.jl already exists, delete manually to continue.")
@@ -65,13 +74,13 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
-            if ld != nothing
-                link_sysimg(sysimg_path, ld)
+            if cc != nothing
+                link_sysimg(sysimg_path, cc, debug)
             else
                 info("System image successfully built at $sysimg_path.ji")
             end
 
-            if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
+            if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
                 if Base.isfile("$sysimg_path.$(Libdl.dlext)")
                     info("To run Julia with this image loaded, run: julia -J $sysimg_path.$(Libdl.dlext)")
                 else
@@ -89,18 +98,18 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     end
 end
 
-# Search for a linker to link sys.o into sys.dl_ext.  Honor LD environment variable.
-function find_system_linker()
-    if haskey( ENV, "LD" )
-        if !success(`$(ENV["LD"]) -v`)
-            warn("Using linker override $(ENV["LD"]), but unable to run `$(ENV["LD"]) -v`")
+# Search for a compiler to link sys.o into sys.dl_ext.  Honor LD environment variable.
+function find_system_compiler()
+    if haskey( ENV, "CC" )
+        if !success(`$(ENV["CC"]) -v`)
+            warn("Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`")
         end
-        return ENV["LD"]
+        return ENV["CC"]
     end
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     @windows_only try
-        require("WinRPM")
+        eval(Main, :(using WinRPM))
         winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
             "sys-root","mingw","bin","gcc.exe")
         if success(`$winrpmgcc --version`)
@@ -113,52 +122,44 @@ function find_system_linker()
     end
 
 
-    # See if `ld` exists
+    # See if `cc` exists
     try
-        if success(`ld -v`)
-            return "ld"
+        if success(`cc -v`)
+            return "cc"
         end
     end
 
-    warn( "No supported linker found; startup times will be longer" )
+    warn( "No supported compiler found; startup times will be longer" )
 end
 
 # Link sys.o into sys.$(dlext)
-function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
-    julia_libdir = dirname(Libdl.dlpath("libjulia"))
+function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false)
+    if sysimg_path == nothing
+        sysimg_path = default_sysimg_path(debug)
+    end
+    julia_libdir = dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia"))
 
     FLAGS = ["-L$julia_libdir"]
-    if OS_NAME == :Darwin
-        push!(FLAGS, "-dylib")
-        push!(FLAGS, "-macosx_version_min")
-        push!(FLAGS, "10.7")
-    else
-        push!(FLAGS, "-shared")
-    end
-    push!(FLAGS, "-ljulia")
+
+    push!(FLAGS, "-shared")
+    push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
     @windows_only push!(FLAGS, "-lssp")
 
     info("Linking sys.$(Libdl.dlext)")
-    run(`$ld $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
+    run(`$cc $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
 
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
-    @windows_only begin
-        if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
-            LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
-            LLVM_msg *= " Delete generated sys.dll to avoid these problems"
-            warn( LLVM_msg )
-        end
-    end
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
 # in, use them as the arguments to build_sysimg above
 if !isinteractive()
-    if length(ARGS) > 4 || ("--help" in ARGS || "-h" in ARGS)
-        println("Usage: build_sysimg.jl <sysimg_path> <cpu_target> <usrimg_path.jl> [--force] [--help]")
+    if length(ARGS) > 5 || ("--help" in ARGS || "-h" in ARGS)
+        println("Usage: build_sysimg.jl <sysimg_path> <cpu_target> <usrimg_path.jl> [--force] [--debug] [--help]")
         println("   <sysimg_path>    is an absolute, extensionless path to store the system image at")
         println("   <cpu_target>     is an LLVM cpu target to build the system image against")
         println("   <usrimg_path.jl> is the path to a user image to be baked into the system image")
+        println("   --debug          Using julia-debug instead of julia to build the system image")
         println("   --force          Set if you wish to overwrite the default system image")
         println("   --help           Print out this help text and exit")
         println()
@@ -166,11 +167,13 @@ if !isinteractive()
         println("   build_sysimg.jl /usr/local/lib/julia/sys core2 ~/my_usrimg.jl --force")
         println()
         println(" Running this script with no arguments is equivalent to:")
-        println("   build_sysimg.jl $(default_sysimg_path) native")
+        println("   build_sysimg.jl $(default_sysimg_path()) native")
         return 0
     end
 
+    debug_flag = "--debug" in ARGS
+    filter!(x -> x != "--debug", ARGS)
     force_flag = "--force" in ARGS
     filter!(x -> x != "--force", ARGS)
-    build_sysimg(ARGS..., force=force_flag)
+    build_sysimg(ARGS...; force=force_flag, debug=debug_flag)
 end

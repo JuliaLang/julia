@@ -45,7 +45,7 @@ const FloatSignificandSize = Int32(64)
 
 function normalize(v::Float)
     f = v.s
-    e = v.e
+    e::Int32 = v.e
     while (f & Float10MSBits) == 0
         f <<= 10
         e -= 10

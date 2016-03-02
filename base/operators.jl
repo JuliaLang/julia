@@ -4,7 +4,7 @@
 
 const (<:) = issubtype
 
-super(T::DataType) = T.super
+supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
@@ -88,8 +88,14 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
+immutable ElementwiseMaxFun end
+(::ElementwiseMaxFun)(x, y) = max(x,y)
+
+immutable ElementwiseMinFun end
+(::ElementwiseMinFun)(x, y) = min(x, y)
+
 for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
-               (:$,:$), (:min,:(MinFun())), (:max,:(MaxFun())), (:kron,:kron))
+               (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
@@ -121,9 +127,83 @@ const .≤ = .<=
 const .≠ = .!=
 
 # core << >> and >>> takes Int as second arg
+"""
+    <<(x, n)
+
+Left bit shift operator, `x << n`. The result is `x` shifted left by `n` bits,
+where `n >= 0`, filling with `0`s. This is equivalent to `x * 2^n`.
+
+```jldoctest
+julia> Int8(3) << 2
+12
+
+julia> bits(Int8(3))
+"00000011"
+
+julia> bits(Int8(12))
+"00001100"
+```
+See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
+"""
 <<(x,y::Int)  = no_op_err("<<", typeof(x))
+
+"""
+    >>(x, n)
+
+Right bit shift operator, `x >> n`. The result is `x` shifted right by `n` bits, where
+`n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving the sign of `x`.
+This is equivalent to `fld(x, 2^n)`.
+
+
+```jldoctest
+julia> Int8(13) >> 2
+3
+
+julia> bits(Int8(13))
+"00001101"
+
+julia> bits(Int8(3))
+"00000011"
+
+julia> Int8(-14) >> 2
+-4
+
+julia> bits(Int8(-14))
+"11110010"
+
+julia> bits(Int8(-4))
+"11111100"
+```
+See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
+"""
 >>(x,y::Int)  = no_op_err(">>", typeof(x))
+
+"""
+    >>>(x, n)
+
+Unsigned right bit shift operator, `x >>> n`. The result is `x` shifted right by `n` bits,
+where `n >= 0`, filling with `0`s.
+
+For `Unsigned` integer types, this is eqivalent to [`>>`](:func:`>>`). For `Signed` integer types,
+this is equivalent to `(unsigned(x) >> n) % typeof(x)`.
+
+```jldoctest
+julia> Int8(-14) >>> 2
+60
+
+julia> bits(Int8(-14))
+"11110010"
+
+julia> bits(Int8(60))
+"00111100"
+```
+`BigInt`s are treated as if having infinite size, so no filling is required and this
+is equivalent to [`>>`](:func:`>>`).
+
+See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
+"""
 >>>(x,y::Int) = no_op_err(">>>", typeof(x))
+
 <<(x,y::Integer)  = typemax(Int) < y ? zero(x) : x <<  (y % Int)
 >>(x,y::Integer)  = typemax(Int) < y ? zero(x) : x >>  (y % Int)
 >>>(x,y::Integer) = typemax(Int) < y ? zero(x) : x >>> (y % Int)
@@ -142,11 +222,17 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 const % = rem
 .%(x::Real, y::Real) = x%y
 const ÷ = div
+.÷(x::Real, y::Real) = x÷y
 
-# mod returns in [0,y) whereas mod1 returns in (0,y]
+# mod returns in [0,y) or (y,0] (for negative y),
+# whereas mod1 returns in (0,y] or [y,0)
 mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
-rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
-fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
+fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+# efficient version for integers
+mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
 transpose(x) = x
@@ -181,11 +267,11 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
-eltype(t::DataType) = eltype(super(t))
+eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
 # copying immutable things
-copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
+copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaInfo,
               TopNode,QuoteNode,DataType,Union}) = x
 
 # function pipelining
@@ -246,7 +332,7 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I::Int...)
+function setindex_shape_check(X::AbstractArray, I...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
@@ -283,16 +369,16 @@ end
 setindex_shape_check(X::AbstractArray) =
     (length(X)==1 || throw_setindex_mismatch(X,()))
 
-setindex_shape_check(X::AbstractArray, i::Int) =
+setindex_shape_check(X::AbstractArray, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Int, j::Int) =
+setindex_shape_check{T}(X::AbstractArray{T,1}, i, j) =
     (length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
+function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -301,7 +387,7 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Int, j::Int)
         throw_setindex_mismatch(X, (i,j))
     end
 end
-setindex_shape_check(X, I::Int...) = nothing # Non-arrays broadcast to all idxs
+setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
 # convert to a supported index type (Array, Colon, or Int)
 to_index(i::Int) = i
@@ -439,9 +525,10 @@ isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.fi
                                                              isless(p.second,q.second))
 getindex(p::Pair,i::Int) = getfield(p,i)
 getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
-reverse(p::Pair) = Pair(p.second, p.first)
+reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
+length(p::Pair) = 2
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
@@ -457,6 +544,8 @@ export
     $,
     %,
     .%,
+    ÷,
+    .÷,
     &,
     *,
     +,
@@ -499,7 +588,6 @@ export
     |>,
     <|,
     ~,
-    ÷,
     ⋅,
     ×,
     ∈,
@@ -520,13 +608,12 @@ export
     getindex,
     setindex!,
     transpose,
-    ctranspose,
-    call
+    ctranspose
 
-import ..this_module: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
-    transpose, ctranspose, call,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    transpose, ctranspose,
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end

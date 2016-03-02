@@ -3,14 +3,12 @@
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
+// Options in here are NOT allowed to affect the jlapi, since that would require this header to be installed
+
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
 
 // object layout options ------------------------------------------------------
-
-// if this is not defined, only individual dimension sizes are
-// stored and not total length, to save space.
-#define STORE_ARRAY_LEN
 
 // how much space we're willing to waste if an array outgrows its
 // original object
@@ -18,11 +16,8 @@
 
 // codegen options ------------------------------------------------------------
 
-// (Experimental) codegen support for thread-local storage
-// #define CODEGEN_TLS
-
 // (Experimental) Use MCJIT ELF, even where it's not the native format
-// #define FORCE_ELF
+//#define FORCE_ELF
 
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
@@ -65,7 +60,7 @@
 //#define GC_TIME
 
 // OBJPROFILE counts objects by type
-//#define OBJPROFILE
+// #define OBJPROFILE
 
 
 // method dispatch profiling --------------------------------------------------
@@ -94,6 +89,20 @@
 #define COPY_STACKS
 #endif
 
+// threading options ----------------------------------------------------------
+
+// controls for when threads sleep
+#define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+
+// defaults for # threads
+#define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
+#define DEFAULT_NUM_THREADS             4
+
+// affinitization behavior
+#define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
+#define DEFAULT_MACHINE_EXCLUSIVE       0
+
 // sanitizer defaults ---------------------------------------------------------
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
@@ -107,6 +116,5 @@
 #  define CODEGEN_TLS
 #  endif
 #endif
-
 
 #endif

@@ -54,15 +54,17 @@ cx = Any[
 ]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == convert(UInt32, cx[i,2])
-    @test string(cx[i,2]) == unescape_string(cx[i,3])
-    if isascii(cx[i,2]) || !isprint(cx[i,2])
-        @test cx[i,3] == escape_string(string(cx[i,2]))
+    cp, ch, st = cx[i,:]
+    @test cp == convert(UInt32, ch)
+    @test string(ch) == unescape_string(st)
+    if isascii(ch) || !isprint(ch)
+        @test st == escape_string(string(ch))
     end
     for j = 1:size(cx,1)
-        str = string(cx[i,2], cx[j,2])
+        str = string(ch, cx[j,2])
         @test str == unescape_string(escape_string(str))
     end
+    @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
 end
 
 for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
@@ -134,6 +136,8 @@ end
 @test "\x0f" == unescape_string("\\x0f")
 @test "\x0F" == unescape_string("\\x0F")
 
+extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+withenv("PATH" => extrapath * ENV["PATH"]) do
 if !success(`iconv --version`)
     warn("iconv not found, skipping unicode tests!")
     @windows_only warn("Use WinRPM.install(\"win_iconv\") to run these tests")
@@ -154,9 +158,9 @@ else
     # Use iconv to generate the other data
     for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
         output_path = joinpath(unicodedir, encoding*".unicode")
-        f = Base.FS.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
+        f = Base.Filesystem.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
         run(pipeline(`iconv -f $primary_encoding -t $encoding $primary_path`, f))
-        Base.FS.close(f)
+        Base.Filesystem.close(f)
     end
 
     f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
@@ -168,23 +172,22 @@ else
     close(f)
     @test str1 == str2
 
-    @test str1 == open(joinpath(unicodedir,"UTF-16LE.unicode")) do f
-        utf16(read(f, UInt16, 2160641)[2:end])
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
+                             UInt16, 2160641)[2:end])
 
-    @test str1 == open(joinpath(unicodedir,"UTF-16LE.unicode")) do f
-        utf16(read(f, UInt8, 2160641*2))
-    end
-    @test str1 == open(joinpath(unicodedir,"UTF-16BE.unicode")) do f
-        utf16(read(f, UInt8, 2160641*2))
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
+                             UInt8, 2160641*2))
 
-    @test str1 == open(joinpath(unicodedir,"UTF-32LE.unicode")) do f
-        utf32(read(f, UInt8, 1112065*4))
-    end
-    @test str1 == open(joinpath(unicodedir,"UTF-32BE.unicode")) do f
-        utf32(read(f, UInt8, 1112065*4))
-    end
+    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16BE.unicode"),
+                             UInt8, 2160641*2))
+
+
+    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32LE.unicode"),
+                             UInt8, 1112065*4))
+
+    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32BE.unicode"),
+                             UInt8, 1112065*4))
+
 
     str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
     str2 = UTF32String(UInt32[
@@ -200,6 +203,7 @@ else
         rm(joinpath(unicodedir,encoding*".unicode"))
     end
     rm(unicodedir)
+end
 end
 
 # Tests of join()

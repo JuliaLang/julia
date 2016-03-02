@@ -4,6 +4,7 @@ using Base.Pkg.Types
 using Base.Pkg.Query
 using Base.Pkg.Resolve
 using Base.Pkg.Resolve.VersionWeights
+import Base.Pkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 
@@ -209,7 +210,7 @@ reqs_data = Any[
     ["A", v"1", v"2"],
     ["C", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
@@ -256,7 +257,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = Any[
     ["A", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -274,13 +275,13 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = Any[
     ["B"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
@@ -314,7 +315,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = Any[
     ["C", v"1", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -335,19 +336,19 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = Any[
     ["B"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require C (impossible)
 reqs_data = Any[
     ["C"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
 deps_data = Any[

@@ -7,50 +7,50 @@ export UmfpackLU
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
-importall Base.SparseMatrix
-import Base.SparseMatrix: increment, increment!, decrement, decrement!, nnz
+importall ..SparseArrays
+import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
-    message :: AbstractString
+    message::AbstractString
 end
 
 function umferror(status::Integer)
-     if status==UMFPACK_OK
-         return
-     elseif status==UMFPACK_WARNING_singular_matrix
-         throw(MatrixIllConditionedException("singular matrix"))
-     elseif status==UMFPACK_WARNING_determinant_underflow
-         throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
-     elseif status==UMFPACK_WARNING_determinant_overflow
-         throw(MatrixIllConditionedException("the determinant overflowed"))
-     elseif status==UMFPACK_ERROR_out_of_memory
-         throw(OutOfMemoryError())
-     elseif status==UMFPACK_ERROR_invalid_Numeric_object
-         throw(ArgumentError("invalid UMFPack numeric object"))
-     elseif status==UMFPACK_ERROR_invalid_Symbolic_object
-         throw(ArgumentError("invalid UMFPack symbolic object"))
-     elseif status==UMFPACK_ERROR_argument_missing
-         throw(ArgumentError("a required argument to UMFPack is missing"))
-     elseif status==UMFPACK_ERROR_n_nonpositive
-         throw(BoundsError("the number of rows or columns of the matrix must be greater than zero"))
-     elseif status==UMFPACK_ERROR_invalid_matrix
-         throw(ArgumentError("invalid matrix"))
-     elseif status==UMFPACK_ERROR_different_pattern
-         throw(ArgumentError("pattern of the matrix changed"))
-     elseif status==UMFPACK_ERROR_invalid_system
-         throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
-     elseif status==UMFPACK_ERROR_invalid_permutation
-         throw(ArgumentError("invalid permutation"))
-     elseif status==UMFPACK_ERROR_file_IO
-         throw(ErrorException("error saving / loading UMFPack decomposition"))
-     elseif status==UMFPACK_ERROR_ordering_failed
-         throw(ErrorException("the ordering method failed"))
-     elseif status==UMFPACK_ERROR_internal_error
-         throw(ErrorException("an internal error has occurred, of unknown cause"))
-     else
-         throw(ErrorException("unknown UMFPack error code: $status"))
-     end
+    if status==UMFPACK_OK
+        return
+    elseif status==UMFPACK_WARNING_singular_matrix
+        throw(LinAlg.SingularException(0))
+    elseif status==UMFPACK_WARNING_determinant_underflow
+        throw(MatrixIllConditionedException("the determinant is nonzero but underflowed"))
+    elseif status==UMFPACK_WARNING_determinant_overflow
+        throw(MatrixIllConditionedException("the determinant overflowed"))
+    elseif status==UMFPACK_ERROR_out_of_memory
+        throw(OutOfMemoryError())
+    elseif status==UMFPACK_ERROR_invalid_Numeric_object
+        throw(ArgumentError("invalid UMFPack numeric object"))
+    elseif status==UMFPACK_ERROR_invalid_Symbolic_object
+        throw(ArgumentError("invalid UMFPack symbolic object"))
+    elseif status==UMFPACK_ERROR_argument_missing
+        throw(ArgumentError("a required argument to UMFPack is missing"))
+    elseif status==UMFPACK_ERROR_n_nonpositive
+        throw(ArgumentError("the number of rows or columns of the matrix must be greater than zero"))
+    elseif status==UMFPACK_ERROR_invalid_matrix
+        throw(ArgumentError("invalid matrix"))
+    elseif status==UMFPACK_ERROR_different_pattern
+        throw(ArgumentError("pattern of the matrix changed"))
+    elseif status==UMFPACK_ERROR_invalid_system
+        throw(ArgumentError("invalid sys argument provided to UMFPack solver"))
+    elseif status==UMFPACK_ERROR_invalid_permutation
+        throw(ArgumentError("invalid permutation"))
+    elseif status==UMFPACK_ERROR_file_IO
+        throw(ErrorException("error saving / loading UMFPack decomposition"))
+    elseif status==UMFPACK_ERROR_ordering_failed
+        throw(ErrorException("the ordering method failed"))
+    elseif status==UMFPACK_ERROR_internal_error
+        throw(ErrorException("an internal error has occurred, of unknown cause"))
+    else
+        throw(ErrorException("unknown UMFPack error code: $status"))
+    end
 end
 
 macro isok(A)
@@ -59,8 +59,8 @@ end
 
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
-    const UmfpackIndexTypes = (:Int32, )
-    typealias UMFITypes Union{Int32}
+    const UmfpackIndexTypes = (:Int32,)
+    typealias UMFITypes Int32
 else
     const UmfpackIndexTypes = (:Int32, :Int64)
     typealias UMFITypes Union{Int32, Int64}
@@ -75,22 +75,20 @@ const umf_ctrl = Array(Float64, UMFPACK_CONTROL)
 ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
 const umf_info = Array(Float64, UMFPACK_INFO)
 
-function show_umf_ctrl(level::Real)
+function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_control, :libumfpack), Void, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
-show_umf_ctrl() = show_umf_ctrl(2.)
 
-function show_umf_info(level::Real)
+function show_umf_info(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
     umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_info, :libumfpack), Void,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
 end
-show_umf_info() = show_umf_info(2.)
 
 ## Should this type be immutable?
 type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
@@ -103,6 +101,43 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     nzval::Vector{Tv}
 end
 
+"""
+    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+
+Compute the LU factorization of a sparse matrix `A`.
+
+For sparse `A` with real or complex element type, the return type of `F` is
+`UmfpackLU{Tv, Ti}`, with `Tv` = `Float64` or `Complex128` respectively and
+`Ti` is an integer type (`Int32` or `Int64`).
+
+The individual components of the factorization `F` can be accessed by indexing:
+
+| Component | Description                         |
+|:----------|:------------------------------------|
+| `F[:L]`   | `L` (lower triangular) part of `LU` |
+| `F[:U]`   | `U` (upper triangular) part of `LU` |
+| `F[:p]`   | right permutation `Vector`          |
+| `F[:q]`   | left permutation `Vector`           |
+| `F[:Rs]`  | `Vector` of scaling factors         |
+| `F[:(:)]` | `(L,U,p,q,Rs)` components           |
+
+The relation between `F` and `A` is
+
+`F[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]`
+
+`F` further supports the following functions:
+
+- [`\\`](:func:`\\`)
+- [`cond`](:func:`cond`)
+- [`det`](:func:`det`)
+
+** Implementation note **
+
+`lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+SuiteSparse. As this library only supports sparse matrices with `Float64` or
+`Complex128` elements, `lufact` converts `A` into a copy that is of type
+`SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+"""
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 
     zerobased = S.colptr[1] == 0
@@ -113,11 +148,35 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
+lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
+lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+    lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
+lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
+    throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
+    "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
+    "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
+    "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
+lufact(A::SparseMatrixCSC, pivot::Type{Val{false}}) = lufact(A)
 
-function show(io::IO, f::UmfpackLU)
-    println(io, "UMFPACK LU Factorization of a $(f.m)-by-$(f.n) sparse matrix")
-    f.numeric != C_NULL && println(f.numeric)
+
+size(F::UmfpackLU) = (F.m, F.n)
+function size(F::UmfpackLU, dim::Integer)
+    if dim < 1
+        throw(ArgumentError("size: dimension $dim out of range"))
+    elseif dim == 1
+        return Int(F.m)
+    elseif dim == 2
+        return Int(F.n)
+    else
+        return 1
+    end
+end
+
+function show(io::IO, F::UmfpackLU)
+    println(io, "UMFPACK LU Factorization of a $(size(F)) sparse matrix")
+    F.numeric != C_NULL && println(io, F.numeric)
 end
 
 ## Wrappers for UMFPACK functions
@@ -170,8 +229,9 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException(""))
-            umferror(status)
+            if status != UMFPACK_WARNING_singular_matrix
+                umferror(status)
+            end
             U.numeric = tmp[1]
             return U
         end
@@ -184,8 +244,9 @@ for itype in UmfpackIndexTypes
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException(""))
-            umferror(status)
+            if status != UMFPACK_WARNING_singular_matrix
+                umferror(status)
+            end
             U.numeric = tmp[1]
             return U
         end
@@ -395,7 +456,6 @@ for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
         end
     end
 end
-show_umf_info() = show_umf_info(2.)
 
 function umfpack_report_symbolic(symb::Ptr{Void}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]

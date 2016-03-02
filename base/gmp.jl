@@ -8,7 +8,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed
+             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc
 
 if Clong == Int32
     typealias ClongMax Union{Int8, Int16, Int32}
@@ -85,7 +85,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     _n = Nullable{BigInt}()
 
     # don't make a copy in the common case where we are parsing a whole bytestring
-    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,i,endpos))
+    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0
@@ -120,11 +120,21 @@ end
 
 convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 
-function convert(::Type{BigInt}, x::Float64)
-    !isinteger(x) && throw(InexactError())
+
+function unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64})
     z = BigInt()
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
     return z
+end
+
+function convert(::Type{BigInt}, x::Union{Float32,Float64})
+    isinteger(x) || throw(InexactError())
+    unsafe_trunc(BigInt,x)
+end
+
+function trunc(::Type{BigInt}, x::Union{Float32,Float64})
+    isfinite(x) || throw(InexactError())
+    unsafe_trunc(BigInt,x)
 end
 
 convert(::Type{BigInt}, x::Float16) = BigInt(Float64(x))
@@ -429,8 +439,8 @@ function powermod(x::BigInt, p::BigInt, m::BigInt)
           &r, &x, &p, &m)
     return m < 0 && r > 0 ? r + m : r # choose sign conistent with mod(x^p, m)
 end
-powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
-powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
+
+powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
@@ -506,7 +516,7 @@ hex(n::BigInt) = base(16, n)
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    len = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
+    len = Int(ccall(:strlen, Csize_t, (Cstring,), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
 
@@ -538,8 +548,15 @@ isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
+Base.checked_abs(x::BigInt) = abs(x)
+Base.checked_neg(x::BigInt) = -x
 Base.checked_add(a::BigInt, b::BigInt) = a + b
 Base.checked_sub(a::BigInt, b::BigInt) = a - b
 Base.checked_mul(a::BigInt, b::BigInt) = a * b
+Base.checked_div(a::BigInt, b::BigInt) = div(a, b)
+Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
+Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
+Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
+Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
 
 end # module

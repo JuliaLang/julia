@@ -196,7 +196,7 @@ Anonymous Functions
 
 Functions in Julia are `first-class objects
 <https://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
-variables, called using the standard function call syntax from the
+variables, and called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
 without being given a name, using either of these syntaxes:
@@ -204,16 +204,19 @@ without being given a name, using either of these syntaxes:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    (anonymous function)
+    #1 (generic function with 1 method)
 
     julia> function (x)
                x^2 + 2x - 1
            end
-    (anonymous function)
+    #2 (generic function with 1 method)
 
-This creates an unnamed function taking one argument *x* and returning the
-value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
-use for anonymous functions is passing them to functions which take
+This creates a function taking one argument *x* and returning the
+value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value.
+Notice that the result is a generic function, but with a
+compiler-generated name based on consecutive numbering.
+
+The primary use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is :func:`map`,
 which applies a function to each value of an array and returns a new
 array containing the resulting values:
@@ -476,25 +479,32 @@ Keyword argument default values are evaluated only when necessary
 left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.
 
-Extra keyword arguments can be collected using ``...``, as in varargs
-functions::
+The types of keyword arguments can be made explicit as follows::
 
-    function f(x; y=0, args...)
+    function f(;x::Int64=1)
         ###
     end
 
-Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
+Extra keyword arguments can be collected using ``...``, as in varargs
+functions::
+
+    function f(x; y=0, kwargs...)
+        ###
+    end
+
+Inside ``f``, ``kwargs`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
-arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
+arguments using a semicolon in a call, e.g. ``f(x, z=1; kwargs...)``.
 Dictionaries can also be used for this purpose.
 
-In addition, one can also pass ``(key,value)`` tuples, or any iterable
+One can also pass ``(key,value)`` tuples, or any iterable
 expression (such as a ``=>`` pair) that can be assigned to such a
 tuple, explicitly after a semicolon.  For example, ``plot(x, y;
 (:width,2))`` and ``plot(x, y; :width => 2)`` are equivalent to
 ``plot(x, y, width=2)``.  This is useful in situations where the
 keyword name is computed at runtime.
 
+.. _man-evaluation-scope-default-values:
 
 Evaluation Scope of Default Values
 ----------------------------------

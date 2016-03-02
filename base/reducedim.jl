@@ -222,8 +222,6 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = (_mapreducedim!(f, op, R, A); R)
-
 to_op(op) = op
 function to_op(op::Function)
     is(op, +) ? AddFun() :
@@ -325,12 +323,18 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     Rval, Rind
 end
 
-# findmin
+
+"""
+    findmin!(rval, rind, A, [init=true]) -> (minval, index)
+
+Find the minimum of `A` and the corresponding linear index along singleton
+dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+"""
 function findmin!{R}(rval::AbstractArray{R},
                      rind::AbstractArray,
                      A::AbstractArray;
                      init::Bool=true)
-    findminmax!(LessFun(), initarray!(rval, typemax(R), init), rind, A)
+    findminmax!(LessFun(), initarray!(rval, MinFun(), init), rind, A)
 end
 
 function findmin{T}(A::AbstractArray{T}, region)
@@ -342,12 +346,17 @@ function findmin{T}(A::AbstractArray{T}, region)
             zeros(Int, reduced_dims0(A, region)), A)
 end
 
-# findmax
+"""
+    findmax!(rval, rind, A, [init=true]) -> (maxval, index)
+
+Find the maximum of `A` and the corresponding linear index along singleton
+dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+"""
 function findmax!{R}(rval::AbstractArray{R},
                      rind::AbstractArray,
                      A::AbstractArray;
                      init::Bool=true)
-    findminmax!(MoreFun(), initarray!(rval, typemin(R), init), rind, A)
+    findminmax!(MoreFun(), initarray!(rval, MaxFun(), init), rind, A)
 end
 
 function findmax{T}(A::AbstractArray{T}, region)

@@ -7,12 +7,11 @@
 extern "C" {
 #endif
 
-double strtod_c(const char *nptr, char **endptr);
-float strtof_c(const char *nptr, char **endptr);
+JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr);
+JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
-

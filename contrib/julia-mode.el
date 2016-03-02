@@ -131,6 +131,71 @@ This function provides equivalent functionality, but makes no efforts to optimis
              "\\\\"))
         (group "'"))))
 
+(defconst julia-hanging-operator-regexp
+  ;; taken from julia-parser.scm
+  (concat "^[^#\n]+ "
+          (regexp-opt
+           '( ;; conditional
+             "?"
+             ;; assignment
+             "=" ":=" "+=" "-=" "*=" "/=" "//=" ".//=" ".*=" "./=" "\\=" ".\\="
+             "^=" ".^=" "÷=" ".÷=" "%=" ".%=" "|=" "&=" "$=" "=>" "<<=" ">>="
+             ">>>=" "~" ".+=" ".-="
+             ;; arrow
+             "--" "-->" "←" "→" "↔" "↚" "↛" "↠" "↣" "↦" "↮" "⇎" "⇏" "⇒" "⇔" "⇴"
+             "⇶" "⇷" "⇸" "⇹" "⇺" "⇻" "⇼" "⇽" "⇾" "⇿" "⟵" "⟶" "⟷" "⟷" "⟹"
+             "⟺" "⟻" "⟼" "⟽" "⟾" "⟿" "⤀" "⤁" "⤂" "⤃" "⤄" "⤅" "⤆" "⤇" "⤌"
+             "⤍" "⤎" "⤏" "⤐" "⤑" "⤔" "⤕" "⤖" "⤗" "⤘" "⤝" "⤞" "⤟" "⤠" "⥄" "⥅"
+             "⥆" "⥇" "⥈" "⥊" "⥋" "⥎" "⥐" "⥒" "⥓" "⥖" "⥗" "⥚" "⥛" "⥞" "⥟" "⥢"
+             "⥤" "⥦" "⥧" "⥨" "⥩" "⥪" "⥫" "⥬" "⥭" "⥰" "⧴" "⬱" "⬰" "⬲" "⬳" "⬴"
+             "⬵" "⬶" "⬷" "⬸" "⬹" "⬺" "⬻" "⬼" "⬽" "⬾" "⬿" "⭀" "⭁" "⭂" "⭃" "⭄"
+             "⭇" "⭈" "⭉" "⭊" "⭋" "⭌" "￩" "￫"
+             ;; or and and
+             "&&" "||"
+             ;; comparison
+             ">" "<" ">=" "≥" "<=" "≤" "==" "===" "≡" "!=" "≠" "!==" "≢" ".>"
+             ".<" ".>=" ".≥" ".<=" ".≤" ".==" ".!=" ".≠" ".=" ".!" "<:" ">:" "∈"
+             "∉" "∋" "∌" "⊆" "⊈" "⊂" "⊄" "⊊" "∝" "∊" "∍" "∥" "∦" "∷" "∺" "∻" "∽"
+             "∾" "≁" "≃" "≄" "≅" "≆" "≇" "≈" "≉" "≊" "≋" "≌" "≍" "≎" "≐" "≑" "≒"
+             "≓" "≔" "≕" "≖" "≗" "≘" "≙" "≚" "≛" "≜" "≝" "≞" "≟" "≣" "≦" "≧" "≨"
+             "≩" "≪" "≫" "≬" "≭" "≮" "≯" "≰" "≱" "≲" "≳" "≴" "≵" "≶" "≷" "≸" "≹"
+             "≺" "≻" "≼" "≽" "≾" "≿" "⊀" "⊁" "⊃" "⊅" "⊇" "⊉" "⊋" "⊏" "⊐" "⊑" "⊒"
+             "⊜" "⊩" "⊬" "⊮" "⊰" "⊱" "⊲" "⊳" "⊴" "⊵" "⊶" "⊷" "⋍" "⋐" "⋑" "⋕" "⋖"
+             "⋗" "⋘" "⋙" "⋚" "⋛" "⋜" "⋝" "⋞" "⋟" "⋠" "⋡" "⋢" "⋣" "⋤" "⋥" "⋦" "⋧"
+             "⋨" "⋩" "⋪" "⋫" "⋬" "⋭" "⋲" "⋳" "⋴" "⋵" "⋶" "⋷" "⋸" "⋹" "⋺" "⋻" "⋼"
+             "⋽" "⋾" "⋿" "⟈" "⟉" "⟒" "⦷" "⧀" "⧁" "⧡" "⧣" "⧤" "⧥" "⩦" "⩧" "⩪" "⩫"
+             "⩬" "⩭" "⩮" "⩯" "⩰" "⩱" "⩲" "⩳" "⩴" "⩵" "⩶" "⩷" "⩸" "⩹" "⩺" "⩻" "⩼"
+             "⩽" "⩾" "⩿" "⪀" "⪁" "⪂" "⪃" "⪄" "⪅" "⪆" "⪇" "⪈" "⪉" "⪊" "⪋" "⪌" "⪍"
+             "⪎" "⪏" "⪐" "⪑" "⪒" "⪓" "⪔" "⪕" "⪖" "⪗" "⪘" "⪙" "⪚" "⪛" "⪜" "⪝" "⪞"
+             "⪟" "⪠" "⪡" "⪢" "⪣" "⪤" "⪥" "⪦" "⪧" "⪨" "⪩" "⪪" "⪫" "⪬" "⪭" "⪮" "⪯"
+             "⪰" "⪱" "⪲" "⪳" "⪴" "⪵" "⪶" "⪷" "⪸" "⪹" "⪺" "⪻" "⪼" "⪽" "⪾" "⪿" "⫀"
+             "⫁" "⫂" "⫃" "⫄" "⫅" "⫆" "⫇" "⫈" "⫉" "⫊" "⫋" "⫌" "⫍" "⫎" "⫏" "⫐" "⫑"
+             "⫒" "⫓" "⫔" "⫕" "⫖" "⫗" "⫘" "⫙" "⫷" "⫸" "⫹" "⫺" "⊢" "⊣"
+             ;; pipe, colon
+             "|>" "<|" ":" ".."
+             ;; plus
+             "+" "-" "⊕" "⊖" "⊞" "⊟" ".+" ".-" "++" "|" "∪" "∨" "$" "⊔" "±" "∓"
+             "∔" "∸" "≂" "≏" "⊎" "⊻" "⊽" "⋎" "⋓" "⧺" "⧻" "⨈" "⨢" "⨣" "⨤" "⨥" "⨦"
+             "⨧" "⨨" "⨩" "⨪" "⨫" "⨬" "⨭" "⨮" "⨹" "⨺" "⩁" "⩂" "⩅" "⩊" "⩌" "⩏" "⩐"
+             "⩒" "⩔" "⩖" "⩗" "⩛" "⩝" "⩡" "⩢" "⩣"
+             ;; bitshift
+             "<<" ">>" ">>>" ".<<" ".>>" ".>>>"
+             ;; times
+             "*" "/" "./" "÷" ".÷" "%" "⋅" "∘" "×" ".%" ".*" "\\"
+             ".\\" "&" "∩" "∧" "⊗" "⊘" "⊙" "⊚" "⊛" "⊠" "⊡" "⊓" "∗" "∙" "∤" "⅋"
+             "≀" "⊼" "⋄" "⋆" "⋇" "⋉" "⋊" "⋋" "⋌" "⋏" "⋒" "⟑" "⦸" "⦼" "⦾" "⦿" "⧶"
+             "⧷" "⨇" "⨰" "⨱" "⨲" "⨳" "⨴" "⨵" "⨶" "⨷" "⨸" "⨻" "⨼" "⨽" "⩀" "⩃" "⩄"
+             "⩋" "⩍" "⩎" "⩑" "⩓" "⩕" "⩘" "⩚" "⩜" "⩞" "⩟" "⩠" "⫛" "⊍" "▷" "⨝" "⟕"
+             "⟖" "⟗"
+             ;; rational
+             "//" ".//"
+             ;; power
+             "^" ".^" "↑" "↓" "⇵" "⟰" "⟱" "⤈" "⤉" "⤊" "⤋" "⤒" "⤓" "⥉" "⥌" "⥍"
+             "⥏" "⥑" "⥔" "⥕" "⥘" "⥙" "⥜" "⥝" "⥠" "⥡" "⥣" "⥥" "⥮" "⥯" "￪" "￬"
+             ;; decl, dot
+             "::" "."))
+          (regexp-opt '(" #" " \n" "#" "\n"))))
+
 (defconst julia-triple-quoted-string-regex
   ;; We deliberately put a group on the first and last delimiter, so
   ;; we can mark these as string delimiters for font-lock.
@@ -258,7 +323,11 @@ This function provides equivalent functionality, but makes no efforts to optimis
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
-        "quote" "do" "immutable"))
+        "quote" "do" "immutable" "module"))
+
+;; For keywords that begin a block without additional indentation
+(defconst julia-block-start-keywords-no-indent
+  (list "module"))
 
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
@@ -332,12 +401,13 @@ As a result, it is true inside \"foo\", `foo` and 'f'."
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
 KW-LIST is a list of strings.  The word at point is not considered
-a keyword if used as a field name, X.word, or quoted, :word."
+a keyword if used as a field name, X.word, or quoted, :word.
+
+Assumes that point is not inside a comment."
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
        (member (current-word t) kw-list)
-       (not (julia-in-comment))
        ;; 'end' is not a keyword when used for indexing, e.g. foo[end-2]
        (or (not (equal (current-word t) "end"))
            (not (julia-in-brackets)))))
@@ -357,9 +427,7 @@ Do not move back beyond position MIN."
         (setq count
               (cond ((julia-at-keyword julia-block-start-keywords)
                      (+ count 1))
-                    ;; fixme: breaks on strings
-                    ((and (equal (current-word t) "end")
-                          (not (julia-in-comment)) (not (julia-in-brackets)))
+                    ((equal (current-word t) "end")
                      (- count 1))
                     (t count))))
       (if (> count 0)
@@ -383,13 +451,6 @@ beginning of the buffer."
   (unless (eq (point) (point-min))
     (backward-char)))
 
-(defvar julia-max-paren-lookback 400
-  "When indenting, don't look back more than this
-many characters to see if there are unclosed parens.
-
-This variable has a major effect on indent performance if set too
-high.")
-
 (defvar julia-max-block-lookback 5000
   "When indenting, don't look back more than this
 many characters to see if there are unclosed blocks.
@@ -402,236 +463,112 @@ high.")
 containing paren before point, so we can align succeeding code
 with it. Returns nil if we're not within nested parens."
   (save-excursion
-    ;; Back up to previous line (beginning-of-line was already called)
-    (backward-char)
-    (let ((min-pos (max (- (point) julia-max-paren-lookback)
-                        (point-min)))
-          (open-count 0))
-      (while (and (> (point) min-pos)
-                  (not (plusp open-count)))
+    (beginning-of-line)
+    (let ((parser-state (syntax-ppss)))
+      (cond ((nth 3 parser-state) nil)       ;; strings
+            ((= (nth 0 parser-state) 0) nil) ;; top level
+            (t
+             (ignore-errors ;; return nil if any of these movements fail
+               (backward-up-list)
+               (forward-char)
+               (skip-syntax-forward " ")
+               (current-column)))))))
 
-        (when (looking-at (rx (any "[" "]" "(" ")")))
-          (unless (or (julia-in-string) (julia-in-comment))
-            (cond ((looking-at (rx (any "[" "(")))
-                   (incf open-count))
-                  ((looking-at (rx (any "]" ")")))
-                   (decf open-count)))))
+(defun julia-prev-line-skip-blank-or-comment ()
+  "Move point to beginning of previous line skipping blank lines
+and lines including only comments. Returns number of lines moved.
+A return of -1 signals that we moved to the first line of
+the (possibly narrowed) buffer, so there is nowhere else to go."
+  (catch 'result
+    (let ((moved 0) this-move)
+      (while t
+        (setq this-move (forward-line -1))
+        (cond
+         ;; moved into comment or blank
+         ((and (= 0 this-move)
+               (or (looking-at-p "^\\s-*\\(?:#.*\\)*$")
+                   (julia-in-comment)))
+          (incf moved))
+         ;; success
+         ((= 0 this-move)
+          (throw 'result (1+ moved)))
+         ;; on first line and in comment
+         ((and (bobp)
+               (or (looking-at-p "^\\s-*\\(?:#.*\\)*$")
+                   (julia-in-comment)))
+          (throw 'result -1))
+         ((bobp)
+          (throw 'result moved))
+         (t
+          (throw 'result 0)))))))
 
-        (julia--safe-backward-char))
+(defun julia-indent-hanging ()
+  "Calculate indentation for lines that follow \"hanging\"
+operators (operators that end the previous line) as defined in
+`julia-hanging-operator-regexp'. An assignment operator ending
+the previous line increases the indent as do the other operators
+unless another operator is found two lines up. Previous line
+means previous line after skipping blank lines and lines with
+only comments."
+  (let (prev-indent)
+    (save-excursion
+      (when (> (julia-prev-line-skip-blank-or-comment) 0)
+        (setq prev-indent (current-indentation))
+        (when (looking-at-p julia-hanging-operator-regexp)
+          (if (and (> (julia-prev-line-skip-blank-or-comment) 0)
+                   (looking-at-p julia-hanging-operator-regexp))
+              ;; two preceding hanging operators => indent same as line
+              ;; above
+              prev-indent
+            ;; one preceding hanging operator => increase indent from line
+            ;; above
+            (+ julia-indent-offset prev-indent)))))))
 
-      (if (plusp open-count)
-          (progn (forward-char 2)
-                 (while (looking-at (rx blank))
-                   (forward-char))
-                 (current-column))
-        nil))))
+(defun julia-indent-in-string ()
+  "Indentation inside strings with newlines is \"manual\",
+meaning always increase indent on TAB and decrease on S-TAB."
+  (save-excursion
+    (beginning-of-line)
+    (when (julia-in-string)
+      (if (member this-command '(julia-latexsub-or-indent
+                                 ess-indent-or-complete))
+          (+ julia-indent-offset (current-indentation))
+        ;; return the current indentation to prevent other functions from
+        ;; indenting inside strings
+        (current-indentation)))))
 
 (defun julia-indent-line ()
   "Indent current line of julia code."
   (interactive)
   (let* ((point-offset (- (current-column) (current-indentation))))
-    (end-of-line)
     (indent-line-to
      (or
-      ;; If we're inside an open paren, indent to line up arguments.
-      (save-excursion
-        (beginning-of-line)
-        (ignore-errors (julia-paren-indent)))
-      ;; If the previous line ends in =, increase the indent.
-      (ignore-errors ; if previous line is (point-min)
-        (save-excursion
-          (if (and (not (equal (point-min) (line-beginning-position)))
-                   (progn
-                     (forward-line -1)
-                     (end-of-line) (backward-char 1)
-                     (and (equal (char-after (point)) ?=)
-                          (not (julia-in-comment)))))
-              (+ julia-indent-offset (current-indentation))
-            nil)))
+      ;; note: if this first function returns nil the beginning of the line
+      ;; cannot be in a string
+      (julia-indent-in-string)
+      ;; If we're inside an open paren, indent to line up arguments. After this,
+      ;; we cannot be inside parens which includes brackets
+      (julia-paren-indent)
+      ;; indent due to hanging operators (lines ending in an operator)
+      (julia-indent-hanging)
       ;; Indent according to how many nested blocks we are in.
       (save-excursion
         (beginning-of-line)
+        ;; jump out of any comments
+        (let ((state (syntax-ppss)))
+          (when (nth 4 state)
+            (goto-char (nth 8 state))))
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords))
               (last-open-block (julia-last-open-block (- (point) julia-max-block-lookback))))
           (max 0 (+ (or last-open-block 0)
-                    (if endtok (- julia-indent-offset) 0)))))))
+                    (if (or endtok
+                            (julia-at-keyword julia-block-start-keywords-no-indent))
+                        (- julia-indent-offset) 0)))))))
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
       (move-to-column (+ (current-indentation) point-offset)))))
-
-(defmacro julia--should-indent (from to)
-  "Assert that we indent text FROM producing text TO in `julia-mode'."
-  `(with-temp-buffer
-     (let ((julia-indent-offset 4))
-       (julia-mode)
-       (insert ,from)
-       (indent-region (point-min) (point-max))
-       (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                      ,to)))))
-
-;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
-;; when we define tests.
-(ignore-errors
-  (require 'ert)
-
-  (ert-deftest julia--test-indent-if ()
-    "We should indent inside if bodies."
-    (julia--should-indent
-     "
-if foo
-bar
-end"
-     "
-if foo
-    bar
-end"))
-
-  (ert-deftest julia--test-indent-else ()
-    "We should indent inside else bodies."
-    (julia--should-indent
-     "
-if foo
-    bar
-else
-baz
-end"
-     "
-if foo
-    bar
-else
-    baz
-end"))
-
-  (ert-deftest julia--test-indent-toplevel ()
-    "We should not indent toplevel expressions. "
-    (julia--should-indent
-     "
-foo()
-bar()"
-     "
-foo()
-bar()"))
-
-  (ert-deftest julia--test-indent-nested-if ()
-    "We should indent for each level of indentation."
-    (julia--should-indent
-     "
-if foo
-    if bar
-bar
-    end
-end"
-     "
-if foo
-    if bar
-        bar
-    end
-end"))
-
-  (ert-deftest julia--test-indent-function ()
-    "We should indent function bodies."
-    (julia--should-indent
-     "
-function foo()
-bar
-end"
-     "
-function foo()
-    bar
-end"))
-
-  (ert-deftest julia--test-indent-begin ()
-    "We should indent after a begin keyword."
-    (julia--should-indent
-     "
-@async begin
-bar
-end"
-     "
-@async begin
-    bar
-end"))
-
-  (ert-deftest julia--test-indent-paren ()
-    "We should indent to line up with the text after an open paren."
-    (julia--should-indent
-     "
-foobar(bar,
-baz)"
-     "
-foobar(bar,
-       baz)"))
-
-  (ert-deftest julia--test-indent-paren-space ()
-    "We should indent to line up with the text after an open
-paren, even if there are additional spaces."
-    (julia--should-indent
-     "
-foobar( bar,
-baz )"
-     "
-foobar( bar,
-        baz )"))
-
-  (ert-deftest julia--test-indent-equals ()
-    "We should increase indent on a trailing =."
-    (julia--should-indent
-     "
-foo() =
-bar"
-     "
-foo() =
-    bar"))
-
-  (ert-deftest julia--test-indent-ignores-blank-lines ()
-    "Blank lines should not affect indentation of non-blank lines."
-    (julia--should-indent
-     "
-if foo
-        
-bar
-end"
-     "
-if foo
-    
-    bar
-end"))
-
-  (ert-deftest julia--test-indent-comment-equal ()
-    "`=` at the end of comment should not increase indent level."
-    (julia--should-indent
-     "
-# a =
-# b =
-c"
-     "
-# a =
-# b =
-c"))
-
-  (ert-deftest julia--test-indent-leading-paren ()
-    "`(` at the beginning of a line should not affect indentation."
-    (julia--should-indent
-     "
-(1)"
-     "
-(1)"))
-
-  (ert-deftest julia--test-top-level-following-paren-indent ()
-    "`At the top level, a previous line indented due to parens should not affect indentation."
-    (julia--should-indent
-     "y1 = f(x,
-       z)
-y2 = g(x)"
-     "y1 = f(x,
-       z)
-y2 = g(x)"))
-
-  (defun julia--run-tests ()
-    (interactive)
-    (ert-run-tests-interactively "julia--test")))
 
 (defalias 'julia-mode-prog-mode
   (if (fboundp 'prog-mode)
@@ -684,6 +621,14 @@ y2 = g(x)"))
   (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
+
+(defun julia-manual-deindent ()
+  "Deindent by `julia-indent-offset' regardless of current
+indentation context. To be used to manually indent inside
+strings."
+  (interactive)
+  (indent-line-to (max 0 (- (current-indentation) julia-indent-offset))))
+(define-key julia-mode-map (kbd "<backtab>") 'julia-manual-deindent)
 
 (defvar julia-latexsubs (make-hash-table :test 'equal))
 
@@ -3202,7 +3147,7 @@ y2 = g(x)"))
   :type 'string
   :group 'julia)
 
-(defvar julia-prompt-regexp "julia>"
+(defvar julia-prompt-regexp "^\\w*> "
   "Regexp for matching `inferior-julia' prompt.")
 
 (defvar inferior-julia-mode-map

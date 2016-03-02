@@ -5,6 +5,7 @@
 # report an error if so
 
 # Files to check:
+set -f # disable glob expansion in this script
 file_patterns='
 *.1
 *.c

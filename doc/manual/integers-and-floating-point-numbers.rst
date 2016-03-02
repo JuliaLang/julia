@@ -30,7 +30,7 @@ The following are Julia's primitive numeric types:
 
 ================  =======  ==============  ============== ==================
 Type              Signed?  Number of bits  Smallest value Largest value
-----------------  -------  --------------  -------------- ------------------
+================  =======  ==============  ============== ==================
 :class:`Int8`        ✓         8            -2^7             2^7 - 1
 :class:`UInt8`                 8             0               2^8 - 1
 :class:`Int16`       ✓         16           -2^15            2^15 - 1
@@ -48,7 +48,7 @@ Type              Signed?  Number of bits  Smallest value Largest value
 
 ================ ========= ==============
 Type             Precision Number of bits
----------------- --------- --------------
+================ ========= ==============
 :class:`Float16` half_          16
 :class:`Float32` single_        32
 :class:`Float64` double_        64
@@ -512,7 +512,7 @@ presented in the `IEEE 754 standard <https://en.wikipedia.org/wiki/IEEE_754-2008
     julia> 1.1 + 0.1
     1.2000000000000002
 
-    julia> with_rounding(Float64,RoundDown) do
+    julia> setrounding(Float64,RoundDown) do
            1.1 + 0.1
            end
     1.2
@@ -619,26 +619,25 @@ However, type promotion between the primitive types above and
 
 The default precision (in number of bits of the significand) and
 rounding mode of :class:`BigFloat` operations can be changed globally
-by calling :func:`set_bigfloat_precision` and
-:func:`set_rounding`, and all further calculations will take
+by calling :func:`setprecision` and
+:func:`setrounding`, and all further calculations will take
 these changes in account.  Alternatively, the precision or the
 rounding can be changed only within the execution of a particular
-block of code by :func:`with_bigfloat_precision` or
-:func:`with_rounding`:
+block of code by using the same functions with a ``do`` block:
 
 .. doctest::
 
-    julia> with_rounding(BigFloat,RoundUp) do
+    julia> setrounding(BigFloat, RoundUp) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.100000000000000000000000000000000000000000000000000000000000000000000000000003
 
-    julia> with_rounding(BigFloat,RoundDown) do
+    julia> setrounding(BigFloat, RoundDown) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.099999999999999999999999999999999999999999999999999999999999999999999999999986
 
-    julia> with_bigfloat_precision(40) do
+    julia> setprecision(40) do
            BigFloat(1) + parse(BigFloat, "0.1")
            end
     1.1000000000004
@@ -698,20 +697,10 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
-    Closest candidates are:
-      Union(!Matched::Any...)
-      BoundsError()
-      BoundsError(!Matched::Any...)
-      ...
+    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
 
     julia> x(x+1)
-    ERROR: MethodError: `call` has no method matching call(::Int64, ::Int64)
-    Closest candidates are:
-      Union(!Matched::Any...)
-      BoundsError()
-      BoundsError(!Matched::Any...)
-      ...
+    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
 
 Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
@@ -755,7 +744,7 @@ specified type or the type of a given variable.
 
 ====================== =====================================================
 Function               Description
----------------------- -----------------------------------------------------
+====================== =====================================================
 :func:`zero(x) <zero>` Literal zero of type ``x`` or type of variable ``x``
 :func:`one(x) <one>`   Literal one of type ``x`` or type of variable ``x``
 ====================== =====================================================
@@ -778,4 +767,3 @@ Examples:
 
     julia> one(BigFloat)
     1.000000000000000000000000000000000000000000000000000000000000000000000000000000
-

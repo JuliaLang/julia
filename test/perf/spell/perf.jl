@@ -28,7 +28,7 @@ end
 if !isfile("big.txt")
     download("http://norvig.com/big.txt", "big.txt")
 end
-const NWORDS = train(words(readall("big.txt")))
+const NWORDS = train(words(readstring("big.txt")))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 

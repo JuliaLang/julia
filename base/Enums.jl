@@ -74,7 +74,7 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        bitstype 32 $(esc(T)) <: Enum
+        Base.@__doc__(bitstype 32 $(esc(T)) <: Enum)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             Intrinsics.box($(esc(typename)), convert(Int32, x))
@@ -92,7 +92,19 @@ macro enum(T,syms...)
                 end
             end
         end
-        Base.show(io::IO,x::$(esc(typename))) = print(io, x, "::", $(esc(typename)))
+        function Base.show(io::IO,x::$(esc(typename)))
+            if Base.limit_output(io)
+                print(io, x)
+            else
+                print(io, x, "::", $(esc(typename)), " = ", Int(x))
+            end
+        end
+        function Base.writemime(io::IO,::MIME"text/plain",::Type{$(esc(typename))})
+            print(io, "Enum ", $(esc(typename)), ":")
+            for (sym, i) in $vals
+                print(io, "\n", sym, " = ", i)
+            end
+        end
     end
     if isa(T,Symbol)
         for (sym,i) in vals

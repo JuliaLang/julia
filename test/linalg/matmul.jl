@@ -32,6 +32,7 @@ Bi = B+(2.5*im).*A[[2,1],[2,1]]
 @test Ac_mul_B(Ai, Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
 @test A_mul_Bc(Ai, Bi) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
 @test Ac_mul_Bc(Ai, Bi) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
+@test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
 
 # 3x3
 A = [1 2 3; 4 5 6; 7 8 9].-5
@@ -46,6 +47,7 @@ Bi = B+(2.5*im).*A[[2,1,3],[2,3,1]]
 @test Ac_mul_B(Ai, Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
 @test A_mul_Bc(Ai, Bi) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
 @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
+@test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
 
 # Generic integer matrix multiplication
 A = [1 2 3; 4 5 6] .- 3
@@ -59,6 +61,9 @@ A = rand(1:20, 5, 5) .- 10
 B = rand(1:20, 5, 5) .- 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
+v = [1,2]
+C = Array(Int, 2, 2)
+@test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
 
 # Preallocated
 C = Array(Int, size(A, 1), size(B, 2))
@@ -66,12 +71,32 @@ C = Array(Int, size(A, 1), size(B, 2))
 @test At_mul_B!(C, A, B) == A'*B
 @test A_mul_Bt!(C, A, B) == A*B'
 @test At_mul_Bt!(C, A, B) == A'*B'
+@test Base.LinAlg.Ac_mul_Bt!(C, A, B) == A'*B.'
+
+#test DimensionMismatch for generic_matmatmul
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,A,ones(Int,4,4))
+@test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
+
+#and for generic_matvecmul
+A = rand(5,5)
+B = rand(5)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(zeros(6),'N',A,B)
+@test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
+
 v = [1,2,3]
 C = Array(Int, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
 vf = map(Float64,v)
 C = Array(Float64, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
+
+# fallbacks & such for BlasFloats
+A = rand(Float64,6,6)
+B = rand(Float64,6,6)
+C = zeros(Float64,6,6)
+@test Base.LinAlg.At_mul_Bt!(C,A,B) == A.'*B.'
+@test Base.LinAlg.A_mul_Bc!(C,A,B) == A*B.'
+@test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
 
 # matrix algebra with subarrays of floats (stride != 1)
 A = reshape(map(Float64,1:20),5,4)
@@ -86,6 +111,16 @@ Aref = Ai[1:2:end,1:2:end]
 Asub = sub(Ai, 1:2:5, 1:2:4)
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
+# issue #15286
+let C = zeros(8, 8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4)
+    @test At_mul_B!(sC, A, A) == A'*A
+    @test At_mul_B!(sC, A, B) == A'*B
+end
+let Aim = A .- im, C = zeros(Complex128,8,8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4) .+ im
+    @test Ac_mul_B!(sC, Aim, Aim) == Aim'*Aim
+    @test Ac_mul_B!(sC, Aim, B) == Aim'*B
+end
+
 
 # syrk & herk
 A = reshape(1:1503, 501, 3).-750.0
@@ -166,3 +201,27 @@ for elty in [Float32,Float64,Complex128,Complex64]
     A = rand(elty,3,3)
     @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
 end
+
+# 13593, #13488
+a = rand(3,3)
+b = rand(3,3)
+@test_throws ArgumentError A_mul_B!(a, a, b)
+@test_throws ArgumentError A_mul_B!(a, b, a)
+@test_throws ArgumentError A_mul_B!(a, a, a)
+
+# Number types that lack conversion to the destination type (#14293)
+immutable RootInt
+    i::Int
+end
+import Base: *, promote_op
+(*)(x::RootInt, y::RootInt) = x.i*y.i
+promote_op(::Base.MulFun, ::Type{RootInt}, ::Type{RootInt}) = Int
+
+a = [RootInt(3)]
+C = [0]
+A_mul_Bt!(C, a, a)
+@test C[1] == 9
+a = [RootInt(2),RootInt(10)]
+@test a*a' == [4 20; 20 100]
+A = [RootInt(3) RootInt(5)]
+@test A*a == [56]

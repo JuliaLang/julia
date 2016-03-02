@@ -4,8 +4,8 @@ import Core.Intrinsics.ccall
 
 baremodule Base
 
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
+using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
+            _apply, typeassert, apply_type, svec
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include
@@ -30,10 +30,8 @@ end
 include("essentials.jl")
 include("docs/bootstrap.jl")
 include("base.jl")
+include("generator.jl")
 include("reflection.jl")
-include("build_h.jl")
-include("version_git.jl")
-include("c.jl")
 include("options.jl")
 
 # core operations & types
@@ -51,11 +49,36 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 include("functors.jl")
+include("checked.jl")
+importall .Checked
 
 # array structures
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
+
+# Array convenience converting constructors
+(::Type{Array{T}}){T}(m::Integer) = Array{T}(Int(m))
+(::Type{Array{T}}){T}(m::Integer, n::Integer) = Array{T}(Int(m), Int(n))
+(::Type{Array{T}}){T}(m::Integer, n::Integer, o::Integer) = Array{T}(Int(m), Int(n), Int(o))
+(::Type{Array{T}}){T}(d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+
+(::Type{Vector{T}}){T}(m::Integer) = Array{T}(m)
+(::Type{Vector{T}}){T}() = Array{T}(0)
+(::Type{Vector})(m::Integer) = Array{Any}(m)
+(::Type{Vector})() = Array{Any}(0)
+
+(::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Array{T}(m, n)
+(::Type{Matrix{T}}){T}() = Array{T}(0, 0)
+(::Type{Matrix})(m::Integer, n::Integer) = Array{Any}(m, n)
+(::Type{Matrix})() = Array{Any}(0, 0)
+
+# TODO: possibly turn these into deprecations
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
+Array{T}(::Type{T}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
+Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
 
 # numeric operations
 include("hashing.jl")
@@ -81,13 +104,20 @@ include("dict.jl")
 include("set.jl")
 include("iterator.jl")
 
-# For OS specific stuff in I/O
+# For OS specific stuff
+include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
+include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
 include("osutils.jl")
+include("c.jl")
+
+# Core I/O
+include("io.jl")
+include("iostream.jl")
+include("iobuffer.jl")
 
 # strings & printing
 include("char.jl")
 include("ascii.jl")
-include("iobuffer.jl")
 include("string.jl")
 include("unicode.jl")
 include("parse.jl")
@@ -96,17 +126,12 @@ include("regex.jl")
 include("base64.jl")
 importall .Base64
 
-# Core I/O
-include("io.jl")
-include("iostream.jl")
-
 # system & environment
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
-include("path.jl")
 include("intfuncs.jl")
 
 # nullable types
@@ -118,15 +143,13 @@ include("lock.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")
-include("stat.jl")
-include("fs.jl")
-importall .FS
+include("filesystem.jl")
+importall .Filesystem
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
 include("grisu.jl")
 import .Grisu.print_shortest
-include("file.jl")
 include("methodshow.jl")
 
 # core math functions
@@ -209,9 +232,6 @@ include("managers.jl")
 # code loading
 include("loading.jl")
 
-# Polling (requires multi.jl)
-include("poll.jl")
-
 # memory-mapped and shared arrays
 include("mmap.jl")
 import .Mmap
@@ -228,18 +248,12 @@ include("i18n.jl")
 using .I18n
 
 # frontend
+include("initdefs.jl")
 include("Terminals.jl")
 include("LineEdit.jl")
 include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
-
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
 
 # misc useful functions & macros
 include("util.jl")
@@ -254,10 +268,6 @@ importall .Broadcast
 
 # statistics
 include("statistics.jl")
-
-# sparse matrices and sparse linear algebra
-include("sparse.jl")
-importall .SparseMatrix
 
 # irrational mathematical constants
 include("irrationals.jl")
@@ -280,9 +290,16 @@ importall .QuadGK
 include("fastmath.jl")
 importall .FastMath
 
+# libgit2 support
+include("libgit2.jl")
+
 # package manager
 include("pkg.jl")
 const Git = Pkg.Git
+
+# Stack frames and traces
+include("stacktraces.jl")
+importall .StackTraces
 
 # profiler
 include("profile.jl")
@@ -292,12 +309,27 @@ importall .Profile
 include("Dates.jl")
 import .Dates: Date, DateTime, now
 
+# sparse matrices, vectors, and sparse linear algebra
+include("sparse.jl")
+importall .SparseArrays
+
+# Documentation
+
+include("markdown/Markdown.jl")
+include("docs/Docs.jl")
+using .Docs
+using .Markdown
+
 # deprecated functions
 include("deprecated.jl")
 
 # Some basic documentation
 include("docs/helpdb.jl")
 include("docs/basedocs.jl")
+
+# threads
+include("threads.jl")
+include("threadcall.jl")
 
 function __init__()
     # Base library init
@@ -306,6 +338,7 @@ function __init__()
     early_init()
     init_load_path()
     init_parallel()
+    init_threadcall()
 end
 
 include = include_from_node1

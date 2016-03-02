@@ -1,165 +1,248 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function temp_pkg_dir(fn::Function)
-  # Used in tests below to setup and teardown a sandboxed package directory
-  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
-  @test !isdir(Pkg.dir())
-  try
-    Pkg.init()
-    @test isdir(Pkg.dir())
-    Pkg.resolve()
+import Base.Pkg.PkgError
 
-    fn()
-  finally
-    rm(tmpdir, recursive=true)
-  end
+function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
+    # Used in tests below to setup and teardown a sandboxed package directory
+    const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
+    @test !isdir(Pkg.dir())
+    try
+        Pkg.init()
+        @test isdir(Pkg.dir())
+        Pkg.resolve()
+        fn()
+    finally
+        remove_tmp_dir && rm(tmpdir, recursive=true)
+    end
 end
+
 
 # Test basic operations: adding or removing a package, status, free
 #Also test for the existence of REQUIRE and META_Branch
 temp_pkg_dir() do
-  @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
-  @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
-  @test isempty(Pkg.installed())
-  Pkg.add("Example")
-  @test [keys(Pkg.installed())...] == ["Example"]
-  iob = IOBuffer()
-  Pkg.checkout("Example")
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test startswith(str, " - Example")
-  @test endswith(str, "master")
-  Pkg.free("Example")
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test endswith(str, string(Pkg.installed("Example")))
-  Pkg.checkout("Example")
-  Pkg.free(("Example",))
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test endswith(str, string(Pkg.installed("Example")))
-  Pkg.rm("Example")
-  @test isempty(Pkg.installed())
-  @test !isempty(Pkg.available("Example"))
-  @test_throws ErrorException Pkg.available("FakePackageDoesn'tExist")
-  Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
-  @test [keys(Pkg.installed())...] == ["Example"]
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test startswith(str, " - Example")
-  @test endswith(str, "master")
-  Pkg.free("Example")
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test endswith(str, string(Pkg.installed("Example")))
-  Pkg.checkout("Example")
-  Pkg.free(("Example",))
-  Pkg.status("Example", iob)
-  str = chomp(takebuf_string(iob))
-  @test endswith(str, string(Pkg.installed("Example")))
-  Pkg.rm("Example")
-  @test isempty(Pkg.installed())
-end
+    @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
+    @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
+    @test isempty(Pkg.installed())
+    @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
+    @test !isempty(Pkg.available())
 
-# testing a package with test dependencies causes them to be installed for the duration of the test
-temp_pkg_dir() do
-  Pkg.generate("PackageWithTestDependencies", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
-  @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
-  @test readall(Pkg.dir("PackageWithTestDependencies","REQUIRE")) == "julia $(Pkg.Generate.versionfloor(VERSION))\n"
+    # check that versioninfo(io, true) doesn't error and produces some output
+    # (done here since it calls Pkg.status which might error or clone metadata)
+    buf = PipeBuffer()
+    versioninfo(buf, true)
+    ver = readstring(buf)
+    @test startswith(ver, "Julia Version $VERSION")
+    @test contains(ver, "Environment:")
 
-  isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
-  open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"w") do f
-    println(f,"Example")
-  end
+    # Check that setprotocol! works.
+    begin
+        try
+            Pkg.setprotocol!("notarealprotocol")
+            Pkg.add("Example")
+            error("unexpected")
+        catch ex
+            if isa(ex, CompositeException)
+                ex = ex.exceptions[1]
 
-  open(Pkg.dir("PackageWithTestDependencies","test","runtests.jl"),"w") do f
-    println(f,"using Base.Test")
-    println(f,"@test haskey(Pkg.installed(), \"Example\")")
-  end
+                if isa(ex, CapturedException)
+                    ex = ex.ex
+                end
+            end
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git. Unsupported URL protocol"
+        end
+    end
 
-  Pkg.resolve()
-  @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
+    Pkg.setprotocol!("https")
+    Pkg.add("Example")
+    @test [keys(Pkg.installed())...] == ["Example"]
+    iob = IOBuffer()
+    Pkg.checkout("Example")
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test startswith(str, " - Example")
+    @test endswith(str, "master")
+    Pkg.free("Example")
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test endswith(str, string(Pkg.installed("Example")))
+    Pkg.checkout("Example")
+    Pkg.free(("Example",))
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test endswith(str, string(Pkg.installed("Example")))
+    Pkg.rm("Example")
+    @test isempty(Pkg.installed())
+    @test !isempty(Pkg.available("Example"))
+    @test !in("Example", keys(Pkg.installed()))
+    Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+    @test [keys(Pkg.installed())...] == ["Example"]
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test startswith(str, " - Example")
+    @test endswith(str, "master")
+    Pkg.free("Example")
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test endswith(str, string(Pkg.installed("Example")))
+    Pkg.checkout("Example")
+    Pkg.free(("Example",))
+    Pkg.status("Example", iob)
+    str = chomp(takebuf_string(iob))
+    @test endswith(str, string(Pkg.installed("Example")))
+    @test isempty(Pkg.dependents("Example"))
 
-  Pkg.test("PackageWithTestDependencies")
+    # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
+    try
+        Pkg.add("REPL")
+        error("unexpected")
+    catch err
+        @test isa(err.exceptions[1].ex, PkgError)
+        @test err.exceptions[1].ex.msg == "REPL can't be installed because " *
+            "it has no versions that support $VERSION of julia. You may " *
+            "need to update METADATA by running `Pkg.update()`"
+    end
 
-  @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
-end
+    # trying to add, check availability, or pin a nonexistent package errors
+    try
+        Pkg.add("NonexistentPackage")
+        error("unexpected")
+    catch err
+        @test isa(err.exceptions[1].ex, PkgError)
+        @test err.exceptions[1].ex.msg == "unknown package NonexistentPackage"
+    end
+    try
+        Pkg.available("NonexistentPackage")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "NonexistentPackage is not a package (not registered or installed)"
+    end
+    try
+        Pkg.pin("NonexistentPackage", v"1.0.0")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "NonexistentPackage is not a git repo"
+    end
 
-# testing a package with no runtests.jl errors
-temp_pkg_dir() do
-  Pkg.generate("PackageWithNoTests", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
+    # trying to pin a git repo under Pkg.dir that is not an installed package errors
+    try
+        Pkg.pin("METADATA", v"1.0.0")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "METADATA cannot be pinned – not an installed package"
+    end
 
-  if isfile(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
-    rm(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
-  end
+    # trying to pin an installed, registered package to an unregistered version errors
+    try
+        Pkg.pin("Example", v"2147483647.0.0")
+        error("unexpected")
+    catch err
+        @test isa(err, PkgError)
+        @test err.msg == "Example – 2147483647.0.0 is not a registered version"
+    end
 
-  try
-    Pkg.test("PackageWithNoTests")
-  catch err
-    @test err.msg == "PackageWithNoTests did not provide a test/runtests.jl file"
-  end
-end
+    # PR #13572, handling of versions with untagged detached heads
+    LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+        LibGit2.checkout!(repo, "72f09c7d0099793378c645929a9961155faae6d2")
+    end
+    @test Pkg.installed()["Example"] > v"0.0.0"
 
-# testing a package with failing tests errors
-temp_pkg_dir() do
-  Pkg.generate("PackageWithFailingTests", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
+    # issue #13583
+    begin
+        try
+            Pkg.test("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "IDoNotExist is not an installed package"
+        end
 
-  isdir(Pkg.dir("PackageWithFailingTests","test")) || mkdir(Pkg.dir("PackageWithFailingTests","test"))
-  open(Pkg.dir("PackageWithFailingTests", "test", "runtests.jl"),"w") do f
-    println(f,"using Base.Test")
-    println(f,"@test false")
-  end
+        try
+            Pkg.test("IDoNotExist1", "IDoNotExist2")
+            error("unexpected")
+        catch ex
+            @test isa(ex,Pkg.PkgError)
+            @test ex.msg == "IDoNotExist1 and IDoNotExist2 are not installed packages"
+        end
+    end
 
-  try
-    Pkg.test("PackageWithFailingTests")
-  catch err
-    @test err.msg == "PackageWithFailingTests had test errors"
-  end
-end
+    begin
+        Pkg.pin("Example")
+        Pkg.free("Example")
 
-# Testing with code-coverage
-temp_pkg_dir() do
-  Pkg.generate("PackageWithCodeCoverage", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
+        Pkg.pin("Example", v"0.4.0")
+        Pkg.update()
+        Pkg.installed()["Example"] == v"0.4.0"
+    end
 
-  src = """
-module PackageWithCodeCoverage
+    # add a directory that is not a git repository
+    begin
+        mkdir(joinpath(Pkg.dir(), "NOTGIT"))
+        Pkg.installed("NOTGIT") == typemin(VersionNumber)
+        Pkg.installed()["NOTGIT"] == typemin(VersionNumber)
+    end
 
-export f1, f2, f3, untested
+    begin
+        # don't bork when a Pkg repo is bare, issue #13804
+        pth = joinpath(Pkg.dir(), "BAREGIT")
+        mkdir(pth)
+        # create a bare repo (isbare = true)
+        repo = LibGit2.init(pth, true)
+        @test repo.ptr != C_NULL
+        finalize(repo)
+        Pkg.update()
+    end
 
-f1(x) = 2x
-f2(x) = f1(x)
-function f3(x)
-    3x
-end
-untested(x) = 7
+    #test PkgDev redirects
+    begin
+        try
+            Pkg.register("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.register(pkg,[url]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
 
-end"""
-  linetested = [false, false, false, false, true, true, false, true, false, false]
-  open(Pkg.dir("PackageWithCodeCoverage", "src", "PackageWithCodeCoverage.jl"), "w") do f
-      println(f, src)
-  end
-  isdir(Pkg.dir("PackageWithCodeCoverage","test")) || mkdir(Pkg.dir("PackageWithCodeCoverage","test"))
-  open(Pkg.dir("PackageWithCodeCoverage", "test", "runtests.jl"),"w") do f
-    println(f,"using PackageWithCodeCoverage, Base.Test")
-    println(f,"@test f2(2) == 4")
-    println(f,"@test f3(5) == 15")
-  end
+        try
+            Pkg.tag("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.tag(pkg, [ver, [commit]]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
 
-  Pkg.test("PackageWithCodeCoverage")
-  covdir = Pkg.dir("PackageWithCodeCoverage","src")
-  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
-  @test isempty(covfiles)
-  Pkg.test("PackageWithCodeCoverage", coverage=true)
-  covfiles = filter!(x -> contains(x, "PackageWithCodeCoverage.jl") && contains(x,".cov"), readdir(covdir))
-  @test !isempty(covfiles)
-  for file in covfiles
-      @test isfile(joinpath(covdir,file))
-      covstr = readall(joinpath(covdir,file))
-      srclines = split(src, '\n')
-      covlines = split(covstr, '\n')
-      for i = 1:length(linetested)
-          covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
-          @test covlines[i] == covline
-      end
-  end
+        try
+            Pkg.generate("IDoNotExist","MIT")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.generate(pkg, license) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.publish()
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.publish() has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+
+        try
+            Pkg.license()
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.license([lic]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+        try
+            Pkg.submit("IDoNotExist")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+        try
+            Pkg.submit("IDoNotExist", "nonexistentcommit")
+            error("unexpected")
+        catch ex
+            @test ex.msg == "Pkg.submit(pkg[, commit]) has been moved to the package PkgDev.jl.\nRun Pkg.add(\"PkgDev\") to install PkgDev on Julia v0.5-"
+        end
+    end
 end

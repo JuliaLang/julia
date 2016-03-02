@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Set{T}
+type Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set() = new(Dict{T,Void}())
@@ -28,7 +28,7 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
+pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
 pop!(s::Set) = (idx = start(s.dict); val = s.dict.keys[idx]; _delete!(s.dict, idx); val)
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
@@ -104,11 +104,30 @@ const ⊆ = issubset
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
 function unique(C)
-    out = Array(eltype(C),0)
+    out = Vector{eltype(C)}()
     seen = Set{eltype(C)}()
     for x in C
         if !in(x, seen)
             push!(seen, x)
+            push!(out, x)
+        end
+    end
+    out
+end
+
+"""
+    unique(f, itr)
+
+Returns an array containing one value from `itr` for each unique value produced by `f`
+applied to elements of `itr`.
+"""
+function unique(f::Callable, C)
+    out = Vector{eltype(C)}()
+    seen = Set()
+    for x in C
+        y = f(x)
+        if !in(y, seen)
+            push!(seen, y)
             push!(out, x)
         end
     end
@@ -135,7 +154,7 @@ end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
-    h += hashs_seed
+    h = hash(hashs_seed, h)
     for x in s
         h $= hash(x)
     end

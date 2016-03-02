@@ -170,6 +170,9 @@ function init3!(
         Bignums.shiftleft!(plus,exponent)
         Bignums.assignuint16!(minus,UInt16(1))
         Bignums.shiftleft!(minus,exponent)
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     return
 end
@@ -186,6 +189,9 @@ function init1!(
         Bignums.shiftleft!(num,1)
         Bignums.assignuint16!(plus,UInt16(1))
         Bignums.assignuint16!(minus,UInt16(1))
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     return
 end
@@ -198,6 +204,9 @@ function init2!(
     if need_boundary_deltas
         Bignums.assignbignum!(plus,power_ten)
         Bignums.assignbignum!(minus,power_ten)
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     Bignums.multiplybyuint64!(num,UInt64(significand))
     Bignums.assignuint16!(den,UInt16(1))

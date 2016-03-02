@@ -134,8 +134,8 @@ type Worker
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
 
-    r_stream::AsyncStream
-    w_stream::AsyncStream
+    r_stream::IO
+    w_stream::IO
     manager::ClusterManager
     config::WorkerConfig
 
@@ -185,14 +185,14 @@ function flush_gc_msgs(w::Worker)
     msgs = copy(w.add_msgs)
     if !isempty(msgs)
         empty!(w.add_msgs)
-        remote_do(w, add_clients, msgs)
+        remote_do(add_clients, w, msgs)
     end
 
     msgs = copy(w.del_msgs)
     if !isempty(msgs)
         empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
-        remote_do(w, del_clients, msgs)
+        remote_do(del_clients, w, msgs)
     end
 end
 
@@ -293,7 +293,7 @@ get_bind_addr(w::LocalProcess) = LPROC.bind_addr
 function get_bind_addr(w::Worker)
     if isnull(w.config.bind_addr)
         if w.id != myid()
-            w.config.bind_addr = remotecall_fetch(w.id, get_bind_addr, w.id)
+            w.config.bind_addr = remotecall_fetch(get_bind_addr, w.id, w.id)
         end
     end
     get(w.config.bind_addr)
@@ -317,7 +317,7 @@ function procs(pid::Integer)
             Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
         end
     else
-        remotecall_fetch(1, procs, pid)
+        remotecall_fetch(procs, 1, pid)
     end
 end
 
@@ -336,30 +336,35 @@ function rmprocs(args...; waitfor = 0.0)
         error("only process 1 can add and remove processes")
     end
 
-    rmprocset = []
-    for i in vcat(args...)
-        if i == 1
-            warn("rmprocs: process 1 not removed")
-        else
-            if haskey(map_pid_wrkr, i)
-                w = map_pid_wrkr[i]
-                set_worker_state(w, W_TERMINATING)
-                kill(w.manager, i, w.config)
-                push!(rmprocset, w)
+    lock(worker_lock)
+    try
+        rmprocset = []
+        for i in vcat(args...)
+            if i == 1
+                warn("rmprocs: process 1 not removed")
+            else
+                if haskey(map_pid_wrkr, i)
+                    w = map_pid_wrkr[i]
+                    set_worker_state(w, W_TERMINATING)
+                    kill(w.manager, i, w.config)
+                    push!(rmprocset, w)
+                end
             end
         end
-    end
 
-    start = time()
-    while (time() - start) < waitfor
-        if all(w -> w.state == W_TERMINATED, rmprocset)
-            break;
-        else
-            sleep(0.1)
+        start = time()
+        while (time() - start) < waitfor
+            if all(w -> w.state == W_TERMINATED, rmprocset)
+                break;
+            else
+                sleep(0.1)
+            end
         end
-    end
 
-    ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+        ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+    finally
+        unlock(worker_lock)
+    end
 end
 
 
@@ -425,7 +430,7 @@ function deregister_worker(pg, pid)
             if PGRP.topology != :all_to_all
                 for rpid in workers()
                     try
-                        remote_do(rpid, deregister_worker, pid)
+                        remote_do(deregister_worker, rpid, pid)
                     catch
                     end
                 end
@@ -434,7 +439,7 @@ function deregister_worker(pg, pid)
     end
     push!(map_del_wrkr, pid)
 
-    # delete this worker from our RemoteRef client sets
+    # delete this worker from our remote reference client sets
     ids = []
     tonotify = []
     for (id,rv) in pg.refs
@@ -457,25 +462,50 @@ function deregister_worker(pg, pid)
 end
 
 ## remote refs ##
-
 const client_refs = WeakKeyDict()
 
-type RemoteRef{RemoteStore}
+abstract AbstractRemoteRef
+
+type Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
-    # TODO: cache value if it's fetched, but don't serialize the cached value
+    v::Nullable{Any}
 
-    function RemoteRef(w, wh, id)
-        r = new(w,wh,id)
-        found = getkey(client_refs, r, false)
-        if !is(found,false)
-            return found
+    Future(w, wh, id) = Future(w, wh, id, Nullable{Any}())
+    Future(w, wh, id, v) = (r = new(w,wh,id,v); test_existing_ref(r))
+end
+finalize_future(f::Future) = (isnull(f.v) && send_del_client(f))
+
+type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
+    where::Int
+    whence::Int
+    id::Int
+
+    RemoteChannel(w, wh, id) = (r = new(w,wh,id); test_existing_ref(r))
+end
+
+function test_existing_ref(r::Future)
+    found = getkey(client_refs, r, false)
+    if !is(found,false)
+        if isnull(found.v) && !isnull(r.v)
+            # we have recd the value from another source, probably a deserialized ref, send a del_client message
+            send_del_client(r)
+            found.v = r.v
         end
-        client_refs[r] = true
-        finalizer(r, send_del_client)
-        r
+        return found
     end
+    client_refs[r] = true
+    finalizer(r, finalize_future)
+    r
+end
+
+function test_existing_ref(r::RemoteChannel)
+    found = getkey(client_refs, r, false)
+    !is(found,false) && return found
+    client_refs[r] = true
+    finalizer(r, send_del_client)
+    r
 end
 
 let REF_ID::Int = 1
@@ -486,53 +516,82 @@ let REF_ID::Int = 1
     next_rrid_tuple() = (myid(),next_ref_id())
 end
 
-RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-RemoteRef(w::Worker) = RemoteRef(w.id)
-function RemoteRef(pid::Integer=myid())
+Future(w::LocalProcess) = Future(w.id)
+Future(w::Worker) = Future(w.id)
+function Future(pid::Integer=myid())
     rrid = next_rrid_tuple()
-    RemoteRef{Channel{Any}}(pid, rrid[1], rrid[2])
+    Future(pid, rrid[1], rrid[2])
 end
 
-function RemoteRef(f::Function, pid::Integer=myid())
-    remotecall_fetch(pid, (f, rrid) -> begin
+function RemoteChannel(pid::Integer=myid())
+    rrid = next_rrid_tuple()
+    RemoteChannel{Channel{Any}}(pid, rrid[1], rrid[2])
+end
+function RemoteChannel(f::Function, pid::Integer=myid())
+    remotecall_fetch(pid, f, next_rrid_tuple()) do f, rrid
         rv=lookup_ref(rrid, f)
-        RemoteRef{typeof(rv.c)}(myid(), rrid[1], rrid[2])
-    end, f, next_rrid_tuple())
+        RemoteChannel{typeof(rv.c)}(myid(), rrid[1], rrid[2])
+    end
 end
 
-hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+remoteref_id(r::AbstractRemoteRef) = (r.whence, r.id)
+function channel_from_id(id)
+    rv = get(PGRP.refs, id, false)
+    if rv === false
+        throw(ErrorException("Local instance of remote reference not found"))
+    end
+    rv.c
+end
 
 lookup_ref(id, f=def_rv_channel) = lookup_ref(PGRP, id, f)
 function lookup_ref(pg, id, f)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue(f)
+        rv = RemoteValue(f())
         pg.refs[id] = rv
         push!(rv.clientset, id[1])
     end
     rv
 end
+function isready(rr::Future)
+    !isnull(rr.v) && return true
 
-function isready(rr::RemoteRef, args...)
-    rid = rr2id(rr)
+    rid = remoteref_id(rr)
+    if rr.where == myid()
+        isready(lookup_ref(rid).c)
+    else
+        remotecall_fetch(rid->isready(lookup_ref(rid).c), rr.where, rid)
+    end
+end
+
+function isready(rr::RemoteChannel, args...)
+    rid = remoteref_id(rr)
     if rr.where == myid()
         isready(lookup_ref(rid).c, args...)
     else
-        remotecall_fetch(rr.where, id->isready(lookup_ref(rid).c, args...), rid)
+        remotecall_fetch(rid->isready(lookup_ref(rid).c, args...), rr.where, rid)
     end
 end
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
-    rv = lookup_ref(id)
-    delete!(rv.clientset, client)
-    if isempty(rv.clientset)
-        delete!(pg.refs, id)
-        #print("$(myid()) collected $id\n")
+# As a workaround to issue https://github.com/JuliaLang/julia/issues/14445
+# the dict/set updates are executed asynchronously so that they do
+# not occur in the midst of a gc. The `@async` prefix must be removed once
+# 14445 is fixed.
+    @async begin
+        rv = get(pg.refs, id, false)
+        if rv != false
+            delete!(rv.clientset, client)
+            if isempty(rv.clientset)
+                delete!(pg.refs, id)
+                #print("$(myid()) collected $id\n")
+            end
+        end
     end
     nothing
 end
@@ -551,23 +610,18 @@ function start_gc_msgs_task()
     end
 end
 
-function send_del_client(rr::RemoteRef)
+function send_del_client(rr)
     if rr.where == myid()
-        del_client(rr2id(rr), myid())
-    else
-        if in(rr.where, map_del_wrkr)
-            # for a removed worker, don't bother
-            return
-        end
+        del_client(remoteref_id(rr), myid())
+    elseif rr.where in procs() # process only if a valid worker
         w = worker_from_id(rr.where)
-        push!(w.del_msgs, (rr2id(rr), myid()))
+        push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
         notify(any_gc_flag)
     end
 end
 
 function add_client(id, client)
-    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -575,53 +629,68 @@ end
 
 function add_clients(pairs::Vector)
     for p in pairs
-        add_client(p[1], p[2])
+        add_client(p[1], p[2]...)
     end
 end
 
-function send_add_client(rr::RemoteRef, i)
+function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
-        add_client(rr2id(rr), i)
-    elseif i != rr.where
+        add_client(remoteref_id(rr), i)
+    elseif (i != rr.where) && (rr.where in procs())
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
-        push!(w.add_msgs, (rr2id(rr), i))
+        push!(w.add_msgs, (remoteref_id(rr), i))
         w.gcflag = true
         notify(any_gc_flag)
     end
 end
 
-function serialize(s::SerializationState, rr::RemoteRef)
-    i = worker_id_from_socket(s.io)
-    #println("$(myid()) serializing $rr to $i")
-    if i != -1
-        #println("send add $rr to $i")
-        send_add_client(rr, i)
+channel_type{T}(rr::RemoteChannel{T}) = T
+
+serialize(s::SerializationState, f::Future) = serialize(s, f, isnull(f.v))
+serialize(s::SerializationState, rr::RemoteChannel) = serialize(s, rr, true)
+function serialize(s::SerializationState, rr::AbstractRemoteRef, addclient)
+    if addclient
+        p = worker_id_from_socket(s.io)
+        (p !== rr.where) && send_add_client(rr, p)
     end
     invoke(serialize, Tuple{SerializationState, Any}, s, rr)
 end
 
-function deserialize(s::SerializationState, t::Type{RemoteRef})
-    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
-    where = rr.where
-    if where == myid()
-        add_client(rr2id(rr), myid())
-    end
-    # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+function deserialize{T<:Future}(s::SerializationState, t::Type{T})
+    f = deserialize_rr(s,t)
+    Future(f.where, f.whence, f.id) # ctor adds to ref table
 end
 
-# data stored by the owner of a RemoteRef
+function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
+    rr = deserialize_rr(s,t)
+    # call ctor to make sure this rr gets added to the client_refs table
+    RemoteChannel{channel_type(rr)}(rr.where, rr.whence, rr.id)
+end
+
+function deserialize_rr(s, t)
+    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
+    if rr.where == myid()
+        # send_add_client() is not executed when the ref is being
+        # serialized to where it exists
+        add_client(remoteref_id(rr), myid())
+    end
+    rr
+end
+
+# data stored by the owner of a remote reference
 def_rv_channel() = Channel(1)
 type RemoteValue
     c::AbstractChannel
-    clientset::IntSet
+    clientset::IntSet # Set of workerids that have a reference to this channel.
+                      # Keeping ids instead of a count aids in cleaning up upon
+                      # a worker exit.
+
     waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue(f::Function) = new(f(), IntSet(), 0)
+    RemoteValue(c) = new(c, IntSet(), 0)
 end
 
 wait(rv::RemoteValue) = wait(rv.c)
@@ -646,7 +715,7 @@ function run_work_thunk(thunk, print_error)
     catch err
         ce = CapturedException(err, catch_backtrace())
         result = RemoteException(ce)
-        print_error && print(STDERR, ce)
+        print_error && showerror(STDERR, ce)
     end
     result
 end
@@ -656,7 +725,7 @@ function run_work_thunk(rv::RemoteValue, thunk)
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue(def_rv_channel)
+    rv = RemoteValue(def_rv_channel())
     (PGRP::ProcessGroup).refs[rid] = rv
     push!(rv.clientset, rid[1])
     schedule(@task(run_work_thunk(rv,thunk)))
@@ -665,7 +734,7 @@ end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-#function localize_ref(r::RemoteRef)
+#function localize_ref(r::RemoteChannel)
 #    if r.where == myid()
 #        fetch(r)
 #    else
@@ -686,7 +755,7 @@ function local_remotecall_thunk(f, args)
     # TODO: this seems to be capable of causing deadlocks by waiting on
     # Refs buried inside the closure that we don't want to wait on yet.
     # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    # if isa(linfo,LambdaStaticData)
+    # if isa(linfo,LambdaInfo)
     #     env = ccall(:jl_closure_env, Any, (Any,), f)
     #     buf = memio()
     #     serialize(buf, env)
@@ -698,28 +767,28 @@ function local_remotecall_thunk(f, args)
     # f(map(localize_ref,args)...)
 end
 
-function remotecall(w::LocalProcess, f, args...)
-    rr = RemoteRef(w)
-    schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
+function remotecall(f, w::LocalProcess, args...)
+    rr = Future(w)
+    schedule_call(remoteref_id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
-function remotecall(w::Worker, f, args...)
-    rr = RemoteRef(w)
+function remotecall(f, w::Worker, args...)
+    rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, CallMsg{:call}(f, args, rr2id(rr)))
+    send_msg(w, CallMsg{:call}(f, args, remoteref_id(rr)))
     rr
 end
 
-remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
+remotecall(f, id::Integer, args...) = remotecall(f, worker_from_id(id), args...)
 
 # faster version of fetch(remotecall(...))
-function remotecall_fetch(w::LocalProcess, f, args...)
+function remotecall_fetch(f, w::LocalProcess, args...)
     v=run_work_thunk(local_remotecall_thunk(f,args), false)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-function remotecall_fetch(w::Worker, f, args...)
+function remotecall_fetch(f, w::Worker, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
     oid = next_rrid_tuple()
@@ -731,27 +800,28 @@ function remotecall_fetch(w::Worker, f, args...)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-remotecall_fetch(id::Integer, f, args...) =
-    remotecall_fetch(worker_from_id(id), f, args...)
+remotecall_fetch(f, id::Integer, args...) =
+    remotecall_fetch(f, worker_from_id(id), args...)
 
 # faster version of wait(remotecall(...))
-remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
+remotecall_wait(f, w::LocalProcess, args...) = wait(remotecall(f, w, args...))
 
-function remotecall_wait(w::Worker, f, args...)
+function remotecall_wait(f, w::Worker, args...)
     prid = next_rrid_tuple()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
-    rr = RemoteRef(w)
-    send_msg(w, CallWaitMsg(f, args, rr2id(rr), prid))
-    wait(rv)
+    rr = Future(w)
+    send_msg(w, CallWaitMsg(f, args, remoteref_id(rr), prid))
+    v = fetch(rv.c)
     delete!(PGRP.refs, prid)
+    isa(v, RemoteException) && throw(v)
     rr
 end
 
-remotecall_wait(id::Integer, f, args...) =
-    remotecall_wait(worker_from_id(id), f, args...)
+remotecall_wait(f, id::Integer, args...) =
+    remotecall_wait(f, worker_from_id(id), args...)
 
-function remote_do(w::LocalProcess, f, args...)
+function remote_do(f, w::LocalProcess, args...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
@@ -760,49 +830,97 @@ function remote_do(w::LocalProcess, f, args...)
     nothing
 end
 
-function remote_do(w::Worker, f, args...)
+function remote_do(f, w::Worker, args...)
     send_msg(w, RemoteDoMsg(f, args))
     nothing
 end
 
-remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
+remote_do(f, id::Integer, args...) = remote_do(f, worker_from_id(id), args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
-    rid = rr2id(rr)
+function call_on_owner(f, rr::AbstractRemoteRef, args...)
+    rid = remoteref_id(rr)
     if rr.where == myid()
         f(rid, args...)
     else
-        remotecall_fetch(rr.where, f, rid, args...)
+        remotecall_fetch(f, rr.where, rid, args...)
     end
 end
 
-wait_ref(rid, args...) = (wait(lookup_ref(rid).c, args...); nothing)
-wait(r::RemoteRef, args...) = (call_on_owner(wait_ref, r, args...); r)
+function wait_ref(rid, callee, args...)
+    v = fetch_ref(rid, args...)
+    if isa(v, RemoteException)
+        if myid() == callee
+            throw(v)
+        else
+            return v
+        end
+    end
+    nothing
+end
+wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid()); r)
+wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
+
+function fetch_future(rid, callee)
+    rv = lookup_ref(rid);
+    v = fetch(rv.c)
+    del_client(rid, callee)
+    v
+end
+function fetch(r::Future)
+    !isnull(r.v) && return get(r.v)
+    v=call_on_owner(fetch_future, r, myid())
+    r.v=v
+    v
+end
 
 fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
-fetch(r::RemoteRef, args...) = call_on_owner(fetch_ref, r, args...)
+fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 fetch(x::ANY) = x
 
-# storing a value to a RemoteRef
+isready(rv::RemoteValue, args...) = isready(rv.c, args...)
+function put!(rr::Future, v)
+    !isnull(rr.v) && error("Future can be set only once")
+    call_on_owner(put_future, rr, v, myid())
+    rr.v = v
+    rr
+end
+function put_future(rid, v, callee)
+    rv = lookup_ref(rid)
+    isready(rv) && error("Future can be set only once")
+    put!(rv, v)
+    # The callee has the value and hence can be removed from the remote store.
+    del_client(rid, callee)
+    nothing
+end
+
+
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-put_ref(rid, args...) = put!(lookup_ref(rid), args...)
-put!(rr::RemoteRef, args...) = (call_on_owner(put_ref, rr, args...); rr)
+put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
+put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+
+# take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-take_ref(rid, args...) = take!(lookup_ref(rid), args...)
-take!(rr::RemoteRef, args...) = call_on_owner(take_ref, rr, args...)
+function take_ref(rid, callee, args...)
+    v=take!(lookup_ref(rid), args...)
+    isa(v, RemoteException) && (myid() == callee) && throw(v)
+    v
+end
+take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
+
+# close is not supported on Future
 
 close_ref(rid) = (close(lookup_ref(rid).c); nothing)
-close(rr::RemoteRef) = call_on_owner(close_ref, rr)
+close(rr::RemoteChannel) = call_on_owner(close_ref, rr)
 
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg,:call_fetch)
+    if is(msg,:call_fetch) || isa(value, RemoteException)
         val = value
     else
-        val = oid
+        val = :OK
     end
     try
         send_msg_now(sock, ResultMsg(oid, val))
@@ -818,7 +936,7 @@ function deliver_result(sock::IO, msg, oid, value)
         elseif wid == 1
             exit(1)
         else
-            remote_do(1, rmprocs, wid)
+            remote_do(rmprocs, 1, wid)
         end
     end
 end
@@ -836,9 +954,9 @@ function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket)
         message_handler_loop(r_stream, w_stream)
 end
 
-process_messages(r_stream::AsyncStream, w_stream::AsyncStream) = @schedule message_handler_loop(r_stream, w_stream)
+process_messages(r_stream::IO, w_stream::IO) = @schedule message_handler_loop(r_stream, w_stream)
 
-function message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStream)
+function message_handler_loop(r_stream::IO, w_stream::IO)
     global PGRP
     global cluster_manager
 
@@ -897,7 +1015,7 @@ end
 function handle_msg(msg::CallWaitMsg, r_stream, w_stream)
     @schedule begin
         rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
-        deliver_result(w_stream, :call_wait, msg.notify_oid, wait(rv))
+        deliver_result(w_stream, :call_wait, msg.notify_oid, fetch(rv.c))
     end
 end
 
@@ -1060,7 +1178,7 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     cluster_manager = manager
     disable_threaded_libs()
 
-    # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
+    # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
     assert(nprocs() <= 1)
     assert(isempty(PGRP.refs))
     assert(isempty(client_refs))
@@ -1075,7 +1193,20 @@ end
 # `manager` is of type ClusterManager. The respective managers are responsible
 # for launching the workers. All keyword arguments (plus a few default values)
 # are available as a dictionary to the `launch` methods
+#
+# Only one addprocs can be in progress at any time
+#
+const worker_lock = ReentrantLock()
 function addprocs(manager::ClusterManager; kwargs...)
+    lock(worker_lock)
+    try
+        addprocs_locked(manager::ClusterManager; kwargs...)
+    finally
+        unlock(worker_lock)
+    end
+end
+
+function addprocs_locked(manager::ClusterManager; kwargs...)
 
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(symbol(params[:topology]))
@@ -1102,13 +1233,13 @@ function addprocs(manager::ClusterManager; kwargs...)
 
     @sync begin
         while true
-            if length(launched) == 0
+            if isempty(launched)
                 istaskdone(t_launch) && break
                 @schedule (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
-            if (length(launched) > 0)
+            if !isempty(launched)
                 wconfig = shift!(launched)
                 let wconfig=wconfig
                     @async setup_launched_worker(manager, wconfig, launched_q)
@@ -1125,7 +1256,7 @@ function addprocs(manager::ClusterManager; kwargs...)
     # function returns to the caller.
     all_w = workers()
     for pid in all_w
-        remote_do(pid, set_valid_processes, all_w)
+        remote_do(set_valid_processes, pid, all_w)
     end
 
     sort!(launched_q)
@@ -1169,7 +1300,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
         exeflags = get(fromconfig.exeflags, ``)
         cmd = `$exename $exeflags`
 
-        new_addresses = remotecall_fetch(frompid, launch_additional, cnt, cmd)
+        new_addresses = remotecall_fetch(launch_additional, frompid, cnt, cmd)
         for address in new_addresses
             (bind_addr, port) = address
 
@@ -1183,7 +1314,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             let wconfig=wconfig
                 @async begin
                     pid = create_worker(manager, wconfig)
-                    remote_do(frompid, redirect_output_from_additional_worker, pid, port)
+                    remote_do(redirect_output_from_additional_worker, frompid, pid, port)
                     push!(launched_q, pid)
                 end
             end
@@ -1272,7 +1403,7 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = cell(np)
 
     for i in 1:np
-        io, pobj = open(detach(cmd), "r")
+        io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
         io_objs[i] = io
     end
 
@@ -1298,17 +1429,18 @@ let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
-        env = thunk.env
-        if isa(env,Tuple)
-            for v in env
-                if isa(v,Box)
-                    v = v.contents
-                end
-                if isa(v,RemoteRef)
-                    p = v.where; break
-                end
-            end
-        end
+        # TODO jb/functions
+        #env = thunk.env
+        #if isa(env,Tuple)
+        #    for v in env
+        #        if isa(v,Box)
+        #            v = v.contents
+        #        end
+        #        if isa(v,AbstractRemoteRef)
+        #            p = v.where; break
+        #        end
+        #    end
+        #end
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
             nextidx += 1
@@ -1317,31 +1449,31 @@ let nextidx = 0
     end
 end
 
-spawnat(p, thunk) = sync_add(remotecall(p, thunk))
+spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawn_somewhere($(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawn_somewhere($expr))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnat($(esc(p)), $(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(spawnat($(esc(p)), $expr))
 end
 
 macro fetch(expr)
-    expr = localize_vars(:(()->($expr)), false)
+    expr = localize_vars(esc(:(()->($expr))), false)
     quote
-        thunk = $(esc(expr))
-        remotecall_fetch(chooseproc(thunk), thunk)
+        thunk = $expr
+        remotecall_fetch(thunk, chooseproc(thunk))
     end
 end
 
 macro fetchfrom(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(remotecall_fetch($(esc(p)), $(esc(expr))))
+    expr = localize_vars(esc(:(()->($expr))), false)
+    :(remotecall_fetch($expr, $(esc(p))))
 end
 
 macro everywhere(ex)
@@ -1349,7 +1481,7 @@ macro everywhere(ex)
         sync_begin()
         thunk = ()->(eval(Main,$(Expr(:quote,ex))); nothing)
         for pid in workers()
-            async_run_thunk(()->remotecall_fetch(pid, thunk))
+            async_run_thunk(()->remotecall_fetch(thunk, pid))
             yield() # ensure that the remotecall_fetch has been started
         end
 
@@ -1365,7 +1497,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    Any[ remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n ]
+    Any[ remotecall(f, PGRP.workers[(i-1)%np+1].id, map(L->L[i], lsts)...) for i = 1:n ]
 end
 
 pmap(f) = f()
@@ -1427,7 +1559,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
                     (idx, fvals) = tasklet
                     busy_workers[pididx] = true
                     try
-                        results[idx] = remotecall_fetch(wpid, f, fvals...)
+                        results[idx] = remotecall_fetch(f, wpid, fvals...)
                     catch ex
                         if err_retry
                             push!(retryqueue, (idx,fvals, ex))
@@ -1476,31 +1608,32 @@ function splitrange(N::Int, np::Int)
     return chunks
 end
 
-function preduce(reducer, f, N::Int)
+function preduce(reducer, f, R)
+    N = length(R)
     chunks = splitrange(N, nworkers())
     all_w = workers()[1:length(chunks)]
 
     w_exec = Task[]
     for (idx,pid) in enumerate(all_w)
-        t = Task(()->remotecall_fetch(pid, f, first(chunks[idx]), last(chunks[idx])))
+        t = Task(()->remotecall_fetch(f, pid, reducer, R, first(chunks[idx]), last(chunks[idx])))
         schedule(t)
         push!(w_exec, t)
     end
     reduce(reducer, [wait(t) for t in w_exec])
 end
 
-function pfor(f, N::Int)
-    [@spawn f(first(c), last(c)) for c in splitrange(N, nworkers())]
+function pfor(f, R)
+    [@spawn f(R, first(c), last(c)) for c in splitrange(length(R), nworkers())]
 end
 
-function make_preduce_body(reducer, var, body, R)
+function make_preduce_body(var, body)
     quote
-        function (lo::Int, hi::Int)
-            $(esc(var)) = ($R)[lo]
+        function (reducer, R, lo::Int, hi::Int)
+            $(esc(var)) = R[lo]
             ac = $(esc(body))
             if lo != hi
-                for $(esc(var)) in ($R)[(lo+1):hi]
-                    ac = ($(esc(reducer)))(ac, $(esc(body)))
+                for $(esc(var)) in R[(lo+1):hi]
+                    ac = reducer(ac, $(esc(body)))
                 end
             end
             ac
@@ -1508,10 +1641,10 @@ function make_preduce_body(reducer, var, body, R)
     end
 end
 
-function make_pfor_body(var, body, R)
+function make_pfor_body(var, body)
     quote
-        function (lo::Int, hi::Int)
-            for $(esc(var)) in ($R)[lo:hi]
+        function (R, lo::Int, hi::Int)
+            for $(esc(var)) in R[lo:hi]
                 $(esc(body))
             end
         end
@@ -1535,12 +1668,11 @@ macro parallel(args...)
     r = loop.args[1].args[2]
     body = loop.args[2]
     if na==1
-        thecall = :(pfor($(make_pfor_body(var, body, :therange)), length(therange)))
+        thecall = :(pfor($(make_pfor_body(var, body)), $(esc(r))))
     else
-        thecall = :(preduce($(esc(reducer)),
-                            $(make_preduce_body(reducer, var, body, :therange)), length(therange)))
+        thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
-    localize_vars(quote therange = $(esc(r)); $thecall; end)
+    localize_vars(thecall)
 end
 
 
@@ -1568,7 +1700,7 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
     start = time()
-    done = RemoteRef()
+    done = Channel(1)
     timercb(aw) = begin
         try
             if testcb()
@@ -1625,7 +1757,7 @@ end
 
 function check_same_host(pids)
     if myid() != 1
-        return remotecall_fetch(1, check_same_host, pids)
+        return remotecall_fetch(check_same_host, 1, pids)
     else
         # We checkfirst if all test pids have been started using the local manager,
         # else we check for the same bind_to addr. This handles the special case
@@ -1658,10 +1790,14 @@ function terminate_all_workers()
     end
 end
 
-getindex(r::RemoteRef) = fetch(r)
-function getindex(r::RemoteRef, args...)
+getindex(r::RemoteChannel) = fetch(r)
+getindex(r::Future) = fetch(r)
+
+getindex(r::Future, args...) = getindex(fetch(r), args...)
+function getindex(r::RemoteChannel, args...)
     if r.where == myid()
         return getindex(fetch(r), args...)
     end
-    return remotecall_fetch(r.where, getindex, r, args...)
+    return remotecall_fetch(getindex, r.where, r, args...)
 end
+

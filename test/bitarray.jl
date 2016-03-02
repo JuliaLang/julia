@@ -171,10 +171,10 @@ function gen_getindex_data()
     m1, m2 = rand_m1m2()
     produce((m1, m2, Bool))
     m1, m2 = rand_m1m2()
-    produce((m1, 1:m2, BitMatrix))
-    produce((m1, :, BitMatrix))
+    produce((m1, 1:m2, BitVector))
+    produce((m1, :, BitVector))
     m1, m2 = rand_m1m2()
-    produce((m1, randperm(m2), BitMatrix))
+    produce((m1, randperm(m2), BitVector))
     m1, m2 = rand_m1m2()
     produce((1:m1, m2, BitVector))
     produce((:, m2, BitVector))
@@ -1201,7 +1201,7 @@ b1 = triu(bitrand(n2, n1))
 
 b1 = bitrand(n1,n1)
 b1 |= b1.'
-@check_bit_operation issym(b1) Bool
+@check_bit_operation issymmetric(b1) Bool
 @check_bit_operation ishermitian(b1) Bool
 
 b1 = bitrand(n1)

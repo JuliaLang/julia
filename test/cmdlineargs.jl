@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
+let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # --version
-    let v = split(readall(`$exename -v`), "julia version ")[end]
+    let v = split(readstring(`$exename -v`), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
     end
-    @test readall(`$exename -v`) == readall(`$exename --version`)
+    @test readstring(`$exename -v`) == readstring(`$exename --version`)
 
     # --help
     let header = "julia [switches] -- [programfile] [args...]"
-        @test startswith(readall(`$exename -h`), header)
-        @test startswith(readall(`$exename --help`), header)
+        @test startswith(readstring(`$exename -h`), header)
+        @test startswith(readstring(`$exename --help`), header)
     end
 
     # --quiet
@@ -29,8 +29,8 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test !success(`$exename --eval`)
 
     # --print
-    @test readall(`$exename -E "1+1"`) == "2\n"
-    @test readall(`$exename --print="1+1"`) == "2\n"
+    @test readstring(`$exename -E "1+1"`) == "2\n"
+    @test readstring(`$exename --print="1+1"`) == "2\n"
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
@@ -45,9 +45,7 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --load
     let testfile = tempname()
         try
-            open(testfile, "w") do io
-                println(io, "testvar = :test")
-            end
+            write(testfile, "testvar = :test\n")
             @test split(readchomp(`$exename --load=$testfile -P "println(testvar)"`), '\n')[end] == "test"
             @test split(readchomp(`$exename -P "println(testvar)" -L $testfile`), '\n')[end] == "test"
         finally
@@ -124,9 +122,10 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     @test readchomp(`$exename -E "Bool(Base.JLOptions().malloc_log)" --track-allocation=user`) == "true"
 
     # --optimize
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().opt_level)"`) == "false"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().opt_level)" -O`) == "true"
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().opt_level)" --optimize`) == "true"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
 
     # --check-bounds
     let JL_OPTIONS_CHECK_BOUNDS_DEFAULT = 0,
@@ -152,6 +151,40 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
         foo()
     " --depwarn=error`)
 
+    # test deprecated bindings, #13269
+    let code = """
+        module Foo
+            import Base: @deprecate_binding
+
+            const NotDeprecated = true
+            @deprecate_binding Deprecated NotDeprecated
+        end
+
+        Foo.Deprecated
+        """
+
+        @test !success(`$exename -E "$code" --depwarn=error`)
+
+        # FIXME these should also be run on windows once the bug causing them to hang gets fixed
+        @unix_only let out  = Pipe(),
+                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out))
+
+            wait(proc)
+            close(out.in)
+            @test success(proc)
+            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
+        end
+
+        @unix_only let out  = Pipe(),
+                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
+
+            wait(proc)
+            close(out.in)
+            @test success(proc)
+            @test isempty(readstring(out))
+        end
+    end
+
     # --inline
     @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
@@ -172,25 +205,73 @@ let exename = `$(joinpath(JULIA_HOME, Base.julia_exename())) --precompiled=yes`
     # --worker takes default / custom as arugment (default/custom arguments tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
+    escape(str) = replace(str, "\\", "\\\\")
+
     # test passing arguments
     let testfile = tempname()
         try
-            # write a julia source file that just prints ARGS to STDOUT and exits
-            open(testfile, "w") do io
-                println(io, "println(ARGS)")
-                println(io, "exit(0)")
-            end
-            @test readchomp(`$exename $testfile foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
-            @test readchomp(`$exename -L $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            # write a julia source file that just prints ARGS to STDOUT
+            write(testfile, """
+                println(ARGS)
+            """)
+            @test readchomp(`$exename $testfile foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) == "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') == ["UTF8String[\"$(escape(testfile))\"]", "UTF8String[]"]
             @test !success(`$exename --foo $testfile`)
-            @test !success(`$exename -L $testfile -- foo -bar -- baz`)
+            @test !success(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`)
         finally
             rm(testfile)
+        end
+    end
+
+    # test the script name
+    let a = tempname(), b = tempname()
+        try
+            write(a, """
+                println(@__FILE__)
+                println(PROGRAM_FILE)
+                println(length(ARGS))
+                include(\"$(escape(b))\")
+            """)
+            write(b, """
+                println(@__FILE__)
+                println(PROGRAM_FILE)
+                println(length(ARGS))
+            """)
+            @test split(readchomp(`$exename $a`), '\n') == ["$a", "$a", "0", "$b", "$a", "0"]
+            @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') == ["$(realpath(b))", "", "0"]
+            @test split(readchomp(`$exename -L $b $a`), '\n') == ["$(realpath(b))", "", "1", "$a", "$a", "0", "$b", "$a", "0"]
+        finally
+            rm(a)
+            rm(b)
         end
     end
 
     # issue #10562
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "UTF8String[\"\"]"
 
+    # issue #12679
+    extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+    withenv("PATH" => extrapath * ENV["PATH"]) do
+        @test readchomp(pipeline(ignorestatus(`$exename -f --compile=yes -foo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
+        @test readchomp(pipeline(ignorestatus(`$exename -f -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
+        @test readchomp(pipeline(ignorestatus(`$exename -f --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
+        @test readchomp(pipeline(ignorestatus(`$exename -f -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
+    end
+
+    # --compilecache={yes|no}
+    @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"
+    @test readchomp(`$exename --compilecache=yes -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"
+    @test readchomp(`$exename --compilecache=no -E "Bool(Base.JLOptions().use_compilecache)"`) == "false"
+    @test !success(`$exename --compilecache=foo -e "exit(0)"`)
+
+    # issue #12671, starting from a non-directory
+    @unix_only if VersionNumber(Base.libllvm_version) > v"3.3"
+        testdir = mktempdir()
+        cd(testdir) do
+            rm(testdir)
+            @test success(`$exename -e "exit(0)"`)
+        end
+    end
 end

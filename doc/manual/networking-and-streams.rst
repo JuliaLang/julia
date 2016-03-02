@@ -16,18 +16,24 @@ functionality.
 Basic Stream I/O
 ----------------
 
-All Julia streams expose at least a :func:`read` and a :func:`write` method, taking the stream as their first argument, e.g.::
+All Julia streams expose at least a :func:`read` and a :func:`write` method,
+taking the stream as their first argument, e.g.::
 
-    julia> write(STDOUT,"Hello World")
+    julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
     Hello World
 
     julia> read(STDIN,Char)
 
     '\n'
 
-Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example,
+Note that :func:`write` returns 11, the number of bytes (in ``"Hello World"``) written to :const:`STDOUT`,
+but this return value is suppressed with the ``;``.
+
+Here Enter was pressed again so that Julia would read the newline. Now, as you can see from this example,
 :func:`write` takes the data to write as its second argument, while :func:`read` takes the type of the
-data to be read as the second argument. For example, to read a simple byte array, we could do::
+data to be read as the second argument.
+
+For example, to read a simple byte array, we could do::
 
     julia> x = zeros(UInt8,4)
     4-element Array{UInt8,1}:
@@ -47,7 +53,7 @@ data to be read as the second argument. For example, to read a simple byte array
 However, since this is slightly cumbersome, there are several convenience methods provided. For example, we could have written the
 above as::
 
-    julia> readbytes(STDIN,4)
+    julia> read(STDIN,4)
     abcd
     4-element Array{UInt8,1}:
      0x61
@@ -80,17 +86,26 @@ or :func:`read` if you wanted to read by character instead::
 Text I/O
 --------
 
-Note that the write method mentioned above operates on binary streams. In particular, values do not get converted to any canonical text
+Note that the :func:`write` method mentioned above operates on binary streams.
+In particular, values do not get converted to any canonical text
 representation but are written out as is::
 
-    julia> write(STDOUT,0x61)
+    julia> write(STDOUT,0x61);  # suppress return value 1 with ;
     a
+
+Note that ``a`` is written to :const:`STDOUT` by the :func:`write` function and
+that the returned value is ``1`` (since ``0x61`` is one byte).
 
 For text I/O, use the :func:`print` or :func:`show` methods, depending on your needs (see the standard library reference for a detailed discussion of
 the difference between the two)::
 
     julia> print(STDOUT,0x61)
     97
+
+IO Output Contextual Properties
+-------------------------------
+
+Sometimes IO output can benefit from the ability to pass contextual information into show methods. The ``IOContext`` object provides this framework for associating arbitrary metadata with an IO object. For example, ``showlimited`` adds a hinting parameter to the IO object that the invoked show method should print a shorter output (if applicable).
 
 Working with Files
 ------------------
@@ -127,7 +142,7 @@ as its first argument and filename as its second, opens the file, calls the func
 an argument, and then closes it again. For example, given a function::
 
     function read_and_capitalize(f::IOStream)
-        return uppercase(readall(f))
+        return uppercase(readstring(f))
     end
 
 You can call::
@@ -141,7 +156,7 @@ To avoid even having to define a named function, you can use the ``do`` syntax, 
 function on the fly::
 
     julia> open("hello.txt") do f
-              uppercase(readall(f))
+              uppercase(readstring(f))
            end
     "HELLO AGAIN."
 
@@ -169,19 +184,19 @@ specified port (2000) in this case. The same function may also be used to
 create various other kinds of servers::
 
     julia> listen(2000) # Listens on localhost:2000 (IPv4)
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-    TcpServer(active)
+    TCPServer(active)
 
     julia> listen("testsocket") # Listens on a domain socket/named pipe
     PipeServer(active)
@@ -198,7 +213,7 @@ should be able to pass the same arguments to :func:`connect` as you did to liste
 establish the connection. So let's try that out (after having created the server above)::
 
     julia> connect(2000)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
     julia> Hello World
 
@@ -218,7 +233,7 @@ A great strength of Julia is that since the API is exposed synchronously even th
     Task
 
     julia> clientside=connect(2001)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
     julia> @async while true
               write(STDOUT,readline(clientside))
@@ -240,7 +255,7 @@ given by the ``host`` parameter on the port given by the port parameter. It
 allows you to do things like::
 
     julia> connect("google.com",80)
-    TcpSocket(open, 0 bytes waiting)
+    TCPSocket(open, 0 bytes waiting)
 
 At the base of this functionality is :func:`getaddrinfo`, which will do the appropriate address resolution::
 

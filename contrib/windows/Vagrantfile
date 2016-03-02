@@ -5,7 +5,7 @@ $script_msys2 = <<SCRIPT
 $bits = "64"
 $arch = "x86_$bits".Replace("x86_32", "i686")
 # change the date in the following for future msys2 releases
-$msys2tarball = "msys2-base-$arch-20150512.tar"
+$msys2tarball = "msys2-base-$arch-20150916.tar"
 
 # these environment variables need to be set, or Julia gets confused
 [Environment]::SetEnvironmentVariable("HOMEDRIVE", "C:")
@@ -75,6 +75,6 @@ Vagrant.configure("2") do |config|
     # Use VBoxManage to customize the VM. For example to change memory:
     vb.memory = 2048
   end
-  # change the following to $script_cygwin to build with Cygwin instead of MSYS2
-  config.vm.provision :shell, privileged: false, :inline => $script_msys2
+  # change the following to $script_msys2 to build with MSYS2 instead of Cygwin
+  config.vm.provision :shell, privileged: false, :inline => $script_cygwin
 end

@@ -101,9 +101,9 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
 
 :code:`ios.c` is still used by:
 
-    - :code:`julia/src/flisp/*.c`
-    - :code:`julia/src/dump.c` -- for serialisation file IO and for memory buffers.
-    - :code:`base/iostream.jl` -- for file IO (see :code:`base/fs.jl` for ``libuv`` equivalent).
+- :code:`julia/src/flisp/*.c`
+- :code:`julia/src/dump.c` -- for serialisation file IO and for memory buffers.
+- :code:`base/iostream.jl` -- for file IO (see :code:`base/fs.jl` for ``libuv`` equivalent).
 
 Use of :code:`ios.c` in these modules is mostly self-contained and
 separated from the ``libuv`` I/O system. However, there is `one place

@@ -2,11 +2,15 @@
 
 module LinAlg
 
-importall Base
-importall ..Base.Operators
-import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring,
-             print_matrix, transpose!, unsafe_getindex, unsafe_setindex!,
-             isapprox
+import Base: \, /, *, ^, +, -, ==, ./, .*
+import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
+    Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
+import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transpose!,
+    ctranspose, ctranspose!, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
+    imag, inv, isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
+    promote_rule, real, round, setindex!, show, similar, size, transpose, transpose!,
+    trunc
+using Base: promote_op, MulFun
 
 export
 # Modules
@@ -30,6 +34,7 @@ export
     LDLt,
     QR,
     QRPivoted,
+    LQ,
     Schur,
     SVD,
     Hermitian,
@@ -77,7 +82,7 @@ export
     ishermitian,
     isposdef,
     isposdef!,
-    issym,
+    issymmetric,
     istril,
     istriu,
     kron,
@@ -92,6 +97,8 @@ export
     lufact!,
     lyap,
     norm,
+    normalize,
+    normalize!,
     nullspace,
     ordschur!,
     ordschur,
@@ -100,8 +107,10 @@ export
     qr,
     qrfact!,
     qrfact,
+    lq,
+    lqfact!,
+    lqfact,
     rank,
-    scale,
     scale!,
     schur,
     schurfact!,
@@ -173,14 +182,18 @@ function chkstride1(A...)
     end
 end
 
-# Check that matrix is square
-function chksquare(A)
+"""
+    LinAlg.checksquare(A)
+
+Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
+"""
+function checksquare(A)
     m,n = size(A)
     m == n || throw(DimensionMismatch("matrix is not square"))
     m
 end
 
-function chksquare(A...)
+function checksquare(A...)
     sizes = Int[]
     for a in A
         size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
@@ -189,16 +202,15 @@ function chksquare(A...)
     return sizes
 end
 
-# Check that upper/lower (for special matrices) is correctly specified
-macro chkuplo()
-   :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-
-Valid choices are 'U' (upper) or 'L' (lower).""")))
+function char_uplo(uplo::Symbol)
+    if uplo == :U
+        'U'
+    elseif uplo == :L
+        'L'
+    else
+        throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
+    end
 end
-
-const CHARU = 'U'
-const CHARL = 'L'
-char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
 copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
@@ -207,6 +219,7 @@ include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")
+import .BLAS: gemv! # consider renaming gemv! in matmul
 include("linalg/matmul.jl")
 include("linalg/lapack.jl")
 
@@ -216,6 +229,7 @@ include("linalg/triangular.jl")
 
 include("linalg/factorization.jl")
 include("linalg/qr.jl")
+include("linalg/lq.jl")
 include("linalg/eigen.jl")
 include("linalg/svd.jl")
 include("linalg/schur.jl")

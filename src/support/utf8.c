@@ -21,7 +21,7 @@
 #include <wctype.h>
 
 #include "utf8proc.h"
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 
 #include "dtypes.h"
 

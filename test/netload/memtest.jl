@@ -54,7 +54,7 @@ end
 
 function mtest_remotecall_fetch()
     for i in 1:10^5
-        remotecall_fetch(1, myid)
+        remotecall_fetch(myid, 1)
     end
     gc()
 end

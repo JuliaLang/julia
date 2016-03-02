@@ -122,8 +122,11 @@ function convert(::Type{UTF32String}, dat::AbstractVector{UInt32})
     @inbounds return fast_utf_copy(UTF32String, UInt32, length(dat), dat, true)
 end
 
-convert{T<:Union{Int32,Char}}(::Type{UTF32String}, data::AbstractVector{T}) =
+convert(::Type{UTF32String}, data::AbstractVector{Int32}) =
     convert(UTF32String, reinterpret(UInt32, convert(Vector{T}, data)))
+
+convert(::Type{UTF32String}, data::AbstractVector{Char}) =
+    convert(UTF32String, map(UInt32, data))
 
 convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVector{S}) =
     convert(T, utf32(v))

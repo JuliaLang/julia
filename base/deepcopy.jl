@@ -7,19 +7,11 @@
 
 deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
 
-deepcopy_internal(x::Union{Symbol,LambdaStaticData,TopNode,GlobalRef,
-                           DataType,Union,Task},
+deepcopy_internal(x::Union{Symbol,LambdaInfo,TopNode,GlobalRef,DataType,Union,Task},
                   stackdict::ObjectIdDict) = x
 deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
     ntuple(i->deepcopy_internal(x[i], stackdict), length(x))
 deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
-
-function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
-    if isa(x.env, Union{MethodTable, Symbol}) || x.env === ()
-        return x
-    end
-    invoke(deepcopy_internal, Tuple{Any, ObjectIdDict}, x, stackdict)
-end
 
 function deepcopy_internal(x, stackdict::ObjectIdDict)
     if haskey(stackdict, x)
@@ -31,18 +23,15 @@ end
 function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
     nf = nfields(T)
     (isbits(T) || nf == 0) && return x
+    y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     if T.mutable
-        y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
-        for i in 1:nf
-            if isdefined(x,i)
-                y.(i) = deepcopy_internal(x.(i), stackdict)
-            end
+    end
+    for i in 1:nf
+        if isdefined(x,i)
+            ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), y, i-1,
+                  deepcopy_internal(getfield(x,i), stackdict))
         end
-    else
-        fields = Any[deepcopy_internal(x.(i), stackdict) for i in 1:nf]
-        y = ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32),
-                  T, pointer(fields), length(fields))
     end
     return y::T
 end
@@ -56,7 +45,7 @@ end
 
 function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     if isbits(T)
-        return copy(x)
+        return (stackdict[x]=copy(x))
     end
     dest = similar(x)
     stackdict[x] = dest

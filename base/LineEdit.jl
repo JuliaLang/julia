@@ -70,7 +70,7 @@ input_string(s::PromptState) = bytestring(s.input_buffer)
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
     str = input_string(s)
-    length(str) == 0 && return 0
+    isempty(str) && return 0
     rest = str[nextind(str, position(s.input_buffer)):end]
     return count(c->(c == '\n'), rest)
 end
@@ -143,7 +143,7 @@ end
 complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
 function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
-    if length(completions) == 0
+    if isempty(completions)
         beep(terminal(s))
     elseif !should_complete
         # should_complete is false for cases where we only want to show
@@ -156,7 +156,7 @@ function complete_line(s::PromptState, repeats)
         edit_replace(s, position(s.input_buffer), prev_pos, completions[1])
     else
         p = common_prefix(completions)
-        if length(p) > 0 && p != partial
+        if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
             # well complete that
             prev_pos = position(s.input_buffer)
@@ -747,13 +747,13 @@ immutable KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
+match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, ByteString(cs)))
 match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
 match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
-    eof(term) && return keymap_fcn(nothing, s, "")
+    eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
@@ -761,9 +761,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
 
-keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, s, c)
-    return (s, p) -> begin
+keymap_fcn(f::Void, c) = (s, p) -> return :ok
+function keymap_fcn(f::Function, c)
+    return function (s, p)
         r = f(s, p, c)
         if isa(r, Symbol)
             return r
@@ -990,7 +990,7 @@ function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
     ptr = data.response_buffer.ptr
     seek(data.response_buffer, 0)
-    write(s.input_buffer, readall(data.response_buffer))
+    write(s.input_buffer, readstring(data.response_buffer))
     s.input_buffer.ptr = offset + ptr - 2
     data.response_buffer.ptr = ptr
     refresh_line(s)
@@ -1100,6 +1100,7 @@ function reset_state(s::PrefixSearchState)
         s.response_buffer.size = 0
         s.response_buffer.ptr = 1
     end
+    reset_state(s.histprompt.hp)
 end
 
 function transition(f::Function, s::PrefixSearchState, mode)
@@ -1124,12 +1125,12 @@ end
 
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
-    write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
+    unsafe_write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
     write(buf, "': ")
     offset = buf.ptr
     ptr = s.response_buffer.ptr
     seek(s.response_buffer, 0)
-    write(buf, readall(s.response_buffer))
+    write(buf, readstring(s.response_buffer))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")

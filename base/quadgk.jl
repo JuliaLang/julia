@@ -79,7 +79,7 @@ function evalrule(f, a,b, x,w,gw, nrm)
     return Segment(a, b, Ik, E)
 end
 
-rulekey(::Type{BigFloat}, n) = (BigFloat, get_bigfloat_precision(), n)
+rulekey(::Type{BigFloat}, n) = (BigFloat, precision(BigFloat), n)
 rulekey(T,n) = (T,n)
 
 # Internal routine: integrate f over the union of the open intervals

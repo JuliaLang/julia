@@ -33,20 +33,28 @@ module CompletionFoo
     test3(x::AbstractArray{Int}, y::Int) = pass
     test3(x::AbstractArray{Float64}, y::Float64) = pass
 
+    test4(x::AbstractString, y::AbstractString) = pass
+    test4(x::AbstractString, y::Regex) = pass
+
+    test5(x::Array{Bool,1}) = pass
+    test5(x::BitArray{1}) = pass
+    test5(x::Float64) = pass
+
     array = [1, 1]
+    varfloat = 0.1
 end
 
 function temp_pkg_dir(fn::Function)
-  # Used in tests below to setup and teardown a sandboxed package directory
-  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
-  @test !isdir(Pkg.dir())
-  try
-    mkpath(Pkg.dir())
-    @test isdir(Pkg.dir())
-    fn()
-  finally
-    rm(tmpdir, recursive=true)
-  end
+    # Used in tests below to setup and teardown a sandboxed package directory
+    const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
+    @test !isdir(Pkg.dir())
+    try
+        mkpath(Pkg.dir())
+        @test isdir(Pkg.dir())
+        fn()
+    finally
+        rm(tmpdir, recursive=true)
+    end
 end
 
 test_complete(s) = completions(s,endof(s))
@@ -186,7 +194,7 @@ c, r, res = test_complete(s)
 @test r == 1:3
 @test s[r] == "max"
 
-# Test completion of methods with input args
+# Test completion of methods with input concrete args and args where typeinference determine their type
 s = "CompletionFoo.test(1,1, "
 c, r, res = test_complete(s)
 @test !res
@@ -239,23 +247,53 @@ for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
     @test s[r] == "CompletionFoo.test2"
 end
 
-# This cannot find the correct method due to the backticks expands to a macro in the parser.
-# Then the function argument is an expression which is not handled by current method completion logic.
 s = "(1, CompletionFoo.test2(`)`,"
 c, r, res = test_complete(s)
-@test length(c) == 3
+@test c[1] == string(methods(CompletionFoo.test2, Tuple{Cmd})[1])
+@test length(c) == 1
 
-s = "CompletionFoo.test3([1.,2.],"
+s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
 c, r, res = test_complete(s)
 @test !res
-@test length(c) == 2
+@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
+@test length(c) == 1
 
 s = "CompletionFoo.test3([1.,2.], 1.,"
 c, r, res = test_complete(s)
 @test !res
 @test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
 @test r == 1:19
+@test length(c) == 1
 @test s[r] == "CompletionFoo.test3"
+
+s = "CompletionFoo.test4(\"e\",r\" \","
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, Regex})[1])
+@test r == 1:19
+@test length(c) == 1
+@test s[r] == "CompletionFoo.test4"
+
+s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test c[1] == string(methods(CompletionFoo.test5, Tuple{BitArray{1}})[1])
+
+########## Test where the current inference logic fails ########
+# Fails due to inferrence fails to determine a concrete type for arg 1
+# But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
+s = "CompletionFoo.test5(AbstractArray[[]][1],"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
+# equivalent to above but due to the time macro the completion fails to find the concrete type
+s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+#################################################################
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
@@ -393,6 +431,27 @@ c, r, res = test_scomplete(s)
     @test r == 6:7
     @test s[r] == "Pk"
 
+    # Pressing tab after having entered "/tmp " should not
+    # attempt to complete "/tmp" but rather work on the current
+    # working directory again.
+    let
+        file = joinpath(path, "repl completions")
+        s = "/tmp "
+        c,r = test_scomplete(s)
+        @test r == 6:5
+    end
+
+    # Test completing paths with an escaped trailing space
+    let
+        file = joinpath(tempdir(), "repl completions")
+        touch(file)
+        s = string(tempdir(), "/repl\\ ")
+        c,r = test_scomplete(s)
+        @test ["repl\\ completions"] == c
+        @test s[r] == "repl\\ "
+        rm(file)
+    end
+
     # Tests homedir expansion
     let
         path = homedir()
@@ -407,6 +466,57 @@ c, r, res = test_scomplete(s)
         @test "tmpfoobar/" in c
         c,r = test_complete(s)
         rm(dir)
+    end
+
+    # Tests detecting of files in the env path (in shell mode)
+    let
+        oldpath = ENV["PATH"]
+        path = tempdir()
+        # PATH can also contain folders which we aren't actually allowed to read.
+        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+        ENV["PATH"] = string(path, ":", unreadable)
+
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        chmod(unreadable, 0o000)
+
+        s = "tmp-execu"
+        c,r = test_scomplete(s)
+        @test "tmp-executable" in c
+        @test r == 1:9
+        @test s[r] == "tmp-execu"
+
+        rm(file)
+        rm(unreadable)
+        ENV["PATH"] = oldpath
+    end
+
+    # Make sure completion results are unique in case things are in the env path twice.
+    let
+        file0 = joinpath(tempdir(), "repl-completion")
+        dir = joinpath(tempdir(), "repl-completion-subdir")
+        file1 = joinpath(dir, "repl-completion")
+
+        try
+            # Create /tmp/repl-completion and /tmp/repl-completion-subdir/repl-completion
+            mkdir(dir)
+            touch(file0)
+            touch(file1)
+
+            withenv("PATH" => string(tempdir(), ":", dir)) do
+                s = string("repl-completio")
+                c,r = test_scomplete(s)
+                @test [utf8("repl-completion")] == c
+                @test s[r] == "repl-completio"
+            end
+
+        finally
+            rm(file0)
+            rm(file1)
+            rm(dir)
+        end
     end
 end
 
@@ -469,3 +579,11 @@ c,r = test_complete("cd(\"folder_do_not_exist_77/file")
     end
     rm(tmp)
 end
+
+# auto completions of true and false... issue #14101
+s = "tru"
+c, r, res = test_complete(s)
+@test "true" in c
+s = "fals"
+c, r, res = test_complete(s)
+@test "false" in c

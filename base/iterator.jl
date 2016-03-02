@@ -23,11 +23,23 @@ eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
 abstract AbstractZipIterator
 
+immutable Zip1{I} <: AbstractZipIterator
+    a::I
+end
+zip(a) = Zip1(a)
+length(z::Zip1) = length(z.a)
+eltype{I}(::Type{Zip1{I}}) = Tuple{eltype(I)}
+start(z::Zip1) = (start(z.a),)
+function next(z::Zip1, st)
+    n = next(z.a,st[1])
+    return ((n[1],), (n[2],))
+end
+done(z::Zip1, st) = done(z.a,st[1])
+
 immutable Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
-zip(a) = a
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = min(length(z.a), length(z.b))
 eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
@@ -45,7 +57,9 @@ immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
 end
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = min(length(z.a), length(z.z))
-@generated function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
+function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+    @_pure_meta
     Tuple{S, T.parameters...}
 end
 eltype{I,Z}(::Type{Zip{I,Z}}) = tuple_type_cons(eltype(I), eltype(Z))
@@ -210,3 +224,120 @@ next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
 repeated(x, n::Int) = take(repeated(x), n)
+
+# product
+
+abstract AbstractProdIterator
+
+immutable Prod2{I1, I2} <: AbstractProdIterator
+    a::I1
+    b::I2
+end
+
+"""
+    product(iters...)
+
+Returns an iterator over the product of several iterators. Each generated element is
+a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
+changes the fastest. Example:
+
+    julia> collect(product(1:2,3:5))
+    6-element Array{Tuple{Int64,Int64},1}:
+     (1,3)
+     (2,3)
+     (1,4)
+     (2,4)
+     (1,5)
+     (2,5)
+"""
+product(a) = Zip1(a)
+product(a, b) = Prod2(a, b)
+eltype{I1,I2}(::Type{Prod2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
+length(p::AbstractProdIterator) = length(p.a)*length(p.b)
+
+function start(p::AbstractProdIterator)
+    s1, s2 = start(p.a), start(p.b)
+    s1, s2, Nullable{eltype(p.b)}(), (done(p.a,s1) || done(p.b,s2))
+end
+
+@inline function prod_next(p, st)
+    s1, s2 = st[1], st[2]
+    v1, s1 = next(p.a, s1)
+
+    nv2 = st[3]
+    if isnull(nv2)
+        v2, s2 = next(p.b, s2)
+    else
+        v2 = nv2.value
+    end
+
+    if done(p.a, s1)
+        return (v1,v2), (start(p.a), s2, oftype(nv2,nothing), done(p.b,s2))
+    end
+    return (v1,v2), (s1, s2, Nullable(v2), false)
+end
+
+@inline next(p::Prod2, st) = prod_next(p, st)
+@inline done(p::AbstractProdIterator, st) = st[4]
+
+immutable Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
+    a::I1
+    b::I2
+end
+
+product(a, b, c...) = Prod(a, product(b, c...))
+eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
+
+@inline function next{I1,I2}(p::Prod{I1,I2}, st)
+    x = prod_next(p, st)
+    ((x[1][1],x[1][2]...), x[2])
+end
+
+_size(p::Prod2) = (length(p.a), length(p.b))
+_size(p::Prod) = (length(p.a), _size(p.b)...)
+
+"""
+    IteratorND(iter, dims)
+
+Given an iterator `iter` and dimensions tuple `dims`, return an iterator that
+yields the same values as `iter`, but with the specified multi-dimensional shape.
+For example, this determines the shape of the array returned when `collect` is
+applied to this iterator.
+"""
+immutable IteratorND{I,N}
+    iter::I
+    dims::NTuple{N,Int}
+
+    function (::Type{IteratorND}){I,N}(iter::I, shape::NTuple{N,Integer})
+        li = length(iter)
+        if li != prod(shape)
+            throw(DimensionMismatch("dimensions $shape must be consistent with iterator length $li"))
+        end
+        new{I,N}(iter, shape)
+    end
+    (::Type{IteratorND}){I<:AbstractProdIterator}(p::I) = IteratorND(p, _size(p))
+end
+
+start(i::IteratorND) = start(i.iter)
+done(i::IteratorND, s) = done(i.iter, s)
+next(i::IteratorND, s) = next(i.iter, s)
+
+size(i::IteratorND) = i.dims
+length(i::IteratorND) = prod(size(i))
+ndims{I,N}(::IteratorND{I,N}) = N
+
+eltype{I}(::IteratorND{I}) = eltype(I)
+
+collect(i::IteratorND) = copy!(Array(eltype(i),size(i)), i)
+
+function collect{I<:IteratorND}(g::Generator{I})
+    sz = size(g.iter)
+    if length(g.iter) == 0
+        return Array(Union{}, sz)
+    end
+    st = start(g)
+    first, st = next(g, st)
+    dest = Array(typeof(first), sz)
+    dest[1] = first
+    return map_to!(g.f, 2, st, dest, g.iter)
+end

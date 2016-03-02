@@ -26,6 +26,13 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
 
+promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{Complex{S}}) =
+    Complex{promote_op(op,T,S)}
+promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{S}) =
+    Complex{promote_op(op,T,S)}
+promote_op{T<:Real,S<:Real}(op, ::Type{T}, ::Type{Complex{S}}) =
+    Complex{promote_op(op,T,S)}
+
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
 real(z::Complex) = z.re
@@ -36,6 +43,9 @@ reim(z) = (real(z), imag(z))
 
 real{T<:Real}(::Type{T}) = T
 real{T<:Real}(::Type{Complex{T}}) = T
+
+complex{T<:Real}(::Type{T}) = Complex{T}
+complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
@@ -49,25 +59,26 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
-function complex_show(io::IO, z::Complex, compact::Bool)
+flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
+
+function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact ? showcompact(io,r) : show(io,r)
+    compact = limit_output(io)
+    showcompact_lim(io, r)
     if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    compact ? showcompact(io, i) : show(io, i)
+    showcompact_lim(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
 end
-complex_show(io::IO, z::Complex{Bool}, compact::Bool) =
+show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
-show(io::IO, z::Complex) = complex_show(io, z, false)
-showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
 function read{T<:Real}(s::IO, ::Type{Complex{T}})
     r = read(s,T)
@@ -75,8 +86,7 @@ function read{T<:Real}(s::IO, ::Type{Complex{T}})
     Complex{T}(r,i)
 end
 function write(s::IO, z::Complex)
-    write(s,real(z))
-    write(s,imag(z))
+    write(s,real(z),imag(z))
 end
 
 ## equality and hashing of complex numbers ##
@@ -545,31 +555,41 @@ end
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 ^{T<:Integer}(z::Complex{T}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
 
-function sin(z::Complex)
+function sin{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0 return Complex(zr, zi) end
-    if isnan(zr) && !isfinite(zi) return Complex(zr, zi) end
-    if !isfinite(zr) && zi == 0 return Complex(oftype(zr, NaN), zi) end
-    if !isfinite(zr) && isfinite(zi) return Complex(oftype(zr, NaN), oftype(zi, NaN)) end
-    if !isfinite(zr) && !isfinite(zi) return Complex(zr, oftype(zi, NaN)) end
-    Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
+    if zr == 0
+        Complex(F(zr), sinh(zi))
+    elseif !isfinite(zr)
+        if zi == 0 || isinf(zi)
+            Complex(F(NaN), F(zi))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
+    end
 end
 
-function cos(z::Complex)
+
+function cos{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0
-        return Complex(isnan(zi) ? zi : oftype(zi, Inf),
-                       isnan(zi) ? zr : zr*-sign(zi))
+    if zr == 0
+        Complex(cosh(zi), isnan(zi) ? F(zr) : -flipsign(F(zr),zi))
+    elseif !isfinite(zr)
+        if zi == 0
+            Complex(F(NaN), isnan(zr) ? zero(F) : -flipsign(F(zi),zr))
+        elseif isinf(zi)
+            Complex(F(Inf), F(NaN))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
     end
-    if !isfinite(zr) && isinf(zi)
-        return Complex(oftype(zr, Inf), oftype(zi, NaN))
-    end
-    if isinf(zr)
-        return Complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
-    end
-    if isnan(zr) && zi==0 return Complex(zr, abs(zi)) end
-    Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
 end
+
 
 function tan(z::Complex)
     zr, zi = reim(z)
@@ -621,15 +641,13 @@ end
 
 function sinh(z::Complex)
     zr, zi = reim(z)
-    if isinf(zr) && isinf(zi) return Complex(zr, oftype(zi, NaN)) end
     w = sin(Complex(zi, zr))
     Complex(imag(w),real(w))
 end
 
 function cosh(z::Complex)
     zr, zi = reim(z)
-    if isnan(zr) && zi==0 return Complex(zr, zi) end
-    cos(Complex(-zi,zr))
+    cos(Complex(zi,-zr))
 end
 
 function tanh{T<:AbstractFloat}(z::Complex{T})

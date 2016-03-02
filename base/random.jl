@@ -35,8 +35,8 @@ type Close1Open2 <: FloatInterval end
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
     end
 
-    rand{ T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
-    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+    rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
 end
 
 @windows_only begin
@@ -47,12 +47,12 @@ end
         RandomDevice() = new(Array(UInt128, 1))
     end
 
-    function rand{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, ::Type{T})
+    function rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T})
         win32_SystemFunction036!(rd.buffer)
         @inbounds return rd.buffer[1] % T
     end
 
-    rand!{T<:Union{Bool, Base.IntTypes...}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
+    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
 end
 
 rand(rng::RandomDevice, ::Type{Close1Open2}) =
@@ -90,7 +90,7 @@ function gen_rand(r::MersenneTwister)
 end
 
 @inline reserve_1(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
-# `reserve` allows to call `rand_inbounds` n times
+# `reserve` allows one to call `rand_inbounds` n times
 # precondition: n <= MTCacheLength
 @inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
 
@@ -104,7 +104,6 @@ end
 
 @inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
 @inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
-@inline rand_ui52(r::MersenneTwister) = rand_ui52_raw(r) & 0x000fffffffffffff
 @inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
@@ -149,7 +148,7 @@ function make_seed()
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))
         try
-        seed = hash(seed, parse(UInt64, readall(pipeline(`ifconfig`, `sha1sum`))[1:40], 16))
+        seed = hash(seed, parse(UInt64, readstring(pipeline(`ifconfig`, `sha1sum`))[1:40], 16))
         end
         return make_seed(seed)
     end
@@ -168,11 +167,7 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    open(filename) do io
-        a = Array(UInt32, Int(n))
-        read!(io, a)
-        a
-    end
+    read!(filename, Array(UInt32, Int(n)))
 end
 
 ## srand()
@@ -245,7 +240,8 @@ rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
 
 ## random integers
 
-@inline rand_ui52(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2)) & 0x000fffffffffffff
+@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 # MersenneTwister
 
@@ -566,7 +562,7 @@ else
     end
 end
 
-rand{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
 
 
 # Randomly draw a sample from an AbstractArray r
@@ -596,7 +592,7 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
 ## random BitArrays (AbstractRNG)
 
 function rand!(rng::AbstractRNG, B::BitArray)
-    length(B) == 0 && return B
+    isempty(B) && return B
     Bc = B.chunks
     rand!(rng, Bc)
     Bc[end] &= Base._msk_end(B)
@@ -1324,14 +1320,28 @@ randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RN
 randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
+"Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
+@inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
+    # this duplicates the functionality of RangeGenerator objects,
+    # to optimize this special case
+    while true
+        x = (rand_ui52_raw(r) % Int) & mask
+        x < n && return x
+    end
+end
 
 function shuffle!(r::AbstractRNG, a::AbstractVector)
-    for i = length(a):-1:2
-        j = rand(r, 1:i)
+    n = length(a)
+    @assert n <= Int64(2)^52
+    mask = nextpow2(n) - 1
+    for i = n:-1:2
+        (mask >> 1) == i && (mask >>= 1)
+        j = 1 + rand_lt(r, i, mask)
         a[i], a[j] = a[j], a[i]
     end
     return a
 end
+
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
@@ -1339,14 +1349,17 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 function randperm(r::AbstractRNG, n::Integer)
     a = Array(typeof(n), n)
+    @assert n <= Int64(2)^52
     if n == 0
        return a
     end
     a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(r, 1:i)
+    mask = 3
+    @inbounds for i = 2:Int(n)
+        j = 1 + rand_lt(r, i, mask)
         a[i] = a[j]
         a[j] = i
+        i == 1+mask && (mask = 2mask + 1)
     end
     return a
 end
@@ -1354,11 +1367,15 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array(typeof(n), n)
+    n == 0 && return a
+    @assert n <= Int64(2)^52
     a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(r, 1:i-1)
+    mask = 3
+    @inbounds for i = 2:Int(n)
+        j = 1 + rand_lt(r, i-1, mask)
         a[i] = a[j]
         a[j] = i
+        i == 1+mask && (mask = 2mask + 1)
     end
     return a
 end

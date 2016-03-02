@@ -20,7 +20,7 @@ import ..Base: show, uv_error
 
 global CPU_CORES
 
-function init_sysinfo()
+function __init__()
     # set CPU core count
     global const CPU_CORES =
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
@@ -145,5 +145,7 @@ function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
     uv_error("set_process_title", err)
 end
+
+maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
 end # module Sys

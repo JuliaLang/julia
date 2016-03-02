@@ -1,5 +1,6 @@
 environment:
 #  USEMSVC: "1"
+  JULIA_TEST_MAXRSS_MB: 500
   matrix:
   - ARCH: "i686"
   - ARCH: "x86_64"
@@ -31,11 +32,15 @@ cache:
 # Cache any downloads from sourceforge because it's really unreliable
   - i686-4.9.2-release-win32-sjlj-rt_v4-rev3.7z
   - x86_64-4.9.2-release-win32-seh-rt_v4-rev3.7z
-  - llvm-3.3-i686-w64-mingw32-juliadeps.7z
-  - llvm-3.3-x86_64-w64-mingw32-juliadeps.7z
-  - jq.exe
+  - llvm-3.7.1-i686-w64-mingw32-juliadeps-r04.7z
+  - llvm-3.7.1-x86_64-w64-mingw32-juliadeps-r04.7z
 
 build_script:
+# If there's a newer build queued for the same PR, cancel this one
+  - ps: if ($env:APPVEYOR_PULL_REQUEST_NUMBER -and $env:APPVEYOR_BUILD_NUMBER -ne ((Invoke-RestMethod `
+        https://ci.appveyor.com/api/projects/$env:APPVEYOR_ACCOUNT_NAME/$env:APPVEYOR_PROJECT_SLUG/history?recordsNumber=50).builds | `
+        Where-Object pullRequestId -eq $env:APPVEYOR_PULL_REQUEST_NUMBER)[0].buildNumber) { `
+        throw "There are newer queued builds for this pull request, failing early." }
 # Remove C:\MinGW\bin from the path, the version of MinGW installed on
 # AppVeyor is not compatible with the cross-compiled Julia Windows binaries
   - set PATH=%PATH:C:\MinGW\bin;=%
@@ -43,10 +48,9 @@ build_script:
 # Unable to find Digest::SHA or Digest::SHA::PurePerl
   - set PATH=%PATH:C:\Perl\bin;=%
 #  - '"%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64'
-# Since the AppVeyor VMs have Git installed, they have MSYS1
-  - sh --login /c/projects/julia/contrib/windows/msys_build.sh
+  - C:\msys64\usr\bin\sh.exe --login /c/projects/julia/contrib/windows/msys_build.sh
 
 test_script:
   - usr\bin\julia -e "versioninfo()"
   - copy usr\lib\julia\sys.ji local.ji && usr\bin\julia -J local.ji -e "true" && del local.ji
-  - cd test && ..\usr\bin\julia runtests.jl all
+  - cd test && ..\usr\bin\julia runtests.jl all && ..\usr\bin\julia runtests.jl libgit2-online pkg

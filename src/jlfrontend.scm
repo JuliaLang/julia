@@ -1,6 +1,8 @@
 (load "./flisp/aliases.scm")
 (load "utils.scm")
+(load "ast.scm")
 (load "match.scm")
+(load "macroexpand.scm")
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
 
@@ -36,9 +38,9 @@
                                       (put! tab n #t)
                                       tab)))
                 ((lambda)       tab)
-                ((local local!) tab)
+                ((local)        tab)
                 ((break-block)  (find-possible-globals- (caddr e) tab))
-		((module)       '())
+                ((module toplevel) '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
                            (cdr e))
@@ -65,78 +67,56 @@
      (find-decls 'global e)
      ;; vars assigned anywhere, if they have been defined as global
      (filter defined-julia-global (find-possible-globals e))))
-   (append
-    (find-decls 'local e)
-    (find-decls 'local! e))))
+   (find-decls 'local e)))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e)
-  (cond ((or (boolean? e) (eof-object? e)
-             ;; special top-level expressions left alone
-             (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
-         e)
-        ((and (pair? e) (memq (car e) '(import importall using export)))
-         e)
-        ((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
-         e)
-        (else
-         (let ((ex0 (julia-expand-macros e)))
-           (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
-               `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
-               (let* ((ex (julia-expand01 ex0))
-                      (gv (toplevel-expr-globals ex))
-                      (th (julia-expand1
-                           `(lambda ()
-                              (scope-block
-                               (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
-                                      ,ex))))))
-                 (if (null? (car (caddr th)))
-                     ;; if no locals, return just body of function
-                     (cadddr th)
-                     `(thunk ,th))))))))
-
-;; (body (= v _) (return v)) => (= v _)
-(define (simple-assignment? e)
-  (and (length= e 3) (eq? (car e) 'body)
-       (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
-       (eq? (cadr (caddr e)) (cadadr e))))
-
-(define (expand-toplevel-expr- e)
-  (let ((ex (expand-toplevel-expr-- e)))
-    (cond ((contains (lambda (x) (equal? x '(top ccall))) ex) ex)
-          ((simple-assignment? ex)  (cadr ex))
-          ((and (length= ex 2) (eq? (car ex) 'body))
-           ;; (body (return x)) => x
-           (cadadr ex))
-          (else ex))))
+  (let ((ex0 (julia-expand-macros e)))
+    (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
+        `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
+        (let* ((ex (julia-expand0 ex0))
+               (gv (toplevel-expr-globals ex))
+               (th (julia-expand1
+                    `(lambda () ()
+                             (scope-block
+                              (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
+                                     ,ex))))))
+          (if (and (null? (car (caddr th)))
+                   (= 0 (caddr (caddr th))))
+              ;; if no locals, return just body of function
+              (cadddr th)
+              `(thunk ,th))))))
 
 (define *in-expand* #f)
 
 (define (expand-toplevel-expr e)
-  (if (and (pair? e) (eq? (car e) 'toplevel))
-      ;;`(toplevel ,@(map expand-toplevel-expr (cdr e)))
-      ;; delay expansion so defined global variables take effect for later
-      ;; toplevel expressions.
-      e
-      (let ((last *in-expand*))
-        (if (not last)
-            (begin (reset-gensyms)
-                   (set! *in-expand* #t)))
-        (let ((ex (expand-toplevel-expr- e)))
-          (set! *in-expand* last)
-          ex))))
+  (cond ((or (atom? e)
+             (and (pair? e)
+                  (or (memq (car e) '(toplevel line module import importall using export))
+                      (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+         e)
+        (else
+         (let ((last *in-expand*))
+           (if (not last)
+               (begin (reset-gensyms)
+                      (set! *in-expand* #t)))
+           (let ((ex (expand-toplevel-expr-- e)))
+             (set! *in-expand* last)
+             (if (and (length= ex 2) (eq? (car ex) 'body))
+                 ;; (body (return x)) => x
+                 (cadadr ex)
+                 ex))))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
   (let ((inp (open-input-string s)))
     (io.seek inp pos0)
-    (let ((expr
-           (parser-wrap (lambda ()
-                          (if greedy
-                              (julia-parse inp)
-                              (julia-parse inp parse-atom))))))
+    (let ((expr (parser-wrap (lambda ()
+                               (if greedy
+                                   (julia-parse inp)
+                                   (julia-parse inp parse-atom))))))
       (cons expr (io.pos inp)))))
 
 (define (jl-parse-string s)
@@ -156,38 +136,36 @@
                                (loop (nreconc (cdr expr) exprs))
                                (loop (cons expr exprs))))))))))
 
+(define (jl-parse-all io filename)
+  (unwind-protect
+   (with-bindings ((current-filename (symbol filename)))
+    (let ((stream (make-token-stream io)))
+      (let loop ((exprs '()))
+        (let ((lineno (parser-wrap
+                       (lambda ()
+                         (skip-ws-and-comments (ts:port stream))
+                         (input-port-line (ts:port stream))))))
+          (if (pair? lineno)
+              (cons 'toplevel (reverse! (cons lineno exprs)))
+              (let ((expr (parser-wrap
+                           (lambda ()
+                             (julia-parse stream)))))
+                (if (eof-object? expr)
+                    (cons 'toplevel (reverse! exprs))
+                    (let ((next (list* expr `(line ,lineno) exprs)))
+                      (if (and (pair? expr) (eq? (car expr) 'error))
+                          (cons 'toplevel (reverse! next))
+                          (loop next))))))))))
+   (io.close io)))
+
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str filename)
-  (jl-parser-set-stream filename (open-input-string str)))
+  (jl-parse-all (open-input-string str) filename))
 
-(define (jl-parse-file s)
+(define (jl-parse-file filename)
   (trycatch
-   (let ((b (buffer))
-	 (f (open-input-file s)))
-     ;; read whole file first to avoid problems with concurrent modification (issue #10497)
-     (io.copy b f)
-     (io.close f)
-     (io.seek b 0)
-     (begin (jl-parser-set-stream s b)
-	    #t))
+   (jl-parse-all (open-input-file filename) filename)
    (lambda (e) #f)))
-
-(define *filename-stack* '())
-(define *ts-stack* '())
-(define current-token-stream #())
-
-(define (jl-parser-set-stream name stream)
-  (set! *filename-stack* (cons current-filename *filename-stack*))
-  (set! *ts-stack* (cons current-token-stream *ts-stack*))
-  (set! current-filename (symbol name))
-  (set! current-token-stream (make-token-stream stream)))
-
-(define (jl-parser-close-stream)
-  (io.close (ts:port current-token-stream))
-  (set! current-filename (car *filename-stack*))
-  (set! current-token-stream (car *ts-stack*))
-  (set! *filename-stack* (cdr *filename-stack*))
-  (set! *ts-stack* (cdr *ts-stack*)))
 
 (define *depwarn* #t)
 (define (jl-parser-depwarn w)
@@ -200,27 +178,6 @@
   (let ((prev *deperror*))
     (set! *deperror* (eq? e #t))
     prev))
-
-(define (jl-parser-next)
-  (let* ((err (parser-wrap
-               (lambda ()
-                 (skip-ws-and-comments (ts:port current-token-stream)))))
-         (lineno (input-port-line (ts:port current-token-stream))))
-    (cons lineno
-          (if (pair? err)
-              err
-              (parser-wrap
-               (lambda ()
-                 (let ((e (julia-parse current-token-stream)))
-                   (if (eof-object? e)
-                       e
-                       (if (and (pair? e) (or (eq? (car e) 'error)
-                                              (eq? (car e) 'continue)))
-                           e
-                           (expand-toplevel-expr e))))))))))
-
-(define (jl-parser-current-lineno)
-  (input-port-line (ts:port current-token-stream)))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

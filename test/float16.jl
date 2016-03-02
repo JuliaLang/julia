@@ -23,6 +23,16 @@ g = Float16(1.)
 @test convert(Int128,Float16(-2.0)) == Int128(-2)
 @test convert(UInt128,Float16(2.0)) == UInt128(2)
 
+# convert(::Type{Int128},  x::Float16)
+@test convert(Int128, Float16(1.0)) === Int128(1.0)
+@test convert(Int128, Float16(-1.0)) === Int128(-1.0)
+@test_throws InexactError convert(Int128, Float16(3.5))
+
+# convert(::Type{UInt128}, x::Float16)
+@test convert(UInt128, Float16(1.0)) === UInt128(1.0)
+@test_throws InexactError convert(UInt128, Float16(3.5))
+@test_throws InexactError convert(UInt128, Float16(-1))
+
 x = Float32(rand())
 y = Float32(rand())
 z = Float32(rand())

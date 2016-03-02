@@ -20,11 +20,11 @@ namespace llvm {
 
 // simd loop
 static unsigned simd_loop_mdkind = 0;
-static MDNode* simd_loop_md = NULL;
+static MDNode *simd_loop_md = NULL;
 
 /// Mark loop as a SIMD loop.  Return false if loop cannot be marked.
 /// incr should be the basic block that increments the loop counter.
-bool annotateSimdLoop(BasicBlock* incr)
+bool annotateSimdLoop(BasicBlock *incr)
 {
     DEBUG(dbgs() << "LSL: annotating simd_loop\n");
     // Lazy initialization
@@ -72,20 +72,20 @@ private:
     bool hasSIMDLoopMetadata( Loop *L) const;
 
     /// If Phi is part of a reduction cycle of FAdd or FMul, mark the ops as permitting reassociation/commuting.
-    void enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const;
+    void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const;
 };
 
 bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const
 {
     // Note: If a loop has 0 or multiple latch blocks, it's probably not a simd_loop anyway.
-    if (BasicBlock* latch = L->getLoopLatch())
+    if (BasicBlock *latch = L->getLoopLatch())
         for (BasicBlock::iterator II = latch->begin(), EE = latch->end(); II!=EE; ++II)
             if (II->getMetadata(simd_loop_mdkind))
                 return true;
     return false;
 }
 
-void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const
+void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -94,7 +94,7 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const
     for (Instruction *I = Phi; ; I=J) {
         J = NULL;
         // Find the user of instruction I that is within loop L.
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
+#ifdef LLVM35
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
 #else
@@ -149,8 +149,8 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
         return false;
 
     DEBUG(dbgs() << "LSL: simd_loop found\n");
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
-    MDNode* n = L->getLoopID();
+#ifdef LLVM34
+    MDNode *n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
 #ifdef LLVM36
@@ -162,13 +162,13 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
         L->setLoopID(n);
     }
 #else
-    MDNode* n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
+    MDNode *n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
     L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
 #endif
 #ifdef LLVM36
-    MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(n));
+    MDNode *m = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(n));
 #else
-    MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
+    MDNode *m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
 #endif
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
@@ -179,7 +179,7 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     assert(L->isAnnotatedParallel());
 
     // Mark floating-point reductions as okay to reassociate/commute.
-    BasicBlock* Lh = L->getHeader();
+    BasicBlock *Lh = L->getHeader();
     DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
     for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I!=E; ++I)
         if (PHINode *Phi = dyn_cast<PHINode>(I))
@@ -194,7 +194,8 @@ static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-DLLEXPORT Pass* createLowerSimdLoopPass() {
+JL_DLLEXPORT Pass *createLowerSimdLoopPass()
+{
     return new LowerSIMDLoop();
 }
 

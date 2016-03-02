@@ -38,16 +38,14 @@ const RTX_EQUALS_B   = Int32(2) # solve R'*X=B     or X = R'\B
 const RTX_EQUALS_ETB = Int32(3) # solve R'*X=E'*B  or X = R'\(E'*B)
 
 
-using Base.SparseMatrix: SparseMatrixCSC
-using Base.SparseMatrix.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, VTypes, common
+using ..SparseArrays: SparseMatrixCSC
+using ..SparseArrays.CHOLMOD: C_Dense, C_Sparse, Dense, ITypes, Sparse, SuiteSparseStruct, VTypes, common
 
 import Base: size
 import Base.LinAlg: qrfact
-import Base.SparseMatrix.CHOLMOD: convert, free!
+import ..SparseArrays.CHOLMOD: convert, free!
 
-
-
-immutable C_Factorization{Tv<:VTypes}
+immutable C_Factorization{Tv<:VTypes} <: SuiteSparseStruct
     xtype::Cint
     factors::Ptr{Tv}
 end
@@ -91,7 +89,7 @@ function backslash{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv}, B::D
     end
     d = Dense(ccall((:SuiteSparseQR_C_backslash, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Cdouble, Ptr{C_Sparse{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            ordering, tol, A.p, B.p, common()))
+            ordering, tol, get(A.p), get(B.p), common()))
     finalizer(d, free!)
     d
 end
@@ -103,7 +101,7 @@ function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     end
     f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv}},
         (Cint, Cdouble, Ptr{Sparse{Tv}}, Ptr{Void}),
-            ordering, tol, A.p, common()))
+            ordering, tol, get(A.p), common()))
     finalizer(f, free!)
     f
 end
@@ -118,7 +116,7 @@ function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
     end
     d = Dense(ccall((:SuiteSparseQR_C_solve, :libspqr), Ptr{C_Dense{Tv}},
         (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-            system, QR.p, B.p, common()))
+            system, get(QR.p), get(B.p), common()))
     finalizer(d, free!)
     d
 end
@@ -133,17 +131,33 @@ function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     end
     d = Dense(ccall((:SuiteSparseQR_C_qmult, :libspqr), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factorization{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Void}),
-                method, QR.p, X.p, common()))
+                method, get(QR.p), get(X.p), common()))
     finalizer(d, free!)
     d
 end
 
-qrfact(A::SparseMatrixCSC) = factorize(ORDERING_DEFAULT, DEFAULT_TOL, Sparse(A, 0))
+qrfact(A::SparseMatrixCSC, ::Type{Val{true}}) = factorize(ORDERING_DEFAULT, DEFAULT_TOL, Sparse(A, 0))
+qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
 
-function (\){T}(F::Factorization{T}, B::StridedVecOrMat{T})
+# With a real lhs and complex rhs with the same precision, we can reinterpret
+# the complex rhs as a real rhs with twice the number of columns
+#
+# This definition is similar to the definition in factorization.jl except the we here have to use
+# \ instead of A_ldiv_B! because of limitations in SPQR
+function (\)(F::Factorization{Float64}, B::StridedVector{Complex{Float64}})
+    c2r = reshape(transpose(reinterpret(Float64, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    x = F\c2r
+    return reinterpret(Complex{Float64}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2),))
+end
+function (\)(F::Factorization{Float64}, B::StridedMatrix{Complex{Float64}})
+    c2r = reshape(transpose(reinterpret(Float64, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    x = F\c2r
+    return reinterpret(Complex{Float64}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2), size(B,2)))
+end
+function (\){T<:VTypes}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
     convert(typeof(B), solve(RETX_EQUALS_B, F, QtB))
 end
-(\){T,S}(F::Factorization{T}, B::StridedVecOrMat{S}) = F\convert(AbstractArray{T}, B)
+(\)(F::Factorization, B::StridedVecOrMat) = F\convert(AbstractArray{eltype(F)}, B)
 
 end # module

@@ -2,7 +2,7 @@
 
 include("testdefs.jl")
 addprocs(4; topology="master_slave")
-@test_throws RemoteException remotecall_fetch(2, ()->remotecall_fetch(3,myid))
+@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -11,7 +11,9 @@ function test_worker_counts()
     ws=sort(workers())
 
     for p in workers()
-        @test (true, true, true) == remotecall_fetch(p, (x,y,z)->(x==nprocs(), y==nworkers(), z==sort(workers())), np, nw, ws)
+        @test (true, true, true) == remotecall_fetch(p, np, nw, ws) do x,y,z
+            (x==nprocs(), y==nworkers(), z==sort(workers()))
+        end
     end
 end
 
@@ -38,8 +40,8 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exeflags = params[:exeflags]
 
     for i in 1:manager.np
-        io, pobj = open(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker`, dir=dir)), "r")
+        io, pobj = open(pipeline(detach(
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker`, dir=dir)); stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
@@ -75,9 +77,9 @@ for p1 in workers()
         i1 = map_pid_ident[p1]
         i2 = map_pid_ident[p2]
         if (iseven(i1) && iseven(i2)) || (isodd(i1) && isodd(i2))
-            @test p2 == remotecall_fetch(p1, p->remotecall_fetch(p,myid), p2)
+            @test p2 == remotecall_fetch(p->remotecall_fetch(myid, p), p1, p2)
         else
-            @test_throws RemoteException remotecall_fetch(p1, p->remotecall_fetch(p,myid), p2)
+            @test_throws RemoteException remotecall_fetch(p->remotecall_fetch(myid, p), p1, p2)
         end
     end
 end

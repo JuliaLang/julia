@@ -28,17 +28,36 @@
 
    Returns the files and directories in the directory ``dir`` (or the current working directory if not given).
 
+.. function:: walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+
+   .. Docstring generated from Julia source
+
+   The walkdir method return an iterator that walks the directory tree of a directory. The iterator returns a tuple containing ``(rootpath, dirs, files)``\ . The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError it will raise the error. A custom error handling function can be provided through ``onerror`` keyword argument, the function is called with a SystemError as argument.
+
+   .. code-block:: julia
+
+       for (root, dirs, files) in walkdir(".")
+           println("Directories in $root")
+           for dir in dirs
+               println(joinpath(root, dir)) # path to directories
+           end
+           println("Files in $root")
+           for file in files
+               println(joinpath(root, file)) # path to files
+           end
+       end
+
 .. function:: mkdir(path, [mode])
 
    .. Docstring generated from Julia source
 
-   Make a new directory with name ``path`` and permissions ``mode``\ . ``mode`` defaults to 0o777, modified by the current file creation mask.
+   Make a new directory with name ``path`` and permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
 .. function:: mkpath(path, [mode])
 
    .. Docstring generated from Julia source
 
-   Create all directories in the given ``path``\ , with permissions ``mode``\ . ``mode`` defaults to 0o777, modified by the current file creation mask.
+   Create all directories in the given ``path``\ , with permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
 .. function:: symlink(target, link)
 
@@ -56,11 +75,17 @@
 
    Returns the value of a symbolic link ``path``\ .
 
-.. function:: chmod(path, mode)
+.. function:: chmod(path, mode; recursive=false)
 
    .. Docstring generated from Julia source
 
-   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. 0o777) are currently supported.
+   Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported. If ``recursive=true`` and the path is a directory all permissions in that directory will be recursively changed.
+
+.. function:: chown(path, owner, group=-1)
+
+   .. Docstring generated from Julia source
+
+   Change the owner and/or group of ``path`` to ``owner`` and/or ``group``\ . If the value entered for ``owner`` or ``group`` is ``-1`` the corresponding ID will not change. Only integer ``owner``\ s and ``group``\ s are currently supported.
 
 .. function:: stat(file)
 
@@ -68,20 +93,33 @@
 
    Returns a structure whose fields contain information about the file. The fields of the structure are:
 
-   ========= ======================================================================
-    size      The size (in bytes) of the file
-    device    ID of the device that contains the file
-    inode     The inode number of the file
-    mode      The protection mode of the file
-    nlink     The number of hard links to the file
-    uid       The user id of the owner of the file
-    gid       The group id of the file owner
-    rdev      If this file refers to a device, the ID of the device it refers to
-    blksize   The file-system preferred block size for the file
-    blocks    The number of such blocks allocated
-    mtime     Unix timestamp of when the file was last modified
-    ctime     Unix timestamp of when the file was created
-   ========= ======================================================================
+   +---------+--------------------------------------------------------------------+
+   | Name    | Description                                                        |
+   +=========+====================================================================+
+   | size    | The size (in bytes) of the file                                    |
+   +---------+--------------------------------------------------------------------+
+   | device  | ID of the device that contains the file                            |
+   +---------+--------------------------------------------------------------------+
+   | inode   | The inode number of the file                                       |
+   +---------+--------------------------------------------------------------------+
+   | mode    | The protection mode of the file                                    |
+   +---------+--------------------------------------------------------------------+
+   | nlink   | The number of hard links to the file                               |
+   +---------+--------------------------------------------------------------------+
+   | uid     | The user id of the owner of the file                               |
+   +---------+--------------------------------------------------------------------+
+   | gid     | The group id of the file owner                                     |
+   +---------+--------------------------------------------------------------------+
+   | rdev    | If this file refers to a device, the ID of the device it refers to |
+   +---------+--------------------------------------------------------------------+
+   | blksize | The file-system preferred block size for the file                  |
+   +---------+--------------------------------------------------------------------+
+   | blocks  | The number of such blocks allocated                                |
+   +---------+--------------------------------------------------------------------+
+   | mtime   | Unix timestamp of when the file was last modified                  |
+   +---------+--------------------------------------------------------------------+
+   | ctime   | Unix timestamp of when the file was created                        |
+   +---------+--------------------------------------------------------------------+
 
 .. function:: lstat(file)
 
@@ -99,7 +137,7 @@
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``stat(file).mtime``
+   Equivalent to ``stat(file).mtime``\ .
 
 .. function:: filemode(file)
 
@@ -111,7 +149,7 @@
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``stat(file).size``
+   Equivalent to ``stat(file).size``\ .
 
 .. function:: uperm(file)
 
@@ -119,19 +157,23 @@
 
    Gets the permissions of the owner of the file as a bitfield of
 
-   ==== =====================
-    01   Execute Permission
-    02   Write Permission
-    04   Read Permission
-   ==== =====================
+   +-------+--------------------+
+   | Value | Description        |
+   +=======+====================+
+   | 01    | Execute Permission |
+   +-------+--------------------+
+   | 02    | Write Permission   |
+   +-------+--------------------+
+   | 04    | Read Permission    |
+   +-------+--------------------+
 
-   For allowed arguments, see ``stat``.
+   For allowed arguments, see ``stat``\ .
 
 .. function:: gperm(file)
 
    .. Docstring generated from Julia source
 
-   Like uperm but gets the permissions of the group owning the file
+   Like uperm but gets the permissions of the group owning the file.
 
 .. function:: operm(file)
 
@@ -159,11 +201,11 @@
 
    Move the file, link, or directory from ``src`` to ``dst``\ . ``remove_destination=true`` will first remove an existing ``dst``\ .
 
-.. function:: rm(path::AbstractString; recursive=false)
+.. function:: rm(path::AbstractString; force=false, recursive=false)
 
    .. Docstring generated from Julia source
 
-   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is passed and the path is a directory, then all contents are removed recursively.
+   Delete the file, link, or empty directory at the given path. If ``force=true`` is passed, a non-existing path is not treated as error. If ``recursive=true`` is passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::AbstractString)
 
@@ -225,12 +267,6 @@
 
    Returns ``true`` if ``path`` is a directory, ``false`` otherwise.
 
-.. function:: isexecutable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to execute ``path``\ , ``false`` otherwise.
-
 .. function:: isfifo(path) -> Bool
 
    .. Docstring generated from Julia source
@@ -261,12 +297,6 @@
 
    Returns ``true`` if ``path`` is a valid filesystem path, ``false`` otherwise.
 
-.. function:: isreadable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to read ``path``\ , ``false`` otherwise.
-
 .. function:: issetgid(path) -> Bool
 
    .. Docstring generated from Julia source
@@ -291,12 +321,6 @@
 
    Returns ``true`` if ``path`` has the sticky bit set, ``false`` otherwise.
 
-.. function:: iswritable(path) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if the current user has permission to write to ``path``\ , ``false`` otherwise.
-
 .. function:: homedir() -> AbstractString
 
    .. Docstring generated from Julia source
@@ -319,7 +343,7 @@
 
    .. Docstring generated from Julia source
 
-   ``@__FILE__`` expands to a string with the absolute path and file name of the script being run. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ .
+   ``@__FILE__`` expands to a string with the absolute file path of the file containing the macro. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ . Alternatively see :data:`PROGRAM_FILE`\ .
 
 .. function:: @__LINE__ -> Int
 

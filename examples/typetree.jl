@@ -59,7 +59,7 @@ function store_type(sname::AbstractString, t::TypeConstructor)
 end
 
 function store_type(sname::AbstractString, t::DataType)
-    suptype = super(t)
+    suptype = supertype(t)
     subtypes = (suptype != t) ? store_type(typ_name(suptype), suptype) : types_tree
     tnode = add_ttnode(subtypes, sname, t)
     return tnode.subtypes
@@ -71,7 +71,7 @@ function store_type(sname::AbstractString, t::Tuple)
 end
 
 function store_type(sname::AbstractString, t)
-    suptype = super(t)
+    suptype = supertype(t)
     subtypes = (suptype != t) ? store_type(typ_name(suptype), suptype) : types_tree
     tnode = add_ttnode(subtypes, sname, t)
     return tnode.subtypes

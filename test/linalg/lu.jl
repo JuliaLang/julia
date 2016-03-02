@@ -140,7 +140,7 @@ nHilbert = 50
 H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
 Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
-with_bigfloat_precision(2^10) do
+setprecision(2^10) do
     @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100
 end
 

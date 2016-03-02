@@ -239,7 +239,12 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
             for (s, g) in grphtest
                 s_ = T(normalize_string(s, nf))
                 g_ = map(s -> normalize_string(s, nf), g)
+                # #9261
+                if length(s_) > 0
+                    @test typeof(first(graphemes(s_))) == SubString{typeof(s_)}
+                end
                 grph = collect(graphemes(s_))
+                @test eltype(grph) == SubString{typeof(s_)}
                 @test grph == g_
                 @test length(graphemes(s_)) == length(grph)
             end

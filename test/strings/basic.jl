@@ -11,6 +11,8 @@
 @test endswith("abcd", "cd")
 @test !endswith("abcd", "dc")
 @test !endswith("cd", "abcd")
+@test startswith("ab\0cd", "ab\0c")
+@test !startswith("ab\0cd", "ab\0d")
 
 @test filter(x -> x ∈ ['f', 'o'], "foobar") == "foo"
 
@@ -155,15 +157,6 @@ tstr = tstStringType("12");
 @test_throws ErrorException endof(tstr)
 @test_throws ErrorException next(tstr, Bool(1))
 
-## generic string uses only endof and next ##
-
-immutable GenericString <: AbstractString
-    string::AbstractString
-end
-
-Base.endof(s::GenericString) = endof(s.string)
-Base.next(s::GenericString, i::Int) = next(s.string, i)
-
 gstr = GenericString("12");
 @test typeof(string(gstr))==GenericString
 @test bytestring()==""
@@ -261,14 +254,14 @@ end
 # issue # 11389: Vector{UInt32} was copied with UTF32String, unlike Vector{Char}
 a = UInt32[48,0]
 b = UTF32String(a)
-@test b=="0"
+@test b == "0"
 a[1] = 65
-@test b=="A"
+@test b == "A"
 c = Char['0','\0']
 d = UTF32String(c)
-@test d=="0"
+@test d == "0"
 c[1] = 'A'
-@test d=="A"
+@test d == "A"
 
 # iteration
 @test [c for c in "ḟøøƀäṙ"] == ['ḟ', 'ø', 'ø', 'ƀ', 'ä', 'ṙ']
@@ -480,7 +473,13 @@ str = "abcdef\uff\uffff\u10ffffABCDEF"
 
 foomap(ch) = (ch > 65)
 foobar(ch) = Char(0xd800)
-foobaz(ch) = Char(0x200000)
+foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test_throws UnicodeError map(foomap, utf16(str))
 @test_throws UnicodeError map(foobar, utf16(str))
 @test_throws UnicodeError map(foobaz, utf16(str))
+
+@test "a".*["b","c"] == ["ab","ac"]
+@test ["b","c"].*"a" == ["ba","ca"]
+@test utf8("a").*["b","c"] == ["ab","ac"]
+@test "a".*map(utf8,["b","c"]) == ["ab","ac"]
+@test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]

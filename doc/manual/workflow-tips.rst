@@ -21,48 +21,48 @@ The most basic Julia workflows involve using a text editor in
 conjunction with the ``julia`` command line. A common pattern includes
 the following elements:
 
- - **Put code under development in a temporary module.** Create a file,
-   say ``Tmp.jl``, and include within it ::
+- **Put code under development in a temporary module.** Create a file,
+  say ``Tmp.jl``, and include within it ::
 
-       module Tmp
+      module Tmp
 
-       <your definitions here>
+      <your definitions here>
 
-       end
+      end
 
- - **Put your test code in another file.** Create another file, say
-   ``tst.jl``, which begins with ::
+- **Put your test code in another file.** Create another file, say
+  ``tst.jl``, which begins with ::
 
-       import Tmp
+      import Tmp
 
-   and includes tests for the contents of ``Tmp``. The value of using
-   :obj:`import` versus :obj:`using` is that you can call :obj:`reload`
-   ``("Tmp")`` instead of having to restart the REPL when your
-   definitions change. Of course, the cost is the need to prepend
-   ``Tmp.`` to uses of names defined in your module. (You can lower that
-   cost by keeping your module name short.)
+  and includes tests for the contents of ``Tmp``. The value of using
+  :obj:`import` versus :obj:`using` is that you can call :obj:`reload`
+  ``("Tmp")`` instead of having to restart the REPL when your
+  definitions change. Of course, the cost is the need to prepend
+  ``Tmp.`` to uses of names defined in your module. (You can lower that
+  cost by keeping your module name short.)
 
-   Alternatively, you can wrap the contents of your test file in a
-   module, as ::
+  Alternatively, you can wrap the contents of your test file in a
+  module, as ::
 
-       module Tst
-           using Tmp
+      module Tst
+          using Tmp
 
-           <scratch work>
+          <scratch work>
 
-       end
+      end
 
-   The advantage is that you can now do :obj:`using` ``Tmp`` in your
-   test code and can therefore avoid prepending ``Tmp.`` everywhere.
-   The disadvantage is that code can no longer be selectively copied
-   to the REPL without some tweaking.
+  The advantage is that you can now do :obj:`using` ``Tmp`` in your
+  test code and can therefore avoid prepending ``Tmp.`` everywhere.
+  The disadvantage is that code can no longer be selectively copied
+  to the REPL without some tweaking.
 
- - **Lather. Rinse. Repeat.** Explore ideas at the ``julia`` command
-   prompt. Save good ideas in ``tst.jl``. Occasionally
-   restart the REPL, issuing ::
+- **Lather. Rinse. Repeat.** Explore ideas at the ``julia`` command
+  prompt. Save good ideas in ``tst.jl``. Occasionally
+  restart the REPL, issuing ::
 
-       reload("Tmp")
-       include("tst.jl")
+      reload("Tmp")
+      include("tst.jl")
 
 Simplify initialization
 ~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
-# import Base: ViewIndex, nextLD, dimsizeexpr, rangetype, merge_indexes, first_index, stride1expr, tailsize, subarray_linearindexing_dim
+# import Base: ViewIndex, dimsizeexpr, rangetype, merge_indexes, first_index, stride1expr, tailsize
 using Base.Cartesian
 
 print_underestimates = false
@@ -89,59 +89,12 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(A::AbstractArray) = single_stride_dim(copy_to_array(A))
 
-# Extract the "linear indexing dimension" from a SubArray
-getLD{T,N,P,I,LD}(::SubArray{T,N,P,I,LD}) = LD
-
-# Compare the linear indexing dimension of a SubArray
-# to a direct computation of strides
-function cmpLD(Atest::SubArray, Acomp)
-    # Compute ld, skipping over dropped dimensions
-    LD = getLD(Atest)
-    ld = LD
-    for i = 1:LD
-        if isa(Atest.indexes[i], Real)
-            ld -= 1
-        end
-    end
-    ld, single_stride_dim(Acomp)
-end
-
-# Testing linear dimension inference for views-of-views
-for N = 1:4
-    @eval begin
-        function test_viewview{T}(SB, A::Array{T,$N}, f, vindex)
-            local SSB
-            @nloops $N j d->(1:length(vindex)) d->(i_d = vindex[j_d]) begin
-                I = @ntuple $N d->i_d
-                try
-                    SSB = f(SB, I...)
-                catch err
-                    println(summary(SB))
-                    println(I)
-                    rethrow(err)
-                end
-                SA = f(A, I...)
-                ld, ldc = cmpLD(SSB, SA)
-                if ld == ldc
-                elseif ld <= ldc
-                    if print_underestimates
-                        println("Underestimate f = ", f, " on ", summary(SB), " with I = ", I, ", producing ", summary(SSB))
-                    end
-                else
-                    println(summary(SB))
-                    println(summary(SSB))
-                    error("failed on ", I)
-                end
-            end
-        end
-    end
-end
-
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(A, B)
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
+            @show IA IB A[IA] B[IB]
             isgood = false
             break
         end
@@ -164,6 +117,7 @@ function test_linear(A, B)
     end
     if !isgood
         @show A
+        @show A.indexes
         @show B
         error("Mismatch")
     end
@@ -189,50 +143,69 @@ function _test_mixed(A, B)
         @show B
         error("Mismatch")
     end
+    nothing
 end
 
-function err_li(I::Tuple, ld::Int, ldc::Int)
-    @show I
-    @show ld, ldc
-    error("Linear indexing inference mismatch")
+function test_bounds(A)
+    @test_throws BoundsError A[0]
+    @test_throws BoundsError A[end+1]
+    @test_throws BoundsError A[1, 0]
+    @test_throws BoundsError A[1, end+1]
+    @test_throws BoundsError A[1, 1, 0]
+    @test_throws BoundsError A[1, 1, end+1]
+    @test_throws BoundsError A[0, 1]
+    @test_throws BoundsError A[end+1, 1]
+    @test_throws BoundsError A[0, 1, 1]
+    @test_throws BoundsError A[end+1, 1, 1]
+    @test_throws BoundsError A[1, 0, 1]
+    @test_throws BoundsError A[1, end+1, 1]
 end
 
-function err_li(S::SubArray, ld::Int, szC)
-    println(summary(S))
-    @show S.indexes
-    @show ld
-    @show szC
-    error("Linear indexing inference mismatch")
+function dim_break_linindex(I)
+    i = 1
+    while i <= length(I) && !isa(I[i], Vector{Int})
+        i += 1
+    end
+    i - 1
 end
 
 function runtests(A::Array, I...)
     # Direct test of linear indexing inference
     C = Agen_nodrop(A, I...)
-    ld = single_stride_dim(C)
-    ldc = Base.subarray_linearindexing_dim(typeof(A), typeof(I))
-    ld == ldc || err_li(I, ld, ldc)
+    ld = min(single_stride_dim(C), dim_break_linindex(I))
     # sub
     S = sub(A, I...)
-    getLD(S) == ldc || err_li(S, ldc)
     if Base.iscontiguous(S)
         @test S.stride1 == 1
     end
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
     # slice
     S = slice(A, I...)
-    getLD(S) == ldc || err_li(S, ldc)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
 end
 
 function runtests(A::SubArray, I...)
+    # When A was created with sub, we have to check bounds, since some
+    # of the "residual" dimensions have size 1. It's possible that we
+    # need dedicated tests for sub.
+    for d = 1:length(I)-1
+        if !isa(I[d], Colon) && any(I[d] .> size(A,d))
+            return nothing
+        end
+    end
+    if !isa(I[end], Colon) && any(I[end] .> prod(size(A)[length(I):end]))
+        return nothing
+    end
     AA = copy_to_array(A)
     # Direct test of linear indexing inference
     C = Agen_nodrop(AA, I...)
-    Cld = ld = single_stride_dim(C)
+    Cld = ld = min(single_stride_dim(C), dim_break_linindex(I))
     Cdim = AIindex = 0
     while Cdim <= Cld && AIindex < length(A.indexes)
         AIindex += 1
@@ -252,11 +225,10 @@ function runtests(A::SubArray, I...)
         @show I
         rethrow(err)
     end
-    ldc = getLD(S)
-    ldc <= ld || err_li(S, ld, size(C))
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
     # slice
     try
         S = slice(A, I...)
@@ -266,11 +238,10 @@ function runtests(A::SubArray, I...)
         @show I
         rethrow(err)
     end
-    ldc = getLD(S)
-    ldc <= ld || err_li(S, ld, size(C))
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
+    test_bounds(S)
 end
 
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
@@ -308,8 +279,8 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
-index5 = (2, :, 2:5, 1:2:5, [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
-index25 = (8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
+index5 = (1, 2, :, 2:5, 1:2:5, [1], [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
+index25 = (3, 8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
 index125 = (113, :, 85:121, 2:15:92, [99,14,103], sub(1:125,[66,18,59]))
 
 if testfull
@@ -329,6 +300,8 @@ if testfull
         for o3 in oindex, o2 in oindex, o1 in oindex
             sliceB = slice(B, o1, o2, o3)
             runviews(sliceB, index5, index25, index125)
+            subB = sub(B, o1, o2, o3)
+            runviews(subB, index5, index25, index125)
         end
     end
 end
@@ -342,16 +315,18 @@ if !testfull
                      (:,3:7,:),
                      (3:7,:,:),
                      (3:7,6,:),
-                     (3:7,6,6),
-                     (6,3:7,3:7),
+                     (3:7,6,0x6),
+                     (6,UInt(3):UInt(7),3:7),
                      (13:-2:1,:,:),
                      ([8,4,6,12,5,7],:,3:7),
                      (6,6,[8,4,6,12,5,7]),
                      (1,:,sub(1:13,[9,12,4,13,1])),
                      (sub(1:13,[9,12,4,13,1]),2:6,4))
             runtests(B, oind...)
-            sliceB = slice(B, oind)
+            sliceB = slice(B, oind...)
             runviews(sliceB, index5, index25, index125)
+            subB = sub(B, oind...)
+            runviews(subB, index5, index25, index125)
         end
     end
 end
@@ -367,8 +342,9 @@ x11289 = randn(5,5)
 # sub
 A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, :)
+@test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, :)
+@test parentindexes(sA) == (Base.NoSlice(2), 1:5, :)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test sA[1, 2, 1:8][:] == [5:15:120;]
@@ -388,7 +364,7 @@ sA[:] = -3
 sA = sub(A, 1:3, 3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
-@test sA == A[1:3,3,2:5]
+@test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3;]
@@ -469,4 +445,23 @@ let a = ones(Float64, (2,2)),
     b = sub(a, 1:2, 1:2)
     b[2] = 2
     @test b[2] === 2.0
+end
+
+# issue #15138
+let a = [1,2,3],
+    b = sub(a, UInt(1):UInt(2))
+    @test b == slice(a, UInt(1):UInt(2)) == slice(slice(a, :), UInt(1):UInt(2)) == [1,2]
+end
+
+let A = reshape(1:4, 2, 2)
+    B = sub(A, :, :)
+    @test parent(B) === A
+    @test parent(sub(B, 0x1, :)) === parent(slice(B, 0x1, :)) === A
+end
+
+# issue #15168
+let A = rand(10), sA = sub(copy(A), :)
+    @test sA[Int16(1)] === sA[Int32(1)] === sA[Int64(1)] === A[1]
+    permute!(sA, collect(Int16, 1:10))
+    @test A == sA
 end

@@ -39,25 +39,22 @@ include(joinpath(dir, "queens.jl"))
 @unix_only begin
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) $script`
-
-    (strm, proc) = open(cmd)
-    errors = readall(strm)
-    wait(proc)
-    if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-        println(errors);
+    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end
 
 dc_path = joinpath(dir, "dictchannel.jl")
-include(dc_path)
+myid() == 1 || include(dc_path)
 
-w_set=filter!(x->x != myid(), workers())
-pid = length(w_set) > 0 ? w_set[1] : myid()
-
-remotecall_fetch(pid, f->(include(f); nothing), dc_path)
-dc=RemoteRef(()->DictChannel(), pid)
-@test typeof(dc) == RemoteRef{DictChannel}
+# Run the remote on pid 1, since runtests may terminate workers
+# at any time depending on memory usage
+remotecall_fetch(1, dc_path) do f
+    include(f)
+    nothing
+end
+dc=RemoteChannel(()->DictChannel(), 1)
+@test typeof(dc) == RemoteChannel{DictChannel}
 
 @test isready(dc) == false
 put!(dc, 1, 2)

@@ -59,16 +59,30 @@ I passed an argument ``x`` to a function, modified it inside that function, but 
 Suppose you call a function like this::
 
 	julia> x = 10
-	julia> function change_value!(y) # Create a new function
+        10
+
+	julia> function change_value!(y)
 	           y = 17
 	       end
+        change_value! (generic function with 1 method)
+
 	julia> change_value!(x)
+        17
+
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
+In Julia, the binding of a variable ``x`` cannot be changed by passing
+``x`` as an argument to a function. When calling ``change_value!(x)``
+in the above example, ``y`` is a newly created variable, bound
+initially to the value of ``x``, i.e. ``10``; then ``y`` is rebound to
+the constant ``17``, while the variable ``x`` of the outer scope is
+left untouched.
 
-But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
+But here is a thing you should pay attention to: suppose ``x`` is
+bound to an object of type ``Array`` (or any other *mutable* type).
+From within the function, you cannot "unbind" ``x`` from this Array,
+but you can change its content. For example::
 
 	julia> x = [1,2,3]
 	3-element Array{Int64,1}:
@@ -76,17 +90,26 @@ But here is a thing you should pay attention to: suppose ``x`` is bound to an Ar
 	2
 	3
 
-	julia> function change_array!(A) # Create a new function
+	julia> function change_array!(A)
 	           A[1] = 5
 	       end
+        change_array! (generic function with 1 method)
+
 	julia> change_array!(x)
+        5
+
 	julia> x
 	3-element Array{Int64,1}:
 	5
 	2
 	3
 
-Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
+Here we created a function ``change_array!()``, that assigns ``5`` to
+the first element of the passed array (bound to ``x`` at the call
+site, and bound to ``A`` within the function). Notice that, after the
+function call, ``x`` is still bound to the same array, but the content
+of that array changed: the variables ``A`` and ``x`` were distinct
+bindings refering to the same mutable ``Array`` object.
 
 
 Can I use ``using`` or ``import`` inside a function?
@@ -128,8 +151,8 @@ inside a specific function or set of functions, you have two options:
 What does the ``...`` operator do?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The two uses of the `...` operator: slurping and splatting
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The two uses of the ``...`` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Many newcomers to Julia find the use of ``...`` operator confusing. Part of
 what makes the ``...`` operator confusing is that it means two different things
@@ -447,306 +470,6 @@ in the future, we could consider defaulting to checked integer arithmetic in
 Julia, but for now, we have to live with the possibility of overflow.
 
 
-.. _man-abstract-fields:
-
-How do "abstract" or ambiguous fields in types interact with the compiler?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Types can be declared without specifying the types of their fields:
-
-.. doctest::
-
-    julia> type MyAmbiguousType
-               a
-           end
-
-This allows ``a`` to be of any type. This can often be useful, but it
-does have a downside: for objects of type ``MyAmbiguousType``, the
-compiler will not be able to generate high-performance code.  The
-reason is that the compiler uses the types of objects, not their
-values, to determine how to build code. Unfortunately, very little can
-be inferred about an object of type ``MyAmbiguousType``:
-
-.. doctest::
-
-    julia> b = MyAmbiguousType("Hello")
-    MyAmbiguousType("Hello")
-
-    julia> c = MyAmbiguousType(17)
-    MyAmbiguousType(17)
-
-    julia> typeof(b)
-    MyAmbiguousType
-
-    julia> typeof(c)
-    MyAmbiguousType
-
-``b`` and ``c`` have the same type, yet their underlying
-representation of data in memory is very different. Even if you stored
-just numeric values in field ``a``, the fact that the memory
-representation of a ``UInt8`` differs from a ``Float64`` also means
-that the CPU needs to handle them using two different kinds of
-instructions.  Since the required information is not available in the
-type, such decisions have to be made at run-time. This slows
-performance.
-
-You can do better by declaring the type of ``a``. Here, we are focused
-on the case where ``a`` might be any one of several types, in which
-case the natural solution is to use parameters. For example:
-
-.. doctest::
-
-    julia> type MyType{T<:AbstractFloat}
-             a::T
-           end
-
-This is a better choice than
-
-.. doctest::
-
-    julia> type MyStillAmbiguousType
-             a::AbstractFloat
-           end
-
-because the first version specifies the type of ``a`` from the type of
-the wrapper object.  For example:
-
-.. doctest::
-
-    julia> m = MyType(3.2)
-    MyType{Float64}(3.2)
-
-    julia> t = MyStillAmbiguousType(3.2)
-    MyStillAmbiguousType(3.2)
-
-    julia> typeof(m)
-    MyType{Float64}
-
-    julia> typeof(t)
-    MyStillAmbiguousType
-
-The type of field ``a`` can be readily determined from the type of
-``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
-to change the type of field ``a``:
-
-.. doctest::
-
-    julia> typeof(t.a)
-    Float64
-
-    julia> t.a = 4.5f0
-    4.5f0
-
-    julia> typeof(t.a)
-    Float32
-
-In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
-change:
-
-.. doctest::
-
-    julia> m.a = 4.5f0
-    4.5
-
-    julia> typeof(m.a)
-    Float64
-
-The fact that the type of ``m.a`` is known from ``m``'s type---coupled
-with the fact that its type cannot change mid-function---allows the
-compiler to generate highly-optimized code for objects like ``m`` but
-not for objects like ``t``.
-
-Of course, all of this is true only if we construct ``m`` with a
-concrete type.  We can break this by explicitly constructing it with
-an abstract type:
-
-.. doctest::
-
-    julia> m = MyType{AbstractFloat}(3.2)
-    MyType{AbstractFloat}(3.2)
-
-    julia> typeof(m.a)
-    Float64
-
-    julia> m.a = 4.5f0
-    4.5f0
-
-    julia> typeof(m.a)
-    Float32
-
-For all practical purposes, such objects behave identically to those
-of ``MyStillAmbiguousType``.
-
-It's quite instructive to compare the sheer amount code generated for
-a simple function
-::
-
-    func(m::MyType) = m.a+1
-
-using
-::
-
-    code_llvm(func,(MyType{Float64},))
-    code_llvm(func,(MyType{AbstractFloat},))
-    code_llvm(func,(MyType,))
-
-For reasons of length the results are not shown here, but you may wish
-to try this yourself. Because the type is fully-specified in the first
-case, the compiler doesn't need to generate any code to resolve the
-type at run-time.  This results in shorter and faster code.
-
-
-.. _man-abstract-container-type:
-
-How should I declare "abstract container type" fields?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The same best practices that apply in the `previous section
-<#man-abstract-fields>`_ also work for container types:
-
-.. doctest::
-
-    julia> type MySimpleContainer{A<:AbstractVector}
-             a::A
-           end
-
-    julia> type MyAmbiguousContainer{T}
-             a::AbstractVector{T}
-           end
-
-For example:
-
-.. doctest::
-
-    julia> c = MySimpleContainer(1:3);
-
-    julia> typeof(c)
-    MySimpleContainer{UnitRange{Int64}}
-
-    julia> c = MySimpleContainer([1:3;]);
-
-    julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}}
-
-    julia> b = MyAmbiguousContainer(1:3);
-
-    julia> typeof(b)
-    MyAmbiguousContainer{Int64}
-
-    julia> b = MyAmbiguousContainer([1:3;]);
-
-    julia> typeof(b)
-    MyAmbiguousContainer{Int64}
-
-For ``MySimpleContainer``, the object is fully-specified by its type
-and parameters, so the compiler can generate optimized functions. In
-most instances, this will probably suffice.
-
-While the compiler can now do its job perfectly well, there are cases
-where *you* might wish that your code could do different things
-depending on the *element type* of ``a``.  Usually the best way to
-achieve this is to wrap your specific operation (here, ``foo``) in a
-separate function::
-
-    function sumfoo(c::MySimpleContainer)
-        s = 0
-	for x in c.a
-	    s += foo(x)
-	end
-	s
-    end
-
-    foo(x::Integer) = x
-    foo(x::AbstractFloat) = round(x)
-
-This keeps things simple, while allowing the compiler to generate
-optimized code in all cases.
-
-However, there are cases where you may need to declare different
-versions of the outer function for different element types of
-``a``. You could do it like this::
-
-    function myfun{T<:AbstractFloat}(c::MySimpleContainer{Vector{T}})
-        ...
-    end
-    function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
-        ...
-    end
-
-This works fine for ``Vector{T}``, but we'd also have to write
-explicit versions for ``UnitRange{T}`` or other abstract types. To
-prevent such tedium, you can use two parameters in the declaration of
-``MyContainer``::
-
-    type MyContainer{T, A<:AbstractVector}
-        a::A
-    end
-    MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
-
-    julia> b = MyContainer(1.3:5);
-
-    julia> typeof(b)
-    MyContainer{Float64,UnitRange{Float64}}
-
-Note the somewhat surprising fact that ``T`` doesn't appear in the
-declaration of field ``a``, a point that we'll return to in a moment.
-With this approach, one can write functions such as::
-
-    function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
-        return c.a[1]+1
-    end
-    # Note: because we can only define MyContainer for
-    # A<:AbstractArray, and any unspecified parameters are arbitrary,
-    # the previous could have been written more succinctly as
-    #     function myfunc{T<:Integer}(c::MyContainer{T})
-
-    function myfunc{T<:AbstractFloat}(c::MyContainer{T})
-        return c.a[1]+2
-    end
-
-    function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
-        return c.a[1]+3
-    end
-
-    julia> myfunc(MyContainer(1:3))
-    2
-
-    julia> myfunc(MyContainer(1.0:3))
-    3.0
-
-    julia> myfunc(MyContainer([1:3]))
-    4
-
-As you can see, with this approach it's possible to specialize on both
-the element type ``T`` and the array type ``A``.
-
-However, there's one remaining hole: we haven't enforced that ``A``
-has element type ``T``, so it's perfectly possible to construct an
-object like this::
-
-  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
-
-  julia> typeof(b)
-  MyContainer{Int64,UnitRange{Float64}}
-
-To prevent this, we can add an inner constructor::
-
-    type MyBetterContainer{T<:Real, A<:AbstractVector}
-        a::A
-
-        MyBetterContainer(v::AbstractVector{T}) = new(v)
-    end
-    MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
-
-
-    julia> b = MyBetterContainer(1.3:5);
-
-    julia> typeof(b)
-    MyBetterContainer{Float64,UnitRange{Float64}}
-
-    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
-    ERROR: no method MyBetterContainer(UnitRange{Float64},)
-
-The inner constructor requires that the element type of ``A`` be ``T``.
 
 .. _faq-packages:
 
@@ -871,37 +594,35 @@ is fully asynchronous.
 The following::
 
     @sync for i in 1:3
-        @async print(i, " Foo ", " Bar ")
+        @async write(STDOUT, string(i), " Foo ", " Bar ")
     end
 
 results in::
 
     123 Foo  Foo  Foo  Bar  Bar  Bar
 
-This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
-internally, the writing of each argument yields to other tasks while waiting for
-that part of the I/O to complete.
+This is happening because, while the ``write`` call is synchronous, the writing of
+each argument yields to other tasks while waiting for that part of the I/O to complete.
 
-``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
-during a call. Consequently changing ``print`` to ``println`` in the above example
-results in::
+``print`` and ``println`` "lock" the stream during a call. Consequently changing ``write`` to
+``println`` in the above example results in::
 
     1 Foo  Bar
     2 Foo  Bar
     3 Foo  Bar
 
-For other functions and streams, etc, you could lock your writes with a ``ReentrantLock``
-like this::
+You can lock your writes with a ``ReentrantLock`` like this::
 
     l = ReentrantLock()
     @sync for i in 1:3
         @async begin
             lock(l)
             try
-                print(i, " Foo ", " Bar ")
+                write(STDOUT, string(i), " Foo ", " Bar ")
             finally
                 unlock(l)
             end
+        end
     end
 
 

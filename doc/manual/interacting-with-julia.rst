@@ -229,3 +229,26 @@ and get a list of LaTeX matches as well::
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
 
 A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.
+
+
+Customizing Colors
+~~~~~~~~~~~~~~~~~~
+
+The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
+prompt you can add something like the following to your ``juliarc.jl`` file::
+
+    Base.active_repl.prompt_color = Base.text_colors[:cyan]
+
+The available color keys in ``Base.text_colors`` are ``:black``, ``:red``, ``:green``, ``:yellow``,
+``:blue``, ``:magenta``, ``:cyan``, ``:white``, ``:normal``, and ``:bold``. Similarly, you can
+change the colors for the help and shell prompts and input and answer text by setting the
+appropriate member of ``Base.active_repl`` (respectively, ``help_color``, ``shell_color``,
+``input_color``, and ``answer_color``). For the latter two, be sure that the ``envcolors`` member
+is also set to false.
+
+You can also customize the color used to render warning and informational messages by
+setting the appropriate environment variable. For instance, to render warning messages in yellow and
+informational messages in cyan you can add the following to your ``juliarc.jl`` file::
+
+    ENV["JULIA_WARN_COLOR"] = :yellow
+    ENV["JULIA_INFO_COLOR"] = :cyan

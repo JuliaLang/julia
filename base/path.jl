@@ -1,5 +1,21 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+export
+    abspath,
+    basename,
+    dirname,
+    expanduser,
+    homedir,
+    isabspath,
+    isdirpath,
+    joinpath,
+    normpath,
+    realpath,
+    relpath,
+    splitdir,
+    splitdrive,
+    splitext
+
 @unix_only begin
     const path_separator    = "/"
     const path_separator_re = r"/+"
@@ -108,20 +124,31 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 abspath(a::AbstractString) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-@windows_only realpath(path::AbstractString) = realpath(utf16(path))
-@windows_only function realpath(path::UTF16String)
-    p = UInt32((sizeof(path)>>2) + 1)
+@windows_only function realpath(path::AbstractString)
+    path = cwstring(path)
+    buf = zeros(UInt16, length(path))
     while true
-        buflength = p
-        buf = zeros(UInt16,buflength)
-        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
-            UInt32, (Cwstring, UInt32, Ptr{UInt16}, Ptr{Void}),
-            path, buflength, buf, C_NULL)
-        systemerror(:realpath, p == 0)
-        if (p < buflength)
-            resize!(buf, p+1)
-            return utf8(UTF16String(buf))
-        end
+        n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
+            path, length(buf), buf, C_NULL)
+        systemerror(:realpath, n == 0)
+        x = n < length(buf) # is the buffer big enough?
+        resize!(buf, n) # shrink if x, grow if !x
+        x && return UTF8String(utf16to8(buf))
+    end
+end
+
+@windows_only function longpath(path::AbstractString)
+    path = cwstring(path)
+    buf = zeros(UInt16, length(path))
+    while true
+        n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
+            path, buf, length(buf))
+        systemerror(:longpath, n == 0)
+        x = n < length(buf) # is the buffer big enough?
+        resize!(buf, n) # shrink if x, grow if !x
+        x && return UTF8String(utf16to8(buf))
     end
 end
 

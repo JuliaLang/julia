@@ -152,8 +152,10 @@ end
 # test for unique Enum values
 @test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
 
-@test repr(apple) == "apple::"*string(Fruit)
+@test repr(apple) == "apple::$(string(Fruit)) = 0"
 @test string(apple) == "apple"
+
+@test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL

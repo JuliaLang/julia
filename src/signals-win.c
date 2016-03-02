@@ -1,9 +1,10 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 // Windows
-//
-DLLEXPORT void gdblookup(ptrint_t ip);
-#define WIN32_LEAN_AND_MEAN
+
+#define sig_stack_size 131072 // 128k reserved for SEGV handling
+static BOOL (*pSetThreadStackGuarantee)(PULONG);
+
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
@@ -42,6 +43,7 @@ static char *strsignal(int sig)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
+    CONTEXT Context;
     switch (sig) {
     case SIGFPE:
         fpreset();
@@ -69,18 +71,19 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
-        ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
-        bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
-        jlbacktrace();
-        gc_debug_print_status();
+        memset(&Context, 0, sizeof(Context));
+        RtlCaptureContext(&Context);
+        jl_critical_error(sig, &Context, jl_bt_data, &jl_bt_size);
         raise(sig);
     }
 }
 
-BOOL (*pSetThreadStackGuarantee)(PULONG);
 void restore_signals(void)
 {
-    SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
+    // turn on ctrl-c handler
+    SetConsoleCtrlHandler(NULL, 0);
+    // see if SetThreadStackGuarantee exists
+    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
 }
 
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
@@ -93,7 +96,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #else
 #error WIN16 not supported :P
 #endif
-    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_bt_size = bt ? rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
@@ -106,7 +109,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #endif
 }
 
-volatile HANDLE hMainThread = NULL;
+HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -165,6 +168,13 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
+#ifdef JULIA_ENABLE_THREADING
+                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] ==
+                    (intptr_t)jl_gc_signal_page) {
+                    jl_gc_signal_wait();
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
+#endif
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
@@ -216,9 +226,9 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
-        jlbacktrace();
+        jl_gdblookup((intptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+
+        jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -256,7 +266,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 }
 #endif
 
-DLLEXPORT void jl_install_sigint_handler(void)
+JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
@@ -290,12 +300,13 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 break;
             }
             // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &ctxThread);
+            bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &ctxThread);
             // Mark the end of this block with 0
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
                 fputs("failed to resume main thread! aborting.",stderr);
+                gc_debug_critical_error();
                 abort();
             }
         }
@@ -306,7 +317,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
@@ -327,16 +338,13 @@ DLLEXPORT int jl_profile_start_timer(void)
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void jl_profile_stop_timer(void)
+JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
 
 void jl_install_default_signal_handlers(void)
 {
-    ULONG StackSizeInBytes = sig_stack_size;
-    if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
-        pSetThreadStackGuarantee = NULL;
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGFPE");
     }
@@ -353,4 +361,16 @@ void jl_install_default_signal_handlers(void)
         jl_error("fatal error: Couldn't set SIGTERM");
     }
     SetUnhandledExceptionFilter(exception_handler);
+}
+
+void *jl_install_thread_signal_handler(void)
+{
+    // Ensure the stack overflow handler has enough space to collect the backtrace
+    ULONG StackSizeInBytes = sig_stack_size;
+    if (pSetThreadStackGuarantee) {
+        if (!pSetThreadStackGuarantee(&StackSizeInBytes)) {
+            pSetThreadStackGuarantee = NULL;
+        }
+    }
+    return NULL;
 }

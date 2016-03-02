@@ -12,7 +12,7 @@ function startswith(a::AbstractString, b::AbstractString)
     end
     done(b,i)
 end
-startswith(str::AbstractString, chars::Chars) = !isempty(str) && str[start(str)] in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in chars
 
 function endswith(a::AbstractString, b::AbstractString)
     i = endof(a)
@@ -28,11 +28,11 @@ function endswith(a::AbstractString, b::AbstractString)
     end
     j < b1
 end
-endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
+endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
 startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
-    (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
+    (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
 
@@ -173,9 +173,9 @@ function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, k
 end
 #rsplit(str::AbstractString) = rsplit(str, _default_delims, 0, false)
 
-_replace(io, repl, str, r, pattern) = write(io, repl)
+_replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
-    write(io, repl(SubString(str, first(r), last(r))))
+    print(io, repl(SubString(str, first(r), last(r))))
 
 function replace(str::ByteString, pattern, repl, limit::Integer)
     n = 1
@@ -212,27 +212,34 @@ replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
 
 # hex <-> bytes conversion
 
-function hex2bytes(s::ASCIIString)
-    len = length(s)
-    iseven(len) || throw(ArgumentError("string length must be even: length($(repr(s))) == $len"))
-    arr = zeros(UInt8, div(len,2))
-    i = j = 0
-    while i < len
-        n = 0
-        c = s[i+=1]
+function hex2bytes(s::AbstractString)
+    a = zeros(UInt8, div(endof(s), 2))
+    i, j = start(s), 0
+    while !done(s, i)
+        c, i = next(s, i)
         n = '0' <= c <= '9' ? c - '0' :
             'a' <= c <= 'f' ? c - 'a' + 10 :
             'A' <= c <= 'F' ? c - 'A' + 10 :
-                throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        c = s[i+=1]
+            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
+        done(s, i) &&
+            throw(ArgumentError("string length must be even: length($(repr(s))) == $(length(s))"))
+        c, i = next(s, i)
         n = '0' <= c <= '9' ? n << 4 + c - '0' :
             'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
             'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
-                throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        arr[j+=1] = n
+            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
+        a[j += 1] = n
     end
-    return arr
+    resize!(a, j)
+    return a
 end
-hex2bytes(s::AbstractString) = hex2bytes(ascii(s))
 
-bytes2hex{T<:UInt8}(arr::Vector{T}) = join([hex(i,2) for i in arr])
+function bytes2hex(a::AbstractArray{UInt8})
+    b = Vector{UInt8}(2*length(a))
+    i = 0
+    for x in a
+        b[i += 1] = hex_chars[1 + x >> 4]
+        b[i += 1] = hex_chars[1 + x & 0xf]
+    end
+    return ASCIIString(b)
+end

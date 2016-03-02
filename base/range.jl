@@ -3,6 +3,7 @@
 ## 1-dimensional ranges ##
 
 typealias Dims Tuple{Vararg{Int}}
+typealias DimsInteger Tuple{Vararg{Integer}}
 
 abstract Range{T} <: AbstractArray{T,1}
 
@@ -244,12 +245,63 @@ function show(io::IO, r::LinSpace)
     print(io, ')')
 end
 
+"""
+`print_range(io, r)` prints out a nice looking range r in terms of its elements
+as if it were `collect(r)`, dependent on the size of the
+terminal, and taking into account whether compact numbers should be shown.
+It figures out the width in characters of each element, and if they
+end up too wide, it shows the first and last elements separated by a
+horizontal elipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+
+`print_range(io, r, pre, sep, post, hdots)` uses optional
+parameters `pre` and `post` characters for each printed row,
+`sep` separator string between printed elements,
+`hdots` string for the horizontal ellipsis.
+"""
+function print_range(io::IO, r::Range,
+                     pre::AbstractString = " ",
+                     sep::AbstractString = ",",
+                     post::AbstractString = "",
+                     hdots::AbstractString = ",\u2026,") # horiz ellipsis
+    # This function borrows from print_matrix() in show.jl
+    # and should be called by writemime (replutil.jl) and by display()
+    limit = limit_output(io)
+    sz = displaysize(io)
+    screenheight, screenwidth = sz[1] - 4, sz[2]
+    screenwidth -= length(pre) + length(post)
+    postsp = ""
+    sepsize = length(sep)
+    m = 1 # treat the range as a one-row matrix
+    n = length(r)
+    # Figure out spacing alignments for r, but only need to examine the
+    # left and right edge columns, as many as could conceivably fit on the
+    # screen, with the middle columns summarized by horz, vert, or diag ellipsis
+    maxpossiblecols = div(screenwidth, 1+sepsize) # assume each element is at least 1 char + 1 separator
+    colsr = n <= maxpossiblecols ? (1:n) : [1:div(maxpossiblecols,2)+1; (n-div(maxpossiblecols,2)):n]
+    rowmatrix = r[colsr]' # treat the range as a one-row matrix for print_matrix_row
+    A = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), screenwidth, screenwidth, sepsize) # how much space range takes
+    if n <= length(A) # cols fit screen, so print out all elements
+        print(io, pre) # put in pre chars
+        print_matrix_row(io,rowmatrix,A,1,1:n,sep) # the entire range
+        print(io, post) # add the post characters
+    else # cols don't fit so put horiz ellipsis in the middle
+        # how many chars left after dividing width of screen in half
+        # and accounting for the horiz ellipsis
+        c = div(screenwidth-length(hdots)+1,2)+1 # chars remaining for each side of rowmatrix
+        alignR = reverse(alignment(io, rowmatrix, 1:m, length(rowmatrix):-1:1, c, c, sepsize)) # which cols of rowmatrix to put on the right
+        c = screenwidth - sum(map(sum,alignR)) - (length(alignR)-1)*sepsize - length(hdots)
+        alignL = alignment(io, rowmatrix, 1:m, 1:length(rowmatrix), c, c, sepsize) # which cols of rowmatrix to put on the left
+        print(io, pre)   # put in pre chars
+        print_matrix_row(io, rowmatrix,alignL,1,1:length(alignL),sep) # left part of range
+        print(io, hdots) # horizontal ellipsis
+        print_matrix_row(io, rowmatrix,alignR,1,length(rowmatrix)-length(alignR)+1:length(rowmatrix),sep) # right part of range
+        print(io, post)  # post chars
+    end
+end
+
 logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations
-
-similar(r::Range, T::Type, dims::Tuple{Vararg{Integer}}) = Array(T, dims...)
-similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
 
@@ -336,57 +388,86 @@ done(r::LinSpace, i::Int) = length(r) < i
 next{T}(r::LinSpace{T}, i::Int) =
     (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
-# NOTE: For ordinal ranges, we assume start+step might be from a
-# lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
-start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
+start(r::StepRange) = oftype(r.start + r.step, r.start)
 next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
 done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
-done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
+done{T,S}(r::StepRange{T,S}, i::Integer) =
+    isempty(r) | (i == oftype(i, r.stop) + r.step)
 
-start(r::UnitRange) = oftype(r.start+1, r.start)
-next{T}(r::UnitRange{T}, i) = (convert(T,i), i+1)
-done(r::UnitRange, i) = i==oftype(i,r.stop)+1
+start{T}(r::UnitRange{T}) = oftype(r.start + one(T), r.start)
+next{T}(r::UnitRange{T}, i) = (convert(T, i), i + one(T))
+done{T}(r::UnitRange{T}, i) = i == oftype(i, r.stop) + one(T)
 
+
+# some special cases to favor default Int type to avoid overflow
+let smallint = (Int === Int64 ?
+                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
+                Union{Int8,UInt8,Int16,UInt16})
+    global start
+    global next
+    start{T<:smallint}(r::StepRange{T}) = convert(Int, r.start)
+    next{T<:smallint}(r::StepRange{T}, i) = (i % T, i + r.step)
+    start{T<:smallint}(r::UnitRange{T}) = convert(Int, r.start)
+    next{T<:smallint}(r::UnitRange{T}, i) = (i % T, i + 1)
+end
 
 ## indexing
 
-getindex(r::Range, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(v::Range{T}, i::Integer) = convert(T, first(v) + (i-1)*step(v))
+function getindex{T}(v::Range{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(v, i)
+    convert(T, first(v) + (i-1)*step(v))
+end
+function getindex{T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}}(v::Range{T},i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(v, i)
+    (first(v) + (i - 1) * step(v)) % T
+end
 
-getindex{T}(r::FloatRange{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(r::FloatRange{T}, i::Integer) = convert(T, (r.start + (i-1)*r.step)/r.divisor)
+function getindex{T}(r::FloatRange{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i);
+    convert(T, (r.start + (i-1)*r.step)/r.divisor)
+end
 
-getindex{T}(r::LinSpace{T}, i::Integer) = (checkbounds(r, i); unsafe_getindex(r, i))
-unsafe_getindex{T}(r::LinSpace{T}, i::Integer) = convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+function getindex{T}(r::LinSpace{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i);
+    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+end
 
 getindex(r::Range, ::Colon) = copy(r)
-unsafe_getindex(r::Range, ::Colon) = copy(r)
 
-getindex(r::UnitRange, s::UnitRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::UnitRange, s::UnitRange{Int})
+function getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + s.start-1)
     range(st, length(s))
 end
 
-getindex(r::UnitRange, s::StepRange{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::UnitRange, s::StepRange{Int})
+function getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + s.start-1)
     range(st, step(s), length(s))
 end
 
-getindex(r::StepRange, s::Range{Int}) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::StepRange, s::Range{Int})
+function getindex{T<:Integer}(r::StepRange, s::Range{T})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step(r)*step(s), length(s))
 end
 
-getindex(r::FloatRange, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex(r::FloatRange, s::OrdinalRange)
+function getindex(r::FloatRange, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
 end
 
-getindex(r::LinSpace, s::OrdinalRange) = (checkbounds(r, s); unsafe_getindex(r, s))
-function unsafe_getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
     sl::T = length(s)
     ifirst = first(s)
     ilast = last(s)

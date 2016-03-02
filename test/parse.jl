@@ -99,9 +99,6 @@ macro test999_str(args...); args; end
 # issue #10994
 @test parse("1 + #= \0 =# 2") == :(1 + 2)
 
-# issue #10985
-@test expand(:(f(::Int...) = 1)).head == :method
-
 # issue #10910
 @test parse(":(using A)") == Expr(:quote, Expr(:using, :A))
 @test parse(":(using A.b, B)") == Expr(:quote,
@@ -153,6 +150,26 @@ macro f(args...) end; @f ""
 """) == Expr(:toplevel,
             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
             Expr(:macrocall, symbol("@f"), ""))
+
+# blocks vs. tuples
+@test parse("()") == Expr(:tuple)
+@test parse("(;)") == Expr(:block)
+@test parse("(;;;;)") == Expr(:block)
+@test_throws ParseError parse("(,)")
+@test_throws ParseError parse("(;,)")
+@test_throws ParseError parse("(,;)")
+@test parse("(x;)") == Expr(:block, :x)
+@test parse("(;x)") == Expr(:tuple, Expr(:parameters, :x))
+@test parse("(;x,)") == Expr(:tuple, Expr(:parameters, :x))
+@test parse("(x,)") == Expr(:tuple, :x)
+@test parse("(x,;)") == Expr(:tuple, :x)
+@test parse("(x;y)") == Expr(:block, :x, :y)
+@test parse("(x=1;y=2)") == Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2))
+@test parse("(x,;y)") == Expr(:tuple, Expr(:parameters, :y), :x)
+@test parse("(x,;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x)
+@test parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
+@test parse("(x,a;y=1,z=2)") == Expr(:tuple, Expr(:parameters, Expr(:kw,:y,1), Expr(:kw,:z,2)), :x, :a)
+@test parse("(a=1, b=2)") == Expr(:tuple, Expr(:(=), :a, 1), Expr(:(=), :b, 2))
 
 # integer parsing
 @test is(parse(Int32,"0",36),Int32(0))
@@ -293,3 +310,42 @@ parse("""
 
 # issue #12771
 @test -(3)^2 == -9
+
+# issue #13302
+let p = parse("try
+           a
+       catch
+           b, c = t
+       end")
+    @test isa(p,Expr) && p.head === :try
+    @test p.args[2] === false
+    @test p.args[3].args[end] == parse("b,c = t")
+end
+
+# pr #13078
+@test parse("a in b in c") == Expr(:comparison, :a, :in, :b, :in, :c)
+@test parse("a||b→c&&d") == Expr(:call, :→,
+                                 Expr(symbol("||"), :a, :b),
+                                 Expr(symbol("&&"), :c, :d))
+
+# issue #11988 -- normalize \r and \r\n in literal strings to \n
+@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
+@test '\r' == first("\r") == first("\r\n") # still allow explicit \r
+
+# issue #14561 - generating 0-method generic function def
+let fname = :f
+    @test :(function $fname end) == Expr(:function, :f)
+end
+
+# issue #14977
+@test parse("x = 1", 1) == (:(x = 1), 6)
+@test parse("x = 1", 6) == (nothing, 6)
+@test_throws BoundsError parse("x = 1", 0)
+@test_throws BoundsError parse("x = 1", -1)
+@test_throws BoundsError parse("x = 1", 7)
+
+# issue #14683
+@test_throws ParseError parse("'\\A\"'")
+@test parse("'\"'") == parse("'\\\"'") == '"' == "\""[1] == '\42'
+
+@test_throws ParseError parse("f(2x for x=1:10, y")

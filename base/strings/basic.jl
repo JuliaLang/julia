@@ -15,7 +15,7 @@ bytestring(s::Vector{UInt8}) = bytestring(pointer(s),length(s))
 
 function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
-    ccall(:jl_cstr_to_string, Any, (Ptr{UInt8},), p)::ByteString
+    ccall(:jl_cstr_to_string, Any, (Cstring,), p)::ByteString
 end
 bytestring(s::Cstring) = bytestring(convert(Ptr{UInt8}, s))
 
@@ -48,6 +48,8 @@ sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary rep
 eltype{T<:AbstractString}(::Type{T}) = Char
 
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
+(.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
+(.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
 function length(s::AbstractString)

@@ -233,10 +233,6 @@
 
    Equivalent to the native ``ptrdiff_t`` c-type (Int)
 
-.. data:: Coff_t
-
-   Equivalent to the native ``off_t`` c-type
-
 .. data:: Cwchar_t
 
    Equivalent to the native ``wchar_t`` c-type (Int32)
@@ -248,3 +244,23 @@
 .. data:: Cdouble
 
    Equivalent to the native ``double`` c-type (Float64)
+
+****************
+ LLVM Interface
+****************
+
+.. function:: llvmcall(IR::String, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+              llvmcall((declarations::String, IR::String), ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+
+   .. Docstring generated from Julia source
+
+   Call LLVM IR string in the first argument. Similar to an LLVM function ``define`` block, arguments are available as consecutive unnamed SSA variables (%0, %1, etc.).
+
+   The optional declarations string contains external functions declarations that are necessary for llvm to compile the IR string. Multiple declarations can be passed in by separating them with line breaks.
+
+   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
+
+   Each ``ArgumentValue`` to ``llvmcall`` will be converted to the corresponding ``ArgumentType``\ , by automatic insertion of calls to ``unsafe_convert(ArgumentType, cconvert(ArgumentType, ArgumentValue))``\ . (see also the documentation for each of these functions for further details). In most cases, this simply results in a call to ``convert(ArgumentType, ArgumentValue)``\ .
+
+   See ``test/llvmcall.jl`` for usage examples.
+

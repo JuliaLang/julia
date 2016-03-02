@@ -151,3 +151,9 @@ module TestGeneratedThrow
         cfunction(foo,Void,())
     end
 end
+
+# @generated functions including inner functions
+@generated function _g_f_with_inner(x)
+    :(y->y)
+end
+@test (_g_f_with_inner(1))(8) == 8

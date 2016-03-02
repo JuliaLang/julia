@@ -9,7 +9,7 @@
 # Writable ends are always tested for writability before a write
 
 n = 20
-intvls = [2, .2, .1, .002]
+intvls = [2, .2, .1, .005]
 
 pipe_fds = cell(n)
 for i in 1:n
@@ -33,8 +33,8 @@ function pfd_tst_reads(idx, intvl)
     @test @windows ? evt.writable : !evt.writable
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
-    # Assuming that a 2 second buffer is good enough on a modern system
-    @test t_elapsed <= (intvl + 1)
+    # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
+    # @test t_elapsed <= (intvl + 1)
 
     dout = Array(UInt8, 1)
     @windows ? (
@@ -56,8 +56,9 @@ function pfd_tst_timeout(idx, intvl)
     @test !evt.writable
     t_elapsed = toq()
 
-    @unix_only @test (intvl <= t_elapsed) # TODO: enable this test on windows when the libuv version is bumped
-    @test (t_elapsed <= (intvl + 1))
+    # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
+    # @unix_only @test (intvl <= t_elapsed) # TODO: enable this test on windows when the libuv version is bumped
+    # @test (t_elapsed <= (intvl + 1))
 end
 
 

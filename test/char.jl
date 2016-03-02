@@ -13,6 +13,13 @@
 # should be swapped
 @test bswap('\U10200') == '\U20100'
 
+@test 'b' + 1 == 'c'
+@test typeof('b' + 1) == Char
+@test 1 + 'b' == 'c'
+@test typeof(1 + 'b') == Char
+@test 'b' - 1 == 'a'
+@test typeof('b' - 1) == Char
+
 let
 
 numberchars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -171,3 +178,18 @@ end #end of let block
 
 @test convert(Signed, 'A') === Int32(65)
 @test convert(Unsigned, 'A') === UInt32(65)
+
+# issue #14573
+let
+    array = ['a', 'b', 'c'] + [1, 2, 3]
+    @test array == ['b', 'd', 'f']
+    @test eltype(array) == Char
+
+    array = [1, 2, 3] + ['a', 'b', 'c']
+    @test array == ['b', 'd', 'f']
+    @test eltype(array) == Char
+
+    array = ['a', 'b', 'c'] - [0, 1, 2]
+    @test array == ['a', 'a', 'a']
+    @test eltype(array) == Char
+end

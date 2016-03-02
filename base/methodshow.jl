@@ -2,7 +2,7 @@
 
 # Method and method-table pretty-printing
 
-function argtype_decl(n, t) # -> (argname, argtype)
+function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -18,35 +18,53 @@ function argtype_decl(n, t) # -> (argname, argtype)
         if t.parameters[1] === Any
             return string(s, "..."), ""
         else
-            return s, string(t.parameters[1], "...")
+            return s, string_with_env(env, t.parameters[1]) * "..."
         end
     elseif t == ByteString
         return s, "ByteString"
     end
-    return s, string(t)
+    return s, string_with_env(env, t)
 end
 
 function arg_decl_parts(m::Method)
     tv = m.tvars
     if !isa(tv,SimpleVector)
-        tv = svec(tv)
+        tv = Any[tv]
+    else
+        tv = Any[tv...]
     end
-    li = m.func.code
+    li = m.func
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
+    decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
+                for i = 1:length(m.sig.parameters)]
     return tv, decls, li.file, li.line
 end
 
 function show(io::IO, m::Method)
-    print(io, m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
+    ft = m.sig.parameters[1]
+    d1 = decls[1]
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+        print(io, ft.name.mt.name)
+    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            print(io, f)
+        else
+            print(io, "(", d1[1], "::", d1[2], ")")
+        end
+    else
+        print(io, "(", d1[1], "::", d1[2], ")")
+    end
     if !isempty(tv)
         show_delim_array(io, tv, '{', ',', '}', false)
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls],
+    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     print(io, ")")
     if line > 0
@@ -56,10 +74,14 @@ end
 
 function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
     name = mt.name
+    isself = isdefined(mt.module, name) &&
+             typeof(getfield(mt.module, name)) <: Function
     n = length(mt)
     if header
         m = n==1 ? "method" : "methods"
-        print(io, "# $n $m for generic function \"$name\":")
+        ns = isself ? string(name) : string("(::", name, ")")
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
     d = mt.defs
     n = rest = 0
@@ -90,27 +112,35 @@ function inbase(m::Module)
     end
 end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
+
 function url(m::Method)
-    M = m.func.code.module
-    (m.func.code.file == :null || m.func.code.file == :string) && return ""
-    file = string(m.func.code.file)
-    line = m.func.code.line
+    M = m.func.module
+    (m.func.file == :null || m.func.file == :string) && return ""
+    file = string(m.func.file)
+    line = m.func.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
-        return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
+        if isempty(Base.GIT_VERSION_INFO.commit)
+            # this url will only work if we're on a tagged release
+            return "https://github.com/JuliaLang/julia/tree/v$VERSION/base/$file#L$line"
+        else
+            return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
+        end
     else
         try
             d = dirname(file)
-            u = Git.readchomp(`config remote.origin.url`, dir=d)
-            u = match(Git.GITHUB_REGEX,u).captures[1]
-            root = cd(d) do # dir=d confuses --show-toplevel, apparently
-                Git.readchomp(`rev-parse --show-toplevel`)
-            end
-            if startswith(file, root)
-                commit = Git.readchomp(`rev-parse HEAD`, dir=d)
-                return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
-            else
-                return fileurl(file)
+            return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
+                LibGit2.with(LibGit2.GitConfig(repo)) do cfg
+                    u = LibGit2.get(cfg, "remote.origin.url", "")
+                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    commit = string(LibGit2.head_oid(repo))
+                    root = LibGit2.path(repo)
+                    if startswith(file, root)
+                        "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                    else
+                        fileurl(file)
+                    end
+                end
             end
         catch
             return fileurl(file)
@@ -119,8 +149,23 @@ function url(m::Method)
 end
 
 function writemime(io::IO, ::MIME"text/html", m::Method)
-    print(io, m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
+    ft = m.sig.parameters[1]
+    d1 = decls[1]
+    if ft <: Function &&
+            isdefined(ft.name.module, ft.name.mt.name) &&
+            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+        print(io, ft.name.mt.name)
+    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+        f = ft.parameters[1]
+        if isa(f, DataType) && isempty(f.parameters)
+            print(io, f)
+        else
+            print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+        end
+    else
+        print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
+    end
     if !isempty(tv)
         print(io,"<i>")
         show_delim_array(io, tv, '{', ',', '}', false)
@@ -128,7 +173,7 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     end
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
-                      for d in decls], ", ", ", ")
+                      for d in decls[2:end]], ", ", ", ")
     print(io, ")")
     if line > 0
         u = url(m)
@@ -145,7 +190,9 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
-    print(io, "$n $meths for generic function <b>$name</b>:<ul>")
+    ns = string(name)
+    what = startswith(ns, '@') ? "macro" : "generic function"
+    print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
     d = mt.defs
     while d !== nothing
         print(io, "<li> ")
@@ -171,4 +218,4 @@ end
 
 # override usual show method for Vector{Method}: don't abbreviate long lists
 writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
-    showarray(io, mt, limit=false)
+    showarray(IOContext(io, :limit_output => false), mt)

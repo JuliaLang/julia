@@ -1,0 +1,49 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
+#include "julia.h"
+#include "julia_internal.h"
+
+#include "intrinsics.h"
+
+int globalUnique = 0;
+
+#define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
+
+void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
+void jl_write_malloc_log(void) UNAVAILABLE
+void jl_write_coverage_data(void) UNAVAILABLE
+void jl_generate_fptr(jl_lambda_info_t *li) UNAVAILABLE
+void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx) UNAVAILABLE
+
+JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
+JL_DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
+JL_DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABLE
+JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
+
+void jl_init_codegen(void) { }
+void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig)
+{
+    if (!specsig)
+        lam->fptr = fptr;
+}
+void jl_getFunctionInfo(char **name, char **filename, size_t *line,
+                        char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
+                        size_t pointer, int *fromC, int skipC, int skipInline)
+{
+    *name = NULL;
+    *line = -1;
+    *filename = NULL;
+    *inlinedat_file = NULL;
+    *inlinedat_line = -1;
+    *outer_linfo = NULL;
+    *fromC = 0;
+}
+
+jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
+                           jl_lambda_info_t *li, int sparams, int allow_alloc)
+{
+    return NULL;
+}

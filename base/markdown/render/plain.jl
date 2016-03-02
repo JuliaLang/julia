@@ -20,9 +20,12 @@ function plain{l}(io::IO, header::Header{l})
 end
 
 function plain(io::IO, code::Code)
-    println(io, "```", code.language)
+    # If the code includes a fenced block this will break parsing,
+    # so it must be enclosed by a longer ````-sequence.
+    n = mapreduce(length, max, 2, matchall(r"^`+"m, code.code)) + 1
+    println(io, "`" ^ n, code.language)
     println(io, code.code)
-    println(io, "```")
+    println(io, "`" ^ n)
 end
 
 function plain(io::IO, p::Paragraph)
@@ -47,10 +50,13 @@ function plain(io::IO, q::BlockQuote)
 end
 
 function plain(io::IO, md::HorizontalRule)
-    println(io, "–" ^ 3)
+    println(io, "-" ^ 3)
 end
 
-plain(io::IO, md) = writemime(io, "text/plain", md)
+function plain(io::IO, md)
+    writemime(io,  MIME"text/plain"(), md)
+    println(io)
+end
 
 # Inline elements
 
@@ -65,6 +71,11 @@ end
 plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
 plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
+
+function plaininline(io::IO, md::Footnote)
+    print(io, "[^", md.id, "]")
+    md.text ≡ nothing || (print(io, ":"); plaininline(io, md.text))
+end
 
 plaininline(io::IO, md::Image) = plaininline(io, "![", md.alt, "](", md.url, ")")
 
