@@ -2,13 +2,13 @@
 
 module Read
 
-import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError
+import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
 using ..Types
 
 readstrip(path...) = strip(readstring(joinpath(path...)))
 
-url(pkg::AbstractString) = readstrip("METADATA", pkg, "url")
-sha1(pkg::AbstractString, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")
+url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
+sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
