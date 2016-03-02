@@ -350,22 +350,22 @@ For example, a recursive factorial routine could be defined like this:
 
 .. doctest::
 
-    julia> function factorial(n::Int)
+    julia> function fact(n::Int)
                n >= 0 || error("n must be non-negative")
                n == 0 && return 1
-               n * factorial(n-1)
+               n * fact(n-1)
            end
-    factorial (generic function with 1 method)
+    fact (generic function with 1 method)
 
-    julia> factorial(5)
+    julia> fact(5)
     120
 
-    julia> factorial(0)
+    julia> fact(0)
     1
 
-    julia> factorial(-1)
+    julia> fact(-1)
     ERROR: n must be non-negative
-     in factorial at none:2
+     in fact at none:2
 
 
 Boolean operations *without* short-circuit evaluation can be done with the
