@@ -132,11 +132,6 @@ end
 (|){T<:BitInteger}(x::T, y::T) = box(T, or_int(unbox(T,x),unbox(T,y)))
 ($){T<:BitInteger}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
 
->>{T<:BitSigned,S<:BitInteger64}(x::T, y::S)   = box(T,ashr_int(unbox(T,x),unbox(S,y)))
->>{T<:BitUnsigned,S<:BitInteger64}(x::T, y::S) = box(T,lshr_int(unbox(T,x),unbox(S,y)))
-<<{T<:BitInteger,S<:BitInteger64}(x::T,  y::S) = box(T, shl_int(unbox(T,x),unbox(S,y)))
->>>{T<:BitInteger,S<:BitInteger64}(x::T, y::S) = box(T,lshr_int(unbox(T,x),unbox(S,y)))
-
 bswap{T<:Union{Int8,UInt8}}(x::T) = x
 bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
     box(T,bswap_int(unbox(T,x)))
@@ -161,6 +156,26 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 <( x::Unsigned, y::Signed  ) = (y >= 0) & (x <  unsigned(y))
 <=(x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <= y)
 <=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
+
+## integer shifts ##
+
+# unsigned shift counts always shift in the same direction
+>>{T<:BitSigned,S<:BitUnsigned}(x::T, y::S) =
+    box(T,ashr_int(unbox(T,x),unbox(S,y)))
+>>{T<:BitUnsigned,S<:BitUnsigned}(x::T, y::S) =
+    box(T,lshr_int(unbox(T,x),unbox(S,y)))
+<<{T<:BitInteger,S<:BitUnsigned}(x::T,  y::S) =
+    box(T, shl_int(unbox(T,x),unbox(S,y)))
+>>>{T<:BitInteger,S<:BitUnsigned}(x::T, y::S) =
+    box(T,lshr_int(unbox(T,x),unbox(S,y)))
+# signed shift counts can shift in either direction
+# note: this early during bootstrap, `>=` is not yet available
+>>(x::BitInteger, y::BitSigned) =
+    0 <= y ? x >> unsigned(y) : x << unsigned(-y)
+<<(x::BitInteger, y::BitSigned) =
+    0 <= y ? x << unsigned(y) : x >> unsigned(-y)
+>>>(x::BitInteger, y::BitSigned) =
+    0 <= y ? x >>> unsigned(y) : x << unsigned(-y)
 
 ## integer conversions ##
 
@@ -399,13 +414,6 @@ if WORD_SIZE == 32
     function mod(x::Int128, y::Int128)
         Int128(mod(BigInt(x),BigInt(y)))
     end
-
-    <<( x::Int128,  y::Int) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int,y)))
-    <<( x::UInt128, y::Int) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int,y)))
-    >>( x::Int128,  y::Int) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int,y)))
-    >>( x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
-    >>>(x::Int128,  y::Int) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int,y)))
-    >>>(x::UInt128, y::Int) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int,y)))
 else
     *{T<:Union{Int128,UInt128}}(x::T, y::T)  = box(T,mul_int(unbox(T,x),unbox(T,y)))
 
