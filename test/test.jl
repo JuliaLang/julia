@@ -266,3 +266,7 @@ for i in 1:6
     @test typeof(tss[i].results[4]) == CustomTestSet
     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
 end
+
+# Issue #14928
+# Make sure abstract error type works.
+@test_throws Exception error("")
