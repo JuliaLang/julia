@@ -126,12 +126,16 @@ end
 const .≤ = .<=
 const .≠ = .!=
 
-# core << >> and >>> takes Int as second arg
+# Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
+# counts can shift in either direction, and are translated here to unsigned
+# counts. Integer datatypes only need to implement the unsigned version.
+
 """
     <<(x, n)
 
-Left bit shift operator, `x << n`. The result is `x` shifted left by `n` bits,
-where `n >= 0`, filling with `0`s. This is equivalent to `x * 2^n`.
+Left bit shift operator, `x << n`. For `n >= 0`, the result is `x` shifted left
+by `n` bits, filling with `0`s. This is equivalent to `x * 2^n`. For `n < 0`,
+this is equivalent to `x >> -n`.
 
 ```jldoctest
 julia> Int8(3) << 2
@@ -145,14 +149,21 @@ julia> bits(Int8(12))
 ```
 See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
 """
-<<(x,y::Int)  = no_op_err("<<", typeof(x))
+function <<(x, c::Integer)
+    typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
+    (x >= 0 || c >= 0) && return zero(x)
+    oftype(x, -1)
+end
+<<(x, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
+<<(x, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
     >>(x, n)
 
-Right bit shift operator, `x >> n`. The result is `x` shifted right by `n` bits, where
-`n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving the sign of `x`.
-This is equivalent to `fld(x, 2^n)`.
+Right bit shift operator, `x >> n`. For `n >= 0`, the result is `x` shifted
+right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
+0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
+0`, this is equivalent to `x << -n`.
 
 
 ```jldoctest
@@ -176,16 +187,23 @@ julia> bits(Int8(-4))
 ```
 See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
 """
->>(x,y::Int)  = no_op_err(">>", typeof(x))
+function >>(x, c::Integer)
+    typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
+    (x >= 0 || c < 0) && return zero(x)
+    oftype(x, -1)
+end
+>>(x, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
+>>(x, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
     >>>(x, n)
 
-Unsigned right bit shift operator, `x >>> n`. The result is `x` shifted right by `n` bits,
-where `n >= 0`, filling with `0`s.
+Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
+shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
+is equivalent to `x [<<](:func:`<<`) -n`].
 
-For `Unsigned` integer types, this is eqivalent to [`>>`](:func:`>>`). For `Signed` integer types,
-this is equivalent to `(unsigned(x) >> n) % typeof(x)`.
+For `Unsigned` integer types, this is eqivalent to [`>>`](:func:`>>`). For
+`Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
 julia> Int8(-14) >>> 2
@@ -202,11 +220,9 @@ is equivalent to [`>>`](:func:`>>`).
 
 See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
 """
->>>(x,y::Int) = no_op_err(">>>", typeof(x))
-
-<<(x,y::Integer)  = typemax(Int) < y ? zero(x) : x <<  (y % Int)
->>(x,y::Integer)  = typemax(Int) < y ? zero(x) : x >>  (y % Int)
->>>(x,y::Integer) = typemax(Int) < y ? zero(x) : x >>> (y % Int)
+>>>(x, c::Integer) = typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+>>>(x, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
+>>>(x, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
