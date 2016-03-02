@@ -193,8 +193,7 @@ end
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
-function copy!{TvA, TiA, TvB, TiB}(A::SparseMatrixCSC{TvA,TiA},
-                                   B::SparseMatrixCSC{TvB,TiB})
+function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     # If the two matrices have the same length then all the
     # elements in A will be overwritten.
     if length(A) == length(B)
@@ -208,10 +207,37 @@ function copy!{TvA, TiA, TvB, TiB}(A::SparseMatrixCSC{TvA,TiA},
             # This is like a "reshape B into A".
             sparse_compute_reshaped_colptr_and_rowval(A.colptr, A.rowval, A.m, A.n, B.colptr, B.rowval, B.m, B.n)
         end
-        copy!(A.nzval, B.nzval)
     else
-        invoke(Base.copy!, Tuple{AbstractMatrix{TvA}, AbstractMatrix{TvB}}, A, B)
+        length(A) >= length(B) || throw(BoundsError())
+        lB = length(B)
+        nnzA = nnz(A)
+        nnzB = nnz(B)
+        # Up to which col, row, and ptr in rowval/nzval will A be overwritten?
+        lastmodcolA = div(lB - 1, A.m) + 1
+        lastmodrowA = mod(lB - 1, A.m) + 1
+        lastmodptrA = A.colptr[lastmodcolA]
+        while lastmodptrA < A.colptr[lastmodcolA+1] && A.rowval[lastmodptrA] <= lastmodrowA
+            lastmodptrA += 1
+        end
+        lastmodptrA -= 1
+        if lastmodptrA >= nnzB
+            # A will have fewer non-zero elements; unmodified elements are kept at the end.
+            deleteat!(A.rowval, nnzB+1:lastmodptrA)
+            deleteat!(A.nzval, nnzB+1:lastmodptrA)
+        else
+            # A will have more non-zero elements; unmodified elements are kept at the end.
+            resize!(A.rowval, nnzB + nnzA - lastmodptrA)
+            resize!(A.nzval, nnzB + nnzA - lastmodptrA)
+            copy!(A.rowval, nnzB+1, A.rowval, lastmodptrA+1, nnzA-lastmodptrA)
+            copy!(A.nzval, nnzB+1, A.nzval, lastmodptrA+1, nnzA-lastmodptrA)
+        end
+        # Adjust colptr accordingly.
+        @inbounds for i in 2:length(A.colptr)
+            A.colptr[i] += nnzB - lastmodptrA
+        end
+        sparse_compute_reshaped_colptr_and_rowval(A.colptr, A.rowval, A.m, lastmodcolA-1, B.colptr, B.rowval, B.m, B.n)
     end
+    copy!(A.nzval, B.nzval)
     return A
 end
 

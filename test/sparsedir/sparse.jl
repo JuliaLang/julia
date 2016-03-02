@@ -257,14 +257,26 @@ let
     B = sprand(25, 1, 0.2)
     copy!(A, B)
     @test A[:] == B[:]
-    # Test size(A) != size(B)
-    B = sprand(3, 3, 0.2)
-    copy!(A, B)
-    @test A[1:9] == B[:]
+    # Test various size(A) / size(B) combinations
+    for mA in [5, 10, 20], nA in [5, 10, 20], mB in [5, 10, 20], nB in [5, 10, 20]
+        A = sprand(mA,nA,0.4)
+        Aorig = copy(A)
+        B = sprand(mB,nB,0.4)
+        if mA*nA >= mB*nB
+            copy!(A,B)
+            @assert(A[1:length(B)] == B[:])
+            @assert(A[length(B)+1:end] == Aorig[length(B)+1:end])
+        else
+            @test_throws BoundsError copy!(A,B)
+        end
+    end
     # Test eltype(A) != eltype(B), size(A) != size(B)
+    A = sprand(5, 5, 0.2)
+    Aorig = copy(A)
     B = sparse(rand(Float32, 3, 3))
     copy!(A, B)
     @test A[1:9] == B[:]
+    @test A[10:end] == Aorig[10:end]
     # Test eltype(A) != eltype(B), size(A) == size(B)
     A = sparse(rand(Float64, 3, 3))
     B = sparse(rand(Float32, 3, 3))
