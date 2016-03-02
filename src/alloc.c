@@ -336,9 +336,6 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
                 called |= (1<<(i-1));
         }
         li->called = called;
-        if (tvars != jl_emptysvec)
-            if (jl_has_intrinsics(li, (jl_expr_t*)ast, ctx))
-                li->needs_sparam_vals_ducttape = 1;
     }
     return li;
 }
