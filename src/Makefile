@@ -3,6 +3,7 @@ JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR := .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
