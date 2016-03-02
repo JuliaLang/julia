@@ -12,26 +12,34 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
 {
+    // Assume *pa don't need a write barrier
+    // pa doesn't have to be a GC slot but *pa needs to be rooted
     size_t sz = jl_array_len(*pa);
     size_t i;
     void **ol = (void**)(*pa)->data;
-    *pa = jl_alloc_cell_1d(newsz);
-    // we do not check the write barrier here
-    // because pa always points to a C stack location
-    // (see eqtable_put)
-    // it should be changed if this assumption no longer holds
+    jl_array_t *newa = jl_alloc_cell_1d(newsz);
+    // keep the original array in the original slot since we need `ol`
+    // to be valid in the loop below.
+    JL_GC_PUSH1(&newa);
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
-            (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
-            jl_gc_wb(*pa, ol[i+1]);
+            (*jl_table_lookup_bp(&newa, ol[i])) = ol[i+1];
+            jl_gc_wb(newa, ol[i+1]);
              // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
+    *pa = newa;
+    // we do not check the write barrier here
+    // because pa always points to a C stack location
+    // (see jl_eqtable_put and jl_finalize_deserializer)
+    // it should be changed if this assumption no longer holds
+    JL_GC_POP();
 }
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 {
+    // pa points to a **rooted** gc frame slot
     uint_t hv;
     jl_array_t *a = *pa;
     size_t orig, index, iter;
@@ -116,9 +124,12 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
 JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
+    JL_GC_PUSH1(&h);
+    // &h may be assigned to in jl_idtable_rehash so it need to be rooted
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
     jl_gc_wb(h, val);
+    JL_GC_POP();
     return h;
 }
 
