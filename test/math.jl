@@ -387,9 +387,9 @@ j33 = besselj(3,3.)
 @test besselj(-3,-3) == j33
 @test besselj(-3,3) == -j33
 @test besselj(3,-3) == -j33
-@test besselj(3,3f0) ≈ Float32(j33)
+@test besselj(3,3f0) ≈ j33
 @test besselj(3,complex(3.)) ≈ j33
-@test besselj(3,complex(3f0)) ≈ Float32(j33)
+@test besselj(3,complex(3f0)) ≈ j33
 @test besselj(3,complex(3)) ≈ j33
 
 j43 = besselj(4,3.)
@@ -397,9 +397,9 @@ j43 = besselj(4,3.)
 @test besselj(-4,-3) == j43
 @test besselj(-4,3) == j43
 @test besselj(4,-3) == j43
-@test besselj(4,3f0) ≈ Float32(j43)
+@test besselj(4,3f0) ≈ j43
 @test besselj(4,complex(3.)) ≈ j43
-@test besselj(4,complex(3f0)) ≈ Float32(j43)
+@test besselj(4,complex(3f0)) ≈ j43
 @test besselj(4,complex(3)) ≈ j43
 
 @test_approx_eq j33 0.30906272225525164362

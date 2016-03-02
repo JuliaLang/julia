@@ -176,7 +176,7 @@ const ≈ = isapprox
 # default tolerance arguments
 rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
 rtoldefault{T<:Real}(::Type{T}) = 0
-rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = rtoldefault(promote_type(real(T),real(S)))
+rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = max(rtoldefault(real(T)),rtoldefault(real(S)))
 
 # fused multiply-add
 fma_libm(x::Float32, y::Float32, z::Float32) =
