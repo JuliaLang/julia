@@ -253,6 +253,10 @@ let
     @test pointer(A.nzval) != pointer(B.nzval)
     @test pointer(A.rowval) != pointer(B.rowval)
     @test pointer(A.colptr) != pointer(B.colptr)
+    # Test size(A) != size(B), but length(A) == length(B)
+    B = sprand(25, 1, 0.2)
+    copy!(A, B)
+    @test A[:] == B[:]
     # Test size(A) != size(B)
     B = sprand(3, 3, 0.2)
     copy!(A, B)

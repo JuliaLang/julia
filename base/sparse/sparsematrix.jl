@@ -195,14 +195,19 @@ copy(S::SparseMatrixCSC) =
 
 function copy!{TvA, TiA, TvB, TiB}(A::SparseMatrixCSC{TvA,TiA},
                                    B::SparseMatrixCSC{TvB,TiB})
-    # If the two matrices have the same size then all the
-    # elements in A will be overwritten and we can simply copy the
-    # internal fields of B to A.
-    if size(A) == size(B)
-        copy!(A.colptr, B.colptr)
+    # If the two matrices have the same length then all the
+    # elements in A will be overwritten.
+    if length(A) == length(B)
         resize!(A.nzval, length(B.nzval))
         resize!(A.rowval, length(B.rowval))
-        copy!(A.rowval, B.rowval)
+        if size(A) == size(B)
+            # Simple case: we can simply copy the internal fields of B to A.
+            copy!(A.colptr, B.colptr)
+            copy!(A.rowval, B.rowval)
+        else
+            # This is like a "reshape B into A".
+            sparse_compute_reshaped_colptr_and_rowval(A.colptr, A.rowval, A.m, A.n, B.colptr, B.rowval, B.m, B.n)
+        end
         copy!(A.nzval, B.nzval)
     else
         invoke(Base.copy!, Tuple{AbstractMatrix{TvA}, AbstractMatrix{TvB}}, A, B)
