@@ -428,10 +428,10 @@ specified:
 .. doctest::
 
     julia> f(2, 3)
-    2,3,1
+    (2,3,1)
 
     julia> f(2, 3, 4)
-    2,3,4
+    (2,3,4)
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
