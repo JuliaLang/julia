@@ -32,7 +32,9 @@
   (cond ((atom? e)   tab)
         ((quoted? e) tab)
         (else (case (car e)
-                ((=)            (if (not (jlgensym? (cadr e))) (put! tab (decl-var (cadr e)) #t)))
+                ((=)            (if (not (jlgensym? (cadr e)))
+                                    (put! tab (decl-var (cadr e)) #t))
+                                (find-possible-globals- (caddr e) tab))
                 ((method)       (let ((n (method-expr-name e)))
                                   (if (symbol? n)
                                       (put! tab n #t)
@@ -43,8 +45,8 @@
                 ((module toplevel) '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))
-                           (cdr e))
-                 tab)))))
+                           (cdr e))))
+              tab)))
 
 (define (find-possible-globals e)
   (table.keys (find-possible-globals- e (table))))
