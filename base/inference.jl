@@ -2231,12 +2231,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::VarInfo, 
         return (isbits(atypes[2].parameters[1]),())
     end
     # special-case inliners for known pure functions that compute types
-    if isType(e.typ)
-        if (is(f,apply_type) || is(f,fieldtype) ||
+    if isType(e.typ) && !has_typevars(e.typ.parameters[1],true)
+        if (is(f,apply_type) || is(f,fieldtype) || is(f,typeof) ||
             istopfunction(topmod, f, :typejoin) ||
-            istopfunction(topmod, f, :promote_type)) &&
-                !has_typevars(e.typ.parameters[1],true)
-            return (e.typ.parameters[1],())
+            istopfunction(topmod, f, :promote_type))
+            if effect_free(argexprs[2], sv, true)
+                return (e.typ.parameters[1],())
+            else
+                return (e.typ.parameters[1], Any[argexprs[2]])
+            end
         end
     end
     if isa(f,IntrinsicFunction) || ft === IntrinsicFunction

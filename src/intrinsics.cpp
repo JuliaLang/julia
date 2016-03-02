@@ -415,7 +415,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     if (!jl_is_datatype(v.typ)
         || !jl_is_bitstype(v.typ)
         || jl_datatype_size(v.typ) != nb) {
-        Value *typ = emit_typeof(v);
+        Value *typ = emit_typeof_boxed(v, ctx);
         if (!jl_is_bitstype(v.typ)) {
             if (isboxed) {
                 Value *isbits = emit_datatype_isbitstype(typ);
