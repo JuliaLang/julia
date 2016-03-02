@@ -1675,7 +1675,6 @@ function typeinf_loop(frame)
             frame = active[end]::InferenceState
         else
             frame = pop!(workq)
-            frame.inworkq = false
         end
         typeinf_frame(frame)
         if isempty(workq) && nactive[] > 0
@@ -1684,7 +1683,10 @@ function typeinf_loop(frame)
             for i in active
                 i === nothing && continue
                 i = i::InferenceState
-                i.fixedpoint && finish(i)
+                if i.fixedpoint
+                    i.inworkq = true
+                    finish(i)
+                end
             end
         end
     end
@@ -1705,6 +1707,8 @@ function typeinf_frame(frame)
     global global_sv # TODO: actually pass this to all functions that need it
     last_global_sv = global_sv
     global_sv = frame
+    frame.inworkq = true
+    @assert !frame.inferred
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
@@ -1849,14 +1853,8 @@ function typeinf_frame(frame)
         end
     end
 
-    if frame.inferred
-        # during recursive compilation, this can happen.
-        # now just need to bail since it's already finished.
-        last_global_sv = global_sv
-        return
-    end
-
     # with no active ip's, type inference on frame is done if there are no outstanding (unfinished) edges
+    @assert !frame.inferred
     finished = isempty(frame.edges)
     if isempty(workq)
         # oops, there's a cycle somewhere in the `edges` graph
@@ -1911,6 +1909,7 @@ function typeinf_frame(frame)
             end
         end
     end
+    frame.inworkq = false
     global_sv = last_global_sv
     nothing
 end
@@ -1944,7 +1943,7 @@ function finish(me::InferenceState)
     # see this InferenceState is in an imcomplete state
     # set `inworkq` to prevent it from trying to look
     # at the object in any detail
-    me.inworkq = true
+    @assert me.inworkq
 
     # annotate fulltree with type information
     for i = 1:length(me.gensym_types)
