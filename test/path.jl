@@ -87,3 +87,7 @@ function test_relpath()
     @test_throws ArgumentError relpath("", "$(sep)home$(sep)user$(sep)dir_withendsep$(sep)")
 end
 test_relpath()
+
+# Test type stability
+@test isa(joinpath("a", "b"), ASCIIString)
+@test isa(joinpath(abspath("a"), "b"), ASCIIString)

@@ -67,7 +67,7 @@ end
 function pathsep(paths::AbstractString...)
     for path in paths
         m = match(path_separator_re, path)
-        m !== nothing && return m.match[1]
+        m !== nothing && return m.match[1:1]
     end
     return path_separator
 end
