@@ -838,3 +838,25 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+
+# Issue 14111
+# test vector with no zeros
+s14111 = sparsevec([1., 2.5, -3., 8., -4])
+a14111 = sparsevec([0.4, 1., -1.2, 3.2, -1.6])
+@test exact_equal(s14111/2.5, a14111)
+@test exact_equal(s14111./2.5, a14111)
+# test vector with all zeros
+s14111 = sparsevec(Int64[], Float64[], 10)
+a14111 = sparsevec(Int64[], Float64[], 10)
+@test exact_equal(s14111/5., a14111)
+@test exact_equal(s14111./5., a14111)
+# test vector with both zero and nonzero
+s14111 = sparsevec([7., 0., -6., 3., 0., 2])
+a14111 = sparsevec([1, 3, 4, 6], [2.8, -2.4, 1.2, 0.8], 6)
+@test exact_equal(s14111/2.5, a14111)
+@test exact_equal(s14111./2.5, a14111)
+# test for division by illegal arguments
+@test_throws ArgumentError s14111/0.
+@test_throws ArgumentError s14111./0.
+@test_throws ArgumentError s14111/NaN
+@test_throws ArgumentError s14111./NaN

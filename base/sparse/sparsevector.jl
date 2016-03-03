@@ -1197,6 +1197,15 @@ scale!(a::Complex, x::AbstractSparseVector) = scale!(nonzeros(x), a)
 # .*(x::AbstractSparseVector, a::Number) = scale(x, a)
 # .*(a::Number, x::AbstractSparseVector) = scale(x, a)
 
+function /(x::AbstractSparseVector, a::Number)
+    if a == 0 || isnan(a)
+        throw(ArgumentError("Cannot divide sparse vector by provided argument"))
+    end
+    SparseVector(length(x), copy(x.nzind), x.nzval/a)
+end
+
+./(x::AbstractSparseVector, a::Number) = /(x,a)
+
 
 # dot
 

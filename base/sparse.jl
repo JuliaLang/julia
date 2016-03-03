@@ -6,7 +6,7 @@ using Base: Func, AddFun, OrFun, ConjFun, IdFun
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
-import Base: +, -, *, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
+import Base: +, -, *, /, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
 import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!, At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
 import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!
 
