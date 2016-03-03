@@ -31,6 +31,7 @@ function test_code_reflections(tester, freflect)
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
     test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
     test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
+    test_code_reflection(freflect, muladd, Tuple{Float64, Float64, Float64}, tester)
 end
 
 println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
