@@ -1596,7 +1596,25 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
             # if the client was inlining, then this means we decided not to try to infer this
             # particular signature (due to signature coarsening in abstract_call_gf_by_type)
             # and attempting to force it now would be a bad idea (non terminating)
-            return (nothing, Union{}, false)
+            skip = true
+            if linfo.module == _topmod(linfo.module) || (isdefined(Main, :Base) && linfo.module == Main.Base)
+                # however, some gf have special tfunc and meaning they wouldn't have been inferred yet
+                # check the same conditions from abstract_call_gf to detect this case
+                if linfo.name == :promote_type || linfo.name == :typejoin
+                    skip = false
+                elseif linfo.name == :getindex || linfo.name == :next || linfo.name == :indexed_next
+                    argtypes = atypes.parameters
+                    if length(argtypes)>2 && argtypes[3]===Int &&
+                        (argtypes[2] <: Tuple ||
+                         (isa(argtypes[2], DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
+                          (argtypes[2]::DataType).name === Main.Base.Pair.name))
+                        skip = false
+                    end
+                end
+            end
+            if skip
+                return (nothing, Union{}, false)
+            end
         end
         # add lam to be inferred and record the edge
         ast = ccall(:jl_prepare_ast, Any, (Any,), linfo)::Expr
@@ -1663,42 +1681,52 @@ function typeinf_loop(frame)
         frame.inworkq || typeinf_frame(frame)
         return
     end
-    in_typeinf_loop = true
-    # the core type-inference algorithm
-    # processes everything in workq,
-    # and returns when there is nothing left
-    while nactive[] > 0
-        while active[end] === nothing
-            pop!(active)
-        end
-        if isempty(workq)
-            frame = active[end]::InferenceState
-        else
-            frame = pop!(workq)
-        end
-        typeinf_frame(frame)
-        if isempty(workq) && nactive[] > 0
-            # nothing in active has an edge that hasn't reached a fixed-point
-            # so all of them can be considered finished now
-            for i in active
-                i === nothing && continue
-                i = i::InferenceState
-                if i.fixedpoint
-                    i.inworkq = true
-                    finish(i)
+    try
+        in_typeinf_loop = true
+        # the core type-inference algorithm
+        # processes everything in workq,
+        # and returns when there is nothing left
+        while nactive[] > 0
+            while active[end] === nothing
+                pop!(active)
+            end
+            if isempty(workq)
+                frame = active[end]::InferenceState
+            else
+                frame = pop!(workq)
+            end
+            typeinf_frame(frame)
+            if isempty(workq) && nactive[] > 0
+                # nothing in active has an edge that hasn't reached a fixed-point
+                # so all of them can be considered finished now
+                fplist = Any[]
+                for i in active
+                    i === nothing && continue
+                    i = i::InferenceState
+                    if i.fixedpoint
+                        push!(fplist, i)
+                        i.inworkq = true
+                    end
+                end
+                for i in fplist
+                    finish(i) # this may add incomplete work to active
                 end
             end
         end
+        # cleanup the active queue
+        empty!(active)
+    #    while active[end] === nothing
+    #        # this pops everything, but with exaggerated care just in case
+    #        # something managed to add something to the queue at the same time
+    #        # (or someone decides to use an alternative termination condition)
+    #        pop!(active)
+    #    end
+        in_typeinf_loop = false
+    catch ex
+        println("WARNING: An error occured during inference. Type inference is now partially disabled.")
+        println(ex)
+        ccall(:jlbacktrace, Void, ())
     end
-    # cleanup the active queue
-    empty!(active)
-#    while active[end] === nothing
-#        # this pops everything, but with exaggerated care just in case
-#        # something managed to add something to the queue at the same time
-#        # (or someone decides to use an alternative termination condition)
-#        pop!(active)
-#    end
-    in_typeinf_loop = false
     nothing
 end
 
@@ -1707,8 +1735,8 @@ function typeinf_frame(frame)
     global global_sv # TODO: actually pass this to all functions that need it
     last_global_sv = global_sv
     global_sv = frame
-    frame.inworkq = true
     @assert !frame.inferred
+    frame.inworkq = true
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
@@ -1940,7 +1968,7 @@ function finish(me::InferenceState)
         @assert (i::InferenceState).fixedpoint
     end
     # below may call back into inference and
-    # see this InferenceState is in an imcomplete state
+    # see this InferenceState is in an incomplete state
     # set `inworkq` to prevent it from trying to look
     # at the object in any detail
     @assert me.inworkq
@@ -2407,7 +2435,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     local methfunc
     atype = Tuple{atypes...}
-    if length(atype.parameters)-1 > MAX_TUPLETYPE_LEN
+    if length(atype.parameters) - 1 > MAX_TUPLETYPE_LEN
         atype = limit_tuple_type(atype)
     end
     meth = _methods_by_ftype(atype, 1)
