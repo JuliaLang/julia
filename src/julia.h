@@ -176,6 +176,13 @@ typedef struct _jl_lambda_info_t {
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
     jl_value_t *ast;
+    /*
+    jl_value_t *code;  // compressed uint8 array, or Any array of statements
+    jl_array_t *slotnames; // names of local variables
+    jl_array_t *slottypes;
+    jl_array_t *varinfo;  // local var bit flags
+    jl_array_t *gensymtypes;
+    */
     jl_value_t *rettype;
     // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_syms;
@@ -192,9 +199,12 @@ typedef struct _jl_lambda_info_t {
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_sym_t *file;
     int32_t line;
+    int32_t nslots;
+    int32_t ngensym;
     int8_t inferred;
     int8_t pure;
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
+    //uint8_t isva;
 
     // hidden fields:
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
@@ -378,6 +388,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_typector_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_sym_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_symbol_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_gensym_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_slot_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
@@ -448,7 +459,6 @@ extern JL_DLLEXPORT jl_value_t *jl_array_uint8_type;
 extern JL_DLLEXPORT jl_value_t *jl_array_any_type;
 extern JL_DLLEXPORT jl_value_t *jl_array_symbol_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_expr_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_symbolnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_globalref_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type;
@@ -456,6 +466,9 @@ extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_assignnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_returnnode_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_gotoifnotnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
@@ -481,7 +494,7 @@ extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *method_sym;
+extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
@@ -494,7 +507,7 @@ extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
-extern jl_sym_t *inert_sym;
+extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
 
 // gc -------------------------------------------------------------------------
 
@@ -649,12 +662,13 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
-#define jl_symbolnode_sym(s) (*(jl_sym_t**)s)
-#define jl_symbolnode_type(s) (((jl_value_t**)s)[1])
 #define jl_linenode_file(x) (*(jl_sym_t**)x)
 #define jl_linenode_line(x) (((intptr_t*)x)[1])
 #define jl_labelnode_label(x) (((intptr_t*)x)[0])
+#define jl_slot_number(x) (((intptr_t*)x)[0])
+#define jl_slot_type(x) (((jl_value_t**)x)[1])
 #define jl_gotonode_label(x) (((intptr_t*)x)[0])
+#define jl_gotoifnotnode_label(x) (((intptr_t*)x)[1])
 #define jl_globalref_mod(s) (*(jl_module_t**)s)
 #define jl_globalref_name(s) (((jl_sym_t**)s)[1])
 
@@ -768,8 +782,8 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_gensym(v)      jl_typeis(v,jl_gensym_type)
+#define jl_is_slot(v)        jl_typeis(v,jl_slot_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
-#define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
@@ -1220,16 +1234,13 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex,
                                                   int delay_warn);
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
-JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m,
-                                                       jl_value_t *e,
-                                                       jl_svec_t *local_syms,
-                                                       jl_svec_t *local_vals);
+JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                                       jl_lambda_info_t *lam);
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li);
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
 JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);

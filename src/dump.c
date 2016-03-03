@@ -619,11 +619,12 @@ static int is_ast_node(jl_value_t *v)
         }
         return 0;
     }
-    return jl_is_symbol(v) || jl_is_symbolnode(v) || jl_is_gensym(v) ||
+    return jl_is_symbol(v) || jl_is_slot(v) || jl_is_gensym(v) ||
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
-        jl_is_bool(v) ||
+        jl_is_bool(v) || jl_typeis(v,jl_returnnode_type) ||
+        jl_typeis(v,jl_assignnode_type) || jl_typeis(v,jl_gotoifnotnode_type) ||
         jl_is_topnode(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
@@ -813,10 +814,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 for(i=0; i < l; i += 3) {
                     if (!jl_is_leaf_type(jl_cellref(tf,i))) {
                         jl_value_t *ret = jl_cellref(tf,i+1);
-                        if (jl_is_tuple(ret)) {
-                            jl_value_t *ast = jl_fieldref(ret, 0);
+                        if (jl_is_lambda_info(ret)) {
+                            jl_value_t *ast = ((jl_lambda_info_t*)ret)->ast;
                             if (jl_is_array(ast) && jl_array_len(ast) > 500)
-                                jl_cellset(tf, i+1, jl_fieldref(ret,1));
+                                jl_cellset(tf, i+1, ((jl_lambda_info_t*)ret)->rettype);
                         }
                     }
                 }
@@ -831,6 +832,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, li->called);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
+        write_int32(s, li->nslots);
+        write_int32(s, li->ngensym);
         jl_serialize_value(s, (jl_value_t*)li->module);
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1445,6 +1448,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->file);
         li->line = read_int32(s);
+        li->nslots = read_int32(s);
+        li->ngensym = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
         jl_gc_wb(li, li->module);
         li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
@@ -2366,7 +2371,7 @@ void jl_init_serializer(void)
     htable_new(&backref_table, 0);
 
     void *tags[] = { jl_symbol_type, jl_gensym_type, jl_datatype_type,
-                     jl_simplevector_type, jl_array_type,
+                     jl_simplevector_type, jl_array_type, jl_slot_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongSvec_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag,
@@ -2376,8 +2381,7 @@ void jl_init_serializer(void)
                      // everything above here represents a class of object rather only than a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym,
+                     call_sym, body_sym, line_sym, lambda_sym, jl_symbol("tuple"),
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
@@ -2399,7 +2403,6 @@ void jl_init_serializer(void)
                      jl_box_int32(39), jl_box_int32(40), jl_box_int32(41),
                      jl_box_int32(42), jl_box_int32(43), jl_box_int32(44),
                      jl_box_int32(45), jl_box_int32(46), jl_box_int32(47),
-                     jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2418,7 +2421,6 @@ void jl_init_serializer(void)
                      jl_box_int64(39), jl_box_int64(40), jl_box_int64(41),
                      jl_box_int64(42), jl_box_int64(43), jl_box_int64(44),
                      jl_box_int64(45), jl_box_int64(46), jl_box_int64(47),
-                     jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
@@ -2431,6 +2433,7 @@ void jl_init_serializer(void)
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple),
+                     jl_returnnode_type, jl_assignnode_type, jl_gotoifnotnode_type,
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
@@ -2438,11 +2441,12 @@ void jl_init_serializer(void)
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
-                     jl_module_type->name, jl_function_type->name,
+                     jl_module_type->name, jl_function_type->name, jl_slot_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,
-                     jl_globalref_type->name,
+                     jl_globalref_type->name, jl_returnnode_type->name, jl_assignnode_type->name,
+                     jl_gotoifnotnode_type->name,
 
                      jl_root_task,
 
