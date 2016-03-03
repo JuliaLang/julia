@@ -47,6 +47,7 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
                 @test_throws ArgumentError bkfact(a)
             end
         end
+
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         for rook in (false, true)
             bc2 = bkfact(apd, :U, issymmetric(apd), rook)
@@ -54,6 +55,23 @@ debug && println("Bunch-Kaufman factors of a pos-def matrix")
             @test_approx_eq_eps apd * (bc2\b) b 150000ε
             @test ishermitian(bc2) == !issymmetric(bc2)
         end
+    end
+end
 
+debug && println("Bunch-Kaufman factors of a singular matrix")
+let
+    As1 = ones(n, n)
+    As2 = complex(ones(n, n))
+    As3 = complex(ones(n, n))
+    As3[end, 1] += im
+    As3[1, end] -= im
+
+    for As = (As1, As2, As3)
+        for rook in (false, true)
+            F = bkfact(As, :U, issymmetric(As), rook)
+            @test det(F) == 0
+            @test_throws LinAlg.SingularException inv(F)
+            @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+        end
     end
 end
