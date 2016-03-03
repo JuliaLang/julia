@@ -487,7 +487,7 @@ end
 
 function test_existing_ref(r::Future)
     found = getkey(client_refs, r, false)
-    if !is(found,false)
+    if !is(found,false) && (client_refs[r] == true)
         if isnull(found.v) && !isnull(r.v)
             # we have recd the value from another source, probably a deserialized ref, send a del_client message
             send_del_client(r)
@@ -502,7 +502,7 @@ end
 
 function test_existing_ref(r::RemoteChannel)
     found = getkey(client_refs, r, false)
-    !is(found,false) && return found
+    !is(found,false) && (client_refs[r] == true) && return found
     client_refs[r] = true
     finalizer(r, send_del_client)
     r
@@ -577,6 +577,14 @@ function isready(rr::RemoteChannel, args...)
     end
 end
 
+function del_client(rr::AbstractRemoteRef)
+    del_client(remoteref_id(rr), myid())
+    if haskey(client_refs, rr)
+        client_refs[rr] = false
+    end
+    nothing
+end
+
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
 # As a workaround to issue https://github.com/JuliaLang/julia/issues/14445
@@ -612,7 +620,7 @@ end
 
 function send_del_client(rr)
     if rr.where == myid()
-        del_client(remoteref_id(rr), myid())
+        del_client(rr)
     elseif rr.where in procs() # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
