@@ -640,6 +640,11 @@ if DoFullTest
     end
     sleep(0.5)  # Give some time for the above error to be printed
 
+    # github PR #14456
+    for n = 1:10^6
+        fetch(@spawnat myid() myid())
+    end
+
 @unix_only begin
     function test_n_remove_pids(new_pids)
         for p in new_pids
