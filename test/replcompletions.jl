@@ -42,6 +42,8 @@ module CompletionFoo
 
     array = [1, 1]
     varfloat = 0.1
+
+    const tuple = (1, 2)
 end
 
 function temp_pkg_dir(fn::Function)
@@ -587,3 +589,8 @@ c, r, res = test_complete(s)
 s = "fals"
 c, r, res = test_complete(s)
 @test "false" in c
+
+# Don't crash when attempting to complete a tuple, #15329
+s = "CompletionFoo.tuple."
+c, r, res = test_complete(s)
+@test isempty(c)
