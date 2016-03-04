@@ -147,7 +147,7 @@ module TestGeneratedThrow
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
     function __init__()
         code_typed(foo,(); optimize = false)
-        @test isa(Core.Inference.inference_stack,Core.Inference.EmptyCallStack)
+        @test Core.Inference.isempty(Core.Inference.active) && Core.Inference.isempty(Core.Inference.workq)
         cfunction(foo,Void,())
     end
 end

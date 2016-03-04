@@ -189,7 +189,7 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-void jl_type_infer(jl_lambda_info_t *li, jl_lambda_info_t *def);
+void jl_type_infer(jl_lambda_info_t *li, jl_value_t *toplevel);
 
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
