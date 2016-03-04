@@ -179,3 +179,5 @@ let
     end
 end
 
+@test qr(Int[]) == (Int[],1)
+@test Base.LinAlg.qr!(Int[1]) == (Int[1],1)
