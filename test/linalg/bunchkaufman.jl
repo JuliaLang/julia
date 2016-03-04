@@ -23,40 +23,61 @@ bimg  = randn(n,2)/2
 for eltya in (Float32, Float64, Complex64, Complex128, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
-    asym = a'+a                  # symmetric indefinite
-    apd  = a'*a                 # symmetric positive-definite
-    ε = εa = eps(abs(float(one(eltya))))
-
-    for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
-        εb = eps(abs(float(one(eltyb))))
-        ε = max(εa,εb)
-
-debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
-
-debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
-        bc1 = factorize(asym)
-        @test_approx_eq inv(bc1) * asym eye(n)
-        @test_approx_eq_eps asym * (bc1\b) b 1000ε
-        for rook in (false, true)
-            @test_approx_eq inv(bkfact(a.' + a, :U, true, rook)) * (a.' + a) eye(n)
-            @test size(bc1) == size(bc1.LD)
-            @test size(bc1,1) == size(bc1.LD,1)
-            @test size(bc1,2) == size(bc1.LD,2)
-            if eltya <: BlasReal
-                @test_throws ArgumentError bkfact(a)
-            end
+    for atype in ("Array", "SubArray")
+        asym = a'+a                  # symmetric indefinite
+        apd  = a'*a                 # symmetric positive-definite
+        if atype == "Array"
+            a = a
+            a2 = a2
+        else
+            a = sub(a, 1:n, 1:n)
+            a2 = sub(a2, 1:n, 1:n)
+            asym = sub(asym, 1:n, 1:n)
+            apd = sub(apd, 1:n, 1:n)
         end
+        ε = εa = eps(abs(float(one(eltya))))
 
-debug && println("Bunch-Kaufman factors of a pos-def matrix")
-        for rook in (false, true)
-            bc2 = bkfact(apd, :U, issymmetric(apd), rook)
-            @test_approx_eq inv(bc2) * apd eye(n)
-            @test_approx_eq_eps apd * (bc2\b) b 150000ε
-            @test ishermitian(bc2) == !issymmetric(bc2)
+        for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+            for btype in ("Array", "SubArray")
+                if btype == "Array"
+                    b = b
+                else
+                    b = sub(b, 1:n, 1:2)
+                end
+
+                εb = eps(abs(float(one(eltyb))))
+                ε = max(εa,εb)
+
+    debug && println("\neltype of a: ", eltya, " eltype of b: ", eltyb)
+    debug && println("  type of a: ", atype, " type of b: ", btype, "\n")
+
+    debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
+                bc1 = factorize(asym)
+                @test_approx_eq inv(bc1) * asym eye(n)
+                @test_approx_eq_eps asym * (bc1\b) b 1000ε
+                for rook in (false, true)
+                    @test_approx_eq inv(bkfact(a.' + a, :U, true, rook)) * (a.' + a) eye(n)
+                    @test size(bc1) == size(bc1.LD)
+                    @test size(bc1,1) == size(bc1.LD,1)
+                    @test size(bc1,2) == size(bc1.LD,2)
+                    if eltya <: BlasReal
+                        @test_throws ArgumentError bkfact(a)
+                    end
+                end
+
+    debug && println("Bunch-Kaufman factors of a pos-def matrix")
+                for rook in (false, true)
+                    bc2 = bkfact(apd, :U, issymmetric(apd), rook)
+                    @test_approx_eq inv(bc2) * apd eye(n)
+                    @test_approx_eq_eps apd * (bc2\b) b 150000ε
+                    @test ishermitian(bc2) == !issymmetric(bc2)
+                end
+            end
         end
     end
 end
+
 
 debug && println("Bunch-Kaufman factors of a singular matrix")
 let
@@ -67,11 +88,19 @@ let
     As3[1, end] -= im
 
     for As = (As1, As2, As3)
-        for rook in (false, true)
-            F = bkfact(As, :U, issymmetric(As), rook)
-            @test det(F) == 0
-            @test_throws LinAlg.SingularException inv(F)
-            @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+        for Astype in ("Array", "SubArray")
+            if Astype == "Array"
+                As = As
+            else
+                As = sub(As, 1:n, 1:n)
+            end
+
+            for rook in (false, true)
+                F = bkfact(As, :U, issymmetric(As), rook)
+                @test det(F) == 0
+                @test_throws LinAlg.SingularException inv(F)
+                @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+            end
         end
     end
 end
