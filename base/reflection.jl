@@ -295,11 +295,9 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x, types)
         if optimize
-            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], linfo,
-                                                true, true)
+            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], true)
         else
-            (tree, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2],
-                                                         optimize=false)
+            (tree, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
         end
         if !isa(tree, Expr)
             tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)

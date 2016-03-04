@@ -415,5 +415,3 @@ else
     rem(x::Int128,  y::Int128)  = box(Int128,checked_srem_int(unbox(Int128,x),unbox(Int128,y)))
     rem(x::UInt128, y::UInt128) = box(UInt128,checked_urem_int(unbox(UInt128,x),unbox(UInt128,y)))
 end
-
-(::Type{T}){T}(arg) = convert(T, arg)::T

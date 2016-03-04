@@ -194,12 +194,11 @@ typedef struct _jl_lambda_info_t {
     int32_t line;
     int8_t inferred;
     int8_t pure;
+    int8_t inInference; // flags to tell if inference is running on this function
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
 
     // hidden fields:
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
-    uint8_t inInference : 1;    // flags to tell if inference is running on this function
-                                // used to avoid infinite recursion
     uint8_t inCompile : 1;
     uint8_t needs_sparam_vals_ducttape : 1; // if there are intrinsic calls,
                                             // probably require the sparams to compile successfully
@@ -275,6 +274,7 @@ typedef struct _jl_datatype_t {
     uint8_t mutabl;
     uint8_t pointerfree;
     int32_t ninitialized;
+    int32_t depth;
     // hidden fields:
     uint32_t nfields;
     uint32_t alignment : 29;  // strictest alignment over all fields
