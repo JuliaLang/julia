@@ -27,13 +27,22 @@ function __bootexpand(str, obj)
 end
 
 function __bootexpand(expr::Expr)
-    if expr.head !== :->
-        throw(ArgumentError("Wrong argument to @doc"))
-    end
-    __bootexpand(expr.args...)
+    expr.head === :-> || throw(ArgumentError("Wrong argument to @doc"))
+    str = Core.arrayref(expr.args, 1)
+    obj = Core.arrayref(Core.arrayref(expr.args, 2).args, 2)
+    __bootexpand(str, obj)
 end
 
 setexpand!(__bootexpand)
+
+# The following docstrings are basic sanity checks for `__bootexpand`.
+
+@doc """
+Captures and stores docstrings in `DocBootstrap.docs` before the real docsystem is defined.
+
+Note: this expander is later replaced by the more feature-complete `Docs.docm`.
+""" ->
+__bootexpand(str, obj)
 
 """
     DocBootstrap :: Module

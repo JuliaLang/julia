@@ -21,6 +21,18 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
+# Check that some very early docs have been found.
+let d1 = @doc(Base.DocBootstrap.__bootexpand),
+    d3 = @doc(Base.DocBootstrap.loaddocs),
+    d2 = @doc(Base.DocBootstrap)
+    @test length(d1.meta[:results]) === 1
+    @test contains(stringmime("text/markdown", d1), "Captures and stores")
+    @test length(d2.meta[:results]) === 1
+    @test contains(stringmime("text/markdown", d2), "DocBootstrap :: Module")
+    @test length(d3.meta[:results]) === 1
+    @test contains(stringmime("text/markdown", d2), "loaddocs()")
+end
+
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
