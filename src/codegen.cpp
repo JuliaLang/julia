@@ -1293,15 +1293,24 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
     assert(jl_is_tuple_type(argt));
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     if (llvmf) {
-        #ifndef LLVM35
-        new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
-        #elif defined(LLVM37) && !defined(LLVM38)
-        GlobalAlias::create(cast<PointerType>(llvmf->getType()),
-                            GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
-        #else
-        GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
-                            GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
-        #endif
+        Function *active_llvmf = active_module->getFunction(llvmf->getName());
+        // In imaging mode, and in most cases in JIT mode (where the wrapper is specifically
+        // compiled for this function), we can simply use a global alias.
+        if (active_llvmf) {
+            #ifndef LLVM35
+            new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+            #elif defined(LLVM37) && !defined(LLVM38)
+            GlobalAlias::create(cast<PointerType>(llvmf->getType()),
+                                GlobalValue::ExternalLinkage, name, active_llvmf, active_module);
+            #else
+            GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
+                                GlobalValue::ExternalLinkage, name, active_llvmf, active_module);
+            #endif
+        } else {
+            // Otherwise we use a global mapping
+            assert(!imaging_mode);
+            jl_ExecutionEngine->addGlobalMapping(llvmf->getName(), (void*)getAddressForOrCompileFunction(llvmf));
+        }
     }
 }
 
@@ -1421,6 +1430,16 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
 #endif
     JL_GC_POP();
     return llvmf;
+}
+
+extern "C" JL_DLLEXPORT
+uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
+{
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+    return getAddressForOrCompileFunction(llvmf);
+#else
+    return jl_ExecutionEngine->getPointerToFunction(llvmf);
+#endif
 }
 
 extern "C" JL_DLLEXPORT
