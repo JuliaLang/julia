@@ -87,6 +87,8 @@ importall .Rounding
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
+include("multinverses.jl")
+using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
 

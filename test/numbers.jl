@@ -2858,3 +2858,16 @@ for T in (Int8, Int16, Int32, Int64, Bool)
     @test round(T, true//true) === one(T)
     @test round(T, false//true) === zero(T)
 end
+
+# multiplicative inverses
+function testmi(numrange, denrange)
+    for d in denrange
+        d == 0 && continue
+        fastd = Base.multiplicativeinverse(d)
+        for n in numrange
+            @test div(n,d) == div(n,fastd)
+        end
+    end
+end
+testmi(-1000:1000, -100:100)
+@test_throws ErrorException Base.multiplicativeinverse(0)
