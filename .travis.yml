@@ -54,6 +54,8 @@ before_install:
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
         if [ "$ARCH" = "i686" ]; then
           export BUILDOPTS="$BUILDOPTS MARCH=pentium4";
+        else
+          export BUILDOPTS="$BUILDOPTS MARCH=x86-64";
         fi;
         echo "override ARCH=$ARCH" >> Make.user;
       elif [ `uname` = "Darwin" ]; then
