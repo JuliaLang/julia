@@ -2870,4 +2870,5 @@ function testmi(numrange, denrange)
     end
 end
 testmi(-1000:1000, -100:100)
+testmi(typemax(Int)-1000:typemax(Int), -100:100)
 @test_throws ErrorException Base.multiplicativeinverse(0)
