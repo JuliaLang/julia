@@ -1,14 +1,15 @@
 module MultiplicativeInverses
 
-import Base: div, divrem, rem
+import Base: div, divrem, rem, unsigned
 using  Base: LinearFast, LinearSlow, tail
 export multiplicativeinverse
 
-unsigned_type(::Int8) = UInt8
-unsigned_type(::Int16) = UInt16
-unsigned_type(::Int32) = UInt32
-unsigned_type(::Int64) = UInt64
-unsigned_type(::Int128) = UInt128
+unsigned(::Type{Int8}) = UInt8
+unsigned(::Type{Int16}) = UInt16
+unsigned(::Type{Int32}) = UInt32
+unsigned(::Type{Int64}) = UInt64
+unsigned(::Type{Int128}) = UInt128
+unsigned{T<:Unsigned}(::Type{T}) = T
 
 abstract MultiplicativeInverse{T}
 
