@@ -207,3 +207,6 @@ function schur(A::StridedMatrix, B::StridedMatrix)
 end
 
 full(F::Schur) = (F.Z * F.T) * F.Z'
+
+copy(F::Schur) = Schur(copy(F.T), copy(F.Z), copy(F.values))
+copy(F::GeneralizedSchur) = GeneralizedSchur(copy(F.S), copy(F.T), copy(F.alpha), copy(F.beta), copy(F.Q), copy(F.Z))
