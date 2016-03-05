@@ -582,7 +582,6 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-# note: probably should be StridedVector or AbstractVector
 function reverse(A::AbstractVector, s=1, n=length(A))
     B = similar(A)
     for i = 1:s-1
@@ -598,9 +597,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
 end
 reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 
-reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
-reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
-function reverse!(v::StridedVector, s=1, n=length(v))
+function reverse!(v::AbstractVector, s=1, n=length(v))
     if n <= s  # empty case; ok
     elseif !(1 ≤ s ≤ endof(v))
         throw(BoundsError(v, s))
@@ -724,7 +721,7 @@ function find(testf::Function, A::AbstractArray)
     I
 end
 
-function find(A::StridedArray)
+function find(A::AbstractArray)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     count = 1
@@ -742,7 +739,7 @@ find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
-function findn(A::StridedMatrix)
+function findn(A::AbstractMatrix)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
