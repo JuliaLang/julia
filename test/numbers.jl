@@ -2871,4 +2871,7 @@ function testmi(numrange, denrange)
 end
 testmi(-1000:1000, -100:100)
 testmi(typemax(Int)-1000:typemax(Int), -100:100)
-@test_throws ErrorException Base.multiplicativeinverse(0)
+testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
+@test_throws ArgumentError Base.multiplicativeinverse(0)
+testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
+testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
