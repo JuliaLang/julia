@@ -170,11 +170,12 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
     box(T,lshr_int(unbox(T,x),unbox(S,y)))
 # signed shift counts can shift in either direction
 # note: this early during bootstrap, `>=` is not yet available
->>(x::BitInteger, y::BitSigned) =
+# note: we only define Int shift counts here; the generic case is handled later
+>>(x::BitInteger, y::Int) =
     0 <= y ? x >> unsigned(y) : x << unsigned(-y)
-<<(x::BitInteger, y::BitSigned) =
+<<(x::BitInteger, y::Int) =
     0 <= y ? x << unsigned(y) : x >> unsigned(-y)
->>>(x::BitInteger, y::BitSigned) =
+>>>(x::BitInteger, y::Int) =
     0 <= y ? x >>> unsigned(y) : x << unsigned(-y)
 
 ## integer conversions ##
