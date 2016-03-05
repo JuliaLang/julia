@@ -390,7 +390,7 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union{QRCompactWYQ{TB},QRPackedQ{TB}})
+function A_mul_Bc{TA,TB}(A::AbstractMatrix{TA}, B::Union{QRCompactWYQ{TB},QRPackedQ{TB}})
     TAB = promote_type(TA,TB)
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)

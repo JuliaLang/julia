@@ -377,6 +377,46 @@ end
     end
 end
 
+for (f, fmod, op) = ((:cummin, :_cummin!, :min), (:cummax, :_cummax!, :max))
+    @eval function ($f)(v::AbstractVector)
+        n = length(v)
+        cur_val = v[1]
+        res = similar(v, n)
+        res[1] = cur_val
+        for i in 2:n
+            cur_val = ($op)(v[i], cur_val)
+            res[i] = cur_val
+        end
+        return res
+    end
+
+    @eval function ($f)(A::AbstractArray, axis::Integer)
+        res = similar(A)
+        if size(A, axis) < 1
+            return res
+        end
+        R1 = CartesianRange(size(A)[1:axis-1])
+        R2 = CartesianRange(size(A)[axis+1:end])
+        ($fmod)(res, A, R1, R2, axis)
+    end
+
+    @eval @noinline function ($fmod)(res, A::AbstractArray, R1::CartesianRange, R2::CartesianRange, axis::Integer)
+        for I2 in R2
+            for I1 in R1
+                res[I1, 1, I2] = A[I1, 1, I2]
+            end
+            for i = 2:size(A, axis)
+                for I1 in R1
+                    res[I1, i, I2] = ($op)(A[I1, i, I2], res[I1, i-1, I2])
+                end
+            end
+        end
+        res
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end
+
 ## SubArray index merging
 # A view created like V = A[2:3:8, 5:2:17] can later be indexed as V[2:7],
 # creating a new 1d view.
