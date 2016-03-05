@@ -123,6 +123,41 @@ for T in (UInt8, UInt16, UInt32, UInt64)
     @test_throws InexactError convert(T, -1)
 end
 
+# Test bit shifts
+for T in Base.BitInteger_types
+    nbits = 8*sizeof(T)
+    issigned = typemin(T) < 0
+    highbit = T(2) ^ (nbits-1)
+    val1 = 0x1234567890abcdef % T % highbit
+    val2 = val1 + highbit
+    for val in (val1, val2)
+        for count in 0:nbits+1
+            ucount, scount = unsigned(count), signed(count)
+            # Note: We assume modulo semantics for the arithmetic operations
+            # used here
+            if count < nbits
+                @test val << ucount === val * T(2)^count
+                @test val >>> ucount ===
+                    fld(unsigned(val), unsigned(T(2))^count) % T
+            else
+                @test val << ucount === T(0)
+                @test val >>> ucount === T(0)
+            end
+            @test val << scount === val << ucount
+            @test val << -scount === val >> ucount
+            @test val >>> scount === val >>> ucount
+            @test val >>> -scount === val << ucount
+            if count < (issigned ? nbits-1 : nbits)
+                @test val >> ucount === fld(val, T(2)^count)
+            else
+                @test val >> ucount === T(val<0 ? -1 : 0)
+            end
+            @test val >> scount === val >> ucount
+            @test val >> -scount === val << ucount
+        end
+    end
+end
+
 @test widen(UInt8(3)) === UInt32(3)
 @test widen(UInt16(3)) === UInt32(3)
 @test widen(UInt32(3)) === UInt64(3)
