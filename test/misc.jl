@@ -379,9 +379,7 @@ for (X,Y,Z) in ((V16,V16,V16), (I16,V16,I16), (V16,I16,V16), (V16,V16,I16), (I16
 end
 
 # clipboard functionality
-if OS_NAME == :Windows || OS_NAME == :Darwin
-    for str in ("Hello, world.","∀ x ∃ y","")
-        clipboard(str)
-        @test clipboard() == str
-    end
+@windows_only for str in ("Hello, world.","∀ x ∃ y","")
+    clipboard(str)
+    @test clipboard() == str
 end
