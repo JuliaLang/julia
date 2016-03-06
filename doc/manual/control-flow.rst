@@ -195,7 +195,7 @@ conditional expression is anything but ``true`` or ``false``:
     ERROR: TypeError: non-boolean (Int64) used in boolean context
 
 This error indicates that the conditional was of the wrong type:
-:obj:`Int64`` rather than the required :obj:`Bool`.
+:obj:`Int64` rather than the required :obj:`Bool`.
 
 The so-called "ternary operator", ``?:``, is closely related to the
 ``if``-``elseif``-``else`` syntax, but is used where a conditional
