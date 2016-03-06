@@ -966,9 +966,11 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
     std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.lower_bound(fptr);
 
     if (fit != fmap.end() && fptr < fit->first + fit->second.lengthAdr) {
-        *symsize = fit->second.lengthAdr;
+        if (symsize)
+            *symsize = fit->second.lengthAdr;
         *lines = fit->second.lines;
-        *slide = 0;
+        if (slide)
+            *slide = 0;
         found = 1;
     }
 #else // MCJIT version
@@ -976,24 +978,45 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
-        *symsize = 0;
-        *slide = 0;
+        if (symsize)
+            *symsize = 0;
+        if (slide)
+            *slide = 0;
         *object = fit->second.object;
         *SectionSlide = -(int64_t)fit->first;
+        if (context) {
 #if defined(LLVM39)
-        *context = fit->second.context;
+            *context = fit->second.context;
 #elif defined(LLVM37)
-        *context = new DWARFContextInMemory(*fit->second.object, fit->second.L);
+            *context = new DWARFContextInMemory(*fit->second.object, fit->second.L);
 #else
-        *context = DIContext::getDWARFContext(*fit->second.object);
-        *slide = fit->second.slide;
+            *context = DIContext::getDWARFContext(*fit->second.object);
+            *slide = fit->second.slide;
 #endif
+        }
         found = 1;
     }
 #endif
     uv_rwlock_rdunlock(&threadsafe);
     return found;
 }
+
+#ifdef USE_MCJIT
+extern "C"
+JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
+{
+    const object::ObjectFile *object = NULL;
+    DIContext *context;
+    int64_t SectionSlide, slide;
+    if (!jl_DI_for_fptr(fptr, NULL, NULL, &SectionSlide, &object, NULL))
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, false, NULL, NULL, NULL, NULL))
+            assert(false);
+    assert(object != NULL);
+    return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
+        const_cast<char*>(object->getData().data()),
+        object->getData().size(), false);
+}
+#endif
 
 void jl_cleanup_DI(llvm::DIContext *context)
 {
