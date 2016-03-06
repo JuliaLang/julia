@@ -945,8 +945,17 @@ static Value *getModuleFlag(Module *m, StringRef Key)
 
 static void jl_setup_module(Module *m)
 {
-    if (!getModuleFlag(m,"Dwarf Version"))
-        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
+    // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
+    // imaging mode. The structure of v4 is slightly nicer for debugging JIT
+    // code.
+    if (!getModuleFlag(m,"Dwarf Version")) {
+        int dwarf_version = 4;
+#ifdef _OS_DARWIN_
+        if (imaging_mode)
+            dwarf_version = 2;
+#endif
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
+    }
 #ifdef LLVM34
     if (!getModuleFlag(m,"Debug Info Version"))
         m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
