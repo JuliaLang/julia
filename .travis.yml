@@ -8,13 +8,17 @@ matrix:
       addons:
         apt:
           packages:
-            - binutils:i386
-            - gcc:i386
-            - g++:i386
+            - bar
+            - time
+            - binutils
+            - gcc
+            - g++
+            - gcc-multilib
+            - g++-multilib
             - make:i386
-            - cpp:i386
             - libssl-dev:i386
-            - gfortran:i386
+            - gfortran
+            - gfortran-multilib
     - os: linux
       env: ARCH="x86_64"
       compiler: "g++ -m64"
@@ -28,6 +32,10 @@ cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps-i686
     - $TRAVIS_BUILD_DIR/deps-x86_64
+branches:
+  only:
+    - master
+    - /release-.*/
 notifications:
     email: false
     irc:
@@ -46,7 +54,10 @@ before_install:
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
         if [ "$ARCH" = "i686" ]; then
           export BUILDOPTS="$BUILDOPTS MARCH=pentium4";
+        else
+          export BUILDOPTS="$BUILDOPTS MARCH=x86-64";
         fi;
+        echo "override ARCH=$ARCH" >> Make.user;
       elif [ `uname` = "Darwin" ]; then
         brew update;
         brew install -v jq;
@@ -77,7 +88,9 @@ script:
     - cd .. && mv julia julia2
     - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
-    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
+    - export JULIA_CPU_CORES=2 && cd /tmp/julia/share/julia/test &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl all &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl pkg
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
 before_cache:
