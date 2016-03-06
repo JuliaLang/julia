@@ -36,6 +36,12 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
 debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
         bc1 = factorize(asym)
+        @test_approx_eq logabsdet(bc1)[1] log(abs(det(bc1)))
+        if eltya <: Real
+            @test logabsdet(bc1)[2] == sign(det(bc1))
+        else
+            @test logabsdet(bc1)[2] ≈ sign(det(bc1))
+        end
         @test_approx_eq inv(bc1) * asym eye(n)
         @test_approx_eq_eps asym * (bc1\b) b 1000ε
         for rook in (false, true)
@@ -51,6 +57,9 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         for rook in (false, true)
             bc2 = bkfact(apd, :U, issymmetric(apd), rook)
+            @test_approx_eq logdet(bc2) log(det(bc2))
+            @test_approx_eq logabsdet(bc2)[1] log(abs(det(bc2)))
+            @test logabsdet(bc2)[2] == sign(det(bc2))
             @test_approx_eq inv(bc2) * apd eye(n)
             @test_approx_eq_eps apd * (bc2\b) b 150000ε
             @test ishermitian(bc2) == !issymmetric(bc2)
@@ -75,3 +84,6 @@ let
         end
     end
 end
+
+@test_throws DomainError logdet(bkfact([-1 -1; -1 1]))
+@test_throws Base.LinAlg.SingularException logabsdet(bkfact([8 4; 4 2]))
