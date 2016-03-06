@@ -29,12 +29,12 @@ end
 zip(a) = Zip1(a)
 length(z::Zip1) = length(z.a)
 eltype{I}(::Type{Zip1{I}}) = Tuple{eltype(I)}
-start(z::Zip1) = (start(z.a),)
-function next(z::Zip1, st)
+@inline start(z::Zip1) = (start(z.a),)
+@inline function next(z::Zip1, st)
     n = next(z.a,st[1])
     return ((n[1],), (n[2],))
 end
-done(z::Zip1, st) = done(z.a,st[1])
+@inline done(z::Zip1, st) = done(z.a,st[1])
 
 immutable Zip2{I1, I2} <: AbstractZipIterator
     a::I1
@@ -43,13 +43,13 @@ end
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = min(length(z.a), length(z.b))
 eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
-start(z::Zip2) = (start(z.a), start(z.b))
-function next(z::Zip2, st)
+@inline start(z::Zip2) = (start(z.a), start(z.b))
+@inline function next(z::Zip2, st)
     n1 = next(z.a,st[1])
     n2 = next(z.b,st[2])
     return ((n1[1], n2[1]), (n1[2], n2[2]))
 end
-done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
+@inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
 immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
@@ -63,13 +63,13 @@ function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     Tuple{S, T.parameters...}
 end
 eltype{I,Z}(::Type{Zip{I,Z}}) = tuple_type_cons(eltype(I), eltype(Z))
-start(z::Zip) = tuple(start(z.a), start(z.z))
-function next(z::Zip, st)
+@inline start(z::Zip) = tuple(start(z.a), start(z.z))
+@inline function next(z::Zip, st)
     n1 = next(z.a, st[1])
     n2 = next(z.z, st[2])
     (tuple(n1[1], n2[1]...), (n1[2], n2[2]))
 end
-done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
+@inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
 # filter
 
