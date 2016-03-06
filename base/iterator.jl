@@ -341,3 +341,117 @@ function collect{I<:IteratorND}(g::Generator{I})
     dest[1] = first
     return map_to!(g.f, 2, st, dest, g.iter)
 end
+
+"""
+    @shareiterators
+
+This macro may improve the efficiency of loops that have multiple iterators.
+For example,
+```
+@shareiterators for (IA, IB) in zip(eachindex(A), eachindex(B))
+    # body
+end
+```
+generates, by default, a loop with two indexes that need to be
+incremented and tested on each iteration. However, if it happens that
+the two iterators in the `zip` call have the same value, then it runs
+a variant of the loop that uses a single index.
+
+Note this is only recommended for cases where the iterators can be
+compared efficiently. The example above demonstrates good usage of
+this macro; in contrast,
+```
+@shareiterators for (a, b) in zip(A, B)
+    # body
+end
+```
+would be much worse than the version without `@shareiterators`,
+because it would check each element of `A` and `B` before deciding
+which variant of the loop to run (and hence pass through `A` and `B`
+twice).
+"""
+macro shareiterators(ex)
+    _shareiterators(ex)
+end
+
+function _shareiterators(ex::Expr)
+    if ex.head == :block
+        # Skip to the :for loop
+        i = 1
+        while i <= length(ex.args) && (a = ex.args[i]; !isa(a, Expr) || a.head != :for)
+            i += 1
+        end
+        i > length(ex.args) && error("expression must be a for loop")
+        ex.args[i] = _shareiterators(ex.args[i])
+        return ex
+    end
+    ex.head == :for || error("expression must be a for loop")
+    iteration, body = ex.args
+    statevars, iterex = iteration.args
+    isa(statevars, Symbol) && return ex  # just one variable
+    # A couple of sanity checks
+    statevars.head == :tuple || error("iteration variables must be expressed as a tuple")
+    iterex.head == :call && iterex.args[1] == :zip || error("iterators must be zipped")
+    iteratorexs = iterex.args[2:end]
+    n = length(statevars.args)
+    length(iteratorexs) == n || error("number of items does not match the number of iterators")
+    (n < 2 || n > 3) && return ex    # just special-case 2 or 3 iterators
+    statesyms = statevars.args
+    # Evaluate the iterators
+    itersyms = [gensym(string("R", i)) for i = 1:n]
+    iterevals = [Expr(:(=), itersyms[i], iteratorexs[i]) for i = 1:n]
+    # Prepare a variant using a single iterator
+    state1 = gensym(:I)
+    body1 = itersub(body, statesyms, state1)
+    n == 2 && return esc(quote
+        $(iterevals...)
+        if $(itersyms[1]) == $(itersyms[2])
+            for $state1 in $(itersyms[1])
+                $body1
+            end
+        else
+            for $statevars in zip($(itersyms...))
+                $body
+            end
+        end
+    end)
+    # With 3 iterators, we have to consider pairs as well as the triple
+    state12, state13, state23 = gensym(:I12), gensym(:I13), gensym(:I23)
+    body12 = itersub(body, statesyms[[1,2]], state12)
+    body13 = itersub(body, statesyms[[1,3]], state13)
+    body23 = itersub(body, statesyms[[2,3]], state23)
+    esc(quote
+        $(iterevals...)
+        if $(itersyms[1]) == $(itersyms[2]) == $(itersyms[3])
+            for $state1 in $(itersyms[1])
+                $body1
+            end
+        elseif $(itersyms[1]) == $(itersyms[2])
+            for ($state12, $(statesyms[3])) in zip($(itersyms[1]), $(itersyms[3]))
+                $body12
+            end
+        elseif $(itersyms[1]) == $(itersyms[3])
+            for ($state13, $(statesyms[2])) in zip($(itersyms[1]), $(itersyms[2]))
+                $body13
+            end
+        elseif $(itersyms[2]) == $(itersyms[3])
+            for ($state23, $(statesyms[1])) in zip($(itersyms[2]), $(itersyms[1]))
+                $body23
+            end
+        else
+            for $statevars in zip($(itersyms...))
+                $body
+            end
+        end
+    end)
+end
+
+itersub(ex, statesyms, replacement) = itersub!(copy(ex), statesyms, replacement)
+function itersub!(ex::Expr, statesyms, replacement)
+    for i = 1:length(ex.args)
+        ex.args[i] = itersub!(ex.args[i], statesyms, replacement)
+    end
+    ex
+end
+itersub!(sym::Symbol, statesyms, replacement) = sym in statesyms ? replacement : sym
+itersub!(arg, statesyms, replacement) = arg

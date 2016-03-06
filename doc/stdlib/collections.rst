@@ -55,6 +55,30 @@ type.
 
    Note that :func:`zip` is its own inverse: ``collect(zip(zip(a...)...)) == collect(a)``\ .
 
+.. function:: @shareiterators
+
+   .. Docstring generated from Julia source
+
+   This macro may improve the efficiency of loops that have multiple iterators. For example,
+
+   .. code-block:: julia
+
+       @shareiterators for (IA, IB) in zip(eachindex(A), eachindex(B))
+           # body
+       end
+
+   generates, by default, a loop with two indexes that need to be incremented and tested on each iteration. However, if it happens that the two iterators in the ``zip`` call have the same value, then it runs a variant of the loop that uses a single index.
+
+   Note this is only recommended for cases where the iterators can be compared efficiently. The example above demonstrates good usage of this macro; in contrast,
+
+   .. code-block:: julia
+
+       @shareiterators for (a, b) in zip(A, B)
+           # body
+       end
+
+   would be much worse than the version without ``@shareiterators``\ , because it would check each element of ``A`` and ``B`` before deciding which variant of the loop to run (and hence pass through ``A`` and ``B`` twice).
+
 .. function:: enumerate(iter)
 
    .. Docstring generated from Julia source
