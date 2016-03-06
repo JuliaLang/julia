@@ -5,34 +5,18 @@
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod, checked_cld
 
-# Test return types
-for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
-    z, o = T(0), T(1)
-    @test typeof(checked_neg(z)) === T
-    @test typeof(checked_abs(z)) === T
-    @test typeof(checked_add(z)) === T
-    @test typeof(checked_mul(z)) === T
-    @test typeof(checked_add(z,z)) === T
-    @test typeof(checked_sub(z,z)) === T
-    @test typeof(checked_mul(z,z)) === T
-    @test typeof(checked_div(z,o)) === T
-    @test typeof(checked_rem(z,o)) === T
-    @test typeof(checked_fld(z,o)) === T
-    @test typeof(checked_mod(z,o)) === T
-    @test typeof(checked_cld(z,o)) === T
-end
-
 # checked operations
 
 for T in (Int8, Int16, Int32, Int64, Int128)
     # regular cases
+    @test checked_abs(T(0)) === T(0)
+    @test checked_neg(T(0)) === T(0)
+    @test checked_add(T(0)) === T(0)
+    @test checked_mul(T(0)) === T(0)
+
     for s in (-1, +1)
-        @test checked_abs(T(0s)) === T(abs(0s))
-        @test checked_neg(T(0s)) === T(-(0s))
-        @test checked_add(T(0s)) === T(0s)
-        @test checked_mul(T(0s)) === T(0s)
         @test checked_abs(T(3s)) === T(abs(3s))
-        @test checked_neg(T(3s)) === T(-(3s))
+        @test checked_neg(T(3s)) === T(-3s)
         @test checked_add(T(3s)) === T(3s)
         @test checked_mul(T(3s)) === T(3s)
         @test checked_abs(T(s*typemax(T))) === typemax(T)
@@ -46,7 +30,7 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test_throws OverflowError checked_neg(typemin(T))
 
     # regular cases
-    for s1 in (-1, +1), s2 in (-1,+1)
+    for s1 in (-1, +1), s2 in (-1, +1)
         @test checked_add(T(4s1), T(3s2)) === T(4s1 + 3s2)
         @test checked_sub(T(4s1), T(3s2)) === T(4s1 - 3s2)
         @test checked_mul(T(4s1), T(3s2)) === T(4s1 * 3s2)
@@ -144,8 +128,13 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     # regular cases
     @test checked_abs(T(0)) === T(0)
     @test checked_neg(T(0)) === T(0)
+    @test checked_add(T(0)) === T(0)
+    @test checked_mul(T(0)) === T(0)
+
     @test checked_abs(T(3)) === T(3)
     @test_throws OverflowError checked_neg(T(3))
+    @test checked_add(T(3)) === T(3)
+    @test checked_mul(T(3)) === T(3)
 
     # regular cases
     @test checked_add(T(4), T(3)) === T(7)
