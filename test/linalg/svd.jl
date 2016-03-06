@@ -21,6 +21,8 @@ a2img  = randn(n,n)/2
 for eltya in (Float32, Float64, Complex64, Complex128, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    asym = aa'+aa                  # symmetric indefinite
+    apd  = aa'*aa                 # symmetric positive-definite
     for atype in ("Array", "SubArray")
         if atype == "Array"
             a = aa
@@ -29,8 +31,6 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
             a = sub(aa, 1:n, 1:n)
             a2 = sub(aa2, 1:n, 1:n)
         end
-        asym = a'+a                  # symmetric indefinite
-        apd  = a'*a                 # symmetric positive-definite
         ε = εa = eps(abs(float(one(eltya))))
 
     debug && println("\ntype of a: ", eltya, "\n")
