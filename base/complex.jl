@@ -62,21 +62,29 @@ complex(z::Complex) = z
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
-    r, i = reim(z)
+    if unitless(z) != z
+        print(io, "(")
+    end
+    r, i = reim(unitless(z))
     compact = limit_output(io)
-    showcompact_lim(io, r)
+    Base.showcompact_lim(io, r)
     if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    showcompact_lim(io, i)
+    Base.showcompact_lim(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
+    if unitless(z) != z
+        print(io, ") ")
+        print(io, unit(z))
+    end
 end
+
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 

@@ -59,3 +59,15 @@ one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
 
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
+
+# Fallback methods for unit support
+# For numbers without units, nothing to be done in stripping units
+function unitless(x::Number)
+    @_inline_meta
+    x
+end
+# For numbers without units, the "unit" is multiplicative identity
+function unit(x::Number)
+    @_inline_meta
+    one(x)
+end
