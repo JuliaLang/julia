@@ -840,7 +840,6 @@ void jl_get_builtin_hooks(void)
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
-    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 
     jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,

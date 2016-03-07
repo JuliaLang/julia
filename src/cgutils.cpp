@@ -848,22 +848,29 @@ static inline jl_module_t *topmod(jl_codectx_t *ctx)
 
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
-    if (jl_is_expr(e)) {
-        jl_value_t *typ = ((jl_expr_t*)e)->etype;
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-        return typ;
-    }
-    if (jl_is_symbolnode(e)) {
-        jl_value_t *typ = jl_symbolnode_type(e);
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-        return typ;
-    }
     if (jl_is_gensym(e)) {
         int idx = ((jl_gensym_t*)e)->id;
         jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
         return (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+    }
+    if (jl_typeis(e, jl_slot_type)) {
+        jl_value_t *typ = jl_slot_get_type(e);
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+        return typ;
+    }
+    if (jl_is_expr(e)) {
+        if (((jl_expr_t*)e)->head == static_parameter_sym) {
+            size_t idx = jl_unbox_long(jl_exprarg(e,0))-1;
+            if (idx >= jl_svec_len(ctx->linfo->sparam_vals))
+                return (jl_value_t*)jl_any_type;
+            e = jl_svecref(ctx->linfo->sparam_vals, idx);
+            goto type_of_constant;
+        }
+        jl_value_t *typ = ((jl_expr_t*)e)->etype;
+        if (jl_is_typevar(typ))
+            typ = ((jl_tvar_t*)typ)->ub;
+        return typ;
     }
     if (jl_is_quotenode(e)) {
         e = jl_fieldref(e,0);
@@ -890,27 +897,6 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         }
     }
     if (jl_is_symbol(e)) {
-        if (jl_is_symbol(e)) {
-            if (is_global((jl_sym_t*)e, ctx)) {
-                // look for static parameter
-                jl_svec_t *sp = ctx->linfo->sparam_syms;
-                for (size_t i=0; i < jl_svec_len(sp); i++) {
-                    assert(jl_is_symbol(jl_svecref(sp, i)));
-                    if (e == jl_svecref(sp, i)) {
-                        if (jl_svec_len(ctx->linfo->sparam_vals) == 0)
-                            return (jl_value_t*)jl_any_type;
-                        e = jl_svecref(ctx->linfo->sparam_vals, i);
-                        goto type_of_constant;
-                    }
-                }
-            }
-            else {
-                std::map<jl_sym_t*,jl_varinfo_t>::iterator it = ctx->vars.find((jl_sym_t*)e);
-                if (it != ctx->vars.end())
-                    return (*it).second.value.typ;
-                return (jl_value_t*)jl_any_type;
-            }
-        }
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);
         if (!b || !b->value)
             return (jl_value_t*)jl_any_type;
@@ -1098,14 +1084,11 @@ static Value *emit_arraysize(const jl_cgval_t &tinfo, Value *dim, jl_codectx_t *
 static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
 {
     if (ex == NULL) return NULL;
-    jl_sym_t *aname=NULL;
-    if (jl_is_symbol(ex))
-        aname = ((jl_sym_t*)ex);
-    else if (jl_is_symbolnode(ex))
-        aname = jl_symbolnode_sym(ex);
-    if (aname && ctx->arrayvars->find(aname) != ctx->arrayvars->end()) {
-        return &(*ctx->arrayvars)[aname];
-    }
+    if (!jl_is_slot(ex))
+        return NULL;
+    int sl = jl_slot_number(ex)-1;
+    if (ctx->arrayvars->find(sl) != ctx->arrayvars->end())
+        return &(*ctx->arrayvars)[sl];
     //TODO: gensym case
     return NULL;
 }
@@ -1582,7 +1565,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
 
 static bool might_need_root(jl_value_t *ex)
 {
-    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
+    return (!jl_is_symbol(ex) && !jl_typeis(ex, jl_slot_type) && !jl_is_gensym(ex) &&
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
             !jl_is_globalref(ex));
 }
