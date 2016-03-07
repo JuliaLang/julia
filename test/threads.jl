@@ -23,7 +23,7 @@ function test_threaded_loop_and_atomic_add()
         found[a[i]] = true
     end
     @test x[] == 10000
-    # Next test checks that al loop iterations ran,
+    # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
     @test findfirst(found,false) == 0
     if was_inorder
@@ -140,7 +140,7 @@ end
 # Ensure only LLVM-supported types can be atomic
 @test_throws TypeError Atomic{Bool}
 @test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{Float64}
+@test_throws TypeError Atomic{Complex128}
 
 # Test atomic memory ordering with load/store
 type CommBuf
@@ -229,6 +229,81 @@ function test_fence()
     @test commbuf.correct[2] == true
 end
 test_fence()
+
+# Test load / store with various types
+let atomic_types = [Int8, Int16, Int32, Int64, Int128,
+                    UInt8, UInt16, UInt32, UInt64, UInt128,
+                    Float16, Float32, Float64]
+    # Temporarily omit 128-bit types
+    if Base.ARCH === :i686
+        filter!(T -> sizeof(T)<=8, atomic_types)
+    end
+    for T in atomic_types
+        var = Atomic{T}()
+        var[] = 42
+        @test var[] === T(42)
+        old = atomic_xchg!(var, T(13))
+        @test old === T(42)
+        @test var[] === T(13)
+        old = atomic_cas!(var, T(13), T(14))   # this will succeed
+        @test old === T(13)
+        @test var[] === T(14)
+        old = atomic_cas!(var, T(13), T(15))   # this will fail
+        @test old === T(14)
+        @test var[] === T(14)
+    end
+end
+
+# Test atomic_cas! and atomic_xchg!
+function test_atomic_cas!{T}(var::Atomic{T}, range::StepRange{Int,Int})
+    for i in range
+        while true
+            old = atomic_cas!(var, T(i-1), T(i))
+            old == T(i-1) && break
+        end
+    end
+end
+for T in (Int32, Int64, Float32, Float64)
+    var = Atomic{T}()
+    nloops = 1000
+    di = nthreads()
+    @threads for i in 1:di
+        test_atomic_cas!(var, i:di:nloops)
+    end
+    @test var[] === T(nloops)
+end
+
+function test_atomic_xchg!{T}(var::Atomic{T}, i::Int, accum::Atomic{Int})
+    old = atomic_xchg!(var, T(i))
+    atomic_add!(accum, Int(old))
+end
+for T in (Int32, Int64, Float32, Float64)
+    accum = Atomic{Int}()
+    var = Atomic{T}()
+    nloops = 1000
+    @threads for i in 1:nloops
+        test_atomic_xchg!(var, i, accum)
+    end
+    @test accum[] + Int(var[]) === sum(0:nloops)
+end
+
+function test_atomic_float{T}(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{T}, i::Int)
+    atomic_add!(varadd, T(i))
+    atomic_max!(varmax, T(i))
+    atomic_min!(varmin, T(i))
+end
+for T in (Int32, Int64, Float32, Float64)
+    varadd = Atomic{T}()
+    varmax = Atomic{T}()
+    varmin = Atomic{T}()
+    nloops = 1000
+    @threads for i in 1:nloops
+        test_atomic_float(varadd, varmax, varmin, i)
+    end
+    @test varadd[] === T(sum(1:nloops))
+    @test varmax[] === T(maximum(1:nloops))
+    @test varmin[] === T(0)
+end
 
 let async = Base.AsyncCondition(), t
     c = Condition()
