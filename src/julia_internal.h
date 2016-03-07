@@ -183,8 +183,6 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                               const char *content, size_t contentlen);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
-jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
-                                             jl_value_t **loc, size_t nl);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
@@ -206,7 +204,6 @@ jl_array_t *jl_lam_staticparams(jl_expr_t *l);
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
-int jl_local_in_linfo(jl_lambda_info_t *linfo, jl_sym_t *sym);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
 jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
 int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m);

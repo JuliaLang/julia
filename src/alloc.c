@@ -32,7 +32,6 @@ jl_datatype_t *jl_weakref_type;
 jl_datatype_t *jl_ascii_string_type;
 jl_datatype_t *jl_utf8_string_type;
 jl_datatype_t *jl_expr_type;
-jl_datatype_t *jl_symbolnode_type;
 jl_datatype_t *jl_globalref_type;
 jl_datatype_t *jl_linenumbernode_type;
 jl_datatype_t *jl_labelnode_type;
@@ -72,7 +71,7 @@ jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
-jl_sym_t *module_sym;
+jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
@@ -99,7 +98,7 @@ jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
 jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
-jl_sym_t *unused_sym;
+jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 
 typedef struct {
     int64_t a;
@@ -272,6 +271,44 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
+JL_DLLEXPORT void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
+{
+    li->ast = ast; jl_gc_wb(li, ast);
+    if (!jl_is_expr(ast))
+        return;
+    jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
+    if (has_meta(body, pure_sym))
+        li->pure = 1;
+    jl_value_t *body1 = skip_meta(body);
+    if (jl_is_linenode(body1)) {
+        li->file = jl_linenode_file(body1);
+        li->line = jl_linenode_line(body1);
+    }
+    else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
+        li->file = (jl_sym_t*)jl_exprarg(body1, 1);
+        li->line = jl_unbox_long(jl_exprarg(body1, 0));
+    }
+    jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
+    jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
+    li->nslots = jl_array_len(vis);
+    jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)li->ast);
+    li->ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_long(gensym_types));
+    size_t narg = jl_array_len(args);
+    uint8_t called=0;
+    int i, j=0;
+    for(i=1; i < narg && i <= 8; i++) {
+        jl_value_t *ai = jl_cellref(args,i);
+        if (ai == (jl_value_t*)unused_sym || !jl_is_symbol(ai)) continue;
+        jl_value_t *vj;
+        do {
+            vj = jl_cellref(vis, j++);
+        } while (jl_cellref(vj,0) != ai);
+        if (jl_unbox_long(jl_cellref(vj,2))&64)
+            called |= (1<<(i-1));
+    }
+    li->called = called;
+}
+
 JL_DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_t *sparams,
                                      jl_module_t *ctx)
@@ -306,37 +343,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->pure = 0;
     li->called = 0xff;
     li->needs_sparam_vals_ducttape = 2;
-    if (ast && jl_is_expr(ast)) {
-        jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
-        if (has_meta(body, pure_sym))
-            li->pure = 1;
-        jl_value_t *body1 = skip_meta(body);
-        if (jl_is_linenode(body1)) {
-            li->file = jl_linenode_file(body1);
-            li->line = jl_linenode_line(body1);
-        }
-        else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
-            li->file = (jl_sym_t*)jl_exprarg(body1, 1);
-            li->line = jl_unbox_long(jl_exprarg(body1, 0));
-        }
-        jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)li->ast);
-        jl_array_t *args = jl_lam_args((jl_expr_t*)li->ast);
-        size_t narg = jl_array_len(args);
-        uint8_t called=0;
-        int i, j=0;
-        for(i=1; i < narg && i <= 8; i++) {
-            jl_value_t *ai = jl_cellref(args,i);
-            if (ai == (jl_value_t*)unused_sym || !jl_is_symbol(ai)) continue;
-            jl_value_t *vj;
-            do {
-                vj = jl_cellref(vis, j++);
-            } while (jl_cellref(vj,0) != ai);
-
-            if (jl_unbox_long(jl_cellref(vj,2))&64)
-                called |= (1<<(i-1));
-        }
-        li->called = called;
-    }
+    if (ast != NULL)
+        jl_lambda_info_set_ast(li, ast);
     return li;
 }
 

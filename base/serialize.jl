@@ -18,7 +18,7 @@ const TAGS = Any[
     Tuple, Array, Expr,
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
-    LineNumberNode, SymbolNode, LabelNode, GotoNode,
+    LineNumberNode, Slot, LabelNode, GotoNode,
     QuoteNode, TopNode, TypeVar, Core.Box, LambdaInfo,
     Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
@@ -563,11 +563,11 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
     line = deserialize(s)
     pure = deserialize(s)
     if makenew
-        linfo.ast = ast
+        linfo.module = mod
         linfo.sparam_syms = sparam_syms
         linfo.sparam_vals = sparam_vals
+        ccall(:jl_lambda_info_set_ast, Void, (Any, Any), linfo, ast)
         linfo.inferred = infr
-        linfo.module = mod
         linfo.roots = roots
         linfo.name = name
         linfo.file = file
