@@ -5814,6 +5814,8 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
 #ifdef V128_BUG
     HostFeatures["avx"] = false;
 #endif
+#endif
+#if defined(_CPU_X86_64_)
     // Require cx16 (cmpxchg16b)
     // We need this for 128-bit atomic operations. We only need this
     // when threading is enabled; however, to test whether this
