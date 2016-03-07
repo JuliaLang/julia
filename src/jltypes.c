@@ -26,6 +26,7 @@ jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
 jl_datatype_t *jl_gensym_type;
+jl_datatype_t *jl_slot_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
@@ -3371,7 +3372,11 @@ void jl_init_types(void)
 
     jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_emptysvec,
                                      jl_svec1(jl_symbol("id")),
-                                     jl_svec1(jl_long_type), 0, 0, 0);
+                                     jl_svec1(jl_long_type), 0, 0, 1);
+
+    jl_slot_type = jl_new_datatype(jl_symbol("Slot"), jl_any_type, jl_emptysvec,
+                                   jl_svec(2, jl_symbol("id"), jl_symbol("typ")),
+                                   jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
 
     jl_init_int32_int64_cache();
 
@@ -3457,8 +3462,8 @@ void jl_init_types(void)
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_emptysvec,
-                        jl_svec(1, jl_symbol("name")),
-                        jl_svec(1, jl_sym_type), 0, 0, 1);
+                        jl_svec(1, jl_symbol("slot")),
+                        jl_svec(1, jl_slot_type), 0, 0, 1);
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_emptysvec,
@@ -3481,7 +3486,7 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(17, jl_symbol("ast"), jl_symbol("rettype"),
+                        jl_svec(19, jl_symbol("ast"), jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"), jl_symbol("sparam_vals"),
                                 jl_symbol("tfunc"), jl_symbol("name"),
                                 jl_symbol("roots"),
@@ -3490,16 +3495,18 @@ void jl_init_types(void)
                                 jl_symbol("specializations"),
                                 jl_symbol("module"), jl_symbol("def"),
                                 jl_symbol("file"), jl_symbol("line"),
+                                jl_symbol("nslots"), jl_symbol("ngensym"),
                                 jl_symbol("inferred"),
                                 jl_symbol("pure"),
                                 jl_symbol("inInference")),
-                        jl_svec(17, jl_any_type, jl_any_type,
+                        jl_svec(19, jl_any_type, jl_any_type,
                                 jl_simplevector_type, jl_simplevector_type,
                                 jl_any_type, jl_sym_type,
                                 jl_any_type, jl_any_type,
                                 jl_any_type, jl_array_any_type,
                                 jl_module_type, jl_any_type,
                                 jl_sym_type, jl_int32_type,
+                                jl_int32_type, jl_int32_type,
                                 jl_bool_type, jl_bool_type, jl_bool_type),
                         0, 1, 5);
 
@@ -3619,6 +3626,8 @@ void jl_init_types(void)
     dots_sym = jl_symbol("...");
     list_sym = jl_symbol("list");
     unused_sym = jl_symbol("#unused#");
+    slot_sym = jl_symbol("slot");
+    static_parameter_sym = jl_symbol("static_parameter");
 }
 
 #ifdef __cplusplus

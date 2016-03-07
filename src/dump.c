@@ -616,7 +616,7 @@ static int is_ast_node(jl_value_t *v)
         }
         return 0;
     }
-    return jl_is_symbol(v) || jl_is_symbolnode(v) || jl_is_gensym(v) ||
+    return jl_is_symbol(v) || jl_is_slot(v) || jl_is_gensym(v) ||
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
@@ -828,6 +828,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, li->called);
         jl_serialize_value(s, (jl_value_t*)li->file);
         write_int32(s, li->line);
+        write_int32(s, li->nslots);
+        write_int32(s, li->ngensym);
         jl_serialize_value(s, (jl_value_t*)li->module);
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1442,6 +1444,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->file);
         li->line = read_int32(s);
+        li->nslots = read_int32(s);
+        li->ngensym = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&li->module);
         jl_gc_wb(li, li->module);
         li->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->roots);
@@ -2363,7 +2367,7 @@ void jl_init_serializer(void)
     htable_new(&backref_table, 0);
 
     void *tags[] = { jl_symbol_type, jl_gensym_type, jl_datatype_type,
-                     jl_simplevector_type, jl_array_type,
+                     jl_simplevector_type, jl_array_type, jl_slot_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongSvec_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag,
@@ -2435,7 +2439,7 @@ void jl_init_serializer(void)
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
-                     jl_module_type->name, jl_function_type->name,
+                     jl_module_type->name, jl_function_type->name, jl_slot_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,

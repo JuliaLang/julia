@@ -320,7 +320,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 #   eval(parse("Set{Int64}([2,3,1])”) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-typealias ExprNode Union{Expr, QuoteNode, SymbolNode, LineNumberNode,
+typealias ExprNode Union{Expr, QuoteNode, Slot, LineNumberNode,
                          LabelNode, GotoNode, TopNode, GlobalRef}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
@@ -494,8 +494,8 @@ show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.
 show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.name,')')
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
-function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
-    print(io, ex.name)
+function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
+    print(io, "_", ex.id)
     emphstate = typeemphasize(io)
     if emphstate || ex.typ !== Any
         show_expr_type(io, ex.typ, emphstate)

@@ -417,9 +417,7 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
     if (constant || jl_is_gensym(ex))
         return constant;
     JL_TRY {
-        constant = jl_interpret_toplevel_expr_in(ctx->module, ex,
-                                                 ctx->linfo->sparam_syms,
-                                                 ctx->linfo->sparam_vals);
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->linfo);
     }
     JL_CATCH {
         if (compiletime)
