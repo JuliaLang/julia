@@ -36,7 +36,6 @@ type InferenceState
     # info on the state of inference and the linfo
     linfo::LambdaInfo
     args::Vector{Any}
-    labels::Vector{Int}
     stmt_types::Vector{Any}
     # return type
     bestguess #::Type
@@ -79,14 +78,6 @@ type InferenceState
             sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
         else
             sp = sparams
-        end
-
-        labels = zeros(Int, nl)
-        for i = 1:length(body)
-            b = body[i]
-            if isa(b,LabelNode)
-                labels[b.label + 1] = i
-            end
         end
 
         n = length(body)
@@ -156,7 +147,7 @@ type InferenceState
         frame = new(
             atypes, ast, body, sp, vars, gensym_types, vinflist, nl, Dict{GenSym, Bool}(), linfo.module, 0, false,
 
-            linfo, args, labels, s, Union{}, W, n,
+            linfo, args, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             gensym_uses, gensym_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
@@ -1474,14 +1465,6 @@ end
 
 #### helper functions for typeinf initialization and looping ####
 
-function findlabel(labels, l)
-    i = l+1 > length(labels) ? 0 : labels[l+1]
-    if i == 0
-        error("label ",l," not found")
-    end
-    return i
-end
-
 function label_counter(body)
     l = -1
     for b in body
@@ -1787,13 +1770,13 @@ function typeinf_frame(frame)
                     end
                 end
             elseif isa(stmt, GotoNode)
-                pc´ = findlabel(frame.labels, (stmt::GotoNode).label)
+                pc´ = (stmt::GotoNode).label
             elseif isa(stmt, Expr)
                 stmt = stmt::Expr
                 hd = stmt.head
                 if is(hd, :gotoifnot)
                     condexpr = stmt.args[1]
-                    l = findlabel(frame.labels, stmt.args[2]::Int)
+                    l = stmt.args[2]::Int
                     # constant conditions
                     if is(condexpr, true)
                     elseif is(condexpr, false)
@@ -1842,7 +1825,7 @@ function typeinf_frame(frame)
                         unmark_fixedpoint(frame)
                     end
                 elseif is(hd, :enter)
-                    l = findlabel(frame.labels, stmt.args[1]::Int)
+                    l = stmt.args[1]::Int
                     frame.cur_hand = (l, frame.cur_hand)
                     # propagate type info to exception handler
                     l = frame.cur_hand[1]
@@ -1997,6 +1980,7 @@ function finish(me::InferenceState)
         end
         alloc_elim_pass(fulltree, me)
         getfield_elim_pass(fulltree.args[3], me)
+        reindex_labels!(fulltree.args[3], me)
     end
 
     # finalize and record the linfo result
@@ -3572,6 +3556,30 @@ function replace_getfield!(ast, e::Expr, tupname, vals, field_names, sv, i0)
             e.args[i] = val
         elseif isa(a, Expr)
             replace_getfield!(ast, a::Expr, tupname, vals, field_names, sv, 1)
+        end
+    end
+end
+
+# fix label numbers to always equal the statement index of the label
+function reindex_labels!(e, sv)
+    mapping = zeros(Int, sv.label_counter)
+    for i = 1:length(e.args)
+        el = e.args[i]
+        if isa(el,LabelNode)
+            mapping[el.label] = i
+            e.args[i] = LabelNode(i)
+        end
+    end
+    for i = 1:length(e.args)
+        el = e.args[i]
+        if isa(el,GotoNode)
+            e.args[i] = GotoNode(mapping[el.label])
+        elseif isa(el,Expr)
+            if el.head === :gotoifnot
+                el.args[2] = mapping[el.args[2]]
+            elseif el.head === :enter
+                el.args[1] = mapping[el.args[1]]
+            end
         end
     end
 end
