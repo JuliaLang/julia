@@ -21,6 +21,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
                              int start, int toplevel);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
 int jl_is_toplevel_only_expr(jl_value_t *e);
+extern void *jl_symbol_name(jl_sym_t *s);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
