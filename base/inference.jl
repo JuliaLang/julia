@@ -1541,10 +1541,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
                     if !needtree
                         return (nothing, code, true)
                     end
-                elseif !isa(code,Tuple) && !needtree
-                    # TODO: temporary hack
-                    return (nothing, code.bestguess, false)
-                else
+                elseif isa(code,Tuple)
                     inftree, inftyp = code
                     if linfo.inInference
                         linfo.inferred = true
@@ -1558,6 +1555,9 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
                         linfo.ngensym = length(inftree.args[2][3])
                     end
                     return (inftree, inftyp, true) # code is a tuple (ast, type)
+                else
+                    # otherwise this is an InferenceState from a different bootstrap stage's
+                    # copy of the inference code; ignore it.
                 end
             end
         end
@@ -1810,7 +1810,9 @@ function typeinf_frame(frame)
                         for (caller, callerW) in frame.backedges
                             # notify backedges of updated type information
                             for caller_pc in callerW
-                                push!(caller.ip, caller_pc)
+                                if caller.stmt_types[caller_pc] !== ()
+                                    push!(caller.ip, caller_pc)
+                                end
                             end
                         end
                         unmark_fixedpoint(frame)
@@ -3366,6 +3368,9 @@ end
 
 # make sure that typeinf is executed before turning on typeinf_ext
 # this ensures that typeinf_ext doesn't recurse before it can add the item to the workq
+
+precompile(methods(typeinf_edge).defs.sig)
+
 for m in _methods_by_ftype(Tuple{typeof(typeinf_loop), Vararg{Any}}, 10)
     typeinf(m[3].func, m[1], m[2], true)
 end

@@ -125,6 +125,10 @@ function precompile(f::ANY, args::Tuple)
     ccall(:jl_compile_hint, Void, (Any,), Tuple{Core.Typeof(f), args...})
 end
 
+function precompile(argt::Type)
+    ccall(:jl_compile_hint, Void, (Any,), argt)
+end
+
 esc(e::ANY) = Expr(:escape, e)
 
 macro boundscheck(blk)
