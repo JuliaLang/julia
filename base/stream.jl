@@ -886,14 +886,6 @@ function stop_reading(stream::LibuvStream)
     end
 end
 
-function readbytes!(s::LibuvStream, b::AbstractArray{UInt8}, nb=length(b))
-    wait_readnb(s, nb)
-    nr = nb_available(s)
-    resize!(b, nr) # shrink to just contain input data if was resized
-    read!(s.buffer, b)
-    return nr
-end
-
 function readbytes(stream::LibuvStream)
     wait_readnb(stream, typemax(Int))
     return takebuf_array(stream.buffer)
