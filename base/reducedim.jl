@@ -88,45 +88,27 @@ reducedim_initarray{T}(A::AbstractArray, region, v0::T) = reducedim_initarray(A,
 reducedim_initarray0{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_dims0(A,region)), v0)
 reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(A, region, v0, T)
 
-# TODO: better way to handle reducedim initialization
-#
-# The current scheme is basically following Steven G. Johnson's original implementation
-#
-promote_union(T::Union) = promote_type(T.types...)
-promote_union(T) = T
-function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
-    T = promote_union(S)
-    if method_exists(zero, Tuple{Type{T}})
-        x = f(zero(T))
-        z = zero(x) + zero(x)
-        Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
-    else
-        z = zero(sum(f, A))
-        Tr = typeof(z)
+for (ff, opf, zerof) in ((:Any, :AddFun, :zero),
+                         (:Any, :MulFun, :one),
+                         (:Any, :MaxFun, :typemin),
+                         (:Any, :MinFun, :typemax),
+                         (:AbsFun, :MaxFun, :zero),
+                         (:Abs2Fun, :MaxFun, :zero),
+                         (:Any, :OrFun, :zero),
+                         (:Any, :AndFun, :one))
+    @eval begin
+        function reducedim_init(f::$ff, op::$opf, A::AbstractArray, region)
+            if isempty(A)
+                x = ($zerof)(eltype(A))
+            else
+                x = ($zerof)(A[1])
+            end
+            z = op(f(x), f(x))
+            Tr = promote_type(eltype(A), typeof(z))
+            return reducedim_initarray(A, region, z, Tr)
+        end
     end
-    return reducedim_initarray(A, region, z, Tr)
 end
-
-function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
-    T = promote_union(S)
-    if method_exists(zero, Tuple{Type{T}})
-        x = f(zero(T))
-        z = one(x) * one(x)
-        Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
-    else
-        z = one(prod(f, A))
-        Tr = typeof(z)
-    end
-    return reducedim_initarray(A, region, z, Tr)
-end
-
-reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
-reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union{AbsFun,Abs2Fun}, op::MaxFun, A::AbstractArray{T}, region) =
-    reducedim_initarray(A, region, zero(f(zero(T))))
-
-reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
 
