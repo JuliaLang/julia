@@ -381,7 +381,7 @@ function inv{T}(A::StridedMatrix{T})
     return convert(typeof(parent(Ai)), Ai)
 end
 
-function factorize{T}(A::Matrix{T})
+function factorize{T}(A::StridedMatrix{T})
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
