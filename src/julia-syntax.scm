@@ -2731,7 +2731,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-jlgensym (linearize (car exprs))))
+                               (newlam    (renumber-things (renumber-jlgensym (linearize (car exprs)))))
                                (vi        (lam:vinfo newlam))
                                ;; insert `list` expression heads to make the lambda vinfo
                                ;; lists quotable
@@ -3225,14 +3225,44 @@ f(x) = yt(x)
 (define (renumber-jlgensym e)
   (renumber-jlgensym- e #f error))
 
+(define (label-to-idx-map body)
+  (let ((tbl (table)))
+    (let loop ((stmts (cdr body))
+               (i 1))
+      (if (pair? stmts)
+          (let ((el (car stmts)))
+            (if (and (pair? el) (eq? (car el) 'label))
+                (put! tbl (cadr el) i))
+            (loop (cdr stmts) (+ i 1)))))
+    tbl))
+
+(define (renumber-labels! body label2idx)
+  (let loop ((stmts (cdr body)))
+    (if (pair? stmts)
+        (let ((el (car stmts)))
+          (if (pair? el)
+              (case (car el)
+                ((label goto enter) (set-car! (cdr el) (get label2idx (cadr el))))
+                ((gotoifnot)        (set-car! (cddr el) (get label2idx (caddr el))))
+                (else #f)))
+          (loop (cdr stmts))))))
+
+(define (renumber-things ex)
+  (if (atom? ex) ex
+      (begin (if (eq? (car ex) 'lambda)
+                 (renumber-labels! (lam:body ex) (label-to-idx-map (lam:body ex))))
+             (for-each renumber-things (cdr ex))))
+  ex)
+
 ;; expander entry point
 
 (define (julia-expand1 ex)
-  (renumber-jlgensym
-   (linearize
-    (closure-convert
-     (analyze-variables!
-      (resolve-scopes ex))))))
+  (renumber-things
+   (renumber-jlgensym
+    (linearize
+     (closure-convert
+      (analyze-variables!
+       (resolve-scopes ex)))))))
 
 (define julia-expand0 expand-forms)
 

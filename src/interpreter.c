@@ -453,18 +453,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     return (jl_value_t*)jl_nothing;
 }
 
-static int label_idx(long ltgt, jl_array_t *stmts)
-{
-    size_t j;
-    for(j=0; j < stmts->nrows; j++) {
-        jl_value_t *l = jl_cellref(stmts,j);
-        if (jl_is_labelnode(l) && jl_labelnode_label(l)==ltgt)
-            break;
-    }
-    assert(j < stmts->nrows);
-    return j;
-}
-
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 {
     ssize_t ngensym = 0;
@@ -495,7 +483,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
-            i = label_idx(jl_gotonode_label(stmt), stmts);
+            i = jl_gotonode_label(stmt)-1;
             continue;
         }
         if (jl_is_expr(stmt)) {
@@ -503,7 +491,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
             if (head == goto_ifnot_sym) {
                 jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl, ngensym);
                 if (cond == jl_false) {
-                    i = label_idx(jl_unbox_long(jl_exprarg(stmt, 1)), stmts);
+                    i = jl_unbox_long(jl_exprarg(stmt, 1))-1;
                     continue;
                 }
                 else if (cond != jl_true) {
@@ -528,7 +516,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, 
                     if (jl_exception_in_transit == jl_stackovf_exception)
                         _resetstkoflw();
 #endif
-                    i = label_idx(jl_unbox_long(jl_exprarg(stmt,0)), stmts);
+                    i = jl_unbox_long(jl_exprarg(stmt,0))-1;
                     continue;
                 }
             }
