@@ -63,7 +63,7 @@ else
 end
 
 hash(x::QuoteNode, h::UInt) = hash(x.value, hash(QuoteNode, h))
-hash(x::SymbolNode, h::UInt) = hash(x.name, hash(x.typ, hash(SymbolNode, h)))
+hash(x::Slot, h::UInt) = hash(x.id, hash(x.typ, hash(Slot, h)))
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
 const hashr_seed = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087

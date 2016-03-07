@@ -1157,6 +1157,7 @@ void jl_init_primitives(void)
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
+    add_builtin("Slot", (jl_value_t*)jl_slot_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
@@ -1352,10 +1353,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     else if (vt == jl_gensym_type) {
         n += jl_printf(out, "GenSym(%" PRIuPTR ")",
                        (uintptr_t)((jl_gensym_t*)v)->id);
-    }
-    else if (vt == jl_symbolnode_type) {
-        n += jl_printf(out, "%s::", jl_symbol_name(jl_symbolnode_sym(v)));
-        n += jl_static_show_x(out, jl_symbolnode_type(v), depth);
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
