@@ -69,7 +69,7 @@ function lock!(l::RecursiveTatasLock)
     end
     while true
         if l.handle[] == 0
-            if atomic_cas!(l.handle, 0, 1)
+            if atomic_cas!(l.handle, 0, 1) == 0
                 l.ownertid[] = threadid()
                 return 0
             end
@@ -89,7 +89,7 @@ function trylock!(l::RecursiveTatasLock)
         return 0
     end
     if l.handle[] == 0
-        if atomic_cas!(l.handle, 0, 1)
+        if atomic_cas!(l.handle, 0, 1) == 0
             l.ownertid[] = threadid()
             return 0
         end
