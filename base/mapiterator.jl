@@ -4,9 +4,8 @@
 """
     MapIterator(f, c...) -> iterator
 
-`collect(MapIterator(f, c...))` is equivalent to `map(f, c...)`
+`collect(MapIterator(f, c...))` is equivalent to `map(f, c...)`.
 """
-
 type MapIterator
     f::Union{Function,Type}
     arg_itr
@@ -35,9 +34,8 @@ Results are asynchronously stored in "results" collection
 (the iterator returns nothing).
 
 Note: `for task in AsyncMapIterator(f, results, c...)` end is equivalent to
-`map!(f, results, c...)`
+`map!(f, results, c...)`.
 """
-
 type AsyncMapIterator
     f
     results
@@ -120,7 +118,6 @@ The iterator returns results as the become available.
 Note: `collect(StreamMapIterator(f, c...; ntasks=1))` is equivalent to
 `map(f, c...)`.
 """
-
 type StreamMapIterator
     async_itr::AsyncMapIterator
 end
