@@ -287,6 +287,42 @@ let a = @doc(DocsTest.multidoc),
     @test docstrings_equal(a, b)
 end
 
+
+module DynamicDocs
+
+function f end
+g(x) = x
+type T end
+abstract AT
+
+for each in (f, g, T, AT)
+    Docs.doc!("$each", each)
+end
+Docs.doc!("DynamicDocs.g(x)", g, Tuple{Any})
+
+end
+
+let d1 = @doc(DynamicDocs.f),
+    d2 = @doc(DynamicDocs.g),
+    d3 = @doc(DynamicDocs.T),
+    d4 = @doc(DynamicDocs.AT)
+
+    @test length(d1.meta[:results]) === 1
+    @test d1.meta[:results][1].text == "DynamicDocs.f"
+
+    @test length(d2.meta[:results]) === 2
+    @test meta(DynamicDocs)[@var(DynamicDocs.g)].order == [Union{}, Tuple{Any}]
+    @test d2.meta[:results][1].text == "DynamicDocs.g"
+    @test d2.meta[:results][2].text == "DynamicDocs.g(x)"
+
+    @test length(d3.meta[:results]) === 1
+    @test d3.meta[:results][1].text == "DynamicDocs.T"
+
+    @test length(d4.meta[:results]) === 1
+    @test d4.meta[:results][1].text == "DynamicDocs.AT"
+end
+
+
 "BareModule"
 baremodule BareModule
 
