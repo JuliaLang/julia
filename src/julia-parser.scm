@@ -1313,7 +1313,7 @@
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
    (without-whitespace-newline
-    (let* ((doargs (if (eqv? (peek-token s) #\newline)
+    (let* ((doargs (if (memv (peek-token s) '(#\newline #\;))
                        '()
                        (parse-comma-separated s parse-range)))
            (loc (line-number-node s)))
