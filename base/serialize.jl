@@ -310,6 +310,10 @@ function serialize(s::SerializationState, linfo::LambdaInfo)
     writetag(s.io, LAMBDASTATICDATA_TAG)
     serialize(s, object_number(linfo))
     serialize(s, uncompressed_ast(linfo))
+    serialize(s, linfo.slotnames)
+    serialize(s, linfo.slottypes)
+    serialize(s, linfo.slotflags)
+    serialize(s, linfo.gensymtypes)
     if isdefined(linfo.def, :roots)
         serialize(s, linfo.def.roots::Vector{Any})
     else
@@ -323,6 +327,8 @@ function serialize(s::SerializationState, linfo::LambdaInfo)
     serialize(s, linfo.file)
     serialize(s, linfo.line)
     serialize(s, linfo.pure)
+    serialize(s, linfo.nargs)
+    serialize(s, linfo.isva)
 end
 
 function serialize(s::SerializationState, t::Task)
@@ -552,7 +558,11 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
         makenew = true
     end
     deserialize_cycle(s, linfo)
-    ast = deserialize(s)::Expr
+    code = deserialize(s)
+    slotnames = deserialize(s)
+    slottypes = deserialize(s)
+    slotflags = deserialize(s)
+    gensymtypes = deserialize(s)
     roots = deserialize(s)::Vector{Any}
     sparam_syms = deserialize(s)::SimpleVector
     sparam_vals = deserialize(s)::SimpleVector
@@ -562,17 +572,26 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
     file = deserialize(s)
     line = deserialize(s)
     pure = deserialize(s)
+    nargs = deserialize(s)
+    isva = deserialize(s)
     if makenew
-        linfo.module = mod
+        linfo.code = code
+        linfo.slotnames = slotnames
+        linfo.slottypes = slottypes
+        linfo.slotflags = slotflags
+        linfo.gensymtypes = gensymtypes
+        linfo.roots = roots
         linfo.sparam_syms = sparam_syms
         linfo.sparam_vals = sparam_vals
-        ccall(:jl_lambda_info_set_ast, Void, (Any, Any), linfo, ast)
         linfo.inferred = infr
-        linfo.roots = roots
+        linfo.module = mod
         linfo.name = name
         linfo.file = file
         linfo.line = line
         linfo.pure = pure
+        linfo.nargs = nargs
+        linfo.isva = isva
+        ccall(:jl_lambda_info_init_properties, Void, (Any,), linfo)
         known_object_data[lnumber] = linfo
     end
     return linfo

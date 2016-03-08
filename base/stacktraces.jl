@@ -166,7 +166,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     else
         linfo = get(frame.outer_linfo)
         if isdefined(linfo, 8)
-            params = linfo.(#=specTypes=#8).parameters
+            params = linfo.specTypes.parameters
             ft = params[1]
             if ft <: Function && isempty(ft.parameters) &&
                     isdefined(ft.name.module, ft.name.mt.name) &&

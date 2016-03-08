@@ -194,19 +194,17 @@ jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *t
                                            int cache, int inexact);
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
-jl_sym_t *jl_decl_var(jl_value_t *ex);
 
 jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_value_t *jl_lam_gensyms(jl_expr_t *l);
 jl_array_t *jl_lam_staticparams(jl_expr_t *l);
-jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
 jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam);
-int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m);
+int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m);
 
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
