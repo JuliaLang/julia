@@ -346,6 +346,7 @@ for elty in (Complex64, Complex128)
     B = copy(A)
     B,ipiv = LAPACK.hetrf!('U',B)
     @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
+    @test_throws DimensionMismatch LAPACK.hetrs_rook!('U',B,ipiv,rand(elty,11,5))
 end
 
 # stev, stebz, stein, stegr
