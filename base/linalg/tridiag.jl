@@ -498,7 +498,11 @@ function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
     end
 end
 
-function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
+A_mul_B!(C::AbstractVector, A::Tridiagonal, B::AbstractVector) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+
+function A_mul_B_td!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)
