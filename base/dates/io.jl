@@ -69,6 +69,7 @@ setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(k
 keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))
 
 SLOT_RULE['y'] = Year
+SLOT_RULE['Y'] = Year
 SLOT_RULE['m'] = Month
 SLOT_RULE['u'] = Month
 SLOT_RULE['U'] = Month
@@ -169,8 +170,15 @@ function parse(x::AbstractString,df::DateFormat)
     return vcat(sort!(periods,rev=true,lt=periodisless), extra)
 end
 
-slotformat(slot::Slot{Year},dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")[(end-slot.width+1):end]
 slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
+function slotformat(slot::Slot{Year},dt,locale)
+    s = lpad(string(value(slot.parser(dt))),slot.width,"0")
+    if slot.letter == 'y'
+        return s[(end-slot.width+1):end]  # Truncate the year
+    else # == 'Y'
+        return s
+    end
+end
 function slotformat(slot::Slot{Month},dt,locale)
     if slot.letter == 'm'
         return lpad(month(dt),slot.width,"0")
