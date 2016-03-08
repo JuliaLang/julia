@@ -200,6 +200,17 @@ let
     @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
 end
 
+# test that LinAlg.axpy! works for x and y of different dimensions
+let
+    α = 5
+    x = ones(Int, 2, 3)
+    y = ones(Int, 3, 4)
+    rx = [1 4]
+    ry = [2 12]
+    @test LinAlg.axpy!(α, x, rx, y, ry) == [1 1 1 1; 6 1 1 1; 1 1 1 6]
+end
+
+
 let
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
