@@ -102,8 +102,14 @@ function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     Y
 end
 
-(*)(X::Diagonal, A::SparseMatrixCSC) = scale!(copy(A), X.diag, A)
-(*)(A::SparseMatrixCSC, X::Diagonal) = scale!(copy(A), A, X.diag)
+function (*)(D::Diagonal, A::SparseMatrixCSC)
+    T = Base.promote_op(*, eltype(D), eltype(A))
+    scale!(LinAlg.copy_oftype(A, T), D.diag, A)
+end
+function (*)(A::SparseMatrixCSC, D::Diagonal)
+    T = Base.promote_op(*, eltype(D), eltype(A))
+    scale!(LinAlg.copy_oftype(A, T), A, D.diag)
+end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
