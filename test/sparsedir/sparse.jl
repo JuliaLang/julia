@@ -272,6 +272,11 @@ end
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
+# transpose of SubArrays
+A = sub(sprandn(10, 10, 0.3), 1:4, 1:4)
+@test  transpose(full(A)) == full(transpose(A))
+@test ctranspose(full(A)) == full(ctranspose(A))
+
 # exp
 A = sprandn(5,5,0.2)
 @test e.^A ≈ e.^full(A)
@@ -1186,9 +1191,6 @@ Ari = ceil(Int64,100*Ar)
 @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
 @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
 @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
-
-@test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
-@test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 
 # csc_permute
 A = sprand(10,10,0.2)

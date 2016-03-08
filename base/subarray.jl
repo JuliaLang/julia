@@ -48,10 +48,6 @@ function getindex(N::NoSlice, r::Range{Int})
 end
 
 abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
-typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}}
-typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}}
-typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
-typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()

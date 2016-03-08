@@ -65,6 +65,21 @@ v = [1,2]
 C = Array(Int, 2, 2)
 @test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
 
+# Generic AbstractArrays
+module MyArray15367
+    using Base.Test
+    immutable MyArray{T,N} <: AbstractArray{T,N}
+        data::Array{T,N}
+    end
+
+    Base.size(A::MyArray) = size(A.data)
+    Base.getindex(A::MyArray, indexes...) = A.data[indexes...]
+
+    A = MyArray(rand(4,5))
+    b = rand(5)
+    @test_approx_eq A*b A.data*b
+end
+
 # Preallocated
 C = Array(Int, size(A, 1), size(B, 2))
 @test A_mul_B!(C, A, B) == A*B
