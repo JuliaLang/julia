@@ -170,7 +170,7 @@ end
 
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
-code_lowered(f, t::ANY=Tuple) = map(m->uncompressed_ast(m.func), methods(f, t))
+code_lowered(f, t::ANY=Tuple) = map(m->m.func, methods(f, t))
 function methods(f::ANY,t::ANY)
     if isa(f,Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -249,7 +249,7 @@ done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
 uncompressed_ast(l::LambdaInfo) =
-    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
+    isa(l.code,Array{Any,1}) ? l.code : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.code)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
@@ -295,14 +295,11 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x, types)
         if optimize
-            (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2], true)
+            (li, ty) = Core.Inference.typeinf(linfo, x[1], x[2], true)
         else
-            (tree, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
+            (li, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
         end
-        if !isa(tree, Expr)
-            tree = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)
-        end
-        push!(asts, tree)
+        push!(asts, li)
     end
     asts
 end
@@ -312,7 +309,7 @@ function return_types(f::ANY, types::ANY=Tuple)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x,types)
-        (tree, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
+        (_li, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
     rt

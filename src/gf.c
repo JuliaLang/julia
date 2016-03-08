@@ -293,7 +293,7 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
       for example, if an unspecialized method is needed,
       the slow compiled code should be associated with
       method->unspecialized, not method */
-    assert(!nli->ast ||
+    assert(!nli->code ||
            (nli->fptr == NULL &&
             nli->jlcall_api == 0 &&
             nli->functionObjects.functionObject == NULL &&
@@ -330,11 +330,18 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         return method->unspecialized;
     if (method->specTypes && def->sparam_syms != jl_emptysvec) {
         if (def->needs_sparam_vals_ducttape == 2) {
-            jl_value_t *code = method->ast;
+            jl_array_t *code = method->code;
             JL_GC_PUSH1(&code);
-            if (!jl_is_expr(code))
+            if (!jl_typeis(code, jl_array_any_type))
                 code = jl_uncompress_ast(def, code);
-            def->needs_sparam_vals_ducttape = jl_has_intrinsics(method, (jl_expr_t*)code, method->module);
+            size_t i, l = jl_array_len(code);
+            def->needs_sparam_vals_ducttape = 0;
+            for(i=0; i < l; i++) {
+                if (jl_has_intrinsics(method, jl_cellref(code,i), method->module)) {
+                    def->needs_sparam_vals_ducttape = 1;
+                    break;
+                }
+            }
             JL_GC_POP();
         }
         if (method->needs_sparam_vals_ducttape) {
@@ -815,7 +822,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     else
         (void)jl_method_cache_insert(mt, type, newmeth);
 
-    if (newmeth->ast != NULL) {
+    if (newmeth->code != NULL) {
         jl_array_t *spe = method->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);
@@ -895,11 +902,12 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
 
     ex = jl_exprn(lambda_sym, 2);
 
-    jl_expr_t *generatorast = (jl_expr_t*)generator->ast;
-    if (!jl_is_expr(generatorast))
-        generatorast = (jl_expr_t*)jl_uncompress_ast(generator, (jl_value_t*)generatorast);
-    jl_array_t *argnames = jl_lam_args(generatorast);
+    int nargs = generator->nargs;
+    jl_array_t *argnames = jl_alloc_cell_1d(nargs);
     jl_cellset(ex->args, 0, argnames);
+    size_t i;
+    for(i=0; i < nargs; i++)
+        jl_cellset(argnames, i, jl_cellref(generator->slotnames,i));
 
     jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
     jl_cellset(ex->args, 1, scopeblock);
@@ -913,8 +921,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
 
     // invoke code generator
     assert(jl_nparams(tt) == jl_array_len(argnames) ||
-           (jl_is_rest_arg(jl_cellref(argnames, jl_array_len(argnames)-1)) &&
-            (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
+           (generator->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
     jl_cellset(body->args, 1, jl_call_unspecialized(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
     if (generator->sparam_syms != jl_emptysvec) {
@@ -930,6 +937,8 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
     jl_lambda_info_t *func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
     func->name = generator->name;
+    if (generator->isva)
+        func->isva = 1;
     JL_GC_POP();
     return func;
 }
@@ -1446,7 +1455,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
     } JL_CATCH {
         goto not_found;
     }
-    if (sf == NULL || sf->ast == NULL || sf->inInference)
+    if (sf == NULL || sf->code == NULL || sf->inInference)
         goto not_found;
     if (sf->functionObjects.functionObject == NULL) {
         if (sf->fptr != NULL)

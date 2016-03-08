@@ -209,9 +209,10 @@ function show(io::IO, m::Module)
 end
 
 function show(io::IO, l::LambdaInfo)
-    print(io, "AST(")
-    show(io, uncompressed_ast(l))
-    print(io, ")")
+    println(io, "LambdaInfo for ", l.name)
+    body = Expr(:body); body.args = uncompressed_ast(l)
+    body.typ = l.rettype
+    show(io, body)
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
