@@ -112,7 +112,17 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     jl_gc_wb(tt, tt->super);
 }
 
-    static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *lam)
+static int jl_linfo_nslots(jl_lambda_info_t *li)
+{
+    return jl_array_len(li->slotflags);
+}
+
+static int jl_linfo_ngensyms(jl_lambda_info_t *li)
+{
+    return jl_is_long(li->gensymtypes) ? jl_unbox_long(li->gensymtypes) : jl_array_len(li->gensymtypes);
+}
+
+static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *lam)
 {
     if (jl_is_symbol(e)) {
         jl_value_t *v = jl_get_global(jl_current_module, (jl_sym_t*)e);
@@ -122,10 +132,10 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     }
     if (jl_is_gensym(e)) {
         ssize_t genid = ((jl_gensym_t*)e)->id;
-        if (genid >= lam->ngensym || genid < 0)
+        if (genid >= jl_linfo_ngensyms(lam) || genid < 0)
             jl_error("access to invalid GenSym location");
         else
-            return locals[lam->nslots + genid];
+            return locals[jl_linfo_nslots(lam) + genid];
     }
     if (jl_is_quotenode(e)) {
         return jl_fieldref(e,0);
@@ -140,11 +150,11 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     if (!jl_is_expr(e)) {
         if (jl_typeis(e, jl_slot_type)) {
             ssize_t n = jl_slot_number(e);
-            if (n > lam->nslots || n < 1)
+            if (n > jl_linfo_nslots(lam) || n < 1)
                 jl_error("access to invalid slot number");
             jl_value_t *v = locals[n-1];
-            if (v == NULL) // TODO get var name from `lam`
-                jl_undefined_var_error(anonymous_sym);
+            if (v == NULL)
+                jl_undefined_var_error((jl_sym_t*)jl_cellref(lam->slotnames,n-1));
             return v;
         }
         if (jl_is_globalref(e)) {
@@ -158,7 +168,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
             jl_value_t *var = jl_fieldref(e,0);
             assert(jl_typeis(var,jl_slot_type));
             ssize_t n = jl_slot_number(var);
-            assert(n <= lam->nslots && n > 0);
+            assert(n <= jl_linfo_nslots(lam) && n > 0);
             locals[n-1] = NULL;
             return (jl_value_t*)jl_nothing;
         }
@@ -175,13 +185,13 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         jl_value_t *rhs = eval(args[1], locals, lam);
         if (jl_is_gensym(sym)) {
             ssize_t genid = ((jl_gensym_t*)sym)->id;
-            if (genid >= lam->ngensym || genid < 0)
+            if (genid >= jl_linfo_ngensyms(lam) || genid < 0)
                 jl_error("assignment to invalid GenSym location");
-            locals[lam->nslots + genid] = rhs;
+            locals[jl_linfo_nslots(lam) + genid] = rhs;
         }
         else if (jl_typeis(sym,jl_slot_type)) {
             ssize_t n = jl_slot_number(sym);
-            assert(n <= lam->nslots && n > 0);
+            assert(n <= jl_linfo_nslots(lam) && n > 0);
             locals[n-1] = rhs;
         }
         else {
@@ -520,10 +530,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, jl_lambda_i
 
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
-    jl_expr_t *ast = (jl_expr_t*)lam->ast;
-    jl_array_t *stmts = jl_lam_body(ast)->args;
+    jl_array_t *stmts = lam->code;
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, lam->nslots + lam->ngensym);
+    JL_GC_PUSHARGS(locals, jl_linfo_nslots(lam) + jl_linfo_ngensyms(lam));
     jl_value_t *r = eval_body(stmts, locals, lam, 0, 1);
     JL_GC_POP();
     return r;

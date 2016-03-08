@@ -175,7 +175,11 @@ typedef struct _jl_lambda_info_t {
     // a function pointer.
     // this is the stuff that's shared among different instantiations
     // (different environments) of a closure.
-    jl_value_t *ast;
+    jl_array_t *code;  // compressed uint8 array, or Any array of statements
+    jl_array_t *slotnames; // names of local variables
+    jl_value_t *slottypes;
+    jl_array_t *slotflags;  // local var bit flags
+    jl_value_t *gensymtypes;
     jl_value_t *rettype;
     // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_syms;
@@ -192,14 +196,14 @@ typedef struct _jl_lambda_info_t {
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_sym_t *file;
     int32_t line;
-    int32_t nslots;
-    int32_t ngensym;
+    int32_t nargs;
     int8_t inferred;
     int8_t pure;
+    int8_t isva;
     int8_t inInference; // flags to tell if inference is running on this function
-    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
 
     // hidden fields:
+    uint8_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
     uint8_t inCompile : 1;
     // if there are intrinsic calls, sparams are probably required to compile successfully,
@@ -487,7 +491,7 @@ extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *static_typeof_sym;
+extern jl_sym_t *static_typeof_sym; extern jl_sym_t *compiler_temp_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
@@ -642,6 +646,19 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
         jl_gc_wb(a, x);
     }
     return (jl_value_t*)x;
+}
+
+STATIC_INLINE uint8_t jl_array_uint8_ref(void *a, size_t i)
+{
+    assert(i < jl_array_len(a));
+    assert(jl_typeis(a, jl_array_uint8_type));
+    return ((uint8_t*)(jl_array_data(a)))[i];
+}
+STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
+{
+    assert(i < jl_array_len(a));
+    assert(jl_typeis(a, jl_array_uint8_type));
+    ((uint8_t*)(jl_array_data(a)))[i] = x;
 }
 
 #define jl_exprarg(e,n) (((jl_value_t**)jl_array_data(((jl_expr_t*)(e))->args))[n])
@@ -1228,28 +1245,27 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li);
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
-JL_DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
-JL_DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
+JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast);
+JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *data);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);
 
-STATIC_INLINE int jl_vinfo_assigned(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_assigned(uint8_t vi)
 {
-    return (jl_unbox_long(jl_cellref(vi,2))&2)!=0;
+    return (vi&2)!=0;
 }
 
-STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
-    return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
+    return (vi&16)!=0;
 }
 
-STATIC_INLINE int jl_vinfo_usedundef(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 {
-    return (jl_unbox_long(jl_cellref(vi,2))&32)!=0;
+    return (vi&32)!=0;
 }
 
 // calling into julia ---------------------------------------------------------

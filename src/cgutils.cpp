@@ -849,9 +849,12 @@ static inline jl_module_t *topmod(jl_codectx_t *ctx)
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(e)) {
+        if (jl_is_long(ctx->linfo->gensymtypes))
+            return (jl_value_t*)jl_any_type;
         int idx = ((jl_gensym_t*)e)->id;
-        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
-        return (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+        assert(jl_is_array(ctx->linfo->gensymtypes));
+        jl_array_t *gensym_types = (jl_array_t*)ctx->linfo->gensymtypes;
+        return jl_cellref(gensym_types, idx);
     }
     if (jl_typeis(e, jl_slot_type)) {
         jl_value_t *typ = jl_slot_get_type(e);

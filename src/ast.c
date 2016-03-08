@@ -486,7 +486,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 e = cdr_(e);
             }
             nli = jl_new_lambda_info((jl_value_t*)ex, tvars, jl_emptysvec, jl_current_module);
-            jl_preresolve_globals(nli->ast, nli);
+            jl_preresolve_globals((jl_value_t*)nli, nli);
             JL_GC_POP();
             return (jl_value_t*)nli;
         }
@@ -918,18 +918,6 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
     return (jl_array_t*)ae;
 }
 
-jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
-{
-    jl_expr_t *ast;
-    if (jl_is_expr(li->ast))
-        ast = (jl_expr_t*)li->ast;
-    else
-        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
-    // NOTE (gc root): `ast` is not rooted here, but jl_lam_args and jl_cellref
-    // do not allocate.
-    return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
-}
-
 // get array of var info records (for args and locals)
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
@@ -959,13 +947,6 @@ jl_expr_t *jl_lam_body(jl_expr_t *l)
     assert(jl_is_expr(be));
     assert(((jl_expr_t*)be)->head == body_sym);
     return (jl_expr_t*)be;
-}
-
-jl_sym_t *jl_decl_var(jl_value_t *ex)
-{
-    if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
-    assert(jl_is_expr(ex));
-    return (jl_sym_t*)jl_exprarg(ex, 0);
 }
 
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
@@ -1018,25 +999,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-// given a new lambda_info with static parameter values, make a copy
-// of the tree with declared types evaluated and static parameters passed
-// on to all enclosed functions.
-// this tree can then be further mutated by optimization passes.
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
-{
-    jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;
-    JL_GC_PUSH1(&ast);
-    if (!jl_is_expr(ast)) {
-        ast = jl_uncompress_ast(li, ast);
-    }
-    else {
-        ast = jl_copy_ast(ast);
-    }
-    JL_GC_POP();
-    return ast;
-}
-
 JL_DLLEXPORT int jl_is_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -1087,6 +1049,15 @@ jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
         if (lam->module == NULL)
             return expr;
         return jl_module_globalref(lam->module, (jl_sym_t*)expr);
+    }
+    else if (jl_is_lambda_info(expr)) {
+        jl_array_t *exprs = ((jl_lambda_info_t*)expr)->code;
+        if (jl_typeis(exprs, jl_array_any_type)) {
+            size_t l = jl_array_len(exprs);
+            size_t i;
+            for(i=0; i < l; i++)
+                jl_cellset(exprs, i, jl_preresolve_globals(jl_cellref(exprs,i), lam));
+        }
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
