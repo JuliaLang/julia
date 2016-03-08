@@ -27,6 +27,15 @@ iteratoreltype{I}(::Type{Enumerate{I}}) = iteratoreltype(I)
 
 abstract AbstractZipIterator
 
+zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
+zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
+zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
+zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
+_min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
+_min_length(a, b, A, ::IsInfinite) = length(a)
+_min_length(a, b, ::IsInfinite, B) = length(b)
+_min_length(a, b, A, B) = min(length(a),length(b))
+
 immutable Zip1{I} <: AbstractZipIterator
     a::I
 end
@@ -49,7 +58,7 @@ immutable Zip2{I1, I2} <: AbstractZipIterator
     b::I2
 end
 zip(a, b) = Zip2(a, b)
-length(z::Zip2) = min(length(z.a), length(z.b))
+length(z::Zip2) = _min_length(z.a, z.b, iteratorsize(z.a), iteratorsize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
 eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
 @inline start(z::Zip2) = (start(z.a), start(z.b))
@@ -60,7 +69,7 @@ eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
 end
 @inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
-iteratorsize{I1,I2}(::Type{Zip2{I1,I2}}) = and_iteratorsize(iteratorsize(I1),iteratorsize(I2))
+iteratorsize{I1,I2}(::Type{Zip2{I1,I2}}) = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype{I1,I2}(::Type{Zip2{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
 immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
@@ -68,7 +77,7 @@ immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     z::Z
 end
 zip(a, b, c...) = Zip(a, zip(b, c...))
-length(z::Zip) = min(length(z.a), length(z.z))
+length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
 tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
 function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
@@ -84,7 +93,7 @@ eltype{I,Z}(::Type{Zip{I,Z}}) = tuple_type_cons(eltype(I), eltype(Z))
 end
 @inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
-iteratorsize{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratorsize(iteratorsize(I1),iteratorsize(I2))
+iteratorsize{I1,I2}(::Type{Zip{I1,I2}}) = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
 # filter
@@ -141,7 +150,9 @@ done(i::Rest, st) = done(i.itr, st)
 
 eltype{I}(::Type{Rest{I}}) = eltype(I)
 iteratoreltype{I,S}(::Type{Rest{I,S}}) = iteratoreltype(I)
-iteratorsize{T<:Rest}(::Type{T}) = SizeUnknown()
+rest_iteratorsize(a) = SizeUnknown()
+rest_iteratorsize(::IsInfinite) = IsInfinite()
+iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
 # Count -- infinite counting
 
@@ -327,6 +338,7 @@ iteratorsize{I1,I2}(::Type{Prod{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),it
 end
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasLength()
+prod_iteratorsize(a, ::IsInfinite) = IsInfinite() # products can have an infinite last iterator (which moves slowest)
 prod_iteratorsize(a, b) = SizeUnknown()
 
 _size(p::Prod2) = (length(p.a), length(p.b))
