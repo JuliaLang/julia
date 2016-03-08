@@ -482,14 +482,12 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
 end
 
 function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    if length(rx) != length(ry)
+        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     elseif minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
-    elseif length(rx) != length(ry)
-        throw(ArgumentError("rx has length $(length(rx)), but ry has length $(length(ry))"))
     end
     for i = 1:length(rx)
         @inbounds y[ry[i]] += x[rx[i]]*α
