@@ -349,3 +349,11 @@ end
 @test parse("'\"'") == parse("'\\\"'") == '"' == "\""[1] == '\42'
 
 @test_throws ParseError parse("f(2x for x=1:10, y")
+
+# issue #15223
+call0(f) = f()
+call1(f,x) = f(x)
+call2(f,x,y) = f(x,y)
+@test (call0() do; 42 end) == 42
+@test (call1(42) do x; x+1 end) == 43
+@test (call2(42,1) do x,y; x+y+1 end) == 44
