@@ -72,9 +72,6 @@ foo(x) = 2x
 foo(x, y) = x + y
 foo(x, y, z) = x + y + z
 
-# 0 argument
-@test map(foo) === 2
-
 # 1 argument
 @test map(foo, ()) === ()
 @test map(foo, (1,)) === (2,)

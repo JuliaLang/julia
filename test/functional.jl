@@ -245,3 +245,43 @@ let d = Dict(:a=>1, :b=>2), a = Dict(3=>4, 5=>6)
     @test Dict( v=>(k,) for (k,v) in d) == Dict(2=>(:b,), 1=>(:a,))
     @test Dict( (x,b)=>(c,y) for (x,c) in d, (b,y) in a ) == Dict((:a,5)=>(1,6),(:b,5)=>(2,6),(:a,3)=>(1,4),(:b,3)=>(2,4))
 end
+
+# partition(c, n)
+let v = collect(Base.partition([1,2,3,4,5], 1))
+    @test all(i->v[i][1] == i, v)
+end
+
+let v = collect(Base.partition([1,2,3,4,5], 2))
+    @test v[1] == [1,2]
+    @test v[2] == [3,4]
+    @test v[3] == [5]
+end
+
+let v = collect(Base.partition(enumerate([1,2,3,4,5]), 3))
+    @test v[1] == [(1,1),(2,2),(3,3)]
+    @test v[2] == [(4,4),(5,5)]
+end
+
+for n in [5,6]
+    @test collect(Base.partition([1,2,3,4,5], n))[1] == [1,2,3,4,5]
+    @test collect(Base.partition(enumerate([1,2,3,4,5]), n))[1] ==
+          [(1,1),(2,2),(3,3),(4,4),(5,5)]
+end
+
+
+@test join(map(x->string(x...), Base.partition("Hello World!", 5)), "|") ==
+      "Hello| Worl|d!"
+
+let s = "Monkey 🙈🙊🙊"
+    tf = (n)->join(map(x->string(x...), Base.partition(s,n)), "|")
+    @test tf(10) == s
+    @test tf(9) == "Monkey 🙈🙊|🙊"
+    @test tf(8) == "Monkey 🙈|🙊🙊"
+    @test tf(7) == "Monkey |🙈🙊🙊"
+    @test tf(6) == "Monkey| 🙈🙊🙊"
+    @test tf(5) == "Monke|y 🙈🙊🙊"
+    @test tf(4) == "Monk|ey 🙈|🙊🙊"
+    @test tf(3) == "Mon|key| 🙈🙊|🙊"
+    @test tf(2) == "Mo|nk|ey| 🙈|🙊🙊"
+    @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
+end

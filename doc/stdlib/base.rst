@@ -1218,6 +1218,22 @@ Errors
 
    An error occurred when running a module's ``__init__`` function. The actual error thrown is available in the ``.error`` field.
 
+.. function:: retry(f, [condition]; n=3; max_delay=10) -> Function
+
+   .. Docstring generated from Julia source
+
+   Returns a lambda that retries function ``f`` up to ``n`` times in the event of an exception. If ``condition`` is a ``Type`` then retry only for exceptions of that type. If ``condition`` is a function ``cond(::Exception) -> Bool`` then retry only if it is true.
+
+   e.g. ``retry(http_get, e->e.status == "503")(url)`` or ``retry(read, UVError)(io)``\ .
+
+.. function:: @catch(f) -> Function
+
+   .. Docstring generated from Julia source
+
+   Returns a lambda that executes ``f`` and returns either the result of ``f`` or an ``Exception`` thrown by ``f``\ .
+
+   e.g. ``@catch(length)() == MethodError(length,())``      ``@catch(length)([1,2,3]) == 3``
+
 Events
 ------
 

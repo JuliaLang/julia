@@ -525,7 +525,7 @@ testcpt()
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
+@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
@@ -682,30 +682,79 @@ if DoFullTest
     # pmap tests
     # needs at least 4 processors dedicated to the below tests
     ppids = remotecall_fetch(()->addprocs(4), 1)
+    pool = WorkerPool(ppids)
     s = "abcdefghijklmnopqrstuvwxyz";
     ups = uppercase(s);
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
+
+    unmangle_exception = e -> begin
+        if isa(e, CompositeException)
+            e = e.exceptions[1].ex
+            if isa(e, RemoteException)
+                e = e.captured.ex.exceptions[1].ex
+            end
+        end
+        return e
+    end
+
+
+    for mapf in [map, asyncmap, (f, c) -> pmap(pool, f, c)]
+
+        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(x), s)])
+        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(Char(x)), s.data)])
+
+        # retry, on error exit
+        try
+            res = mapf(retry(
+                           x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
+                                       : uppercase(x)),
+                       s);
+            error("unexpected")
+        catch e
+            e = unmangle_exception(e)
+            @test isa(e, ErrorException)
+            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        end
+
+        # no retry, on error exit
+        try
+            res = mapf(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
+                                   : uppercase(x),
+                       s)
+            error("unexpected")
+        catch e
+            e = unmangle_exception(e)
+            @test isa(e, ErrorException)
+            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        end
+
+        # no retry, on error continue
+        res = mapf(@catch(
+                       x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
+                                   : uppercase(x)),
+                   Any[s...])
+        @test length(res) == length(ups)
+        res[1] = unmangle_exception(res[1])
+        @test isa(res[1], ErrorException)
+        @test res[1].msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        @test ups[2:end] == string(res[2:end]...)
+
+    end
 
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=true, pids=ppids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=true, pids=ppids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=false, pids=ppids);
+    mapf = (f, c) -> asyncmap(retry(remote(pool, f), n=10, max_delay=0), c)
+    res = mapf(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
+                                 : uppercase(x),
+               s)
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
-    # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=false, pids=ppids);
+    # retry, on error continue
+    mapf = (f, c) -> asyncmap(@catch(retry(remote(pool, f), n=10, max_delay=0)), c)
+    res = mapf(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
+                                 : uppercase(x),
+               s)
     @test length(res) == length(ups)
-    @test isa(res[1], Exception)
+    @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # Topology tests need to run externally since a given cluster at any
     # time can only support a single topology and the current session

@@ -235,6 +235,18 @@ General Parallel Computing Support
 
    Returns a list of all worker process identifiers.
 
+.. function:: default_worker_pool()
+
+   .. Docstring generated from Julia source
+
+   WorkerPool containing idle ``workers()`` (used by ``remote(f)``\ ).
+
+.. function:: WorkerPool(workers)
+
+   .. Docstring generated from Julia source
+
+   Create a WorkerPool from a vector of worker ids.
+
 .. function:: rmprocs(pids...)
 
    .. Docstring generated from Julia source
@@ -253,13 +265,23 @@ General Parallel Computing Support
 
    Get the id of the current process.
 
-.. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
+.. function:: asyncmap(f, c...) -> collection
 
    .. Docstring generated from Julia source
 
-   Transform collections ``lsts`` by applying ``f`` to each element in parallel. (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.) If ``nprocs() > 1``\ , the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers, or on the processes specified by ``pids``\ .
+   Transform collection ``c`` by applying ``@async f`` to each element.
 
-   If ``err_retry`` is ``true``\ , it retries a failed application of ``f`` on a different worker. If ``err_stop`` is ``true``\ , it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   For multiple collection arguments, apply f elementwise.
+
+.. function:: pmap([::WorkerPool], f, c...) -> collection
+
+   .. Docstring generated from Julia source
+
+   Transform collection ``c`` by applying ``f`` to each element using available workers and tasks.
+
+   For multiple collection arguments, apply f elementwise.
+
+   Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.
 
 .. function:: remotecall(func, id, args...)
 
@@ -339,7 +361,13 @@ General Parallel Computing Support
 
    Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
-.. function:: remote(f)
+.. function:: remotecall_fetch(f, pool::WorkerPool, args...)
+
+   .. Docstring generated from Julia source
+
+   Call ``f(args...)`` on one of the workers in ``pool``\ .
+
+.. function:: remote([::WorkerPool], f) -> Function
 
    .. Docstring generated from Julia source
 

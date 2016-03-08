@@ -58,6 +58,12 @@ Breaking changes
     is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
     `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
 
+  * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
+    `pmap` no longer retries or returns `Exception` objects in the result collection.
+    `pmap(retry(f), c)` or `pmap(@catch(f), c)` can be used instead.
+    ([#15409](https://github.com/JuliaLang/julia/pull/15409#discussion_r57494701)).
+
+
 Library improvements
 --------------------
 
