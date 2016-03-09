@@ -357,8 +357,14 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
 #  include <libunwind.h>
 #define STRINGIFY1(x) #x
 #define STRINGIFY2(x) STRINGIFY1(x)
+#if defined(_OS_LINUX_)
+#if defined(_CPU_X86_64_)
 asm("_jl_unw_getcontext: movq " STRINGIFY2(unw_tdep_getcontext) "@GOTPCREL(%rip), %rax\n"
     "jmpq *%rax");
+#elif defined(_CPU_X86_)
+asm("_jl_unw_getcontext: jmp " STRINGIFY2(unw_tdep_getcontext) "@PLT");
+#endif
+#endif
 
 JL_DLLEXPORT void jl_unw_init_local(void *cursor, void *context)
 {
@@ -370,7 +376,7 @@ JL_DLLEXPORT int jl_unw_step(void *cursor)
     return unw_step((unw_cursor_t *)cursor);
 }
 
-JL_DLLEXPORT int jl_unw_get_reg(void *cursor, int reg, uint64_t *retval)
+JL_DLLEXPORT int jl_unw_get_reg(void *cursor, int reg, uintptr_t *retval)
 {
     return unw_get_reg((unw_cursor_t *)cursor, reg, retval);
 }
