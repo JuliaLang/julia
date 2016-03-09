@@ -3876,3 +3876,7 @@ module Test15264
     mod1{T}(x::T) = x < 1 ? x : mod1(x-1)
 end
 @test Test15264.mod1 !== Base.mod1
+
+
+# check that medium-sized array is 64-byte aligned (#15139)
+@test Int(pointer(Vector{Float64}(1024))) % 64 == 0

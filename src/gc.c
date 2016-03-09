@@ -134,6 +134,13 @@ typedef struct _bigval_t {
         size_t sz;
         uintptr_t age : 2;
     };
+    #ifdef _P64 // Add padding so that char data[] below is 64-byte aligned
+        // (8 pointers of 8 bytes each) - (4 other pointers in struct)
+        void *_padding[8 - 4];
+    #else
+        // (16 pointers of 4 bytes each) - (4 other pointers in struct)
+        void *_padding[16 - 4];
+    #endif
     //struct buff_t <>;
     union {
         uintptr_t header;
@@ -145,7 +152,7 @@ typedef struct _bigval_t {
 #if !defined(_COMPILER_MICROSOFT_)
     int _dummy[0];
 #endif
-    // must be 16-aligned here, in 32 & 64b
+    // must be 64-byte aligned here, in 32 & 64 bit modes
     char data[];
 } bigval_t;
 
@@ -170,7 +177,7 @@ typedef struct _pool_t {
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (16 - (sizeof_jl_taggedvalue_t % 16))
+#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof_jl_taggedvalue_t % JL_SMALL_BYTE_ALIGNMENT))
 
 // pool page metadata
 typedef struct _gcpage_t {
@@ -440,15 +447,8 @@ static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #1
 
 // malloc wrappers, aligned allocation
 
-#if defined(_P64) || defined(__APPLE__)
-#define malloc_a16(sz) malloc(sz)
-#define realloc_a16(p, sz, oldsz) realloc((p), (sz))
-#define free_a16(p) free(p)
-#else
-#define malloc_a16(sz) jl_malloc_aligned(sz, 16)
-#define realloc_a16(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, 16)
-#define free_a16(p) jl_free_aligned(p)
-#endif
+#define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
+#define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
 
 static void schedule_finalization(void *o, void *f)
 {
@@ -973,10 +973,10 @@ static NOINLINE void *alloc_big(size_t sz)
 {
     maybe_collect();
     size_t offs = offsetof(bigval_t, header);
-    size_t allocsz = LLT_ALIGN(sz + offs, 16);
+    size_t allocsz = LLT_ALIGN(sz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-    bigval_t *v = (bigval_t*)malloc_a16(allocsz);
+    bigval_t *v = (bigval_t*)malloc_cache_align(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
     jl_atomic_fetch_add(&allocd_bytes, allocsz);
@@ -1036,7 +1036,7 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
-            free_a16(v);
+            jl_free_aligned(v);
             big_freed++;
         }
         big_total++;
@@ -1103,7 +1103,7 @@ static void jl_gc_free_array(jl_array_t *a)
     if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
         if (a->flags.isaligned)
-            free_a16(d);
+            jl_free_aligned(d);
         else
             free(d);
         freed_bytes += array_nbytes(a);
@@ -2397,7 +2397,7 @@ void *reallocb(void *b, size_t sz)
         if (allocsz < sz)  // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
         bigval_t *bv = bigval_header(buff);
-        bv = (bigval_t*)realloc_a16(bv, allocsz, bv->sz&~3);
+        bv = (bigval_t*)realloc_cache_align(bv, allocsz, bv->sz&~3);
         if (bv == NULL)
             jl_throw(jl_memory_exception);
         return &bv->data[0];
@@ -2436,7 +2436,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
-    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*), 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
@@ -2449,7 +2449,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
-    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 2, 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 2, JL_SMALL_BYTE_ALIGNMENT);
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
@@ -2462,7 +2462,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
-    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 3, 16);
+    const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 3, JL_SMALL_BYTE_ALIGNMENT);
     void *tag = NULL;
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
@@ -2509,7 +2509,7 @@ jl_thread_heap_t *jl_mk_thread_heap(void)
 #ifdef JULIA_ENABLE_THREADING
     // Cache-aligned malloc
     jl_thread_heap =
-        (jl_thread_heap_t*)jl_malloc_aligned(sizeof(jl_thread_heap_t), 64);
+        (jl_thread_heap_t*)jl_malloc_aligned(sizeof(jl_thread_heap_t), JL_CACHE_BYTE_ALIGNMENT);
 #endif
     FOR_CURRENT_HEAP () {
         const int *szc = sizeclasses;
@@ -2673,6 +2673,7 @@ static void big_obj_stats(void)
 
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
+    sz += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect();
     allocd_bytes += sz;
     gc_num.malloc++;
@@ -2684,6 +2685,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
+    nm += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect();
     allocd_bytes += nm*sz;
     gc_num.malloc++;
@@ -2696,15 +2698,15 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
-    freed_bytes += sz;
+    freed_bytes += sz + JL_SMALL_BYTE_ALIGNMENT;
     gc_num.freecall++;
 }
 
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old,
-                                                       size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
+    old += JL_SMALL_BYTE_ALIGNMENT;
+    sz += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect();
-
     if (sz < old)
        freed_bytes += (old - sz);
     else
@@ -2718,7 +2720,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old,
 
 JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
-    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + 16);
+    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz);
     p[0] = sz;
     return (void *)(p + 2);
 }
@@ -2727,7 +2729,7 @@ JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
     int64_t *p;
     size_t nmsz = nm*sz;
-    p = (int64_t *)jl_gc_counted_calloc(nmsz + 16, 1);
+    p = (int64_t *)jl_gc_counted_calloc(nmsz, 1);
     p[0] = nmsz;
     return (void *)(p + 2);
 }
@@ -2736,7 +2738,7 @@ JL_DLLEXPORT void jl_free(void *p)
 {
     int64_t *pp = (int64_t *)p - 2;
     size_t sz = pp[0];
-    jl_gc_counted_free(pp, sz + 16);
+    jl_gc_counted_free(pp, sz);
 }
 
 JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
@@ -2751,7 +2753,7 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
         pp = (int64_t *)p - 2;
         szold = pp[0];
     }
-    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold + 16, sz + 16);
+    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz);
     pnew[0] = sz;
     return (void *)(pnew + 2);
 }
@@ -2759,12 +2761,12 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     maybe_collect();
-    size_t allocsz = LLT_ALIGN(sz, 16);
+    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     allocd_bytes += allocsz;
     gc_num.malloc++;
-    void *b = malloc_a16(allocsz);
+    void *b = malloc_cache_align(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     return b;
@@ -2775,7 +2777,7 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
 {
     maybe_collect();
 
-    size_t allocsz = LLT_ALIGN(sz, 16);
+    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
@@ -2791,7 +2793,7 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
 
     void *b;
     if (isaligned)
-        b = realloc_a16(d, allocsz, oldsz);
+        b = realloc_cache_align(d, allocsz, oldsz);
     else
         b = realloc(d, allocsz);
     if (b == NULL)
