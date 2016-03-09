@@ -4,6 +4,8 @@
  I/O and Network
 *****************
 
+	Note: All I/O is asynchronous.
+
 General I/O
 -----------
 
