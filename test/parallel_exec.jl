@@ -819,3 +819,8 @@ end
 
 @test t11062() == 2
 
+# issue #15406
+v15406 = remotecall_wait(() -> 1, id_other)
+fetch(v15406)
+remotecall_wait(t -> fetch(t), id_other, v15406)
+
