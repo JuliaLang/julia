@@ -84,9 +84,8 @@ y = ['a','b','c','d','e']
 @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
 @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
 @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(-1:5))
-@test_throws ArgumentError Base.LinAlg.axpy!(α,x,collect(1:3),y,collect(1:5))
 @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))
-@test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,collect(1:2),['a','b'],collect(1:2))
+@test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,collect(1:3),y,collect(1:5))
 
 @test_throws ArgumentError diag(rand(10))
 @test !issymmetric(ones(5,3))
@@ -198,6 +197,16 @@ let
     y = fill(zeros(Int, 2, 2), 3)
     @test LinAlg.axpy!(α, x, deepcopy(y)) == x .* Matrix{Int}[α]
     @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
+end
+
+# test that LinAlg.axpy! works for x and y of different dimensions
+let
+    α = 5
+    x = 2:5
+    y = ones(Int, 2, 4)
+    rx = [1 4]
+    ry = [2 8]
+    @test LinAlg.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
 let
