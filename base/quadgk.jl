@@ -88,7 +88,6 @@ rulekey(T,n) = (T,n)
 # with absolute tolerance abstol and relative tolerance reltol,
 # with maxevals an approximate maximum number of f evaluations.
 function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
-
     if eltype(s) <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2

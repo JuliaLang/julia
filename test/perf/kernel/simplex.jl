@@ -16,7 +16,6 @@ const dualTol = 1e-7
 
 # Data taken from sample greenbea iteration
 function doTwoPassRatioTest()
-
     n = 8000
 
     candidates = zeros(Int,n) # don't count allocation time, assume reuse
@@ -68,5 +67,4 @@ function doTwoPassRatioTest()
     end
 
     return time() - t
-
 end

@@ -43,7 +43,6 @@ type Interface
     vweight::Vector{Vector{VersionWeight}}
 
     function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
         # generate pkgs
         pkgs = sort!(ByteString[Set{ByteString}(keys(deps))...])
 
@@ -100,7 +99,6 @@ end
 
 # The output format is a Dict which associates a VersionNumber to each installed package name
 function compute_output_dict(sol::Vector{Int}, interface::Interface)
-
     pkgs = interface.pkgs
     np = interface.np
     pvers = interface.pvers
@@ -196,7 +194,6 @@ end
 # verifies that the solution fulfills all hard constraints
 # (requirements and dependencies)
 function verify_solution(sol::Vector{Int}, interface::Interface)
-
     reqs = interface.reqs
     deps = interface.deps
     spp = interface.spp
