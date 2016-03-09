@@ -206,7 +206,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     end
     println(io,             "  LAPACK: ",liblapack_name)
     println(io,             "  LIBM: ",libm_name)
-    println(io,             "  LLVM: libLLVM-",libllvm_version)
+    println(io,             "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
