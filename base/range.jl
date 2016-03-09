@@ -883,7 +883,7 @@ reverse(r::LinSpace)     = LinSpace(r.stop, r.start, r.len, r.divisor)
 ## sorting ##
 
 issorted(r::AbstractUnitRange) = true
-issorted(r::Range) = step(r) >= zero(step(r))
+issorted(r::Range) = length(r) <= 1 || step(r) >= zero(step(r))
 
 sort(r::AbstractUnitRange) = r
 sort!(r::AbstractUnitRange) = r
