@@ -1090,7 +1090,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
         jl_cgval_t ary = emit_expr(argi, ctx);
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(boxed(ary, ctx)), lrt),
+        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary, ctx), lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
     if (fptr == (void(*)(void))&jl_value_ptr ||
