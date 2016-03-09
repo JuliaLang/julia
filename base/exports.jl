@@ -1223,6 +1223,7 @@ export
     pmap,
     procs,
     put!,
+    remote,
     remotecall,
     remotecall_fetch,
     remotecall_wait,

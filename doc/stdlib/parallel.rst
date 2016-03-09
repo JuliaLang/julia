@@ -339,6 +339,12 @@ General Parallel Computing Support
 
    Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
+.. function:: remote(f)
+
+   .. Docstring generated from Julia source
+
+   Returns a lambda that executes function ``f`` on an available worker using ``remotecall_fetch``.
+
 .. function:: put!(RemoteChannel, value)
 
    .. Docstring generated from Julia source
