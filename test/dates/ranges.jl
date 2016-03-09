@@ -77,8 +77,8 @@ function test_all_combos()
                 @test length(reverse(dr)) == 0
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
-                @test !issorted(dr)
-                @test sortperm(dr) == 0:-1:1
+                @test issorted(dr)
+                @test sortperm(dr) == 1:1:0
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1-neg_step in dr)
@@ -106,7 +106,7 @@ function test_all_combos()
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
-                    @test !issorted(dr)
+                    @test issorted(dr) == (len <= 1)
                     @test l in dr
                 end
             end
@@ -182,8 +182,8 @@ function test_all_combos()
                     @test length(reverse(dr)) == 0
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
-                    @test !issorted(dr)
-                    @test sortperm(dr) == 0:-1:1
+                    @test issorted(dr)
+                    @test sortperm(dr) == 1:1:0
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1-neg_step in dr)
@@ -212,7 +212,7 @@ function test_all_combos()
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
                         @test last(reverse(dr)) >= l
-                        @test !issorted(dr)
+                        @test issorted(dr) == (len <= 1)
                         @test l in dr
 
                     end
