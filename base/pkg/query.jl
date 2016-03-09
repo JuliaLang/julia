@@ -117,7 +117,6 @@ end
 # the allowed range (checking for impossible ranges while at it).
 # This is a pre-pruning step, so it also creates some structures which are later used by pruning
 function filter_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
     # the same pattern are equivalent.
@@ -160,7 +159,6 @@ end
 #   2) They have the same dependencies
 # Preliminarily calls filter_versions.
 function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
     filtered_deps, allowed, vmask = filter_versions(reqs, deps)
 
     # For each package, we examine the dependencies of its versions
@@ -311,7 +309,6 @@ prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) =
 
 # Build a graph restricted to a subset of the packages
 function subdeps(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
-
     sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for p in pkgs
         haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
@@ -327,7 +324,6 @@ end
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
 function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
-
     staged = pkgs
     allpkgs = copy(pkgs)
     while !isempty(staged)
@@ -347,7 +343,6 @@ end
 # Build a subgraph incuding only the (direct and indirect) dependencies and dependants
 # of a given package set
 function undirected_dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
-
     graph = Dict{ByteString, Set{ByteString}}()
 
     for (p,d) in deps

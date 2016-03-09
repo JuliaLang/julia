@@ -405,7 +405,6 @@ function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
-
     m,n = size(a)
     colptr = Array(Ti, max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later

@@ -4,7 +4,6 @@
 ## http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.138.4361&rank=7
 
 function hpl_seq(A::Matrix, b::Vector)
-
     blocksize = 5
 
     n = size(A,1)
@@ -46,7 +45,6 @@ function hpl_seq(A::Matrix, b::Vector)
     x = triu(A[1:n,1:n]) \ A[:,n+1]
 
     return x
-
 end ## hpl()
 
 
@@ -66,14 +64,12 @@ function panel_factor_seq(A, I, col_dep)
     panel_p = K[panel_p]
 
     return (true, panel_p)
-
 end ## panel_factor_seq()
 
 
 ### Trailing update ###
 
 function trailing_update_seq(A, I, J, panel_p, row_dep, col_dep)
-
     n = size (A, 1)
 
     ## Enforce dependencies
@@ -93,7 +89,6 @@ function trailing_update_seq(A, I, J, panel_p, row_dep, col_dep)
     end
 
     return true
-
 end ## trailing_update_seq()
 
 # This version is written for a shared memory implementation.
@@ -105,7 +100,6 @@ hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, max(1, div(max(size(A)),4)), true)
 hpl_par(A::Matrix, b::Vector, bsize::Integer) = hpl_par(A, b, bsize, true)
 
 function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
-
     n = size(A,1)
     A = [A b]
 
@@ -188,28 +182,24 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
     x = triu(A[1:n,1:n]) \ A[:,n+1]
 
     return x
-
 end ## hpl()
 
 
 ### Panel factorization ###
 
 function panel_factor_par(A_KI, col_dep)
-
     @assert col_dep
 
     ## Factorize a panel
     panel_p = lufact!(A_KI)[:p] # Economy mode
 
     return (A_KI, panel_p)
-
 end ## panel_factor_par()
 
 
 ### Trailing update ###
 
 function trailing_update_par(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
-
     @assert row_dep
     @assert col_dep
 
@@ -225,7 +215,6 @@ function trailing_update_par(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     end
 
     return (A_IJ, A_KJ)
-
 end ## trailing_update_par()
 
 

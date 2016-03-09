@@ -388,20 +388,16 @@ Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
 Base.iteratorsize{N}(::Type{GenericIterator{N}}) = Base.SizeUnknown()
 
 function test_map(::Type{TestAbstractArray})
-
     empty_pool = WorkerPool()
     pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
 
     for mapf in [map, asyncmap, pmap_fallback]
-
         for typ in (Float16, Float32, Float64,
                     Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128
-        ),
+                    UInt8, UInt16, UInt32, UInt64, UInt128),
             arg_typ in (Integer,
                         Signed,
-                        Unsigned
-        )
+                        Unsigned)
             X = typ[1:10...]
             _typ = typeof(arg_typ(one(typ)))
             @test mapf(arg_typ, X) == _typ[1:10...]

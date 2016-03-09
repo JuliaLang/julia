@@ -129,7 +129,6 @@ function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
 end
 
 function det(F::BunchKaufman)
-
     if F.info > 0
         return zero(eltype(F))
     end

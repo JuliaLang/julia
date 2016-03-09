@@ -316,7 +316,6 @@ function zeta(s::Union{Int,Float64,Complex{Float64}},
 end
 
 function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
-
     m == 0 && return digamma(z)
     m == 1 && return trigamma(z)
 

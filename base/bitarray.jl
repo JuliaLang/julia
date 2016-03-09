@@ -601,7 +601,6 @@ function insert!(B::BitVector, i::Integer, item)
 end
 
 function _deleteat!(B::BitVector, i::Integer)
-
     k, j = get_chunks_id(i)
 
     msk_bef = _msk64 >>> (63 - j)

@@ -823,8 +823,9 @@ end
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv}, stype)
-
+function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+        colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long},
+        nzval::Vector{Tv}, stype)
     # check if columns are sorted
     iss = true
     for i = 2:length(colptr)
@@ -844,8 +845,8 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{Sui
     @isok check_sparse(o)
 
     return o
-
 end
+
 function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
@@ -902,7 +903,6 @@ end
 
 # Useful when reading in files, but not type stable
 function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
-
     if p == C_NULL
         throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
     end
@@ -942,7 +942,6 @@ function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     end
 
     return Sparse(convert(Ptr{C_Sparse{Tv}}, p))
-
 end
 
 convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
