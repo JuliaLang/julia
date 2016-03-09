@@ -670,7 +670,7 @@ end
 
 function deserialize{T<:Future}(s::SerializationState, t::Type{T})
     f = deserialize_rr(s,t)
-    Future(f.where, f.whence, f.id) # ctor adds to ref table
+    Future(f.where, f.whence, f.id, f.v) # ctor adds to client_refs table
 end
 
 function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
