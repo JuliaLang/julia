@@ -127,7 +127,7 @@ linenumber, source code, and fielddocs.
 """
 type DocStr
     text   :: UTF8String
-    object :: Nullable{Markdown.MD}
+    object :: Nullable
     data   :: Dict{Symbol, Any}
 
     DocStr(text::AbstractString, data = Dict()) = new(text, Nullable(), data)
@@ -233,11 +233,13 @@ function doc(binding::Binding, sig::Type = Union)
             end
         end
         # Get parsed docs and concatenate them.
-        md = Markdown.MD(map(parsedoc, results))
+        md = catdoc(map(parsedoc, results)...)
         # Save metadata in the generated markdown.
-        md.meta[:results] = results
-        md.meta[:binding] = binding
-        md.meta[:typesig] = sig
+        if isa(md, Markdown.MD)
+            md.meta[:results] = results
+            md.meta[:binding] = binding
+            md.meta[:typesig] = sig
+        end
         return md
     end
 end
