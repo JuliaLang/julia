@@ -3877,6 +3877,20 @@ module Test15264
 end
 @test Test15264.mod1 !== Base.mod1
 
-
 # check that medium-sized array is 64-byte aligned (#15139)
 @test Int(pointer(Vector{Float64}(1024))) % 64 == 0
+
+# PR #15413
+# Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
+# `TypeVar`) without crashing
+let
+    function arrayset_unknown_dim{T}(::Type{T}, n)
+        Base.arrayset(reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
+    end
+    arrayset_unknown_dim(Any, 1)
+    arrayset_unknown_dim(Any, 2)
+    arrayset_unknown_dim(Any, 3)
+    arrayset_unknown_dim(Int, 1)
+    arrayset_unknown_dim(Int, 2)
+    arrayset_unknown_dim(Int, 3)
+end
