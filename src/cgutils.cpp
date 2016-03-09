@@ -1690,14 +1690,21 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
 #endif
 }
 
+static bool arraytype_constshape(jl_value_t *ty)
+{
+    return (jl_is_array_type(ty) && jl_is_leaf_type(ty) &&
+            jl_is_long(jl_tparam1(ty)) && jl_unbox_long(jl_tparam1(ty)) != 1);
+}
+
 static Value *emit_arraysize(const jl_cgval_t &tinfo, Value *dim, jl_codectx_t *ctx)
 {
     assert(tinfo.isboxed);
     Value *t = boxed(tinfo, ctx);
     int o = offsetof(jl_array_t, nrows)/sizeof(void*) - 1;
+    MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arraysize;
     return emit_nthptr_recast(t, builder.CreateAdd(dim,
                                                    ConstantInt::get(dim->getType(), o)),
-                              tbaa_arraysize, T_psize);
+                              tbaa, T_psize);
 }
 
 static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
@@ -1720,10 +1727,12 @@ static Value *emit_arraysize(const jl_cgval_t &tinfo, int dim, jl_codectx_t *ctx
     return emit_arraysize(tinfo, ConstantInt::get(T_int32, dim), ctx);
 }
 
-static Value *emit_arraylen_prim(Value *t, jl_value_t *ty, jl_codectx_t *ctx)
+static Value *emit_arraylen_prim(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
 {
+    assert(tinfo.isboxed);
+    Value *t = boxed(tinfo, ctx);
+    jl_value_t *ty = tinfo.typ;
 #ifdef STORE_ARRAY_LEN
-    (void)ty;
     Value *addr = builder.CreateStructGEP(
 #ifdef LLVM37
                                           nullptr,
@@ -1731,7 +1740,8 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty, jl_codectx_t *ctx)
                                           builder.CreateBitCast(t,jl_parray_llvmt),
                                           1); //index (not offset) of length field in jl_parray_llvmt
 
-    return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
+    MDNode *tbaa = arraytype_constshape(ty) ? tbaa_const : tbaa_arraylen;
+    return tbaa_decorate(tbaa, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
     if (jl_is_long(p1)) {
@@ -1758,11 +1768,13 @@ static Value *emit_arraylen(const jl_cgval_t &tinfo, jl_value_t *ex, jl_codectx_
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av!=NULL)
         return builder.CreateLoad(av->len);
-    return emit_arraylen_prim(boxed(tinfo, ctx), expr_type(ex, ctx), ctx);
+    return emit_arraylen_prim(tinfo, ctx);
 }
 
-static Value *emit_arrayptr(Value *t)
+static Value *emit_arrayptr(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
 {
+    assert(tinfo.isboxed);
+    Value *t = boxed(tinfo, ctx);
     Value *addr = builder.CreateStructGEP(
 #ifdef LLVM37
                                           nullptr,
@@ -1770,17 +1782,17 @@ static Value *emit_arrayptr(Value *t)
                                           builder.CreateBitCast(t,jl_parray_llvmt),
                                           0); //index (not offset) of data field in jl_parray_llvmt
 
-    return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
+    MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
+    return tbaa_decorate(tbaa, builder.CreateLoad(addr, false));
 }
 
 static Value *emit_arrayptr(const jl_cgval_t &tinfo, jl_value_t *ex, jl_codectx_t *ctx)
 {
     assert(tinfo.isboxed);
-    Value *t = boxed(tinfo, ctx);
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av!=NULL)
         return builder.CreateLoad(av->dataptr);
-    return emit_arrayptr(t);
+    return emit_arrayptr(tinfo, ctx);
 }
 
 static Value *emit_arraysize(const jl_cgval_t &tinfo, jl_value_t *ex, int dim, jl_codectx_t *ctx)
@@ -1806,17 +1818,16 @@ static Value *emit_arrayflags(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
 #endif
                             builder.CreateBitCast(t, jl_parray_llvmt),
                             arrayflag_field);
-    return builder.CreateLoad(addr); // TODO: tbaa
+    return tbaa_decorate(tbaa_arrayflags, builder.CreateLoad(addr));
 }
 
 static void assign_arrayvar(jl_arrayvar_t &av, const jl_cgval_t &ainfo, jl_codectx_t *ctx)
 {
     assert(ainfo.isboxed);
-    Value *ar = boxed(ainfo, ctx);
-    tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
+    tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ainfo, ctx),
                                                     av.dataptr->getType()->getContainedType(0)),
                                                     av.dataptr));
-    builder.CreateStore(emit_arraylen_prim(ar, av.ty, ctx), av.len);
+    builder.CreateStore(emit_arraylen_prim(ainfo, ctx), av.len);
     for(size_t i=0; i < av.sizes.size(); i++)
         builder.CreateStore(emit_arraysize(ainfo, i+1, ctx), av.sizes[i]);
 }
