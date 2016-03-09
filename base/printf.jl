@@ -1142,7 +1142,7 @@ function _printf(macroname, io, fmt, args)
     #  Immediately check for corresponding arguments if there is no splatting
     #
     if !has_splatting && length(sym_args) != length(args)
-       error("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))")
+       throw(ArgumentError("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))"))
     end
 
     for i = length(sym_args):-1:1
