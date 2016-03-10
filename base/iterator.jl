@@ -2,6 +2,16 @@
 
 isempty(itr) = done(itr, start(itr))
 
+_min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
+_min_length(a, b, A, ::IsInfinite) = length(a)
+_min_length(a, b, ::IsInfinite, B) = length(b)
+_min_length(a, b, A, B) = min(length(a),length(b))
+
+_diff_length(a, b, A, ::IsInfinite) = 0
+_diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
+_diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
+_diff_length(a, b, A, B) = max(length(a)-length(b), 0) 
+
 # enumerate
 
 immutable Enumerate{I}
@@ -31,10 +41,7 @@ zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inher
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
-_min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
-_min_length(a, b, A, ::IsInfinite) = length(a)
-_min_length(a, b, ::IsInfinite, B) = length(b)
-_min_length(a, b, A, B) = min(length(a),length(b))
+
 
 immutable Zip1{I} <: AbstractZipIterator
     a::I
@@ -182,7 +189,10 @@ take(xs, n::Int) = Take(xs, n)
 
 eltype{I}(::Type{Take{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Take{I}}) = iteratoreltype(I)
-iteratorsize{T<:Take}(::Type{T}) = SizeUnknown()  # TODO
+take_iteratorsize(a) = HasLength()
+take_iteratorsize(::SizeUnknown) = SizeUnknown()
+iteratorsize{I}(::Type{Take{I}}) = take_iteratorsize(iteratorsize(I))
+length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
 
 start(it::Take) = (it.n, start(it.xs))
 
@@ -207,7 +217,11 @@ drop(xs, n::Int) = Drop(xs, n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Drop{I}}) = iteratoreltype(I)
-iteratorsize{T<:Drop}(::Type{T}) = SizeUnknown()  # TODO
+drop_iteratorsize(::SizeUnknown) = SizeUnknown()
+drop_iteratorsize(::Union{HasShape, HasLength}) = HasLength()
+drop_iteratorsize(::IsInfinite) = IsInfinite()
+iteratorsize{I}(::Type{Drop{I}}) = drop_iteratorsize(iteratorsize(I))
+length(d::Drop) = _diff_length(d.xs, 1:d.n, iteratorsize(d.xs), HasLength())
 
 function start(it::Drop)
     xs_state = start(it.xs)

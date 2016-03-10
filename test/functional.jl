@@ -122,6 +122,10 @@ let i = 0
     @test i == 10
 end
 
+@test length(take(1:3,typemax(Int))) == 3
+@test length(take(countfrom(1),3)) == 3
+@test length(take(1:6,3)) == 3
+
 # drop
 # ----
 
@@ -132,6 +136,10 @@ let i = 0
     end
     @test i == 4
 end
+
+@test length(drop(1:3,typemax(Int))) == 0
+@test Base.iteratorsize(drop(countfrom(1),3)) == Base.IsInfinite()
+@test_throws MethodError length(drop(countfrom(1), 3))
 
 # cycle
 # -----
