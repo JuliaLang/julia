@@ -243,6 +243,90 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     @test sparsevec(ctranspose(ctranspose(acp))) == acp
 end
 
+let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
+    x2 = SparseVector(8, [3, 4], [1.2, 3.4])
+    copy!(x2, x1)
+    @test x2 == x1
+    x2 = SparseVector(8, [2, 4, 8], [10.3, 7.4, 3.1])
+    copy!(x2, x1)
+    @test x2 == x1
+    x2 = SparseVector(8, [1, 3, 4, 7], [0.3, 1.2, 3.4, 0.1])
+    copy!(x2, x1)
+    @test x2 == x1
+    x2 = SparseVector(10, [3, 4], [1.2, 3.4])
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9:10] == spzeros(2)
+    x2 = SparseVector(10, [3, 4, 9], [1.2, 3.4, 17.8])
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = SparseVector(10, [3, 4, 5, 6, 9], [8.3, 7.2, 1.2, 3.4, 17.8])
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = SparseVector(6, [3, 4], [1.2, 3.4])
+    @test_throws BoundsError copy!(x2, x1)
+end
+
+let x1 = sparse([2, 1, 2], [1, 3, 3], [12.2, 1.4, 5.0], 2, 4)
+    x2 = SparseVector(8, [3, 4], [1.2, 3.4])
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = SparseVector(8, [2, 4, 8], [10.3, 7.4, 3.1])
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = SparseVector(8, [1, 3, 4, 7], [0.3, 1.2, 3.4, 0.1])
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = SparseVector(10, [3, 4], [1.2, 3.4])
+    copy!(x2, x1)
+    @test x2[1:8] == x1[:]
+    @test x2[9:10] == spzeros(2)
+    x2 = SparseVector(10, [3, 4, 9], [1.2, 3.4, 17.8])
+    copy!(x2, x1)
+    @test x2[1:8] == x1[:]
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = SparseVector(10, [3, 4, 5, 6, 9], [8.3, 7.2, 1.2, 3.4, 17.8])
+    copy!(x2, x1)
+    @test x2[1:8] == x1[:]
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = SparseVector(6, [3, 4], [1.2, 3.4])
+    @test_throws BoundsError copy!(x2, x1)
+end
+
+let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
+    x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 4)
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = sparse([2, 2, 2], [1, 3, 4], [10.3, 7.4, 3.1], 2, 4)
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = sparse([1, 1, 2, 1], [1, 2, 2, 4], [0.3, 1.2, 3.4, 0.1], 2, 4)
+    copy!(x2, x1)
+    @test x2[:] == x1[:]
+    x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 5)
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9:10] == spzeros(2)
+    x2 = sparse([1, 2, 1], [2, 2, 5], [1.2, 3.4, 17.8], 2, 5)
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = sparse([1, 2, 1, 2, 1], [2, 2, 3, 3, 5], [8.3, 7.2, 1.2, 3.4, 17.8], 2, 5)
+    copy!(x2, x1)
+    @test x2[1:8] == x1
+    @test x2[9] == 17.8
+    @test x2[10] == 0
+    x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 3)
+    @test_throws BoundsError copy!(x2, x1)
+end
+
 ### Type conversion
 
 let x = convert(SparseVector, sparse([2, 5, 6], [1, 1, 1], [1.25, -0.75, 3.5], 8, 1))
