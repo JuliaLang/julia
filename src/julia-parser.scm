@@ -1166,7 +1166,7 @@
                                        ;; if ends on same line, don't skip the following newline
                                        (skip-ws-and-comments (ts:port s)))
                                    (line-number-node s)))
-                     (body  (parse-block s)))
+                     (body  (empty-block-returns-nothing (parse-block s))))
                 (expect-end s word)
                 (add-filename-to-block! body loc)
                 (list word def body)))))
@@ -1306,8 +1306,14 @@
   (if (and (length> body 1)
            (pair? (cadr body))
            (eq? (caadr body) 'line))
-      (set-car! (cdr body) loc))
+      (set-car! (cdr body) loc)
+      (set-cdr! body (cons loc (cdr body))))
   body)
+
+(define (empty-block-returns-nothing b)
+  (if (equal? b '(block))
+      `(block (null))
+      b))
 
 (define (parse-do s)
   (with-bindings
@@ -1318,7 +1324,7 @@
                        (parse-comma-separated s parse-range)))
            (loc (line-number-node s)))
       `(-> (tuple ,@doargs)
-           ,(begin0 (add-filename-to-block! (parse-block s) loc)
+           ,(begin0 (add-filename-to-block! (empty-block-returns-nothing (parse-block s)) loc)
                     (expect-end s 'do)))))))
 
 (define (macrocall-to-atsym e)
