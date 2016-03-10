@@ -181,13 +181,11 @@ function runtests(A::Array, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
-    test_bounds(S)
     # slice
     S = slice(A, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
-    test_bounds(S)
 end
 
 function runtests(A::ANY, I...)
@@ -228,7 +226,6 @@ function runtests(A::ANY, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
-    test_bounds(S)
     # slice
     try
         S = slice(A, I...)
@@ -241,7 +238,6 @@ function runtests(A::ANY, I...)
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
-    test_bounds(S)
 end
 
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
@@ -280,9 +276,9 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
-index5 = (1, :, 2:5, 1:2:5, [4,1,5], reshape([2]), sub(1:5,[2,1,5]), [2 3 4 1])  # all work with at least size 5
-index25 = (3, :, 2:11, 12:3:22, [4,1,5,9], reshape([10]), sub(1:25,[13,22,24]), [19 15; 4 24])
-index125 = (113, :, 85:121, 2:15:92, [99,14,103], reshape([72]), sub(1:125,[66,18,59]), reshape([25,4,102,67], 1, 2, 2))
+index5 = (1, :, 2:5, [4,1,5], reshape([2]), sub(1:5,[2 3 4 1]))  # all work with at least size 5
+index25 = (3, :, 2:11, [19,9,7], reshape([10]), sub(1:25,[19 15; 4 24]))
+index125 = (113, :, 85:121, [99,14,103], reshape([72]), sub(1:125,reshape([25,4,102,67], 1, 2, 2)))
 
 if testfull
     let A = copy(reshape(1:5*7*11, 11, 7, 5))
@@ -357,6 +353,7 @@ sA[2:5:end] = -1
 @test strides(sA) == (1,3,15)
 @test stride(sA,3) == 15
 @test stride(sA,4) == 120
+test_bounds(sA)
 sA = sub(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 sA[1:3,1:5] = -2
@@ -364,11 +361,13 @@ sA[1:3,1:5] = -2
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
 @test strides(sA) == (1,3)
+test_bounds(sA)
 sA = sub(A, 1:3, 3, 2:5)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
+test_bounds(sA)
 sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3;]
 @test strides(sA) == (2,9,30)
@@ -377,6 +376,7 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test sub(sub([1:5;], 1:5), 1:5) == [1:5;]
 # Test with mixed types
 @test sA[:, Int16[1,2], big(2)] == [31 40; 33 42]
+test_bounds(sA)
 
 # sub logical indexing #4763
 A = sub([1:10;], 5:8)
@@ -401,15 +401,18 @@ sA = slice(A, 2, :, 1:8)
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
+test_bounds(sA)
 sA = slice(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test strides(sA) == (1,3)
+test_bounds(sA)
 sA = slice(A, 1:2:3, 3, 1:2:8)
 @test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test strides(sA) == (2,30)
 @test sA[:] == A[sA.indexes...][:]
+test_bounds(sA)
 
 a = [5:8;]
 @test parent(a) == a
