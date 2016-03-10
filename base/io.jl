@@ -142,10 +142,10 @@ end
 write(s::IO, x::Bool)    = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
-function write(s::IO, a::AbstractArray)
+function write(s::IO, A::AbstractArray)
     nb = 0
-    for i in eachindex(a)
-        nb += write(s, a[i])
+    for a in A
+        nb += write(s, a)
     end
     return nb
 end
@@ -159,8 +159,8 @@ end
         return unsafe_write(s, pointer(a), sizeof(a))
     else
         nb = 0
-        for i in eachindex(a)
-            nb += write(s, a[i])
+        for b in a
+            nb += write(s, b)
         end
         return nb
     end

@@ -964,8 +964,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i in eachindex(A,B)
-        if !isequal(A[i], B[i])
+    for (a, b) in zip(A, B)
+        if !isequal(a, b)
             return false
         end
     end
@@ -973,12 +973,11 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function lexcmp(A::AbstractArray, B::AbstractArray)
-    nA, nB = length(A), length(B)
-    for i = 1:min(nA, nB)
-        res = lexcmp(A[i], B[i])
+    for (a, b) in zip(A, B)
+        res = lexcmp(a, b)
         res == 0 || return res
     end
-    return cmp(nA, nB)
+    return cmp(length(A), length(B))
 end
 
 function (==)(A::AbstractArray, B::AbstractArray)
@@ -988,8 +987,8 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i in eachindex(A,B)
-        if !(A[i]==B[i])
+    for (a, b) in zip(A, B)
+        if !(a == b)
             return false
         end
     end
