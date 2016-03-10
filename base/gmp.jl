@@ -432,7 +432,7 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
-    p < 0 && throw(DomainError())
+    p < 0 && return powermod(invmod(x, m), -p, m)
     r = BigInt()
     ccall((:__gmpz_powm, :libgmp), Void,
           (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
