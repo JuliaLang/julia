@@ -320,6 +320,60 @@ convert{Tv,TvS,TiS}(::Type{SparseVector{Tv}}, s::SparseVector{TvS,TiS}) =
     SparseVector{Tv,TiS}(s.n, s.nzind, convert(Vector{Tv}, s.nzval))
 
 
+### copying
+function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
+    lA = length(A)
+    lA >= lB || throw(BoundsError())
+    # If the two vectors have the same length then all the elements in A will be overwritten.
+    if length(A) == lB
+        resize!(A.nzval, nnzB)
+        resize!(A.nzind, nnzB)
+    else
+        nnzA = nnz(A)
+
+        lastmodindA = searchsortedlast(A.nzind, lB)
+        if lastmodindA >= nnzB
+            # A will have fewer non-zero elements; unmodified elements are kept at the end.
+            deleteat!(A.nzind, nnzB+1:lastmodindA)
+            deleteat!(A.nzval, nnzB+1:lastmodindA)
+        else
+            # A will have more non-zero elements; unmodified elements are kept at the end.
+            resize!(A.nzind, nnzB + nnzA - lastmodindA)
+            resize!(A.nzval, nnzB + nnzA - lastmodindA)
+            copy!(A.nzind, nnzB+1, A.nzind, lastmodindA+1, nnzA-lastmodindA)
+            copy!(A.nzval, nnzB+1, A.nzval, lastmodindA+1, nnzA-lastmodindA)
+        end
+    end
+end
+
+function copy!(A::SparseVector, B::SparseVector)
+    prep_sparsevec_copy_dest!(A, length(B), nnz(B))
+    copy!(A.nzind, B.nzind)
+    copy!(A.nzval, B.nzval)
+    return A
+end
+
+function copy!(A::SparseVector, B::SparseMatrixCSC)
+    prep_sparsevec_copy_dest!(A, length(B), nnz(B))
+
+    ptr = 1
+    @assert length(A.nzind) >= length(B.rowval)
+    maximum(B.colptr)-1 <= length(B.rowval) || throw(BoundsError())
+    @inbounds for col=1:length(B.colptr)-1
+        offsetA = (col - 1) * B.m
+        while ptr <= B.colptr[col+1]-1
+            A.nzind[ptr] = B.rowval[ptr] + offsetA
+            ptr += 1
+        end
+    end
+    copy!(A.nzval, B.nzval)
+    return A
+end
+
+copy!{TvB, TiB}(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) =
+    copy!(A, SparseMatrixCSC{TvB,TiB}(B.n, 1, TiB[1, length(B.nzind)+1], B.nzind, B.nzval))
+
+
 ### Rand Construction
 sprand{T}(n::Integer, p::AbstractFloat, rfn::Function, ::Type{T}) = sprand(GLOBAL_RNG, n, p, rfn, T)
 function sprand{T}(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function, ::Type{T})
