@@ -2359,8 +2359,8 @@ end
 @test_throws DivideError powermod(1,0,0)
 @test_throws DivideError powermod(1,0,big(0))
 # negative power domain error
-@test_throws DomainError powermod(1,-2,1)
-@test_throws DomainError powermod(1,-2,big(1))
+@test powermod(1, -1, 1) == 0
+@test powermod(1, -1, big(1)) == 0
 
 # other divide-by-zero errors
 @test_throws DivideError div(1,0)
