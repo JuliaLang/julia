@@ -4449,7 +4449,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         #endif
         // set initial line number
         inlineLoc = DebugLoc::get(lno, 0, (MDNode*)SP, NULL);
-        builder.SetCurrentDebugLocation(inlineLoc);
         #ifdef LLVM38
         f->setSubprogram(SP);
         #endif
@@ -4457,11 +4456,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
         #endif
     }
-    else {
-        builder.SetCurrentDebugLocation(noDbg);
-    }
+    builder.SetCurrentDebugLocation(noDbg);
 
     if (ctx.debug_enabled) {
+        const bool AlwaysPreserve = true;
         // Go over all arguments and local variables and initialize their debug information
         for(i=0; i < nreq; i++) {
             jl_sym_t *argname = jl_decl_var(jl_cellref(largs,i));
@@ -4471,11 +4469,13 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             varinfo.dinfo = ctx.dbuilder->createParameterVariable(
                 SP,                                 // Scope (current function will be fill in later)
                 jl_symbol_name(argname),            // Variable name
-                ctx.sret + i + 1,                                // Argument number (1-based)
+                ctx.sret + i + 1,                   // Argument number (1-based)
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line
                 // Variable type
-                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,false));
+                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,false),
+                AlwaysPreserve,                  // May be deleted if optimized out
+                0);                     // Flags (TODO: Do we need any)
 #else
             varinfo.dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
@@ -4484,7 +4484,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.value.typ, ctx.dbuilder,false), // Variable type
-                false,                  // May be optimized out
+                AlwaysPreserve,                  // May be deleted if optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + i + 1);                   // Argument number (1-based)
 #endif
@@ -4493,20 +4493,22 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 #ifdef LLVM38
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
-                jl_symbol_name(ctx.vaName),        // Variable name
+                std::string(jl_symbol_name(ctx.vaName)) + "...",         // Variable name
                 ctx.sret + nreq + 1,               // Argument number (1-based)
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(ctx.vars[ctx.vaName].value.typ, ctx.dbuilder, false));
+                julia_type_to_di(ctx.vars[ctx.vaName].value.typ, ctx.dbuilder, false),
+                AlwaysPreserve,                  // May be deleted if optimized out
+                0);                     // Flags (TODO: Do we need any)
 #else
             ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,   // Tag
                 SP,                                 // Scope (current function will be fill in later)
-                jl_symbol_name(ctx.vaName),         // Variable name
+                std::string(jl_symbol_name(ctx.vaName)) + "...",         // Variable name
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.vars[ctx.vaName].value.typ, ctx.dbuilder, false),      // Variable type
-                false,                  // May be optimized out
+                AlwaysPreserve,                  // May be deleted if optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + nreq + 1);              // Argument number (1-based)
 #endif
@@ -4527,7 +4529,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.value.typ, ctx.dbuilder, false), // Variable type
-                false,                  // May be optimized out
+                AlwaysPreserve,                  // May be deleted if optimized out
                 0                       // Flags (TODO: Do we need any)
 #ifndef LLVM38
                 ,0                      // Argument number (1-based)
@@ -4542,7 +4544,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     std::map<jl_sym_t *, MDNode *> filescopes;
 #endif
 
-    Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
+    Value *fArg=NULL, *argArray=NULL, *pargArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
         if (needsparams) {
@@ -4550,6 +4552,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
         fArg = &*AI++;
         argArray = &*AI++;
+        pargArray = builder.CreateAlloca(argArray->getType());
+        builder.CreateStore(argArray, pargArray, true/*volatile store to prevent removal of this alloca*/);
         argCount = &*AI++;
         ctx.argArray = argArray;
         ctx.argCount = argCount;
@@ -4591,8 +4595,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 
     // get pointers for locals stored in the gc frame array (argTemp)
 #ifdef LLVM36
-    if (ctx.debug_enabled)
+    if (ctx.debug_enabled) {
         prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_declare));
+        prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
+    }
 #endif
     for (std::map<jl_sym_t*, jl_varinfo_t>::iterator I = ctx.vars.begin(), E = ctx.vars.end(); I != E; ++I) {
         jl_sym_t *s = I->first;
@@ -4617,17 +4623,19 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                         assert(varinfo.dinfo->getType() != jl_pvalue_dillvmt);
                         ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
 #ifdef LLVM37
-                                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
-#else
-                                builder.GetInsertBlock());
+                                inlineLoc,
 #endif
+                                builder.GetInsertBlock());
                     }
 #endif
                 }
                 continue;
             }
         }
-        if (varinfo.isAssigned || (va && s == ctx.vaName && varinfo.escapes)) {
+        if (varinfo.isAssigned || // always need a slot if the variable is assigned
+                specsig || // for arguments, give them stack slots if then aren't in `argArray` (otherwise, will use that pointer)
+                (va && s == ctx.vaName && varinfo.escapes) || // or it's the va arg tuple
+                (s != unused_sym && s == jl_decl_var(jl_cellref(largs, 0)))) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
             varinfo.memloc = av;
 #ifdef LLVM36
@@ -4637,16 +4645,15 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                     expr = ctx.dbuilder->createExpression();
                 }
                 else {
-                    SmallVector<int64_t, 8> addr;
+                    SmallVector<uint64_t, 8> addr;
                     addr.push_back(llvm::dwarf::DW_OP_deref);
                     expr = ctx.dbuilder->createExpression(addr);
                 }
                 ctx.dbuilder->insertDeclare(av, varinfo.dinfo, expr,
 #ifdef LLVM37
-                                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
-#else
-                                builder.GetInsertBlock());
+                                inlineLoc,
 #endif
+                                builder.GetInsertBlock());
             }
 #endif
         }
@@ -4662,30 +4669,27 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
-        if (s == unused_sym) {
-            if (specsig && !type_is_ghost(llvmArgType)) ++AI;
-            continue;
-        }
         jl_varinfo_t &vi = ctx.vars[s];
         jl_cgval_t theArg;
-        if (!vi.value.isghost) {
-            if (vi.value.constant) {
-                assert(vi.memloc == NULL);
-                if (specsig && !type_is_ghost(llvmArgType)) ++AI;
-                continue;
-            }
-            else if (specsig) {
-                if (type_is_ghost(llvmArgType)) // this argument is not actually passed
+        if (s == unused_sym || vi.value.constant) {
+            assert(vi.memloc == NULL);
+            if (specsig && !type_is_ghost(llvmArgType)) ++AI;
+        }
+        else {
+            if (specsig) {
+                if (type_is_ghost(llvmArgType)) { // this argument is not actually passed
                     theArg = ghostValue(argType);
+                }
                 else if (llvmArgType->isAggregateType()) {
                     theArg = mark_julia_slot(&*AI++, argType); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
-                else
+                else {
                     theArg = mark_julia_type(&*AI++, isboxed, argType, &ctx, /*needsgcroot*/false);
+                }
             }
             else {
-                if (i==0) {
+                if (i == 0) {
                     // first (function) arg is separate in jlcall
                     theArg = mark_julia_type(fArg, true, vi.value.typ, &ctx, /*needsgcroot*/false);
                 }
@@ -4693,41 +4697,57 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                     Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
                     theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ, &ctx, /*needsgcroot*/false);
 #ifdef LLVM36
-                    if (ctx.debug_enabled) {
-                        SmallVector<int64_t, 8> addr;
-                        addr.push_back(llvm::dwarf::DW_OP_plus);
-                        addr.push_back(i * sizeof(void*));
+                    if (ctx.debug_enabled && !vi.memloc && !vi.value.V) {
+                        SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
-                        prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
-                        ctx.dbuilder->insertDbgValueIntrinsic(
-                            argArray, 0, vi.dinfo, ctx.dbuilder->createExpression(addr),
+                        addr.push_back(llvm::dwarf::DW_OP_plus);
+                        addr.push_back((i - 1) * sizeof(void*));
+                        if (vi.dinfo->getType() != jl_pvalue_dillvmt)
+                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                        ctx.dbuilder->insertDeclare(pargArray, vi.dinfo, ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                            builder.getCurrentDebugLocation().get(),
+                                        inlineLoc,
 #endif
-                            builder.GetInsertBlock());
+                                        builder.GetInsertBlock());
                     }
 #endif
                 }
             }
 
-            Value *lv = vi.memloc;
-            if (lv == NULL) {
+            if (vi.memloc == NULL) {
                 if (vi.value.V) {
                     // copy theArg into its local variable slot (unboxed)
-                    assert(vi.isAssigned);
-                    assert(vi.value.ispointer);
+                    assert(vi.isAssigned && vi.value.ispointer);
                     builder.CreateStore(emit_unbox(vi.value.V->getType()->getContainedType(0),
                                                    theArg, vi.value.typ),
                                         vi.value.V);
                 }
                 else {
-                    // keep track of original (boxed) value to avoid re-boxing or moving
+                    // keep track of original (possibly boxed) value to avoid re-boxing or moving
+                    assert(!vi.isAssigned || vi.value.constant);
                     vi.value = theArg;
+#ifdef LLVM36
+                    if (specsig && theArg.V && ctx.debug_enabled) {
+                        SmallVector<uint64_t, 8> addr;
+                        if (vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer)
+                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                        AllocaInst *parg = dyn_cast<AllocaInst>(theArg.V);
+                        if (!parg) {
+                            parg = builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
+                            builder.CreateStore(theArg.V, parg);
+                        }
+                        ctx.dbuilder->insertDeclare(parg, vi.dinfo, ctx.dbuilder->createExpression(addr),
+#ifdef LLVM37
+                                        inlineLoc,
+#endif
+                                        builder.GetInsertBlock());
+                    }
+#endif
                 }
             }
             else {
                 Value *argp = boxed(theArg, &ctx, false); // skip the temporary gcroot since it would be folded to argp anyways
-                builder.CreateStore(argp, lv);
+                builder.CreateStore(argp, vi.memloc);
                 if (!theArg.isboxed)
                     emit_local_root(&ctx, &vi); // create a root for vi
             }
@@ -4736,9 +4756,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 jl_arrayvar_t av = arrayvars[s];
                 assign_arrayvar(av, theArg, &ctx);
             }
-        }
-        else {
-            assert(vi.memloc == NULL);
         }
     }
 
@@ -4749,10 +4766,9 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         if (!vi.escapes && !vi.isAssigned) {
             ctx.vaStack = true;
         }
-        else if (!vi.value.isghost) {
+        else if (!vi.value.constant) {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
-            Value *lv = vi.memloc;
-            if (lv != NULL) {
+            if (vi.memloc != NULL) {
 #ifdef LLVM37
                 Value *restTuple =
                     builder.CreateCall(prepare_call(jltuple_func), {V_null,
@@ -4768,7 +4784,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                                         builder.CreateSub(argCount,
                                                           ConstantInt::get(T_int32,nreq-1)));
 #endif
-                builder.CreateStore(restTuple, lv);
+                builder.CreateStore(restTuple, vi.memloc);
                 emit_local_root(&ctx, &vi); // create a root for vi
             }
             else {
@@ -4806,6 +4822,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     bool prevlabel = false;
     lno = -1;
     int prevlno = -1;
+    if (ctx.debug_enabled)
+        builder.SetCurrentDebugLocation(inlineLoc);
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_linenode(stmt) ||
@@ -5176,8 +5194,8 @@ static void init_julia_llvm_env(Module *m)
         DIArray()); // Elements - will be corrected later
 #endif
 
-    jl_pvalue_dillvmt = dbuilder.createPointerType(jl_value_dillvmt,sizeof(jl_value_t*)*8,
-                                                   __alignof__(jl_value_t*)*8);
+    jl_pvalue_dillvmt = dbuilder.createPointerType(jl_value_dillvmt, sizeof(jl_value_t*) * 8,
+                                                   __alignof__(jl_value_t*) * 8);
 
 #ifdef LLVM36
     SmallVector<llvm::Metadata *, 1> Elts;
