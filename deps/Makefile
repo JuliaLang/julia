@@ -726,6 +726,8 @@ $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
+# fix replutil test on unix
+$(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
