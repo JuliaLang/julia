@@ -529,6 +529,7 @@ a good practice to explicitly call ``finalize`` on local instances of a ``Remote
 is not required on fetched ``Future``\ s. Explicitly calling ``finalize`` results in an immediate message sent to
 the remote node to go ahead and remove its reference to the value.
 
+Once finalized, a reference becomes invalid and cannot be used in any further calls.
 
 Shared Arrays
 -------------
@@ -712,6 +713,16 @@ If we create SharedArrays and time these functions, we get the following results
 The biggest advantage of ``advection_shared!`` is that it minimizes traffic
 among the workers, allowing each to compute for an extended time on the
 assigned piece.
+
+Shared Arrays and Distributed Garbage Collection
+------------------------------------------------
+
+Like remote references, shared arrays are also dependent on garbage collection
+on the creating node to release references from all participating workers. Code which
+creates many short lived shared array objects would benefit from explicitly
+finalizing these objects as soon as possible. This results in both memory and file
+handles mapping the shared segment being released sooner.
+
 
 .. _man-clustermanagers:
 
