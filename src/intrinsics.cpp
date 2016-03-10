@@ -350,11 +350,11 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
         bt = jl_tparam0(et);
     }
     else {
-        bt = try_eval(targ, ctx, NULL); // TODO: change this to an actual call to staticeval rather than actually executing code
+        bt = jl_static_eval(targ, ctx, ctx->module, ctx->linfo, true, true);
         if (bt) jl_add_linfo_root(ctx->linfo, bt);
     }
-    if (fname && (!bt || !jl_is_bitstype(bt))) {
-        jl_errorf("%s: expected bits type as first argument", fname);
+    if (!bt || !jl_is_bitstype(bt)) {
+        emit_error("expected bits type as first argument", ctx);
         return NULL;
     }
     return bt;
