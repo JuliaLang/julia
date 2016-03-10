@@ -220,6 +220,20 @@ map!(x->1, d)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(id_other, D->D[1], Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
+function finalize_and_test(r)
+    finalize(r)
+    @test_throws ErrorException fetch(r)
+end
+
+for id in [id_me, id_other]
+    finalize_and_test(RemoteRef(id))
+    finalize_and_test((r=RemoteRef(id); put!(r, 1); r))
+end
+
+d = SharedArray(Int,10)
+finalize(d)
+@test_throws BoundsError d[1]
+
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
 workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]

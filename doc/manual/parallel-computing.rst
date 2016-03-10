@@ -666,6 +666,39 @@ The biggest advantage of ``advection_shared!`` is that it minimizes traffic
 among the workers, allowing each to compute for an extended time on the
 assigned piece.
 
+Distributed Garbage Collection
+------------------------------
+
+Objects referred to by remote references can be freed only when *all* held references in the cluster
+are deleted.
+
+The node where the value is stored keeps track of which of the workers have a reference to it.
+Every time a ``RemoteRef`` is serialized to a worker, the node pointed to by the reference is
+notified. And every time a ``RemoteRef`` is garbage collected locally, the node owning the value
+is again notified.
+
+The notifications are done via sending of "tracking" messages - an "add reference" message when
+a reference is serialized to a different process and a "delete reference" message when a reference
+is locally garbage collected.
+
+It is important to note that *when* an object is locally garbage collected depends on the size of
+the object and the current memory pressure in the system.
+
+In case of remote references, the size of the local reference object is quite small, while the value
+stored on the remote node may be quite large. Since the local object may not be collected immediately,
+it is a good practice to explicitly call ``finalize`` on local instances of ``RemoteRef``. Explicitly
+calling ``finalize`` results in an immediate message sent to the remote node to go ahead and
+remove its reference to the value.
+
+Once finalized, a reference becomes invalid and cannot be used in any further calls.
+
+Like remote references, ``SharedArray`` objects are also dependent on garbage collection
+on the creating node to release references from all participating workers. Code which
+creates many short lived shared array objects would benefit from explicitly
+finalizing these objects as soon as possible. This results in both memory and file
+handles mapping the shared segment being released sooner.
+
+
 .. _man-clustermanagers:
 
 ClusterManagers
