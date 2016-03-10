@@ -13,8 +13,8 @@ for f in (:-, :~, :conj, :sign)
     @eval begin
         function ($f)(A::AbstractArray)
             F = similar(A)
-            for i in eachindex(A)
-                F[i] = ($f)(A[i])
+            for (iF, iA) in zip(eachindex(F), eachindex(A))
+                F[iF] = ($f)(A[iA])
             end
             return F
         end
@@ -28,8 +28,8 @@ imag(A::AbstractArray) = reshape([ imag(x) for x in A ], size(A))
 
 function !(A::AbstractArray{Bool})
     F = similar(A)
-    for i in eachindex(A)
-        F[i] = !A[i]
+    for (iF, iA) in zip(eachindex(F), eachindex(A))
+        F[iF] = !A[iA]
     end
     return F
 end
@@ -66,35 +66,29 @@ for (f,F) in ((:+,   AddFun()),
     @eval begin
         function ($f){S,T}(A::Range{S}, B::Range{T})
             F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for (a,b) in zip(A,B)
-                @inbounds F[i] = ($f)(a, b)
-                i += 1
+            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+                @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
             F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for b in B
-                @inbounds F[i] = ($f)(A[i], b)
-                i += 1
+            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+                @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
             F = similar(B, promote_op($F,S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for a in A
-                @inbounds F[i] = ($f)(a, B[i])
-                i += 1
+            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+                @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
             F = similar(A, promote_op($F,S,T), promote_shape(size(A),size(B)))
-            for i in eachindex(A,B)
-                @inbounds F[i] = ($f)(A[i], B[i])
+            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+                @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
@@ -116,15 +110,15 @@ for (f,F) in ((:.+,  DotAddFun()),
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_array_type($F,typeof(A),T))
-            for i in eachindex(B)
-                @inbounds F[i] = ($f)(A, B[i])
+            for (iF, iB) in zip(eachindex(F), eachindex(B))
+                @inbounds F[iF] = ($f)(A, B[iB])
             end
             return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
             F = similar(A, promote_array_type($F,typeof(B),T))
-            for i in eachindex(A)
-                @inbounds F[i] = ($f)(A[i], B)
+            for (iF, iA) in zip(eachindex(F), eachindex(A))
+                @inbounds F[iF] = ($f)(A[iA], B)
             end
             return F
         end

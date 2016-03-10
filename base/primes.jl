@@ -39,7 +39,7 @@ function _primesmask(lo::Int, hi::Int)
     sieve = ones(Bool, whi - wlo)
     hi < 49 && return sieve
     small_sieve = _primesmask(isqrt(hi))
-    @inbounds for i in eachindex(small_sieve)
+    @inbounds for i = 1:length(small_sieve)  # don't use eachindex here
         if small_sieve[i]; p = wheel_prime(i)
             j = wheel_index(2 * div(lo - p - 1, 2p) + 1)
             q = p * wheel_prime(j + 1); j = j & 7 + 1
@@ -64,7 +64,7 @@ function primesmask(lo::Int, hi::Int)
     wheel_sieve = _primesmask(max(7, lo), hi)
     lsi = lo - 1
     lwi = wheel_index(lsi)
-    @inbounds for i in eachindex(wheel_sieve)
+    @inbounds for i = 1:length(wheel_sieve)   # don't use eachindex here
         sieve[wheel_prime(i + lwi) - lsi] = wheel_sieve[i]
     end
     return sieve
@@ -86,7 +86,7 @@ function primes(lo::Int, hi::Int)
     sizehint!(list, floor(Int, hi / log(hi)))
     sieve = _primesmask(max(7, lo), hi)
     lwi = wheel_index(lo - 1)
-    @inbounds for i in eachindex(sieve)
+    @inbounds for i = 1:length(sieve)   # don't use eachindex here
         sieve[i] && push!(list, wheel_prime(i + lwi))
     end
     return list

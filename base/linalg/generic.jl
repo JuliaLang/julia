@@ -22,14 +22,8 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     if length(C) != length(X)
         throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
-    if size(C) == size(X)
-        for I in eachindex(C, X)
-            @inbounds C[I] = X[I]*s
-        end
-    else
-        for (IC, IX) in zip(eachindex(C), eachindex(X))
-            @inbounds C[IC] = X[IX]*s
-        end
+    for (IC, IX) in zip(eachindex(C), eachindex(X))
+        @inbounds C[IC] = X[IX]*s
     end
     C
 end
@@ -39,14 +33,8 @@ function generic_scale!(C::AbstractArray, s::Number, X::AbstractArray)
         throw(DimensionMismatch("first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
-    if size(C) == size(X)
-        for I in eachindex(C, X)
-            @inbounds C[I] = s*X[I]
-        end
-    else
-        for (IC, IX) in zip(eachindex(C), eachindex(X))
-            @inbounds C[IC] = s*X[IX]
-        end
+    for (IC, IX) in zip(eachindex(C), eachindex(X))
+        @inbounds C[IC] = s*X[IX]
     end
     C
 end
@@ -273,14 +261,8 @@ function vecdot(x::AbstractArray, y::AbstractArray)
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
     s = zero(dot(x[1], y[1]))
-    if size(x) == size(y)
-        for I in eachindex(x, y)
-            @inbounds s += dot(x[I], y[I])
-        end
-    else
-        for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-            @inbounds  s += dot(x[Ix], y[Iy])
-        end
+    for (Ix, Iy) in zip(eachindex(x), eachindex(y))
+        @inbounds  s += dot(x[Ix], y[Iy])
     end
     s
 end
