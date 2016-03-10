@@ -394,7 +394,8 @@ in the Images package::
   <edit code>                      # be sure to add a test for your bug
   Pkg.test("Images")               # make sure everything works now
   ;git commit -a -m "Fix foo by calling bar"   # write a descriptive message
-  Pkg.submit("Images")
+  using PkgDev
+  PkgDev.submit("Images")
 
 The last line will present you with a link to submit a pull request
 to incorporate your changes.
