@@ -216,13 +216,16 @@ function initialize_shared_array(S, s, onlocalhost, init, pids)
 end
 
 function finalize_refs{T,N}(S::SharedArray{T,N})
-    for r in S.refs
-        finalize(r)
+    if length(S.pids) > 0
+        for r in S.refs
+            finalize(r)
+        end
+        empty!(S.pids)
+        empty!(S.refs)
+        init_loc_flds(S)
+        finalize(S.s)
+        S.s = Array(T, ntuple(d->0,N))
     end
-    empty!(S.pids)
-    empty!(S.refs)
-    init_loc_flds(S)
-    S.s = Array(T, ntuple(d->0,N))
     S
 end
 
