@@ -132,7 +132,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
     }
     if (jl_is_gensym(e)) {
         ssize_t genid = ((jl_gensym_t*)e)->id;
-        if (genid >= jl_linfo_ngensyms(lam) || genid < 0)
+        if (genid >= jl_linfo_ngensyms(lam) || genid < 0 || locals == NULL)
             jl_error("access to invalid GenSym location");
         else
             return locals[jl_linfo_nslots(lam) + genid];
@@ -150,7 +150,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
     if (!jl_is_expr(e)) {
         if (jl_typeis(e, jl_slot_type)) {
             ssize_t n = jl_slot_number(e);
-            if (n > jl_linfo_nslots(lam) || n < 1)
+            if (n > jl_linfo_nslots(lam) || n < 1 || locals == NULL)
                 jl_error("access to invalid slot number");
             jl_value_t *v = locals[n-1];
             if (v == NULL)
