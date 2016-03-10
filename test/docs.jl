@@ -383,6 +383,42 @@ end
 
 @test isdefined(MacroGenerated, :_g)
 
+# Issues.
+# =======
+
+# Issue #15424. Non-markdown docstrings.
+
+module I15424
+
+immutable LazyHelp
+    text
+end
+
+function Base.writemime(io::IO, ::MIME"text/plain", h::LazyHelp)
+    print(io, h.text)
+end
+
+Base.show(io::IO, h::LazyHelp) = writemime(io, "text/plain", h)
+
+function Base.Docs.catdoc(hs::LazyHelp...)
+    Base.Docs.Text() do io
+        for h in hs
+            writemime(io, MIME"text/plain"(), h)
+        end
+    end
+end
+
+Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needle)
+
+@doc LazyHelp("LazyHelp\n") LazyHelp
+@doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)
+
+end
+
+let d = @doc(I15424.LazyHelp)
+    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+end
+
 # Issue #13385.
 @test @doc(I) !== nothing
 
