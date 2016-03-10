@@ -245,7 +245,8 @@ function runtests(A::ANY, I...)
 end
 
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
-function runviews{T}(SB::AbstractArray{T,3}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
+    @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
         runtests(SB, i1, i2, i3)
     end
@@ -279,9 +280,9 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
-index5 = (1, 2, :, 2:5, 1:2:5, [1], [4,1,5], sub(1:5,[2,1,5]))  # all work with at least size 5
-index25 = (3, 8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
-index125 = (113, :, 85:121, 2:15:92, [99,14,103], sub(1:125,[66,18,59]))
+index5 = (1, :, 2:5, 1:2:5, [4,1,5], reshape([2]), sub(1:5,[2,1,5]), [2 3 4 1])  # all work with at least size 5
+index25 = (3, :, 2:11, 12:3:22, [4,1,5,9], reshape([10]), sub(1:25,[13,22,24]), [19 15; 4 24])
+index125 = (113, :, 85:121, 2:15:92, [99,14,103], reshape([72]), sub(1:125,[66,18,59]), reshape([25,4,102,67], 1, 2, 2))
 
 if testfull
     let A = copy(reshape(1:5*7*11, 11, 7, 5))
@@ -293,7 +294,7 @@ end
 
 # "outer" indexes create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
-oindex = (:, 6, 3:7, 13:-2:1, [8,4,6,12,5,7])
+oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
@@ -321,7 +322,9 @@ if !testfull
                      ([8,4,6,12,5,7],:,3:7),
                      (6,6,[8,4,6,12,5,7]),
                      (1,:,sub(1:13,[9,12,4,13,1])),
-                     (sub(1:13,[9,12,4,13,1]),2:6,4))
+                     (sub(1:13,[9,12,4,13,1]),2:6,4),
+                     ([1:5 2:6 3:7 4:8 5:9], :, 3),
+                     (:, [46:-1:42 88:-1:84 22:-1:18 49:-1:45 8:-1:4]))
             runtests(B, oind...)
             sliceB = slice(B, oind...)
             runviews(sliceB, index5, index25, index125)
