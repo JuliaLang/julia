@@ -154,6 +154,8 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
+ - no newline after function signature
+ - no newline before function end
 
 #### General Formatting Guidelines For C code contributions
 
@@ -164,6 +166,9 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - newline between } and else instead of } else {
  - if one part of an if..else chain uses { } then all should
  - no whitespace at the end of a line
+ - no indentation for preprocessor directives like #if and #ifdef
+ - no newline after function signature
+ - no newline before function end }
 
 ### Git Recommendations For Pull Requests
 
