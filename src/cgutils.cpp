@@ -489,7 +489,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
 {
     if (isboxed)
         return jl_pvalue_dillvmt;
-    if (jl_is_abstracttype(jt) || jl_is_uniontype(jt) || jl_is_array_type(jt))
+    if (jl_is_abstracttype(jt) || jl_is_uniontype(jt) || jl_is_array_type(jt) || jt == (jl_value_t*)jl_sym_type)
         return jl_pvalue_dillvmt;
     if (jl_is_typector(jt) || jl_is_typevar(jt))
         return jl_pvalue_dillvmt;
@@ -2075,7 +2075,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     if (gcrooted) {
         // make a gcroot for the new box
         // (unless the caller explicitly said this was unnecessary)
-        Value *froot = emit_local_slot(ctx);
+        Value *froot = emit_local_root(ctx);
         builder.CreateStore(box, froot);
     }
 
