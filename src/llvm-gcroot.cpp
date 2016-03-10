@@ -654,6 +654,7 @@ void allocate_frame()
             GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             gep->insertAfter(last_gcframe_inst);
             gcroot->replaceAllUsesWith(gep);
+            gep->takeName(gcroot);
             gcroot->eraseFromParent();
             last_gcframe_inst = gep;
         }
@@ -670,26 +671,35 @@ void allocate_frame()
     unsigned argSpaceSize = 0;
     Instruction *argSlot = NULL;
     for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
-        CallInst* callInst = dyn_cast<CallInst>(&*I);
+        Instruction* inst = &*I;
         ++I;
-        if (callInst && callInst->getCalledFunction() == gcroot_func) {
-            if (!argSlot) {
-                argSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
+        if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
+            if (callInst->getCalledFunction() == gcroot_func) {
+                if (!argSlot) {
+                    argSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
 #ifdef JL_DEBUG_BUILD
-                argSlot->setName("locals");
+                    argSlot->setName("locals");
 #endif
-                argSlot->insertAfter(gcframe);
-                if (last_gcframe_inst == gcframe)
-                    last_gcframe_inst = argSlot;
+                    argSlot->insertAfter(gcframe);
+                    if (last_gcframe_inst == gcframe)
+                        last_gcframe_inst = argSlot;
+                }
+                Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) argSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, argSpaceSize++)));
+                argTempi->insertAfter(last_gcframe_inst);
+                callInst->replaceAllUsesWith(argTempi);
+                argTempi->takeName(callInst);
+                callInst->eraseFromParent();
+                // Initialize the slots for function variables to NULL
+                StoreInst *store = new StoreInst(V_null, argTempi);
+                store->insertAfter(argTempi);
+                last_gcframe_inst = store;
             }
-            Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) argSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, argSpaceSize++)));
-            argTempi->insertAfter(last_gcframe_inst);
-            callInst->replaceAllUsesWith(argTempi);
-            callInst->eraseFromParent();
-            // Initialize the slots for function variables to NULL
-            StoreInst *store = new StoreInst(V_null, argTempi);
-            store->insertAfter(argTempi);
-            last_gcframe_inst = store;
+        }
+        else if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst)) {
+            if (allocaInst->getAllocatedType() == V_null->getType()) {
+                StoreInst *store = new StoreInst(V_null, allocaInst);
+                store->insertAfter(allocaInst);
+            }
         }
     }
 

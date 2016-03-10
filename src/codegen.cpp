@@ -127,7 +127,7 @@ using namespace llvm::legacy;
 #define AddrSpaceCastInst BitCastInst
 #endif
 
-#if !defined(_COMPILER_MICROSOFT_) && __cplusplus < 201103L
+#if !defined(_COMPILER_MICROSOFT_) && __cplusplus < 201103L && !defined(static_assert)
 #  define static_assert(...)
 #endif
 
@@ -443,9 +443,7 @@ struct jl_cgval_t {
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
     bool ispointer; // whether this value is actually pointer to the value
-    bool isimmutable; // V points to something that is definitely immutable (e.g. not stack allocated)
-    //bool isstack; // points to stack-allocated memory
-    //bool isarg; // derived from an argument
+    bool isimmutable; // V points to something that is definitely immutable (e.g. single-assignment, but including memory)
     jl_cgval_t(Value *V, Value *gcroot, bool isboxed, jl_value_t *typ) : // general constructor (with pointer type auto-detect)
         V(V), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen contexts
         constant(NULL),
@@ -511,7 +509,6 @@ struct jl_varinfo_t {
     bool isSA;
     bool isVolatile;
     bool isArgument;
-    bool hasGCRoot;
     bool escapes;
     bool usedUndef;
     bool used;
@@ -523,7 +520,7 @@ struct jl_varinfo_t {
                      dinfo(DIVariable()),
 #endif
                      isAssigned(true), isSA(false),
-                     isVolatile(false), isArgument(false), hasGCRoot(false),
+                     isVolatile(false), isArgument(false),
                      escapes(true), usedUndef(false), used(false)
     {
     }
@@ -613,7 +610,7 @@ typedef struct {
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 
-static Value* emit_local_slot(jl_codectx_t *ctx);
+static Value* emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi = NULL);
 static void mark_gc_use(const jl_cgval_t &v);
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
@@ -677,7 +674,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     }
     Value *froot = NULL;
     if (needsroot && isboxed) {
-        froot = emit_local_slot(ctx);
+        froot = emit_local_root(ctx);
         builder.CreateStore(v, froot);
     }
     return jl_cgval_t(v, froot, isboxed, typ);
@@ -765,7 +762,7 @@ static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
             s != ctx->vaName && store_unboxed_p(vi.value.typ));
 }
 
-static void alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
+static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->vars[s];
     jl_value_t *jt = vi.value.typ;
@@ -774,25 +771,14 @@ static void alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     assert(vtype != T_pjlvalue);
     if (type_is_ghost(vtype)) {
         vi.value = ghostValue(jt);
-        return;
+        return NULL;
     }
     // CreateAlloca is OK here because alloc_local is only called during prologue setup
     Value *lv = builder.CreateAlloca(vtype, 0, jl_symbol_name(s));
     vi.value = mark_julia_slot(lv, jt);
     vi.value.isimmutable &= vi.isSA; // slot is not immutable if there are multiple assignments
     assert(vi.value.isboxed == false);
-#ifdef LLVM36
-    if (ctx->debug_enabled) {
-        prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_declare));
-#ifdef LLVM37
-        ctx->dbuilder->insertDeclare(lv, vi.dinfo, ctx->dbuilder->createExpression(),
-                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
-#else
-        ctx->dbuilder->insertDeclare(lv, vi.dinfo, ctx->dbuilder->createExpression(),
-                builder.GetInsertBlock());
-#endif
-    }
-#endif
+    return lv;
 }
 
 static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
@@ -974,6 +960,7 @@ static void jl_setup_module(Module *m)
 #endif
 }
 
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
 static void jl_finalize_module(Module *m)
 {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && defined(USE_MCJIT)
@@ -994,8 +981,7 @@ static void jl_finalize_module(Module *m)
 #endif
 }
 
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-#ifdef JL_DEBUG_BUILD
+#if !defined(USE_ORCJIT) && defined(JL_DEBUG_BUILD)
 static void writeRecoveryFile(llvm::Module *mod)
 {
     std::error_code err;
@@ -1406,6 +1392,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
             FPM->run(*llvmf);
             llvmf->removeFromParent();
             llvmf->setName(oldllvmf->getName());
+#else
+            (void)oldllvmf;
 #endif
         }
         JL_GC_POP();
@@ -1572,10 +1560,10 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 
 // Code coverage
 
-typedef std::map<std::string,std::vector<GlobalVariable*> > logdata_t;
+typedef StringMap< std::vector<GlobalVariable*> > logdata_t;
 static logdata_t coverageData;
 
-static void coverageVisitLine(std::string filename, int line)
+static void coverageVisitLine(StringRef filename, int line)
 {
     if (filename == "" || filename == "none" || filename == "no file")
         return;
@@ -1599,14 +1587,14 @@ static void coverageVisitLine(std::string filename, int line)
 
 extern "C" int isabspath(const char *in);
 
-static void write_log_data(logdata_t logData, const char *extension)
+static void write_log_data(logdata_t &logData, const char *extension)
 {
     std::string base = std::string(jl_options.julia_home);
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
-        std::string filename = (*it).first;
-        std::vector<GlobalVariable*> &values = (*it).second;
+        std::string filename = it->first();
+        std::vector<GlobalVariable*> &values = it->second;
         if (values.size() > 1) {
             if (!isabspath(filename.c_str()))
                 filename = base + filename;
@@ -1664,7 +1652,7 @@ extern "C" void jl_write_coverage_data(void)
 
 static logdata_t mallocData;
 
-static void mallocVisitLine(std::string filename, int line)
+static void mallocVisitLine(StringRef filename, int line)
 {
     if (filename == "" || filename == "none" || filename == "no file") {
         jl_gc_sync_total_bytes();
@@ -1943,9 +1931,10 @@ static void mark_volatile_vars(jl_array_t *stmts, std::map<jl_sym_t*,jl_varinfo_
                     if (j < i || j > last) {
                         std::set<jl_sym_t*>::iterator it = as.begin();
                         for(; it != as.end(); it++) {
-                            if (vars.find(*it) != vars.end() &&
+                            std::map<jl_sym_t*, jl_varinfo_t>::iterator vi = vars.find(*it);
+                            if (vi != vars.end() && !vi->second.value.constant &&
                                 local_var_occurs(jl_cellref(stmts,j), *it)) {
-                                vars[*it].isVolatile = true;
+                                vi->second.isVolatile = true;
                             }
                         }
                     }
@@ -2044,11 +2033,17 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 // ---- Get Element Pointer (GEP) instructions within the GC frame ----
 
 // Emit a gc-root slot indicator
-static Value* emit_local_slot(jl_codectx_t *ctx)
+static Value* emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 {
     CallInst *newroot = CallInst::Create(prepare_call(gcroot_func), "", /*InsertBefore*/ctx->ptlsStates);
+    if (vi) {
+        vi->memloc->replaceAllUsesWith(newroot);
+        newroot->takeName(vi->memloc);
+        vi->memloc = newroot;
+    }
     return newroot;
 }
+
 
 // Marks a use (and thus a potential kill) of a gcroot
 static void mark_gc_use(const jl_cgval_t &v)
@@ -2474,7 +2469,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_throw && nargs==1) {
-        Value *arg1 = boxed(emit_expr(args[1], ctx), ctx); // rooted by throw
+        Value *arg1 = boxed(emit_expr(args[1], ctx), ctx, false); // rooted by throw
         // emit a "conditional" throw so that codegen does't end up trying to emit code after an "unreachable" terminator
         raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
         *ret = jl_cgval_t();
@@ -3141,11 +3136,13 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx)
     }
 
     jl_varinfo_t &vi = ctx->vars[sym];
+    if (!vi.isArgument && !vi.isAssigned)
+        undef_var_error_if_null(V_null, sym, ctx);
     if (vi.memloc) {
         Value *bp = vi.memloc;
         if (vi.isArgument ||  // arguments are always defined
             (!vi.isAssigned && !vi.usedUndef)) {
-            // if no undef usage was found by inference, and it's either not assigned or not in env it must be always defined
+            // if no undef usage was found by inference, and it's either not assigned or not in env: it must be always defined
             Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
             return mark_julia_type(v, true, vi.value.typ, ctx);
         }
@@ -3155,15 +3152,14 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx)
             return v;
         }
     }
-    else if (vi.isVolatile && !vi.value.isghost) {
-        // copy value to a non-volatile location
-        assert(vi.value.ispointer);
-        Type *T = julia_type_to_llvm(vi.value.typ)->getPointerTo();
-        Value *v = data_pointer(vi.value, ctx, T);
-        return mark_julia_type(builder.CreateLoad(v, true), false, vi.value.typ, ctx);
+    else if (vi.value.isboxed || vi.value.constant || !vi.value.ispointer || (vi.isSA && !vi.isVolatile)) {
+        return vi.value;
     }
     else {
-        return vi.value;
+        // copy value to a non-mutable location
+        Type *T = julia_type_to_llvm(vi.value.typ)->getPointerTo();
+        Value *v = data_pointer(vi.value, ctx, T);
+        return mark_julia_type(builder.CreateLoad(v, vi.isVolatile), false, vi.value.typ, ctx);
     }
 }
 
@@ -3181,7 +3177,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     emit_unbox(vtype, slot, slot.typ),
                     false, slot.typ, ctx);
         }
-        else if (slot.isboxed) {
+        if (slot.isboxed && slot.isimmutable) {
             // see if inference had a better type for the gensym than the expression (after inlining getfield on a Tuple)
             jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
             if (jl_is_array(gensym_types)) {
@@ -3233,7 +3229,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     if (!vi.used)
         return;
 
-    // add info to arravar list
+    // add info to arrayvar list
     if (rval_info.isboxed) {
         // check isboxed in case rval isn't the right type (for example, on a dead branch),
         // so we don't try to assign it to the arrayvar info
@@ -3243,35 +3239,18 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
     }
 
+    assert(vi.isAssigned);
     if (vi.memloc) {
-        // boxed or unused variables
-        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && (!rval_info.typ || rval_info.typ == jl_bottom_type)) {
-            if (vi.usedUndef) {
-                // sometimes x = y::Union{} occurs
-                jl_sym_t *s;
-                if (jl_is_symbolnode(r))
-                    s = jl_symbolnode_sym(r);
-                else
-                    s = (jl_sym_t*)r;
-                builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)s));
-            }
-            return;
+        // boxed variables
+        if (((!vi.isSA && rval_info.gcroot) || !rval_info.isboxed) && isa<AllocaInst>(vi.memloc)) {
+            // rval had a gcroot, so lval needs one too: promote variable slot to a gcroot
+            emit_local_root(ctx, &vi);
         }
-        Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to variable slot
+        Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to the variable slot
         builder.CreateStore(rval, vi.memloc, vi.isVolatile);
     }
-    else if (vi.value.isghost || vi.value.constant) {
+    else if (vi.value.constant) {
         // virtual store
-    }
-    else if (!vi.hasGCRoot) {
-        // SSA variable w/o gcroot, just track the value info directly
-        assert(vi.isSA);
-        if (!rval_info.isimmutable && !rval_info.isboxed) { // emit a copy of values stored in mutable slots
-            rval_info = mark_julia_type(
-                    emit_unbox(julia_type_to_llvm(rval_info.typ), rval_info, rval_info.typ),
-                    false, rval_info.typ, ctx);
-        }
-        vi.value = rval_info;
     }
     else {
         // store unboxed
@@ -4188,6 +4167,11 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
     ctx.nReqArgs = nreq;
 
+    // create SAvalue locations for GenSym objects
+    ctx.gensym_assigned.assign(n_gensyms, false);
+    ctx.gensym_SAvalues.assign(n_gensyms, jl_cgval_t());
+
+    // step 3. some variable analysis
     size_t i;
     for(i=0; i < nreq; i++) {
         jl_value_t *arg = jl_cellref(largs,i);
@@ -4221,8 +4205,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             varinfo.value = mark_julia_type((Value*)NULL, false, typ, &ctx);
         }
     }
-
-    // step 3. some variable analysis
 
     // finish recording escape info
     simple_escape_analysis((jl_value_t*)ast, true, &ctx);
@@ -4346,8 +4328,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     bool do_coverage = jl_options.code_coverage == JL_LOG_ALL || (jl_options.code_coverage == JL_LOG_USER && in_user_code);
     bool do_malloc_log = jl_options.malloc_log  == JL_LOG_ALL || (jl_options.malloc_log    == JL_LOG_USER && in_user_code);
     jl_value_t *stmt = skip_meta(stmts);
-    std::string filename = "no file";
-    char *dbgFuncName = jl_symbol_name(lam->name);
+    StringRef filename = "<no file>";
+    StringRef dbgFuncName = jl_symbol_name(lam->name);
     int lno = -1;
     // look for initial (line num filename [funcname]) node, [funcname] for kwarg methods.
     if (jl_is_linenode(stmt)) {
@@ -4370,6 +4352,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             }
         }
     }
+    if (filename.empty())
+        filename = "<missing>";
     int toplineno = lno;
 
     DIBuilder dbuilder(*builtins_module);
@@ -4392,14 +4376,15 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
 
     DebugLoc noDbg;
     ctx.debug_enabled = true;
-    if (dbgFuncName[0] == 0) {
+    if (dbgFuncName.empty()) {
         // special value: if function name is empty, disable debug info
-        builder.SetCurrentDebugLocation(noDbg);
-        ctx.debug_enabled = false;
         do_coverage = false;
         do_malloc_log = false;
+        //dbgFuncName = filename; // for testing, uncomment this line
+        ctx.debug_enabled = !dbgFuncName.empty();
     }
-    else {
+
+    if (ctx.debug_enabled) {
         // TODO: Fix when moving to new LLVM version
         #ifndef LLVM34
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
@@ -4471,6 +4456,9 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         #ifndef LLVM37
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
         #endif
+    }
+    else {
+        builder.SetCurrentDebugLocation(noDbg);
     }
 
     if (ctx.debug_enabled) {
@@ -4565,31 +4553,6 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         argCount = &*AI++;
         ctx.argArray = argArray;
         ctx.argCount = argCount;
-
-#ifdef LLVM36
-        // Declare arguments early so llvm in case any of the below emits basic blocks
-        // before we get to loading local variables
-        for(i=0; i < nreq; i++) {
-            jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
-            if (s == unused_sym) continue;
-            if (ctx.vars[s].dinfo != (MDNode*)NULL) {
-                SmallVector<int64_t, 9> addr;
-                addr.push_back(llvm::dwarf::DW_OP_plus);
-                addr.push_back(i * sizeof(void*));
-                addr.push_back(llvm::dwarf::DW_OP_deref);
-                prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
-                ctx.dbuilder->insertDbgValueIntrinsic(
-                    argArray,
-                    0,
-                    ctx.vars[s].dinfo,
-                    ctx.dbuilder->createExpression(addr),
-#ifdef LLVM37
-                    builder.getCurrentDebugLocation().get(),
-#endif
-                    builder.GetInsertBlock());
-            }
-        }
-#endif
     }
 
     /*
@@ -4605,114 +4568,10 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     error_unless(sp_ok, "stack overflow", &ctx);
     */
 
-    // step 7. allocate local variables
-    // must be in the first basic block for the llvm mem2reg pass to work
-    int n_roots = 0;
-    for(i=0; i < largslen; i++) {
-        jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
-        if (s == unused_sym) continue;
-        jl_varinfo_t &varinfo = ctx.vars[s];
-        if (varinfo.value.isghost || varinfo.value.constant) {
-            // no need to explicitly load/store a constant/ghost value
-            continue;
-        }
-        if (jl_is_type_type(varinfo.value.typ) && jl_is_leaf_type(jl_tparam0(varinfo.value.typ))) {
-            // replace T::Type{T} with T
-            varinfo.value = mark_julia_const(jl_tparam0(varinfo.value.typ));
-        }
-        else if (store_unboxed_p(s, &ctx)) {
-            if (varinfo.isAssigned) // otherwise, just leave it in the input register
-                alloc_local(s, &ctx);
-        }
-        else if (varinfo.isAssigned || (va && i==largslen-1 && varinfo.escapes)) {
-            n_roots++;
-        }
-        maybe_alloc_arrayvar(s, &ctx);
-    }
-    for(i=0; i < vinfoslen; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
-        assert(jl_is_symbol(s));
-        jl_varinfo_t &vi = ctx.vars[s];
-        if (vi.isArgument) {
-            continue;
-        }
-        if ((vi.value.isghost || vi.value.constant) && !vi.usedUndef) {
-            // no need to explicitly load/store a constant/ghost value
-            continue;
-        }
-        if (store_unboxed_p(s, &ctx)) {
-            alloc_local(s, &ctx);
-        }
-        else {
-            if (!vi.used) {
-                vi.hasGCRoot = false;
-                continue;
-            }
-            if (jl_options.opt_level > 0 && vi.isSA && !vi.isVolatile && !vi.usedUndef) {
-                vi.hasGCRoot = false; // so far...
-            }
-            else if (jl_is_type_type(vi.value.typ) && jl_is_leaf_type(jl_tparam0(vi.value.typ)) && !vi.usedUndef) {
-                // replace T::Type{T} with T
-                vi.value = mark_julia_const(jl_tparam0(vi.value.typ));
-                vi.hasGCRoot = false;
-            }
-            else {
-                vi.hasGCRoot = true;
-                n_roots++;
-            }
-        }
-        maybe_alloc_arrayvar(s, &ctx);
-    }
-
-    // create SAvalue locations for GenSym objects
-    ctx.gensym_assigned.assign(n_gensyms, false);
-    ctx.gensym_SAvalues.assign(n_gensyms, jl_cgval_t());
-
-    // step 8. set up GC frame
+    // step 7. set up GC frame
     allocate_gc_frame(b0, &ctx);
 
-    // get pointers for locals stored in the gc frame array (argTemp)
-    int varnum = 0;
-    for(i=0; i < largslen; i++) {
-        jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
-        if (s == unused_sym) continue;
-        jl_varinfo_t &varinfo = ctx.vars[s];
-        assert(!varinfo.memloc); // arguments shouldn't also have memory locs
-        if (varinfo.value.isghost || varinfo.value.constant) {
-            // no need to explicitly load/store a ghost value
-            varinfo.hasGCRoot = true;
-            continue;
-        }
-        if (store_unboxed_p(s, &ctx)) {
-            varinfo.hasGCRoot = true;
-        }
-        else if (varinfo.isAssigned || (va && i==largslen-1 && varinfo.escapes)) {
-            Value *av = emit_local_slot(&ctx);
-            varnum++;
-            varinfo.memloc = av;
-        }
-    }
-    for(i=0; i < vinfoslen; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(jl_cellref(vinfos,i),0);
-        jl_varinfo_t &varinfo = ctx.vars[s];
-        if (varinfo.memloc || varinfo.isArgument)
-            continue; // gc root already created
-        if ((varinfo.value.isghost || varinfo.value.constant) && !varinfo.usedUndef)
-            varinfo.hasGCRoot = true; // will never need a gc-root for this
-        else if (store_unboxed_p(s, &ctx))
-            varinfo.hasGCRoot = true; // will never need a gc-root for this
-        else if (varinfo.hasGCRoot) {
-            Value *lv = emit_local_slot(&ctx);
-            varnum++;
-            varinfo.memloc = lv;
-        }
-    }
-    assert(varnum == n_roots);
-
-    // step 9. create boxes for boxed locals
-    // now handled by explicit :newvar nodes
-
-    // step 10. allocate space for exception handler contexts
+    // step 8. allocate space for exception handler contexts
     size_t stmtslen = jl_array_dim0(stmts);
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -4727,10 +4586,74 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 11. check arg count
-    // (obsoleted by jb/functions branch)
+    // step 9. allocate local variables slots
+    // must be in the first basic block for the llvm mem2reg pass to work
 
-    // step 12. move args into local variables
+    // get pointers for locals stored in the gc frame array (argTemp)
+#ifdef LLVM36
+    if (ctx.debug_enabled)
+        prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_declare));
+#endif
+    for (std::map<jl_sym_t*, jl_varinfo_t>::iterator I = ctx.vars.begin(), E = ctx.vars.end(); I != E; ++I) {
+        jl_sym_t *s = I->first;
+        jl_varinfo_t &varinfo = I->second;
+        if (s == unused_sym) continue;
+        assert(!varinfo.memloc); // variables shouldn't also have memory locs already
+        if (!varinfo.usedUndef) {
+            if (varinfo.value.constant) {
+                // no need to explicitly load/store a constant/ghost value
+                continue;
+            }
+            else if (jl_is_type_type(varinfo.value.typ) && jl_is_leaf_type(jl_tparam0(varinfo.value.typ))) {
+                // replace T::Type{T} with T
+                varinfo.value = mark_julia_const(jl_tparam0(varinfo.value.typ));
+                continue;
+            }
+            else if (store_unboxed_p(s, &ctx)) {
+                if (varinfo.isAssigned) { // otherwise, just leave it in the input register
+                    Value *lv = alloc_local(s, &ctx); (void)lv;
+#ifdef LLVM36
+                    if (ctx.debug_enabled) {
+                        assert(varinfo.dinfo->getType() != jl_pvalue_dillvmt);
+                        ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
+#ifdef LLVM37
+                                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+#else
+                                builder.GetInsertBlock());
+#endif
+                    }
+#endif
+                }
+                continue;
+            }
+        }
+        if (varinfo.isAssigned || (va && s == ctx.vaName && varinfo.escapes)) {
+            AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
+            varinfo.memloc = av;
+#ifdef LLVM36
+            if (ctx.debug_enabled) {
+                DIExpression *expr;
+                if (varinfo.dinfo->getType() == jl_pvalue_dillvmt) {
+                    expr = ctx.dbuilder->createExpression();
+                }
+                else {
+                    SmallVector<int64_t, 8> addr;
+                    addr.push_back(llvm::dwarf::DW_OP_deref);
+                    expr = ctx.dbuilder->createExpression(addr);
+                }
+                ctx.dbuilder->insertDeclare(av, varinfo.dinfo, expr,
+#ifdef LLVM37
+                                builder.getCurrentDebugLocation().get(), builder.GetInsertBlock());
+#else
+                                builder.GetInsertBlock());
+#endif
+            }
+#endif
+        }
+        maybe_alloc_arrayvar(s, &ctx);
+    }
+
+    // step 10. move args into local variables
     Function::arg_iterator AI = f->arg_begin();
     if (ctx.sret)
         AI++; // skip sret slot
@@ -4769,6 +4692,21 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                 else {
                     Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
                     theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ, &ctx, /*needsgcroot*/false);
+#ifdef LLVM36
+                    if (ctx.debug_enabled) {
+                        SmallVector<int64_t, 8> addr;
+                        addr.push_back(llvm::dwarf::DW_OP_plus);
+                        addr.push_back(i * sizeof(void*));
+                        addr.push_back(llvm::dwarf::DW_OP_deref);
+                        prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::dbg_value));
+                        ctx.dbuilder->insertDbgValueIntrinsic(
+                            argArray, 0, vi.dinfo, ctx.dbuilder->createExpression(addr),
+#ifdef LLVM37
+                            builder.getCurrentDebugLocation().get(),
+#endif
+                            builder.GetInsertBlock());
+                    }
+#endif
                 }
             }
 
@@ -4790,6 +4728,8 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
             else {
                 Value *argp = boxed(theArg, &ctx, false); // skip the temporary gcroot since it would be folded to argp anyways
                 builder.CreateStore(argp, lv);
+                if (!theArg.isboxed)
+                    emit_local_root(&ctx, &vi); // create a root for vi
             }
             // get arrayvar data if applicable
             if (arrayvars.find(s) != arrayvars.end()) {
@@ -4802,7 +4742,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 13. allocate rest argument if necessary
+    // step 11. allocate rest argument if necessary
     if (va && ctx.vaName) {
         jl_sym_t *argname = ctx.vaName;
         jl_varinfo_t &vi = ctx.vars[argname];
@@ -4829,6 +4769,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
                                                           ConstantInt::get(T_int32,nreq-1)));
 #endif
                 builder.CreateStore(restTuple, lv);
+                emit_local_root(&ctx, &vi); // create a root for vi
             }
             else {
                 // TODO: Perhaps allow this in the future, but for now since varargs
@@ -4841,7 +4782,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 14. associate labels with basic blocks to resolve forward jumps
+    // step 12. associate labels with basic blocks to resolve forward jumps
     BasicBlock *prev=NULL;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *ex = jl_cellref(stmts,i);
@@ -4861,7 +4802,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 15. compile body statements
+    // step 13. compile body statements
     bool prevlabel = false;
     lno = -1;
     int prevlno = -1;
@@ -5018,7 +4959,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
         }
     }
 
-    // step 17, Apply LLVM level inlining
+    // step 14, Apply LLVM level inlining
     for(std::vector<CallInst*>::iterator it = ctx.to_inline.begin(); it != ctx.to_inline.end(); ++it) {
         Function *inlinef = (*it)->getCalledFunction();
         InlineFunctionInfo info;
@@ -5043,7 +4984,7 @@ static void emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declaratio
     }
 #endif
 
-    // step 18. Perform any delayed instantiations
+    // step 15. Perform any delayed instantiations
     if (ctx.debug_enabled) {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
         if(cyclectx)
@@ -5871,7 +5812,7 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
     HostFeatures["avx"] = false;
 #endif
 #endif
-#if defined(_CPU_X86_64_)
+#if defined(_CPU_X86_64_) && defined(LLVM36)
     // Require cx16 (cmpxchg16b)
     // We need this for 128-bit atomic operations. We only need this
     // when threading is enabled; however, to test whether this
