@@ -772,6 +772,11 @@ JL_DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
     jl_cellset(a, jl_array_dim(a,0)-1, c);
 }
 
+JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)
+{
+    return jl_array_data_owner(a);
+}
+
 #ifdef __cplusplus
 }
 #endif
