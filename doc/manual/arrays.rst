@@ -263,29 +263,40 @@ where each ``I_k`` may be:
 1. A scalar integer
 2. A ``Range`` of the form ``a:b``, or ``a:b:c``
 3. A ``:`` or ``Colon()`` to select entire dimensions
-4. An arbitrary integer vector, including the empty vector ``[]``
-5. A boolean vector
+4. An arbitrary integer array, including the empty array ``[]``
+5. A boolean array to select elements at its ``true`` indices
 
-The result ``X`` generally has dimensions
+If all the indices are scalars, then the result ``X`` is a single element from
+the array ``A``. Otherwise, ``X`` is an array with the same number of
+dimensions as the sum of the dimensionalities of all the indices.
+
+If all indices are vectors, for example, then the shape of ``X`` would be
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of ``X`` containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. All dimensions indexed with scalars are
-dropped. For example, the result of ``A[2, I, 3]`` will be a vector with size
-``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
-a dimension indexed by a boolean vector will be the number of true values in the vector.
-As a special part of this syntax, the ``end`` keyword may be used to represent the last
-index of each dimension within the indexing brackets, as determined by the size of the
-innermost array being indexed.
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``I_1`` is changed to a
+two-dimensional matrix, then ``X`` becomes an ``n+1``-dimensional array of
+shape ``(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))``. The
+matrix adds a dimension. The location ``(i_1, i_2, i_3, ..., i_{n+1})`` contains
+the value at ``A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]``. All dimensions
+indexed with scalars are dropped. For example, the result of ``A[2, I, 3]`` is
+an array with size ``size(I)``. Its ``i``\ th element is populated by
+``A[2, I[i], 3]``.
 
-Alternatively, single elements of a multidimensional array can be indexed as
-::
+Boolean arrays must be the same length as the dimension they are indexing into.
+Indexing by a boolean array ``B`` is the same as indexing by the vector that is
+returned by ``find(B)``; the size of a dimension indexed by a boolean array will
+be the number of true values in the vector. It is generally more efficient to
+use boolean arrays as indices directly instead of first calling ``find``.
 
-    x = A[I]
+Additionally, single elements of a multidimensional array can be indexed as
+``x = A[I]``, where ``I`` is a ``CartesianIndex``. It effectively behaves like
+an ``n``-tuple of integers spanning multiple dimensions of ``A``. See
+:ref:`man-array-iteration` below.
 
-where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
-See :ref:`man-array-iteration` below.
-
-Indexing syntax is equivalent to a call to ``getindex``::
+As a special part of this syntax, the ``end`` keyword may be used to represent
+the last index of each dimension within the indexing brackets, as determined by
+the size of the innermost array being indexed. Indexing syntax without the
+``end`` keyword is equivalent to a call to ``getindex``::
 
     X = getindex(A, I_1, I_2, ..., I_n)
 
@@ -304,6 +315,20 @@ Example:
     2×2 Array{Int64,2}:
      6  10
      7  11
+
+    julia> x[map(isprime, x)]
+    6-element Array{Int64,1}:
+      2
+      3
+      5
+      7
+     11
+     13
+
+    julia> x[1, [2 3; 4 1]]
+    2x2 Array{Int64,2}:
+      5  9
+     13  1
 
 Empty ranges of the form ``n:n-1`` are sometimes used to indicate the inter-index
 location between ``n-1`` and ``n``.  For example, the :func:`searchsorted` function uses
@@ -329,16 +354,18 @@ where each ``I_k`` may be:
 1. A scalar integer
 2. A ``Range`` of the form ``a:b``, or ``a:b:c``
 3. A ``:`` or ``Colon()`` to select entire dimensions
-4. An arbitrary integer vector, including the empty vector ``[]``
-5. A boolean vector
+4. An arbitrary integer array, including the empty array ``[]``
+5. A boolean array to select elements at its ``true`` indices
 
-If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
-and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
-the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
-value is written to all referenced locations of ``A``.
+If ``X`` is an array, it must have the same number of elements as the product
+of the lengths of the indices:
+``prod(length(I_1), length(I_2), ..., length(I_n))``. The value in location
+``i_1, i_2, ..., i_n`` of ``A`` is overwritten with the value
+``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its value
+is written to all referenced locations of ``A``.
 
-A boolean vector used as an index behaves as in :func:`getindex` (it is first transformed
-with :func:`find`).
+A boolean array used as an index behaves as in :func:`getindex`, behaving as
+though it is first transformed with :func:`find`.
 
 Index assignment syntax is equivalent to a call to :func:`setindex!`::
 
