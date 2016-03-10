@@ -47,11 +47,8 @@ static llvm::Value *prepare_call(llvm::Value *Callee)
 }
 
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static GlobalValue *realize_pending_global(Instruction *User, GlobalValue *G, std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals)
+static GlobalValue *realize_pending_global(Module *M, GlobalValue *G, std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals)
 {
-    Function *UsedInHere = User->getParent()->getParent();
-    assert(UsedInHere);
-    Module *M = UsedInHere->getParent();
     if (M == G->getParent() && M != builtins_module) { // can happen during bootstrap
         //std::cout << "Skipping " << std::string(G->getName()) << " due to parentage" << std::endl;
         return nullptr;
@@ -126,7 +123,8 @@ static void handleUse(Use &Use1, llvm::GlobalValue *G,
                       struct ExprChain *Chain, struct ExprChain *ChainEnd)
 {
     Instruction *User = dyn_cast<Instruction>(Use1.getUser());
-    if (!User) {
+    GlobalValue *GVUser = dyn_cast<GlobalValue>(Use1.getUser());
+    if (!User && !GVUser) {
         ConstantExpr *Expr = cast<ConstantExpr>(Use1.getUser());
         Value::use_iterator UI2 = Expr->use_begin(), E2 = Expr->use_end();
         for (; UI2 != E2;) {
@@ -142,7 +140,16 @@ static void handleUse(Use &Use1, llvm::GlobalValue *G,
         }
         return;
     }
-    llvm::Constant *Replacement = realize_pending_global(User,G,FixedGlobals);
+    llvm::Module *M = nullptr;
+    if (User) {
+        Function *UsedInHere = User->getParent()->getParent();
+        assert(UsedInHere);
+        M = UsedInHere->getParent();
+    } else {
+        assert(GVUser);
+        M = GVUser->getParent();
+    }
+    llvm::Constant *Replacement = realize_pending_global(M,G,FixedGlobals);
     if (!Replacement)
         return;
     while (Chain) {
