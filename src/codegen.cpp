@@ -1310,7 +1310,13 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
         } else {
             // Otherwise we use a global mapping
             assert(!imaging_mode);
-            jl_ExecutionEngine->addGlobalMapping(llvmf->getName(), (void*)getAddressForOrCompileFunction(llvmf));
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+            jl_ExecutionEngine->addGlobalMapping(llvmf->getName(),
+                    (void*)getAddressForOrCompileFunction(llvmf));
+#else
+            jl_ExecutionEngine->addGlobalMapping(llvmf,
+                    jl_ExecutionEngine->getPointerToFunction(llvmf));
+#endif
         }
     }
 }
@@ -1318,7 +1324,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // --- native code info, and dump function to IR and ASM ---
 
 extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
-#ifdef USE_MCJIT
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
     const object::ObjectFile **object
 #else
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
@@ -1439,7 +1445,7 @@ uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
     return getAddressForOrCompileFunction(llvmf);
 #else
-    return jl_ExecutionEngine->getPointerToFunction(llvmf);
+    return (uint64_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
 }
 
