@@ -11,6 +11,8 @@ immutable Generator{I,F}
     iter::I
 end
 
+Generator(f, c1, c...) = Generator(a->f(a...), zip(c1, c...))
+
 start(g::Generator) = start(g.iter)
 done(g::Generator, s) = done(g.iter, s)
 function next(g::Generator, s)
