@@ -64,6 +64,8 @@ issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose{T<:Real}(A::Symmetric{T}) = A
+isposdef(A::Symmetric) = isposdef(A.data)
+
 function ctranspose(A::Symmetric)
     AC = ctranspose(A.data)
     return Symmetric(AC, ifelse(A.uplo == 'U', :L, :U))
@@ -138,7 +140,7 @@ A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
 
-bkfact(A::HermOrSym) = bkfact(A.data, symbol(A.uplo), issymmetric(A))
+bkfact(A::HermOrSym) = bkfact(full(A.data), symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)
 
 # Is just RealHermSymComplexHerm, but type alias seems to be broken
@@ -163,7 +165,8 @@ eigfact!{T<:BlasReal,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S}, vl::Real,
 # Because of #6721 it is necessary to specify the parameters explicitly here.
 eigfact{T1<:Real,T2}(A::RealHermSymComplexHerm{T1,T2}, vl::Real, vh::Real) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh))
 
-eigvals!{T<:BlasReal,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S}) = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+# eigvals!{T<:BlasReal,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S}) = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+eigvals!{T<:BlasReal,S<:AbstractMatrix}(A::RealHermSymComplexHerm{T,S}) = LAPACK.syevr!('N', 'A', A.uplo, full(A.data), 0.0, 0.0, 0, 0, -1.0)[1]
 # Because of #6721 it is necessary to specify the parameters explicitly here.
 eigvals{T1<:Real,T2}(A::RealHermSymComplexHerm{T1,T2}) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)))
 
