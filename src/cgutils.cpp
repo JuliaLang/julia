@@ -489,7 +489,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
 {
     if (isboxed)
         return jl_pvalue_dillvmt;
-    if (jl_is_abstracttype(jt) || jl_is_uniontype(jt) || jl_is_array_type(jt))
+    // always return the boxed representation for types with hidden content
+    if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
+            jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
+            jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
+            jt == (jl_value_t*)jl_lambda_info_type)
         return jl_pvalue_dillvmt;
     if (jl_is_typector(jt) || jl_is_typevar(jt))
         return jl_pvalue_dillvmt;
@@ -516,7 +520,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     #endif
     }
     #ifdef LLVM37
-    else if (jl_is_tuple_type(jt) || jl_is_structtype(jt)) {
+    else if (!jl_is_leaf_type(jt)) {
+        jdt->ditype = jl_pvalue_dillvmt;
+        return jl_pvalue_dillvmt;
+    }
+    else if (jl_is_structtype(jt)) {
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         size_t ntypes = jl_datatype_nfields(jst);
         llvm::DICompositeType *ct = dbuilder->createStructType(
@@ -2075,7 +2083,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     if (gcrooted) {
         // make a gcroot for the new box
         // (unless the caller explicitly said this was unnecessary)
-        Value *froot = emit_local_slot(ctx);
+        Value *froot = emit_local_root(ctx);
         builder.CreateStore(box, froot);
     }
 
