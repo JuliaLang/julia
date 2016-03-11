@@ -204,3 +204,5 @@ let f(g) = (@test size(g.iter)==(2,3))
 end
 
 @test_throws DimensionMismatch Base.IteratorND(1:2, (2,3))
+
+@test collect(Base.Generator(+, [1,2], [10,20])) == [11,22]
