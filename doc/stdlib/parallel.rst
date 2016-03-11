@@ -343,7 +343,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Returns a lambda that executes function ``f`` on an available worker using ``remotecall_fetch``.
+   Returns a lambda that executes function ``f`` on an available worker using ``remotecall_fetch``\ .
 
 .. function:: put!(RemoteChannel, value)
 
