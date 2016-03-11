@@ -294,9 +294,9 @@ end
 
 # bits types
 if WORD_SIZE == 64
-    @test isa((()->Intrinsics.box(Ptr{Int8},Intrinsics.unbox(Int64,0)))(), Ptr{Int8})
+    @test isa((()->Core.Intrinsics.box(Ptr{Int8},Core.Intrinsics.unbox(Int64,0)))(), Ptr{Int8})
 else
-    @test isa((()->Intrinsics.box(Ptr{Int8},Intrinsics.unbox(Int32,0)))(), Ptr{Int8})
+    @test isa((()->Core.Intrinsics.box(Ptr{Int8},Core.Intrinsics.unbox(Int32,0)))(), Ptr{Int8})
 end
 @test isa(convert(Char,65), Char)
 
@@ -1383,7 +1383,7 @@ f4518(x::ByteString, y::Union{Int32,Int64}) = 1
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,Int64(1234)))
+    x = Core.Intrinsics.box(Date4581{Int}, Core.Intrinsics.unbox(Int64,Int64(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
@@ -1392,10 +1392,10 @@ end
 
 # issue #6591
 function f6591(d)
-    Intrinsics.box(Int64, d)
+    Core.Intrinsics.box(Int64, d)
     (f->f(d))(identity)
 end
-let d = Intrinsics.box(Date4581{Int}, Int64(1))
+let d = Core.Intrinsics.box(Date4581{Int}, Int64(1))
     @test isa(f6591(d), Date4581)
 end
 
@@ -1894,7 +1894,7 @@ obj = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array(T,1)
-    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,Int64(1)))
+    a[1] = Core.Intrinsics.box(Date6387{Int64}, Core.Intrinsics.unbox(Int64,Int64(1)))
     a
 end
 
@@ -2402,8 +2402,8 @@ result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T
 
 # test functionality of non-power-of-2 bitstype constants
 bitstype 24 Int24
-Int24(x::Int) = Intrinsics.box(Int24,Intrinsics.trunc_int(Int24,Intrinsics.unbox(Int,x)))
-Int(x::Int24) = Intrinsics.box(Int,Intrinsics.zext_int(Int,Intrinsics.unbox(Int24,x)))
+Int24(x::Int) = Core.Intrinsics.box(Int24,Core.Intrinsics.trunc_int(Int24,Core.Intrinsics.unbox(Int,x)))
+Int(x::Int24) = Core.Intrinsics.box(Int,Core.Intrinsics.zext_int(Int,Core.Intrinsics.unbox(Int24,x)))
 let x,y,f
     x = Int24(Int(0x12345678)) # create something (via truncation)
     @test Int(0x345678) === Int(x)
@@ -3902,3 +3902,8 @@ let
     arrayset_unknown_dim(Int, 2)
     arrayset_unknown_dim(Int, 3)
 end
+
+# issue #15370
+@test isdefined(Core, :Box)
+@test isdefined(Base, :Box)
+@test !isdefined(Main, :Box)

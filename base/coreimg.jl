@@ -1,8 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
-using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            _apply, typeassert, apply_type, svec
+using Core.TopModule, Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 
 eval(x) = Core.eval(Inference,x)
@@ -12,7 +11,7 @@ include = Core.include
 
 # simple print definitions for debugging.
 show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                     Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
+                     pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
 print(x::ANY) = show(x)
 println(x::ANY) = ccall(:jl_, Void, (Any,), x) # includes a newline
 print(a::ANY...) = for x=a; print(x); end
