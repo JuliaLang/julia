@@ -1110,6 +1110,8 @@ I2 = CartesianIndex((-1,5,2))
 @test I2 + I1 == CartesianIndex((1,8,2))
 @test I1 - I2 == CartesianIndex((3,-2,-2))
 @test I2 - I1 == CartesianIndex((-3,2,2))
+@test I1 + 1 == CartesianIndex((3,4,1))
+@test I1 - 2 == CartesianIndex((0,1,-2))
 
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
@@ -1146,6 +1148,9 @@ indexes = collect(R)
 @test length(indexes) == 12
 @test length(R) == 12
 @test ndims(R) == 2
+
+@test CartesianRange((3:5,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(5,7))
+@test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
 
 r = 2:3
 itr = eachindex(r)

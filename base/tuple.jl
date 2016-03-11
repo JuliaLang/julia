@@ -85,6 +85,22 @@ tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
 map(f, ::Tuple{}, ts::Tuple...) = ()
 map(f, ts::Tuple...) = (f(heads(ts...)...), map(f, tails(ts...)...)...)
 
+# type-stable padding
+fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
+_ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}) = out
+function _ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}, t...)
+    @_inline_meta
+    error("input tuple of length $(N+length(t)), requested $N")
+end
+function _ftl{N}(out, val, ::Type{Val{N}}, t1, t...)
+    @_inline_meta
+    _ftl((out..., t1), val, Val{N}, t...)
+end
+function _ftl{N}(out, val, ::Type{Val{N}})
+    @_inline_meta
+    _ftl((out..., val), val, Val{N})
+end
+
 ## comparison ##
 
 function isequal(t1::Tuple, t2::Tuple)
