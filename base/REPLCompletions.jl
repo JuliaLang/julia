@@ -48,7 +48,7 @@ function complete_symbol(sym, ffunc)
             # We're now looking for a type
             fields = fieldnames(t)
             found = false
-            for i in 1:length(fields)
+            for i in eachindex(fields)
                 s == fields[i] || continue
                 t = t.types[i]
                 (Base.isstructtype(t) && !(t <: Tuple)) || return UTF8String[]

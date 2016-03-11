@@ -83,8 +83,8 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         # Wait till all the workers have mapped the segment
-        for i in 1:length(refs)
-            wait(refs[i])
+        for ref in refs
+            wait(ref)
         end
 
         # All good, immediately unlink the segment.
@@ -183,8 +183,8 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     end
 
     # Wait till all the workers have mapped the segment
-    for i in 1:length(refs)
-        wait(refs[i])
+    for ref in refs
+        wait(ref)
     end
 
     S = SharedArray{T,N}(dims, pids, refs, filename)
