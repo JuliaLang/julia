@@ -10102,7 +10102,7 @@ read
     eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
 Computes eigenvalues and eigenvectors of `A`. See [`eigfact`](:func:`eigfact`) for details
-on the `balance` keyword argument.
+on the `permute` and `scale` keyword arguments. The eigenvectors are returned columnwise.
 
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
