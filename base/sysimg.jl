@@ -1,11 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Core.Intrinsics.ccall
-
 baremodule Base
 
-using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            _apply, typeassert, apply_type, svec
+using Core.TopModule, Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include
@@ -19,7 +16,7 @@ if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                         Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
+                         pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
     print(x::ANY) = show(x)
     println(x::ANY) = ccall(:jl_, Void, (Any,), x)
     print(a::ANY...) = for x=a; print(x); end

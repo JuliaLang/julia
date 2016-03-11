@@ -762,8 +762,6 @@ function schedule_call(rid, thunk)
     rv
 end
 
-#localize_ref(b::Box) = Box(localize_ref(b.contents))
-
 #function localize_ref(r::RemoteChannel)
 #    if r.where == myid()
 #        fetch(r)
@@ -1463,18 +1461,6 @@ let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
-        # TODO jb/functions
-        #env = thunk.env
-        #if isa(env,Tuple)
-        #    for v in env
-        #        if isa(v,Box)
-        #            v = v.contents
-        #        end
-        #        if isa(v,AbstractRemoteRef)
-        #            p = v.where; break
-        #        end
-        #    end
-        #end
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
             nextidx += 1

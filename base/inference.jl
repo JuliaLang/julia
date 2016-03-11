@@ -268,7 +268,7 @@ add_tfunc(le_float, 2, 2, cmp_tfunc)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc)
 add_tfunc(fpislt, 2, 2, cmp_tfunc)
 add_tfunc(nan_dom_err, 2, 2, (a, b)->a)
-add_tfunc(getfield(Core.Intrinsics,:ccall), 3, IInf,
+add_tfunc(Core.Intrinsics.ccall, 3, IInf,
     function(fptr, rt, at, a...)
         if !isType(rt)
             return Any
@@ -283,15 +283,15 @@ add_tfunc(getfield(Core.Intrinsics,:ccall), 3, IInf,
         end
         return t
     end)
-add_tfunc(eval(Core.Intrinsics,:llvmcall), 3, IInf,
+add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
     (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
-add_tfunc(eval(Core.Intrinsics,:cglobal), 1, 2,
+add_tfunc(Core.Intrinsics.cglobal, 1, 2,
     (fptr, t...)->(isempty(t) ? Ptr{Void} :
                    isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
-add_tfunc(eval(Core.Intrinsics,:select_value), 3, 3,
+add_tfunc(Core.Intrinsics.select_value, 3, 3,
     # TODO: return Bottom if cnd is definitely not a Bool
     (cnd, x, y)->Union{x,y})
-add_tfunc(eval(Core.Intrinsics,:arraylen), 1, 1, x->Int)
+add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
 add_tfunc(is, 2, 2, cmp_tfunc)
 add_tfunc(issubtype, 2, 2, cmp_tfunc)
 add_tfunc(isa, 2, 2, cmp_tfunc)

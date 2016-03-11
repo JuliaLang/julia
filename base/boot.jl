@@ -125,7 +125,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, Method, MethodTable,
+    Function, LambdaInfo, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
@@ -143,37 +143,13 @@ export
     GlobalRef, NewvarNode, GenSym,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
-    # arrayref, arrayset, arraysize,
-    # _apply,
-    kwfunc,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
-    # typeassert, apply_type,
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main,
-    # intrinsics module
-    Intrinsics
-    #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
-    #box, bswap_int, checked_fptosi, checked_fptoui,
-    #checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
-    #checked_srem_int, checked_uadd_int, checked_usub_int, checked_umul_int,
-    #checked_udiv_int, checked_urem_int,
-    #checked_trunc_sint, checked_trunc_uint, check_top_bit,
-    #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
-    #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
-    #sqrt_llvm, powi_llvm,
-    #sqrt_llvm_fast,
-    #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
-    #fptrunc, le_float, lefsi64, lefui64, lesif64,
-    #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
-    #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
-    #sdiv_int, shl_int, sitofp, sle_int, slt_int, smod_int,
-    #srem_int, sub_float, sub_int, trunc_int, udiv_int, uitofp,
-    #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int, arraylen
-
+    nothing, Main
 
 const (===) = is
 
@@ -350,4 +326,15 @@ Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
+module TopModule
+    # this defines the types that lowering expects to be defined in a (top) module
+    # that are usually inherited from Core, but could be defined custom for a module
+    using Core: Box, IntrinsicFunction, Builtin,
+            arrayref, arrayset, arraysize,
+            _expr, _apply, typeassert, apply_type, svec, kwfunc
+    export Box, IntrinsicFunction, Builtin,
+            arrayref, arrayset, arraysize,
+            _expr, _apply, typeassert, apply_type, svec, kwfunc
+end
+using .TopModule
 ccall(:jl_set_istopmod, Void, (Bool,), true)
