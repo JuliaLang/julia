@@ -109,9 +109,9 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
     B
 end
 
-getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i > j ? A.data[i,j] : ifelse(i == j, one(T), zero(A.data[j,i]))
+getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i > j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
 getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i < j ? A.data[i,j] : ifelse(i == j, one(T), zero(A.data[j,i]))
+getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i < j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
 getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[j,i])
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
