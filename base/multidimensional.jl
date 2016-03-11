@@ -884,7 +884,7 @@ end
 @generated function groupslices{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         if !(1 <= dim <= $N)
-            error("Input argument dim must be 1 <= dim <= $N, but is currently $dim")
+            ArgumentError("Input argument dim must be 1 <= dim <= $N, but is currently $dim")
         end
         hashes = zeros(UInt, size(A, dim))
 
@@ -894,21 +894,61 @@ end
             @inbounds hashes[k] = hash(hashes[k], hash((@nref $N A i)))
         end
 
-        ic = Array(Int, size(A, dim))
+        # Collect index of first row for each hash
+        uniquerow = Array(Int, size(A, dim))
         firstrow = Dict{Prehashed,Int}()
-        icdict = Dict{Int,Int}()
-        h = 0
         for k = 1:size(A, dim)
-            tmp = get!(firstrow, Prehashed(hashes[k]), k)
-            if !haskey(icdict,tmp)
-                h += 1
-                icdict[tmp] = h
-                ic[k] = h
+            uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
+        end
+        uniquerows = collect(values(firstrow))
+
+        # Check for collisions
+        collided = falses(size(A, dim))
+        @inbounds begin
+            @nloops $N i A d->(if d == dim
+                k = i_d
+                j_d = uniquerow[k]
             else
-                ic[k] = icdict[tmp]
+                j_d = i_d
+            end) begin
+                if (@nref $N A j) != (@nref $N A i)
+                    collided[k] = true
+                end
             end
         end
 
+        if any(collided)
+            nowcollided = BitArray(size(A, dim))
+            while any(collided)
+                # Collect index of first row for each collided hash
+                empty!(firstrow)
+                for j = 1:size(A, dim)
+                    collided[j] || continue
+                    uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
+                end
+                for v in values(firstrow)
+                    push!(uniquerows, v)
+                end
+
+                # Check for collisions
+                fill!(nowcollided, false)
+                @nloops $N i A d->begin
+                    if d == dim
+                        k = i_d
+                        j_d = uniquerow[k]
+                        (!collided[k] || j_d == k) && continue
+                    else
+                        j_d = i_d
+                    end
+                end begin
+                    if (@nref $N A j) != (@nref $N A i)
+                        nowcollided[k] = true
+                    end
+                end
+                (collided, nowcollided) = (nowcollided, collided)
+            end
+        end
+        ic = uniquerow
         return ic
     end
 end
