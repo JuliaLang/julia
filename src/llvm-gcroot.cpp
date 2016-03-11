@@ -1,16 +1,21 @@
+#include "llvm-version.h"
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#ifdef LLVM36
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/DebugInfoMetadata.h>
+#endif
 
 #include <vector>
 #include <queue>
 
-#include "llvm-version.h"
 #include "julia.h"
 
 #ifdef LLVM37
@@ -654,6 +659,7 @@ void allocate_frame()
             GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             gep->insertAfter(last_gcframe_inst);
             gcroot->replaceAllUsesWith(gep);
+            gep->takeName(gcroot);
             gcroot->eraseFromParent();
             last_gcframe_inst = gep;
         }
@@ -667,31 +673,66 @@ void allocate_frame()
  *         Replace(slot, newslot) -> at InsertPoint(gc-frame)
  *         CreateStore(NULL, newslot) -> at InsertPoint(gc-frame)
  */
-    unsigned argSpaceSize = 0;
-    Instruction *argSlot = NULL;
-    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
-        CallInst* callInst = dyn_cast<CallInst>(&*I);
-        ++I;
-        if (callInst && callInst->getCalledFunction() == gcroot_func) {
-            if (!argSlot) {
-                argSlot = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, 2)));
-#ifdef JL_DEBUG_BUILD
-                argSlot->setName("locals");
+#ifdef LLVM36
+    DIBuilder dbuilder(M, false);
 #endif
-                argSlot->insertAfter(gcframe);
-                if (last_gcframe_inst == gcframe)
-                    last_gcframe_inst = argSlot;
+    unsigned argSpaceSize = 0;
+    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
+        Instruction* inst = &*I;
+        ++I;
+        if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
+            if (callInst->getCalledFunction() == gcroot_func) {
+                unsigned offset = 2 + argSpaceSize++;
+                Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, offset)));
+                argTempi->insertAfter(last_gcframe_inst);
+#ifdef LLVM36
+                Metadata *md = ValueAsMetadata::getIfExists(callInst);
+                if (md) {
+                    Value *mdValue = MetadataAsValue::get(M.getContext(), md);
+                    for (User::use_iterator use = mdValue->use_begin(), usee = mdValue->use_end(); use != usee; ) {
+                        // need to recreate the dbg_declare accordingly -- sadly llvm can't handle this in RAUW
+                        User *user = use->getUser();
+                        ++use;
+                        if (CallInst* dbg = dyn_cast<CallInst>(user)) {
+                            Function *called = dbg->getCalledFunction();
+                            if (called && called->getIntrinsicID() == Intrinsic::dbg_declare) {
+                                DILocalVariable *dinfo = cast<DILocalVariable>(cast<MetadataAsValue>(dbg->getOperand(1))->getMetadata());
+                                DIExpression *expr = cast<DIExpression>(cast<MetadataAsValue>(dbg->getOperand(2))->getMetadata());
+                                SmallVector<uint64_t, 8> addr;
+                                addr.push_back(llvm::dwarf::DW_OP_plus);
+                                addr.push_back(offset * sizeof(void*));
+                                addr.append(expr->elements_begin(), expr->elements_end());
+                                expr = dbuilder.createExpression(addr);
+                                dbuilder.insertDeclare(gcframe, dinfo, expr,
+#ifdef LLVM37
+                                                dbg->getDebugLoc(),
+#endif
+                                                dbg->getParent());
+                                dbg->eraseFromParent();
+                            }
+                        }
+                    }
+                }
+#endif
+                callInst->replaceAllUsesWith(argTempi);
+                argTempi->takeName(callInst);
+                callInst->eraseFromParent();
+                // Initialize the slots for function variables to NULL
+                StoreInst *store = new StoreInst(V_null, argTempi);
+                store->insertAfter(argTempi);
+                last_gcframe_inst = store;
             }
-            Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) argSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, argSpaceSize++)));
-            argTempi->insertAfter(last_gcframe_inst);
-            callInst->replaceAllUsesWith(argTempi);
-            callInst->eraseFromParent();
-            // Initialize the slots for function variables to NULL
-            StoreInst *store = new StoreInst(V_null, argTempi);
-            store->insertAfter(argTempi);
-            last_gcframe_inst = store;
+        }
+        else if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst)) {
+            if (allocaInst->getAllocatedType() == V_null->getType()) {
+                StoreInst *store = new StoreInst(V_null, allocaInst);
+                store->insertAfter(allocaInst);
+            }
         }
     }
+#ifdef LLVM36
+    dbuilder.finalize();
+#endif
 
     if (argSpaceSize + maxDepth == 0) {
         // 0 roots; remove gc frame entirely

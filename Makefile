@@ -226,13 +226,13 @@ COMMA:=,
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	$$(call spawn,$2) -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+	$$(call spawn,$3) $2 -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
 		-J $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT) \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
-$(eval $(call sysimg_builder,,$(JULIA_EXECUTABLE_release)))
-$(eval $(call sysimg_builder,-debug,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
 
 $(build_bindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_bindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
