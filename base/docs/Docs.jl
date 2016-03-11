@@ -130,10 +130,32 @@ type DocStr
     object :: Nullable
     data   :: Dict{Symbol, Any}
 
-    DocStr(text::AbstractString, data = Dict()) = new(text, Nullable(), data)
-    DocStr(object, data = Dict())               = new("", Nullable(object), data)
+    DocStr(text::AbstractString, data) = new(text, Nullable(), data)
+    DocStr(object,               data) = new("", Nullable(object), data)
+    DocStr(docstr::DocStr,       data) = docstr
 end
-docexpr(args...) = Expr(:call, DocStr, args...)
+
+function docstr(binding::Binding, typesig::ANY = Union{})
+    for m in modules
+        dict = meta(m)
+        if haskey(dict, binding)
+            docs = dict[binding].docs
+            if haskey(docs, typesig)
+                return docs[typesig]
+            end
+        end
+    end
+    error("could not find matching docstring for '$binding :: $typesig'.")
+end
+docstr(object, data = Dict()) = DocStr(object, data)
+
+macro ref(x)
+    binding = bindingexpr(namify(x))
+    typesig = signature(x)
+    esc(docexpr(binding, typesig))
+end
+
+docexpr(args...) = Expr(:call, docstr, args...)
 
 function parsedoc(d::DocStr)
     if isnull(d.object)
@@ -455,9 +477,18 @@ function moduledoc(meta, def, def′)
     end
 end
 
+# Shares a single doc, `meta`, between several expressions from the tuple expression `ex`.
 function multidoc(meta, ex, define)
     out = Expr(:toplevel)
-    out.args = [:(@doc($meta, $obj, $define)) for obj in ex.args]
+    str = docexpr(meta, metadata(ex))
+    ref = Ref{DocStr}()
+    for (n, arg) in enumerate(ex.args)
+        # The first `arg` to be documented needs to also create the docstring for the group.
+        # Subsequent `arg`s just need `ref` to be able to find the docstring without having
+        # to create an entirely new one each.
+        docstr = n === 1 ? :($(ref)[] = $str) : :($(ref)[])
+        push!(out.args, :(@doc($docstr, $arg, $define)))
+    end
     esc(out)
 end
 
