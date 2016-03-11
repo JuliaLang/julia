@@ -87,9 +87,9 @@ subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
 subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
 
 function chkfinite(A::StridedMatrix)
-    for i = eachindex(A)
-        if !isfinite(A[i])
-            throw(ArgumentError("matrix contains NaNs"))
+    for a in A
+        if !isfinite(a)
+            throw(ArgumentError("matrix contains Infs or NaNs"))
         end
     end
     return true

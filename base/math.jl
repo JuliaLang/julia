@@ -250,12 +250,12 @@ function frexp{T<:AbstractFloat}(x::T)
 end
 
 function frexp{T<:AbstractFloat}(A::Array{T})
-    f = similar(A)
-    e = Array(Int, size(A))
-    for i in eachindex(A)
-        f[i], e[i] = frexp(A[i])
+    F = similar(A)
+    E = Array(Int, size(A))
+    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
+        F[iF], E[iE] = frexp(A[iA])
     end
-    return (f, e)
+    return (F, E)
 end
 
 modf(x) = rem(x,one(x)), trunc(x)
