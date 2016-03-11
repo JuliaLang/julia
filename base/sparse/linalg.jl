@@ -576,8 +576,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     end
 
     function _any_abs_eq(v,n::Int)
-        for i in eachindex(v)
-            if abs(v[i])==n
+        for vv in v
+            if abs(vv)==n
                 return true
             end
         end

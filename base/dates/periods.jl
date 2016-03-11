@@ -223,7 +223,7 @@ for op in (:.+, :.-)
         ($op_){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
         ($op_){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = ($op)(Y,x)
         ($op_){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
-            reshape(CompoundPeriod[($op_)(X[i],Y[i]) for i in eachindex(X, Y)], promote_shape(size(X),size(Y)))
+            reshape(CompoundPeriod[($op_)(x,y) for (x,y) in zip(X, Y)], promote_shape(size(X),size(Y)))
     end
 end
 
