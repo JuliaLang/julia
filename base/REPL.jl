@@ -790,6 +790,11 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf, input)
             string = takebuf_string(buf)
+            # Parse help and shell commands
+            if string[1] in ('?', ';')
+                repl_keymap[string[1]](s, o)
+                string = string[2:end]
+            end
             curspos = position(LineEdit.buffer(s))
             pos = 1
             inputsz = sizeof(input)
