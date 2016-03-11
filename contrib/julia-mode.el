@@ -401,16 +401,15 @@ As a result, it is true inside \"foo\", `foo` and 'f'."
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
 KW-LIST is a list of strings.  The word at point is not considered
-a keyword if used as a field name, X.word, or quoted, :word.
-
-Assumes that point is not inside a comment."
+a keyword if used as a field name, X.word, or quoted, :word."
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
        (member (current-word t) kw-list)
        ;; 'end' is not a keyword when used for indexing, e.g. foo[end-2]
        (or (not (equal (current-word t) "end"))
-           (not (julia-in-brackets)))))
+           (not (julia-in-brackets))
+           (not (julia-in-comment)))))
 
 ;; if backward-sexp gives an error, move back 1 char to move over the '('
 (defun julia-safe-backward-sexp ()
