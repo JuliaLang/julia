@@ -786,45 +786,59 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
         # Bracketed Paste Mode
         "\e[200~" => (s,o...)->begin
-            input = LineEdit.bracketed_paste(s)
-            buf = copy(LineEdit.buffer(s))
-            edit_insert(buf, input)
-            string = takebuf_string(buf)
-            curspos = position(LineEdit.buffer(s))
-            pos = 1
-            inputsz = sizeof(input)
-            sz = sizeof(string)
-            while pos <= sz
-                oldpos = pos
+            input = LineEdit.bracketed_paste(s) # read directly from s until reaching the end-bracketed-paste marker
+            sbuffer = LineEdit.buffer(s)
+            curspos = position(sbuffer)
+            seek(sbuffer, 0)
+            shouldeval = (nb_available(sbuffer) == curspos && search(sbuffer, UInt8('\n')) == 0)
+            seek(sbuffer, curspos)
+            if curspos == 0
+                # if pasting at the beginning, strip leading whitespace
+                input = lstrip(input)
+            end
+            if !shouldeval
+                # when pasting in the middle of input, just paste in place
+                # don't try to execute all the WIP, since that's rather confusing
+                # and is often ill-defined how it should behave
+                edit_insert(s, input)
+                return
+            end
+            edit_insert(sbuffer, input)
+            input = takebuf_string(sbuffer)
+            oldpos = start(input)
+            firstline = true
+            while !done(input, oldpos) # loop until all lines have been executed
                 ast, pos = Base.syntax_deprecation_warnings(false) do
-                    Base.parse(string, pos, raise=false)
+                    Base.parse(input, oldpos, raise=false)
                 end
-                if isa(ast, Expr) && ast.head == :error
+                if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
+                        (done(input, pos) && !endswith(input, '\n'))
+                    # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                     # Insert all the remaining text as one line (might be empty)
-                    LineEdit.replace_line(s, strip(bytestring(string.data[max(oldpos, 1):end])))
-                    seek(LineEdit.buffer(s), max(curspos-oldpos+inputsz, 0))
+                    tail = input[oldpos:end]
+                    if !firstline
+                        # strip leading whitespace, but only if it was the result of executing something
+                        # (avoids modifying the user's current leading wip line)
+                        tail = lstrip(tail)
+                    end
+                    LineEdit.replace_line(s, tail)
                     LineEdit.refresh_line(s)
                     break
                 end
-                # Get the line and strip leading and trailing whitespace
-                line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
-                isempty(line) && continue
-                LineEdit.replace_line(s, line)
-                if oldpos <= curspos
-                    seek(LineEdit.buffer(s),curspos-oldpos+inputsz)
-                end
-                LineEdit.refresh_line(s)
-                (pos > sz && last(string) != '\n') && break
-                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+                # get the line and strip leading and trailing whitespace
+                line = strip(input[oldpos:prevind(input, pos)])
+                if !isempty(line)
+                    # put the line on the screen and history
+                    LineEdit.replace_line(s, line)
                     LineEdit.commit_line(s)
-                    # This is slightly ugly but ok for now
-                    terminal = LineEdit.terminal(s)
+                    # execute the statement
+                    terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
                     raw!(terminal, false) && disable_bracketed_paste(terminal)
                     LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
                     raw!(terminal, true) && enable_bracketed_paste(terminal)
-                else
-                    break
                 end
+                oldpos = pos
+                firstline = false
             end
         end,
     )
