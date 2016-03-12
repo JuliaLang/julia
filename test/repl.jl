@@ -252,6 +252,7 @@ begin
 
     # Some manual setup
     s = LineEdit.init_state(repl.t, repl.interface)
+    LineEdit.edit_insert(s, "wip")
 
     # Test that navigating history skips invalid modes
     # (in both directions)
@@ -271,10 +272,18 @@ begin
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    @test position(LineEdit.buffer(s)) == 3
+    LineEdit.move_line_start(s)
+    @test position(LineEdit.buffer(s)) == 0
 
     # Test that the same holds for prefix search
-    ps = LineEdit.state(s, prefix_mode)
+    ps = LineEdit.state(s, prefix_mode)::LineEdit.PrefixSearchState
+    @test LineEdit.input_string(ps) == ""
+    LineEdit.enter_prefix_search(s, prefix_mode, true)
     LineEdit.history_prev_prefix(ps, hp, "")
+    @test ps.prefix == ""
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "2 + 2"
     LineEdit.history_prev_prefix(ps, hp, "")
@@ -284,6 +293,8 @@ begin
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "shell"
     LineEdit.history_next_prefix(ps, hp, "sh")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "wip"
 
     # Test that searching backwards puts you into the correct mode and
     # skips invalid modes.
