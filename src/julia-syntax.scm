@@ -2261,11 +2261,6 @@
                 (new-env (append vars glob env))
                 (new-iglo (append iglo implicitglobals))
                 (body (resolve-scopes- blok new-env new-iglo lam new-ren #f))
-                (lineno (if (and (length> body 1)
-                                 (pair? (cadr body))
-                                 (eq? 'line (car (cadr body))))
-                            (list (cadr body))
-                            '()))
                 (real-new-vars (append (diff vars need-rename) renamed)))
            (for-each (lambda (v)
                        (if (memq v vars)
@@ -2274,15 +2269,11 @@
            (if lam
                (set-car! (cddr lam)
                          (append real-new-vars (caddr lam))))
-           `(block
-             ,@lineno
-             ,@(map (lambda (v) `(local ,v))
-                    real-new-vars)
-             ,@(if (and (pair? body) (eq? (car body) 'block))
-                   (if (null? lineno)
-                       (cdr body)
-                       (cddr body))
-                   (list body)))))
+           (insert-after-meta
+            (if (and (pair? body) (eq? (car body) 'block))
+                body
+                `(block ,body))
+            (map (lambda (v) `(local ,v)) real-new-vars))))
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
         (else
@@ -2553,22 +2544,29 @@ f(x) = yt(x)
             (cons (last e2) (append tl (butlast (cdr e2))))
             (cons e2 tl)))))
 
+;; return `body` with `stmts` inserted after any meta nodes
+(define (insert-after-meta body stmts)
+  (let ((meta (take-while (lambda (x) (and (pair? x)
+                                           (memq (car x) '(line meta))))
+                          (cdr body))))
+    `(,(car body)
+      ,@meta
+      ,@stmts
+      ,@(list-tail body (+ 1 (length meta))))))
+
 (define (add-box-inits-to-body lam body)
   (let ((args (map arg-name (lam:args lam)))
-        (vis  (car (lam:vinfo lam)))
-        (lnos (take-while (lambda (x) (and (pair? x) (eq? (car x) 'line)))
-                          (cdr body))))
+        (vis  (car (lam:vinfo lam))))
     ;; insert Box allocations for captured/assigned arguments
-    `(,(car body)
-      ,@lnos
-      ,@(apply append
-               (map (lambda (arg)
-                      (let ((vi (assq arg vis)))
-                        (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
-                            `((= ,arg (call (top Box) ,arg)))
-                            '())))
-                    args))
-      ,@(list-tail body (+ 1 (length lnos))))))
+    (insert-after-meta
+     body
+     (apply append
+            (map (lambda (arg)
+                   (let ((vi (assq arg vis)))
+                     (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
+                         `((= ,arg (call (top Box) ,arg)))
+                         '())))
+                 args)))))
 
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
