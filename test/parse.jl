@@ -170,6 +170,7 @@ macro f(args...) end; @f ""
 @test parse("(x,a;y=1)") == Expr(:tuple, Expr(:parameters, Expr(:kw, :y, 1)), :x, :a)
 @test parse("(x,a;y=1,z=2)") == Expr(:tuple, Expr(:parameters, Expr(:kw,:y,1), Expr(:kw,:z,2)), :x, :a)
 @test parse("(a=1, b=2)") == Expr(:tuple, Expr(:(=), :a, 1), Expr(:(=), :b, 2))
+@test_throws ParseError parse("(1 2)") # issue #15248
 
 # integer parsing
 @test is(parse(Int32,"0",36),Int32(0))
