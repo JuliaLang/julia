@@ -64,7 +64,16 @@ issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose{T<:Real}(A::Symmetric{T}) = A
-isposdef(A::Symmetric) = isposdef(A.data)
+
+function isposdef{T<:Real,S}(A::HermOrSym{T,S})
+    try
+        f = cholfact(A)
+    catch e
+        isa(e, LinAlg.PosDefException) || rethrow(e)
+        return false
+    end
+    true
+end
 
 function ctranspose(A::Symmetric)
     AC = ctranspose(A.data)
