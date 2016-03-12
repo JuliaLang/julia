@@ -140,7 +140,6 @@ Functions and LambdaInfo::
 
     jl_function_t *jl_new_generic_function(jl_sym_t *name);
     jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
-    jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env, jl_lambda_info_t *li);
 
 Arrays::
 
