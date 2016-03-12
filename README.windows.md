@@ -290,6 +290,15 @@ Then run the build:
 
 If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode).
 
+## Debugging a cross-compiled build under wine
+
+The most effective way to debug a cross-compiled version of julia on the cross-compilation
+host is to install a windows version of gdb and run it under wine as usual. The pre-built packages
+available [as part of the MSYS2 project](https://sourceforge.net/projects/msys2/files/REPOS/MINGW/)
+are known to work. Apart from the GDB package you may also need the python and termcap packages.
+Finally, GDB's prompt may not work when launch from the command line. This can be worked around
+by prepending `wineconsole` to the regular GDB invocation.
+
 ## Using a Windows VM
 
 [Vagrant](http://www.vagrantup.com/downloads) can also be used with a Windows
