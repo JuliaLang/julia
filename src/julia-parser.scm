@@ -1967,7 +1967,9 @@
                        (else
                         ;; tuple (x,) (x,y) (x...) etc.
                         (if (eqv? t #\, )
-                            (take-token s))
+                            (take-token s)
+                            (if (not (eqv? t #\;))
+                                (error "missing comma or ) in argument list")))
                         (arglist-to-tuple #f (eqv? t #\,) (parse-arglist s #\) ) ex)))))))))
 
           ;; cat expression
