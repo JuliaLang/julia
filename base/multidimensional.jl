@@ -884,7 +884,7 @@ end
 @generated function groupslices{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         if !(1 <= dim <= $N)
-            error("Input argument dim must be 1 <= dim <= $N, but is currently $dim")
+            ArgumentError("Input argument dim must be 1 <= dim <= $N, but is currently $dim")
         end
         hashes = zeros(UInt, size(A, dim))
 
