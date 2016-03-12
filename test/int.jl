@@ -176,6 +176,19 @@ end
 @test widemul(false, 3) == 0
 @test widemul(3, true) == widemul(true, 3) == 3
 
+i=Int64(2)^63-1
+
+@test widemul(i,i)==85070591730234615847396907784232501249
+
+k=widemul(i,i)
+j=div(k,2)
+
+@test div(k,j)==2
+
+j=div(k,5)
+
+@test rem(k,j)==4
+
 # issue #3596
 @test Int128(1)<<0 == 1
 @test repr(Int128(1)<<1) == "2"
