@@ -163,9 +163,8 @@ function run_repl(repl::AbstractREPL, consumer = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
-    consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
-    backend
+    return backend
 end
 
 ## BasicREPL ##
@@ -418,11 +417,12 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
 
     # load the saved line
     if idx == max_idx
+        last_buffer = hist.last_buffer
         LineEdit.transition(s, hist.last_mode) do
-            LineEdit.replace_line(s, hist.last_buffer)
-            hist.last_mode = nothing
-            hist.last_buffer = IOBuffer()
+            LineEdit.replace_line(s, last_buffer)
         end
+        hist.last_mode = nothing
+        hist.last_buffer = IOBuffer()
     else
         if haskey(hist.mode_mapping, hist.modes[idx])
             LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]]) do
@@ -891,27 +891,15 @@ type StreamREPL <: AbstractREPL
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
+StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.input_color(), Base.answer_color())
+run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
-
-StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
 answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
-
-
-function run_repl(stream::IO)
-    repl =
-    @async begin
-        repl_channel = Channel(1)
-        response_channel = Channel(1)
-        start_repl_backend(repl_channel, response_channel)
-        StreamREPL_frontend(repl, repl_channel, response_channel)
-    end
-    repl
-end
 
 function ends_with_semicolon(line)
     match = rsearch(line, ';')
@@ -931,7 +919,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
-    while repl.stream.open
+    while !eof(repl.stream)
         if have_color
             print(repl.stream,repl.prompt_color)
         end

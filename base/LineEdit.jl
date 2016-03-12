@@ -1104,13 +1104,13 @@ function reset_state(s::PrefixSearchState)
 end
 
 function transition(f::Function, s::PrefixSearchState, mode)
-    if isdefined(s,:mi)
-        transition(f,s.mi,mode)
+    if isdefined(s, :mi)
+        transition(s.mi, mode)
     end
     s.parent = mode
     s.histprompt.parent_prompt = mode
-    if isdefined(s,:mi)
-        transition(f,s.mi,s.histprompt)
+    if isdefined(s, :mi)
+        transition(f, s.mi, s.histprompt)
     else
         f()
     end
@@ -1600,7 +1600,7 @@ function init_state(terminal, m::ModalInterface)
 end
 
 function run_interface(terminal, m::ModalInterface)
-    s = init_state(terminal, m)
+    s::MIState = init_state(terminal, m)
     while !s.aborted
         p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
@@ -1608,7 +1608,7 @@ function run_interface(terminal, m::ModalInterface)
             @unix_only ccall(:jl_repl_raise_sigtstp, Cint, ())
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        s.mode_state[s.current_mode].p.on_done(s, buf, ok)
+        mode(state(s, s.current_mode)).on_done(s, buf, ok)
     end
 end
 
