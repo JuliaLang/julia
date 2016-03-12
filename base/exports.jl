@@ -1436,6 +1436,7 @@ export
     @noinline,
 
     @assert,
+    @require,
     @enum,
     @label,
     @goto,

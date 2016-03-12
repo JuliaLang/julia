@@ -101,6 +101,31 @@ let deepthought(x, y) = 42
     end
 end
 
+# test @require
+let
+    f1(n) = begin @require n > 0; n end
+    f2(n) = begin @require n != 0 "non-zero n"; n end
+
+    @test f1(1) == 1
+    @test f2(1) == 1
+
+    try
+        f1(0)
+        error("unexpected")
+    catch ex
+        @test isa(ex, ArgumentError)
+        @test ismatch(r"f1(.*) requires n > 0", ex.msg)
+    end
+
+    try
+        f2(0)
+        error("unexpected")
+    catch ex
+        @test isa(ex, ArgumentError)
+        @test ismatch(r"f2(.*) requires non-zero n", ex.msg)
+    end
+end
+
 let # test the process title functions, issue #9957
     oldtitle = Sys.get_process_title()
     Sys.set_process_title("julia0x1")
