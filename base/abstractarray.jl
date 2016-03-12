@@ -422,6 +422,21 @@ function _maxlength(A, B, C...)
     max(length(A), _maxlength(B, C...))
 end
 
+# eachindex(A, d) and eachindex(A, (:, j))
+eachindex(A::AbstractArray, d::Integer) = 1:size(A, d)
+eachindex{d}(A::AbstractArray, ::Type{Val{d}}) = 1:size(A, d)
+eachindex{T,N}(A::AbstractArray{T,N}, indexes::NTuple{N,Union{Colon,Integer,UnitRange}}) = (@_inline_meta; _eachindex((), (), A, indexes...))
+_eachindex{N}(dims::Tuple{Int}, processed::NTuple{N}, A::AbstractArray) = eachindex(A, dims[1])
+_eachindex{N}(dims, processed::NTuple{N}, A::AbstractArray) = throw(DimensionMismatch("selection of $(length(dims)) dimensions not supported"))
+function _eachindex{M}(dims, processed::NTuple{M}, A::AbstractArray, c::Union{Colon,UnitRange}, indexes...)
+    @_inline_meta
+    _eachindex((dims..., M+1), (processed..., c), A, indexes...)
+end
+function _eachindex{M}(dims, processed::NTuple{M}, A::AbstractArray, i::Integer, indexes...)
+    @_inline_meta
+    _eachindex(dims, (processed..., i), A, indexes...)
+end
+
 isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##
