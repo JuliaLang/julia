@@ -458,14 +458,21 @@ static void schedule_finalization(void *o, void *f)
 
 static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 {
-    jl_value_t *args[2] = {ff,o};
-    JL_TRY {
-        jl_apply(args, 2);
+    if (jl_typeis(ff, jl_voidpointer_type)) {
+        void *p = jl_unbox_voidpointer(ff);
+        if (p)
+            ((void (*)(void*))p)(jl_data_ptr(o));
     }
-    JL_CATCH {
-        jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
+    else {
+        jl_value_t *args[2] = {ff,o};
+        JL_TRY {
+            jl_apply(args, 2);
+        }
+        JL_CATCH {
+            jl_printf(JL_STDERR, "error in running finalizer: ");
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+        }
     }
 }
 
