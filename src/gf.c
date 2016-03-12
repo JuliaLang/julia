@@ -18,7 +18,7 @@
 #endif
 
 // ::ANY has no effect if the number of overlapping methods is greater than this
-#define MAX_UNSPECIALIZED_CONFLICTS 10
+#define MAX_UNSPECIALIZED_CONFLICTS 32
 
 #ifdef __cplusplus
 extern "C" {
@@ -407,7 +407,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_value_t *toplevel)
         fargs[2] = (jl_value_t*)toplevel;
 #ifdef TRACE_INFERENCE
         jl_printf(JL_STDERR,"inference on ");
-        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)argtypes);
+        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
         jl_printf(JL_STDERR, "\n");
 #endif
         jl_value_t *info = jl_apply(fargs, 3); (void)info;
@@ -516,6 +516,11 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                 if (jl_type_intersection((jl_value_t*)curr->sig, (jl_value_t*)temp2) !=
                     (jl_value_t*)jl_bottom_type) {
                     nintr++;
+                    if (specific_decl || notcalled_func) {
+                        // ignore MAX_UNSPECIALIZED_CONFLICTS in cache_as_orig mode
+                        // fixes issue #15190
+                        break;
+                    }
                     if (nintr > MAX_UNSPECIALIZED_CONFLICTS) break;
                 }
                 curr = curr->next;
@@ -528,7 +533,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
             else {
                 set_to_any = 1;
                 if (nintr > 0) {
-                    if (specific_decl)
+                    if (specific_decl || notcalled_func)
                         cache_as_orig = 1;
                     else
                         need_guard_entries = 1;
