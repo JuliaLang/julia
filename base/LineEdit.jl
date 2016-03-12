@@ -1348,9 +1348,9 @@ function bracketed_paste(s)
     input = replace(input, '\r', '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]
-        input = Base.unindent(input[(indent+1):end], indent; tabwidth=tabwidth)
+        input = Base.unindent(input, indent; tabwidth=tabwidth)
     end
-    input
+    return replace(input, '\t', " "^tabwidth)
 end
 
 const default_keymap =
