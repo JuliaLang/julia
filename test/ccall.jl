@@ -523,3 +523,12 @@ let n=3
 end
 
 @test ccall(:jl_getpagesize, Clong, ()) == @threadcall(:jl_getpagesize, Clong, ())
+
+# Pointer finalizer (issue #15408)
+let A = [1]
+    ccall((:set_c_int, libccalltest), Void, (Cint,), 1)
+    @test ccall((:get_c_int, libccalltest), Cint, ()) == 1
+    finalizer(A, cglobal((:finalizer_cptr, libccalltest), Void))
+    finalize(A)
+    @test ccall((:get_c_int, libccalltest), Cint, ()) == -1
+end
