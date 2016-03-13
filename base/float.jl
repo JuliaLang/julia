@@ -252,7 +252,7 @@ isless( x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 function cmp(x::AbstractFloat, y::AbstractFloat)
     (isnan(x) || isnan(y)) && throw(DomainError())
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
+    (x > y) - (x < y)
 end
 
 function cmp(x::Real, y::AbstractFloat)
