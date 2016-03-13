@@ -804,17 +804,17 @@ nonboolean_warning(f, op, status) = """
 """
 
 
-@noinline function nonboolean_any(itr)
-    depwarn(nonboolean_warning(:any, :|, "deprecated"), :nonboolean_any)
-    #throw(ArgumentError(nonboolean_warning(:any, :|, "not supported")))
-    reduce(|, itr)
+@noinline function or_bool_only(a, b)
+    depwarn(nonboolean_warning(:any, :|, "deprecated"), :or_bool_only)
+    a|b
 end
+or_bool_only(a::Bool, b::Bool) = a|b
 
-@noinline function nonboolean_all(itr)
-    depwarn(nonboolean_warning(:all, :&, "deprecated"), :nonboolean_all)
-    #throw(ArgumentError(nonboolean_warning(:all, :&, "not supported")))
-    reduce(&, itr)
+@noinline function and_bool_only(a, b)
+    depwarn(nonboolean_warning(:all, :&, "deprecated"), :and_bool_only)
+    a&b
 end
+and_bool_only(a::Bool, b::Bool) = a&b
 
 @deprecate iseltype(x,T)  eltype(x) <: T
 

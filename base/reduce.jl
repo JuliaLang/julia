@@ -363,14 +363,14 @@ any(f::Predicate, itr) = mapreduce_sc_impl(f, OrFun(), itr)
 any(f::IdFun,     itr) =
     eltype(itr) <: Bool ?
         mapreduce_sc_impl(f, OrFun(), itr) :
-        nonboolean_any(itr)
+        reduce(or_bool_only, itr)
 
 all(f::Any,       itr) = all(Predicate(f), itr)
 all(f::Predicate, itr) = mapreduce_sc_impl(f, AndFun(), itr)
 all(f::IdFun,     itr) =
     eltype(itr) <: Bool ?
         mapreduce_sc_impl(f, AndFun(), itr) :
-        nonboolean_all(itr)
+        reduce(and_bool_only, itr)
 
 ## in & contains
 
