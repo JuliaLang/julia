@@ -226,7 +226,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_safe_printf("UNKNOWN"); break;
         }
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-        jl_gdblookup((intptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_gdblookup((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
         static int recursion = 0;
@@ -293,14 +293,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 break;
             }
             CONTEXT ctxThread;
-            memset(&ctxThread,0,sizeof(CONTEXT));
+            memset(&ctxThread, 0, sizeof(CONTEXT));
             ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             if (!GetThreadContext(hMainThread, &ctxThread)) {
                 fputs("failed to get context from main thread. aborting profiling.",stderr);
                 break;
             }
             // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &ctxThread);
+            bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
+                bt_size_max - bt_size_cur - 1, &ctxThread);
             // Mark the end of this block with 0
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;

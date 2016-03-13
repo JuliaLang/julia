@@ -43,7 +43,7 @@ JL_DLLEXPORT void jl_sigint_action(void)
 #endif
 
 // what to do on a critical error
-void jl_critical_error(int sig, bt_context_t context, intptr_t *bt_data, size_t *bt_size)
+void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size)
 {
     // This function is not allowed to reference any TLS variables.
     // We need to explicitly pass in the TLS buffer pointer when
