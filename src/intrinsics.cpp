@@ -529,12 +529,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
 
     Value *vx;
     if (v.ispointer) {
-        // TODO: validate the size and type of the pointer contents
-        if (v.isimmutable && !v.constant) { // wrong type, but can lazy load this later as needed
-            v.typ = bt;
-            v.isboxed = false;
-            return v;
-        }
         vx = builder.CreateLoad(data_pointer(v, ctx, llvmt->getPointerTo()));
     }
     else {
