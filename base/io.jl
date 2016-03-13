@@ -31,9 +31,9 @@ write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 Copy nbytes from ref (converted to a pointer) into the IO stream object.
 
-It is recommended that IO subtypes override the exact method signature below
+It is recommended that subtypes `T<:IO` override the following method signature
 to provide more efficient implementations:
-`unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)`
+`unsafe_write(s::T, p::Ptr{UInt8}, n::UInt)`
 """
 function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
     local written::Int = 0
@@ -48,9 +48,9 @@ end
 
 Copy nbytes from the IO stream object into ref (converted to a pointer).
 
-It is recommended that IO subtypes override the exact method signature below
+It is recommended that subtypes `T<:IO` override the following method signature
 to provide more efficient implementations:
-`unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)`
+`unsafe_read(s::T, p::Ptr{UInt8}, n::UInt)`
 """
 function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     for i = 1:n
