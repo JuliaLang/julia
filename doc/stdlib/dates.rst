@@ -29,7 +29,7 @@ Dates and Time Types
 
 .. data:: TimeType
 
-   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant.
+   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant. Both ``DateTime`` and ``Date`` are subtypes of ``TimeType``.
 
 .. data:: DateTime
 
@@ -69,13 +69,15 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Converts a ``Date`` type to a ``DateTime``\ . The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
+   Converts a ``Date`` to a ``DateTime``\ . The hour, minute, second, and millisecond parts of the new ``DateTime`` are assumed to be zero.
+
+.. _man-date-parsing:
 
 .. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    .. Docstring generated from Julia source
 
-   Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in the ``format`` string. The following codes can be used for constructing format strings:
+   Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in the ``format`` string. The following character codes can be used to construct the ``format`` string:
 
    +--------------+-----------+----------------------------------------------------------------+
    | Code         | Matches   | Comment                                                        |
@@ -107,17 +109,55 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    All characters not listed above are treated as delimiters between date and time slots. So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string like "y-m-dTH:M:S.s".
 
-.. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
+.. _man-date-formatting:
+
+.. function:: format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
 
    .. Docstring generated from Julia source
 
-   Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. ``format`` is a format string in the form described above (e.g. ``"yyyy-mm-dd"``\ ).
+   Construct a string by using a ``TimeType`` object and applying the provided ``format``\ . The following character codes can be used to construct the ``format`` string:
+
+   +-------+----------+-------------------------------------------------------------+
+   | Code  | Examples | Comment                                                     |
+   +=======+==========+=============================================================+
+   | ``y`` | 6        | Numeric year with a fixed width                             |
+   +-------+----------+-------------------------------------------------------------+
+   | ``m`` | 1, 12    | Numeric month with a minimum width                          |
+   +-------+----------+-------------------------------------------------------------+
+   | ``u`` | Jan      | Month name shortened to 3-chars according to the ``locale`` |
+   +-------+----------+-------------------------------------------------------------+
+   | ``U`` | January  | Full month name according to the ``locale`` keyword         |
+   +-------+----------+-------------------------------------------------------------+
+   | ``d`` | 1, 31    | Day of the month with a minimum width                       |
+   +-------+----------+-------------------------------------------------------------+
+   | ``H`` | 0, 23    | Hour (24-hour clock) with a minimum width                   |
+   +-------+----------+-------------------------------------------------------------+
+   | ``M`` | 0, 59    | Minute with a minimum width                                 |
+   +-------+----------+-------------------------------------------------------------+
+   | ``S`` | 0, 59    | Second with a minimum width                                 |
+   +-------+----------+-------------------------------------------------------------+
+   | ``s`` | 000, 500 | Millisecond with a minimum width of 3                       |
+   +-------+----------+-------------------------------------------------------------+
+   | ``e`` | Mon, Tue | Abbreviated days of the week                                |
+   +-------+----------+-------------------------------------------------------------+
+   | ``E`` | Monday   | Full day of week name                                       |
+   +-------+----------+-------------------------------------------------------------+
+
+   The number of sequential code characters indicate the width of the code. A format of ``yyyy-mm`` specifies that the code ``y`` should have a width of four while ``m`` a width of two. Codes that yield numeric digits have an associated mode: fixed-width or minimum-width. The fixed-width mode left-pads the value with zeros when it is shorter than the specified width and truncates the value when longer. Minimum-width mode works the same as fixed-width except that it does not truncate values longer than the width.
+
+   When creating a ``format`` you can use any non-code characters as a separator. For example to generate the string "1996-01-15T00:00:00" you could use ``format``\ : "yyyy-mm-ddTHH:MM:SS".
+
+.. function:: DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
+
+   .. Docstring generated from Julia source
+
+   Construct a date formatting object that can be used for parsing date strings or formatting a date object as a string. For details on the syntax for ``format`` see :ref:`parsing <man-date-parsing>` and :ref:`formatting <man-date-formatting>`\ .
 
 .. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
    .. Docstring generated from Julia source
 
-   Similar form as above for parsing a ``DateTime``\ , but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+   Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in the :func:`Dates.DateFormat` object. Similar to ``DateTime(::AbstractString, ::AbstractString)`` but more efficient when repeatedly parsing similarly formatted date strings with a pre-created ``DateFormat`` object.
 
 .. function:: Date(y, [m, d]) -> Date
 
@@ -141,13 +181,13 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    .. Docstring generated from Julia source
 
-   Converts a ``DateTime`` type to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
+   Converts a ``DateTime`` to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
 .. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    .. Docstring generated from Julia source
 
-   Construct a ``Date`` type by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime`` above.
+   Construct a ``Date`` object by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime(::AbstractString, ::AbstractString)``\ .
 
 .. function:: Date(dt::AbstractString, df::DateFormat) -> Date
 
@@ -178,30 +218,100 @@ Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
 .. function:: year(dt::TimeType) -> Int64
-              month(dt::TimeType) -> Int64
-              week(dt::TimeType) -> Int64
-              day(dt::TimeType) -> Int64
-              hour(dt::TimeType) -> Int64
-              minute(dt::TimeType) -> Int64
-              second(dt::TimeType) -> Int64
-              millisecond(dt::TimeType) -> Int64
 
    .. Docstring generated from Julia source
 
-   Return the field part of a ``Date`` or ``DateTime`` as an ``Int64``\ .
+   The year of a ``Date`` or ``DateTime`` as an ``Int64``\ .
+
+.. function:: month(dt::TimeType) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
+
+.. function:: week(dt::TimeType) -> Int64
+
+   .. Docstring generated from Julia source
+
+   Return the `ISO week date <https://en.wikipedia.org/wiki/ISO_week_date>`_ of a ``Date`` or ``DateTime`` as an ``Int64``\ . Note that the first week of a year is the week that contains the first Thursday of the year which can result in dates prior to January 4th being in the last week of the previous year. For example ``week(Date(2005,1,1))`` is the 53rd week of 2004.
+
+.. function:: day(dt::TimeType) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The day of month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
+
+.. function:: hour(dt::DateTime) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The hour of day of a ``DateTime`` as an ``Int64``\ .
+
+.. function:: minute(dt::DateTime) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The minute of a ``DateTime`` as an ``Int64``\ .
+
+.. function:: second(dt::DateTime) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The second of a ``DateTime`` as an ``Int64``\ .
+
+.. function:: millisecond(dt::DateTime) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The millisecond of a ``DateTime`` as an ``Int64``\ .
 
 .. function:: Year(dt::TimeType) -> Year
-              Month(dt::TimeType) -> Month
-              Week(dt::TimeType) -> Week
-              Day(dt::TimeType) -> Day
-              Hour(dt::TimeType) -> Hour
-              Minute(dt::TimeType) -> Minute
-              Second(dt::TimeType) -> Second
-              Millisecond(dt::TimeType) -> Millisecond
 
    .. Docstring generated from Julia source
 
-   Return the field part of a ``Date`` or ``DateTime`` as a ``Period`` type.
+   The year part of a ``Date`` or ``DateTime`` as a ``Year``\ .
+
+.. function:: Month(dt::TimeType) -> Month
+
+   .. Docstring generated from Julia source
+
+   The month part of a ``Date`` or ``DateTime`` as a ``Month``\ .
+
+.. function:: Week(dt::TimeType) -> Week
+
+   .. Docstring generated from Julia source
+
+   The week part of a ``Date`` or ``DateTime`` as a ``Week``\ . For details see :func:`week`\ .
+
+.. function:: Day(dt::TimeType) -> Day
+
+   .. Docstring generated from Julia source
+
+   The day part of a ``Date`` or ``DateTime`` as a ``Day``\ .
+
+.. function:: Hour(dt::DateTime) -> Hour
+
+   .. Docstring generated from Julia source
+
+   The hour part of a ``DateTime`` as a ``Hour``\ .
+
+.. function:: Minute(dt::DateTime) -> Minute
+
+   .. Docstring generated from Julia source
+
+   The minute part of a ``DateTime`` as a ``Minute``\ .
+
+.. function:: Second(dt::DateTime) -> Second
+
+   .. Docstring generated from Julia source
+
+   The second part of a ``DateTime`` as a ``Second``\ .
+
+.. function:: Millisecond(dt::DateTime) -> Millisecond
+
+   .. Docstring generated from Julia source
+
+   The millisecond part of a ``DateTime`` as a ``Millisecond``\ .
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
@@ -219,7 +329,7 @@ Accessor Functions
 
    .. Docstring generated from Julia source
 
-   Simultaneously return the year, month, and day parts of a ``Date`` or ``DateTime``\ .
+   Simultaneously return the year, month and day parts of a ``Date`` or ``DateTime``\ .
 
 Query Functions
 ~~~~~~~~~~~~~~~
@@ -241,6 +351,12 @@ Query Functions
    .. Docstring generated from Julia source
 
    Returns the day of the week as an ``Int64`` with ``1 = Monday, 2 = Tuesday, etc.``\ .
+
+.. function:: dayofmonth(dt::TimeType) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The day of month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
 .. function:: dayofweekofmonth(dt::TimeType) -> Int
 
@@ -404,16 +520,14 @@ Adjuster Functions
 Periods
 ~~~~~~~
 
-.. function:: Year(v)
-              Month(v)
-              Week(v)
-              Day(v)
-              Hour(v)
-              Minute(v)
-              Second(v)
-              Millisecond(v)
-
-   .. Docstring generated from Julia source
+.. data:: Year(v)
+          Month(v)
+          Week(v)
+          Day(v)
+          Hour(v)
+          Minute(v)
+          Second(v)
+          Millisecond(v)
 
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
