@@ -5,7 +5,7 @@
 
 #include <options.h>
 #include <uv.h>
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
 #include <sched.h>
 #else
