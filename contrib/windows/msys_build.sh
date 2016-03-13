@@ -105,12 +105,6 @@ rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
 
 if [ -z "$USEMSVC" ]; then
-  rm -f usr/bin/libgcc_s_s*-1.dll
-  rm -f usr/bin/libgfortran-3.dll
-  rm -f usr/bin/libquadmath-0.dll
-  rm -f usr/bin/libssp-0.dll
-  rm -f usr/bin/libstdc++-6.dll
-
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
