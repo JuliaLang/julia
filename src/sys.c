@@ -689,7 +689,6 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 }
 
 #ifdef _OS_WINDOWS_
-#include <dbghelp.h>
 static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
   _In_      PCTSTR ModuleName,
   _In_      DWORD64 ModuleBase,

@@ -59,9 +59,9 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
     signal(sig, SIG_DFL);
 #ifdef __APPLE__
-    jl_critical_error(sig, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
+    jl_critical_error(sig, (bt_context_t*)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
 #else
-    jl_critical_error(sig, (bt_context_t)context, jl_bt_data, &jl_bt_size);
+    jl_critical_error(sig, (bt_context_t*)context, jl_bt_data, &jl_bt_size);
 #endif
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
@@ -334,7 +334,7 @@ void jl_sigsetset(sigset_t *sset)
 
 static void *signal_listener(void *arg)
 {
-    static intptr_t bt_data[JL_MAX_BT_SIZE + 1];
+    static uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
     static size_t bt_size = 0;
     sigset_t sset;
     unw_context_t *signal_context;
@@ -382,7 +382,7 @@ static void *signal_listener(void *arg)
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
                     // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((intptr_t*)bt_data_prof + bt_size_cur,
+                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, signal_context);
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;

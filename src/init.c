@@ -38,7 +38,6 @@ JL_DLLEXPORT char *dirname(char *);
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <dbghelp.h>
 #include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);

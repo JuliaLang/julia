@@ -52,7 +52,7 @@ typedef struct _jl_tls_states_t {
     jl_jmp_buf *safe_restore;
     int16_t tid;
     size_t bt_size;
-    intptr_t bt_data[JL_MAX_BT_SIZE + 1];
+    uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
 } jl_tls_states_t;
 
 #ifdef __MIC__
